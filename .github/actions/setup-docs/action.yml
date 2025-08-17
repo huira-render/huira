@@ -1,0 +1,153 @@
+name: 'Setup Documentation Build Environment'
+description: 'Set up the build environment with conda and dependencies'
+
+inputs:
+  platform:
+    description: 'Target platforms: Linux, MacOS, MacOS-ARM, and Windows'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install system dependencies (Linux)
+      if: inputs.platform == 'linux'
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake ninja-build
+
+    - name: Install system dependencies (macOS)
+      if: inputs.platform == 'macos' || inputs.platform == 'macos-arm'
+      shell: bash
+      run: |
+        # macOS already has necessary build tools, but ensure cmake is available
+        which cmake || brew install cmake
+        which ninja || brew install ninja
+
+    - name: Set up Visual Studio (Windows)
+      if: inputs.platform == 'windows'
+      uses: microsoft/setup-msbuild@v2
+
+    # Set up Mambaforge (faster than regular conda)
+    - name: Setup Mambaforge
+      uses: conda-incubator/setup-miniconda@v3
+      with:
+        miniforge-variant: Mambaforge
+        miniforge-version: "23.11.0-0"  # Stable LTS-like version
+        activate-environment: huira_env
+        use-mamba: true
+        channels: conda-forge
+        channel-priority: strict
+        auto-update-conda: false
+        show-channel-urls: true
+      continue-on-error: true
+      id: setup_conda
+
+    # Fallback: Manual installation if the action fails
+    - name: Manual Mambaforge installation (fallback)
+      if: steps.setup_conda.outcome == 'failure'
+      shell: bash
+      run: |
+        echo "setup-miniconda failed, installing Mambaforge manually..."
+        
+        case "${{ inputs.platform }}" in
+          "linux")
+            MAMBAFORGE_URL="https://github.com/conda-forge/miniforge/releases/latest/download/Mambaforge-Linux-x86_64.sh"
+            ;;
+          "macos")
+            MAMBAFORGE_URL="https://github.com/conda-forge/miniforge/releases/latest/download/Mambaforge-MacOSX-x86_64.sh"
+            ;;
+          "macos-arm")
+            MAMBAFORGE_URL="https://github.com/conda-forge/miniforge/releases/latest/download/Mambaforge-MacOSX-arm64.sh"
+            ;;
+          "windows")
+            echo "Cannot do manual installation on Windows, exiting..."
+            exit 1
+            ;;
+        esac
+        
+        # Download and install
+        curl -fsSL -o mambaforge.sh "$MAMBAFORGE_URL"
+        bash mambaforge.sh -b -p $HOME/mambaforge
+        
+        # Add to PATH for subsequent steps
+        echo "$HOME/mambaforge/bin" >> $GITHUB_PATH
+        
+        # Initialize
+        source $HOME/mambaforge/bin/activate
+        conda init bash
+
+    # Cache conda environment
+    - name: Cache conda environment
+      uses: actions/cache@v4
+      with:
+        path: |
+          ${{ env.CONDA }}/envs/huira_env
+          ~/.conda/pkgs
+        key: conda-env-v2-${{ runner.os }}-${{ inputs.platform }}-${{ hashFiles('dependencies/environment.yml', 'docs/docs-dependencies.yml') }}
+        restore-keys: |
+          conda-env-v2-${{ runner.os }}-${{ inputs.platform }}-
+
+    # Install main project dependencies
+    - name: Install main project dependencies
+      shell: bash -el {0}  # Ensures conda environment is activated
+      run: |
+        echo "Installing main project dependencies from dependencies/environment.yml..."
+        mamba env update -n huira_env -f dependencies/environment.yml
+        
+        echo "Installing additional build tools..."
+        # Add essential build tools that aren't in your environment.yml
+        # NOTE: Skipping cmake to use system version (4.0+ has compatibility issues)
+        mamba install -y ninja pkg-config
+        
+        # Platform-specific build tools
+        case "${{ inputs.platform }}" in
+          "linux")
+            echo "Using system CMake instead of conda CMake to avoid version 4.0+ compatibility issues"
+            ;;
+          "windows")
+            echo "Installing Windows build tools..."
+            # Visual Studio is set up separately above
+            mamba install -y cmake  # Windows needs cmake from conda
+            ;;
+          "macos"|"macos-arm")
+            echo "Installing macOS build tools..."
+            # Xcode command line tools should be available
+            ;;
+        esac
+
+    # Install documentation dependencies
+    - name: Install documentation dependencies
+      shell: bash -el {0}  # Ensures conda environment is activated
+      run: |
+        echo "Installing documentation dependencies from docs/docs-dependencies.yml..."
+        conda env update -f docs/docs-dependencies.yml
+
+    # Set environment variables for CMake to find conda packages
+    - name: Set conda environment variables
+      shell: bash -el {0}
+      run: |
+        echo "Setting up environment variables for CMake..."
+        
+        # Get conda environment path
+        CONDA_PREFIX=$(conda info --base)/envs/huira_env
+        
+        # Set environment variables for the rest of the workflow
+        echo "CMAKE_PREFIX_PATH=${CONDA_PREFIX}" >> $GITHUB_ENV
+        echo "PKG_CONFIG_PATH=${CONDA_PREFIX}/lib/pkgconfig" >> $GITHUB_ENV
+        echo "CONDA_PREFIX=${CONDA_PREFIX}" >> $GITHUB_ENV
+        
+        # Platform-specific environment setup
+        case "${{ inputs.platform }}" in
+          "windows")
+            echo "CMAKE_GENERATOR=Visual Studio 17 2022" >> $GITHUB_ENV
+            echo "CMAKE_GENERATOR_PLATFORM=x64" >> $GITHUB_ENV
+            ;;
+          *)
+            echo "CMAKE_GENERATOR=Ninja" >> $GITHUB_ENV
+            ;;
+        esac
+        
+        echo "Environment setup complete!"
+        echo "CMAKE_PREFIX_PATH: ${CMAKE_PREFIX_PATH}"
+        echo "PKG_CONFIG_PATH: ${PKG_CONFIG_PATH}"

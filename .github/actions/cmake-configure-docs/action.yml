@@ -1,0 +1,33 @@
+name: 'CMake Configuration for Documentation'
+description: 'Configure the CMake build system with conda toolchain'
+
+inputs:
+  platform:
+    description: 'Target platforms: Linux, MacOS, MacOS-ARM, and Windows'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Configure CMake (Linux/MacOS)
+      if: inputs.platform != 'windows'
+      shell: bash -el {0}
+      run: |
+        cmake -B build \
+          -DCMAKE_TOOLCHAIN_FILE="${GITHUB_WORKSPACE}/cmake/conda-toolchain.cmake" \
+          -DHUIRA_DOCS=ON \
+          -DCMAKE_BUILD_TYPE=Release \
+          -G Ninja
+
+    - name: Configure CMake (Windows)
+      if: inputs.platform == 'windows'
+      shell: cmd
+      run: |
+        call conda activate huira_env
+        
+        cmake -B build ^
+          -DCMAKE_TOOLCHAIN_FILE="../cmake/conda-toolchain.cmake" ^
+          -DHUIRA_DOCS=ON ^
+          -DCMAKE_BUILD_TYPE=Release ^
+          -G "Visual Studio 17 2022" ^
+          -A x64

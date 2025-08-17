@@ -1,0 +1,64 @@
+{
+  "name": "huira",
+  "description": "A ray tracing library for space engineering and planetary science.",
+  "builtin-baseline": "4bb07a326d9b9bce3703272a509e5bc25dd9cfd5",
+  "dependencies": [
+    "assimp",
+    "cfitsio",
+    "cspice",
+    {
+      "name": "embree3",
+      "default-features": false,
+      "features": [
+        "geometry-instance",
+        "geometry-triangle",
+        "tasking-tbb"
+      ]
+    },
+    "fftw3",
+    {
+      "name": "gdal",
+      "default-features": false
+    },
+    "tbb",
+    "tiff"
+  ],
+  "features": {
+    "tests": {
+      "description": "Build tests using gtest",
+      "dependencies": [
+        "gtest"
+      ]
+    }
+  },
+  "overrides": [
+    {
+      "name": "assimp",
+      "version": "5.4.3"
+    },
+    {
+      "name": "cfitsio",
+      "version": "3.49#6"
+    },
+    {
+      "name": "cspice",
+      "version": "67#3"
+    },
+    {
+      "name": "embree3",
+      "version": "3.13.5#4"
+    },
+    {
+      "name": "fftw3",
+      "version": "3.3.10#10"
+    },
+    {
+      "name": "gdal",
+      "version": "3.10.0#2"
+    },
+    {
+      "name": "tiff",
+      "version": "4.7.0"
+    }
+  ]
+}

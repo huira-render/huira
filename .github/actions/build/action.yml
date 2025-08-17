@@ -1,0 +1,27 @@
+name: 'Build Project'
+description: 'Build the CMake project with conda environment'
+
+inputs:
+  platform:
+    description: 'Target platforms: Linux, MacOS, MacOS-ARM, and Windows'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Build (Linux/macOS)
+      if: inputs.platform != 'windows'
+      shell: bash -el {0}  # Ensures conda environment is activated
+      run: |
+        echo "Building project for ${{ inputs.platform }}..."
+        cmake --build build --parallel
+        echo "Build completed successfully!"
+
+    - name: Build (Windows)
+      if: inputs.platform == 'windows'
+      shell: cmd
+      run: |
+        echo Building project for Windows...
+        call conda activate huira_env
+        cmake --build build --config Release --parallel
+        echo Build completed successfully!
