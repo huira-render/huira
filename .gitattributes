@@ -1,0 +1,9 @@
+# Default to automatic text/binary detection for all files
+* text=auto
+
+# Ensure Windows-style line endings on .bat scripts
+*.bat text eol=crlf
+
+# Ensure LF endings on .sh scripts
+*.sh text eol=lf
+*.cmake text eol=lf
