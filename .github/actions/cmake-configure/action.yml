@@ -9,8 +9,31 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - name: Configure CMake (Linux/MacOS)
-      if: inputs.platform != 'windows'
+    - name: Configure CMake (Linux)
+      if: inputs.platform == 'linux'
+      shell: bash -el {0}
+      run: |
+        cmake -B build \
+          -DCMAKE_TOOLCHAIN_FILE="${GITHUB_WORKSPACE}/cmake/conda-toolchain.cmake" \
+          -DCMAKE_BUILD_TYPE=Release \
+          -G Ninja
+
+    - name: Configure CMake (macOS x86_64)
+      if: inputs.platform == 'macos'
+      shell: bash -el {0}
+      run: |
+        # Explicitly specify system ninja path to avoid conda ninja
+        SYSTEM_NINJA=$(which ninja)
+        echo "Using system ninja at: $SYSTEM_NINJA"
+        
+        cmake -B build \
+          -DCMAKE_TOOLCHAIN_FILE="${GITHUB_WORKSPACE}/cmake/conda-toolchain.cmake" \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_MAKE_PROGRAM="$SYSTEM_NINJA" \
+          -G Ninja
+
+    - name: Configure CMake (macOS ARM)
+      if: inputs.platform == 'macos-arm'
       shell: bash -el {0}
       run: |
         cmake -B build \
