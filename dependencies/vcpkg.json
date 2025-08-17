@@ -20,6 +20,7 @@
       "name": "gdal",
       "default-features": false
     },
+    "glm",
     "tbb",
     "tiff"
   ],
@@ -55,6 +56,10 @@
     {
       "name": "gdal",
       "version": "3.10.0#2"
+    },
+    {
+      "name": "glm",
+      "version": "1.0.1#3"
     },
     {
       "name": "tiff",
