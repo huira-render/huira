@@ -2,6 +2,11 @@
 
 *Huira* is a ray-tracing library for rendering large scenes, star fields, and simulating solar radiation pressure.  It is named after Huiracocha, the creator of the Sun, Moon, and Stars in Inca mythology.
 
+## Build Status
+[![Linux Build](https://github.com/huira-render/huira/actions/workflows/linux-build.yml/badge.svg?branch=main)](https://github.com/huira-render/huira/actions/workflows/linux-build.yml)
+[![Documentation](https://github.com/huira-render/huira/actions/workflows/documentation.yml/badge.svg?branch=main)](https://github.com/huira-render/huira/actions/workflows/documentation.yml)
+
+
 # Building Huira
 
 Please see the platform specific build instructions:

@@ -1,0 +1,55 @@
+name: Documentation
+
+on:
+  push:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+# Add permissions for GitHub Pages deployment
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build-docs:
+    runs-on: ubuntu-22.04 # Updated August 2025
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    
+    - name: Set up build environment
+      uses: ./.github/actions/setup-docs
+      with:
+        platform: linux
+    
+    - name: Configure project
+      uses: ./.github/actions/cmake-configure-docs
+      with:
+        platform: linux
+    
+    - name: Build project
+      uses: ./.github/actions/build
+      with:
+        platform: linux
+
+    # Setup GitHub Pages (only on main branch)
+    - name: Setup Pages
+      if: github.ref == 'refs/heads/main'
+      uses: actions/configure-pages@v4
+
+    # Upload documentation as Pages artifact (only on main branch)
+    - name: Upload Pages artifact
+      if: github.ref == 'refs/heads/main'
+      uses: actions/upload-pages-artifact@v3
+      with:
+        path: ./build/huira_docs/
+
+    # Deploy to GitHub Pages (only on main branch)
+    - name: Deploy to GitHub Pages
+      if: github.ref == 'refs/heads/main'
+      id: deployment
+      uses: actions/deploy-pages@v4
