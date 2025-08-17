@@ -41,6 +41,7 @@ class HuiraConan(ConanFile):
         self.requires("embree3/3.13.5")
         self.requires("fftw/3.3.10")
         self.requires("gdal/3.10.3")
+        self.requires("glm/1.0.1")
         self.requires("libtiff/4.6.0")
         self.requires("onetbb/[>=2021.0]")  # Needs flexible range for Embree compatability
     

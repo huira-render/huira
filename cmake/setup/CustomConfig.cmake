@@ -49,7 +49,7 @@ endif()
 # Enable Broad Warnings:
 if(MSVC AND NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     # MSVC comprehensive warnings
-    target_compile_options(huira INTERFACE 
+    target_compile_options(huira PUBLIC
         /Wall 
         /w14263 # Enable warning for missing override
         /w14242 # Enable warning for extra semicolons
@@ -57,7 +57,7 @@ if(MSVC AND NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     # Clang comprehensive warnings
-    target_compile_options(huira INTERFACE
+    target_compile_options(huira PUBLIC
         -Wall -Wextra
         -Wconversion -Wsign-conversion -Wcast-qual -Wcast-align
         -Wunused -Wuninitialized -Winit-self
@@ -68,7 +68,7 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     # GCC comprehensive warnings
-    target_compile_options(huira INTERFACE 
+    target_compile_options(huira PUBLIC
         -Wall -Wextra -Wpedantic
         -Wconversion -Wsign-conversion -Wcast-qual -Wcast-align
         -Wunused -Wuninitialized -Winit-self -Wlogical-op
@@ -80,13 +80,13 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     
 else()
     # Fallback for other compilers
-    target_compile_options(huira INTERFACE -Wall -Wextra)
+    target_compile_options(huira PUBLIC -Wall -Wextra)
 endif()
 
 
 # Disable Specific Warnings:
 if(MSVC AND NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-    target_compile_options(huira INTERFACE 
+    target_compile_options(huira PUBLIC
         # Style/layout warnings that don't affect correctness (ALWAYS OFF):
         /wd5246 # brace initialization (style, not correctness)
         /wd4820 # padding warnings (layout, not correctness)
@@ -112,12 +112,12 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     foreach(WARNING ${ALWAYS_DISABLED_WARNINGS})
         check_cxx_compiler_flag("-W${WARNING}" HAS_WARNING_${WARNING})
         if(HAS_WARNING_${WARNING})
-            target_compile_options(huira INTERFACE "-Wno-${WARNING}")
+            target_compile_options(huira PUBLIC "-Wno-${WARNING}")
         endif()
     endforeach()
     
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    target_compile_options(huira INTERFACE 
+    target_compile_options(huira PUBLIC
         -Wno-double-promotion
         -Wno-float-equal
     )
@@ -127,7 +127,7 @@ endif()
 
 # Disable backwards compatibility warnings for C++20+ projects
 if(MSVC AND NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-    target_compile_options(huira INTERFACE 
+    target_compile_options(huira PUBLIC
         /wd4996  # Disable deprecation warnings for older C++ features
     )
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -157,7 +157,7 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     foreach(WARNING ${COMPAT_WARNINGS_TO_DISABLE})
         check_cxx_compiler_flag("-W${WARNING}" HAS_WARNING_${WARNING})
         if(HAS_WARNING_${WARNING})
-            target_compile_options(huira INTERFACE "-Wno-${WARNING}")
+            target_compile_options(huira PUBLIC "-Wno-${WARNING}")
         endif()
     endforeach()
     
@@ -174,7 +174,7 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     foreach(WARNING ${GCC_COMPAT_WARNINGS})
         check_cxx_compiler_flag("-W${WARNING}" HAS_WARNING_${WARNING})
         if(HAS_WARNING_${WARNING})
-            target_compile_options(huira INTERFACE "-Wno-${WARNING}")
+            target_compile_options(huira PUBLIC "-Wno-${WARNING}")
         endif()
     endforeach()
 endif()

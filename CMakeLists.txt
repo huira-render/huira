@@ -9,6 +9,8 @@ option(HUIRA_DOCS "Build Documentation" OFF)
 
 option(HUIRA_BUILD_DEV "Build Development Programs" ON)
 
+option(HUIRA_PREBUILD_SPECIALIZATIONS "Build Common Specializations" OFF)
+
 # Load modules from cmake/ directory
 list(APPEND CMAKE_MODULE_PATH 
     "${CMAKE_CURRENT_SOURCE_DIR}/cmake"
@@ -33,46 +35,14 @@ if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
     add_compile_definitions(NDEBUG)
 endif()
 
+if(NOT HUIRA_PREBUILD_SPECIALIZATIONS)
+    add_compile_definitions(HUIRA_HEADER_ONLY)
+endif()
+
 # Set all outputs to go to the binary directory
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
-
-
-#############################
-### Install Configuration ###
-#############################
-include(GNUInstallDirs)
-include(CMakePackageConfigHelpers)
-
-# Set installation paths
-set(HUIRA_INSTALL_CMAKEDIR ${CMAKE_INSTALL_LIBDIR}/cmake/huira)
-set(HUIRA_INSTALL_BINDIR ${CMAKE_INSTALL_BINDIR})
-set(HUIRA_INSTALL_LIBDIR ${CMAKE_INSTALL_LIBDIR})
-set(HUIRA_INSTALL_INCLUDEDIR ${CMAKE_INSTALL_INCLUDEDIR})
-
-# Configure package config files
-configure_package_config_file(
-    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/HuiraConfig.cmake.in"
-    "${CMAKE_CURRENT_BINARY_DIR}/HuiraConfig.cmake"
-    INSTALL_DESTINATION ${HUIRA_INSTALL_CMAKEDIR}
-    PATH_VARS 
-        HUIRA_INSTALL_INCLUDEDIR 
-        HUIRA_INSTALL_LIBDIR
-)
-
-write_basic_package_version_file(
-    "${CMAKE_CURRENT_BINARY_DIR}/HuiraConfigVersion.cmake"
-    VERSION ${PROJECT_VERSION}
-    COMPATIBILITY SameMajorVersion
-)
-
-# Install CMake config files
-install(FILES
-    "${CMAKE_CURRENT_BINARY_DIR}/HuiraConfig.cmake"
-    "${CMAKE_CURRENT_BINARY_DIR}/HuiraConfigVersion.cmake"
-    DESTINATION ${HUIRA_INSTALL_CMAKEDIR}
-)
 
 
 ##########################
@@ -83,10 +53,7 @@ include_directories(include)
 include_directories(source)
 
 # Add source directories:
-add_subdirectory(source/huira)
-
-# Run custom compiler/warnings setup:
-include(CustomConfig)
+add_subdirectory(src/huira)
 
 
 #####################################################

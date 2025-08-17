@@ -10,6 +10,12 @@ Huira
 
     build/index
 
+.. toctree::
+    :hidden:
+    :caption: C++ API
+   
+    huira/index
+
 * :ref:`genindex`
 * :ref:`modindex`
 * :ref:`search`
