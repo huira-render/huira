@@ -1,11 +1,11 @@
 ################################
 ### Project Specific Ignores ###
 ################################
-build/
-out/
+/build/
+/out/
 
-dev/*
-!dev/README.md
+/dev/*
+!/dev/README.md
 
 CMakeSettings.json
 

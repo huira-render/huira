@@ -4,6 +4,10 @@
 
 ## Build Status
 [![Linux Build](https://github.com/huira-render/huira/actions/workflows/linux-build.yml/badge.svg?branch=main)](https://github.com/huira-render/huira/actions/workflows/linux-build.yml)
+[![MacOS (x86) Build](https://github.com/huira-render/huira/actions/workflows/macos-x86-build.yml/badge.svg?branch=main)](https://github.com/huira-render/huira/actions/workflows/macos-x86-build.yml)
+[![MacOS (ARM) Build](https://github.com/huira-render/huira/actions/workflows/macos-arm-build.yml/badge.svg?branch=main)](https://github.com/huira-render/huira/actions/workflows/macos-arm-build.yml)
+[![Windows Build](https://github.com/huira-render/huira/actions/workflows/windows-build.yml/badge.svg?branch=main)](https://github.com/huira-render/huira/actions/workflows/windows-build.yml)
+
 [![Documentation](https://github.com/huira-render/huira/actions/workflows/documentation.yml/badge.svg?branch=main)](https://github.com/huira-render/huira/actions/workflows/documentation.yml)
 
 

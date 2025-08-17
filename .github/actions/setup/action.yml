@@ -28,15 +28,16 @@ runs:
       if: inputs.platform == 'windows'
       uses: microsoft/setup-msbuild@v2
 
-    # Set up Mambaforge (faster than regular conda)
-    - name: Setup Mambaforge
+    # Set up Miniforge3 (faster than regular conda)
+    - name: Setup Miniforge3
       uses: conda-incubator/setup-miniconda@v3
       with:
-        miniforge-variant: Mambaforge
+        miniforge-variant: Miniforge3
         miniforge-version: "23.11.0-0"  # Stable LTS-like version
         activate-environment: huira_env
         use-mamba: true
         channels: conda-forge
+        conda-remove-defaults: true
         channel-priority: strict
         auto-update-conda: false
         show-channel-urls: true
@@ -44,21 +45,21 @@ runs:
       id: setup_conda
 
     # Fallback: Manual installation if the action fails
-    - name: Manual Mambaforge installation (fallback)
+    - name: Manual Miniforge3 installation (fallback)
       if: steps.setup_conda.outcome == 'failure'
       shell: bash
       run: |
-        echo "setup-miniconda failed, installing Mambaforge manually..."
+        echo "setup-miniconda failed, installing Miniforge3 manually..."
         
         case "${{ inputs.platform }}" in
           "linux")
-            MAMBAFORGE_URL="https://github.com/conda-forge/miniforge/releases/latest/download/Mambaforge-Linux-x86_64.sh"
+            MINIFORGE_URL="https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh"
             ;;
           "macos")
-            MAMBAFORGE_URL="https://github.com/conda-forge/miniforge/releases/latest/download/Mambaforge-MacOSX-x86_64.sh"
+            MINIFORGE_URL="https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-MacOSX-x86_64.sh"
             ;;
           "macos-arm")
-            MAMBAFORGE_URL="https://github.com/conda-forge/miniforge/releases/latest/download/Mambaforge-MacOSX-arm64.sh"
+            MINIFORGE_URL="https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-MacOSX-arm64.sh"
             ;;
           "windows")
             echo "Cannot do manual installation on Windows, exiting..."
@@ -67,14 +68,14 @@ runs:
         esac
         
         # Download and install
-        curl -fsSL -o mambaforge.sh "$MAMBAFORGE_URL"
-        bash mambaforge.sh -b -p $HOME/mambaforge
+        curl -fsSL -o miniforge.sh "$MINIFORGE_URL"
+        bash miniforge.sh -b -p $HOME/miniforge3
         
         # Add to PATH for subsequent steps
-        echo "$HOME/mambaforge/bin" >> $GITHUB_PATH
+        echo "$HOME/miniforge3/bin" >> $GITHUB_PATH
         
         # Initialize
-        source $HOME/mambaforge/bin/activate
+        source $HOME/miniforge3/bin/activate
         conda init bash
 
     # Cache conda environment
@@ -96,25 +97,47 @@ runs:
         mamba env update -n huira_env -f dependencies/environment.yml
         
         echo "Installing additional build tools..."
-        # Add essential build tools that aren't in your environment.yml
-        # NOTE: Skipping cmake to use system version (4.0+ has compatibility issues)
-        mamba install -y ninja pkg-config
-        
-        # Platform-specific build tools
+        # Platform-specific build tools installation
         case "${{ inputs.platform }}" in
           "linux")
-            echo "Using system CMake instead of conda CMake to avoid version 4.0+ compatibility issues"
+            echo "Using system CMake and ninja (already installed via apt)"
+            ;;
+          "macos")
+            echo "Using system CMake and ninja for macOS x86_64 (installed via brew)"
+            # Force architecture for conda packages to avoid ARM64 packages on x86_64
+            export CONDA_SUBDIR=osx-64
+            mamba install -y pkg-config
+            ;;
+          "macos-arm")
+            echo "Installing macOS ARM64 build tools..."
+            mamba install -y ninja pkg-config
             ;;
           "windows")
             echo "Installing Windows build tools..."
-            # Visual Studio is set up separately above
-            mamba install -y cmake  # Windows needs cmake from conda
-            ;;
-          "macos"|"macos-arm")
-            echo "Installing macOS build tools..."
-            # Xcode command line tools should be available
+            mamba install -y cmake ninja pkg-config
             ;;
         esac
+
+    # Fix ninja path issue for macOS x86_64
+    - name: Remove conda ninja (macOS x86_64)
+      if: inputs.platform == 'macos'
+      shell: bash -el {0}
+      run: |
+        echo "Removing conda ninja to avoid architecture conflicts..."
+        # Remove or rename conda ninja if it exists
+        if [ -f "${CONDA_PREFIX}/bin/ninja" ]; then
+          echo "Found conda ninja at ${CONDA_PREFIX}/bin/ninja, removing it..."
+          rm -f "${CONDA_PREFIX}/bin/ninja"
+        fi
+        
+        # Verify system ninja is available
+        if ! which ninja > /dev/null 2>&1; then
+          echo "System ninja not found, installing via brew..."
+          brew install ninja
+        fi
+        
+        echo "System ninja location: $(which ninja)"
+        echo "System ninja version: $(ninja --version)"
 
     # Set environment variables for CMake to find conda packages
     - name: Set conda environment variables
@@ -135,6 +158,13 @@ runs:
           "windows")
             echo "CMAKE_GENERATOR=Visual Studio 17 2022" >> $GITHUB_ENV
             echo "CMAKE_GENERATOR_PLATFORM=x64" >> $GITHUB_ENV
+            ;;
+          "macos")
+            # For macOS x86_64, use system ninja and specify its path explicitly
+            echo "CMAKE_GENERATOR=Ninja" >> $GITHUB_ENV
+            SYSTEM_NINJA_PATH=$(which ninja)
+            echo "CMAKE_MAKE_PROGRAM=${SYSTEM_NINJA_PATH}" >> $GITHUB_ENV
+            echo "Using system ninja at: ${SYSTEM_NINJA_PATH}"
             ;;
           *)
             echo "CMAKE_GENERATOR=Ninja" >> $GITHUB_ENV
