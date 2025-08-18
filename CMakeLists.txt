@@ -19,7 +19,6 @@ list(APPEND CMAKE_MODULE_PATH
 )
 include(CustomVcpkgSetup)
 
-
 #############################
 ### Configure the project ###
 #############################
@@ -39,6 +38,9 @@ if(NOT HUIRA_PREBUILD_SPECIALIZATIONS)
     add_compile_definitions(HUIRA_HEADER_ONLY)
 endif()
 
+# Configure compiler and warnings:
+include(CustomConfig)
+
 # Set all outputs to go to the binary directory
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
@@ -50,7 +52,6 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 ##########################
 # Add the included directories:
 include_directories(include)
-include_directories(source)
 
 # Add source directories:
 add_subdirectory(src/huira)

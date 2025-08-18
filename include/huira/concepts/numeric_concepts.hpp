@@ -26,4 +26,4 @@ namespace huira {
 	concept IsRatio = is_std_ratio_impl<T>::value;
 
 
-};
+}

@@ -11,7 +11,7 @@
 
 namespace huira {
 	template <IsFloatingPoint T>
-	class Rotation {
+	class HUIRA_EXPORT Rotation {
 	public:
 		Rotation() = default;
 		Rotation(Mat3<T> matrix);
@@ -58,6 +58,6 @@ namespace huira {
 	typedef Rotation<double> Rotation_d;
 
 	// Declare Explicit Instantiations:
-	extern template class HUIRA_EXPORT Rotation<float>;
-	extern template class HUIRA_EXPORT Rotation<double>;
-};
+	extern template class Rotation<float>;
+	extern template class Rotation<double>;
+}

@@ -148,6 +148,3 @@ install(FILES
 #install(FILES
 #        cmake/
 #        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/Huira)
-
-# Run custom compiler/warnings setup:
-include(CustomConfig)
