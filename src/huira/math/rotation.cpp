@@ -116,13 +116,13 @@ namespace huira {
 	std::string Rotation<T>::toString() const
 	{
 		return glm::to_string(matrix_);
-	};
+	}
 
 	template <IsFloatingPoint T>
 	Rotation<T> Rotation<T>::inverse() const
 	{
 		return Rotation<T>(glm::transpose(matrix_));
-	};
+	}
 
 
 	// =============== //
@@ -132,37 +132,37 @@ namespace huira {
 	Quaternion<T> Rotation<T>::getQuaternion() const
 	{
 		return glm::quat_cast(matrix_);
-	};
+	}
 
 	template <IsFloatingPoint T>
 	ShusterQuaternion<T> Rotation<T>::getShusterQuaternion() const
 	{
 		return toShuster(glm::quat_cast(matrix_));
-	};
+	}
 
 	template <IsFloatingPoint T>
 	Mat3<T> Rotation<T>::getMatrix() const
 	{
 		return matrix_;
-	};
+	}
 
 	template <IsFloatingPoint T>
 	Vec3<T> Rotation<T>::getXAxis() const
 	{
 		return matrix_[0];
-	};
+	}
 
 	template <IsFloatingPoint T>
 	Vec3<T> Rotation<T>::getYAxis() const
 	{
 		return matrix_[1];
-	};
+	}
 
 	template <IsFloatingPoint T>
 	Vec3<T> Rotation<T>::getZAxis() const
 	{
 		return matrix_[2];
-	};
+	}
 
 	// ========================== //
 	// === Operator Overloads === //
@@ -172,26 +172,26 @@ namespace huira {
 	{
 		Mat3<T> result_matrix = matrix_ * b.matrix_;
 		return Rotation<T>(result_matrix);
-	};
+	}
 
 	template <IsFloatingPoint T>
 	Rotation<T>& Rotation<T>::operator*= (const Rotation<T>& b)
 	{
 		this->setMatrix(matrix_ * b.matrix_);
 		return *this;
-	};
+	}
 
 	template <IsFloatingPoint T>
 	Vec3<T> Rotation<T>::operator* (const Vec3<T>& b) const
 	{
 		return matrix_ * b;
-	};
+	}
 
 	template <IsFloatingPoint T>
 	Mat3<T> Rotation<T>::operator* (const Mat3<T>& b) const
 	{
 		return matrix_ * b;
-	};
+	}
 
 
 	// ====================== //
@@ -211,7 +211,7 @@ namespace huira {
 		result[0][2] = 0; result[1][2] = s; result[2][2] =  c;
 
 		return result;
-	};
+	}
 
 	template <IsFloatingPoint T>
 	Mat3<T> Rotation<T>::rotationY(Degree angle)
@@ -227,7 +227,7 @@ namespace huira {
 		result[0][2] = -s; result[1][2] = 0; result[2][2] = c;
 
 		return result;
-	};
+	}
 
 	template <IsFloatingPoint T>
 	Mat3<T> Rotation<T>::rotationZ(Degree angle)
@@ -243,7 +243,7 @@ namespace huira {
 		result[0][2] = 0; result[1][2] =  0; result[2][2] = 1;
 
 		return result;
-	};
+	}
 
 
 	// ======================== //
@@ -257,10 +257,10 @@ namespace huira {
 			// TODO Throw error
 		}
 		this->matrix_ = matrix;
-	};
+	}
 
 
 	// Explicit Instantiations:
-	template class HUIRA_EXPORT Rotation<float>;
-	template class HUIRA_EXPORT Rotation<double>;
+	template class Rotation<float>;
+	template class Rotation<double>;
 }

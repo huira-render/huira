@@ -28,7 +28,7 @@ namespace huira {
         }
 
         return "";
-    };
+    }
 
     template <int L, int M, int T, int I, int O, int N, int J, int A, int S>
     constexpr std::string Dimensionality<L, M, T, I, O, N, J, A, S>::toSIString()
@@ -85,5 +85,5 @@ namespace huira {
                 return numerator + " / " + denominator;
             }
         }
-    };
+    }
 }
