@@ -1,30 +1,26 @@
 #pragma once
 
-#include <array>
-#include <type_traits>
-#include <iostream>
-#include <ratio>
+#include <string>
 
 namespace huira {
     // Base dimensional analysis template
     template <int L, int M, int T, int I, int O, int N, int J, int A, int S>
     struct Dimensionality {
-        static constexpr int length = L;
-        static constexpr int mass = M;
-        static constexpr int time = T;
-        static constexpr int current = I;
-        static constexpr int temperature = O;
-        static constexpr int amount = N;
-        static constexpr int luminosity = J;
-        static constexpr int angle = A;        // plane angle (radians)
-        static constexpr int solid_angle = S;  // solid angle (steradians)
+        static constexpr int length = L;       // Meter    (m)
+        static constexpr int mass = M;         // Kilogram (Kg)
+        static constexpr int time = T;         // Second (s)
+        static constexpr int current = I;      // Ampere (A)
+        static constexpr int temperature = O;  // Kelvin (K)
+        static constexpr int amount = N;       // Mole (mol)
+        static constexpr int luminosity = J;   // Candela (cd)
+        static constexpr int angle = A;        // Radian (rad)
+        static constexpr int solid_angle = S;  // Steradian (sr)
 
-        // Equality comparison for Dimensionality
-        template <int L2, int M2, int T2, int I2, int O2, int N2, int J2, int A2, int S2>
-        static constexpr bool equals() {
-            return L == L2 && M == M2 && T == T2 && I == I2 &&
-                O == O2 && N == N2 && J == J2 && A == A2 && S == S2;
-        }
+        template<typename Other>
+        static constexpr bool sameAs();
+
+        static constexpr std::string getSIUnitString(int power_prefix, int val, std::string unit);
+        static constexpr std::string toSIString();
     };
 
     // Multiplication of Dimensionality
@@ -45,6 +41,17 @@ namespace huira {
         return {};
     }
 
+    // Create Concepts:
+    template<typename>
+    struct is_dimensionality : std::false_type {};
+
+    template<int L, int M, int T, int I, int O, int N, int J, int A, int S>
+    struct is_dimensionality<Dimensionality<L, M, T, I, O, N, J, A, S>> : std::true_type {};
+
+    template<typename T>
+    concept IsDimensionality = is_dimensionality<T>::value;
+
+
     // SI Base Dimensionality Types
     using Dimensionless = Dimensionality<0, 0, 0, 0, 0, 0, 0, 0, 0>;
     using Length = Dimensionality<1, 0, 0, 0, 0, 0, 0, 0, 0>;
@@ -59,43 +66,122 @@ namespace huira {
     using Angle = Dimensionality<0, 0, 0, 0, 0, 0, 0, 1, 0>;        // radians
     using SolidAngle = Dimensionality<0, 0, 0, 0, 0, 0, 0, 0, 1>;   // steradians
 
-    // SI Derived Dimensionality Types (existing ones)
+    // Unnamed but Common SI Derived Unit Types:
     using Area = decltype(Length{} *Length{});
     using Volume = decltype(Length{} *Length{} *Length{});
     using Speed = decltype(Length{} / Time{});
     using Acceleration = decltype(Speed{} / Time{});
+
+    // Named SI Derived Unit Types:
+    using Frequency = decltype(Dimensionless{} / Time{});
     using Force = decltype(Mass{} *Acceleration{});
+    using Pressure = decltype(Force{} / Area{});    
     using Energy = decltype(Force{} *Length{});
     using Power = decltype(Energy{} / Time{});
-    using Frequency = decltype(Dimensionless{} / Time{});
-    using Pressure = decltype(Force{} / Area{});
+    using Charge = decltype(Time{} *Current{});
+    using Voltage = decltype(Power{} / Current{});
+    using Capacitance = decltype(Charge{} / Voltage{});
+    using Resistance = decltype(Voltage{} / Current{});
+    using LuminousFlux = decltype(LuminousIntensity{} *SolidAngle{});
+    using Illuminance = decltype(LuminousFlux{} / Area{});
 
     // Angular derived types
     using AngularVelocity = decltype(Angle{} / Time{});
     using AngularAcceleration = decltype(AngularVelocity{} / Time{});
 
-    // Radiometric quantities
-    using Radiance = decltype(Power{} / (Area{} *SolidAngle{}));           // W/(m²·sr)
-    using Irradiance = decltype(Power{} / Area{});                          // W/m²
-    using RadiantIntensity = decltype(Power{} / SolidAngle{});              // W/sr
-    using LuminousFlux = decltype(LuminousIntensity{} *SolidAngle{});      // lm (cd·sr)
+    // Composite Radiometric quantities
+    using Radiance = decltype(Power{} / (Area{} *SolidAngle{}));
+    using Irradiance = decltype(Power{} / Area{});
+    using RadiantIntensity = decltype(Power{} / SolidAngle{});
 
-    // Photometric quantities
-    using Illuminance = decltype(LuminousFlux{} / Area{});                  // lux (lm/m²)
-    using Luminance = decltype(LuminousIntensity{} / Area{});               // cd/m²
-
-    // Alternative names for clarity
-    using SpectralRadiance = Radiance;    // Often used in optics
-    using RadiantExitance = Irradiance;   // When referring to emitted flux density
+    // Composite Photometric quantities
+    using Luminance = decltype(LuminousIntensity{} / Area{});
 
 
-    // Helper to detect if a type is a Dimensionality specialization
-    template<typename>
-    struct is_dimensionality : std::false_type {};
+    // =========================== // 
+    // === Provide Definitions === //
+    // =========================== //
+    template <int L, int M, int T, int I, int O, int N, int J, int A, int S>
+    template <typename Other>
+    constexpr bool Dimensionality<L, M, T, I, O, N, J, A, S>::sameAs()
+    {
+        return std::is_same_v<Dimensionality<L, M, T, I, O, N, J, A, S>, Other>;
+    }
 
-    template<int L, int M, int T, int I, int O, int N, int J, int A, int S>
-    struct is_dimensionality<Dimensionality<L, M, T, I, O, N, J, A, S>> : std::true_type {};
+    template <int L, int M, int T, int I, int O, int N, int J, int A, int S>
+    constexpr std::string Dimensionality<L, M, T, I, O, N, J, A, S>::getSIUnitString(int power_prefix, int val, std::string unit)
+    {
+        val = power_prefix * val;
 
-    template<typename T>
-    concept IsDimensionality = is_dimensionality<T>::value;
+        if (val == 0) {
+            return "";
+        }
+
+        if (val == 1) {
+            return unit;
+        }
+
+        if (val > 1) {
+            return "(" + unit + ")^" + std::to_string(val);
+        }
+
+        return "";
+    };
+
+    template <int L, int M, int T, int I, int O, int N, int J, int A, int S>
+    constexpr std::string Dimensionality<L, M, T, I, O, N, J, A, S>::toSIString()
+    {
+        // Check if named derived unit:
+        if (sameAs<Frequency>()) { return "Hz"; }
+        if (sameAs<Force>()) { return "N"; }
+        if (sameAs<Pressure>()) { return "Pa"; }
+        if (sameAs<Energy>()) { return "J"; }
+        if (sameAs<Power>()) { return "W"; }
+        if (sameAs<Charge>()) { return "C"; }
+        if (sameAs<Voltage>()) { return "V"; }
+        if (sameAs<Capacitance>()) { return "F"; }
+        if (sameAs<Resistance>()) { return "Ohm"; }
+        if (sameAs<LuminousFlux>()) { return "lm"; }
+        if (sameAs<Illuminance>()) { return "lm / m^2"; }
+        if (sameAs<Radiance>()) { return "W / m^2 sr"; }
+        if (sameAs<Irradiance>()) { return "W / m^2"; }
+        if (sameAs<RadiantIntensity>()) { return "W / sr"; }
+        if (sameAs<Luminance>()) { return "cd / m^2"; }
+
+        // Fall-back to Construction using SI units:
+        std::string numerator = "";
+        std::string denominator = "";
+
+        numerator += getSIUnitString(1, L, "m");
+        numerator += getSIUnitString(1, M, "Kg");
+        numerator += getSIUnitString(1, T, "s");
+        numerator += getSIUnitString(1, I, "A");
+        numerator += getSIUnitString(1, O, "K");
+        numerator += getSIUnitString(1, N, "mol");
+        numerator += getSIUnitString(1, J, "cd");
+        numerator += getSIUnitString(1, A, "rad");
+        numerator += getSIUnitString(1, S, "sr");
+
+        denominator += getSIUnitString(-1, L, "m");
+        denominator += getSIUnitString(-1, M, "Kg");
+        denominator += getSIUnitString(-1, T, "s");
+        denominator += getSIUnitString(-1, I, "A");
+        denominator += getSIUnitString(-1, O, "K");
+        denominator += getSIUnitString(-1, N, "mol");
+        denominator += getSIUnitString(-1, J, "cd");
+        denominator += getSIUnitString(-1, A, "rad");
+        denominator += getSIUnitString(-1, S, "sr");
+
+        if (denominator.empty()) {
+            return "dimensionless";
+        }
+        else {
+            if (numerator.empty()) {
+                return "1 / " + denominator;
+            }
+            else {
+                return numerator + " / " + denominator;
+            }
+        }
+    };
 }
