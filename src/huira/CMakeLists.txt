@@ -46,6 +46,10 @@ else()
     target_compile_definitions(huira PUBLIC HUIRA_HEADER_ONLY)
 endif()
 
+if(NOT BUILD_SHARED_LIBS)
+    target_compile_definitions(huira PUBLIC HUIRA_STATIC)
+endif()
+
 target_link_libraries(huira PUBLIC
     glm::glm
 )
@@ -81,12 +85,21 @@ if(HUIRA_PREBUILD_SPECIALIZATIONS)
     install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/huira/
             DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/huira
             FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h")
+
+    install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/inline/
+            DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/inline
+            FILES_MATCHING PATTERN "*.ipp")
+
 else()
     # Install both public headers and implementation for header-only mode
     install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/huira/
             DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/huira
             FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h")
     
+    install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/inline/
+            DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/inline
+            FILES_MATCHING PATTERN "*.ipp")
+
     install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/implementation/
             DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/implementation
             FILES_MATCHING PATTERN "*.ipp" PATTERN "*.hpp" PATTERN "*.h")

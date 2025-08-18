@@ -94,6 +94,7 @@ if(MSVC AND NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
         /wd4711 # function selected for automatic inline expansion (optimization, not correctness)
         /wd4371 # class layout changes (compiler optimization)
         /wd5045 # Spectre mitigation (security feature, not code issue)
+        /wd4514 # Unreferenced inline function
     )
     
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")

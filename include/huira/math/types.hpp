@@ -2,6 +2,7 @@
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include "glm/glm.hpp"
+#include "glm/gtx/io.hpp"
 
 #include "huira/concepts/numeric_concepts.hpp"
 
@@ -31,7 +32,6 @@ namespace huira {
     using Vec4 = Vec<4, T>;
 
 
-
     // Quaternion aliases
     template<IsFloatingPoint T>
     using Quaternion = glm::qua<T, glm::highp>;  // GLM/Hamilton: (w, x, y, z)
@@ -48,4 +48,30 @@ namespace huira {
     Quaternion<T> toHamilton(const ShusterQuaternion<T>& q) {
         return Quaternion<T>(q.w, q.x, q.y, q.z);
     }
+
+
+    // Helpful typedefs:
+    typedef Mat2<float> Mat2_f;
+    typedef Mat2<double> Mat2_d;
+
+    typedef Mat3<float> Mat3_f;
+    typedef Mat3<double> Mat3_d;
+
+    typedef Mat4<float> Mat4_f;
+    typedef Mat4<double> Mat4_d;
+
+    typedef Vec2<float> Vec2_f;
+    typedef Vec2<double> Vec2_d;
+
+    typedef Vec3<float> Vec3_f;
+    typedef Vec3<double> Vec3_d;
+
+    typedef Vec4<float> Vec4_f;
+    typedef Vec4<double> Vec4_d;
+
+    typedef Quaternion<float> Quaternion_f;
+    typedef Quaternion<double> Quaternion_d;
+
+    typedef ShusterQuaternion<float> ShusterQuaternion_f;
+    typedef ShusterQuaternion<double> ShusterQuaternion_d;
 }
