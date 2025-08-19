@@ -70,8 +70,25 @@ set_target_properties(huira PROPERTIES
 )
 
 # Create an alias for consistent naming
-add_library(Huira::Huira ALIAS huira)
+add_library(huira::huira ALIAS huira)
 
+# Configure instrumentation for code coverage
+if(HUIRA_ENABLE_COVERAGE)
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        set(COVERAGE_FLAGS --coverage -fprofile-arcs -ftest-coverage -g)
+    elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        if(WIN32)
+            set(COVERAGE_FLAGS -fprofile-instr-generate -fcoverage-mapping -g)
+        else()
+            set(COVERAGE_FLAGS --coverage -g)
+        endif()
+    endif()
+    
+    target_compile_options(huira PRIVATE ${COVERAGE_FLAGS})
+    target_link_options(huira PRIVATE ${COVERAGE_FLAGS})
+    
+    message(STATUS "Coverage instrumentation added to huira library")
+endif()
 
 ##########################
 ### Installation Setup ###

@@ -62,15 +62,15 @@ namespace huira {
 		// Create rotation matrix using Rodrigues' formula
 		Mat3<T> matrix;
 		matrix[0][0] = c + x * x * (1 - c);
-		matrix[0][1] = x * y * (1 - c) - z * s;
-		matrix[0][2] = x * z * (1 - c) + y * s;
+		matrix[0][1] = y * x * (1 - c) + z * s;
+		matrix[0][2] = z * x * (1 - c) - y * s;
 
-		matrix[1][0] = y * x * (1 - c) + z * s;
+		matrix[1][0] = x * y * (1 - c) - z * s;
 		matrix[1][1] = c + y * y * (1 - c);
-		matrix[1][2] = y * z * (1 - c) - x * s;
-		
-		matrix[2][0] = z * x * (1 - c) - y * s;
-		matrix[2][1] = z * y * (1 - c) + x * s;
+		matrix[1][2] = z * y * (1 - c) + x * s;
+
+		matrix[2][0] = x * z * (1 - c) + y * s;
+		matrix[2][1] = y * z * (1 - c) - x * s;
 		matrix[2][2] = c + z * z * (1 - c);
 
 		this->setMatrix(matrix);
@@ -121,7 +121,7 @@ namespace huira {
 	template <IsFloatingPoint T>
 	Rotation<T> Rotation<T>::inverse() const
 	{
-		return Rotation<T>(glm::transpose(matrix_));
+		return Rotation<T>(transpose_);
 	}
 
 
@@ -183,12 +183,6 @@ namespace huira {
 
 	template <IsFloatingPoint T>
 	Vec3<T> Rotation<T>::operator* (const Vec3<T>& b) const
-	{
-		return matrix_ * b;
-	}
-
-	template <IsFloatingPoint T>
-	Mat3<T> Rotation<T>::operator* (const Mat3<T>& b) const
 	{
 		return matrix_ * b;
 	}
@@ -257,6 +251,7 @@ namespace huira {
 			// TODO Throw error
 		}
 		this->matrix_ = matrix;
+		this->transpose_ = glm::transpose(matrix);
 	}
 
 

@@ -35,7 +35,6 @@ namespace huira {
 		Rotation& operator*= (const Rotation& b);
 
 		Vec3<T> operator* (const Vec3<T>& b) const;
-		Mat3<T> operator* (const Mat3<T>& b) const;
 
 		static Mat3<T> rotationX(Degree angle);
 		static Mat3<T> rotationY(Degree angle);
@@ -43,6 +42,7 @@ namespace huira {
 
 	private:
 		Mat3<T> matrix_{ 1 };
+		Mat3<T> transpose_{ 1 };
 
 		void setMatrix(Mat3<T> matrix);
 

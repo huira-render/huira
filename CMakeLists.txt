@@ -67,6 +67,7 @@ endif()
 
 if(HUIRA_TESTS)
     message("Building Tests")
+    enable_testing()
     add_subdirectory(tests)
 endif()
 

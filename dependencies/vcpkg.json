@@ -26,9 +26,9 @@
   ],
   "features": {
     "tests": {
-      "description": "Build tests using gtest",
+      "description": "Build testing with catch2",
       "dependencies": [
-        "gtest"
+        "catch2"
       ]
     }
   },
@@ -36,6 +36,10 @@
     {
       "name": "assimp",
       "version": "5.4.3"
+    },
+    {
+      "name": "catch2",
+      "version": "3.8.0"
     },
     {
       "name": "cfitsio",

@@ -1,7 +1,6 @@
 if(MSVC)
     message("Windows Detected")
 
-    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
     set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_Release ON)
     set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_Debug OFF)
 
@@ -146,6 +145,7 @@ if(MSVC AND NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
         /wd5045 # Compiler will insert Spectre mitigation
         /wd4371 # Layout of class may have changed from previous compiler version
         /wd5246 # The initialization of a subobject should be wrapped in braces
+        /wd4868 # Left-to-right evaluation order of braced initializer list
         
         # Compatibility warnings
         /wd4996 # Function or variable may be unsafe (deprecation warnings)
