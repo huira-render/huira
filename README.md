@@ -3,27 +3,27 @@
 *Huira* is a ray-tracing library for rendering large scenes, star fields, and simulating solar radiation pressure.
 
 ### Main Branch Status
-We only run Tests for Linux builds
-
-[![Coverage](https://codecov.io/gh/huira-render/huira/branch/main/graph/badge.svg)](https://app.codecov.io/gh/huira-render/huira/tree/main)
 
 [![Docs](https://github.com/huira-render/huira/actions/workflows/documentation.yml/badge.svg?branch=main)](https://github.com/huira-render/huira/actions/workflows/documentation.yml?query=branch%3Amain)
 
-| Platform | C++ Build | C++ Tests | Python Bindings | Python Tests |
-|:--------:|:---------:|:---------:|:---------------:|:------------:|
-| Linux       | [![Linux][ref-nix-badge]]([ref-nix-yml]) | [![C++ Tests][ref-tests-badge]]([ref-tests-yml]) |  |  | 
-| MacOS (x86) | [![MacOS x86][ref-osi-badge]](ref-osi-yml)  |  |  |  |
-| MacOS (ARM) | [![MacOS ARM][ref-osa-badge]]([ref-osa-yml])|  |  |  |
-| Windows     | [![Windows][ref-win-badge]]([ref-win-yml])  |  |  |  |
+[![C++ Tests](https://github.com/huira-render/huira/actions/workflows/cpp-tests.yml/badge.svg?branch=main)](https://github.com/huira-render/huira/actions/workflows/cpp-tests.yml?query=branch%3Amain])
+[![Coverage](https://codecov.io/gh/huira-render/huira/branch/main/graph/badge.svg)](https://app.codecov.io/gh/huira-render/huira/tree/main)
+
+| Platform | C++ Build | Python Bindings |
+|:--------:|:---------:|:---------------:|
+| Linux       | [![Linux][ref-nix-badge]]([ref-nix-yml])     |  | 
+| MacOS (x86) | [![MacOS x86][ref-osi-badge]](ref-osi-yml)   |  |
+| MacOS (ARM) | [![MacOS ARM][ref-osa-badge]]([ref-osa-yml]) |  |
+| Windows     | [![Windows][ref-win-badge]]([ref-win-yml])   |  |
 
 ### Develop Branch Status (Latest)
-We only run CI/Tests for Linux
 
+[![C++ Tests](https://github.com/huira-render/huira/actions/workflows/cpp-tests.yml/badge.svg?branch=develop)](https://github.com/huira-render/huira/actions/workflows/cpp-tests.yml?query=branch%3Adevelop)
 [![Coverage](https://codecov.io/gh/huira-render/huira/branch/develop/graph/badge.svg)](https://app.codecov.io/gh/huira-render/huira/tree/develop)
 
-| Platform | C++ Build | C++ Tests | Python Bindings | Python Tests |
-|:--------:|:---------:|:---------:|:---------------:|:------------:|
-| Linux        | [![Linux][ref-nix-dev-badge]]([ref-nix-dev-yml]) | [![C++ Tests][ref-tests-dev-badge]](ref-tests-dev-yml]) | | |
+| Platform | C++ Build | Python Bindings |
+|:--------:|:---------:|:---------------:|
+| Linux    | [![Linux][ref-nix-dev-badge]]([ref-nix-dev-yml]) |  |
 
 
 ***
@@ -56,10 +56,6 @@ Huira is licensed under the [MIT License](./LICENSE)
 [ref-nix-dev-badge]: https://github.com/huira-render/huira/actions/workflows/linux-build.yml/badge.svg?branch=develop
 [ref-nix-dev-yml]: https://github.com/huira-render/huira/actions/workflows/linux-build.yml?query=branch%3Adevelop
 
-[ref-tests-dev-badge]: https://github.com/huira-render/huira/actions/workflows/cpp-tests.yml/badge.svg?branch=develop
-[ref-tests-dev-yml]: https://github.com/huira-render/huira/actions/workflows/cpp-tests.yml?query=branch%3Adevelop
-
-
 <!--- MacOS x86 Badges and Workflows --->
 [ref-osi-badge]: https://github.com/huira-render/huira/actions/workflows/macos-x86-build.yml/badge.svg?branch=main
 [ref-osi-yml]: https://github.com/huira-render/huira/actions/workflows/macos-x86-build.yml?query=branch%3Amain
@@ -71,6 +67,3 @@ Huira is licensed under the [MIT License](./LICENSE)
 <!--- Windows Badges and Workflows --->
 [ref-win-badge]: https://github.com/huira-render/huira/actions/workflows/windows-build.yml/badge.svg?branch=main
 [ref-win-yml]: https://github.com/huira-render/huira/actions/workflows/windows-build.yml?query=branch%3Amain
-
-[ref-tests-badge]: https://github.com/huira-render/huira/actions/workflows/cpp-tests.yml/badge.svg?branch=main
-[ref-tests-yml]: https://github.com/huira-render/huira/actions/workflows/cpp-tests.yml?query=branch%3Amain
