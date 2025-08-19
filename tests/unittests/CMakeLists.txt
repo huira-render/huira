@@ -8,19 +8,15 @@ find_package(Catch2 CONFIG REQUIRED)
 # Just add the source file path - test name is derived from filename
 set(UNIT_TESTS
     huira/math/test_rotation.cpp
-    # Add more tests here as you create them:
-    # huira/units/test_dimensional_analysis.cpp
-    # huira/math/test_vector.cpp
-    # huira/math/test_matrix.cpp
 )
 
 #############################
 ### Coverage Configuration ###
 #############################
 
-option(HUIRA_ENABLE_COVERAGE "Enable code coverage reporting" OFF)
+option(HUIRA_COVERAGE "Enable code coverage reporting" OFF)
 
-if(HUIRA_ENABLE_COVERAGE)
+if(HUIRA_COVERAGE)
     if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
         # GCC coverage flags
         set(COVERAGE_FLAGS --coverage -fprofile-arcs -ftest-coverage -g)
@@ -37,7 +33,7 @@ if(HUIRA_ENABLE_COVERAGE)
         endif()
     else()
         message(WARNING "Code coverage not supported for ${CMAKE_CXX_COMPILER_ID}")
-        set(HUIRA_ENABLE_COVERAGE OFF)
+        set(HUIRA_COVERAGE OFF)
     endif()
 endif()
 
@@ -56,9 +52,14 @@ function(add_unit_test test_name source_file)
     )
     
     # Add coverage flags if enabled
-    if(HUIRA_ENABLE_COVERAGE)
-        target_compile_options(${test_name} PRIVATE ${COVERAGE_FLAGS})
-        target_link_options(${test_name} PRIVATE ${COVERAGE_FLAGS})
+    if(HUIRA_COVERAGE)
+        target_compile_options(${test_name} PRIVATE --coverage -g)
+        target_link_libraries(${test_name} PRIVATE --coverage)
+        
+        # Ensure the huira library also has coverage instrumentation
+        # but only when tests are being built
+        target_compile_options(huira PRIVATE --coverage -g)
+        target_link_libraries(huira PRIVATE --coverage)
     endif()
     
     # Disable the problematic warning for MSVC
@@ -96,30 +97,27 @@ endforeach()
 ### CI Integration Setup ###
 ############################
 
-# Configure Catch2 to output JUnit XML for CI
-if(CMAKE_BUILD_TYPE STREQUAL "CI" OR DEFINED ENV{CI})
-    set(CATCH2_OUTPUT_DIR "${CMAKE_BINARY_DIR}/test-results")
-    file(MAKE_DIRECTORY ${CATCH2_OUTPUT_DIR})
-    
-    # Function to add JUnit XML output to tests
-    function(configure_test_output test_name)
-        set_tests_properties(${test_name} PROPERTIES 
-            ENVIRONMENT "CATCH_CONFIG_REPORTER=JUnit::out=${CATCH2_OUTPUT_DIR}/${test_name}.xml"
-        )
-    endfunction()
-    
-    # Apply to all tests
-    foreach(source_file ${UNIT_TESTS})
-        get_filename_component(test_name ${source_file} NAME_WE)
-        configure_test_output(${test_name})
-    endforeach()
-endif()
+# Configure Catch2 to output JUnit XML
+set(CATCH2_OUTPUT_DIR "${CMAKE_BINARY_DIR}/test-results")
+file(MAKE_DIRECTORY ${CATCH2_OUTPUT_DIR})
+
+function(configure_test_output test_name)
+    get_test_property(${test_name} COMMAND current_command)
+    set_tests_properties(${test_name} PROPERTIES 
+        COMMAND "${current_command};-r;junit;-o;${CATCH2_OUTPUT_DIR}/${test_name}.xml"
+    )
+endfunction()
+# Apply to all tests
+foreach(source_file ${UNIT_TESTS})
+    get_filename_component(test_name ${source_file} NAME_WE)
+    configure_test_output(${test_name})
+endforeach()
 
 ###########################
 ### Coverage Target Setup ###
 ###########################
 
-if(HUIRA_ENABLE_COVERAGE)
+if(HUIRA_COVERAGE)
     set(COVERAGE_OUTPUT_DIR "${CMAKE_BINARY_DIR}/coverage")
     file(MAKE_DIRECTORY ${COVERAGE_OUTPUT_DIR})
     
@@ -128,12 +126,22 @@ if(HUIRA_ENABLE_COVERAGE)
         find_program(GENHTML_EXECUTABLE genhtml)
         
         if(LCOV_EXECUTABLE AND GENHTML_EXECUTABLE)
+            # Build command to run each test with XML output
+            set(RUN_TESTS_COMMAND "")
+            foreach(source_file ${UNIT_TESTS})
+                get_filename_component(test_name ${source_file} NAME_WE)
+                list(APPEND RUN_TESTS_COMMAND 
+                    COMMAND $<TARGET_FILE:${test_name}> -r junit -o ${CATCH2_OUTPUT_DIR}/${test_name}.xml
+                )
+            endforeach()
+            
             add_custom_target(coverage
                 COMMAND ${LCOV_EXECUTABLE} --directory . --zerocounters
-                COMMAND ctest --output-on-failure
+                ${RUN_TESTS_COMMAND}  # Run tests individually instead of ctest
                 COMMAND ${LCOV_EXECUTABLE} --directory . --capture --output-file coverage.info
-                COMMAND ${LCOV_EXECUTABLE} --remove coverage.info 
-                    '/usr/*' '*/tests/*' '*/dependencies/*' '*/build/*'
+                COMMAND ${LCOV_EXECUTABLE} --extract coverage.info 
+                    '${CMAKE_SOURCE_DIR}/src/*'
+                    '${CMAKE_SOURCE_DIR}/include/*'
                     --output-file coverage_filtered.info
                 COMMAND ${GENHTML_EXECUTABLE} coverage_filtered.info --output-directory ${COVERAGE_OUTPUT_DIR}
                 WORKING_DIRECTORY ${CMAKE_BINARY_DIR}

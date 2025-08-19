@@ -73,7 +73,7 @@ set_target_properties(huira PROPERTIES
 add_library(huira::huira ALIAS huira)
 
 # Configure instrumentation for code coverage
-if(HUIRA_ENABLE_COVERAGE)
+if(HUIRA_COVERAGE)
     if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
         set(COVERAGE_FLAGS --coverage -fprofile-arcs -ftest-coverage -g)
     elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
