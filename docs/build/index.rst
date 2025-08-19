@@ -7,4 +7,5 @@ Huira Build Instructions
    linux
    macos
    windows
+   visual-studio
    options
