@@ -1,4 +1,4 @@
-# Linux Quickstart Guide
+# Linux Compilation Guide
 
 ## Table of Contents
 - [System Requirements](#system-requirements)
@@ -6,12 +6,13 @@
 - [Method 2: vcpkg Package Manager](#method-2-vcpkg-package-manager)
 - [Method 3: Manual Dependency Management (Advanced Users)](#method-3-manual-dependency-management-advanced-users)
 
-***
+---
 
 ## System Requirements
 
-- **C++ Compiler:** C++20 compatible
-  - GCC 10+ or Clang 10+
+Your development environment must include:
+- **C++ Compiler:** C++20 compatibility essential
+  - Linux systems: GCC 10+ or Clang 10+
 - **Version Control:** Git (recent version)
 - **Build System:** CMake 3.16+
 - **Configuration Tool:** pkg-config
@@ -38,7 +39,7 @@ conda install -c conda-forge cmake git pkg-config cxx-compiler make
 
 This eliminates the need for `sudo` privileges while still providing the necessary build tools.
 
-***
+---
 
 ## Method 1: conda Environment Setup (Preferred)
 
@@ -75,7 +76,7 @@ After successful compilation, integrate *Huira* into your conda environment:
 cmake --install .
 ```
 
-***
+---
 
 ## Method 2: vcpkg Package Manager
 
@@ -95,7 +96,7 @@ cmake -DCMAKE_TOOLCHAIN_FILE=~/vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BU
 cmake --build . -j
 ```
 
-***
+---
 
 ## Method 3: Manual Dependency Management (Advanced Users)
 
