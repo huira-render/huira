@@ -10,6 +10,16 @@
 #include "huira/huira_export.hpp"
 
 namespace huira {
+	/**
+	 * @brief Represents a 3D rotation using a rotation matrix, quaternion, or axis-angle representation.
+	 *
+	 * This class provides various constructors to create a rotation from different representations,
+	 * including a rotation matrix, quaternion, Shuster quaternion, axis-angle representation, and Euler angles.
+	 * It also provides methods to convert between these representations and perform operations like multiplication
+	 * and inversion.
+	 *
+	 * @tparam T The floating-point type (e.g., float or double).
+	 */
 	template <IsFloatingPoint T>
 	class HUIRA_EXPORT Rotation {
 	public:
