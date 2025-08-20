@@ -233,8 +233,6 @@ namespace huira {
         return lhs.getSIValue() >= rhs.getSIValue();
     }
 
-
-
     // Specialize SI Method for more complex conversions (or where `std::ratio` does not meet required precision)   
     using SiderealRatio = std::ratio<976395, 98436902>; // Magic number not used in computation
     template<>
@@ -252,6 +250,9 @@ namespace huira {
     template<>
     constexpr double Quantity<Angle, ArcSecondRatio>::getRatio() const { return PI<double>() / 648000.0; }
 
+    using SquareDegreeRatio = std::ratio<934629, 743097>; // Magic number not used in computation
+    template<>
+    constexpr double Quantity<SolidAngle, SquareDegreeRatio>::getRatio() const { return (PI<double>() / 180.0) * (PI<double>() / 180.0); }
 
     using CelsiusRatio = std::ratio<189305, 10345>; // Magic number not used in computation
     template<>
