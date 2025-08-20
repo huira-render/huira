@@ -6,6 +6,7 @@ cmake_minimum_required(VERSION 3.16)
 option(HUIRA_EXAMPLES "Build Examples" OFF)
 option(HUIRA_TESTS "Build Tests" OFF)
 option(HUIRA_DOCS "Build Documentation" OFF)
+option(HUIRA_PYTHON "Build Python Bindings" OFF)
 
 option(HUIRA_BUILD_DEV "Build Development Programs" ON)
 
@@ -14,6 +15,7 @@ option(HUIRA_PREBUILD_SPECIALIZATIONS "Build Common Specializations" OFF)
 # Load modules from cmake/ directory
 list(APPEND CMAKE_MODULE_PATH 
     "${CMAKE_CURRENT_SOURCE_DIR}/cmake"
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/fetch"
     "${CMAKE_CURRENT_SOURCE_DIR}/cmake/find"
     "${CMAKE_CURRENT_SOURCE_DIR}/cmake/setup"
 )
@@ -74,6 +76,11 @@ endif()
 if(HUIRA_DOCS)
     message("Building Documentation")
     add_subdirectory(docs)
+endif()
+
+if (HUIRA_PYTHON)
+    message("Building Python Bindings")
+    add_subdirectory(bindings/python)
 endif()
 
 # Include all included Scratch directories:
