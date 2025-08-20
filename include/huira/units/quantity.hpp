@@ -4,6 +4,7 @@
 #include <ratio>
 #include <string>
 #include <type_traits>
+#include <ostream>
 
 #include "huira/concepts/numeric_concepts.hpp"
 #include "huira/math/constants.hpp"
@@ -24,6 +25,12 @@ namespace huira {
 
         }
 
+        template<IsRatio OtherScale>
+        constexpr Quantity(const Quantity<Dim, OtherScale>& other)
+        {
+            value_ = this->fromSI(other.getSIValue());
+        }
+
         // Default constructor
         constexpr Quantity() : value_(0.0) {}
 
@@ -38,7 +45,7 @@ namespace huira {
 
         double getSIValue() const
         {
-            return static_cast<double>(Scale::num) / static_cast<double>(Scale::den) * value_;
+            return this->toSI(value_);
         }
 
         double rawValue() const {
@@ -121,8 +128,28 @@ namespace huira {
             return value_ >= other.value_;
         }
 
+        friend std::ostream& operator<<(std::ostream& os, const Quantity& quantity) {
+            os << quantity.toString();
+            return os;
+		}
+
     private:
         double value_;
+
+        constexpr double getRatio() const
+        {
+            return static_cast<double>(Scale::num) / static_cast<double>(Scale::den);
+		}
+
+        constexpr double fromSI(double si_value) const
+        {
+            return si_value / this->getRatio();
+		}
+
+        constexpr double toSI(double value) const
+        {
+            return value * this->getRatio();
+        };
     };
 
     // Helper to multiply two ratios
@@ -211,47 +238,46 @@ namespace huira {
     // Specialize SI Method for more complex conversions (or where `std::ratio` does not meet required precision)   
     using SiderealRatio = std::ratio<976395, 98436902>; // Magic number not used in computation
     template<>
-    inline double Quantity<Time, SiderealRatio>::getSIValue() const {
-        constexpr double sidreal_to_seconds = 86164.0905;
-        return value_ * sidreal_to_seconds;
-    }
+    constexpr double Quantity<Time, SiderealRatio>::getRatio() const { return 86164.0905; }
     
     using DegreeRatio = std::ratio<17329, 192493>; // Magic number not used in computation
     template<>
-    inline double Quantity<Angle, DegreeRatio>::getSIValue() const {
-        constexpr double degrees_to_radians = PI<double>() / 180.0;
-        return value_ * degrees_to_radians;
-    }
+    constexpr double Quantity<Angle, DegreeRatio>::getRatio() const { return PI<double>() / 180.0; }
 
     using ArcMinuteRatio = std::ratio<403921, 13463>; // Magic number not used in computation
     template<>
-    inline double Quantity<Angle, ArcMinuteRatio>::getSIValue() const {
-        constexpr double arcminute_to_radian = PI<double>() / 10800;
-        return value_ * arcminute_to_radian;
-    }
+    constexpr double Quantity<Angle, ArcMinuteRatio>::getRatio() const { return PI<double>() / 10800.0; }
 
     using ArcSecondRatio = std::ratio<2354235, 918342>; // Magic number not used in computation
     template<>
-    inline double Quantity<Angle, ArcSecondRatio>::getSIValue() const {
-        constexpr double arcsecond_to_radian = PI<double>() / 648000;
-        return value_ * arcsecond_to_radian;
+    constexpr double Quantity<Angle, ArcSecondRatio>::getRatio() const { return PI<double>() / 648000.0; }
+
+
+    using CelsiusRatio = std::ratio<189305, 10345>; // Magic number not used in computation
+    template<>
+    constexpr double Quantity<Temperature, CelsiusRatio>::toSI(double value) const {
+        return value + 273.15;
     }
 
     using CelsiusRatio = std::ratio<189305, 10345>; // Magic number not used in computation
     template<>
-    inline double Quantity<Temperature, CelsiusRatio>::getSIValue() const {
-        return value_ + 273.15;
+    constexpr double Quantity<Temperature, CelsiusRatio>::fromSI(double si_value) const {
+        return si_value - 273.15;
     }
 
     using FahrenheitRatio = std::ratio<9243, 1245>; // Magic number not used in computation
     template <>
-    inline double Quantity<Temperature, FahrenheitRatio>::getSIValue() const {
-        return (value_ + 459.67) * (5. / 9.);
+    constexpr double Quantity<Temperature, FahrenheitRatio>::toSI(double value) const {
+        return (value + 459.67) * (5. / 9.);
+    }
+
+    using FahrenheitRatio = std::ratio<9243, 1245>; // Magic number not used in computation
+    template <>
+    constexpr double Quantity<Temperature, FahrenheitRatio>::fromSI(double si_value) const {
+		return si_value * (9. / 5.) - 459.67;
     }
 
     using EVRatio = std::ratio<2339243, 124345>; // Magic number not used in computation
     template <>
-    inline double Quantity<Energy, EVRatio>::getSIValue() const {
-        return value_ * 1.602176634e-19;
-    }
+    constexpr double Quantity<Energy, EVRatio>::getRatio() const { return 1.602176634e-19; }
 }

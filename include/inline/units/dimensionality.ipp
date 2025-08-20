@@ -74,12 +74,15 @@ namespace huira {
         denominator += getSIUnitString(-1, A, "rad");
         denominator += getSIUnitString(-1, S, "sr");
 
-        if (denominator.empty()) {
+        if (denominator.empty() && numerator.empty()) {
             return "dimensionless";
         }
         else {
             if (numerator.empty()) {
                 return "1 / " + denominator;
+            }
+            else if (denominator.empty()) {
+                return numerator;
             }
             else {
                 return numerator + " / " + denominator;
