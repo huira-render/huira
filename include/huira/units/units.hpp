@@ -4,8 +4,32 @@
 
 #include "huira/units/quantity.hpp"
 
+/**
+ * @file units.hpp
+ * @brief Type definitions for various physical units
+ *
+ * This header provides strongly-typed unit definitions for physical quantities.
+ * Units can be multiplied, divided, and converted automatically.
+ *
+ * @section usage_examples Usage Examples
+ *
+ * Basic unit operations:
+ * @code
+ * // Multiply units of the same dimensionality
+ * auto area = huira::Meter(1) * huira::Foot(1);
+ *
+ * // Create complex composite units:
+ * huira::Steradian solid_angle(0.1);
+ * huira::Watt power(60);
+ * auto radiance = power / (area * solid_angle);
+ *
+ * // Perform conversions:
+ * huira::Joule energy = power * huira::Millisecond(20);
+ * @endcode
+ */
 namespace huira {
-	// Distance Units:
+	/// @defgroup distance_units Distance Units
+	/// @{
 	using Kilometer = Quantity<Length, std::kilo>;
 	using Meter = Quantity<Length, std::ratio<1, 1>>;
 	using Cenimeter = Quantity<Length, std::centi>;
@@ -19,13 +43,19 @@ namespace huira {
 	using Foot = Quantity<Length, std::ratio<381, 1250>>;
 	using Yard = Quantity<Length, std::ratio<1143, 1250>>;
 	using Mile = Quantity<Length, std::ratio<80467, 50>>;
+	/// @}
 
-	// Mass Units:
+
+	/// @defgroup mass_units Mass Units
+	/// @{
 	using Kilogram = Quantity<Mass, std::ratio<1, 1>>; // Kilogram is the SI base unit
 	using Gram = Quantity<Mass, std::ratio<1, 1000>>;
 	using Milligram = Quantity<Mass, std::ratio<1, 1000000>>;
+	/// @}
 
-	// Time Units:
+
+	/// @defgroup time_units Time Units
+	/// @{
 	using SidrealDay = Quantity<Time, SiderealRatio>;
 	using Day = Quantity<Time, std::ratio<86400, 1>>;
 	using Hour = Quantity<Time, std::ratio<3600, 1>>;
@@ -35,63 +65,112 @@ namespace huira {
 	using Microsecond = Quantity<Time, std::micro>;
 	using Nanosecond = Quantity<Time, std::nano>;
 	using Femtosecond = Quantity<Time, std::femto>;
+	/// @}
 
-	// Current Units:
+
+	/// @defgroup current_units Current Units
+	/// @{
 	using Ampere = Quantity<Current, std::ratio<1, 1>>;
+	/// @}
 
-	// Temperature Units:
+
+	/// @defgroup temperature_units Temperature Units
+	/// @{
 	using Kelvin = Quantity<Temperature, std::ratio<1, 1>>;
 	using Celsius = Quantity<Temperature, CelsiusRatio>;
 	using Fahrenheit = Quantity<Temperature, FahrenheitRatio>;
+	/// @}
 
-	// Amount of Substance Units:
+
+	/// @defgroup substance_units Amount of Substance Units
+	/// @{
 	using Mole = Quantity<AmountOfSubstance, std::ratio<1, 1>>;
+	/// @}
 
-	// Luminosity Units:
+
+	/// @defgroup luminous_units Luminous Intensity Units
+	/// @{
 	using Candela = Quantity<LuminousIntensity, std::ratio<1, 1>>;
+	/// @}
 
-	// Angular Units:
+
+	/// @defgroup angle_units Angular Units
+	/// @{
 	using Radian = Quantity<Angle, std::ratio<1, 1>>;
     using Degree = Quantity<Angle, DegreeRatio>;
 	using ArcMinute = Quantity<Angle, ArcMinuteRatio>;
 	using ArcSecond = Quantity<Angle, ArcSecondRatio>;
+	/// @}
 
-	// Solid Angle Units:
+
+	/// @defgroup solidangle_units Solid Angle Units
+	/// @{
 	using Steradian = Quantity<SolidAngle, std::ratio<1, 1>>;
+	using SquareDegree = Quantity<SolidAngle, SquareDegreeRatio>;
+	/// @}
 
 
 	// ===================== //
 	// === Derived Units === //
 	// ===================== //
-	// Frequency Units:
+	/// @defgroup frequency_units Frequency Units
+	/// @{
 	using Hertz = Quantity<Frequency, std::ratio<1, 1>>;
 	using Kilohertz = Quantity<Frequency, std::kilo>;
 	using Megahertz = Quantity<Frequency, std::mega>;
 	using Gigahertz = Quantity<Frequency, std::giga>;
 	using Terahertz = Quantity<Frequency, std::tera>;
+	/// @}
 
-	// Force Units:
+
+	/// @defgroup force_units Force Units
+	/// @{
 	using Newton = Quantity<Force, std::ratio<1, 1>>;
+	using Kilonewton = Quantity<Force, std::kilo>;
+	/// @}
 
-	// Pressure Units:
+
+	/// @defgroup pressure_units Pressure Units
+	/// @{
 	using Pascal = Quantity<Pressure, std::ratio<1, 1>>;
+	using Kilopascal = Quantity<Pressure, std::kilo>;
+	/// @}
 
-	// Energy Units:
+
+	/// @defgroup energy_units Energy Units
+	/// @{
 	using Joule = Quantity<Energy, std::ratio<1, 1>>;
+	using Kilojoule = Quantity<Energy, std::kilo>;
+	using Megajoule = Quantity<Energy, std::mega>;
 	using ElectronVolt = Quantity<Energy, EVRatio>;
+	/// @}
 
-	// Power Units:
+
+	/// @defgroup power_units Power Units
+	/// @{
 	using Watt = Quantity<Power, std::ratio<1, 1>>;
+	using Kilowatt = Quantity<Power, std::kilo>;
+	using Megawatt = Quantity<Power, std::mega>;
+	using Gigawatt = Quantity<Power, std::giga>;
+	/// @}
 
-	// Electric Charge Units:
+
+	/// @defgroup charge_units Electric Charge Units
+	/// @{
 	using Coulomb = Quantity<Charge, std::ratio<1, 1>>;
+	/// @}
 
 
-	// Composite Radiometric Derived Units:
+	/// @defgroup radiometric_units Radiometric Units
+	/// @{
 	using WattsPerMeterSquaredSteradian = Quantity<Radiance, std::ratio<1, 1>>;
 	using WattsPerMeterSquared = Quantity<Irradiance, std::ratio<1, 1>>;
 	using WattsPerSteradian = Quantity<RadiantIntensity, std::ratio<1, 1>>;
+	/// @}
 
-	// Composite Photometric Derive Units:
+
+	/// @defgroup photometric_units Photometric Units
+	/// @{
 	using Lumen = Quantity<LuminousFlux, std::ratio<1, 1>>;
+	/// @}
 }

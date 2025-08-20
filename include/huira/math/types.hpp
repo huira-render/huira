@@ -7,20 +7,8 @@
 #include "huira/concepts/numeric_concepts.hpp"
 
 namespace huira {
-    template <int Rows, int Cols, IsFloatingPoint T>
-    using Mat = glm::mat<Cols, Rows, T, glm::highp>;
-
     template <int N, IsFloatingPoint T>
     using Vec = glm::vec<N, T, glm::highp>;
-
-    template <IsFloatingPoint T>
-    using Mat2 = Mat<2, 2, T>;
-
-    template <IsFloatingPoint T>
-    using Mat3 = Mat<3, 3, T>;
-
-    template <IsFloatingPoint T>
-    using Mat4 = Mat<4, 4, T>;
 
     template <IsFloatingPoint T>
     using Vec2 = Vec<2, T>;
@@ -30,6 +18,19 @@ namespace huira {
 
     template <IsFloatingPoint T>
     using Vec4 = Vec<4, T>;
+
+
+    template <int Rows, int Cols, IsFloatingPoint T>
+    using Mat = glm::mat<Cols, Rows, T, glm::highp>;
+
+    template <IsFloatingPoint T>
+    using Mat2 = Mat<2, 2, T>;
+
+    template <IsFloatingPoint T>
+    using Mat3 = Mat<3, 3, T>;
+
+    template <IsFloatingPoint T>
+    using Mat4 = Mat<4, 4, T>;
 
 
     // Quaternion aliases
