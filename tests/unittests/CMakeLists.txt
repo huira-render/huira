@@ -53,13 +53,24 @@ function(add_unit_test test_name source_file)
     
     # Add coverage flags if enabled
     if(HUIRA_COVERAGE)
-        target_compile_options(${test_name} PRIVATE --coverage -g)
-        target_link_libraries(${test_name} PRIVATE --coverage)
+        target_compile_options(${test_name} PRIVATE ${COVERAGE_FLAGS})
+        
+        # Only add linker flags for non-Windows Clang or GCC
+        if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR 
+           (CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND NOT WIN32))
+            target_link_libraries(${test_name} PRIVATE --coverage)
+        elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND WIN32)
+            # The runtime will be automatically linked
+        endif()
         
         # Ensure the huira library also has coverage instrumentation
-        # but only when tests are being built
-        target_compile_options(huira PRIVATE --coverage -g)
-        target_link_libraries(huira PRIVATE --coverage)
+        target_compile_options(huira PRIVATE ${COVERAGE_FLAGS})
+        
+        # Apply same logic for the main library
+        if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR 
+           (CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND NOT WIN32))
+            target_link_libraries(huira PRIVATE --coverage)
+        endif()
     endif()
     
     # Disable the problematic warning for MSVC
