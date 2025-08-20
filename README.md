@@ -11,7 +11,7 @@
 
 | Platform | C++ Build | Python Bindings |
 |:--------:|:---------:|:---------------:|
-| Linux       | [![Linux][ref-nix-badge]]([ref-nix-yml])     |  | 
+| Linux       | [![Linux][ref-nix-badge]]([ref-nix-yml])     |  |
 | MacOS (x86) | [![MacOS x86][ref-osi-badge]](ref-osi-yml)   |  |
 | MacOS (ARM) | [![MacOS ARM][ref-osa-badge]]([ref-osa-yml]) |  |
 | Windows     | [![Windows][ref-win-badge]]([ref-win-yml])   |  |
