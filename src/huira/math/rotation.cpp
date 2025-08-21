@@ -102,7 +102,7 @@ namespace huira {
 			else {
 				throw detail::FatalError(
 					"Invalid rotation axis in sequence",
-					"sequence=\"" + sequence + "\", invalid_char='" + sequence[i]
+					"sequence=\"" + sequence + "\", invalid_char='" + sequence[i] + "'"
 				);
 			}
 		}

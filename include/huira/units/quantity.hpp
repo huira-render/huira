@@ -10,6 +10,7 @@
 #include "huira/units/dimensionality.hpp"
 
 #include "huira/detail/concepts/numeric_concepts.hpp"
+#include "huira/detail/validate.hpp"
 
 namespace huira {
     template<IsDimensionality Dim, IsRatio Scale>
@@ -23,7 +24,7 @@ namespace huira {
             requires std::is_arithmetic_v<T>
         : value_(static_cast<double>(value))
         {
-
+            detail::validateReal(value_, "Unit[" + Dim::toSIString() + "]");
         }
 
         template<IsRatio OtherScale>

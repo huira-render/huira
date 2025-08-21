@@ -76,6 +76,10 @@ namespace huira::detail {
 
     // Handle FatalError crashes
     void BreadcrumbLogger::handleFatalError(const std::string& message, const std::string& details) {
+        std::cerr << red("FATAL ERROR OCCURRED") << std::endl;
+        std::cerr << "    " << red(message) << std::endl;
+        std::cerr << "    " << red(details) << std::endl << std::endl;
+
         handleCrash("FatalError: " + message + (details.empty() ? "" : " (" + details + ")"));
     }
 
@@ -190,21 +194,20 @@ namespace huira::detail {
 
             log_file.flush();
 
-            // Notify user
-            std::cerr << red("FATAL ERROR OCCURRED\n");
+			// Notify user of crash log location:
             std::cerr << yellow("Crash log saved to: ") << log_file_path.string() << std::endl;
 
             // Check if stack trace quality is poor and suggest debug build
 #ifndef HAS_DEBUG_SYMBOLS
             std::cerr << "\nNOTE: Stack trace may be incomplete due to missing debug symbols.\n";
-            std::cerr << "Before submitting a bug report, consider rebuilding with debug symbols for better crash diagnostics:\n";
+            std::cerr << "Consider rebuilding with debug symbols for better crash diagnostics:\n";
             std::cerr << "  GCC/Clang: -g -O2 (or full debug: -g -O0)\n";
             std::cerr << "  MSVC: /Zi /DEBUG (Release with debug info)\n\n";
 #endif
 
-            std::cerr << yellow("Please report this issue at: ") <<
+            std::cerr << yellow("If you believe this is a bug with Huira itself, you can report this issue at:\n    ") <<
                 hyperlink("https://github.com/huira-render/huira/issues/new?template=bug_report.md") <<
-                yellow("\nInclude the log file when reporting.") << std::endl;
+                yellow("\nPlease include all relevant crash log files when reporting.") << std::endl;
 
         }
         catch (const std::exception& e) {
@@ -235,7 +238,8 @@ namespace huira::detail {
                 auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                     entry.timestamp.time_since_epoch()) % 1000;
                 
-                file << "[" << getTimeAsString(entry.timestamp)
+                std::string time_str = getTimeAsString(entry.timestamp);
+                file << "[" << time_str
                     << "." << std::setfill('0') << std::setw(3) << ms.count()
                     << "] [" << entry.level << "] [Thread-" << entry.thread_id << "] "
                     << entry.message << std::endl;
