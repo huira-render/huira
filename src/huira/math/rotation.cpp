@@ -1,11 +1,9 @@
 #include "huira/math/rotation.hpp"
 
 #include <string>
-#include <ostream>
 #include <array>
 
 #include "glm/glm.hpp"
-#include "glm/gtc/matrix_transform.hpp"
 #include "glm/gtx/quaternion.hpp"
 #include "glm/gtx/string_cast.hpp"
 
@@ -13,7 +11,7 @@
 #include "huira/units/units.hpp"
 
 #include "huira/detail/concepts/numeric_concepts.hpp"
-#include "huira/detail/diagnostics/logging.hpp"
+#include "huira/detail/diagnostics/exceptions.hpp"
 
 namespace huira {
 	// ==================== //
@@ -255,8 +253,6 @@ namespace huira {
 		constexpr T epsilon = static_cast<T>(1e-6);
 		if (std::fabs(glm::determinant(matrix) - 1) > epsilon) {
 			T det = glm::determinant(matrix);
-			std::cerr << std::to_string(glm::determinant(matrix) - 1) << "\n";
-			std::cerr << std::to_string(det) << "\n";
 			throw detail::FatalError(
 				"Matrix is not a valid rotation matrix (determinant must be 1.0)",
 				"determinant=" + std::to_string(det) + ", epsilon=" + std::to_string(epsilon)

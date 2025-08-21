@@ -10,8 +10,8 @@
 #include "huira/units/units.hpp"
 
 #include "huira/detail/concepts/numeric_concepts.hpp"
+#include "huira/detail/diagnostics/exceptions.hpp"
 #include "huira/detail/platform/huira_export.hpp"
-#include "huira/detail/diagnostics/logging.hpp"
 
 namespace huira {
     enum class NodeType { GroupNode, Camera, Instance, Light };
@@ -92,7 +92,7 @@ namespace huira {
         }
 
     protected:
-        virtual void onTransformChanged() {};
+        virtual void onTransformChanged() {}
 
     private:
         Mat4<Ts> scene_transformation_{ 1 };

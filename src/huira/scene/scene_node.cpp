@@ -221,9 +221,9 @@ namespace huira {
     void SceneNode<Ts>::updateSceneTransformation()
     {
         Mat4<Ts> parent_transform = parent_->getSceneTransformation();
-
+        (void)parent_transform;
         // TODO Implement
-    };
+    }
 
     template <IsFloatingPoint Ts>
     void SceneNode<Ts>::setParent(GroupNode<Ts>* parent)

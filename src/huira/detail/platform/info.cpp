@@ -1,8 +1,8 @@
 #include "huira/detail/platform/info.hpp"
 
 #ifdef _WIN32
-#include <windows.h>
-#include <psapi.h>
+#include <Windows.h>
+#include <Psapi.h>
 #elif defined(__linux__)
 #include <fstream>
 #include <sstream>
@@ -11,6 +11,10 @@
 #endif
 
 #include <string>
+#include <chrono>
+#include <sstream>
+#include <iomanip>
+#include <ctime>
 
 namespace huira::detail {
     std::string getPlatform() {
@@ -82,5 +86,32 @@ namespace huira::detail {
 #endif
 
         return output;
+    }
+
+    std::string getTimeAsString(const std::chrono::system_clock::time_point& tp, const std::string fmt)
+    {
+        auto time_t = std::chrono::system_clock::to_time_t(tp);
+
+        // Use localtime_s on Windows, localtime_r on POSIX systems
+        std::tm tm_buf{};
+
+#ifdef _WIN32
+        if (localtime_s(&tm_buf, &time_t) != 0) {
+            return "Error formatting time";
+        }
+#else
+        if (localtime_r(&time_t, &tm_buf) == nullptr) {
+            return "Error formatting time";
+        }
+#endif
+
+        std::ostringstream oss;
+        oss << std::put_time(&tm_buf, fmt.c_str());
+        return oss.str();
+    }
+
+    std::string getTimeAsString(const std::string& fmt)
+    {
+        return getTimeAsString(std::chrono::system_clock::now(), fmt);
     }
 }

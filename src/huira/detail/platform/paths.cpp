@@ -4,7 +4,7 @@
 #include <limits.h>
 
 #ifdef _WIN32
-#include <windows.h>
+#include <Windows.h>
 #elif defined(__APPLE__)
 #include <mach-o/dyld.h>
 #include <unistd.h>
@@ -20,7 +20,7 @@ namespace huira::detail {
     std::string getExecutablePath() {
 #ifdef _WIN32
         char path[MAX_PATH];
-        DWORD length = GetModuleFileNameA(NULL, path, MAX_PATH);
+        DWORD length = GetModuleFileNameA(nullptr, path, MAX_PATH);
         if (length == 0) {
             return "";
         }

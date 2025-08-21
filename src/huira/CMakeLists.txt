@@ -14,6 +14,7 @@ find_package(termcolor CONFIG REQUIRED)
 
 # Collect all non-templated source files
 set(HUIRA_SOURCES
+    detail/diagnostics/logging.cpp
     detail/platform/info.cpp
     detail/platform/paths.cpp
 )
