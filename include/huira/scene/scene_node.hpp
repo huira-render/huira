@@ -2,107 +2,119 @@
 
 #include <vector>
 #include <memory>
-#include <stdexcept>
 #include <unordered_map>
+#include <string>
 
-#include "huira/concepts/numeric_concepts.hpp"
+#include "huira/math/rotation.hpp"
+#include "huira/math/types.hpp"
+#include "huira/units/units.hpp"
+
+#include "huira/detail/concepts/numeric_concepts.hpp"
+#include "huira/detail/platform/huira_export.hpp"
+#include "huira/detail/diagnostics/logging.hpp"
 
 namespace huira {
     enum class NodeType { GroupNode, Camera, Instance, Light };
-
 
     // Forward Declaration:
     template <IsFloatingPoint Ts>
     class GroupNode;
 
 	template <IsFloatingPoint Ts>
-	class SceneNode {
+	class HUIRA_EXPORT SceneNode {
     public:
         virtual NodeType getType() const = 0;
         virtual ~SceneNode() = default;
 
-        // Pose setting member functions
+        // Transformation setting member functions
+        void setLocalPosition(Vec3<Ts> position);
+        void setLocalPosition(Meter x, Meter y, Meter z);
+
+        void setLocalRotation(Rotation<Ts> rotation);
+        void setLocalQuaternion(Quaternion<Ts> quaternion);
+        void setLocalShusterQuaternion(ShusterQuaternion<Ts> shuster_quaternion);
+        void setLocalAxisAngle(Vec3<Ts> axis, Degree angle);
+        void setLocalEulerAngles(Degree angle1, Degree angle2, Degree angle3, std::string sequence = "XYZ");
+
+        void setLocalScale(Vec3<Ts> scale);
+        void setLocalScale(double scale);
+        void setLocalScale(double scale_x, double scale_y, double scale_z);
+
+        // Transformation modifying member functions:
+        void translateBy(Vec3<Ts> position);
+        void translateBy(Meter x, Meter y, Meter z);
+
+        void rotateBy(Rotation<Ts> rotation);
+        void rotateBy(Quaternion<Ts> quaternion);
+        void rotateBy(ShusterQuaternion<Ts> shuster_quaternion);
+        void rotateBy(Vec3<Ts> axis, Degree angle);
+        void rotateBy(Degree angle1, Degree angle2, Degree angle3, std::string sequence = "XYZ");
+
+        void scaleBy(Vec3<Ts> scale);
+        void scaleBy(double scale);
+        void scaleBy(double scale_x, double scale_y, double scale_z);
+        
+
+        // Getter methods:
+        Mat4<Ts> getLocalTransformation() const;
+        Vec3<Ts> getLocalPosition() const;
+        Rotation<Ts> getLocalRotation() const;
+        Vec3<Ts> getLocalScale() const;
+
+        Mat4<Ts> getSceneTransformation() const;
+        Vec3<Ts> getScenePosition() const;
+        Rotation<Ts> getSceneRotation() const;
+        Vec3<Ts> getSceneScale() const;
 
         // Type-safe casting helpers
-        template<typename T> bool is() const
-        {
-            return getType() == T::TYPE;
-        }
+        template<typename T> bool is() const { return getType() == T::TYPE; }
 
-        template<typename T> T* as() 
+        template<typename T> 
+        T* as()
         {
             if (is<T>()) {
                 return static_cast<T*>(this);
             }
             else {
-                throw std::runtime_error("Cannot convert to the specified type");
+                throw detail::FatalError("Cannot convert to the specified type");
             }
         }
-        template<typename T> const T* as() const 
+
+        template<typename T> 
+        const T* as() const
         {
             if (is<T>()) {
                 return static_cast<const T*>(this);
             }
             else {
-                throw std::runtime_error("Cannot convert to the specified type");
+                throw detail::FatalError("Cannot convert to the specified type");
             }
         }
 
+    protected:
+        virtual void onTransformChanged() {};
+
     private:
+        Mat4<Ts> scene_transformation_{ 1 };
+        Vec3<Ts> scene_position_{ 0,0,0 };
+        Rotation<Ts> scene_rotation_{};
+        Vec3<Ts> scene_scale_{ 1,1,1 };
+
+        Mat4<Ts> local_transformation_{ 1 };
+        Vec3<Ts> local_position_{ 0,0,0 };
+        Rotation<Ts> local_rotation_{};
+        Vec3<Ts> local_scale_{ 1,1,1 };
+
+        void updateTransforms();
+        void updateSceneTransformation();
+
         GroupNode<Ts>* parent_;
-        void setParent(GroupNode<Ts>* parent)
-        {
-            if (parent != nullptr) {
-                parent_ = parent;
-            }
-            else {
-                throw std::runtime_error("Parent GroupNode pointer is NULL");
-            }
-        };
+        void setParent(GroupNode<Ts>* parent);
 
         friend class GroupNode<Ts>;
 	};
 
-    template <IsFloatingPoint Ts>
-    class GroupNode : public SceneNode<Ts> {
-    public:
-        static constexpr NodeType TYPE = NodeType::GroupNode;
-        NodeType getType() const override { return TYPE; }
-
-        template <typename T>
-        void addChild(std::unique_ptr<T>&& new_child)
-        {
-            new_child->setParent(this);
-            children_.push_back(std::move(new_child));
-        }
-
-        void removeChild(size_t index)
-        {
-            children_.erase(children_.begin() + index);
-        }
-
-    private:
-        std::vector<std::unique_ptr<SceneNode<Ts>>> children_;
-    };
-
-    template <IsFloatingPoint Ts> 
-    class CameraNode : public SceneNode<Ts> {
-    public:
-        static constexpr NodeType TYPE = NodeType::Camera;
-        NodeType getType() const override { return TYPE; }
-    };
-
-    template <IsFloatingPoint Ts>
-    class InstanceNode : public SceneNode<Ts> {
-    public:
-        static constexpr NodeType TYPE = NodeType::Instance;
-        NodeType getType() const override { return TYPE; }
-    };
-
-    template <IsFloatingPoint Ts>
-    class LightNode : public SceneNode<Ts> {
-    public:
-        static constexpr NodeType TYPE = NodeType::Light;
-        NodeType getType() const override { return TYPE; }
-    };
+    // Declare Explicit Instantiations:
+    extern template class SceneNode<float>;
+    extern template class SceneNode<double>;
 }

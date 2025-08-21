@@ -21,6 +21,7 @@ set(HUIRA_SOURCES
 # Collect templates with known/limited specializations
 set(HUIRA_TEMPLATE_SOURCES
     math/rotation.cpp 
+    scene/scene_node.cpp
 )
 
 # Create the library target - always a regular library since we have .cpp files
