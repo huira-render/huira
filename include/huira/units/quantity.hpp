@@ -185,6 +185,12 @@ namespace huira {
         return quantity * scalar;
     }
 
+    // Scalar division (scalar / quantity)
+    template<IsDimensionality Dim, IsRatio Scale>
+    constexpr auto operator/(double scalar, const Quantity<Dim, Scale>& quantity) {
+        return Quantity<Dimensionless, std::ratio<1,1>>(scalar) / quantity;
+    }
+
     // Addition between quantities of same dimension but different scales
     template<IsDimensionality Dim, IsRatio Scale1, IsRatio Scale2>
     constexpr auto operator+(const Quantity<Dim, Scale1>& lhs, const Quantity<Dim, Scale2>& rhs)
