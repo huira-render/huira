@@ -22,6 +22,7 @@ set(HUIRA_SOURCES
 set(HUIRA_TEMPLATE_SOURCES
     math/rotation.cpp 
     
+    platform/info.cpp
     platform/paths.cpp
 )
 
