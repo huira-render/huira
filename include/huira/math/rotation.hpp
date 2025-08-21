@@ -7,7 +7,7 @@
 #include "huira/math/types.hpp"
 #include "huira/units/units.hpp"
 
-#include "huira/huira_export.hpp"
+#include "huira/platform/huira_export.hpp"
 
 namespace huira {
 	/**

@@ -13,7 +13,7 @@
 #include "huira/math/types.hpp"
 #include "huira/units/units.hpp"
 
-#include "huira/huira_export.hpp"
+#include "huira/diagnostics/exceptions.hpp"
 
 namespace huira {
 	// ==================== //
@@ -80,7 +80,10 @@ namespace huira {
 	Rotation<T>::Rotation(Degree angle1, Degree angle2, Degree angle3, std::string sequence)
 	{
 		if (sequence.size() != 3) {
-			// TODO throw error
+			throw FatalError(
+				"Rotation sequence must be exactly 3 characters",
+				"sequence.size()=" + std::to_string(sequence.size()) + ", sequence=\"" + sequence + "\""
+			);
 		}
 
 		std::array<Mat3<T>, 3> basis;
@@ -99,7 +102,10 @@ namespace huira {
 				basis[i] = rotationZ(angles[i]);
 			}
 			else {
-				// TODO throw error
+				throw FatalError(
+					"Invalid rotation axis in sequence",
+					"sequence=\"" + sequence + "\", invalid_char='" + sequence[i]
+				);
 			}
 		}
 
@@ -246,9 +252,15 @@ namespace huira {
 	template <IsFloatingPoint T>
 	void Rotation<T>::setMatrix(Mat3<T> matrix)
 	{
-		constexpr T epsilon = static_cast<T>(1e-9);
-		if (std::fabs(glm::determinant(matrix) - 1.0) > epsilon) {
-			// TODO Throw error
+		constexpr T epsilon = static_cast<T>(1e-6);
+		if (std::fabs(glm::determinant(matrix) - 1) > epsilon) {
+			T det = glm::determinant(matrix);
+			std::cerr << std::to_string(glm::determinant(matrix) - 1) << "\n";
+			std::cerr << std::to_string(det) << "\n";
+			throw FatalError(
+				"Matrix is not a valid rotation matrix (determinant must be 1.0)",
+				"determinant=" + std::to_string(det) + ", epsilon=" + std::to_string(epsilon)
+			);
 		}
 		this->matrix_ = matrix;
 		this->transpose_ = glm::transpose(matrix);

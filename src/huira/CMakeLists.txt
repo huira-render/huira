@@ -6,6 +6,8 @@ set(CMAKE_WARN_DEPRECATED OFF CACHE BOOL "" FORCE)
 
 
 find_package(glm CONFIG REQUIRED)
+find_package(cpptrace CONFIG REQUIRED)
+
 
 #############################
 ### Library Configuration ###
@@ -18,7 +20,9 @@ set(HUIRA_SOURCES
 
 # Collect templates with known/limited specializations
 set(HUIRA_TEMPLATE_SOURCES
-    math/rotation.cpp   
+    math/rotation.cpp 
+    
+    platform/paths.cpp
 )
 
 # Create the library target - always a regular library since we have .cpp files
@@ -52,6 +56,7 @@ endif()
 
 target_link_libraries(huira PUBLIC
     glm::glm
+    cpptrace::cpptrace
 )
 
 # Common configuration for both modes

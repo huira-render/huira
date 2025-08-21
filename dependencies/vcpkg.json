@@ -5,6 +5,7 @@
   "dependencies": [
     "assimp",
     "cfitsio",
+    "cpptrace",
     "cspice",
     {
       "name": "embree3",
@@ -38,12 +39,20 @@
       "version": "5.4.3"
     },
     {
+      "name": "backward-cpp",
+      "version": "1.6#1"
+    },
+    {
       "name": "catch2",
       "version": "3.8.0"
     },
     {
       "name": "cfitsio",
       "version": "3.49#6"
+    },
+    {
+      "name": "cpptrace",
+      "version": "1.0.4"
     },
     {
       "name": "cspice",

@@ -5,6 +5,7 @@ dependencies:
   - assimp=5.4.3         # Asset Importer (3d models)
   - catch2=3.8.0         # Testing Framework
   - cfitsio=4.6.2        # FITS I/O
+  - cpptrace=1.0.4       # Stack trace support
   - cspice=67            # NASA SPICE 
   - embree3=3.13.5       # Ray tracing Acceleration
   - fftw=3.3.10          # Fast Fourier Transform
