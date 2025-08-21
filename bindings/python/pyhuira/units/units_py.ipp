@@ -6,8 +6,9 @@
 #include "pybind11/stl.h"
 #include "pybind11/operators.h"
 
-#include "huira/concepts/numeric_concepts.hpp"
 #include "huira/units/units.hpp"
+
+#include "huira/detail/concepts/numeric_concepts.hpp"
 
 namespace py = pybind11;
 

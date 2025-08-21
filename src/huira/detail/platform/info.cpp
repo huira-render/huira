@@ -1,4 +1,4 @@
-#include "huira/platform/info.hpp"
+#include "huira/detail/platform/info.hpp"
 
 #ifdef _WIN32
 #include <windows.h>

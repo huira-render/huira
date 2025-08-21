@@ -6,9 +6,10 @@
 #include <type_traits>
 #include <ostream>
 
-#include "huira/concepts/numeric_concepts.hpp"
 #include "huira/math/constants.hpp"
 #include "huira/units/dimensionality.hpp"
+
+#include "huira/detail/concepts/numeric_concepts.hpp"
 
 namespace huira {
     template<IsDimensionality Dim, IsRatio Scale>

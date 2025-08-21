@@ -3,11 +3,11 @@
 #include <string>
 #include <ostream>
 
-#include "huira/concepts/numeric_concepts.hpp"
 #include "huira/math/types.hpp"
 #include "huira/units/units.hpp"
 
-#include "huira/platform/huira_export.hpp"
+#include "huira/detail/concepts/numeric_concepts.hpp"
+#include "huira/detail/platform/huira_export.hpp"
 
 namespace huira {
 	/**

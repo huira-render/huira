@@ -22,8 +22,8 @@ set(HUIRA_SOURCES
 set(HUIRA_TEMPLATE_SOURCES
     math/rotation.cpp 
     
-    platform/info.cpp
-    platform/paths.cpp
+    detail/platform/info.cpp
+    detail/platform/paths.cpp
 )
 
 # Create the library target - always a regular library since we have .cpp files

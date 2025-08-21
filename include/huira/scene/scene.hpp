@@ -3,8 +3,9 @@
 #include <string>
 #include <memory>
 
-#include "huira/concepts/numeric_concepts.hpp"
 #include "huira/scene/scene_node.hpp"
+
+#include "huira/detail/concepts/numeric_concepts.hpp"
 
 namespace huira {
     template <IsFloatingPoint Ts>

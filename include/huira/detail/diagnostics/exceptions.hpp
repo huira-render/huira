@@ -11,8 +11,8 @@
 
 #include "cpptrace/cpptrace.hpp"
 
-#include "huira/platform/info.hpp"
-#include "huira/platform/paths.hpp"
+#include "huira/detail/platform/info.hpp"
+#include "huira/detail/platform/paths.hpp"
 
 namespace fs = std::filesystem;
 

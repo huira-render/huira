@@ -1,4 +1,4 @@
-#include "huira/platform/paths.hpp"
+#include "huira/detail/platform/paths.hpp"
 
 #include <string>
 #include <limits.h>
