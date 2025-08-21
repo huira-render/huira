@@ -13,10 +13,11 @@
 
 #include "huira/detail/platform/info.hpp"
 #include "huira/detail/platform/paths.hpp"
+#include "huira/detail/text/colors.hpp"
 
 namespace fs = std::filesystem;
 
-namespace huira {
+namespace huira::detail {
     class FatalError : public std::exception {
     public:
         FatalError(const std::string& message, const std::string& details = "")
@@ -24,7 +25,6 @@ namespace huira {
         {
             captureStackTrace();
             logToFile();
-            logToConsole();
         }
 
         const char* what() const noexcept override {
@@ -123,16 +123,20 @@ namespace huira {
                 }
 
                 fs::path output_path = fs::current_path() / log_name;
-                std::cerr << "Huira encountered a fatal error.  Error log has been saved to: " << output_path.string() << std::endl;
+                detail::printError("Huira encountered a fatal error",
+                    "Error log has been saved to: " + output_path.string() + "\n");
+
+                std::cerr << detail::yellow("Please report this issue at: ") << 
+                    detail::hyperlink("https://github.com/huira-render/huira/issues/new?template=bug_report.md") <<
+                    detail::yellow("\nInclude the log file when reporting.") << std::endl;
             }
             catch (...) {
-                std::cerr << "Huira encountered a fatal error, but failed to write to log file!  " <<
-                    "Check permissions/storage of " << fs::current_path().string() << std::endl;
-            }
-        }
+                detail::printError("Huira encountered a fatal error, but failed to write to log file!");
 
-        void logToConsole() const {
-            std::cerr << getFullDiagnostics() << std::endl;
+                std::cerr << detail::yellow("Please report this issue at: ") << 
+                    detail::hyperlink("https://github.com/huira-render/huira/issues/new?template=bug_report.md") << std::endl;
+            }
+
         }
     };
 }

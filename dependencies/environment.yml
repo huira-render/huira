@@ -13,3 +13,4 @@ dependencies:
   - glm=1.0.1            # Linear Algebra for Graphics
   - libtiff=4.7.0        # TIFF I/O
   - tbb-devel=2021.12.0  # Intel TBB (Threading)
+  - termcolor-cpp=2.0.0  # Terminal colors

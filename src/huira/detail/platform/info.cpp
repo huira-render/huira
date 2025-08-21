@@ -12,7 +12,7 @@
 
 #include <string>
 
-namespace huira {
+namespace huira::detail {
     std::string getPlatform() {
 #ifdef _WIN32
         return "Platform: Windows";

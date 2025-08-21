@@ -2,6 +2,6 @@
 
 #include <string>
 
-namespace huira {
+namespace huira::detail {
 	std::string getExecutablePath();
 };

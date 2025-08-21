@@ -16,7 +16,7 @@
 #include <unistd.h>
 #endif
 
-namespace huira {
+namespace huira::detail {
     std::string getExecutablePath() {
 #ifdef _WIN32
         char path[MAX_PATH];

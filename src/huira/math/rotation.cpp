@@ -80,7 +80,7 @@ namespace huira {
 	Rotation<T>::Rotation(Degree angle1, Degree angle2, Degree angle3, std::string sequence)
 	{
 		if (sequence.size() != 3) {
-			throw FatalError(
+			throw detail::FatalError(
 				"Rotation sequence must be exactly 3 characters",
 				"sequence.size()=" + std::to_string(sequence.size()) + ", sequence=\"" + sequence + "\""
 			);
@@ -102,7 +102,7 @@ namespace huira {
 				basis[i] = rotationZ(angles[i]);
 			}
 			else {
-				throw FatalError(
+				throw detail::FatalError(
 					"Invalid rotation axis in sequence",
 					"sequence=\"" + sequence + "\", invalid_char='" + sequence[i]
 				);
@@ -257,7 +257,7 @@ namespace huira {
 			T det = glm::determinant(matrix);
 			std::cerr << std::to_string(glm::determinant(matrix) - 1) << "\n";
 			std::cerr << std::to_string(det) << "\n";
-			throw FatalError(
+			throw detail::FatalError(
 				"Matrix is not a valid rotation matrix (determinant must be 1.0)",
 				"determinant=" + std::to_string(det) + ", epsilon=" + std::to_string(epsilon)
 			);

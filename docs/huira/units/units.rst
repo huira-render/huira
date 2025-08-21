@@ -1,5 +1,5 @@
 Units
-=====
+=======
 
 .. doxygenfile:: units.hpp
    :project: huira

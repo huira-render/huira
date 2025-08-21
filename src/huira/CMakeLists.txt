@@ -4,10 +4,9 @@ include(FetchContent)
 # Suppress deprecation warnings from third-party libraries
 set(CMAKE_WARN_DEPRECATED OFF CACHE BOOL "" FORCE)
 
-
-find_package(glm CONFIG REQUIRED)
 find_package(cpptrace CONFIG REQUIRED)
-
+find_package(glm CONFIG REQUIRED)
+find_package(termcolor CONFIG REQUIRED)
 
 #############################
 ### Library Configuration ###
@@ -15,15 +14,13 @@ find_package(cpptrace CONFIG REQUIRED)
 
 # Collect all non-templated source files
 set(HUIRA_SOURCES
-    
+    detail/platform/info.cpp
+    detail/platform/paths.cpp
 )
 
 # Collect templates with known/limited specializations
 set(HUIRA_TEMPLATE_SOURCES
     math/rotation.cpp 
-    
-    detail/platform/info.cpp
-    detail/platform/paths.cpp
 )
 
 # Create the library target - always a regular library since we have .cpp files
@@ -56,8 +53,9 @@ if(NOT BUILD_SHARED_LIBS)
 endif()
 
 target_link_libraries(huira PUBLIC
-    glm::glm
     cpptrace::cpptrace
+    glm::glm
+    termcolor::termcolor
 )
 
 # Common configuration for both modes

@@ -23,6 +23,7 @@
     },
     "glm",
     "tbb",
+    "termcolor",
     "tiff"
   ],
   "features": {
@@ -73,6 +74,10 @@
     {
       "name": "glm",
       "version": "1.0.1#3"
+    },
+    {
+      "name": "termcolor",
+      "version": "2.0.0"
     },
     {
       "name": "tiff",
