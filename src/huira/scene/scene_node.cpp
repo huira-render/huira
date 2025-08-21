@@ -12,6 +12,7 @@
 
 #include "huira/detail/concepts/numeric_concepts.hpp"
 #include "huira/detail/diagnostics/logging.hpp"
+#include "huira/detail/validate.hpp"
 
 namespace huira {
     // ============================== //
@@ -20,6 +21,7 @@ namespace huira {
     template <IsFloatingPoint Ts>
     void SceneNode<Ts>::setLocalPosition(Vec3<Ts> position)
     {
+        detail::validateReal(position, "Position");
         this->local_position_ = position;
         this->updateTransforms();
     }
@@ -64,6 +66,7 @@ namespace huira {
     template <IsFloatingPoint Ts>
     void SceneNode<Ts>::setLocalScale(Vec3<Ts> scale)
     {
+        detail::validatePositiveDefinite(scale, "Scale");
         this->local_scale_ = scale;
         this->updateTransforms();
     }
@@ -182,34 +185,20 @@ namespace huira {
     Vec3<Ts> SceneNode<Ts>::getSceneScale() const { return scene_scale_; }
 
 
+    template <IsFloatingPoint Ts>
+    Mat4<Ts> SceneNode<Ts>::getModelMatrix() const { return scene_transformation_; }
+
+    template <IsFloatingPoint Ts>
+    Mat3<Ts> SceneNode<Ts>::getNormalMatrix() const { return scene_rotation_.getMatrix(); }
+
+
     // ================================ //
     // === Private Member Functions === //
     // ================================ //
     template <IsFloatingPoint Ts>
     void SceneNode<Ts>::updateTransforms()
     {
-        // Recall column-major ordering:
-        Mat3<Ts> R = local_rotation_.getMatrix();
-
-        local_transformation_[0][0] = R[0][0] * local_scale_[0];
-        local_transformation_[0][1] = R[0][1] * local_scale_[0];
-        local_transformation_[0][2] = R[0][2] * local_scale_[0];
-        local_transformation_[0][3] = 0;
-
-        local_transformation_[1][0] = R[1][0] * local_scale_[1];
-        local_transformation_[1][1] = R[1][1] * local_scale_[1];
-        local_transformation_[1][2] = R[1][2] * local_scale_[1];
-        local_transformation_[1][3] = 0;
-
-        local_transformation_[2][0] = R[2][0] * local_scale_[2];
-        local_transformation_[2][1] = R[2][1] * local_scale_[2];
-        local_transformation_[2][2] = R[2][2] * local_scale_[2];
-        local_transformation_[2][3] = 0;
-
-        local_transformation_[3][0] = local_position_[0];
-        local_transformation_[3][1] = local_position_[1];
-        local_transformation_[3][2] = local_position_[2];
-        local_transformation_[3][3] = 1;
+        local_transformation_ = constructTransformation(local_position_, local_rotation_, local_scale_);
 
         this->updateSceneTransformation();
 
@@ -220,9 +209,63 @@ namespace huira {
     template <IsFloatingPoint Ts>
     void SceneNode<Ts>::updateSceneTransformation()
     {
-        Mat4<Ts> parent_transform = parent_->getSceneTransformation();
-        (void)parent_transform;
-        // TODO Implement
+        Mat4<Ts> parent_transformation = parent_->getSceneTransformation();
+        
+        scene_transformation_ = parent_transformation * local_transformation_;
+
+        getTransformationComponents(
+            scene_transformation_,
+            scene_position_, scene_rotation_, scene_scale_
+        );
+    }
+
+    template <IsFloatingPoint Ts>
+    Mat4<Ts> SceneNode<Ts>::constructTransformation(const Vec3<Ts>& position, const Rotation<Ts>& rotation, const Vec3<Ts>& scale) const
+    {
+        // Recall column-major ordering:
+        Mat3<Ts> R = rotation.getMatrix();
+
+        Mat4<Ts> transformation;
+        transformation[0][0] = R[0][0] * scale[0];
+        transformation[0][1] = R[0][1] * scale[0];
+        transformation[0][2] = R[0][2] * scale[0];
+        transformation[0][3] = 0;
+
+        transformation[1][0] = R[1][0] * scale[1];
+        transformation[1][1] = R[1][1] * scale[1];
+        transformation[1][2] = R[1][2] * scale[1];
+        transformation[1][3] = 0;
+
+        transformation[2][0] = R[2][0] * scale[2];
+        transformation[2][1] = R[2][1] * scale[2];
+        transformation[2][2] = R[2][2] * scale[2];
+        transformation[2][3] = 0;
+
+        transformation[3][0] = position[0];
+        transformation[3][1] = position[1];
+        transformation[3][2] = position[2];
+        transformation[3][3] = 1;
+
+        return transformation;
+    }
+
+    template <IsFloatingPoint Ts>
+    void SceneNode<Ts>::getTransformationComponents(const Mat4<Ts>& T, Vec3<Ts>& position, Rotation<Ts>& rotation, Vec3<Ts>& scale) const
+    {
+        position = Vec3<Ts>(T[3][0], T[3][1], T[3][2]);
+
+        // Extract scale from the length of the first three columns:
+        Ts sx = glm::length(Vec3<Ts>(T[0][0], T[0][1], T[0][2]));
+        Ts sy = glm::length(Vec3<Ts>(T[1][0], T[1][1], T[1][2]));
+        Ts sz = glm::length(Vec3<Ts>(T[2][0], T[2][1], T[2][2]));
+        scale = Vec3<Ts>(sx, sy, sz);
+
+        Mat3<Ts> R;
+        R[0] = Vec3<Ts>(T[0][0], T[0][1], T[0][2]) / sx;
+        R[1] = Vec3<Ts>(T[1][0], T[1][1], T[1][2]) / sy;
+        R[2] = Vec3<Ts>(T[2][0], T[2][1], T[2][2]) / sz;
+
+        rotation = Rotation<Ts>(R);
     }
 
     template <IsFloatingPoint Ts>

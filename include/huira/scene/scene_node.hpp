@@ -66,6 +66,9 @@ namespace huira {
         Rotation<Ts> getSceneRotation() const;
         Vec3<Ts> getSceneScale() const;
 
+        Mat4<Ts> getModelMatrix() const;
+        Mat3<Ts> getNormalMatrix() const;
+
         // Type-safe casting helpers
         template<typename T> bool is() const { return getType() == T::TYPE; }
 
@@ -107,6 +110,9 @@ namespace huira {
 
         void updateTransforms();
         void updateSceneTransformation();
+
+        Mat4<Ts> constructTransformation(const Vec3<Ts>& position, const Rotation<Ts>& rotation, const Vec3<Ts>& scale) const;
+        void getTransformationComponents(const Mat4<Ts>& T, Vec3<Ts>& position, Rotation<Ts>& rotation, Vec3<Ts>& scale) const;
 
         GroupNode<Ts>* parent_;
         void setParent(GroupNode<Ts>* parent);

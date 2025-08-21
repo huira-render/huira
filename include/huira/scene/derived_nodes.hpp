@@ -23,6 +23,13 @@ namespace huira {
 
     private:
         std::vector<std::unique_ptr<SceneNode<Ts>>> children_;
+
+        void onTransformChanged() override
+        {
+            for (auto& child : children_) {
+                child->updateSceneTransformation();
+            }
+        }
     };
 
     template <IsFloatingPoint Ts>

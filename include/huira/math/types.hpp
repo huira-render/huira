@@ -51,6 +51,25 @@ namespace huira {
     }
 
 
+    // Concepts:
+    template<typename T>
+    concept IsVec = requires {
+        // Check if T is a specialization of glm::vec with highp precision
+        typename T::value_type;
+        requires std::same_as<T, glm::vec<T::length(), typename T::value_type, glm::highp>>;
+        requires IsFloatingPoint<typename T::value_type>;
+    };
+
+    template<typename T>
+    concept IsMat = requires {
+        // Check if T is a specialization of glm::mat with highp precision
+        typename T::value_type;
+        typename T::col_type;
+            requires std::same_as<T, glm::mat<T::cols(), T::rows(), typename T::value_type, glm::highp>>;
+            requires IsFloatingPoint<typename T::value_type>;
+    };
+
+
     // Helpful typedefs:
     typedef Mat2<float> Mat2_f;
     typedef Mat2<double> Mat2_d;
