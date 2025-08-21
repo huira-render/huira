@@ -4,4 +4,4 @@
 
 namespace huira::detail {
 	std::string getExecutablePath();
-};
+}

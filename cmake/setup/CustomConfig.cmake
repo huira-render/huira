@@ -44,6 +44,10 @@ elseif(APPLE)
     endif()
 endif()
 
+if(CMAKE_BUILD_TYPE STREQUAL "Debug" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
+    add_compile_definitions(HAS_DEBUG_SYMBOLS)
+endif()
+
 
 #####################################
 ### Enable Comprehensive Warnings ###
@@ -194,8 +198,8 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
         # Disable warnings that are often false positives or too pedantic
         -Wno-double-promotion
         -Wno-float-equal
-        -Wno-inline  # Disable inline warnings
-        -Wno-system-headers  # Don't warn about system headers
+        -Wno-inline
+        -Wno-system-headers
         
         # Compatibility warnings for modern C++
         -Wno-c++11-compat
@@ -215,7 +219,6 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     foreach(WARNING ${OPTIONAL_DISABLE_WARNINGS})
         check_cxx_compiler_flag("-W${WARNING}" HAS_WARNING_${WARNING})
         if(HAS_WARNING_${WARNING})
-            # Only disable if you don't want these suggestions
             # add_compile_options("-Wno-${WARNING}")
         endif()
     endforeach()
@@ -223,8 +226,6 @@ endif()
 
 # Function to add target-specific warning suppressions
 function(suppress_warnings_for_target target)
-    # Usage: suppress_warnings_for_target(my_target)
-    # This can be used to suppress warnings for specific third-party libraries
     if(MSVC AND NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
         target_compile_options(${target} PRIVATE /W1)
     else()

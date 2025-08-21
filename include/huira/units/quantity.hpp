@@ -150,7 +150,7 @@ namespace huira {
         constexpr double toSI(double value) const
         {
             return value * this->getRatio();
-        };
+        }
     };
 
     // Helper to multiply two ratios

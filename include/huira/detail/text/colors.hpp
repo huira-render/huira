@@ -24,27 +24,27 @@ namespace huira::detail {
         return ColoredText<ColorManip>(str, c);
     }
 
-    auto green(const std::string& str) {
+    static inline auto green(const std::string& str) {
         return colored(str, termcolor::green);
     }
 
-    auto yellow(const std::string& str) {
+    static inline auto yellow(const std::string& str) {
         return colored(str, termcolor::yellow);
     }
 
-    auto red(const std::string& str) {
+    static inline auto red(const std::string& str) {
         return colored(str, termcolor::red);
     }
 
-    auto blue(const std::string& str) {
+    static inline auto blue(const std::string& str) {
         return colored(str, termcolor::blue);
     }
 
-    auto hyperlink(const std::string& str) {
+    static inline auto hyperlink(const std::string& str) {
         return blue(str);
     }
 
-    void printError(const std::string& message, std::string sub_message = "") {
+    static inline void printError(const std::string& message, std::string sub_message = "") {
         std::cerr << red("ERROR: " + message) << std::endl;
         if (!sub_message.empty()) {
             std::cerr << yellow(sub_message) << std::endl;

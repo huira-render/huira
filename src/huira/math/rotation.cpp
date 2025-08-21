@@ -13,7 +13,7 @@
 #include "huira/units/units.hpp"
 
 #include "huira/detail/concepts/numeric_concepts.hpp"
-#include "huira/detail/diagnostics/exceptions.hpp"
+#include "huira/detail/diagnostics/logging.hpp"
 
 namespace huira {
 	// ==================== //
