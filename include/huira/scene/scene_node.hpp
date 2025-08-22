@@ -16,6 +16,16 @@
 namespace huira {
     enum class NodeType { GroupNode, Camera, Instance, Light };
 
+    std::string nodeTypeToString(NodeType type) {
+        switch (type) {
+            case NodeType::GroupNode: return "GroupNode";
+            case NodeType::Camera: return "Camera";
+            case NodeType::Instance: return "Instance";
+            case NodeType::Light: return "Light";
+            default: return "Unknown";
+        }
+	}
+
     // Forward Declaration:
     template <IsFloatingPoint Ts>
     class GroupNode;
@@ -81,7 +91,8 @@ namespace huira {
                 return static_cast<T*>(this);
             }
             else {
-                throw detail::FatalError("Cannot convert to the specified type");
+                throw detail::FatalError("Cannot convert to the specified type",
+                    "SceneNode is of type " + nodeTypeToString(getType()) + " but requested " + nodeTypeToString(T::TYPE));
             }
         }
 
@@ -92,7 +103,8 @@ namespace huira {
                 return static_cast<const T*>(this);
             }
             else {
-                throw detail::FatalError("Cannot convert to the specified type");
+                throw detail::FatalError("Cannot convert to the specified type",
+                    "SceneNode is of type " + nodeTypeToString(getType()) + " but requested " + nodeTypeToString(T::TYPE));
             }
         }
 
