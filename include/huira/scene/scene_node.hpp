@@ -16,7 +16,7 @@
 namespace huira {
     enum class NodeType { GroupNode, Camera, Instance, Light };
 
-    std::string nodeTypeToString(NodeType type) {
+    inline static std::string nodeTypeToString(NodeType type) {
         switch (type) {
             case NodeType::GroupNode: return "GroupNode";
             case NodeType::Camera: return "Camera";
