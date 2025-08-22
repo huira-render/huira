@@ -19,7 +19,7 @@ namespace huira::detail {
 	}
 
 	template <IsFloatingPoint T>
-	void validatePositiveDefinite(T value, const std::string& name)
+	void validateStrictlyPositive(T value, const std::string& name)
 	{
 		validateReal(value, name);
 		if (value <= 0) {
@@ -40,13 +40,26 @@ namespace huira::detail {
 	}
 
 	template <IsVec T>
-	void validatePositiveDefinite(const T& vec, const std::string& name)
+	void validateStrictlyPositive(const T& vec, const std::string& name)
 	{
 		validateReal(vec, name);
 		for (int i = 0; i < T::length(); ++i) {
 			if (vec[i] <= 0) {
 				throw FatalError("Provided " + name + " contains negative values",
 					name + " = " + glm::to_string(vec));
+			}
+		}
+	}
+
+	template <IsMat T>
+	void validateReal(const T& mat, const std::string& name)
+	{
+		for (int col = 0; col < mat.length(); ++col) {
+			for (int row = 0; row < mat[col].length(); ++row) {
+				if (std::isinf(mat[col][row]) || std::isnan(mat[col][row])) {
+					throw FatalError("Provided " + name + " contains INF or NaN",
+						name + " = " + glm::to_string(mat));
+				}
 			}
 		}
 	}

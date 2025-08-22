@@ -66,7 +66,7 @@ namespace huira {
     template <IsFloatingPoint Ts>
     void SceneNode<Ts>::setLocalScale(Vec3<Ts> scale)
     {
-        detail::validatePositiveDefinite(scale, "Scale");
+        detail::validateStrictlyPositive(scale, "Scale");
         this->local_scale_ = scale;
         this->updateTransforms();
     }
@@ -87,6 +87,18 @@ namespace huira {
         this->setLocalScale(Vec3<Ts>{sx, sy, sz});
     }
 
+	template <IsFloatingPoint Ts>
+    void SceneNode<Ts>::setLocalTransformation(Mat4<Ts> transformation)
+    {
+        detail::validateReal(transformation, "Transformation");
+        local_transformation_ = transformation;
+
+		this->getTransformationComponents(local_transformation_,
+            local_position_, local_rotation_, local_scale_
+        );
+
+        this->updateTransforms();
+	}
 
     // ================================ //
     // === Transformation Modifiers === //
@@ -209,6 +221,9 @@ namespace huira {
     template <IsFloatingPoint Ts>
     void SceneNode<Ts>::updateSceneTransformation()
     {
+        if (parent_ == nullptr) {
+			throw detail::FatalError("Parent GroupNode pointer is NULL");
+        }
         Mat4<Ts> parent_transformation = parent_->getSceneTransformation();
         
         scene_transformation_ = parent_transformation * local_transformation_;

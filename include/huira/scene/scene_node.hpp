@@ -40,6 +40,8 @@ namespace huira {
         void setLocalScale(double scale);
         void setLocalScale(double scale_x, double scale_y, double scale_z);
 
+        void setLocalTransformation(Mat4<Ts> transformation);
+
         // Transformation modifying member functions:
         void translateBy(Vec3<Ts> position);
         void translateBy(Meter x, Meter y, Meter z);

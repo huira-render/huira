@@ -61,11 +61,12 @@ namespace huira {
     };
 
     template<typename T>
-    concept IsMat = requires {
-        // Check if T is a specialization of glm::mat with highp precision
+    concept IsMat = requires(T t) {
         typename T::value_type;
         typename T::col_type;
-            requires std::same_as<T, glm::mat<T::cols(), T::rows(), typename T::value_type, glm::highp>>;
+        t.length();
+        t[0].length();
+        t[0][0];
             requires IsFloatingPoint<typename T::value_type>;
     };
 
