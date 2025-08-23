@@ -2,6 +2,8 @@
 #include <initializer_list>
 #include <algorithm>
 #include <type_traits>
+#include <string>
+#include <iostream>
 
 #include "huira/detail/concepts/numeric_concepts.hpp"
 
@@ -130,6 +132,29 @@ namespace huira {
     template <IsNumeric T, size_t N>
     constexpr bool NumericArray<T, N>::operator!=(const NumericArray<T, N>& other) const {
         return data_ != other.data_;
+    }
+
+
+    // ======================== //
+    // === String Functions === //
+    // ======================== //
+    template <IsNumeric T, size_t N>
+    std::string NumericArray<T, N>::toString() const {
+        std::string result = "[";
+        for (size_t i = 0; i < N; ++i) {
+            result += std::to_string(data_[i]);
+            if (i < (N - 1)) {
+                result += ", ";
+            }
+        }
+        result += "]";
+        return result;
+    }
+
+    template <IsNumeric T, size_t N>
+    std::ostream& operator<<(std::ostream& os, const NumericArray<T, N>& v) {
+        os << v.toString();
+        return os;
     }
 
 

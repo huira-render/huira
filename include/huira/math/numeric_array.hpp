@@ -4,6 +4,8 @@
 #include <initializer_list>
 #include <algorithm>
 #include <type_traits>
+#include <string>
+#include <iostream>
 
 #include "huira/detail/concepts/numeric_concepts.hpp"
 
@@ -28,7 +30,7 @@ namespace huira {
 
         constexpr NumericArray(std::initializer_list<T> init) {
             std::copy(init.begin(),
-                init.begin() + std::min(init.size(), N),
+                std::next(init.begin(), static_cast<std::ptrdiff_t>(std::min(init.size(), N))),
                 data_.begin());
         }
 
@@ -114,6 +116,12 @@ namespace huira {
         // Comparison operators
         constexpr bool operator==(const NumericArray& other) const;
         constexpr bool operator!=(const NumericArray& other) const;
+
+        // String functions
+        std::string toString() const;
+
+        template <IsNumeric T2, size_t N2>
+        friend std::ostream& operator<<(std::ostream& os, const NumericArray<T2, N2>& v);
 
     private:
         std::array<T, N> data_;

@@ -78,7 +78,8 @@ if(MSVC AND NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     # Clang comprehensive warnings - nearly everything
-    add_compile_options(-Weverything)  # Enable ALL warnings, then disable specific ones
+    add_compile_options(-Weverything)
+    add_compile_options(-Wextra-semi)
     
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     # GCC comprehensive warnings - maximum practical level
@@ -167,30 +168,14 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
         -Wno-c++20-compat
         
         # Style warnings
-        -Wno-padded
-        -Wno-weak-vtables
         -Wno-exit-time-destructors
         -Wno-global-constructors
-        -Wno-switch-enum
         -Wno-covered-switch-default
-        -Wno-documentation
-        -Wno-documentation-unknown-command
-        -Wno-missing-prototypes
         -Wno-newline-eof
-        -Wno-reserved-id-macro
-        -Wno-disabled-macro-expansion
-        -Wno-unsafe-buffer-usage
         
         # Floating point warnings that are often false positives
         -Wno-double-promotion
         -Wno-float-equal
-        
-        # GNU extension warnings
-        -Wno-gnu-zero-variadic-macro-arguments
-        -Wno-zero-length-array
-        -Wno-gnu-statement-expression
-        -Wno-gnu-conditional-omitted-operand
-        -Wno-gnu-empty-initializer
     )
     
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
