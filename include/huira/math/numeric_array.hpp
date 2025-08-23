@@ -10,8 +10,20 @@
 #include "huira/detail/concepts/numeric_concepts.hpp"
 
 namespace huira {
-    template <IsNumeric T, size_t N>
-    class NumericArray {
+    // Helper to determine optimal alignment for SIMD
+    template<typename T>
+    constexpr size_t simd_alignment() {
+        if constexpr (std::is_same_v<T, float>) {
+            return 32; // AVX alignment for 8 floats
+        }
+        else if constexpr (std::is_same_v<T, double>) {
+            return 32; // AVX alignment for 4 doubles
+        }
+        return alignof(T);
+    }
+    
+    template <IsFloatingPoint T, size_t N>
+    class alignas(simd_alignment<T>()) NumericArray {
     public:
         // Type aliases
         using value_type = T;
@@ -83,16 +95,19 @@ namespace huira {
             data_.swap(other.data_);
         }
 
-        // Arithmetic operations with other NumericArray
+        // Summary
+        T total() const;
+        T magnitude() const;
+        T max() const;
+        T min() const;
+
+        // Array-Array Arithmetic Operations
         constexpr NumericArray& operator+=(const NumericArray& other);
         constexpr NumericArray& operator-=(const NumericArray& other);
         constexpr NumericArray& operator*=(const NumericArray& other);
         constexpr NumericArray& operator/=(const NumericArray& other);
 
-        constexpr NumericArray& operator%=(const NumericArray& other) 
-            requires std::integral<T>;
-
-        // Arithmetic operations with scalars
+        // Array-Scalar Arithmetic Operations
         template <IsNumeric U>
         constexpr NumericArray& operator+=(const U& scalar);
 
@@ -105,10 +120,6 @@ namespace huira {
         template <IsNumeric U>
         constexpr NumericArray& operator/=(const U& scalar);
 
-        template <IsNumeric U>
-        constexpr NumericArray& operator%=(const U& scalar)
-            requires std::integral<T>&& std::integral<U>;
-
         // Unary operators
         constexpr NumericArray operator+() const;
         constexpr NumericArray operator-() const;
@@ -117,14 +128,19 @@ namespace huira {
         constexpr bool operator==(const NumericArray& other) const;
         constexpr bool operator!=(const NumericArray& other) const;
 
+        // Utility to check alignment at runtime
+        bool is_simd_aligned() const noexcept {
+            return reinterpret_cast<uintptr_t>(data_.data()) % simd_alignment<T>() == 0;
+        }
+
         // String functions
         std::string toString() const;
 
-        template <IsNumeric T2, size_t N2>
+        template <IsFloatingPoint T2, size_t N2>
         friend std::ostream& operator<<(std::ostream& os, const NumericArray<T2, N2>& v);
 
     private:
-        std::array<T, N> data_;
+        alignas(simd_alignment<T>()) std::array<T, N> data_;
     };
 
     // Binary arithmetic operators (array + array)
