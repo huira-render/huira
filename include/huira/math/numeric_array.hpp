@@ -135,11 +135,11 @@ namespace huira {
 
         // String functions
         std::string toString() const;
-
+        
         template <IsFloatingPoint T2, size_t N2>
         friend std::ostream& operator<<(std::ostream& os, const NumericArray<T2, N2>& v);
 
-    private:
+    protected:
         alignas(simd_alignment<T>()) std::array<T, N> data_;
     };
 

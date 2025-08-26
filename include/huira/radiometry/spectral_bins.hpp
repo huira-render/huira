@@ -1,54 +1,69 @@
-#pragma once
+#include <string>
+#include <iostream>
 
 #include "huira/math/numeric_array.hpp"
 
 namespace huira {
+    // Bin definitions:
+    struct Bin {
+        float min;
+        float max;
+        float center;
 
-    template <size_t N>
-    class SpectralBins : public NumericArray<float, N> {
-    public:
-        // Import base class constructors that already work with float
-        using NumericArray<float, N>::NumericArray;
+        constexpr Bin() : min(0), max(0), center(0) {}
 
-        // Universal variadic constructor - accepts any numeric types, converts to float
-        template<typename... Args>
-            requires (sizeof...(Args) == N && (IsNumeric<Args> && ...))
-        constexpr SpectralBins(Args&&... args)
-            : NumericArray<float, N>(static_cast<float>(args)...) {}
-
-        // Universal initializer list constructor - accepts any numeric type
-        template<IsNumeric U>
-        constexpr SpectralBins(std::initializer_list<U> init)
-            : NumericArray<float, N>() {
-            size_t i = 0;
-            for (const auto& value : init) {
-                if (i >= N) break;
-                (*this)[i] = static_cast<float>(value);
-                ++i;
-            }
+        constexpr Bin(float new_min, float new_max) :
+            min{ new_min }, max{ new_max }, center{ (min + max) / 2.0f }
+        {
         }
-
-        // Universal fill constructor - accepts any numeric type
-        template<IsNumeric U>
-        explicit constexpr SpectralBins(const U& value)
-            : NumericArray<float, N>(static_cast<float>(value)) {}
-
-        // Copy constructor from any NumericArray with numeric type
-        template<IsNumeric U>
-        constexpr SpectralBins(const NumericArray<U, N>& other)
-            : NumericArray<float, N>() {
-            for (size_t i = 0; i < N; ++i) {
-                (*this)[i] = static_cast<float>(other[i]);
-            }
-        }
-
-    private:
     };
 
-    // Deduction guide for SpectralBins
-    template<typename T, typename... U>
-        requires (IsNumeric<T> && (IsNumeric<U> && ...))
-    SpectralBins(T, U...)->SpectralBins<1 + sizeof...(U)>;
+    template <size_t N, auto... Args>
+    class SpectralBins : public NumericArray<float, N> {
+    public:
+        constexpr SpectralBins() : NumericArray<float, N>() {
+            initialize_bins_static();
+        }
+
+        // Single value:
+        explicit constexpr SpectralBins(float value) : NumericArray<float, N>(value) {
+            initialize_bins_static();
+        }
+
+        // Initializer list:
+        constexpr SpectralBins(std::initializer_list<float> init) : NumericArray<float, N>(init) {
+            initialize_bins_static();
+        }
+
+        // Direct element initialization
+        template <typename... Values>
+            requires (sizeof...(Values) == N && (std::convertible_to<Values, float> && ...))
+        constexpr SpectralBins(Values&&... values) : NumericArray<float, N>(static_cast<float>(values)...) {
+            initialize_bins_static();
+        }
+
+        // Access to bin information
+        constexpr const Bin& get_bin(size_t index) const { return bins_[index]; }
+        constexpr const std::array<Bin, N>& get_all_bins() const { return bins_; }
+
+    private:
+        static std::array<Bin, N> bins_;
+
+        static constexpr std::array<Bin, N> initialize_bins_static();
+        static constexpr std::array<Bin, N> initialize_uniform_static();
+        static constexpr std::array<Bin, N> initialize_pairs_static();
+        static constexpr std::array<Bin, N> initialize_edges_static();
+    };
+
+    // Aliases for faster setting:
+    template <size_t N, int min, int max>
+    using UniformSpectralBins = SpectralBins<N, min, max>;
+
+    template <size_t N, auto... Args>
+    using SpectralBinEdges = SpectralBins<N, Args...>;
+
+    // Helpful types:
+    using RGB = SpectralBins<3, 600, 750, 500, 600, 380, 500>;
 }
 
 #include "inline/radiometry/spectral_bins.ipp"
