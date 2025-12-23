@@ -41,6 +41,11 @@ jobs:
       if: github.ref == 'refs/heads/main'
       uses: actions/configure-pages@v4
 
+    # Add CNAME for custom domain (only on main branch)
+    - name: Add CNAME for custom domain
+      if: github.ref == 'refs/heads/main'
+      run: echo "docs.huira.space" > ./build/huira_docs/CNAME
+
     # Upload documentation as Pages artifact (only on main branch)
     - name: Upload Pages artifact
       if: github.ref == 'refs/heads/main'
