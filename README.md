@@ -12,7 +12,6 @@
 | Platform | C++ Build | Python Bindings |
 |:--------:|:---------:|:---------------:|
 | Linux       | [![Linux][ref-nix-badge]]([ref-nix-yml])     |  | 
-| MacOS (x86) | [![MacOS x86][ref-osi-badge]](ref-osi-yml)   |  |
 | MacOS (ARM) | [![MacOS ARM][ref-osa-badge]]([ref-osa-yml]) |  |
 | Windows     | [![Windows][ref-win-badge]]([ref-win-yml])   |  |
 
@@ -55,10 +54,6 @@ Huira is licensed under the [MIT License](./LICENSE)
 
 [ref-nix-dev-badge]: https://github.com/huira-render/huira/actions/workflows/linux-build.yml/badge.svg?branch=develop
 [ref-nix-dev-yml]: https://github.com/huira-render/huira/actions/workflows/linux-build.yml?query=branch%3Adevelop
-
-<!--- MacOS x86 Badges and Workflows --->
-[ref-osi-badge]: https://github.com/huira-render/huira/actions/workflows/macos-x86-build.yml/badge.svg?branch=main
-[ref-osi-yml]: https://github.com/huira-render/huira/actions/workflows/macos-x86-build.yml?query=branch%3Amain
 
 <!--- MacOS ARM Badges and Workflows --->
 [ref-osa-badge]: https://github.com/huira-render/huira/actions/workflows/macos-arm-build.yml/badge.svg?branch=main
