@@ -5,7 +5,13 @@ include(FetchContent)
 set(CMAKE_WARN_DEPRECATED OFF CACHE BOOL "" FORCE)
 
 
-find_package(glm CONFIG REQUIRED)
+find_package(glm CONFIG QUIET)
+if(NOT glm_FOUND)
+    find_path(GLM_INCLUDE_DIR glm/glm.hpp REQUIRED)
+    add_library(glm::glm INTERFACE IMPORTED)
+    target_include_directories(glm::glm INTERFACE ${GLM_INCLUDE_DIR})
+endif()
+
 
 #############################
 ### Library Configuration ###

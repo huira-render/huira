@@ -43,12 +43,12 @@ runs:
 
     - name: Configure CMake (Windows)
       if: inputs.platform == 'windows'
-      shell: cmd
+      shell: bash -el {0}  # Changed from cmd
       run: |
-        call conda activate huira_env
-        
-        cmake -B build ^
-          -DCMAKE_TOOLCHAIN_FILE="../cmake/conda-toolchain.cmake" ^
-          -DCMAKE_BUILD_TYPE=Release ^
-          -G "Visual Studio 17 2022" ^
+        conda activate huira_env
+    
+        cmake -B build \
+          -DCMAKE_TOOLCHAIN_FILE="${GITHUB_WORKSPACE}/cmake/conda-toolchain.cmake" \
+          -DCMAKE_BUILD_TYPE=Release \
+          -G "Visual Studio 17 2022" \
           -A x64
