@@ -80,6 +80,84 @@ jobs:
         with:
           platform: ${{ matrix.platform }}
 
+  conda-build-linux:
+    needs: build-linux
+    runs-on: ubuntu-22.04
+    name: Conda Build (linux)
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Miniconda
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          auto-update-conda: true
+          conda-solver: libmamba
+          channels: conda-forge
+
+      - name: Install conda-build
+        shell: bash -el {0}
+        run: conda install -y conda-build
+
+      - name: Build conda package
+        shell: bash -el {0}
+        run: conda build dependencies/recipe/
+
+  conda-build-macos:
+    needs: build-other-platforms
+    runs-on: macos-14
+    name: Conda Build (macos-arm)
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Miniconda
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          auto-update-conda: true
+          conda-solver: libmamba
+          channels: conda-forge
+
+      - name: Install conda-build
+        shell: bash -el {0}
+        run: conda install -y conda-build
+
+      - name: Build conda package
+        shell: bash -el {0}
+        run: conda build dependencies/recipe/
+
+  conda-build-windows:
+    needs: build-other-platforms
+    runs-on: windows-2022
+    name: Conda Build (windows)
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Miniconda
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          auto-update-conda: true
+          conda-solver: libmamba
+          channels: conda-forge
+
+      - name: Install conda-build
+        shell: bash -el {0}
+        run: conda install -y conda-build
+
+      - name: Build conda package
+        shell: bash -el {0}
+        run: conda build dependencies/recipe/
+
   test:
     needs: build-linux
     runs-on: ubuntu-22.04

@@ -1,0 +1,51 @@
+package:
+  name: huira
+  version: 0.1.0.dev
+
+source:
+  git_url: ../..
+  git_rev: HEAD
+
+build:
+  number: 0
+
+requirements:
+  build:
+    # Compiler and build tools - conda-build resolves these per-platform
+    - {{ compiler('cxx') }}
+    - cmake
+    - ninja
+  host:
+    - assimp =5.4.3         # Asset Importer (3d models)
+    - catch2 =3.8.0         # Testing Framework
+    - cfitsio =4.6.2        # FITS I/O
+    - cspice =67            # NASA SPICE
+    - embree3 =3.13.5       # Ray tracing Acceleration
+    - fftw =3.3.10          # Fast Fourier Transform
+    - gdal =3.10.0          # Geospatial Abstraction Library
+    - glm =1.0.1            # Linear Algebra for Graphics
+    - libtiff =4.7.0        # TIFF I/O
+    - tbb-devel =2021.12.0  # Intel TBB (Threading)
+  run:
+    - assimp =5.4.3         # Asset Importer (3d models)
+    - cfitsio =4.6.2        # FITS I/O
+    - cspice =67            # NASA SPICE
+    - embree3 =3.13.5       # Ray tracing Acceleration
+    - fftw =3.3.10          # Fast Fourier Transform
+    - gdal =3.10.0          # Geospatial Abstraction Library
+    - libtiff =4.7.0        # TIFF I/O
+    - tbb =2021.12.0        # Intel TBB (Threading)
+
+test:
+  commands:
+    - test -f $PREFIX/include/huira/huira.hpp  # [unix]
+    - if not exist %LIBRARY_INC%\\huira\\huira.hpp exit 1  # [win]
+
+about:
+  home: https://github.com/huira-render/huira
+  license: MIT
+  license_file: LICENSE
+  summary: Spectral renderer for space applications
+  description: |
+    Huira is a C++ library for spectral rendering in space applications,
+    supporting ray tracing, solar radiation pressure modeling, and LIDAR simulation.
