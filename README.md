@@ -1,15 +1,16 @@
 # Huira Renderer
 *Huira* is a ray-tracing library for rendering large scenes, star fields, and simulating solar radiation pressure.
 
-### Main Branch Status
-[![Build](https://github.com/huira-render/huira/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/huira-render/huira/actions/workflows/build.yml?query=branch%3Amain)
-[![Coverage](https://codecov.io/gh/huira-render/huira/branch/main/graph/badge.svg)](https://app.codecov.io/gh/huira-render/huira/tree/main)
 
 **Supported Platforms:** Linux, macOS (ARM), Windows
 
-### Develop Branch Status (Latest)
-[![Build](https://github.com/huira-render/huira/actions/workflows/build.yml/badge.svg?branch=develop)](https://github.com/huira-render/huira/actions/workflows/build.yml?query=branch%3Adevelop)
-[![Coverage](https://codecov.io/gh/huira-render/huira/branch/develop/graph/badge.svg)](https://app.codecov.io/gh/huira-render/huira/tree/develop)
+*NOTE:* `main` reflects the latest stable development state; `develop` contains active feature work.
+
+
+|  | Build | Coverage |
+|---|---|---|
+| **main** | [![Build](https://github.com/huira-render/huira/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/huira-render/huira/actions/workflows/build.yml?query=branch%3Amain) | [![Coverage](https://codecov.io/gh/huira-render/huira/branch/main/graph/badge.svg)](https://app.codecov.io/gh/huira-render/huira/tree/main) |
+| **develop** | [![Build](https://github.com/huira-render/huira/actions/workflows/build.yml/badge.svg?branch=develop)](https://github.com/huira-render/huira/actions/workflows/build.yml?query=branch%3Adevelop) | [![Coverage](https://codecov.io/gh/huira-render/huira/branch/develop/graph/badge.svg)](https://app.codecov.io/gh/huira-render/huira/tree/develop) |
 
 ***
 
@@ -26,6 +27,9 @@ Please see the platform specific quickstart guides:
 
 To see additional optionals for building *Huira*, please refer to:
 - **[Huira Build Options](docs/build/options.md)**
+
+# Examples
+Example programs demonstrating common usage patterns are available in the [`examples/`](examples/) directory.
 
 ***
 
