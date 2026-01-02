@@ -4,13 +4,8 @@
 
 **Supported Platforms:** Linux, macOS (ARM), Windows
 
-*NOTE:* `main` reflects the latest stable development state; `develop` contains active feature work.
-
-
-|  | Build | Coverage |
-|---|---|---|
-| **main** | [![Build](https://github.com/huira-render/huira/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/huira-render/huira/actions/workflows/build.yml?query=branch%3Amain) | [![Coverage](https://codecov.io/gh/huira-render/huira/branch/main/graph/badge.svg)](https://app.codecov.io/gh/huira-render/huira/tree/main) |
-| **develop** | [![Build](https://github.com/huira-render/huira/actions/workflows/build.yml/badge.svg?branch=develop)](https://github.com/huira-render/huira/actions/workflows/build.yml?query=branch%3Adevelop) | [![Coverage](https://codecov.io/gh/huira-render/huira/branch/develop/graph/badge.svg)](https://app.codecov.io/gh/huira-render/huira/tree/develop) |
+[![CI/CD Pipeline](https://github.com/huira-render/huira/actions/workflows/ci-cd.yml/badge.svg?branch=main)](https://github.com/huira-render/huira/actions/workflows/ci-cd.yml?query=branch%3Amain)
+[![Coverage](https://codecov.io/gh/huira-render/huira/branch/main/graph/badge.svg)](https://app.codecov.io/gh/huira-render/huira/tree/main)
 
 ***
 
