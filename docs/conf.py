@@ -5,7 +5,7 @@ import sys
 conf_dir = os.path.abspath(os.path.dirname(__file__))
 
 # Project Name and Author:
-project = 'Huira'
+project = 'huira'
 copyright = '2025, Christopher Gnam'
 author = 'Christopher Gnam'
 

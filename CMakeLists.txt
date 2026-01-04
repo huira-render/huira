@@ -21,9 +21,9 @@ include(CustomVcpkgSetup)
 #############################
 ### Configure the project ###
 #############################
-project(Huira LANGUAGES CXX VERSION 0.8.0)
+project(huira LANGUAGES CXX VERSION 0.8.0)
 
-message("Huira version ${PROJECT_VERSION}")
+message("huira version ${PROJECT_VERSION}")
 add_compile_definitions(HUIRA_VERSION="${PROJECT_VERSION}")
 
 # Configure compiler and warnings:
