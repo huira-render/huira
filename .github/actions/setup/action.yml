@@ -85,7 +85,7 @@ runs:
         path: |
           ${{ env.CONDA }}/envs/huira_env
           ~/.conda/pkgs
-        key: conda-env-v2-${{ runner.os }}-${{ inputs.platform }}-${{ hashFiles('dependencies/environment.yml', 'docs/docs-requirements.yml') }}
+        key: conda-env-v2-${{ runner.os }}-${{ inputs.platform }}-${{ hashFiles('packaging/environment.yml', 'docs/docs-requirements.yml') }}
         restore-keys: |
           conda-env-v2-${{ runner.os }}-${{ inputs.platform }}-
 
@@ -94,8 +94,8 @@ runs:
       if: inputs.platform != 'windows'
       shell: bash -el {0}
       run: |
-        echo "Installing main project dependencies from dependencies/environment.yml..."
-        mamba env update -n huira_env -f dependencies/environment.yml
+        echo "Installing main project dependencies from packaging/environment.yml..."
+        mamba env update -n huira_env -f packaging/environment.yml
         
         echo "Installing additional build tools..."
         case "${{ inputs.platform }}" in
@@ -118,9 +118,9 @@ runs:
       if: inputs.platform == 'windows'
       shell: cmd
       run: |
-        echo Installing main project dependencies from dependencies/environment.yml...
+        echo Installing main project dependencies from packaging/environment.yml...
         call conda activate huira_env
-        mamba env update -n huira_env -f dependencies/environment.yml
+        mamba env update -n huira_env -f packaging/environment.yml
         
         echo Installing Windows build tools...
         mamba install -y cmake ninja pkg-config

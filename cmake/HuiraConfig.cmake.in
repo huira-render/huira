@@ -1,65 +1,14 @@
 @PACKAGE_INIT@
 
-# Store how the library was built
-set(HUIRA_PREBUILD_SPECIALIZATIONS @HUIRA_PREBUILD_SPECIALIZATIONS@)
-set(HUIRA_VERSION "@PROJECT_VERSION@")
-
-# Include helper modules
 include(CMakeFindDependencyMacro)
 
-# Set up paths
-set_and_check(HUIRA_INCLUDE_DIR "@PACKAGE_HUIRA_INSTALL_INCLUDEDIR@")
-set_and_check(HUIRA_CMAKE_DIR "@PACKAGE_HUIRA_INSTALL_CMAKEDIR@")
+find_dependency(glm CONFIG QUIET)
+if(NOT glm_FOUND)
+    find_path(GLM_INCLUDE_DIR glm/glm.hpp REQUIRED)
+    add_library(glm::glm INTERFACE IMPORTED)
+    target_include_directories(glm::glm INTERFACE ${GLM_INCLUDE_DIR})
+endif()
 
-# Include our helper modules for downstream projects
-list(APPEND CMAKE_MODULE_PATH ${HUIRA_CMAKE_DIR})
-include(SimplePackageHelpers)
-include(MarkSystemLibrary)
-
-# Suppress deprecation warnings from third-party libraries
-set(CMAKE_WARN_DEPRECATED OFF CACHE BOOL "" FORCE)
-
-
-
-######################################
-### Find all required dependencies ###
-######################################
-find_dependency(glm CONFIG REQUIRED)
-
-
-
-# Restore deprecation warnings
-set(CMAKE_WARN_DEPRECATED ON CACHE BOOL "" FORCE)
-
-# Include the target file
 include("${CMAKE_CURRENT_LIST_DIR}/HuiraTargets.cmake")
 
-# Provide information about the build mode
-if(HUIRA_PREBUILD_SPECIALIZATIONS)
-    message(STATUS "Found Huira ${HUIRA_VERSION} (precompiled specializations)")
-else()
-    message(STATUS "Found Huira ${HUIRA_VERSION} (header-only templates)")
-endif()
-
-# Set the main target
-set(HUIRA_TARGETS huira::huira)
-
-# For backwards compatibility, create variables that users might expect
-set(HUIRA_FOUND TRUE)
-set(HUIRA_INCLUDE_DIRS "${HUIRA_INCLUDE_DIR}")
-set(HUIRA_LIBRARIES huira::huira) # Always link to the library
-
-# Set compile definitions based on how library was built
-if(NOT HUIRA_PREBUILD_SPECIALIZATIONS)
-    set(HUIRA_COMPILE_DEFINITIONS "HUIRA_HEADER_ONLY")
-else()
-    set(HUIRA_COMPILE_DEFINITIONS "")
-endif()
-
-# Convenience function for users who want to apply the same settings
-function(huira_configure_target target_name)
-    target_link_libraries(${target_name} PRIVATE huira::huira)
-    # Note: HUIRA_HEADER_ONLY is automatically applied via the target's PUBLIC compile definitions
-endfunction()
-
-check_required_components(Huira)
+check_required_components(huira)

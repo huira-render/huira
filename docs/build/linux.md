@@ -57,7 +57,7 @@ Complete the installation prompts and verify conda activation by checking for `(
 
 ### Step 2: Environment Creation
 ```bash
-conda env create -f dependencies/environment.yml
+conda env create -f packaging/environment.yml
 conda activate huira_env
 ```
 

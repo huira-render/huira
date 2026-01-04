@@ -1,5 +1,5 @@
 # Set the alternative vcpkg.json directory:
-set(VCPKG_MANIFEST_DIR "${CMAKE_SOURCE_DIR}/dependencies")
+set(VCPKG_MANIFEST_DIR "${CMAKE_SOURCE_DIR}/packaging")
 
 # Disable vcpkg if using an alternative toolchain
 set(USING_ALTERNATIVE_PKG_MGR FALSE)
