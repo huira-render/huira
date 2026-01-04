@@ -1,4 +1,4 @@
-include(FetchPybind)
+include(huiraFetchPybind)
 
 pybind11_add_module(pyhuira huira_module.cpp)
 target_link_libraries(pyhuira PRIVATE huira::huira Python::Python)

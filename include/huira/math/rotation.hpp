@@ -19,7 +19,7 @@ namespace huira {
 	 * @tparam T The floating-point type (e.g., float or double).
 	 */
 	template <IsFloatingPoint T>
-	class HUIRA_EXPORT Rotation {
+	class Rotation {
 	public:
 		Rotation() = default;
 		Rotation(Mat3<T> matrix);

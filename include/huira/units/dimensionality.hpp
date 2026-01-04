@@ -104,4 +104,4 @@ namespace huira {
     using Luminance = decltype(LuminousIntensity{} / Area{});
 }
 
-#include "inline/units/dimensionality.ipp"
+#include "huira_impl/units/dimensionality.ipp"

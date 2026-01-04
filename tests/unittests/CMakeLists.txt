@@ -63,14 +63,6 @@ function(add_unit_test test_name source_file)
             # The runtime will be automatically linked
         endif()
         
-        # Ensure the huira library also has coverage instrumentation
-        target_compile_options(huira PRIVATE ${COVERAGE_FLAGS})
-        
-        # Apply same logic for the main library
-        if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR 
-           (CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND NOT WIN32))
-            target_link_libraries(huira PRIVATE --coverage)
-        endif()
     endif()
     
     # Disable the problematic warning for MSVC

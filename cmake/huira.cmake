@@ -38,31 +38,31 @@ install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/huira_impl/
 
 # Install the library target
 install(TARGETS huira
-        EXPORT HuiraTargets
+        EXPORT huiraTargets
         INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
 # Install the export set
-install(EXPORT HuiraTargets
-        FILE HuiraTargets.cmake
+install(EXPORT huiraTargets
+        FILE huiraTargets.cmake
         NAMESPACE huira::
         DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/huira)
 
 # Generate and install the config file
 configure_package_config_file(
-    "${CMAKE_SOURCE_DIR}/cmake/HuiraConfig.cmake.in"
-    "${CMAKE_BINARY_DIR}/HuiraConfig.cmake"
+    "${CMAKE_SOURCE_DIR}/cmake/huiraConfig.cmake.in"
+    "${CMAKE_BINARY_DIR}/huiraConfig.cmake"
     INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/huira
 )
 
 # Generate version file
 write_basic_package_version_file(
-    "${CMAKE_BINARY_DIR}/HuiraConfigVersion.cmake"
+    "${CMAKE_BINARY_DIR}/huiraConfigVersion.cmake"
     VERSION ${PROJECT_VERSION}
     COMPATIBILITY SameMajorVersion
 )
 
 # Install config files
 install(FILES
-        "${CMAKE_BINARY_DIR}/HuiraConfig.cmake"
-        "${CMAKE_BINARY_DIR}/HuiraConfigVersion.cmake"
+        "${CMAKE_BINARY_DIR}/huiraConfig.cmake"
+        "${CMAKE_BINARY_DIR}/huiraConfigVersion.cmake"
         DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/huira)

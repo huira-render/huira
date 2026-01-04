@@ -1,5 +1,5 @@
 find_package(Doxygen REQUIRED)
-include(HuiraFindSphinx)
+include(huiraFindSphinx)
 
 set(DOXYGEN_INPUT_DIR ${PROJECT_SOURCE_DIR}/include)
 set(DOXYGEN_OUTPUT_DIR ${CMAKE_BINARY_DIR}/doxygen)

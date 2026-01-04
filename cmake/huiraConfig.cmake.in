@@ -9,6 +9,6 @@ if(NOT glm_FOUND)
     target_include_directories(glm::glm INTERFACE ${GLM_INCLUDE_DIR})
 endif()
 
-include("${CMAKE_CURRENT_LIST_DIR}/HuiraTargets.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/huiraTargets.cmake")
 
 check_required_components(huira)
