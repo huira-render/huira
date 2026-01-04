@@ -10,5 +10,9 @@ dependencies:
   - fftw=3.3.10          # Fast Fourier Transform
   - gdal=3.10.0          # Geospatial Abstraction Library
   - glm=1.0.1            # Linear Algebra for Graphics
+  - indicators=2.3       # Progress bars
   - libtiff=4.7.0        # TIFF I/O
-  - tbb-devel=2021.12.0  # Intel TBB (Threading)
+  - plog=1.1.10          # Logging
+  - tbb-devel=2021.12.0  # Intel TBB
+  - termcolor-cpp=2.0.0  # Terminal colors
+  - yaml-cpp=0.8.0       # YAML parser

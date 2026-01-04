@@ -26,6 +26,13 @@ To see additional optionals for building *Huira*, please refer to:
 # Examples
 Example programs demonstrating common usage patterns are available in the [`examples/`](examples/) directory.
 
+<!--
+# Background
+Huira is a complete rewrite providing similar functionality to the [vira](https://github.com/crgnam/vira) project originally developed by the same author while at NASA's Goddard Space Flight Center. While inspired by vira, huira is built from scratch with new code and is released under the MIT license.
+
+Vira is still maintained on a [personal fork by the original author](https://github.com/crgnam/vira).  However it is recommended to use this project moving forward.
+-->
+
 ***
 
 # License

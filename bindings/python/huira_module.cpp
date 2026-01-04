@@ -9,7 +9,7 @@
 namespace py = pybind11;
 
 PYBIND11_MODULE(pyhuira, m) {
-    m.doc() = "Python bindings for the Vira C++ library";
+    m.doc() = "Python bindings for the Huira C++ library";
 
     huira::bind_units(m);
 };
