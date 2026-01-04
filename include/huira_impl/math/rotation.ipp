@@ -1,5 +1,3 @@
-#include "huira/math/rotation.hpp"
-
 #include <string>
 #include <ostream>
 #include <array>
@@ -12,8 +10,6 @@
 #include "huira/concepts/numeric_concepts.hpp"
 #include "huira/math/types.hpp"
 #include "huira/units/units.hpp"
-
-#include "huira/huira_export.hpp"
 
 namespace huira {
 	// ==================== //
@@ -253,9 +249,4 @@ namespace huira {
 		this->matrix_ = matrix;
 		this->transpose_ = glm::transpose(matrix);
 	}
-
-
-	// Explicit Instantiations:
-	template class Rotation<float>;
-	template class Rotation<double>;
 }

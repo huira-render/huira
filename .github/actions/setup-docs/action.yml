@@ -85,7 +85,7 @@ runs:
         path: |
           ${{ env.CONDA }}/envs/huira_env
           ~/.conda/pkgs
-        key: conda-env-v2-${{ runner.os }}-${{ inputs.platform }}-${{ hashFiles('dependencies/environment.yml', 'docs/docs-dependencies.yml') }}
+        key: conda-env-v2-${{ runner.os }}-${{ inputs.platform }}-${{ hashFiles('packaging/environment.yml', 'docs/docs-dependencies.yml') }}
         restore-keys: |
           conda-env-v2-${{ runner.os }}-${{ inputs.platform }}-
 
@@ -93,8 +93,8 @@ runs:
     - name: Install main project dependencies
       shell: bash -el {0}  # Ensures conda environment is activated
       run: |
-        echo "Installing main project dependencies from dependencies/environment.yml..."
-        mamba env update -n huira_env -f dependencies/environment.yml
+        echo "Installing main project dependencies from packaging/environment.yml..."
+        mamba env update -n huira_env -f packaging/environment.yml
         
         echo "Installing additional build tools..."
         # Platform-specific build tools installation

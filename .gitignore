@@ -4,8 +4,8 @@
 /build/
 /out/
 
-/dev/*
-!/dev/README.md
+/local/*
+!/local/README.md
 
 CMakeSettings.json
 

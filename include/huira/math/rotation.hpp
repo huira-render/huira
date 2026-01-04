@@ -7,8 +7,6 @@
 #include "huira/math/types.hpp"
 #include "huira/units/units.hpp"
 
-#include "huira/huira_export.hpp"
-
 namespace huira {
 	/**
 	 * @brief Represents a 3D rotation using a rotation matrix, quaternion, or axis-angle representation.
@@ -66,8 +64,6 @@ namespace huira {
 	// Helpful typedefs:
 	typedef Rotation<float> Rotation_f;
 	typedef Rotation<double> Rotation_d;
-
-	// Declare Explicit Instantiations:
-	extern template class Rotation<float>;
-	extern template class Rotation<double>;
 }
+
+#include "huira_impl/math/rotation.ipp"

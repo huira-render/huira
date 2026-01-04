@@ -37,7 +37,7 @@ If conda isn't already available:
 
 ### Step 2: Environment Creation
 ```powershell
-conda env create -f dependencies/environment.yml
+conda env create -f packaging/environment.yml
 conda activate huira_env
 ```
 
