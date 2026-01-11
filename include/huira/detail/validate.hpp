@@ -4,7 +4,6 @@
 #include "glm/gtx/string_cast.hpp"
 
 #include "huira/math/types.hpp"
-
 #include "huira/detail/concepts/numeric_concepts.hpp"
 #include "huira/detail/diagnostics/exceptions.hpp"
 

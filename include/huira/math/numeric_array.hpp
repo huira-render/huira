@@ -1,11 +1,11 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <initializer_list>
-#include <algorithm>
-#include <type_traits>
-#include <string>
 #include <iostream>
+#include <string>
+#include <type_traits>
 
 #include "huira/detail/concepts/numeric_concepts.hpp"
 

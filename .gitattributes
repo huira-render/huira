@@ -1,9 +1,29 @@
-# Default to automatic text/binary detection for all files
+# Set default behavior to automatically normalize line endings
 * text=auto
 
-# Ensure Windows-style line endings on .bat scripts
+# Explicitly declare text files you want to always be normalized and converted
+# to native line endings on checkout
+*.c text
+*.cpp text
+*.cxx text
+*.cc text
+*.h text
+*.hpp text
+*.hxx text
+*.cmake text
+*.txt text
+*.md text
+*.sh text eol=lf
 *.bat text eol=crlf
 
-# Ensure LF endings on .sh scripts
-*.sh text eol=lf
-*.cmake text eol=lf
+# Declare files that will always have LF line endings on checkout
+Makefile text eol=lf
+
+# Denote all files that are truly binary and should not be modified
+*.png binary
+*.jpg binary
+*.so binary
+*.dll binary
+*.exe binary
+*.a binary
+*.lib binary

@@ -1,9 +1,9 @@
-#include <array>
-#include <initializer_list>
 #include <algorithm>
-#include <type_traits>
-#include <string>
+#include <array>
 #include <iostream>
+#include <initializer_list>
+#include <string>
+#include <type_traits>
 
 #include "huira/detail/concepts/numeric_concepts.hpp"
 

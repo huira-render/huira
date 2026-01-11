@@ -1,6 +1,6 @@
-#include <string>
-#include <iostream>
 #include <array>
+#include <iostream>
+#include <string>
 
 namespace huira {
     // ======================== //
