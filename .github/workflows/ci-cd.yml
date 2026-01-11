@@ -48,7 +48,7 @@ jobs:
       matrix:
         include:
           - os: macos-14
-            platform: macos-arm
+            platform: macos
           - os: windows-2022
             platform: windows
     
@@ -112,7 +112,7 @@ jobs:
   conda-build-macos:
     needs: build-other-platforms
     runs-on: macos-14
-    name: Conda Build (macos-arm)
+    name: Conda Build (macos)
 
     steps:
       - name: Checkout code
@@ -221,7 +221,7 @@ jobs:
   conda-test-macos:
     needs: conda-build-macos
     runs-on: macos-14
-    name: Conda Package Test (macos-arm)
+    name: Conda Package Test (macos)
 
     steps:
       - name: Checkout code (for test files only)

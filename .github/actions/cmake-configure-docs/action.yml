@@ -3,7 +3,7 @@ description: 'Configure the CMake build system with conda toolchain'
 
 inputs:
   platform:
-    description: 'Target platforms: Linux, MacOS, MacOS-ARM, and Windows'
+    description: 'Target platforms: Linux, MacOS, and Windows'
     required: true
 
 runs:
