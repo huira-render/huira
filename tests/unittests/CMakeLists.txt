@@ -8,6 +8,8 @@ find_package(Catch2 CONFIG REQUIRED)
 # Just add the source file path - test name is derived from filename
 set(UNIT_TESTS
     huira/math/test_rotation.cpp
+
+    huira/units/test_units.cpp
 )
 
 #############################

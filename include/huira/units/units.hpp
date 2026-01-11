@@ -15,8 +15,12 @@
  *
  * Basic unit operations:
  * @code
- * // Multiply units of the same dimensionality
+ * // Create units explicitly (required due to explicit constructors)
  * auto area = huira::Meter(1) * huira::Foot(1);
+ *
+ * // Or use user-defined literals for convenience
+ * auto length = 5.0_m;
+ * auto angle = 45.0_deg;
  *
  * // Create complex composite units:
  * huira::Steradian solid_angle(0.1);
@@ -25,6 +29,14 @@
  *
  * // Perform conversions:
  * huira::Joule energy = power * huira::Millisecond(20);
+ *
+ * // Convert between units:
+ * huira::Meter m(1000);
+ * auto km = m.as<huira::Kilometer>();  // 1.0 km
+ *
+ * // Dimensionless quantities convert to double implicitly
+ * auto ratio = huira::Meter(100) / huira::Meter(50);
+ * double value = ratio;  // 2.0
  * @endcode
  */
 namespace huira {
@@ -32,7 +44,7 @@ namespace huira {
 	/// @{
 	using Kilometer = Quantity<Length, std::kilo>;
 	using Meter = Quantity<Length, std::ratio<1, 1>>;
-	using Cenimeter = Quantity<Length, std::centi>;
+	using Centimeter = Quantity<Length, std::centi>;
 	using Millimeter = Quantity<Length, std::milli>;
 	using Micrometer = Quantity<Length, std::micro>;
 	using Nanometer = Quantity<Length, std::nano>;
@@ -56,7 +68,7 @@ namespace huira {
 
 	/// @defgroup time_units Time Units
 	/// @{
-	using SidrealDay = Quantity<Time, SiderealRatio>;
+	using SiderealDay = Quantity<Time, SiderealDayTag>;
 	using Day = Quantity<Time, std::ratio<86400, 1>>;
 	using Hour = Quantity<Time, std::ratio<3600, 1>>;
 	using Minute = Quantity<Time, std::ratio<60, 1>>;
@@ -77,8 +89,8 @@ namespace huira {
 	/// @defgroup temperature_units Temperature Units
 	/// @{
 	using Kelvin = Quantity<Temperature, std::ratio<1, 1>>;
-	using Celsius = Quantity<Temperature, CelsiusRatio>;
-	using Fahrenheit = Quantity<Temperature, FahrenheitRatio>;
+	using Celsius = Quantity<Temperature, CelsiusTag>;
+	using Fahrenheit = Quantity<Temperature, FahrenheitTag>;
 	/// @}
 
 
@@ -97,16 +109,16 @@ namespace huira {
 	/// @defgroup angle_units Angular Units
 	/// @{
 	using Radian = Quantity<Angle, std::ratio<1, 1>>;
-    using Degree = Quantity<Angle, DegreeRatio>;
-	using ArcMinute = Quantity<Angle, ArcMinuteRatio>;
-	using ArcSecond = Quantity<Angle, ArcSecondRatio>;
+    using Degree = Quantity<Angle, DegreeTag>;
+	using ArcMinute = Quantity<Angle, ArcMinuteTag>;
+	using ArcSecond = Quantity<Angle, ArcSecondTag>;
 	/// @}
 
 
 	/// @defgroup solidangle_units Solid Angle Units
 	/// @{
 	using Steradian = Quantity<SolidAngle, std::ratio<1, 1>>;
-	using SquareDegree = Quantity<SolidAngle, SquareDegreeRatio>;
+	using SquareDegree = Quantity<SolidAngle, SquareDegreeTag>;
 	/// @}
 
 
@@ -142,7 +154,7 @@ namespace huira {
 	using Joule = Quantity<Energy, std::ratio<1, 1>>;
 	using Kilojoule = Quantity<Energy, std::kilo>;
 	using Megajoule = Quantity<Energy, std::mega>;
-	using ElectronVolt = Quantity<Energy, EVRatio>;
+	using ElectronVolt = Quantity<Energy, ElectronVoltTag>;
 	/// @}
 
 
@@ -173,4 +185,71 @@ namespace huira {
 	/// @{
 	using Lumen = Quantity<LuminousFlux, std::ratio<1, 1>>;
 	/// @}
+
+	// =============================== //
+	// === User-Defined Literals  === //
+	// =============================== //
+	/**
+	 * @brief User-defined literals for convenient unit creation
+	 * 
+	 * These literals provide a concise syntax for creating quantities.
+	 * Note: Only works with floating-point literals, not integer literals.
+	 * 
+	 * @example
+	 * auto length = 5.0_m;      // Meter(5.0)
+	 * auto angle = 45.0_deg;    // Degree(45.0)
+	 * auto time = 2.5_s;        // Second(2.5)
+	 */
+	namespace literals {
+		// Length literals
+		constexpr Kilometer operator""_km(long double value) { return Kilometer(static_cast<double>(value)); }
+		constexpr Meter operator""_m(long double value) { return Meter(static_cast<double>(value)); }
+		constexpr Centimeter operator""_cm(long double value) { return Centimeter(static_cast<double>(value)); }
+		constexpr Millimeter operator""_mm(long double value) { return Millimeter(static_cast<double>(value)); }
+		constexpr Micrometer operator""_um(long double value) { return Micrometer(static_cast<double>(value)); }
+		constexpr Nanometer operator""_nm(long double value) { return Nanometer(static_cast<double>(value)); }
+
+		constexpr Foot operator""_ft(long double value) { return Foot(static_cast<double>(value)); }
+		constexpr Yard operator""_yd(long double value) { return Yard(static_cast<double>(value)); }
+		constexpr Mile operator""_mi(long double value) { return Mile(static_cast<double>(value)); }
+
+		// Mass literals
+		constexpr Kilogram operator""_kg(long double value) { return Kilogram(static_cast<double>(value)); }
+		constexpr Gram operator""_g(long double value) { return Gram(static_cast<double>(value)); }
+		constexpr Milligram operator""_mg(long double value) { return Milligram(static_cast<double>(value)); }
+
+		// Time literals
+		constexpr Day operator""_day(long double value) { return Day(static_cast<double>(value)); }
+		constexpr Hour operator""_h(long double value) { return Hour(static_cast<double>(value)); }
+		constexpr Minute operator""_min(long double value) { return Minute(static_cast<double>(value)); }
+		constexpr Second operator""_s(long double value) { return Second(static_cast<double>(value)); }
+		constexpr Millisecond operator""_ms(long double value) { return Millisecond(static_cast<double>(value)); }
+		constexpr Microsecond operator""_us(long double value) { return Microsecond(static_cast<double>(value)); }
+		constexpr Nanosecond operator""_ns(long double value) { return Nanosecond(static_cast<double>(value)); }
+
+		// Angle literals
+		constexpr Radian operator""_rad(long double value) { return Radian(static_cast<double>(value)); }
+		constexpr Degree operator""_deg(long double value) { return Degree(static_cast<double>(value)); }
+
+		// Temperature literals
+		constexpr Kelvin operator""_K(long double value) { return Kelvin(static_cast<double>(value)); }
+		constexpr Celsius operator""_C(long double value) { return Celsius(static_cast<double>(value)); }
+		constexpr Fahrenheit operator""_F(long double value) { return Fahrenheit(static_cast<double>(value)); }
+
+		// Energy literals
+		constexpr Joule operator""_J(long double value) { return Joule(static_cast<double>(value)); }
+		constexpr Kilojoule operator""_kJ(long double value) { return Kilojoule(static_cast<double>(value)); }
+		constexpr ElectronVolt operator""_eV(long double value) { return ElectronVolt(static_cast<double>(value)); }
+
+		// Power literals
+		constexpr Watt operator""_W(long double value) { return Watt(static_cast<double>(value)); }
+		constexpr Kilowatt operator""_kW(long double value) { return Kilowatt(static_cast<double>(value)); }
+		constexpr Megawatt operator""_MW(long double value) { return Megawatt(static_cast<double>(value)); }
+
+		// Frequency literals
+		constexpr Hertz operator""_Hz(long double value) { return Hertz(static_cast<double>(value)); }
+		constexpr Kilohertz operator""_kHz(long double value) { return Kilohertz(static_cast<double>(value)); }
+		constexpr Megahertz operator""_MHz(long double value) { return Megahertz(static_cast<double>(value)); }
+		constexpr Gigahertz operator""_GHz(long double value) { return Gigahertz(static_cast<double>(value)); }
+	}
 }
