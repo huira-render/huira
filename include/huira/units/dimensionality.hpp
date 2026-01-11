@@ -1,7 +1,7 @@
 #pragma once
 
-#include <string>
 #include <concepts>
+#include <string>
 #include <type_traits>
 
 namespace huira {

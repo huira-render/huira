@@ -1,7 +1,7 @@
 #pragma once
 
-#include <string>
 #include <ostream>
+#include <string>
 
 #include "huira/detail/concepts/numeric_concepts.hpp"
 #include "huira/math/types.hpp"

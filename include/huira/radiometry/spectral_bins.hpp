@@ -1,5 +1,7 @@
-#include <string>
+#pragma once
+
 #include <iostream>
+#include <string>
 
 #include "huira/math/numeric_array.hpp"
 

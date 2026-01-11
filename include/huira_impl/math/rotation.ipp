@@ -1,6 +1,6 @@
-#include <string>
-#include <ostream>
 #include <array>
+#include <ostream>
+#include <string>
 
 #include "glm/glm.hpp"
 #include "glm/gtc/matrix_transform.hpp"

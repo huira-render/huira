@@ -1,16 +1,16 @@
 #pragma once
 
 #include <cmath>
+#include <ostream>
 #include <ratio>
 #include <string>
 #include <type_traits>
-#include <ostream>
-
-#include "huira/math/constants.hpp"
-#include "huira/units/dimensionality.hpp"
 
 #include "huira/detail/concepts/numeric_concepts.hpp"
 #include "huira/detail/validate.hpp"
+
+#include "huira/math/constants.hpp"
+#include "huira/units/dimensionality.hpp"
 
 namespace huira {
     template<IsDimensionality Dim, IsRatioOrTag Scale>

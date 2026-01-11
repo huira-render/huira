@@ -1,3 +1,9 @@
+#include <chrono>
+#include <ctime>
+#include <iomanip>
+#include <sstream>
+#include <string>
+
 #ifdef _WIN32
 #include <Windows.h>
 #include <Psapi.h>
@@ -7,12 +13,6 @@
 #elif defined(__APPLE__)
 #include <mach/mach.h>
 #endif
-
-#include <string>
-#include <chrono>
-#include <sstream>
-#include <iomanip>
-#include <ctime>
 
 namespace huira::detail {
     std::string getPlatform() {
