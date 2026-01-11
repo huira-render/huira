@@ -4,7 +4,7 @@
 #include "glm/glm.hpp"
 #include "glm/gtx/io.hpp"
 
-#include "huira/concepts/numeric_concepts.hpp"
+#include "huira/detail/concepts/numeric_concepts.hpp"
 
 namespace huira {
     template <int N, IsFloatingPoint T>
