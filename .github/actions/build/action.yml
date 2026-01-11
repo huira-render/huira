@@ -3,7 +3,7 @@ description: 'Build the CMake project with conda environment'
 
 inputs:
   platform:
-    description: 'Target platforms: Linux, MacOS, MacOS-ARM, and Windows'
+    description: 'Target platforms: linux, macos, and windows'
     required: true
 
 runs:

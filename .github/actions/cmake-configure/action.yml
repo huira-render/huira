@@ -3,7 +3,7 @@ description: 'Configure the CMake build system with conda toolchain'
 
 inputs:
   platform:
-    description: 'Target platforms: Linux, MacOS, MacOS-ARM, and Windows'
+    description: 'Target platforms: linux, macos, and windows'
     required: true
 
 runs:
@@ -18,28 +18,28 @@ runs:
           -DCMAKE_BUILD_TYPE=Release \
           -G Ninja
 
-    - name: Configure CMake (macOS x86_64)
+    - name: Configure CMake (macOS)
       if: inputs.platform == 'macos'
       shell: bash -el {0}
       run: |
-        # Explicitly specify system ninja path to avoid conda ninja
-        SYSTEM_NINJA=$(which ninja)
-        echo "Using system ninja at: $SYSTEM_NINJA"
-        
-        cmake -B build \
-          -DCMAKE_TOOLCHAIN_FILE="${GITHUB_WORKSPACE}/cmake/conda-toolchain.cmake" \
-          -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_MAKE_PROGRAM="$SYSTEM_NINJA" \
-          -G Ninja
-
-    - name: Configure CMake (macOS ARM)
-      if: inputs.platform == 'macos-arm'
-      shell: bash -el {0}
-      run: |
-        cmake -B build \
-          -DCMAKE_TOOLCHAIN_FILE="${GITHUB_WORKSPACE}/cmake/conda-toolchain.cmake" \
-          -DCMAKE_BUILD_TYPE=Release \
-          -G Ninja
+        # Detect architecture and configure accordingly
+        if [[ "$(uname -m)" == "arm64" ]]; then
+          # ARM64: use conda ninja
+          cmake -B build \
+            -DCMAKE_TOOLCHAIN_FILE="${GITHUB_WORKSPACE}/cmake/conda-toolchain.cmake" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -G Ninja
+        else
+          # x86_64: explicitly specify system ninja path to avoid conda ninja
+          SYSTEM_NINJA=$(which ninja)
+          echo "Using system ninja at: $SYSTEM_NINJA"
+          
+          cmake -B build \
+            -DCMAKE_TOOLCHAIN_FILE="${GITHUB_WORKSPACE}/cmake/conda-toolchain.cmake" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_MAKE_PROGRAM="$SYSTEM_NINJA" \
+            -G Ninja
+        fi
 
     - name: Configure CMake (Windows)
       if: inputs.platform == 'windows'

@@ -2,7 +2,7 @@
 *Huira* is a ray-tracing library for rendering large scenes, star fields, and simulating solar radiation pressure.
 
 
-**Supported Platforms:** Linux, macOS (ARM), Windows
+**Supported Platforms:** Linux, macOS, Windows
 
 [![CI/CD Pipeline](https://github.com/huira-render/huira/actions/workflows/ci-cd.yml/badge.svg?branch=main)](https://github.com/huira-render/huira/actions/workflows/ci-cd.yml?query=branch%3Amain)
 [![Coverage](https://codecov.io/gh/huira-render/huira/branch/main/graph/badge.svg)](https://app.codecov.io/gh/huira-render/huira/tree/main)
