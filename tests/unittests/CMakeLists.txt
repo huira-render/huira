@@ -39,6 +39,35 @@ if(HUIRA_COVERAGE)
     endif()
 endif()
 
+#####################################
+### Explicit Template Instantiations ###
+#####################################
+
+# This library explicitly instantiates all template classes with test types.
+# This ensures coverage tools can measure template code, which would otherwise
+# only show coverage for the specific instantiations used in each test.
+#
+# To add coverage for a new template class:
+# 1. Include its header in explicit_instantiations.cpp
+# 2. Add an explicit instantiation line: template class ClassName<TestSpectral, TestFloat>;
+
+add_library(huira_test_instantiations STATIC
+    explicit_instantiations.cpp
+)
+
+target_link_libraries(huira_test_instantiations 
+    PUBLIC huira::huira
+)
+
+# Add coverage flags to the instantiation library
+if(HUIRA_COVERAGE)
+    target_compile_options(huira_test_instantiations PRIVATE ${COVERAGE_FLAGS})
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR 
+       (CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND NOT WIN32))
+        target_link_libraries(huira_test_instantiations PRIVATE --coverage)
+    endif()
+endif()
+
 ###############################
 ### Test Creation Function ###
 ###############################
@@ -49,6 +78,7 @@ function(add_unit_test test_name source_file)
     target_link_libraries(${test_name} 
         PRIVATE 
         huira::huira
+        huira_test_instantiations
         Catch2::Catch2
         Catch2::Catch2WithMain
     )
