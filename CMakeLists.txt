@@ -7,7 +7,7 @@ option(HUIRA_EXAMPLES "Build Examples" OFF)
 option(HUIRA_TESTS "Build Tests" OFF)
 option(HUIRA_DOCS "Build Documentation" OFF)
 option(HUIRA_PYTHON "Build Python Bindings" OFF)
-option(HUIRA_BUILD_DEV "Build Development Programs" ON)
+option(HUIRA_LOCAL_DEV "Build Local Development Directory" OFF)
 
 # Load modules from cmake/ directory
 list(APPEND CMAKE_MODULE_PATH 
@@ -21,9 +21,11 @@ include(CustomVcpkgSetup)
 #############################
 ### Configure the project ###
 #############################
-project(huira LANGUAGES CXX VERSION 0.8.0)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" HUIRA_VERSION)
+string(STRIP "${HUIRA_VERSION}" HUIRA_VERSION)
+project(huira LANGUAGES CXX VERSION ${HUIRA_VERSION})
 
-message("huira version ${PROJECT_VERSION}")
+message(STATUS "huira version ${PROJECT_VERSION}")
 add_compile_definitions(HUIRA_VERSION="${PROJECT_VERSION}")
 
 # Configure compiler and warnings:
@@ -43,33 +45,38 @@ include(huira)
 ### Add additional subdirs based on configuration ###
 #####################################################
 if(HUIRA_EXAMPLES)
-    message("Building Examples")
+    message(STATUS "Building Examples")
     add_subdirectory(examples)
 endif()
 
 if(HUIRA_TESTS)
-    message("Building Tests")
+    message(STATUS "Building Tests")
     enable_testing()
     add_subdirectory(tests)
 endif()
 
 if(HUIRA_DOCS)
-    message("Building Documentation")
+    message(STATUS "Building Documentation")
     add_subdirectory(docs)
 endif()
 
 if(HUIRA_PYTHON)
-    message("Building Python Bindings")
+    message(STATUS "Building Python Bindings")
     add_subdirectory(bindings/python)
 endif()
 
-if(HUIRA_BUILD_DEV)
-    message("Building Development Code")
-    file(GLOB subdirs RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}/dev/ ${CMAKE_CURRENT_SOURCE_DIR}/dev/*/)
+if(HUIRA_LOCAL_DEV)
+    message(STATUS "Building Local Development Directory")
+
+    file(GLOB subdirs RELATIVE
+        "${CMAKE_CURRENT_SOURCE_DIR}/local/"
+        "${CMAKE_CURRENT_SOURCE_DIR}/local/*/"
+    )
+
     foreach(subdir ${subdirs})
-        if(IS_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/dev/${subdir})
-            message(" - Building: dev/${subdir}")
-            add_subdirectory(dev/${subdir})
+        if(IS_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/local/${subdir})
+            message(STATUS " - Building: local/${subdir}")
+            add_subdirectory(local/${subdir})
         endif()
     endforeach()
 endif()

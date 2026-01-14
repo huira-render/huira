@@ -16,26 +16,75 @@ permissions:
   id-token: write
 
 jobs:
+  version-check:
+    runs-on: ubuntu-22.04
+    name: Version Check
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check version consistency
+        run: |
+          set -e
+
+          # Read version from VERSION file
+          VERSION_FILE=$(cat VERSION | tr -d '[:space:]')
+          echo "VERSION file: $VERSION_FILE"
+
+          # Read version from meta.yaml
+          # Try Jinja2 format first: {% set version = "x.y.z" %}
+          # Then fall back to direct YAML format: version: x.y.z
+          META_VERSION=$(grep -oP '{%\s*set\s+version\s*=\s*"\K[^"]+' packaging/recipe/meta.yaml 2>/dev/null || \
+                         grep -oP '^\s*version:\s*\K[0-9]+\.[0-9]+\.[0-9]+' packaging/recipe/meta.yaml | head -1)
+          echo "meta.yaml version: $META_VERSION"
+
+          # Check VERSION matches meta.yaml
+          if [ "$VERSION_FILE" != "$META_VERSION" ]; then
+            echo "::error::Version mismatch: VERSION file ($VERSION_FILE) != meta.yaml ($META_VERSION)"
+            exit 1
+          fi
+
+          # Get the latest git tag (if any exist)
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+
+          if [ -z "$LATEST_TAG" ]; then
+            echo "No git tags found - skipping tag check"
+          else
+            # Strip leading 'v' if present
+            TAG_VERSION="${LATEST_TAG#v}"
+            echo "Latest git tag: $LATEST_TAG (version: $TAG_VERSION)"
+
+            if [ "$VERSION_FILE" != "$TAG_VERSION" ]; then
+              echo "::error::Version mismatch: VERSION file ($VERSION_FILE) != git tag ($TAG_VERSION)"
+              exit 1
+            fi
+          fi
+
+          echo "All versions are consistent"
+
   build-linux:
     runs-on: ubuntu-22.04
     name: Build (linux)
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           submodules: recursive
-      
+
       - name: Set up build environment
         uses: ./.github/actions/setup
         with:
           platform: linux
-      
+
       - name: Configure project
         uses: ./.github/actions/cmake-configure
         with:
           platform: linux
-      
+
       - name: Build project
         uses: ./.github/actions/build
         with:
@@ -51,35 +100,46 @@ jobs:
             platform: macos
           - os: windows-2022
             platform: windows
-    
+
     runs-on: ${{ matrix.os }}
     name: Build (${{ matrix.platform }})
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           submodules: recursive
-      
+
       - name: Set up build environment
         uses: ./.github/actions/setup
         with:
           platform: ${{ matrix.platform }}
-      
+
       - name: Configure project
         uses: ./.github/actions/cmake-configure
         with:
           platform: ${{ matrix.platform }}
-      
+
       - name: Build project
         uses: ./.github/actions/build
         with:
           platform: ${{ matrix.platform }}
 
-  conda-build-linux:
-    needs: build-linux
-    runs-on: ubuntu-22.04
-    name: Conda Build (linux)
+  conda-build:
+    needs: [build-linux, build-other-platforms]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            platform: linux
+          - os: macos-14
+            platform: macos
+          - os: windows-2022
+            platform: windows
+
+    runs-on: ${{ matrix.os }}
+    name: Conda Build (${{ matrix.platform }})
 
     steps:
       - name: Checkout code
@@ -105,80 +165,25 @@ jobs:
       - name: Upload conda package artifact
         uses: actions/upload-artifact@v4
         with:
-          name: conda-package-linux
+          name: conda-package-${{ matrix.platform }}
           path: conda-output/
           retention-days: 1
 
-  conda-build-macos:
-    needs: build-other-platforms
-    runs-on: macos-14
-    name: Conda Build (macos)
+  conda-test:
+    needs: conda-build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            platform: linux
+          - os: macos-14
+            platform: macos
+          - os: windows-2022
+            platform: windows
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Set up Miniconda
-        uses: conda-incubator/setup-miniconda@v3
-        with:
-          auto-update-conda: true
-          conda-solver: libmamba
-          channels: conda-forge
-
-      - name: Install conda-build
-        shell: bash -el {0}
-        run: conda install -y conda-build
-
-      - name: Build conda package
-        shell: bash -el {0}
-        run: conda build packaging/recipe/ --output-folder conda-output
-
-      - name: Upload conda package artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: conda-package-macos
-          path: conda-output/
-          retention-days: 1
-
-  conda-build-windows:
-    needs: build-other-platforms
-    runs-on: windows-2022
-    name: Conda Build (windows)
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Set up Miniconda
-        uses: conda-incubator/setup-miniconda@v3
-        with:
-          auto-update-conda: true
-          conda-solver: libmamba
-          channels: conda-forge
-
-      - name: Install conda-build
-        shell: bash -el {0}
-        run: conda install -y conda-build
-
-      - name: Build conda package
-        shell: bash -el {0}
-        run: conda build packaging/recipe/ --output-folder conda-output
-
-      - name: Upload conda package artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: conda-package-windows
-          path: conda-output/
-          retention-days: 1
-
-  conda-test-linux:
-    needs: conda-build-linux
-    runs-on: ubuntu-22.04
-    name: Conda Package Test (linux)
+    runs-on: ${{ matrix.os }}
+    name: Conda Package Test (${{ matrix.platform }})
 
     steps:
       - name: Checkout code (for test files only)
@@ -186,132 +191,20 @@ jobs:
         with:
           sparse-checkout: |
             tests/packaging
+            .github/actions/conda-test
           sparse-checkout-cone-mode: false
 
-      - name: Download conda package artifact
-        uses: actions/download-artifact@v4
+      - name: Run conda package test
+        uses: ./.github/actions/conda-test
         with:
-          name: conda-package-linux
-          path: conda-package
-
-      - name: Set up Miniconda
-        uses: conda-incubator/setup-miniconda@v3
-        with:
-          auto-update-conda: true
-          conda-solver: libmamba
-          channels: conda-forge
-          activate-environment: test-env
-          auto-activate-base: false
-
-      - name: Install dependencies and local package
-        shell: bash -el {0}
-        run: |
-          conda install -y cmake ninja
-          conda install -y -c file://$PWD/conda-package huira
-
-      - name: Build and run packaging test
-        shell: bash -el {0}
-        run: |
-          cd tests/packaging
-          mkdir build && cd build
-          cmake .. -DCMAKE_PREFIX_PATH=$CONDA_PREFIX
-          cmake --build .
-          ctest --output-on-failure
-
-  conda-test-macos:
-    needs: conda-build-macos
-    runs-on: macos-14
-    name: Conda Package Test (macos)
-
-    steps:
-      - name: Checkout code (for test files only)
-        uses: actions/checkout@v4
-        with:
-          sparse-checkout: |
-            tests/packaging
-          sparse-checkout-cone-mode: false
-
-      - name: Download conda package artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: conda-package-macos
-          path: conda-package
-
-      - name: Set up Miniconda
-        uses: conda-incubator/setup-miniconda@v3
-        with:
-          auto-update-conda: true
-          conda-solver: libmamba
-          channels: conda-forge
-          activate-environment: test-env
-          auto-activate-base: false
-
-      - name: Install dependencies and local package
-        shell: bash -el {0}
-        run: |
-          conda install -y cmake ninja
-          conda install -y -c file://$PWD/conda-package huira
-
-      - name: Build and run packaging test
-        shell: bash -el {0}
-        run: |
-          cd tests/packaging
-          mkdir build && cd build
-          cmake .. -DCMAKE_PREFIX_PATH=$CONDA_PREFIX
-          cmake --build .
-          ctest --output-on-failure
-
-  conda-test-windows:
-    needs: conda-build-windows
-    runs-on: windows-2022
-    name: Conda Package Test (windows)
-
-    steps:
-      - name: Checkout code (for test files only)
-        uses: actions/checkout@v4
-        with:
-          sparse-checkout: |
-            tests/packaging
-          sparse-checkout-cone-mode: false
-
-      - name: Download conda package artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: conda-package-windows
-          path: conda-package
-
-      - name: Set up Miniconda
-        uses: conda-incubator/setup-miniconda@v3
-        with:
-          auto-update-conda: true
-          conda-solver: libmamba
-          channels: conda-forge
-          activate-environment: test-env
-          auto-activate-base: false
-
-      - name: Install dependencies and local package
-        shell: bash -el {0}
-        run: |
-          conda install -y cmake ninja
-          # On Windows, convert path to proper file URL format
-          CHANNEL_PATH=$(cygpath -m "$PWD/conda-package")
-          conda install -y -c "file:///$CHANNEL_PATH" huira
-
-      - name: Build and run packaging test
-        shell: powershell
-        run: |
-          cd tests/packaging
-          mkdir build
-          cd build
-          cmake .. -DCMAKE_PREFIX_PATH="$env:CONDA_PREFIX;$env:CONDA_PREFIX/Library"
-          cmake --build . --config Release
-          ctest -C Release --output-on-failure
+          platform: ${{ matrix.platform }}
+          artifact-name: conda-package-${{ matrix.platform }}
 
   test:
     needs: build-linux
     runs-on: ubuntu-22.04
     name: Test and Coverage
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -322,17 +215,17 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y lcov
-      
+
       - name: Set up build environment
         uses: ./.github/actions/setup
         with:
           platform: linux
-      
+
       - name: Configure project with coverage
         uses: ./.github/actions/cmake-configure-test
         with:
           platform: linux
-      
+
       - name: Build project
         uses: ./.github/actions/build
         with:
@@ -395,23 +288,23 @@ jobs:
     needs: build-linux
     runs-on: ubuntu-22.04
     name: Documentation
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           submodules: recursive
-      
+
       - name: Set up build environment
         uses: ./.github/actions/setup-docs
         with:
           platform: linux
-      
+
       - name: Configure project
         uses: ./.github/actions/cmake-configure-docs
         with:
           platform: linux
-      
+
       - name: Build project
         uses: ./.github/actions/build
         with:
@@ -437,14 +330,11 @@ jobs:
     name: CI
     if: always()
     needs:
+      - version-check
       - build-linux
       - build-other-platforms
-      - conda-build-linux
-      - conda-build-macos
-      - conda-build-windows
-      - conda-test-linux
-      - conda-test-macos
-      - conda-test-windows
+      - conda-build
+      - conda-test
       - docs
       - test
     runs-on: ubuntu-22.04
