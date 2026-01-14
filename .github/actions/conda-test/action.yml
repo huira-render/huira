@@ -1,0 +1,65 @@
+name: 'Conda Package Test'
+description: 'Test a conda package by installing it and running packaging tests'
+
+inputs:
+  platform:
+    description: 'Target platform: linux, macos, or windows'
+    required: true
+  artifact-name:
+    description: 'Name of the conda package artifact to download'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Download conda package artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: conda-package
+
+    - name: Set up Miniconda
+      uses: conda-incubator/setup-miniconda@v3
+      with:
+        auto-update-conda: true
+        conda-solver: libmamba
+        channels: conda-forge
+        activate-environment: test-env
+        auto-activate-base: false
+
+    - name: Install dependencies and local package (Linux/macOS)
+      if: inputs.platform != 'windows'
+      shell: bash -el {0}
+      run: |
+        conda install -y cmake ninja
+        conda install -y -c file://$PWD/conda-package huira
+
+    - name: Install dependencies and local package (Windows)
+      if: inputs.platform == 'windows'
+      shell: bash -el {0}
+      run: |
+        conda install -y cmake ninja
+        # On Windows, convert path to proper file URL format
+        CHANNEL_PATH=$(cygpath -m "$PWD/conda-package")
+        conda install -y -c "file:///$CHANNEL_PATH" huira
+
+    - name: Build and run packaging test (Linux/macOS)
+      if: inputs.platform != 'windows'
+      shell: bash -el {0}
+      run: |
+        cd tests/packaging
+        mkdir build && cd build
+        cmake .. -DCMAKE_PREFIX_PATH=$CONDA_PREFIX
+        cmake --build .
+        ctest --output-on-failure
+
+    - name: Build and run packaging test (Windows)
+      if: inputs.platform == 'windows'
+      shell: powershell
+      run: |
+        cd tests/packaging
+        mkdir build
+        cd build
+        cmake .. -DCMAKE_PREFIX_PATH="$env:CONDA_PREFIX;$env:CONDA_PREFIX/Library"
+        cmake --build . --config Release
+        ctest -C Release --output-on-failure
