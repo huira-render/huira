@@ -31,6 +31,8 @@ namespace huira {
         Node<TSpectral, TFloat>* parent_ = nullptr;
 
         std::vector<std::shared_ptr<Node<TSpectral, TFloat>>> children_;
+
+        friend class Scene<TSpectral, TFloat>;
     };
 }
 
