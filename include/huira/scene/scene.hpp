@@ -6,65 +6,75 @@
 #include <stdexcept>
 #include <string>
 
-#include "huira/radiometry/spectral_bins.hpp"
-
 #include "huira/detail/concepts/numeric_concepts.hpp"
 #include "huira/detail/concepts/spectral_concepts.hpp"
 
-#include "huira/scene/reference_frame.hpp"
-
-#include "huira/handles/reference_frame_handle.hpp"
+#include "huira/scene/nodes.hpp"
+#include "huira/handles/node_handles.hpp"
 
 namespace huira {
 	template <IsSpectral TSpectral, IsFloatingPoint TFloat>
 	class Scene {
 	public:
-        void lock() {
-            locked_ = true;
+        Scene(const Scene&) = delete; // Delete the copy constructor
+        Scene& operator=(const Scene&) = delete; // Delete the copy assignment operator
+
+        Scene()
+        {
+            root_node_ = std::make_unique<Node<TSpectral, TFloat>>(this);
+        };
+
+        void lock() { locked_ = true; }
+        void unlock() { locked_ = false; }
+        bool is_locked() const { return locked_; }
+
+        NodeHandle<TSpectral, TFloat> new_node(std::string name = "")
+        {
+            std::weak_ptr<Node<TSpectral, TFloat>> node = this->root_node_->new_child(name);
+            return NodeHandle<TSpectral, TFloat>{ node, &locked_ };
         }
 
-        void unlock() {
-            locked_ = false;
-        }
-
-        ReferenceFrameHandle<TSpectral, TFloat> create_reference_frame(const std::string& name) {
-            if (locked_) {
-                throw std::runtime_error("Attempted to modify a locked scene");
+        void add_node_name(const std::string& name, std::weak_ptr<Node<TSpectral, TFloat>> node)
+        {
+            if (name.empty()) {
+                return;
             }
 
-            if (reference_frames_.contains(name)) {
-                throw std::runtime_error("Reference frame already exists: " + name);
+            if (node_names_.contains(name)) {
+                throw std::runtime_error("A Node already exists with the name: " + name);
             }
+            node_names_[name] = node;
+        };
 
-            auto frame = std::make_shared<ReferenceFrame<TSpectral, TFloat>>(this);
-            reference_frames_[name] = frame;
-            return ReferenceFrameHandle<TSpectral, TFloat>{ frame, &locked_ };
+        NodeHandle<TSpectral, TFloat> get_named_node(const std::string& name)
+        {
+            if (auto it = node_names_.find(name); it != node_names_.end()) {
+                return NodeHandle<TSpectral, TFloat>{ it->second, &locked_ };
+            }
+            throw std::runtime_error("No Node named: " + name);
         }
 
-        ReferenceFrameHandle<TSpectral, TFloat> get_handle(const std::string& name) {
-            if (auto it = reference_frames_.find(name); it != reference_frames_.end()) {
-                return ReferenceFrameHandle<TSpectral, TFloat>{ it->second, &locked_ };
-            }
-            throw std::runtime_error("No ReferenceFrame named: " + name);
-        }
-
-        const std::string& name_of(const ReferenceFrame<TSpectral, TFloat>* frame) const {
-            for (const auto& [name, ptr] : reference_frames_) {
-                if (ptr.get() == frame) {
-                    return name;
+        const std::string& name_of(const Node<TSpectral, TFloat>* node) const {
+            for (const auto& [name, ptr] : node_names_) {
+                if (auto sptr = ptr.lock()) {
+                    if (sptr.get() == node) {
+                        return name;
+                    }
                 }
             }
-            throw std::runtime_error("ReferenceFrame not found in scene");
+            return "";
         }
 
-        const std::string& name_of(const ReferenceFrameHandle<TSpectral, TFloat>& handle) const {
+        const std::string& name_of(const NodeHandle<TSpectral, TFloat>& handle) const {
             return handle.name();
         }
 
 	private:
         bool locked_ = false;
 
-        std::unordered_map<std::string, std::shared_ptr<ReferenceFrame<TSpectral, TFloat>>> reference_frames_;
+        std::unique_ptr<Node<TSpectral, TFloat>> root_node_;
+
+        std::unordered_map<std::string, std::weak_ptr<Node<TSpectral, TFloat>>> node_names_;
 	};
 }
 

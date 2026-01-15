@@ -1,4 +1,4 @@
-#include "huira/handles/reference_frame_handle.hpp"
+#include "huira/handles/node_handles.hpp"
 
 #include "math/constants.hpp"
 #include "math/rotation.hpp"
