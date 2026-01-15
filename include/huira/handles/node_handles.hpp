@@ -15,12 +15,12 @@ namespace huira {
 
         NodeHandle<TSpectral, TFloat> new_child(std::string name = "") const
         {
-            return NodeHandle<TSpectral, TFloat>{ this->get()->new_child(name), this->scene_locked_ };
+            return NodeHandle<TSpectral, TFloat>{ this->safe_get()->new_child(name), this->scene_locked_ };
         }
 
         const std::string& name() const
         {
-            return this->get()->name();
+            return this->safe_get()->name();
         }
     };
 }

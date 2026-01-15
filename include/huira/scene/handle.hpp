@@ -16,7 +16,7 @@ namespace huira {
         bool valid() const { return !ptr_.expired(); }
 
     protected:
-        std::shared_ptr<T> get() const {
+        std::shared_ptr<T> safe_get() const {
             std::shared_ptr<T> p = ptr_.lock();
 
             if (!p) {
