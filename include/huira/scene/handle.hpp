@@ -30,9 +30,7 @@ namespace huira {
             return p;
         }
 
-    private:
         std::weak_ptr<T> ptr_;
         const bool* scene_locked_;
-
     };
 }
