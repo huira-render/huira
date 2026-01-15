@@ -31,7 +31,7 @@ TEMPLATE_TEST_CASE("Rotation - Template Instantiations", "[rotation][template]",
 
     SECTION("Matrix accessor returns expected format") {
         RotationType rot;
-        Mat3Type matrix = rot.getMatrix();
+        Mat3Type matrix = rot.get_matrix();
 
         // Identity matrix should have 1s on diagonal, 0s elsewhere
         REQUIRE_THAT(matrix[0][0], Catch::Matchers::WithinAbs(TestType(1), 1e-6));
@@ -90,7 +90,7 @@ TEST_CASE("Rotation - Construction Methods", "[rotation][constructor]") {
 
     SECTION("Matrix constructor preserves rotation") {
         // Create a known rotation matrix (90deg around Z)
-        Mat3<double> rot_matrix = RotationType::rotationZ(Degree{ 90.0 });
+        Mat3<double> rot_matrix = RotationType::rotation_z(Degree{ 90.0 });
 
         RotationType rot(rot_matrix);
 
@@ -206,9 +206,9 @@ TEST_CASE("Rotation - Properties and Invariants", "[rotation][properties]") {
     SECTION("Axis extraction methods") {
         RotationType rot({ 0.0, 0.0, 1.0 }, Degree{ 45.0 });
 
-        Vec3Type x_axis = rot.getXAxis();
-        Vec3Type y_axis = rot.getYAxis();
-        Vec3Type z_axis = rot.getZAxis();
+        Vec3Type x_axis = rot.get_x_axis();
+        Vec3Type y_axis = rot.get_y_axis();
+        Vec3Type z_axis = rot.get_z_axis();
 
         // Check orthogonality
         REQUIRE_THAT(glm::dot(x_axis, y_axis), Catch::Matchers::WithinAbs(0.0, 1e-12));
@@ -230,7 +230,7 @@ TEST_CASE("Rotation - Quaternion Conversions", "[rotation][quaternion]") {
         RotationType original({ 1.0, 1.0, 1.0 }, Degree{ 75.0 });
 
         // Convert to quaternion and back
-        Quaternion<double> quat = original.getQuaternion();
+        Quaternion<double> quat = original.get_quaternion();
         RotationType reconstructed(quat);
 
         // Test that they produce the same rotation
@@ -247,7 +247,7 @@ TEST_CASE("Rotation - Quaternion Conversions", "[rotation][quaternion]") {
         RotationType original({ 0.0, 1.0, 0.0 }, Degree{ 45.0 });
 
         // Convert to Shuster quaternion and back
-        ShusterQuaternion<double> shuster_quat = original.getShusterQuaternion();
+        ShusterQuaternion<double> shuster_quat = original.get_shuster_quaternion();
         RotationType reconstructed(shuster_quat);
 
         // Test equivalence
@@ -266,9 +266,9 @@ TEST_CASE("Rotation - Static Factory Methods", "[rotation][static]") {
         Degree angle_90{ 90.0 };
 
         // Test static rotation functions
-        Mat3<double> x_rot = Rotation_d::rotationX(angle_90);
-        Mat3<double> y_rot = Rotation_d::rotationY(angle_90);
-        Mat3<double> z_rot = Rotation_d::rotationZ(angle_90);
+        Mat3<double> x_rot = Rotation_d::rotation_x(angle_90);
+        Mat3<double> y_rot = Rotation_d::rotation_y(angle_90);
+        Mat3<double> z_rot = Rotation_d::rotation_z(angle_90);
 
         // X rotation: [1,0,0] -> [1,0,0], [0,1,0] -> [0,0,1]
         Vec3<double> y_axis{ 0.0, 1.0, 0.0 };
@@ -345,7 +345,7 @@ TEST_CASE("Rotation - String Representation and Output", "[rotation][output]") {
 
     SECTION("toString method returns valid string") {
         RotationType rot({ 0.0, 0.0, 1.0 }, Degree{ 45.0 });
-        std::string str_rep = rot.toString();
+        std::string str_rep = rot.to_string();
 
         // Should return a non-empty string
         REQUIRE_FALSE(str_rep.empty());
