@@ -8,6 +8,12 @@ namespace huira {
     Scene<TSpectral, TFloat>::Scene()
     {
         root_node_ = std::make_unique<Node<TSpectral, TFloat>>(this);
+
+        // Manually configure as a SPICE frame:
+        root_node_->spice_origin_ = "SOLAR SYSTEM BARYCENTER";
+        root_node_->position_source_ = TransformSource::Spice;
+        root_node_->spice_ref_ = "ICRF";
+        root_node_->orientation_source_ = TransformSource::Spice;
     };
 
     template <IsSpectral TSpectral, IsFloatingPoint TFloat>
@@ -53,8 +59,50 @@ namespace huira {
     }
 
     template <IsSpectral TSpectral, IsFloatingPoint TFloat>
+    void Scene<TSpectral, TFloat>::print_node_details(const Node<TSpectral, TFloat>* node) const {
+        // Check for registered name
+        bool name_found = false;
+        for (const auto& [name, ptr] : node_names_) {
+            if (auto sptr = ptr.lock()) {
+                if (sptr.get() == node) {
+                    std::cout << "(name: " << name;
+                    name_found = true;
+                    break;
+                }
+            }
+        }
+
+        if (node->spice_origin_ != "" || node->spice_ref_ != "") {
+            if (name_found) {
+                std::cout << ", ";
+            }
+            else {
+                std::cout << "(";
+            }
+            if (node->spice_origin_ != "") {
+                std::cout << "origin: " << node->spice_origin_;
+                if (node->spice_ref_ != "") {
+                    std::cout << ", ";
+                }
+            }
+
+            if (node->spice_ref_ != "") {
+                std::cout << "ref: " << node->spice_ref_;
+            }
+            std::cout << ")";
+        }
+        else {
+            if (name_found) {
+                std::cout << ")";
+            }
+        }
+    }
+
+    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
     void Scene<TSpectral, TFloat>::print_graph() const {
-        std::cout << "root\n";
+        std::cout << "root ";
+        print_node_details(root_node_.get());
+        std::cout << "\n";
 
         const auto& children = root_node_->children_;
         for (size_t i = 0; i < children.size(); ++i) {
@@ -68,17 +116,8 @@ namespace huira {
         // Print current node
         std::cout << prefix;
         std::cout << (is_last ? "+-- " : "+-- ");
-        std::cout << "node";
-
-        // Check for registered name
-        for (const auto& [name, ptr] : node_names_) {
-            if (auto sptr = ptr.lock()) {
-                if (sptr.get() == node) {
-                    std::cout << " (" << name << ")";
-                    break;
-                }
-            }
-        }
+        std::cout << "Node ";
+        print_node_details(node);
         std::cout << "\n";
 
         // Recurse into children with updated prefix
@@ -91,3 +130,4 @@ namespace huira {
         }
     }
 }
+

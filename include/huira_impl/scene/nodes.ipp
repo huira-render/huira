@@ -27,4 +27,84 @@ namespace huira {
         children_.push_back(child);
         return child;
     }
+
+    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
+    void Node<TSpectral, TFloat>::set_position(const Vec3<TFloat>& position)
+    {
+        if (has_spice_descendant_positions()) {
+            throw std::runtime_error("Cannot set manual position: node has descendants with SPICE positions");
+        }
+        this->local_transform_.translation = position;
+        this->position_source_ = TransformSource::Manual;
+        this->spice_origin_ = "";
+    }
+
+    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
+    void Node<TSpectral, TFloat>::set_orientation(const Rotation<TFloat>& orientation)
+    {
+        if (has_spice_descendant_orientations()) {
+            throw std::runtime_error("Cannot set manual orientation: node has descendants with SPICE orientations");
+        }
+        this->local_transform_.rotation = orientation;
+        this->orientation_source_ = TransformSource::Manual;
+        this->spice_ref_ = "";
+    }
+
+    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
+    void Node<TSpectral, TFloat>::set_scale(const Vec3<TFloat>& scale)
+    {
+        this->local_transform_.scale = scale;
+    }
+
+    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
+    void Node<TSpectral, TFloat>::set_position_from_spice(const std::string& spice_origin)
+    {
+        if (!parent_) {
+            throw std::runtime_error("Cannot set SPICE position on a root node");
+        }
+
+        if (parent_->position_source_ == TransformSource::Manual) {
+            throw std::runtime_error("Cannot set SPICE position: parent node has manual position");
+        }
+
+        this->spice_origin_ = spice_origin;
+        this->position_source_ = TransformSource::Spice;
+    }
+
+    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
+    void Node<TSpectral, TFloat>::set_orientation_from_spice(const std::string& spice_ref)
+    {
+        if (!parent_) {
+            throw std::runtime_error("Cannot set SPICE orientation on a root node");
+        }
+
+        if (parent_->orientation_source_ == TransformSource::Manual) {
+            throw std::runtime_error("Cannot set SPICE orientation: parent node has manual orientation");
+        }
+
+        this->spice_ref_ = spice_ref;
+        this->orientation_source_ = TransformSource::Spice;
+    }
+
+    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
+    bool Node<TSpectral, TFloat>::has_spice_descendant_positions() const
+    {
+        for (auto& child : children_) {
+            if (child->position_source_ == TransformSource::Spice) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
+    bool Node<TSpectral, TFloat>::has_spice_descendant_orientations() const
+    {
+        for (auto& child : children_) {
+            if (child->orientation_source_ == TransformSource::Spice) {
+                return true;
+            }
+        }
+        return false;
+    }
 }

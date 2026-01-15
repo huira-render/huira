@@ -41,12 +41,12 @@ namespace huira {
     using ShusterQuaternion = Vec4<T>;  // Shuster: (x, y, z, w) - common in aerospace
 
     template <IsFloatingPoint T>
-    ShusterQuaternion<T> toShuster(const Quaternion<T>& q) {
+    ShusterQuaternion<T> to_shuster(const Quaternion<T>& q) {
         return ShusterQuaternion<T>(q.x, q.y, q.z, q.w);
     }
 
     template <IsFloatingPoint T>
-    Quaternion<T> toHamilton(const ShusterQuaternion<T>& q) {
+    Quaternion<T> to_hamilton(const ShusterQuaternion<T>& q) {
         return Quaternion<T>(q.w, q.x, q.y, q.z);
     }
 

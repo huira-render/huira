@@ -37,6 +37,7 @@ namespace huira {
 
         void print_graph() const;
         void print_node(const Node<TSpectral, TFloat>* node, const std::string& prefix, bool is_last) const;
+        void print_node_details(const Node<TSpectral, TFloat>* node) const;
 
 	private:
         bool locked_ = false;

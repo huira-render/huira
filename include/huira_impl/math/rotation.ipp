@@ -18,19 +18,19 @@ namespace huira {
 	template <IsFloatingPoint T>
 	Rotation<T>::Rotation(Mat3<T> matrix)
 	{
-		this->setMatrix(matrix);
+		this->set_matrix(matrix);
 	}
 
 	template <IsFloatingPoint T>
 	Rotation<T>::Rotation(Quaternion<T> quaternion)
 	{
-		this->setMatrix(glm::mat3_cast(quaternion));
+		this->set_matrix(glm::mat3_cast(quaternion));
 	}
 
 	template <IsFloatingPoint T>
 	Rotation<T>::Rotation(ShusterQuaternion<T> shuster_quaternion)
 	{
-		this->setMatrix(glm::mat3_cast(toHamilton(shuster_quaternion)));
+		this->set_matrix(glm::mat3_cast(to_hamilton(shuster_quaternion)));
 	}
 
 	template <IsFloatingPoint T>
@@ -40,7 +40,7 @@ namespace huira {
 		T length = std::sqrt(axis.x * axis.x + axis.y * axis.y + axis.z * axis.z);
 		if (length < std::numeric_limits<T>::epsilon()) {
 			Mat3<T> identity{ 1 };
-			this->setMatrix(identity);
+			this->set_matrix(identity);
 			return;
 		}
 
@@ -69,7 +69,7 @@ namespace huira {
 		matrix[2][1] = y * z * (1 - c) - x * s;
 		matrix[2][2] = c + z * z * (1 - c);
 
-		this->setMatrix(matrix);
+		this->set_matrix(matrix);
 	}
 
 	template <IsFloatingPoint T>
@@ -86,13 +86,13 @@ namespace huira {
 			char component = static_cast<char>(std::tolower(sequence[i]));
 
 			if (component == 'x' || component == '1') {
-				basis[i] = rotationX(angles[i]);
+				basis[i] = rotation_x(angles[i]);
 			}
 			else if (component == 'y' || component == '2') {
-				basis[i] = rotationY(angles[i]);
+				basis[i] = rotation_y(angles[i]);
 			}
 			else if (component == 'z' || component == '3') {
-				basis[i] = rotationZ(angles[i]);
+				basis[i] = rotation_z(angles[i]);
 			}
 			else {
 				// TODO throw error
@@ -101,7 +101,7 @@ namespace huira {
 
 
 		Mat3<T> matrix = basis[0] * basis[1] * basis[2];
-		this->setMatrix(matrix);
+		this->set_matrix(matrix);
 	}
 
 
@@ -109,7 +109,7 @@ namespace huira {
 	// === Memeber Functions === //
 	// ========================= //
 	template <IsFloatingPoint T>
-	std::string Rotation<T>::toString() const
+	std::string Rotation<T>::to_string() const
 	{
 		return glm::to_string(matrix_);
 	}
@@ -125,37 +125,37 @@ namespace huira {
 	// === Getters === //
 	// =============== //
 	template <IsFloatingPoint T>
-	Quaternion<T> Rotation<T>::getQuaternion() const
+	Quaternion<T> Rotation<T>::get_quaternion() const
 	{
 		return glm::quat_cast(matrix_);
 	}
 
 	template <IsFloatingPoint T>
-	ShusterQuaternion<T> Rotation<T>::getShusterQuaternion() const
+	ShusterQuaternion<T> Rotation<T>::get_shuster_quaternion() const
 	{
-		return toShuster(glm::quat_cast(matrix_));
+		return to_shuster(glm::quat_cast(matrix_));
 	}
 
 	template <IsFloatingPoint T>
-	Mat3<T> Rotation<T>::getMatrix() const
+	Mat3<T> Rotation<T>::get_matrix() const
 	{
 		return matrix_;
 	}
 
 	template <IsFloatingPoint T>
-	Vec3<T> Rotation<T>::getXAxis() const
+	Vec3<T> Rotation<T>::get_x_axis() const
 	{
 		return matrix_[0];
 	}
 
 	template <IsFloatingPoint T>
-	Vec3<T> Rotation<T>::getYAxis() const
+	Vec3<T> Rotation<T>::get_y_axis() const
 	{
 		return matrix_[1];
 	}
 
 	template <IsFloatingPoint T>
-	Vec3<T> Rotation<T>::getZAxis() const
+	Vec3<T> Rotation<T>::get_z_axis() const
 	{
 		return matrix_[2];
 	}
@@ -173,7 +173,7 @@ namespace huira {
 	template <IsFloatingPoint T>
 	Rotation<T>& Rotation<T>::operator*= (const Rotation<T>& b)
 	{
-		this->setMatrix(matrix_ * b.matrix_);
+		this->set_matrix(matrix_ * b.matrix_);
 		return *this;
 	}
 
@@ -188,7 +188,7 @@ namespace huira {
 	// === Static Members === //
 	// ====================== //
 	template <IsFloatingPoint T>
-	Mat3<T> Rotation<T>::rotationX(Degree angle)
+	Mat3<T> Rotation<T>::rotation_x(Degree angle)
 	{
 		T angle_t = static_cast<T>(angle.getSIValue());
 
@@ -204,7 +204,7 @@ namespace huira {
 	}
 
 	template <IsFloatingPoint T>
-	Mat3<T> Rotation<T>::rotationY(Degree angle)
+	Mat3<T> Rotation<T>::rotation_y(Degree angle)
 	{
 		T angle_t = static_cast<T>(angle.getSIValue());
 
@@ -220,7 +220,7 @@ namespace huira {
 	}
 
 	template <IsFloatingPoint T>
-	Mat3<T> Rotation<T>::rotationZ(Degree angle)
+	Mat3<T> Rotation<T>::rotation_z(Degree angle)
 	{
 		T angle_t = static_cast<T>(angle.getSIValue());
 
@@ -240,7 +240,7 @@ namespace huira {
 	// === Private Memebers === //
 	// ======================== //
 	template <IsFloatingPoint T>
-	void Rotation<T>::setMatrix(Mat3<T> matrix)
+	void Rotation<T>::set_matrix(Mat3<T> matrix)
 	{
 		constexpr T epsilon = static_cast<T>(1e-9);
 		if (std::fabs(glm::determinant(matrix) - 1.0) > epsilon) {

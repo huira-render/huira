@@ -28,35 +28,35 @@ namespace huira {
 		Rotation(Vec3<T> axis, Degree angle);
 		Rotation(Degree angle1, Degree angle2, Degree angle3, std::string sequence = "XYZ");
 
-		std::string toString() const;
+		std::string to_string() const;
 		Rotation inverse() const;
 
-		Quaternion<T> getQuaternion() const;
-		ShusterQuaternion<T> getShusterQuaternion() const;
+		Quaternion<T> get_quaternion() const;
+		ShusterQuaternion<T> get_shuster_quaternion() const;
 
-		Mat3<T> getMatrix() const;
-		Vec3<T> getXAxis() const;
-		Vec3<T> getYAxis() const;
-		Vec3<T> getZAxis() const;
+		Mat3<T> get_matrix() const;
+		Vec3<T> get_x_axis() const;
+		Vec3<T> get_y_axis() const;
+		Vec3<T> get_z_axis() const;
 
 		Rotation operator* (const Rotation& b) const;
 		Rotation& operator*= (const Rotation& b);
 
 		Vec3<T> operator* (const Vec3<T>& b) const;
 
-		static Mat3<T> rotationX(Degree angle);
-		static Mat3<T> rotationY(Degree angle);
-		static Mat3<T> rotationZ(Degree angle);
+		static Mat3<T> rotation_x(Degree angle);
+		static Mat3<T> rotation_y(Degree angle);
+		static Mat3<T> rotation_z(Degree angle);
 
 	private:
 		Mat3<T> matrix_{ 1 };
 		Mat3<T> transpose_{ 1 };
 
-		void setMatrix(Mat3<T> matrix);
+		void set_matrix(Mat3<T> matrix);
 
 		friend std::ostream& operator<<(std::ostream& os, const Rotation<T>& rotation)
 		{
-			os << rotation.getMatrix();
+			os << rotation.get_matrix();
 			return os;
 		}
 	};
