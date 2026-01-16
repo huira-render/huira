@@ -15,7 +15,7 @@
 #endif
 
 namespace huira::detail {
-    std::string getExecutablePath() {
+    std::string get_executable_path() {
 #ifdef _WIN32
         char path[MAX_PATH];
         DWORD length = GetModuleFileNameA(nullptr, path, MAX_PATH);
@@ -27,7 +27,7 @@ namespace huira::detail {
 #elif defined(__APPLE__)
         char path[PATH_MAX];
         uint32_t size = sizeof(path);
-        if (_NSGetExecutablePath(path, &size) != 0) {
+        if (_NSget_executable_path(path, &size) != 0) {
             return "";
         }
 

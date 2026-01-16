@@ -40,7 +40,8 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 ##########################
 ### Define the library ###
 ##########################
-include(huira)
+include(huira-setup)
+include(huira-packaging)
 
 #####################################################
 ### Add additional subdirs based on configuration ###

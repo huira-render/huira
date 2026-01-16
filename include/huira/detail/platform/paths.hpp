@@ -3,7 +3,7 @@
 #include <string>
 
 namespace huira::detail {
-	std::string getExecutablePath();
+	std::string get_executable_path();
 }
 
 #include "huira_impl/detail/platform/paths.ipp"
