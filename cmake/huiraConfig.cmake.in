@@ -2,6 +2,11 @@
 
 include(CMakeFindDependencyMacro)
 
+# Include our CSPICE finder and call it
+include("${CMAKE_CURRENT_LIST_DIR}/huiraFindCSPICE.cmake")
+huira_find_cspice()
+
+# Find GLM
 find_dependency(glm CONFIG QUIET)
 if(NOT glm_FOUND)
     find_path(GLM_INCLUDE_DIR glm/glm.hpp REQUIRED)
@@ -10,5 +15,4 @@ if(NOT glm_FOUND)
 endif()
 
 include("${CMAKE_CURRENT_LIST_DIR}/huiraTargets.cmake")
-
 check_required_components(huira)

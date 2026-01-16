@@ -10,20 +10,20 @@
 #include "huira/detail/concepts/numeric_concepts.hpp"
 
 namespace huira {
-    // Helper to determine optimal alignment for SIMD
+    // Helper to determine optimal alignment for SIMD (as a variable template, not a function)
     template<typename T>
-    constexpr size_t simd_alignment() {
+    inline constexpr size_t simd_alignment_v = []() constexpr {
         if constexpr (std::is_same_v<T, float>) {
-            return 32; // AVX alignment for 8 floats
+            return size_t(32); // AVX alignment for 8 floats
         }
         else if constexpr (std::is_same_v<T, double>) {
-            return 32; // AVX alignment for 4 doubles
+            return size_t(32); // AVX alignment for 4 doubles
         }
         return alignof(T);
-    }
-    
+        }();
+
     template <IsFloatingPoint T, size_t N>
-    class alignas(simd_alignment<T>()) NumericArray {
+    class alignas(simd_alignment_v<T>) NumericArray {
     public:
         // Type aliases
         using value_type = T;
@@ -130,17 +130,17 @@ namespace huira {
 
         // Utility to check alignment at runtime
         bool is_simd_aligned() const noexcept {
-            return reinterpret_cast<uintptr_t>(data_.data()) % simd_alignment<T>() == 0;
+            return reinterpret_cast<uintptr_t>(data_.data()) % simd_alignment_v<T> == 0;
         }
 
         // String functions
         std::string toString() const;
-        
+
         template <IsFloatingPoint T2, size_t N2>
         friend std::ostream& operator<<(std::ostream& os, const NumericArray<T2, N2>& v);
 
     protected:
-        alignas(simd_alignment<T>()) std::array<T, N> data_;
+        alignas(simd_alignment_v<T>) std::array<T, N> data_;
     };
 
     // Binary arithmetic operators (array + array)

@@ -1,5 +1,9 @@
 #include "huira/detail/platform/paths.hpp"
 
+#include <filesystem>
+
+namespace fs = std::filesystem;
+
 // These come from CMake
 #ifndef HUIRA_DEFAULT_DATA_DIR
 #define HUIRA_DEFAULT_DATA_DIR ""
@@ -12,28 +16,28 @@ namespace huira {
         return instance;
     }
 
-    std::string Paths::executable_path() {
+    fs::path Paths::executable_path() {
         return detail::get_executable_path();
     }
 
-    std::string Paths::executable_dir() {
+    fs::path Paths::executable_dir() {
         return std::filesystem::path(executable_path()).parent_path().string();
     }
 
-    std::string Paths::relative_to_executable(const std::string& relativePath) {
+    fs::path Paths::relative_to_executable(const fs::path& relativePath) {
         namespace fs = std::filesystem;
         auto resolved = fs::path(executable_dir()) / relativePath;
         return fs::weakly_canonical(resolved).string();
     }
 
-    std::string Paths::data_dir() const {
+    fs::path Paths::data_dir() const {
         if (data_dir_override_) {
             return *data_dir_override_;
         }
         return HUIRA_DEFAULT_DATA_DIR;
     }
 
-    void Paths::set_data_dir(const std::string& path) {
+    void Paths::set_data_dir(const fs::path& path) {
         namespace fs = std::filesystem;
 
         // If it's a relative path, resolve it relative to executable

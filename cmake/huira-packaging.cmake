@@ -11,9 +11,6 @@ install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/huira/
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/huira_impl/
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/huira_impl)
 
-# Install generated headers
-install(DIRECTORY ${CMAKE_BINARY_DIR}/generated/include/huira/
-        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/huira)
 
 # Install kernel data
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/data/
@@ -48,4 +45,5 @@ write_basic_package_version_file(
 install(FILES
         "${CMAKE_BINARY_DIR}/huiraConfig.cmake"
         "${CMAKE_BINARY_DIR}/huiraConfigVersion.cmake"
+        "${CMAKE_SOURCE_DIR}/cmake/find/huiraFindCSPICE.cmake"
         DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/huira)

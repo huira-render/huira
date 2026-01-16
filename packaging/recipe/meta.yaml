@@ -57,8 +57,8 @@ test:
     - if not exist %LIBRARY_LIB%\\cmake\\huira\\huiraConfig.cmake exit 1  # [win]
     - if not exist %LIBRARY_LIB%\\cmake\\huira\\huiraTargets.cmake exit 1  # [win]
     # Check kernel data is installed
-    - test -f $PREFIX/share/huira/kernels/naif0012.tls  # [unix]
-    - if not exist %LIBRARY_PREFIX%\\share\\huira\\kernels\\naif0012.tls exit 1  # [win]
+    - test -f $PREFIX/share/huira/data/kernels/lsk/naif0012.tls  # [unix]
+    - if not exist %LIBRARY_PREFIX%\\share\\huira\\data\\kernels\\lsk\\naif0012.tls exit 1  # [win]
 
 about:
   home: https://www.huira.space

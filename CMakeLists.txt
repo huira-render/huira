@@ -29,6 +29,8 @@ set(CMAKE_CXX_STANDARD 20)
 message(STATUS "huira version ${PROJECT_VERSION}")
 add_compile_definitions(HUIRA_VERSION="${PROJECT_VERSION}")
 
+add_compile_definitions(NOMINMAX)
+
 # Configure compiler and warnings:
 include(CustomConfig)
 
