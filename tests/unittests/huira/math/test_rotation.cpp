@@ -6,7 +6,7 @@
 #include "catch2/catch_approx.hpp"
 #include "catch2/matchers/catch_matchers_floating_point.hpp"
 
-#include "huira/math/rotation.hpp"
+#include "huira/core/rotation.hpp"
 
 using namespace huira;
 using Catch::Approx;
@@ -50,11 +50,11 @@ TEST_CASE("Rotation - Construction Methods", "[rotation][constructor]") {
 
     SECTION("Axis-angle constructor") {
         Vec3Type z_axis{ 0.0, 0.0, 1.0 };
-        Degree angle_90{ 90.0 };
+        units::Degree angle_90{ 90.0 };
 
         RotationType rot(z_axis, angle_90);
 
-        // 90-degree rotation around Z should map X-axis to Y-axis
+        // 90-units::Degree rotation around Z should map X-axis to Y-axis
         Vec3Type x_axis{ 1.0, 0.0, 0.0 };
         Vec3Type rotated = rot * x_axis;
 
@@ -64,8 +64,8 @@ TEST_CASE("Rotation - Construction Methods", "[rotation][constructor]") {
     }
 
     SECTION("Euler angle constructor - single axis rotations") {
-        Degree angle_90{ 90.0 };
-        Degree zero{ 0.0 };
+        units::Degree angle_90{ 90.0 };
+        units::Degree zero{ 0.0 };
 
         // Test X rotation
         RotationType rot_x(angle_90, zero, zero, "XYZ");
@@ -90,7 +90,7 @@ TEST_CASE("Rotation - Construction Methods", "[rotation][constructor]") {
 
     SECTION("Matrix constructor preserves rotation") {
         // Create a known rotation matrix (90deg around Z)
-        Mat3<double> rot_matrix = RotationType::rotation_z(Degree{ 90.0 });
+        Mat3<double> rot_matrix = RotationType::rotation_z(units::Degree{ 90.0 });
 
         RotationType rot(rot_matrix);
 
@@ -109,9 +109,9 @@ TEST_CASE("Rotation - Operations", "[rotation][operations]") {
 
     SECTION("Multiplication is associative") {
         // Create three different rotations
-        RotationType rot1({ 1.0, 0.0, 0.0 }, Degree{ 30.0 });  // 30deg around X
-        RotationType rot2({ 0.0, 1.0, 0.0 }, Degree{ 45.0 });  // 45deg around Y  
-        RotationType rot3({ 0.0, 0.0, 1.0 }, Degree{ 60.0 });  // 60deg around Z
+        RotationType rot1({ 1.0, 0.0, 0.0 }, units::Degree{ 30.0 });  // 30deg around X
+        RotationType rot2({ 0.0, 1.0, 0.0 }, units::Degree{ 45.0 });  // 45deg around Y  
+        RotationType rot3({ 0.0, 0.0, 1.0 }, units::Degree{ 60.0 });  // 60deg around Z
 
         // Test (rot1 * rot2) * rot3 == rot1 * (rot2 * rot3)
         RotationType left_assoc = (rot1 * rot2) * rot3;
@@ -128,8 +128,8 @@ TEST_CASE("Rotation - Operations", "[rotation][operations]") {
     }
 
     SECTION("Compound assignment operator") {
-        RotationType rot1({ 0.0, 0.0, 1.0 }, Degree{ 45.0 });
-        RotationType rot2({ 1.0, 0.0, 0.0 }, Degree{ 30.0 });
+        RotationType rot1({ 0.0, 0.0, 1.0 }, units::Degree{ 45.0 });
+        RotationType rot2({ 1.0, 0.0, 0.0 }, units::Degree{ 30.0 });
 
         RotationType expected = rot1 * rot2;
         rot1 *= rot2;
@@ -145,7 +145,7 @@ TEST_CASE("Rotation - Operations", "[rotation][operations]") {
 
     SECTION("Inverse operation") {
         Vec3Type axis{ 1.0, 1.0, 1.0 };  // Will be normalized internally
-        Degree angle{ 60.0 };
+        units::Degree angle{ 60.0 };
         RotationType rot(axis, angle);
         RotationType inv_rot = rot.inverse();
 
@@ -166,7 +166,7 @@ TEST_CASE("Rotation - Properties and Invariants", "[rotation][properties]") {
     using Vec3Type = Vec3<double>;
 
     SECTION("Rotation preserves vector length") {
-        RotationType rot({ 1.0, 1.0, 1.0 }, Degree{ 120.0 });
+        RotationType rot({ 1.0, 1.0, 1.0 }, units::Degree{ 120.0 });
 
         std::vector<Vec3Type> test_vectors = {
             {3.0, 4.0, 0.0},    // Length 5
@@ -185,7 +185,7 @@ TEST_CASE("Rotation - Properties and Invariants", "[rotation][properties]") {
     }
 
     SECTION("Rotation preserves angles between vectors") {
-        RotationType rot({ 0.5, 0.5, 0.707 }, Degree{ 75.0 });
+        RotationType rot({ 0.5, 0.5, 0.707 }, units::Degree{ 75.0 });
 
         Vec3Type vec1{ 1.0, 0.0, 0.0 };
         Vec3Type vec2{ 0.0, 1.0, 0.0 };
@@ -204,7 +204,7 @@ TEST_CASE("Rotation - Properties and Invariants", "[rotation][properties]") {
     }
 
     SECTION("Axis extraction methods") {
-        RotationType rot({ 0.0, 0.0, 1.0 }, Degree{ 45.0 });
+        RotationType rot({ 0.0, 0.0, 1.0 }, units::Degree{ 45.0 });
 
         Vec3Type x_axis = rot.get_x_axis();
         Vec3Type y_axis = rot.get_y_axis();
@@ -227,7 +227,7 @@ TEST_CASE("Rotation - Quaternion Conversions", "[rotation][quaternion]") {
     using Vec3Type = Vec3<double>;
 
     SECTION("Quaternion round-trip conversion") {
-        RotationType original({ 1.0, 1.0, 1.0 }, Degree{ 75.0 });
+        RotationType original({ 1.0, 1.0, 1.0 }, units::Degree{ 75.0 });
 
         // Convert to quaternion and back
         Quaternion<double> quat = original.get_quaternion();
@@ -244,7 +244,7 @@ TEST_CASE("Rotation - Quaternion Conversions", "[rotation][quaternion]") {
     }
 
     SECTION("Shuster quaternion round-trip conversion") {
-        RotationType original({ 0.0, 1.0, 0.0 }, Degree{ 45.0 });
+        RotationType original({ 0.0, 1.0, 0.0 }, units::Degree{ 45.0 });
 
         // Convert to Shuster quaternion and back
         ShusterQuaternion<double> shuster_quat = original.get_shuster_quaternion();
@@ -263,7 +263,7 @@ TEST_CASE("Rotation - Quaternion Conversions", "[rotation][quaternion]") {
 
 TEST_CASE("Rotation - Static Factory Methods", "[rotation][static]") {
     SECTION("Static rotation matrices") {
-        Degree angle_90{ 90.0 };
+        units::Degree angle_90{ 90.0 };
 
         // Test static rotation functions
         Mat3<double> x_rot = Rotation_d::rotation_x(angle_90);
@@ -296,9 +296,9 @@ TEST_CASE("Rotation - Edge Cases and Error Conditions", "[rotation][edge_cases]"
     using RotationType = Rotation_d;
     using Vec3Type = Vec3<double>;
 
-    SECTION("Zero degree rotations") {
+    SECTION("Zero units::Degree rotations") {
         Vec3Type any_axis{ 1.0, 2.0, 3.0 };
-        RotationType rot(any_axis, Degree{ 0.0 });
+        RotationType rot(any_axis, units::Degree{ 0.0 });
 
         // Should behave like identity
         Vec3Type test_vec{ 4.0, -2.0, 1.0 };
@@ -311,7 +311,7 @@ TEST_CASE("Rotation - Edge Cases and Error Conditions", "[rotation][edge_cases]"
 
     SECTION("Large angle rotations") {
         Vec3Type axis{ 0.0, 0.0, 1.0 };
-        Degree large_angle{ 720.0 };  // Two full rotations
+        units::Degree large_angle{ 720.0 };  // Two full rotations
 
         RotationType rot(axis, large_angle);
 
@@ -326,7 +326,7 @@ TEST_CASE("Rotation - Edge Cases and Error Conditions", "[rotation][edge_cases]"
 
     SECTION("Very small rotations") {
         Vec3Type axis{ 1.0, 0.0, 0.0 };
-        Degree tiny_angle{ 1e-6 };  // Very small angle
+        units::Degree tiny_angle{ 1e-6 };  // Very small angle
 
         RotationType rot(axis, tiny_angle);
         Vec3Type test_vec{ 0.0, 1.0, 0.0 };
@@ -344,7 +344,7 @@ TEST_CASE("Rotation - String Representation and Output", "[rotation][output]") {
     using RotationType = Rotation_d;
 
     SECTION("toString method returns valid string") {
-        RotationType rot({ 0.0, 0.0, 1.0 }, Degree{ 45.0 });
+        RotationType rot({ 0.0, 0.0, 1.0 }, units::Degree{ 45.0 });
         std::string str_rep = rot.to_string();
 
         // Should return a non-empty string

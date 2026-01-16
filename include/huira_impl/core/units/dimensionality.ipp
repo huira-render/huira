@@ -2,7 +2,7 @@
 #include <string>
 #include <type_traits>
 
-namespace huira {
+namespace huira::units {
     template <int L, int M, int T, int I, int O, int N, int J, int A, int S>
     template <typename Other>
     constexpr bool Dimensionality<L, M, T, I, O, N, J, A, S>::sameAs()

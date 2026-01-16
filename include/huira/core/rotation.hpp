@@ -3,9 +3,10 @@
 #include <ostream>
 #include <string>
 
+#include "huira/core/types.hpp"
+#include "huira/core/units.hpp"
+
 #include "huira/detail/concepts/numeric_concepts.hpp"
-#include "huira/math/types.hpp"
-#include "huira/units/units.hpp"
 
 namespace huira {
 	/**
@@ -25,8 +26,8 @@ namespace huira {
 		Rotation(Mat3<T> matrix);
 		Rotation(Quaternion<T> quaternion);
 		Rotation(ShusterQuaternion<T> quaternion);
-		Rotation(Vec3<T> axis, Degree angle);
-		Rotation(Degree angle1, Degree angle2, Degree angle3, std::string sequence = "XYZ");
+		Rotation(Vec3<T> axis, units::Degree angle);
+		Rotation(units::Degree angle1, units::Degree angle2, units::Degree angle3, std::string sequence = "XYZ");
 
 		std::string to_string() const;
 		Rotation inverse() const;
@@ -44,9 +45,9 @@ namespace huira {
 
 		Vec3<T> operator* (const Vec3<T>& b) const;
 
-		static Mat3<T> rotation_x(Degree angle);
-		static Mat3<T> rotation_y(Degree angle);
-		static Mat3<T> rotation_z(Degree angle);
+		static Mat3<T> rotation_x(units::Degree angle);
+		static Mat3<T> rotation_y(units::Degree angle);
+		static Mat3<T> rotation_z(units::Degree angle);
 
 	private:
 		Mat3<T> matrix_{ 1 };
@@ -66,4 +67,4 @@ namespace huira {
 	typedef Rotation<double> Rotation_d;
 }
 
-#include "huira_impl/math/rotation.ipp"
+#include "huira_impl/core/rotation.ipp"

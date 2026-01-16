@@ -7,9 +7,9 @@
 #include "glm/gtx/quaternion.hpp"
 #include "glm/gtx/string_cast.hpp"
 
+#include "huira/core/types.hpp"
+#include "huira/core/units.hpp"
 #include "huira/detail/concepts/numeric_concepts.hpp"
-#include "huira/math/types.hpp"
-#include "huira/units/units.hpp"
 
 namespace huira {
 	// ==================== //
@@ -34,7 +34,7 @@ namespace huira {
 	}
 
 	template <IsFloatingPoint T>
-	Rotation<T>::Rotation(Vec3<T> axis, Degree angle)
+	Rotation<T>::Rotation(Vec3<T> axis, units::Degree angle)
 	{
 		// Normalize the axis vector
 		T length = std::sqrt(axis.x * axis.x + axis.y * axis.y + axis.z * axis.z);
@@ -73,14 +73,14 @@ namespace huira {
 	}
 
 	template <IsFloatingPoint T>
-	Rotation<T>::Rotation(Degree angle1, Degree angle2, Degree angle3, std::string sequence)
+	Rotation<T>::Rotation(units::Degree angle1, units::Degree angle2, units::Degree angle3, std::string sequence)
 	{
 		if (sequence.size() != 3) {
 			// TODO throw error
 		}
 
 		std::array<Mat3<T>, 3> basis;
-		std::array<Degree, 3> angles = { angle1, angle2, angle3 };
+		std::array<units::Degree, 3> angles = { angle1, angle2, angle3 };
 
 		for (size_t i = 0; i < 3; ++i) {
 			char component = static_cast<char>(std::tolower(sequence[i]));
@@ -188,7 +188,7 @@ namespace huira {
 	// === Static Members === //
 	// ====================== //
 	template <IsFloatingPoint T>
-	Mat3<T> Rotation<T>::rotation_x(Degree angle)
+	Mat3<T> Rotation<T>::rotation_x(units::Degree angle)
 	{
 		T angle_t = static_cast<T>(angle.getSIValue());
 
@@ -204,7 +204,7 @@ namespace huira {
 	}
 
 	template <IsFloatingPoint T>
-	Mat3<T> Rotation<T>::rotation_y(Degree angle)
+	Mat3<T> Rotation<T>::rotation_y(units::Degree angle)
 	{
 		T angle_t = static_cast<T>(angle.getSIValue());
 
@@ -220,7 +220,7 @@ namespace huira {
 	}
 
 	template <IsFloatingPoint T>
-	Mat3<T> Rotation<T>::rotation_z(Degree angle)
+	Mat3<T> Rotation<T>::rotation_z(units::Degree angle)
 	{
 		T angle_t = static_cast<T>(angle.getSIValue());
 

@@ -2,7 +2,7 @@
 
 #include <ratio>
 
-#include "huira/units/quantity.hpp"
+#include "huira/core/units/quantity.hpp"
 
 /**
  * @file units.hpp
@@ -39,15 +39,15 @@
  * double value = ratio;  // 2.0
  * @endcode
  */
-namespace huira {
+namespace huira::units {
 	/// @defgroup distance_units Distance Units
 	/// @{
-	using Kilometer = Quantity<Length, std::kilo>;
-	using Meter = Quantity<Length, std::ratio<1, 1>>;
+	using Kilometer  = Quantity<Length, std::kilo>;
+	using Meter      = Quantity<Length, std::ratio<1, 1>>;
 	using Centimeter = Quantity<Length, std::centi>;
 	using Millimeter = Quantity<Length, std::milli>;
 	using Micrometer = Quantity<Length, std::micro>;
-	using Nanometer = Quantity<Length, std::nano>;
+	using Nanometer  = Quantity<Length, std::nano>;
 
 	using AstronomicalUnit = Quantity<Length, std::ratio<149597870700, 1>>;
 	using AU = AstronomicalUnit;

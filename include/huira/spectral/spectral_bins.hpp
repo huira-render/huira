@@ -3,7 +3,7 @@
 #include <iostream>
 #include <string>
 
-#include "huira/math/numeric_array.hpp"
+#include "huira/spectral/numeric_array.hpp"
 
 namespace huira {
     // Bin definitions:
@@ -68,4 +68,4 @@ namespace huira {
     using RGB = SpectralBins<3, 600, 750, 500, 600, 380, 500>;
 }
 
-#include "huira_impl/radiometry/spectral_bins.ipp"
+#include "huira_impl/spectral/spectral_bins.ipp"

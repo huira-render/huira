@@ -2,11 +2,12 @@
 
 #include "catch2/catch_test_macros.hpp"
 
-#include "huira/math/constants.hpp"
-#include "huira/units/units.hpp"
+#include "huira/core/constants.hpp"
+#include "huira/core/units.hpp"
 
 using namespace huira;
-using namespace huira::literals;
+using namespace huira::units::literals;
+using namespace huira::units;
 
 // Helper for floating point comparisons
 constexpr double EPSILON = 1e-10;
