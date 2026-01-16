@@ -1,33 +1,8 @@
-find_package(glm CONFIG QUIET)
-if(NOT glm_FOUND)
-    find_path(GLM_INCLUDE_DIR glm/glm.hpp REQUIRED)
-    add_library(glm::glm INTERFACE IMPORTED)
-    target_include_directories(glm::glm INTERFACE ${GLM_INCLUDE_DIR})
-endif()
-
-#############################
-### Library Configuration ###
-#############################
-
-add_library(huira INTERFACE)
-add_library(huira::huira ALIAS huira)
-
-target_include_directories(huira
-    INTERFACE
-        $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
-        $<INSTALL_INTERFACE:include>
-)
-
-target_compile_features(huira INTERFACE cxx_std_20)
-
-target_link_libraries(huira INTERFACE glm::glm)
-
 ##########################
 ### Installation Setup ###
 ##########################
-
-include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
+include(GNUInstallDirs)
 
 # Install headers
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/huira/
@@ -35,6 +10,14 @@ install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/huira/
 
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/huira_impl/
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/huira_impl)
+
+# Install generated headers
+install(DIRECTORY ${CMAKE_BINARY_DIR}/generated/include/huira/
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/huira)
+
+# Install kernel data
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/data/
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/huira/data/)
 
 # Install the library target
 install(TARGETS huira
