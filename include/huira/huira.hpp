@@ -1,10 +1,13 @@
-#include "huira/handles/node_handles.hpp"
+#include "huira/handles/node_handle.hpp"
 
-#include "math/constants.hpp"
-#include "math/rotation.hpp"
+#include "core/constants.hpp"
+#include "core/rotation.hpp"
+#include "core/time.hpp"
+#include "core/types.hpp"
+#include "core/units.hpp"
 
-#include "radiometry/spectral_bins.hpp"
+#include "handles/node_handle.hpp"
 
 #include "scene/scene.hpp"
 
-#include "units/units.hpp"
+#include "spectral/spectral_bins.hpp"

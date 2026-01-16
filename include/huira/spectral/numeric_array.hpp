@@ -202,4 +202,4 @@ namespace huira {
     NumericArray(T, U...) -> NumericArray<T, 1 + sizeof...(U)>;
 }
 
-#include "huira_impl/math/numeric_array.ipp"
+#include "huira_impl/spectral/numeric_array.ipp"

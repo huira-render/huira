@@ -4,7 +4,7 @@
 #include <string>
 #include <type_traits>
 
-namespace huira {
+namespace huira::units {
     // Base dimensional analysis template
     template <int L, int M, int T, int I, int O, int N, int J, int A, int S>
     struct Dimensionality {
@@ -104,4 +104,4 @@ namespace huira {
     using Luminance = decltype(LuminousIntensity{} / Area{});
 }
 
-#include "huira_impl/units/dimensionality.ipp"
+#include "huira_impl/core/units/dimensionality.ipp"

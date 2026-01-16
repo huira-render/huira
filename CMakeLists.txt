@@ -24,6 +24,7 @@ include(CustomVcpkgSetup)
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" HUIRA_VERSION)
 string(STRIP "${HUIRA_VERSION}" HUIRA_VERSION)
 project(huira LANGUAGES CXX VERSION ${HUIRA_VERSION})
+set(CMAKE_CXX_STANDARD 20)
 
 message(STATUS "huira version ${PROJECT_VERSION}")
 add_compile_definitions(HUIRA_VERSION="${PROJECT_VERSION}")

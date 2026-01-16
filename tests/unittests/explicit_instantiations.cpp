@@ -1,23 +1,25 @@
 
-#include "huira/math/rotation.hpp"
+#include "huira/core/rotation.hpp"
+#include "huira/core/transform.hpp"
 
-#include "huira/radiometry/spectral_bins.hpp"
+#include "huira/handles/node_handle.hpp"
 
-#include "huira/scene/nodes.hpp"
-#include "huira/handles/node_handles.hpp"
+#include "huira/scene/node.hpp"
 #include "huira/scene/scene.hpp"
+
+#include "huira/spectral/spectral_bins.hpp"
 
 namespace huira {
     using TestSpectral = RGB;
     using TestFloat = float;
 
     // Explicit instantiations - forces code generation for code coverage purposes
-    template class Scene<TestSpectral, TestFloat>;
+    template class Rotation<TestFloat>;
+    template struct Transform<TestFloat>;
 
-    template class Node<TestSpectral, TestFloat>;
     template class NodeHandle<TestSpectral, TestFloat>;
-    
-    template class Rotation<float>;
-    
 
+    template class Scene<TestSpectral, TestFloat>;
+    template class Node<TestSpectral, TestFloat>;
+    
 }

@@ -1,4 +1,5 @@
 #include <stdexcept>
+#include <iostream>
 
 #include "huira/detail/concepts/numeric_concepts.hpp"
 #include "huira/detail/concepts/spectral_concepts.hpp"

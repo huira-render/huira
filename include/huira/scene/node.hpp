@@ -5,10 +5,11 @@
 #include <string>
 #include <stdexcept>
 
+#include "huira/core/transform.hpp"
+#include "huira/core/time.hpp"
+
 #include "huira/detail/concepts/numeric_concepts.hpp"
 #include "huira/detail/concepts/spectral_concepts.hpp"
-
-#include "huira/math/transform.hpp"
 
 namespace huira {
     // Forward declare:
@@ -35,6 +36,9 @@ namespace huira {
 
         void set_position_from_spice(const std::string& spice_origin);
         void set_orientation_from_spice(const std::string& spice_ref);
+        void set_spice(const std::string& spice_origin, const std::string& spice_ref);
+
+        void update_spice_transform(const Time& time);
 
     protected:
         void set_parent(Node<TSpectral, TFloat>* parent) { parent_ = parent; }
@@ -60,4 +64,4 @@ namespace huira {
     };
 }
 
-#include "huira_impl/scene/nodes.ipp"
+#include "huira_impl/scene/node.ipp"

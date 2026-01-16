@@ -1,6 +1,8 @@
 #include <memory>
 #include <string>
 
+#include "huira/core/time.hpp"
+
 #include "huira/detail/concepts/numeric_concepts.hpp"
 #include "huira/detail/concepts/spectral_concepts.hpp"
 
@@ -84,6 +86,20 @@ namespace huira {
 
         this->spice_ref_ = spice_ref;
         this->orientation_source_ = TransformSource::Spice;
+    }
+
+    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
+    void Node<TSpectral, TFloat>::set_spice(const std::string& spice_origin, const std::string& spice_ref)
+    {
+        this->set_position_from_spice(spice_origin);
+        this->set_orientation_from_spice(spice_ref);
+    }
+
+    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
+    void Node<TSpectral, TFloat>::update_spice_transform(const Time& time)
+    {
+        // TODO
+        (void)time;
     }
 
     template <IsSpectral TSpectral, IsFloatingPoint TFloat>

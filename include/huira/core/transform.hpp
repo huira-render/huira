@@ -1,9 +1,9 @@
 #pragma once
 
-#include "huira/detail/concepts/numeric_concepts.hpp"
+#include "huira/core/types.hpp"
+#include "huira/core/rotation.hpp"
 
-#include "huira/math/types.hpp"
-#include "huira/math/rotation.hpp"
+#include "huira/detail/concepts/numeric_concepts.hpp"
 
 namespace huira {
     template <IsFloatingPoint T>
@@ -18,4 +18,4 @@ namespace huira {
     };
 }
 
-#include "huira_impl/math/transform.ipp"
+#include "huira_impl/core/transform.ipp"

@@ -11,14 +11,17 @@ namespace huira {
         Mat4<T> rot = rotation.get_matrix();
         for (int i = 0; i < 3; ++i) {
             for (int j = 0; j < 3; ++j) {
-                result(i, j) = rot(i, j) * scale[j];
+                result[i][j] = rot[i][j] * scale[j];
             }
         }
 
         // Apply translation
-        result(0, 3) = translation.x;
-        result(1, 3) = translation.y;
-        result(2, 3) = translation.z;
+        result[0][3] = translation.x;
+        result[1][3] = translation.y;
+        result[2][3] = translation.z;
+
+        // Set homogeneous coordinate
+        result[3][3] = T(1);
 
         return result;
     }
@@ -40,7 +43,7 @@ namespace huira {
             translation.y / scale.y,
             translation.z / scale.z
         };
-        result.translation = result.rotation.rotate(-scaled_translation);
+        result.translation = result.rotation * -scaled_translation;
 
         return result;
     }
@@ -62,7 +65,7 @@ namespace huira {
             translation.y * b.scale.y,
             translation.z * b.scale.z
         };
-        result.translation = b.rotation.rotate(scaled_translation) + b.translation;
+        result.translation = (b.rotation * scaled_translation) + b.translation;
 
         return result;
     }
