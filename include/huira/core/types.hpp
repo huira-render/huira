@@ -1,8 +1,12 @@
 #pragma once
 
+#include <string>
+#include <sstream>
+
 #define GLM_ENABLE_EXPERIMENTAL
 #include "glm/glm.hpp"
 #include "glm/gtx/io.hpp"
+#include <glm/gtx/string_cast.hpp>
 
 #include "huira/detail/concepts/numeric_concepts.hpp"
 
@@ -19,6 +23,11 @@ namespace huira {
     template <IsFloatingPoint T>
     using Vec4 = Vec<4, T>;
 
+    template <int N, IsFloatingPoint T>
+    std::string vec_to_string(const glm::vec<N, T, glm::highp>& v) {
+        return glm::to_string(v);
+    }
+
 
     template <int Rows, int Cols, IsFloatingPoint T>
     using Mat = glm::mat<Cols, Rows, T, glm::highp>;
@@ -31,6 +40,11 @@ namespace huira {
 
     template <IsFloatingPoint T>
     using Mat4 = Mat<4, 4, T>;
+
+    template <int Rows, int Cols, IsFloatingPoint T>
+    std::string mat_to_string(const glm::mat<Cols, Rows, T, glm::highp>& m) {
+        return glm::to_string(m);
+    }
 
 
     // Quaternion aliases
@@ -75,4 +89,6 @@ namespace huira {
 
     typedef ShusterQuaternion<float> ShusterQuaternion_f;
     typedef ShusterQuaternion<double> ShusterQuaternion_d;
+
+    
 }

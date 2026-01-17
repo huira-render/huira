@@ -21,8 +21,8 @@ namespace huira::units {
         template<typename Other>
         static constexpr bool sameAs();
 
-        static constexpr std::string getSIUnitString(int power_prefix, int val, std::string unit);
-        static constexpr std::string toSIString();
+        static constexpr std::string get_si_unit_string(int power_prefix, int val, std::string unit);
+        static constexpr std::string to_si_string();
     };
 
     // Multiplication of Dimensionality

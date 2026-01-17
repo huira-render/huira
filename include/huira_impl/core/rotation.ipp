@@ -50,7 +50,7 @@ namespace huira {
 		T z = normalized_axis.z;
 
 		// Convert angle to same type as T
-		T angle_t = static_cast<T>(angle.getSIValue());
+		T angle_t = static_cast<T>(angle.get_si_value());
 		T c = std::cos(angle_t);
 		T s = std::sin(angle_t);
 
@@ -190,7 +190,7 @@ namespace huira {
 	template <IsFloatingPoint T>
 	Mat3<T> Rotation<T>::rotation_x(units::Degree angle)
 	{
-		T angle_t = static_cast<T>(angle.getSIValue());
+		T angle_t = static_cast<T>(angle.get_si_value());
 
 		T c = std::cos(angle_t);
 		T s = std::sin(angle_t);
@@ -206,7 +206,7 @@ namespace huira {
 	template <IsFloatingPoint T>
 	Mat3<T> Rotation<T>::rotation_y(units::Degree angle)
 	{
-		T angle_t = static_cast<T>(angle.getSIValue());
+		T angle_t = static_cast<T>(angle.get_si_value());
 
 		T c = std::cos(angle_t);
 		T s = std::sin(angle_t);
@@ -222,7 +222,7 @@ namespace huira {
 	template <IsFloatingPoint T>
 	Mat3<T> Rotation<T>::rotation_z(units::Degree angle)
 	{
-		T angle_t = static_cast<T>(angle.getSIValue());
+		T angle_t = static_cast<T>(angle.get_si_value());
 
 		T c = std::cos(angle_t);
 		T s = std::sin(angle_t);
