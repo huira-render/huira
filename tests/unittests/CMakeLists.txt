@@ -103,8 +103,10 @@ function(add_unit_test test_name source_file)
         target_compile_options(${test_name} PRIVATE /wd4868)
     endif()
     
-    # Register with CTest
-    add_test(NAME ${test_name} COMMAND ${test_name})
+    # Register with CTest and configure JUnit XML output
+    set(CATCH2_OUTPUT_DIR "${CMAKE_BINARY_DIR}/test-results")
+    add_test(NAME ${test_name} 
+             COMMAND ${test_name} -r junit -o "${CATCH2_OUTPUT_DIR}/${test_name}.xml")
     
     # Set test labels for filtering
     set_tests_properties(${test_name} PROPERTIES LABELS "unit")
@@ -121,29 +123,16 @@ endfunction()
 ### Create All Unit Tests ###
 ############################
 
+# Create the test-results directory
+set(CATCH2_OUTPUT_DIR "${CMAKE_BINARY_DIR}/test-results")
+file(MAKE_DIRECTORY ${CATCH2_OUTPUT_DIR})
+
 foreach(source_file ${UNIT_TESTS})
     # Extract test name from filename (without extension)
     get_filename_component(test_name ${source_file} NAME_WE)
     
     # Create the test
     add_unit_test(${test_name} ${source_file})
-endforeach()
-
-############################
-### CI Integration Setup ###
-############################
-
-# Configure Catch2 to output JUnit XML
-set(CATCH2_OUTPUT_DIR "${CMAKE_BINARY_DIR}/test-results")
-file(MAKE_DIRECTORY ${CATCH2_OUTPUT_DIR})
-
-# Apply JUnit XML output to all tests
-foreach(source_file ${UNIT_TESTS})
-    get_filename_component(test_name ${source_file} NAME_WE)
-    # Override the test command to include JUnit output
-    set_property(TEST ${test_name} PROPERTY 
-        COMMAND $<TARGET_FILE:${test_name}> -r junit -o ${CATCH2_OUTPUT_DIR}/${test_name}.xml
-    )
 endforeach()
 
 ###########################
