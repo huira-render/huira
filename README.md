@@ -2,9 +2,9 @@
 *Huira* is a ray-tracing library for rendering large scenes, star fields, and simulating solar radiation pressure.
 
 
-**Supported Platforms:** Linux, macOS, Windows
-
-[![CI/CD Pipeline](https://github.com/huira-render/huira/actions/workflows/ci-cd.yml/badge.svg?branch=main)](https://github.com/huira-render/huira/actions/workflows/ci-cd.yml?query=branch%3Amain)
+[![Linux CI/CD](https://github.com/huira-render/huira/actions/workflows/linux-ci-cd.yml/badge.svg?branch=main)](https://github.com/huira-render/huira/actions/workflows/linux-ci-cd.yml?query=branch%3Amain)
+[![Windows CI/CD](https://github.com/huira-render/huira/actions/workflows/windows-ci-cd.yml/badge.svg?branch=main)](https://github.com/huira-render/huira/actions/workflows/windows-ci-cd.yml?query=branch%3Amain)
+[![MacOS CI/CD](https://github.com/huira-render/huira/actions/workflows/macos-ci-cd.yml/badge.svg?branch=main)](https://github.com/huira-render/huira/actions/workflows/macos-ci-cd.yml?query=branch%3Amain)
 [![Coverage](https://codecov.io/gh/huira-render/huira/branch/main/graph/badge.svg)](https://app.codecov.io/gh/huira-render/huira/tree/main)
 
 ***
@@ -26,12 +26,12 @@ To see additional optionals for building *Huira*, please refer to:
 # Examples
 Example programs demonstrating common usage patterns are available in the [`examples/`](examples/) directory.
 
-<!--
+
 # Background
-Huira is a complete rewrite providing similar functionality to the [vira](https://github.com/crgnam/vira) project originally developed by the same author while at NASA's Goddard Space Flight Center. While inspired by vira, huira is built from scratch with new code and is released under the MIT license.
+Huira is a complete rewrite providing similar functionality to the [vira](https://github.com/nasa/vira) project originally developed by the same author while at NASA's Goddard Space Flight Center. While inspired by vira, huira is built from scratch with new code and is released under the MIT license.
 
 Vira is still maintained on a [personal fork by the original author](https://github.com/crgnam/vira).  However it is recommended to use this project moving forward.
--->
+
 
 ***
 
