@@ -1,13 +1,13 @@
+#include "huira/detail/logger.hpp"
+
+#include "huira/core/constants.hpp"
+#include "huira/core/rotation.hpp"
+#include "huira/core/time.hpp"
+#include "huira/core/types.hpp"
+#include "huira/core/units.hpp"
+
 #include "huira/handles/node_handle.hpp"
 
-#include "core/constants.hpp"
-#include "core/rotation.hpp"
-#include "core/time.hpp"
-#include "core/types.hpp"
-#include "core/units.hpp"
+#include "huira/scene/scene.hpp"
 
-#include "handles/node_handle.hpp"
-
-#include "scene/scene.hpp"
-
-#include "spectral/spectral_bins.hpp"
+#include "huira/spectral/spectral_bins.hpp"

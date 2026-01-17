@@ -1,15 +1,5 @@
 #pragma once
 
-// Protect against Windows min/max macros for header-only library
-#if defined(_WIN32) || defined(_WIN64)
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-// Also undef them if they're already defined
-#undef min
-#undef max
-#endif
-
 #include <algorithm>
 #include <array>
 #include <initializer_list>
@@ -18,6 +8,7 @@
 #include <type_traits>
 
 #include "huira/detail/concepts/numeric_concepts.hpp"
+#include "huira/detail/platform/windows_minmax.hpp"
 
 namespace huira {
     template <IsFloatingPoint T, size_t N>

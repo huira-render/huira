@@ -23,13 +23,13 @@ namespace huira::units {
             requires std::is_arithmetic_v<T>
         : value_(static_cast<double>(value))
         {
-            detail::validateReal(value_, "Unit[" + Dim::toSIString() + "]");
+            detail::validateReal(value_, "Unit[" + Dim::to_si_string() + "]");
         }
 
         template<IsRatioOrTag OtherScale>
         constexpr Quantity(const Quantity<Dim, OtherScale>& other)
         {
-            value_ = this->fromSI(other.getSIValue());
+            value_ = this->from_si(other.get_si_value());
         }
 
         // Default constructor
@@ -47,19 +47,19 @@ namespace huira::units {
         constexpr operator double() const
             requires std::is_same_v<Dim, Dimensionless>
         {
-            return getSIValue();
+            return get_si_value();
         }
 
-        double getSIValue() const
+        double get_si_value() const
         {
-            return this->toSI(value_);
+            return this->to_si(value_);
         }
 
         double value() const {
             return value_;
         }
 
-        double rawValue() const {
+        double raw_value() const {
             return value_;
         }
 
@@ -75,10 +75,10 @@ namespace huira::units {
             return Quantity<Dim, NewScale>(*this);
         }
 
-        std::string toString() const
+        std::string to_string() const
         {
-            std::string output = std::to_string(getSIValue());
-            output += " " + Dim::toSIString();
+            std::string output = std::to_string(get_si_value());
+            output += " " + Dim::to_si_string();
             return output;
         }
 
@@ -152,26 +152,26 @@ namespace huira::units {
         }
 
         friend std::ostream& operator<<(std::ostream& os, const Quantity& quantity) {
-            os << quantity.toString();
+            os << quantity.to_string();
             return os;
         }
 
     private:
         double value_;
 
-        constexpr double getRatio() const
+        constexpr double get_ratio() const
         {
             return static_cast<double>(Scale::num) / static_cast<double>(Scale::den);
         }
 
-        constexpr double fromSI(double si_value) const
+        constexpr double from_si(double value_si) const
         {
-            return si_value / this->getRatio();
+            return value_si / this->get_ratio();
         }
 
-        constexpr double toSI(double value) const
+        constexpr double to_si(double value) const
         {
-            return value * this->getRatio();
+            return value * this->get_ratio();
         }
     };
 
@@ -233,11 +233,11 @@ namespace huira::units {
     constexpr auto operator*(const Quantity<Dim1, Scale1>& lhs, const Quantity<Dim2, Scale2>& rhs) {
         using ResultDim = decltype(Dim1{}* Dim2{});
         if constexpr (involves_tag_v<Scale1, Scale2>) {
-            return Quantity<ResultDim, std::ratio<1, 1>>(lhs.getSIValue() * rhs.getSIValue());
+            return Quantity<ResultDim, std::ratio<1, 1>>(lhs.get_si_value() * rhs.get_si_value());
         }
         else {
             using ResultScale = ratio_multiply<Scale1, Scale2>;
-            return Quantity<ResultDim, ResultScale>(lhs.rawValue() * rhs.rawValue());
+            return Quantity<ResultDim, ResultScale>(lhs.raw_value() * rhs.raw_value());
         }
     }
 
@@ -245,11 +245,11 @@ namespace huira::units {
     constexpr auto operator/(const Quantity<Dim1, Scale1>& lhs, const Quantity<Dim2, Scale2>& rhs) {
         using ResultDim = decltype(Dim1{} / Dim2{});
         if constexpr (involves_tag_v<Scale1, Scale2>) {
-            return Quantity<ResultDim, std::ratio<1, 1>>(lhs.getSIValue() / rhs.getSIValue());
+            return Quantity<ResultDim, std::ratio<1, 1>>(lhs.get_si_value() / rhs.get_si_value());
         }
         else {
             using ResultScale = ratio_divide<Scale1, Scale2>;
-            return Quantity<ResultDim, ResultScale>(lhs.rawValue() / rhs.rawValue());
+            return Quantity<ResultDim, ResultScale>(lhs.raw_value() / rhs.raw_value());
         }
     }
 
@@ -267,101 +267,101 @@ namespace huira::units {
     constexpr auto operator+(const Quantity<Dim, Scale1>& lhs, const Quantity<Dim, Scale2>& rhs)
         -> Quantity<Dim, Scale1> {
         Quantity<Dim, Scale1> rhs_converted(rhs);
-        return Quantity<Dim, Scale1>(lhs.rawValue() + rhs_converted.rawValue());
+        return Quantity<Dim, Scale1>(lhs.raw_value() + rhs_converted.raw_value());
     }
 
     template<IsDimensionality Dim, IsRatioOrTag Scale1, IsRatioOrTag Scale2>
     constexpr auto operator-(const Quantity<Dim, Scale1>& lhs, const Quantity<Dim, Scale2>& rhs)
         -> Quantity<Dim, Scale1> {
         Quantity<Dim, Scale1> rhs_converted(rhs);
-        return Quantity<Dim, Scale1>(lhs.rawValue() - rhs_converted.rawValue());
+        return Quantity<Dim, Scale1>(lhs.raw_value() - rhs_converted.raw_value());
     }
 
     template<IsDimensionality Dim, IsRatioOrTag Scale1, IsRatioOrTag Scale2>
     constexpr bool operator==(const Quantity<Dim, Scale1>& lhs, const Quantity<Dim, Scale2>& rhs) {
-        return lhs.getSIValue() == rhs.getSIValue();
+        return lhs.get_si_value() == rhs.get_si_value();
     }
 
     template<IsDimensionality Dim, IsRatioOrTag Scale1, IsRatioOrTag Scale2>
     constexpr bool operator!=(const Quantity<Dim, Scale1>& lhs, const Quantity<Dim, Scale2>& rhs) {
-        return lhs.getSIValue() != rhs.getSIValue();
+        return lhs.get_si_value() != rhs.get_si_value();
     }
 
     template<IsDimensionality Dim, IsRatioOrTag Scale1, IsRatioOrTag Scale2>
     constexpr bool operator<(const Quantity<Dim, Scale1>& lhs, const Quantity<Dim, Scale2>& rhs) {
-        return lhs.getSIValue() < rhs.getSIValue();
+        return lhs.get_si_value() < rhs.get_si_value();
     }
 
     template<IsDimensionality Dim, IsRatioOrTag Scale1, IsRatioOrTag Scale2>
     constexpr bool operator>(const Quantity<Dim, Scale1>& lhs, const Quantity<Dim, Scale2>& rhs) {
-        return lhs.getSIValue() > rhs.getSIValue();
+        return lhs.get_si_value() > rhs.get_si_value();
     }
 
     template<IsDimensionality Dim, IsRatioOrTag Scale1, IsRatioOrTag Scale2>
     constexpr bool operator<=(const Quantity<Dim, Scale1>& lhs, const Quantity<Dim, Scale2>& rhs) {
-        return lhs.getSIValue() <= rhs.getSIValue();
+        return lhs.get_si_value() <= rhs.get_si_value();
     }
 
     template<IsDimensionality Dim, IsRatioOrTag Scale1, IsRatioOrTag Scale2>
     constexpr bool operator>=(const Quantity<Dim, Scale1>& lhs, const Quantity<Dim, Scale2>& rhs) {
-        return lhs.getSIValue() >= rhs.getSIValue();
+        return lhs.get_si_value() >= rhs.get_si_value();
     }
 
     struct SiderealDayTag {};
     template<> struct is_unit_tag<SiderealDayTag> : std::true_type {};
     template<>
-    constexpr double Quantity<Time, SiderealDayTag>::getRatio() const { return 86164.0905; }
+    constexpr double Quantity<Time, SiderealDayTag>::get_ratio() const { return 86164.0905; }
 
     struct DegreeTag {};
     template<> struct is_unit_tag<DegreeTag> : std::true_type {};
     template<>
-    constexpr double Quantity<Angle, DegreeTag>::getRatio() const { return PI<double>() / 180.0; }
+    constexpr double Quantity<Angle, DegreeTag>::get_ratio() const { return PI<double>() / 180.0; }
 
     struct ArcMinuteTag {};
     template<> struct is_unit_tag<ArcMinuteTag> : std::true_type {};
     template<>
-    constexpr double Quantity<Angle, ArcMinuteTag>::getRatio() const { return PI<double>() / 10800.0; }
+    constexpr double Quantity<Angle, ArcMinuteTag>::get_ratio() const { return PI<double>() / 10800.0; }
 
     struct ArcSecondTag {};
     template<> struct is_unit_tag<ArcSecondTag> : std::true_type {};
     template<>
-    constexpr double Quantity<Angle, ArcSecondTag>::getRatio() const { return PI<double>() / 648000.0; }
+    constexpr double Quantity<Angle, ArcSecondTag>::get_ratio() const { return PI<double>() / 648000.0; }
 
     struct SquareDegreeTag {};
     template<> struct is_unit_tag<SquareDegreeTag> : std::true_type {};
     template<>
-    constexpr double Quantity<SolidAngle, SquareDegreeTag>::getRatio() const {
+    constexpr double Quantity<SolidAngle, SquareDegreeTag>::get_ratio() const {
         return (PI<double>() / 180.0) * (PI<double>() / 180.0);
     }
 
     struct CelsiusTag {};
     template<> struct is_unit_tag<CelsiusTag> : std::true_type {};
     template<>
-    constexpr double Quantity<Temperature, CelsiusTag>::toSI(double value) const {
+    constexpr double Quantity<Temperature, CelsiusTag>::to_si(double value) const {
         return value + 273.15;
     }
 
     template<>
-    constexpr double Quantity<Temperature, CelsiusTag>::fromSI(double si_value) const {
-        return si_value - 273.15;
+    constexpr double Quantity<Temperature, CelsiusTag>::from_si(double value_si) const {
+        return value_si - 273.15;
     }
 
     struct FahrenheitTag {};
     template<> struct is_unit_tag<FahrenheitTag> : std::true_type {};
     template <>
-    constexpr double Quantity<Temperature, FahrenheitTag>::toSI(double value) const {
+    constexpr double Quantity<Temperature, FahrenheitTag>::to_si(double value) const {
         return (value + 459.67) * (5. / 9.);
     }
 
     template <>
-    constexpr double Quantity<Temperature, FahrenheitTag>::fromSI(double si_value) const {
-        return si_value * (9. / 5.) - 459.67;
+    constexpr double Quantity<Temperature, FahrenheitTag>::from_si(double value_si) const {
+        return value_si * (9. / 5.) - 459.67;
     }
 
     struct ElectronVoltTag {};
     template<> struct is_unit_tag<ElectronVoltTag> : std::true_type {};
     template <>
-    constexpr double Quantity<Energy, ElectronVoltTag>::getRatio() const { return 1.602176634e-19; }
+    constexpr double Quantity<Energy, ElectronVoltTag>::get_ratio() const { return 1.602176634e-19; }
 
     template<IsRatioOrTag Scale>
     class Quantity<Dimensionless, Scale> {
@@ -380,7 +380,7 @@ namespace huira::units {
         template<IsRatioOrTag OtherScale>
         constexpr Quantity(const Quantity<Dimensionless, OtherScale>& other)
         {
-            value_ = this->fromSI(other.getSIValue());
+            value_ = this->from_si(other.get_si_value());
         }
 
         constexpr Quantity() : value_(0.0) {}
@@ -392,18 +392,18 @@ namespace huira::units {
         }
 
         constexpr operator double() const {
-            return getSIValue();
+            return get_si_value();
         }
 
-        double getSIValue() const {
-            return this->toSI(value_);
+        double get_si_value() const {
+            return this->to_si(value_);
         }
 
         double value() const {
             return value_;
         }
 
-        double rawValue() const {
+        double raw_value() const {
             return value_;
         }
 
@@ -419,8 +419,8 @@ namespace huira::units {
             return Quantity<Dimensionless, NewScale>(*this);
         }
 
-        std::string toString() const {
-            return std::to_string(getSIValue());
+        std::string to_string() const {
+            return std::to_string(get_si_value());
         }
 
         constexpr Quantity operator+(const Quantity& other) const {
@@ -484,23 +484,23 @@ namespace huira::units {
         }
 
         friend std::ostream& operator<<(std::ostream& os, const Quantity& quantity) {
-            os << quantity.toString();
+            os << quantity.to_string();
             return os;
         }
 
     private:
         double value_;
 
-        constexpr double getRatio() const {
+        constexpr double get_ratio() const {
             return static_cast<double>(Scale::num) / static_cast<double>(Scale::den);
         }
 
-        constexpr double fromSI(double si_value) const {
-            return si_value / this->getRatio();
+        constexpr double from_si(double value_si) const {
+            return value_si / this->get_ratio();
         }
 
-        constexpr double toSI(double value) const {
-            return value * this->getRatio();
+        constexpr double to_si(double value) const {
+            return value * this->get_ratio();
         }
     };
 }

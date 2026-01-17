@@ -46,39 +46,39 @@ TEST_CASE("Basic unit construction and value retrieval", "[construction]") {
     SECTION("Length units") {
         Meter m{ 100 };
         REQUIRE(m.value() == 100.0);
-        REQUIRE(m.getSIValue() == 100.0);
+        REQUIRE(m.get_si_value() == 100.0);
 
         Kilometer km{ 1 };
         REQUIRE(km.value() == 1.0);
-        REQUIRE(km.getSIValue() == 1000.0);
+        REQUIRE(km.get_si_value() == 1000.0);
 
         Millimeter mm{ 1000 };
         REQUIRE(mm.value() == 1000.0);
-        REQUIRE(mm.getSIValue() == 1.0);
+        REQUIRE(mm.get_si_value() == 1.0);
     }
 
     SECTION("Angle units") {
         Radian rad{ 1.0 };
         REQUIRE(rad.value() == 1.0);
-        REQUIRE(rad.getSIValue() == 1.0);
+        REQUIRE(rad.get_si_value() == 1.0);
 
         Degree deg{ 180 };
         REQUIRE(deg.value() == 180.0);
-        REQUIRE(std::abs(deg.getSIValue() - PI<double>()) < EPSILON);
+        REQUIRE(std::abs(deg.get_si_value() - PI<double>()) < EPSILON);
     }
 
     SECTION("Time units") {
         Second s{ 60 };
         REQUIRE(s.value() == 60.0);
-        REQUIRE(s.getSIValue() == 60.0);
+        REQUIRE(s.get_si_value() == 60.0);
 
         Minute min{ 1 };
         REQUIRE(min.value() == 1.0);
-        REQUIRE(min.getSIValue() == 60.0);
+        REQUIRE(min.get_si_value() == 60.0);
 
         Hour h{ 1 };
         REQUIRE(h.value() == 1.0);
-        REQUIRE(h.getSIValue() == 3600.0);
+        REQUIRE(h.get_si_value() == 3600.0);
     }
 }
 
@@ -88,7 +88,7 @@ TEST_CASE("Unit conversions with as<>()", "[conversion]") {
         auto km = m.as<Kilometer>();
 
         REQUIRE(km.value() == 1.0);
-        REQUIRE(km.getSIValue() == 1000.0);
+        REQUIRE(km.get_si_value() == 1000.0);
 
         auto mm = m.as<Millimeter>();
         REQUIRE(mm.value() == 1000000.0);
@@ -132,7 +132,7 @@ TEST_CASE("Same-scale arithmetic", "[arithmetic][same-scale]") {
         auto c = a + b;
 
         REQUIRE(c.value() == 150.0);
-        REQUIRE(c.getSIValue() == 150.0);
+        REQUIRE(c.get_si_value() == 150.0);
     }
 
     SECTION("Subtraction") {
@@ -161,7 +161,7 @@ TEST_CASE("Mixed-scale arithmetic preserves left-hand scale", "[arithmetic][mixe
 
         // Result should be in Degrees (LHS), not Radians
         REQUIRE(c.value() == 90.0);
-        REQUIRE(std::abs(c.getSIValue() - PI<double>() / 2) < EPSILON);
+        REQUIRE(std::abs(c.get_si_value() - PI<double>() / 2) < EPSILON);
     }
 
     SECTION("Subtraction preserves LHS scale") {
@@ -220,7 +220,7 @@ TEST_CASE("Quantity multiplication creates composite units", "[arithmetic][multi
         auto area = l * w;
 
         REQUIRE(area.value() == 15.0);
-        REQUIRE(area.getSIValue() == 15.0);
+        REQUIRE(area.get_si_value() == 15.0);
     }
 
     SECTION("Distance / Time = Speed") {
@@ -237,7 +237,7 @@ TEST_CASE("Quantity multiplication creates composite units", "[arithmetic][multi
         auto energy = force * distance;
 
         // Result should be in Joules (N * m)
-        REQUIRE(energy.getSIValue() == 100.0);
+        REQUIRE(energy.get_si_value() == 100.0);
     }
 
     SECTION("Power * Time = Energy") {
@@ -245,7 +245,7 @@ TEST_CASE("Quantity multiplication creates composite units", "[arithmetic][multi
         Second time{ 10 };
         auto energy = power * time;
 
-        REQUIRE(energy.getSIValue() == 1000.0);  // Joules
+        REQUIRE(energy.get_si_value() == 1000.0);  // Joules
     }
 
     SECTION("Mixed scale multiplication") {
@@ -257,7 +257,7 @@ TEST_CASE("Quantity multiplication creates composite units", "[arithmetic][multi
         REQUIRE(std::abs(speed.value() - 2.5) < EPSILON);
 
         // SI value should be m/s
-        REQUIRE(std::abs(speed.getSIValue() - (5000.0 / 7200.0)) < EPSILON);
+        REQUIRE(std::abs(speed.get_si_value() - (5000.0 / 7200.0)) < EPSILON);
     }
 }
 
@@ -276,7 +276,7 @@ TEST_CASE("Dimensionless quantities", "[dimensionless]") {
         auto ratio = Meter{ 100 } / Meter{ 50 };
 
         REQUIRE(ratio.value() == 2.0);
-        REQUIRE(ratio.getSIValue() == 2.0);
+        REQUIRE(ratio.get_si_value() == 2.0);
     }
 
     SECTION("Dimensionless arithmetic") {
@@ -347,10 +347,10 @@ TEST_CASE("User-defined literals", "[literals]") {
         auto s = 45.0_s;
         auto ms = 500.0_ms;
 
-        REQUIRE(h.getSIValue() == 7200.0);
-        REQUIRE(min.getSIValue() == 1800.0);
-        REQUIRE(s.getSIValue() == 45.0);
-        REQUIRE(ms.getSIValue() == 0.5);
+        REQUIRE(h.get_si_value() == 7200.0);
+        REQUIRE(min.get_si_value() == 1800.0);
+        REQUIRE(s.get_si_value() == 45.0);
+        REQUIRE(ms.get_si_value() == 0.5);
     }
 
     SECTION("Angle literals") {
@@ -366,9 +366,9 @@ TEST_CASE("User-defined literals", "[literals]") {
         auto kw = 1.5_kW;
         auto mw = 0.001_MW;
 
-        REQUIRE(w.getSIValue() == 100.0);
-        REQUIRE(kw.getSIValue() == 1500.0);
-        REQUIRE(mw.getSIValue() == 1000.0);
+        REQUIRE(w.get_si_value() == 100.0);
+        REQUIRE(kw.get_si_value() == 1500.0);
+        REQUIRE(mw.get_si_value() == 1000.0);
     }
 
     SECTION("Literals in expressions") {
@@ -376,7 +376,7 @@ TEST_CASE("User-defined literals", "[literals]") {
         auto time = 10.0_s;
         auto speed = distance / time;
 
-        REQUIRE(speed.getSIValue() == 10.0);  // 10 m/s
+        REQUIRE(speed.get_si_value() == 10.0);  // 10 m/s
     }
 }
 
@@ -428,7 +428,7 @@ TEST_CASE("Complex unit compositions", "[composite]") {
         auto radiance = power / (area * solid_angle);
 
         // 60W / (4m^2 * 0.1sr) = 150 W/(m^2 sr)
-        REQUIRE(std::abs(radiance.getSIValue() - 150.0) < EPSILON);
+        REQUIRE(std::abs(radiance.get_si_value() - 150.0) < EPSILON);
     }
 
     SECTION("Irradiance: W / m^2") {
@@ -439,7 +439,7 @@ TEST_CASE("Complex unit compositions", "[composite]") {
         auto irradiance = power / area;
 
         // 1000W / 100m^2 = 10 W/m^2
-        REQUIRE(std::abs(irradiance.getSIValue() - 10.0) < EPSILON);
+        REQUIRE(std::abs(irradiance.get_si_value() - 10.0) < EPSILON);
     }
 
     SECTION("Kinetic energy: 1/2 m v^2") {
@@ -452,7 +452,7 @@ TEST_CASE("Complex unit compositions", "[composite]") {
         auto energy = 0.5 * mass * velocity_squared;
 
         // 0.5 * 10kg * 100 m^2/s^2 = 500 J
-        REQUIRE(std::abs(energy.getSIValue() - 500.0) < EPSILON);
+        REQUIRE(std::abs(energy.get_si_value() - 500.0) < EPSILON);
     }
 
     SECTION("Angular velocity") {
@@ -466,7 +466,7 @@ TEST_CASE("Complex unit compositions", "[composite]") {
         REQUIRE(std::abs(angular_velocity.value() - (2 * PI<double>() / 60.0)) < EPSILON);
 
         // In radians: 2pi / 60s
-        REQUIRE(std::abs(angular_velocity.getSIValue() - (2 * PI<double>() / 60.0)) < EPSILON);
+        REQUIRE(std::abs(angular_velocity.get_si_value() - (2 * PI<double>() / 60.0)) < EPSILON);
     }
 }
 
@@ -474,7 +474,7 @@ TEST_CASE("Edge cases and special values", "[edge-cases]") {
     SECTION("Zero values") {
         Meter m{ 0 };
         REQUIRE(m.value() == 0.0);
-        REQUIRE(m.getSIValue() == 0.0);
+        REQUIRE(m.get_si_value() == 0.0);
 
         auto zero_sum = m + Meter{ 0 };
         REQUIRE(zero_sum.value() == 0.0);
@@ -491,12 +491,12 @@ TEST_CASE("Edge cases and special values", "[edge-cases]") {
     SECTION("Very large values") {
         Kilometer km{ 1000000 };  // 1 million km
         auto m = km.as<Meter>();
-        REQUIRE(m.getSIValue() == 1e9);
+        REQUIRE(m.get_si_value() == 1e9);
     }
 
     SECTION("Very small values") {
         Nanometer nm{ 1 };
-        REQUIRE(nm.getSIValue() == 1e-9);
+        REQUIRE(nm.get_si_value() == 1e-9);
 
         auto m = nm.as<Meter>();
         REQUIRE(std::abs(m.value() - 1e-9) < 1e-15);
@@ -521,7 +521,7 @@ TEST_CASE("Type safety", "[type-safety]") {
 
         // Result should be Speed (m/s), not Meter or Second
         // This is verified by the type system, but we can check the value
-        REQUIRE(result.getSIValue() == 2.5);
+        REQUIRE(result.get_si_value() == 2.5);
     }
 }
 
@@ -531,7 +531,7 @@ TEST_CASE("Real-world rendering scenarios", "[rendering]") {
         Degree user_fov{ 60 };
 
         // Renderer needs radians internally
-        double fov_radians = user_fov.getSIValue();
+        double fov_radians = user_fov.get_si_value();
         REQUIRE(std::abs(fov_radians - (PI<double>() / 3.0)) < EPSILON);
 
         // Can also convert explicitly
@@ -551,7 +551,7 @@ TEST_CASE("Real-world rendering scenarios", "[rendering]") {
         auto irradiance = light_power / sphere_area;
 
         // Should be approximately 0.318 W/m^2
-        REQUIRE(std::abs(irradiance.getSIValue() - 0.318) < 0.001);
+        REQUIRE(std::abs(irradiance.get_si_value() - 0.318) < 0.001);
     }
 }
 
@@ -561,7 +561,7 @@ TEST_CASE("Copy and assignment semantics", "[semantics]") {
         Meter copy{ original };
 
         REQUIRE(copy.value() == original.value());
-        REQUIRE(copy.getSIValue() == original.getSIValue());
+        REQUIRE(copy.get_si_value() == original.get_si_value());
     }
 
     SECTION("Copy assignment") {
@@ -576,7 +576,7 @@ TEST_CASE("Copy and assignment semantics", "[semantics]") {
         Kilometer km{ 1 };
         Meter m{ km };  // Should convert
 
-        REQUIRE(m.getSIValue() == 1000.0);
+        REQUIRE(m.get_si_value() == 1000.0);
     }
 }
 

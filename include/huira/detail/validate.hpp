@@ -1,18 +1,16 @@
 #pragma once
 
-#define GLM_ENABLE_EXPERIMENTAL
-#include "glm/gtx/string_cast.hpp"
+#include "huira/core/types.hpp"
 
 #include "huira/detail/concepts/numeric_concepts.hpp"
-#include "huira/detail/diagnostics/exceptions.hpp"
+#include "huira/detail/logger.hpp"
 
 namespace huira::detail {
 	template <IsFloatingPoint T>
 	void validateReal(T value, const std::string& name)
 	{
 		if (std::isinf(value) || std::isnan(value)) {
-			throw FatalError("Provided " + name + " contains INF or NaN",
-				name + " = " + std::to_string(value));
+			HUIRA_THROW_ERROR("Provided " + name + " contains INF or NaN" + std::to_string(value));
 		}
 	}
 	
@@ -21,8 +19,7 @@ namespace huira::detail {
 	{
 		validateReal(value, name);
 		if (value <= 0) {
-			throw FatalError("Provided " + name + " is negative or zero",
-				name + " = " + std::to_string(value));
+            HUIRA_THROW_ERROR("Provided " + name + " is negative or zero: " + std::to_string(value));
 		}
 	}
 	
@@ -31,8 +28,7 @@ namespace huira::detail {
 	{
 		for (int i = 0; i < T::length(); ++i) {
 			if (std::isinf(vec[i]) || std::isnan(vec[i])) {
-				throw FatalError("Provided " + name + " contains INF or NaN",
-					name + " = " + glm::to_string(vec));
+                HUIRA_THROW_ERROR("Provided " + name + " contains INF or NaN: " + huira::vec_to_string(vec));
 			}
 		}
 	}
@@ -43,8 +39,7 @@ namespace huira::detail {
 		validateReal(vec, name);
 		for (int i = 0; i < T::length(); ++i) {
 			if (vec[i] <= 0) {
-				throw FatalError("Provided " + name + " contains negative values",
-					name + " = " + glm::to_string(vec));
+                HUIRA_THROW_ERROR("Provided " + name + " contains negative values: " + huira::vec_to_string(vec));
 			}
 		}
 	}
@@ -55,8 +50,7 @@ namespace huira::detail {
 		for (int col = 0; col < mat.length(); ++col) {
 			for (int row = 0; row < mat[col].length(); ++row) {
 				if (std::isinf(mat[col][row]) || std::isnan(mat[col][row])) {
-					throw FatalError("Provided " + name + " contains INF or NaN",
-						name + " = " + glm::to_string(mat));
+					HUIRA_THROW_ERROR("Provided " + name + " contains INF or NaN: " + huira::mat_to_string(mat));
 				}
 			}
 		}

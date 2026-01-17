@@ -11,7 +11,7 @@ namespace huira::units {
     }
 
     template <int L, int M, int T, int I, int O, int N, int J, int A, int S>
-    constexpr std::string Dimensionality<L, M, T, I, O, N, J, A, S>::getSIUnitString(int power_prefix, int val, std::string unit)
+    constexpr std::string Dimensionality<L, M, T, I, O, N, J, A, S>::get_si_unit_string(int power_prefix, int val, std::string unit)
     {
         val = power_prefix * val;
 
@@ -31,7 +31,7 @@ namespace huira::units {
     }
 
     template <int L, int M, int T, int I, int O, int N, int J, int A, int S>
-    constexpr std::string Dimensionality<L, M, T, I, O, N, J, A, S>::toSIString()
+    constexpr std::string Dimensionality<L, M, T, I, O, N, J, A, S>::to_si_string()
     {
         // Check if named derived unit:
         if (sameAs<Frequency>()) { return "Hz"; }
@@ -54,25 +54,25 @@ namespace huira::units {
         std::string numerator = "";
         std::string denominator = "";
 
-        numerator += getSIUnitString(1, L, "m");
-        numerator += getSIUnitString(1, M, "Kg");
-        numerator += getSIUnitString(1, T, "s");
-        numerator += getSIUnitString(1, I, "A");
-        numerator += getSIUnitString(1, O, "K");
-        numerator += getSIUnitString(1, N, "mol");
-        numerator += getSIUnitString(1, J, "cd");
-        numerator += getSIUnitString(1, A, "rad");
-        numerator += getSIUnitString(1, S, "sr");
+        numerator += get_si_unit_string(1, L, "m");
+        numerator += get_si_unit_string(1, M, "Kg");
+        numerator += get_si_unit_string(1, T, "s");
+        numerator += get_si_unit_string(1, I, "A");
+        numerator += get_si_unit_string(1, O, "K");
+        numerator += get_si_unit_string(1, N, "mol");
+        numerator += get_si_unit_string(1, J, "cd");
+        numerator += get_si_unit_string(1, A, "rad");
+        numerator += get_si_unit_string(1, S, "sr");
 
-        denominator += getSIUnitString(-1, L, "m");
-        denominator += getSIUnitString(-1, M, "Kg");
-        denominator += getSIUnitString(-1, T, "s");
-        denominator += getSIUnitString(-1, I, "A");
-        denominator += getSIUnitString(-1, O, "K");
-        denominator += getSIUnitString(-1, N, "mol");
-        denominator += getSIUnitString(-1, J, "cd");
-        denominator += getSIUnitString(-1, A, "rad");
-        denominator += getSIUnitString(-1, S, "sr");
+        denominator += get_si_unit_string(-1, L, "m");
+        denominator += get_si_unit_string(-1, M, "Kg");
+        denominator += get_si_unit_string(-1, T, "s");
+        denominator += get_si_unit_string(-1, I, "A");
+        denominator += get_si_unit_string(-1, O, "K");
+        denominator += get_si_unit_string(-1, N, "mol");
+        denominator += get_si_unit_string(-1, J, "cd");
+        denominator += get_si_unit_string(-1, A, "rad");
+        denominator += get_si_unit_string(-1, S, "sr");
 
         if (denominator.empty() && numerator.empty()) {
             return "dimensionless";
