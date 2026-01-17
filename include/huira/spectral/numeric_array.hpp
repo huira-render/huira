@@ -1,5 +1,15 @@
 #pragma once
 
+// Protect against Windows min/max macros for header-only library
+#if defined(_WIN32) || defined(_WIN64)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+// Also undef them if they're already defined
+#undef min
+#undef max
+#endif
+
 #include <algorithm>
 #include <array>
 #include <initializer_list>
@@ -10,20 +20,8 @@
 #include "huira/detail/concepts/numeric_concepts.hpp"
 
 namespace huira {
-    // Helper to determine optimal alignment for SIMD (as a variable template, not a function)
-    template<typename T>
-    inline constexpr size_t simd_alignment_v = []() constexpr {
-        if constexpr (std::is_same_v<T, float>) {
-            return size_t(32); // AVX alignment for 8 floats
-        }
-        else if constexpr (std::is_same_v<T, double>) {
-            return size_t(32); // AVX alignment for 4 doubles
-        }
-        return alignof(T);
-        }();
-
     template <IsFloatingPoint T, size_t N>
-    class alignas(simd_alignment_v<T>) NumericArray {
+    class NumericArray {
     public:
         // Type aliases
         using value_type = T;
@@ -91,10 +89,6 @@ namespace huira {
         // Operations
         constexpr void fill(const T& value) { data_.fill(value); }
 
-        constexpr void swap(NumericArray& other) noexcept(std::is_nothrow_swappable_v<T>) {
-            data_.swap(other.data_);
-        }
-
         // Summary
         T total() const;
         T magnitude() const;
@@ -128,11 +122,6 @@ namespace huira {
         constexpr bool operator==(const NumericArray& other) const;
         constexpr bool operator!=(const NumericArray& other) const;
 
-        // Utility to check alignment at runtime
-        bool is_simd_aligned() const noexcept {
-            return reinterpret_cast<uintptr_t>(data_.data()) % simd_alignment_v<T> == 0;
-        }
-
         // String functions
         std::string toString() const;
 
@@ -140,7 +129,7 @@ namespace huira {
         friend std::ostream& operator<<(std::ostream& os, const NumericArray<T2, N2>& v);
 
     protected:
-        alignas(simd_alignment_v<T>) std::array<T, N> data_;
+        std::array<T, N> data_;
     };
 
     // Binary arithmetic operators (array + array)
@@ -189,17 +178,6 @@ namespace huira {
 
     template <IsNumeric T, size_t N, IsNumeric U>
     constexpr NumericArray<T, N> operator/(const U& lhs, const NumericArray<T, N>& rhs);
-
-    // Utility function for swapping
-    template <IsNumeric T, size_t N>
-    constexpr void swap(NumericArray<T, N>& lhs, NumericArray<T, N>& rhs)
-        noexcept(noexcept(lhs.swap(rhs))) {
-        lhs.swap(rhs);
-    }
-
-    // Deduction guides
-    template <typename T, typename... U>
-    NumericArray(T, U...) -> NumericArray<T, 1 + sizeof...(U)>;
 }
 
 #include "huira_impl/spectral/numeric_array.ipp"
