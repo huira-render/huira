@@ -181,8 +181,8 @@ namespace huira {
         if (!log_path.empty()) {
             std::cerr << "HUIRA " << crash_type << "\n";
             std::cerr << " - Log file written to: " << std::filesystem::absolute(log_path) << "\n";
-            std::cerr << " - Please include this log file when reporting issues.\n";
-            std::cerr << " - Submit issues at: https://github.com/huira-render/huira/issues/new";
+            std::cerr << " - Please report this issue: https://github.com/huira-render/huira/issues/new?template=bug_report.md\n";
+            std::cerr << " - Include the log file in your report.\n";
         }
     }
 
