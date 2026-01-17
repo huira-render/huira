@@ -137,16 +137,13 @@ endforeach()
 set(CATCH2_OUTPUT_DIR "${CMAKE_BINARY_DIR}/test-results")
 file(MAKE_DIRECTORY ${CATCH2_OUTPUT_DIR})
 
-function(configure_test_output test_name)
-    get_test_property(${test_name} COMMAND current_command)
-    set_tests_properties(${test_name} PROPERTIES 
-        COMMAND "${current_command};-r;junit;-o;${CATCH2_OUTPUT_DIR}/${test_name}.xml"
-    )
-endfunction()
-# Apply to all tests
+# Apply JUnit XML output to all tests
 foreach(source_file ${UNIT_TESTS})
     get_filename_component(test_name ${source_file} NAME_WE)
-    configure_test_output(${test_name})
+    # Override the test command to include JUnit output
+    set_property(TEST ${test_name} PROPERTY 
+        COMMAND $<TARGET_FILE:${test_name}> -r junit -o ${CATCH2_OUTPUT_DIR}/${test_name}.xml
+    )
 endforeach()
 
 ###########################

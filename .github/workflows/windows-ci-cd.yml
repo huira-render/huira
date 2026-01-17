@@ -105,7 +105,7 @@ jobs:
         with:
           platform: windows
 
-      - name: Configure project with coverage
+      - name: Configure project for testing
         uses: ./.github/actions/cmake-configure-test
         with:
           platform: windows
@@ -120,8 +120,15 @@ jobs:
         run: |
           echo "Running tests..."
           cd build
-          ctest --output-on-failure
+          ctest -C Debug --output-on-failure
           echo "Tests completed!"
+
+      - name: Check for test results
+        if: always()
+        shell: bash -el {0}
+        run: |
+          echo "Checking for test result files..."
+          ls -la build/test-results/ || echo "test-results directory not found"
 
       - name: Upload test results
         uses: actions/upload-artifact@v4
@@ -194,8 +201,8 @@ jobs:
           artifact-name: conda-package-windows
 
   # Gate job that depends on all other jobs - use this for branch protection
-  ci:
-    name: CI
+  windows-ci:
+    name: Windows CI
     if: always()
     needs:
       - version-check

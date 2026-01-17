@@ -270,8 +270,8 @@ jobs:
         uses: actions/deploy-pages@v4
 
   # Gate job that depends on all other jobs - use this for branch protection
-  ci:
-    name: CI
+  linux-ci:
+    name: Linux CI
     if: always()
     needs:
       - version-check
