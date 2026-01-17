@@ -1,4 +1,4 @@
-# MacOS Quickstart Guide
+# macOS Quickstart Guide
 
 ## Table of Contents
 - [System Requirements](#system-requirements)

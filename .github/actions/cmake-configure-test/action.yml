@@ -1,5 +1,5 @@
 name: 'CMake Configuration for Testing'
-description: 'Configure the CMake build system with conda toolchain and coverage enabled'
+description: 'Configure the CMake build system with conda toolchain and coverage enabled (Linux only)'
 
 inputs:
   platform:
@@ -20,23 +20,7 @@ runs:
           -DHUIRA_COVERAGE=ON \
           -G Ninja
 
-    - name: Configure CMake (macOS x86_64)
-      if: inputs.platform == 'macos'
-      shell: bash -el {0}
-      run: |
-        # Explicitly specify system ninja path to avoid conda ninja
-        SYSTEM_NINJA=$(which ninja)
-        echo "Using system ninja at: $SYSTEM_NINJA"
-        
-        cmake -B build \
-          -DCMAKE_TOOLCHAIN_FILE="${GITHUB_WORKSPACE}/cmake/conda-toolchain.cmake" \
-          -DCMAKE_BUILD_TYPE=Debug \
-          -DHUIRA_TESTS=ON \
-          -DHUIRA_COVERAGE=ON \
-          -DCMAKE_MAKE_PROGRAM="$SYSTEM_NINJA" \
-          -G Ninja
-
-    - name: Configure CMake (macOS ARM)
+    - name: Configure CMake (macOS)
       if: inputs.platform == 'macos'
       shell: bash -el {0}
       run: |
@@ -44,7 +28,6 @@ runs:
           -DCMAKE_TOOLCHAIN_FILE="${GITHUB_WORKSPACE}/cmake/conda-toolchain.cmake" \
           -DCMAKE_BUILD_TYPE=Debug \
           -DHUIRA_TESTS=ON \
-          -DHUIRA_COVERAGE=ON \
           -G Ninja
 
     - name: Configure CMake (Windows)
@@ -55,8 +38,6 @@ runs:
         
         cmake -B build ^
           -DCMAKE_TOOLCHAIN_FILE="../cmake/conda-toolchain.cmake" ^
-          -DCMAKE_BUILD_TYPE=Debug ^
           -DHUIRA_TESTS=ON ^
-          -DHUIRA_COVERAGE=ON ^
           -G "Visual Studio 17 2022" ^
           -A x64
