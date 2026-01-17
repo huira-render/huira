@@ -1,6 +1,6 @@
-#include "huira/detail/platform/paths.hpp"
-
 #include <filesystem>
+
+#include "huira/detail/platform/get_exe_path.hpp"
 
 namespace fs = std::filesystem;
 

@@ -27,7 +27,7 @@ namespace huira::detail {
 #elif defined(__APPLE__)
         char path[PATH_MAX];
         uint32_t size = sizeof(path);
-        if (_NSget_executable_path(path, &size) != 0) {
+        if (_NSGetExecutablePath(path, &size) != 0) {
             return "";
         }
 

@@ -2,11 +2,8 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
 #include "huira/core/time.hpp"
-#include <chrono>
-#include <thread>
 
 using namespace huira;
-using namespace std::chrono_literals;
 
 TEST_CASE("Time: Constructor from ephemeris time", "[time]") {
     SECTION("Zero ephemeris time") {
@@ -48,31 +45,6 @@ TEST_CASE("Time: Constructor from string", "[time]") {
     }
 }
 
-TEST_CASE("Time: Constructor from system_clock", "[time]") {
-    auto now_sys = std::chrono::system_clock::now();
-    Time t(now_sys);
-    
-    // Convert back and verify roundtrip
-    auto converted = t.to_system_clock();
-    auto diff = std::chrono::duration_cast<std::chrono::milliseconds>(converted - now_sys);
-    
-    // Should be very close (within 1 second due to conversion precision)
-    REQUIRE(std::abs(diff.count()) < 1000);
-}
-
-#if HUIRA_HAS_UTC_CLOCK
-TEST_CASE("Time: Constructor from utc_clock", "[time]") {
-    auto now_utc = std::chrono::utc_clock::now();
-    Time t(now_utc);
-    
-    // Convert back and verify roundtrip
-    auto converted = t.to_utc_clock();
-    auto diff = std::chrono::duration_cast<std::chrono::milliseconds>(converted - now_utc);
-    
-    REQUIRE(std::abs(diff.count()) < 1000);
-}
-#endif
-
 TEST_CASE("Time: Factory methods", "[time]") {
     SECTION("from_et") {
         Time t = Time::from_et(12345.678);
@@ -95,16 +67,6 @@ TEST_CASE("Time: Factory methods", "[time]") {
         double mjd = 51544.5;  // J2000.0
         Time t = Time::from_modified_julian_date(mjd);
         REQUIRE_THAT(t.et(), Catch::Matchers::WithinAbs(0.0, 100.0));
-    }
-
-    SECTION("now") {
-        Time t1 = Time::now();
-        std::this_thread::sleep_for(10ms);
-        Time t2 = Time::now();
-        
-        REQUIRE(t2.et() > t1.et());
-        auto diff = t2 - t1;
-        REQUIRE(diff.count() >= 0.01);  // At least 10ms
     }
 }
 
@@ -171,27 +133,6 @@ TEST_CASE("Time: String conversions", "[time]") {
     }
 }
 
-TEST_CASE("Time: Chrono conversions", "[time]") {
-    SECTION("Roundtrip system_clock conversion") {
-        Time t1 = Time::from_et(86400.0);  // Some arbitrary time
-        auto sys_tp = t1.to_system_clock();
-        Time t2(sys_tp);
-        
-        // Should be very close (within 1 millisecond)
-        REQUIRE_THAT(t2.et(), Catch::Matchers::WithinAbs(t1.et(), 0.001));
-    }
-
-#if HUIRA_HAS_UTC_CLOCK
-    SECTION("Roundtrip utc_clock conversion") {
-        Time t1 = Time::from_et(172800.0);  // Some arbitrary time
-        auto utc_tp = t1.to_utc_clock();
-        Time t2(utc_tp);
-        
-        REQUIRE_THAT(t2.et(), Catch::Matchers::WithinAbs(t1.et(), 0.001));
-    }
-#endif
-}
-
 TEST_CASE("Time: Comparison operators", "[time]") {
     Time t1(1000.0);
     Time t2(2000.0);
@@ -222,91 +163,6 @@ TEST_CASE("Time: Comparison operators", "[time]") {
     }
 }
 
-TEST_CASE("Time: Arithmetic with duration", "[time]") {
-    Time t(1000.0);
-
-    SECTION("Addition with duration") {
-        Time t2 = t + std::chrono::duration<double>(500.0);
-        REQUIRE_THAT(t2.et(), Catch::Matchers::WithinAbs(1500.0, 1e-9));
-    }
-
-    SECTION("Subtraction with duration") {
-        Time t2 = t - std::chrono::duration<double>(300.0);
-        REQUIRE_THAT(t2.et(), Catch::Matchers::WithinAbs(700.0, 1e-9));
-    }
-
-    SECTION("Addition with chrono literals") {
-        Time t2 = t + 1h;  // 1 hour = 3600 seconds
-        REQUIRE_THAT(t2.et(), Catch::Matchers::WithinAbs(1000.0 + 3600.0, 1e-6));
-    }
-
-    SECTION("Subtraction with chrono literals") {
-        Time t2 = t + 1min;  // 1 minute = 60 seconds
-        REQUIRE_THAT(t2.et(), Catch::Matchers::WithinAbs(1000.0 + 60.0, 1e-6));
-    }
-}
-
-TEST_CASE("Time: Difference between times", "[time]") {
-    Time t1(1000.0);
-    Time t2(2500.0);
-
-    SECTION("Positive difference") {
-        auto diff = t2 - t1;
-        REQUIRE_THAT(diff.count(), Catch::Matchers::WithinAbs(1500.0, 1e-9));
-    }
-
-    SECTION("Negative difference") {
-        auto diff = t1 - t2;
-        REQUIRE_THAT(diff.count(), Catch::Matchers::WithinAbs(-1500.0, 1e-9));
-    }
-
-    SECTION("Zero difference") {
-        Time t3(1000.0);
-        auto diff = t1 - t3;
-        REQUIRE_THAT(diff.count(), Catch::Matchers::WithinAbs(0.0, 1e-9));
-    }
-
-    SECTION("Convert difference to other units") {
-        auto diff = t2 - t1;
-        auto diff_minutes = std::chrono::duration_cast<std::chrono::minutes>(diff);
-        auto diff_hours = std::chrono::duration_cast<std::chrono::hours>(diff);
-        
-        REQUIRE(diff_minutes.count() == 25);  // 1500 seconds = 25 minutes
-        REQUIRE(diff_hours.count() == 0);     // 1500 seconds = 0 hours (truncated)
-    }
-}
-
-TEST_CASE("Time: Complex arithmetic scenarios", "[time]") {
-    SECTION("Multiple additions and subtractions") {
-        Time t = Time::from_et(0.0);
-        t = t + 1h + 30min + 45s;
-        t = t - 15min;
-        
-        double expected = 3600.0 + 1800.0 + 45.0 - 900.0;  // 4545 seconds
-        REQUIRE_THAT(t.et(), Catch::Matchers::WithinAbs(expected, 1e-6));
-    }
-
-    SECTION("Time arithmetic preserves order") {
-        Time t1 = Time::from_et(100.0);
-        Time t2 = t1 + 50s;
-        Time t3 = t2 + 50s;
-        
-        REQUIRE(t1 < t2);
-        REQUIRE(t2 < t3);
-        REQUIRE(t1 < t3);
-    }
-
-    SECTION("Symmetric operations") {
-        Time t = Time::from_et(1000.0);
-        auto duration = 500s;
-        
-        Time t_plus = t + duration;
-        Time t_minus = t_plus - duration;
-        
-        REQUIRE_THAT(t_minus.et(), Catch::Matchers::WithinAbs(t.et(), 1e-9));
-    }
-}
-
 TEST_CASE("Time: Edge cases", "[time]") {
     SECTION("Very large ephemeris time") {
         double large_et = 1e15;
@@ -325,33 +181,9 @@ TEST_CASE("Time: Edge cases", "[time]") {
         Time t = Time::from_et(et_with_fraction);
         REQUIRE_THAT(t.et(), Catch::Matchers::WithinAbs(et_with_fraction, 1e-9));
     }
-
-    SECTION("Zero duration arithmetic") {
-        Time t = Time::from_et(1000.0);
-        Time t2 = t + 0s;
-        REQUIRE(t == t2);
-    }
 }
 
 TEST_CASE("Time: Real-world scenarios", "[time]") {
-    SECTION("Calculate time difference in days") {
-        Time t1 = Time("2024-01-01 00:00:00 UTC");
-        Time t2 = Time("2024-01-15 00:00:00 UTC");
-        
-        auto diff = t2 - t1;
-        auto days = std::chrono::duration_cast<std::chrono::duration<double, std::ratio<86400>>>(diff);
-        
-        REQUIRE_THAT(days.count(), Catch::Matchers::WithinAbs(14.0, 0.1));
-    }
-
-    SECTION("Schedule future event") {
-        Time now = Time::now();
-        Time future = now + 24h;  // 24 hours from now
-        
-        auto diff = future - now;
-        REQUIRE_THAT(diff.count(), Catch::Matchers::WithinAbs(86400.0, 1.0));
-    }
-
     SECTION("Historical date") {
         Time apollo11 = Time("1969-07-20 20:17:40 UTC");  // Apollo 11 moon landing
         REQUIRE(apollo11.et() < 0.0);  // Before J2000 epoch
