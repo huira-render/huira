@@ -10,8 +10,11 @@
 ***
 
 # Key Features
-- Large-scale scene support (large datasets and large celestial distances)
 - Radiometrically accurate rendering with calibrated camera distortion models, depth-of-field, and common camera controls
+- SPICE toolkit integration for spacecraft ephemeris and reference frames
+- Unresolved body rendering for distant objects
+- Star field rendering with accurate celestial coordinates
+- **Coming Soon:** 3D mesh, Digital Elevation Map, and level-of-detail support
 
 # Building Huira
 Please see the platform specific quickstart guides:

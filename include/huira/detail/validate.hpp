@@ -7,7 +7,7 @@
 
 namespace huira::detail {
 	template <IsFloatingPoint T>
-	void validateReal(T value, const std::string& name)
+	void validate_real(T value, const std::string& name)
 	{
 		if (std::isinf(value) || std::isnan(value)) {
 			HUIRA_THROW_ERROR("Provided " + name + " contains INF or NaN" + std::to_string(value));
@@ -15,16 +15,16 @@ namespace huira::detail {
 	}
 	
 	template <IsFloatingPoint T>
-	void validateStrictlyPositive(T value, const std::string& name)
+	void validate_strictly_positive(T value, const std::string& name)
 	{
-		validateReal(value, name);
+		validate_real(value, name);
 		if (value <= 0) {
             HUIRA_THROW_ERROR("Provided " + name + " is negative or zero: " + std::to_string(value));
 		}
 	}
 	
 	template <IsVec T>
-	void validateReal(const T& vec, const std::string& name)
+	void validate_real(const T& vec, const std::string& name)
 	{
 		for (int i = 0; i < T::length(); ++i) {
 			if (std::isinf(vec[i]) || std::isnan(vec[i])) {
@@ -34,9 +34,9 @@ namespace huira::detail {
 	}
 	
 	template <IsVec T>
-	void validateStrictlyPositive(const T& vec, const std::string& name)
+	void validate_strictly_positive(const T& vec, const std::string& name)
 	{
-		validateReal(vec, name);
+		validate_real(vec, name);
 		for (int i = 0; i < T::length(); ++i) {
 			if (vec[i] <= 0) {
                 HUIRA_THROW_ERROR("Provided " + name + " contains negative values: " + huira::vec_to_string(vec));
@@ -45,7 +45,7 @@ namespace huira::detail {
 	}
 	
 	template <IsMat T>
-	void validateReal(const T& mat, const std::string& name)
+	void validate_real(const T& mat, const std::string& name)
 	{
 		for (int col = 0; col < mat.length(); ++col) {
 			for (int row = 0; row < mat[col].length(); ++row) {

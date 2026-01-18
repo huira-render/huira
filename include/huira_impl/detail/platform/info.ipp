@@ -15,7 +15,7 @@
 #endif
 
 namespace huira::detail {
-    std::string getPlatform() {
+    std::string get_platform() {
 #ifdef _WIN32
         return "Platform: Windows";
 #elif defined(__linux__)
@@ -27,7 +27,7 @@ namespace huira::detail {
 #endif
     }
 
-    std::string getCompilerInfo() {
+    std::string get_compiler_info() {
 #ifdef _MSC_VER
         return "MSVC " + std::to_string(_MSC_VER);
 #elif defined(__GNUC__) && !defined(__clang__)
@@ -39,7 +39,7 @@ namespace huira::detail {
 #endif
     }
 
-    std::string getMemoryUsage() {
+    std::string get_memory_usage() {
         std::string output;
 
 #ifdef _WIN32
@@ -86,7 +86,7 @@ namespace huira::detail {
         return output;
     }
 
-    std::string getTimeAsString(const std::chrono::system_clock::time_point& tp, const std::string fmt)
+    std::string get_time_as_string(const std::chrono::system_clock::time_point& tp, const std::string fmt)
     {
         auto time_t = std::chrono::system_clock::to_time_t(tp);
 
@@ -108,8 +108,8 @@ namespace huira::detail {
         return oss.str();
     }
 
-    std::string getTimeAsString(const std::string& fmt)
+    std::string get_time_as_string(const std::string& fmt)
     {
-        return getTimeAsString(std::chrono::system_clock::now(), fmt);
+        return get_time_as_string(std::chrono::system_clock::now(), fmt);
     }
 }
