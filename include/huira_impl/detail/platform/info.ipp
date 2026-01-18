@@ -17,13 +17,13 @@
 namespace huira::detail {
     std::string get_platform() {
 #ifdef _WIN32
-        return "Platform: Windows";
+        return "Windows";
 #elif defined(__linux__)
-        return "Platform: Linux";
+        return "Linux";
 #elif defined(__APPLE__)
-        return "Platform: macOS";
+        return "macOS";
 #else
-        return "Platform: Unknown";
+        return "UNKOWN";
 #endif
     }
 
@@ -35,7 +35,7 @@ namespace huira::detail {
 #elif defined(__clang__)
         return "Clang " + std::to_string(__clang_major__) + "." + std::to_string(__clang_minor__);
 #else
-        return "Unknown Compiler";
+        return "UNKNOWN";
 #endif
     }
 

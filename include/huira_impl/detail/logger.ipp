@@ -11,6 +11,8 @@
 #include <sstream>
 #include <thread>
 
+#include "huira/detail/text/colors.hpp"
+#include "huira/detail/platform/info.hpp"
 #include "huira/detail/platform/get_log_path.hpp"
 #include "huira/detail/platform/windows_minmax.hpp"
 
@@ -31,7 +33,7 @@ namespace huira {
         localtime_r(&time_t, &tm_buf);
 #endif
 
-        oss << std::put_time(&tm_buf, "%Y-%m-%d %H:%M:%S")
+        oss << std::put_time(&tm_buf, "%H:%M:%S")
             << '.' << std::setfill('0') << std::setw(3) << ms.count()
             << " [" << level_to_string(level) << "] "
             << "[Thread " << thread_id << "] "
@@ -147,8 +149,12 @@ namespace huira {
             }
         }
 
+        std::string platform_str = detail::get_platform();
+        std::string compiler_str = detail::get_compiler_info();
+
         file << "Huira Log\n";
         file << "=========\n\n";
+        file << "Platform: " << platform_str << " | Compiler: " << compiler_str << "\n\n";
 
         size_t current_write = write_index_.load(std::memory_order_relaxed);
         size_t total_entries = std::min(current_write, buffer_.size());
@@ -179,10 +185,11 @@ namespace huira {
 
     void Logger::output_crash_report(const std::string& log_path, const char* crash_type) {
         if (!log_path.empty()) {
-            std::cerr << "HUIRA " << crash_type << "\n";
-            std::cerr << " - Log file written to: " << std::filesystem::absolute(log_path) << "\n";
-            std::cerr << " - Please report this issue: https://github.com/huira-render/huira/issues/new?template=bug_report.md\n";
-            std::cerr << " - Include the log file in your report.\n";
+            std::cerr << detail::red("HUIRA " + std::string(crash_type)) << "\n";
+            std::cerr << detail::yellow(" - Log file written to: " + std::filesystem::absolute(log_path).string()) << "\n";
+            std::cerr << detail::yellow(" - Please report this issue: ")
+                << detail::blue("https://github.com/huira-render/huira/issues/new?template=bug_report.md") << "\n";
+            std::cerr << detail::yellow(" - Include the log file in your report.") << "\n";
         }
     }
 
