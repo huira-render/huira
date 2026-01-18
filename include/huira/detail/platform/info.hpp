@@ -5,11 +5,11 @@
 
 namespace huira::detail {
 
-    std::string getPlatform();
+    std::string get_platform();
 
-    std::string getCompilerInfo();
+    std::string get_compiler_info();
 
-    std::string getMemoryUsage();
+    std::string get_memory_usage();
 
 #ifdef _WIN32
 #include <process.h>
@@ -19,9 +19,9 @@ namespace huira::detail {
 #define GET_PID() getpid()
 #endif
 
-    std::string getTimeAsString(const std::chrono::system_clock::time_point& tp, const std::string fmt = "%Y-%m-%d %H:%M:%S");
+    std::string get_time_as_string(const std::chrono::system_clock::time_point& tp, const std::string fmt = "%Y-%m-%d %H:%M:%S");
 
-    std::string getTimeAsString(const std::string& fmt = "%Y-%m-%d %H:%M:%S");
+    std::string get_time_as_string(const std::string& fmt = "%Y-%m-%d %H:%M:%S");
 }
 
 #include "huira_impl/detail/platform/info.ipp"

@@ -23,7 +23,7 @@ namespace huira::units {
             requires std::is_arithmetic_v<T>
         : value_(static_cast<double>(value))
         {
-            detail::validateReal(value_, "Unit[" + Dim::to_si_string() + "]");
+            detail::validate_real(value_, "Unit[" + Dim::to_si_string() + "]");
         }
 
         template<IsRatioOrTag OtherScale>
@@ -374,7 +374,7 @@ namespace huira::units {
             requires std::is_arithmetic_v<T>
         : value_(static_cast<double>(value))
         {
-            detail::validateReal(value_, "Dimensionless");
+            detail::validate_real(value_, "Dimensionless");
         }
 
         template<IsRatioOrTag OtherScale>
