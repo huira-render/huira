@@ -22,6 +22,7 @@
     },
     "glm",
     "tbb",
+    "termcolor",
     "tiff"
   ],
   "features": {
