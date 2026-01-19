@@ -1,6 +1,7 @@
 #include "huira/camera/distortion/brown_distortion.hpp"
 #include "huira/camera/distortion/opencv_distortion.hpp"
 #include "huira/camera/distortion/owen_distortion.hpp"
+#include "huira/camera/camera.hpp"
 
 #include "huira/core/ray.hpp"
 #include "huira/core/rotation.hpp"
@@ -28,6 +29,7 @@ namespace huira {
     template class BrownDistortion<TestSpectral, TestFloat>;
     template class OpenCVDistortion<TestSpectral, TestFloat>;
     template class OwenDistortion<TestSpectral, TestFloat>;
+    template class Camera<TestSpectral, TestFloat>;
 
     template class Ray<TestSpectral, TestFloat>;
     template class Rotation<TestFloat>;

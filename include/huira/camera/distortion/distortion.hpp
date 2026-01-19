@@ -3,6 +3,8 @@
 #include <cstddef>
 #include <string>
 #include <variant>
+#include <concepts>
+#include <type_traits>
 
 #include "huira/core/types.hpp"
 #include "huira/detail/concepts/numeric_concepts.hpp"
@@ -43,5 +45,15 @@ namespace huira {
         float tol_sq_ = 1e-12f;
         float tolerance_ = 1e-6f;
     };
+
+    template <typename T>
+    struct is_distortion : std::false_type {};
+
+    template <template <typename, typename> class Derived, typename TSpectral, typename TFloat>
+        requires std::derived_from<Derived<TSpectral, TFloat>, Distortion<TSpectral, TFloat>>
+    struct is_distortion<Derived<TSpectral, TFloat>> : std::true_type {};
+
+    template <typename T>
+    concept IsDistortion = is_distortion<T>::value;
 
 }

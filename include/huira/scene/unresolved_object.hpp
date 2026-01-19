@@ -15,6 +15,8 @@ namespace huira {
     template <IsSpectral TSpectral, IsFloatingPoint TFloat>
     class FrameNode;
 
+
+
     template <IsSpectral TSpectral, IsFloatingPoint TFloat>
     class UnresolvedObject : public Node<TSpectral, TFloat> {
     public:

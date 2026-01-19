@@ -11,6 +11,12 @@
 #include "huira/scene/node.hpp"
 
 namespace huira {
+    // Forward declare:
+    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
+    class Scene;
+
+
+
     enum class LightType {
         Point,
         Sphere
