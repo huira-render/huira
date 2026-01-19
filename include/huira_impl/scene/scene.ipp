@@ -7,12 +7,26 @@
 #include "huira/detail/logger.hpp"
 
 namespace huira {
+
+    // Suppressing C4355: 'this' is passed to Node constructor, but Node only stores
+    // the pointer without calling back into the incomplete Scene object.
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable: 4355)
+#endif
+
     template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    Scene<TSpectral, TFloat>::Scene() : time_(Time::from_et(0))
+    Scene<TSpectral, TFloat>::Scene()
+        : root_node_(std::make_shared<Node<TSpectral, TFloat>>(this))
+        , root(root_node_)
+        , time_(Time::from_et(0))
     {
-        root_node_ = std::make_unique<Node<TSpectral, TFloat>>(this);
         root_node_->set_spice("SOLAR SYSTEM BARYCENTER", "J2000");
     };
+
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
     template <IsSpectral TSpectral, IsFloatingPoint TFloat>
     void Scene<TSpectral, TFloat>::set_time(const Time& time) {
@@ -24,29 +38,6 @@ namespace huira {
         HUIRA_LOG_INFO("Scene time set to " + time.to_utc_string() + " (et = " + std::to_string(time.et()) + ")");
         
         root_node_->update_all_spice_transforms_();
-    }
-
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    FrameHandle<TSpectral, TFloat> Scene<TSpectral, TFloat>::new_subframe(std::string name)
-    {
-        return FrameHandle<TSpectral, TFloat>{ this->root_node_->new_child(name) };
-    }
-
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    FrameHandle<TSpectral, TFloat> Scene<TSpectral, TFloat>::new_spice_subframe(const std::string& spice_origin, const std::string& spice_frame, std::string name)
-    {
-        FrameHandle<TSpectral, TFloat> subframe = this->new_subframe(name);
-        subframe.set_spice(spice_origin, spice_frame);
-        return subframe;
-    }
-
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    FrameHandle<TSpectral, TFloat> Scene<TSpectral, TFloat>::get_named_frame(const std::string& name)
-    {
-        if (auto it = node_names_.find(name); it != node_names_.end()) {
-            return FrameHandle<TSpectral, TFloat>{ it->second };
-        }
-        throw std::runtime_error("No Node named: " + name);
     }
 
     template <IsSpectral TSpectral, IsFloatingPoint TFloat>
@@ -69,56 +60,11 @@ namespace huira {
     // ======================= //
 
     template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    void Scene<TSpectral, TFloat>::add_node_name_(const std::string& name, std::weak_ptr<Node<TSpectral, TFloat>> node)
-    {
-        if (name.empty()) {
-            return;
-        }
-
-        if (node_names_.contains(name)) {
-            HUIRA_THROW_ERROR("A Node already exists with the name: " + name);
-        }
-        node_names_[name] = node;
-    }
-
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    void Scene<TSpectral, TFloat>::remove_node_name_(std::weak_ptr<Node<TSpectral, TFloat>> node)
-    {
-        auto node_ptr = node.lock();
-        if (!node_ptr) {
-            return; // Node already deleted, nothing to remove
-        }
-
-        // Find and erase the name entry for this node
-        for (auto it = node_names_.begin(); it != node_names_.end(); ++it) {
-            if (auto stored_ptr = it->second.lock()) {
-                if (stored_ptr == node_ptr) {
-                    node_names_.erase(it);
-                    return;
-                }
-            }
-        }
-    }
-
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    const std::string& Scene<TSpectral, TFloat>::name_of_node_(const Node<TSpectral, TFloat>* node) const {
-        for (const auto& [name, ptr] : node_names_) {
-            if (auto sptr = ptr.lock()) {
-                if (sptr.get() == node) {
-                    return name;
-                }
-            }
-        }
-        static const std::string empty_string;
-        return empty_string;
-    }
-
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
     void Scene<TSpectral, TFloat>::print_node_(const Node<TSpectral, TFloat>* node, const std::string& prefix, bool is_last) const {
         // Print current node
         std::cout << prefix;
         std::cout << (is_last ? "+-- " : "|-- ");
-        std::cout << "Node ";
+        std::cout << node->get_type_name() + " ";
         print_node_details_(node);
         std::cout << "\n";
 
@@ -137,25 +83,8 @@ namespace huira {
         // Print node ID
         std::cout << "[" << node->id() << "] ";
 
-        // Check for registered name
-        bool name_found = false;
-        for (const auto& [name, ptr] : node_names_) {
-            if (auto sptr = ptr.lock()) {
-                if (sptr.get() == node) {
-                    std::cout << "(name: " << name;
-                    name_found = true;
-                    break;
-                }
-            }
-        }
-
         if (node->spice_origin_ != "" || node->spice_frame_ != "") {
-            if (name_found) {
-                std::cout << ", ";
-            }
-            else {
-                std::cout << "(";
-            }
+            std::cout << "(";
             if (node->spice_origin_ != "") {
                 std::cout << "origin: " << node->spice_origin_;
                 if (node->spice_frame_ != "") {
@@ -167,11 +96,6 @@ namespace huira {
                 std::cout << "frame: " << node->spice_frame_;
             }
             std::cout << ")";
-        }
-        else {
-            if (name_found) {
-                std::cout << ")";
-            }
         }
     }
 }

@@ -17,6 +17,9 @@ namespace huira {
     template <IsSpectral TSpectral, IsFloatingPoint TFloat>
     class Scene;
 
+    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
+    class UnresolvedObject;
+
     enum class TransformSource {
         Manual,
         Spice
@@ -28,7 +31,6 @@ namespace huira {
         Node(Scene<TSpectral, TFloat>* scene);
         virtual ~Node() = default;
 
-        const std::string& name() const { return scene_->name_of_node_(this); }
         std::uint64_t id() const { return id_; }
 
         void set_position(const Vec3<TFloat>& position);
@@ -42,10 +44,15 @@ namespace huira {
         void set_spice_frame(const std::string& spice_frame);
         void set_spice(const std::string& spice_origin, const std::string& spice_frame);
 
+        std::string get_spice_origin() const { return spice_origin_; }
+        std::string get_spice_frame() const { return spice_frame_; }
 
-        std::weak_ptr<Node<TSpectral, TFloat>> new_child(std::string name = "");
+
+        std::weak_ptr<Node<TSpectral, TFloat>> new_child();
         void delete_child(std::weak_ptr<Node<TSpectral, TFloat>> child);
         void change_parent(std::weak_ptr<Node<TSpectral, TFloat>> self_weak, Node<TSpectral, TFloat>* new_parent);
+
+        std::weak_ptr<UnresolvedObject<TSpectral, TFloat>> new_unresolved_object();
 
     protected:
         Transform<TFloat> local_transform_;
@@ -71,6 +78,7 @@ namespace huira {
         virtual void update_global_transform_();
 
         virtual std::string get_info_();
+        virtual std::string get_type_name() const { return "Node"; }
 
     private:
         Scene<TSpectral, TFloat>* scene_;

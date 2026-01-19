@@ -4,6 +4,7 @@
 #include "huira/detail/concepts/spectral_concepts.hpp"
 
 #include "huira/handles/handle.hpp"
+#include "huira/handles/unresolved_handle.hpp"
 #include "huira/scene/node.hpp"
 
 namespace huira {
@@ -12,9 +13,6 @@ namespace huira {
     public:
         FrameHandle() = delete;
         using Handle<Node<TSpectral, TFloat>>::Handle;
-
-
-        const std::string& name() const { return this->get()->name(); }
 
         void set_position(const Vec3<TFloat>& position) const { this->get()->set_position(position); }
         void set_position(double x, double y, double z) const { this->get()->set_position(Vec3<TFloat>{x, y, z}); }
@@ -29,13 +27,15 @@ namespace huira {
         void set_spice_frame(const std::string& spice_frame) const { this->get()->set_spice_frame(spice_frame); }
         void set_spice(const std::string& spice_origin, const std::string& spice_frame) const { this->get()->set_spice(spice_origin, spice_frame); }
 
+        std::string get_spice_origin() const { return this->get()->get_spice_origin(); }
+        std::string get_spice_frame() const { return this->get()->get_spice_frame(); }
 
-        FrameHandle<TSpectral, TFloat> new_subframe(std::string name = "") const {
-            return FrameHandle<TSpectral, TFloat>{ this->get()->new_child(name) };
+        FrameHandle<TSpectral, TFloat> new_subframe() const {
+            return FrameHandle<TSpectral, TFloat>{ this->get()->new_child() };
         }
 
-        FrameHandle<TSpectral, TFloat> new_spice_subframe(const std::string& spice_origin, const std::string& spice_frame, std::string name = "") const {
-            FrameHandle<TSpectral, TFloat> subframe = this->new_subframe(name);
+        FrameHandle<TSpectral, TFloat> new_spice_subframe(const std::string& spice_origin, const std::string& spice_frame) const {
+            FrameHandle<TSpectral, TFloat> subframe = this->new_subframe();
             subframe.set_spice(spice_origin, spice_frame);
             return subframe;
         }
@@ -43,6 +43,20 @@ namespace huira {
         void delete_subframe(FrameHandle<TSpectral, TFloat> subframe) const {
             this->get()->delete_child(std::weak_ptr<Node<TSpectral, TFloat>>(subframe.get()));
         }
+
+
+
+        UnresolvedHandle<TSpectral, TFloat> new_unresolved_object() const {
+            return UnresolvedHandle<TSpectral, TFloat>{ this->get()->new_unresolved_object() };
+        }
+
+        UnresolvedHandle<TSpectral, TFloat> new_spice_unresolved_object(const std::string& spice_origin) const {
+            UnresolvedHandle<TSpectral, TFloat> unresolved = this->new_unresolved_object();
+            unresolved.set_spice_origin(spice_origin);
+            return unresolved;
+        }
+
+
 
         void move_to(FrameHandle<TSpectral, TFloat> new_parent) const {
             auto self_shared = this->get();

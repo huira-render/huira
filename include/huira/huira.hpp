@@ -7,6 +7,7 @@
 #include "huira/core/units.hpp"
 
 #include "huira/handles/frame_handle.hpp"
+#include "huira/handles/unresolved_handle.hpp"
 
 #include "huira/scene/scene.hpp"
 
