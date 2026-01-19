@@ -153,8 +153,31 @@ namespace huira {
     template <IsSpectral TSpectral, IsFloatingPoint TFloat>
     void Node<TSpectral, TFloat>::set_spice(const std::string& spice_origin, const std::string& spice_frame)
     {
-        this->set_spice_origin(spice_origin);
-        this->set_spice_frame(spice_frame);
+        if (scene_->is_locked()) {
+            HUIRA_THROW_ERROR(this->get_info_() + " - set_spice() was called with a locked scene");
+        }
+
+        if (parent_) {
+            if (parent_->position_source_ != TransformSource::Spice) {
+                HUIRA_THROW_ERROR(this->get_info_() + " - Cannot set SPICE origin: parent node (" +
+                    parent_->get_info_() + ") has manually set position");
+            }
+
+            if (parent_->rotation_source_ != TransformSource::Spice) {
+                HUIRA_THROW_ERROR(this->get_info_() + " - Cannot set SPICE frame: parent node (" +
+                    parent_->get_info_() + ") has manually set rotation");
+            }
+        }
+
+        HUIRA_LOG_INFO(this->get_info_() + " - set_spice('" + spice_origin + ", " + spice_frame + "')");
+
+        this->spice_origin_ = spice_origin;
+        this->position_source_ = TransformSource::Spice;
+
+        this->spice_frame_ = spice_frame;
+        this->rotation_source_ = TransformSource::Spice;
+
+        this->update_spice_transform_();
     }
 
 
@@ -437,7 +460,7 @@ namespace huira {
                 parent_->global_transform_.scale * this->local_transform_.scale;
         }
 
-        // All children must be manual (invariant), so just propagate
+        // Recursively propagate to all children (handles both SPICE and Manual)
         for (auto& child : children_) {
             child->update_global_transform_();
         }
