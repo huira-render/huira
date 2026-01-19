@@ -13,6 +13,9 @@ namespace huira {
     class Scene;
 
     template <IsSpectral TSpectral, IsFloatingPoint TFloat>
+    class FrameNode;
+
+    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
     class UnresolvedObject : public Node<TSpectral, TFloat> {
     public:
         UnresolvedObject(Scene<TSpectral, TFloat>* scene)
@@ -25,27 +28,19 @@ namespace huira {
         UnresolvedObject(const UnresolvedObject&) = delete;
         UnresolvedObject& operator=(const UnresolvedObject&) = delete;
 
-        // Remove functionality from the base class that doesn't make sense for UnresolvedObject:
+        // Explicitly delete methods that don't make sense for a point-like object:
         void set_rotation(const Rotation<TFloat>& rotation) = delete;
         void set_scale(const Vec3<TFloat>& scale) = delete;
-
         void set_angular_velocity(const Vec3<TFloat>& angular_velocity) = delete;
-
         void set_spice_frame(const std::string& spice_frame) = delete;
         void set_spice(const std::string& spice_origin, const std::string& spice_frame) = delete;
-
         std::string get_spice_frame() = delete;
-
-        std::weak_ptr<Node<TSpectral, TFloat>> new_child() = delete;
-        void delete_child(std::weak_ptr<Node<TSpectral, TFloat>> child) = delete;
-
-        std::weak_ptr<UnresolvedObject<TSpectral, TFloat>> new_unresolved_object() = delete;
-
 
     protected:
         std::string get_type_name_() const override { return "UnresolvedObject"; }
 
         friend class Scene<TSpectral, TFloat>;
+        friend class FrameNode<TSpectral, TFloat>;
     };
 }
 

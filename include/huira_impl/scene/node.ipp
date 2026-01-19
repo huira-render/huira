@@ -10,8 +10,6 @@
 #include "huira/detail/validate.hpp"
 #include "huira/spice/spice_states.hpp"
 
-#include "huira/scene/unresolved_object.hpp"
-
 namespace huira {
     template <IsSpectral TSpectral, IsFloatingPoint TFloat>
     Node<TSpectral, TFloat>::Node(Scene<TSpectral, TFloat>* scene)
@@ -73,7 +71,7 @@ namespace huira {
             HUIRA_THROW_ERROR(this->get_info_() + " - cannot manually set velocity when node uses SPICE for position " +
                 "(spice_origin_=" + spice_origin_ + ")");
         }
-        
+
         this->local_transform_.velocity = velocity;
         this->update_global_transform_();
     }
@@ -86,7 +84,7 @@ namespace huira {
             HUIRA_THROW_ERROR(this->get_info_() + " - cannot manually set angular velocity when node uses SPICE for rotation " +
                 "(spice_frame_=" + spice_frame_ + ")");
         }
-        
+
         this->local_transform_.angular_velocity = angular_velocity;
         this->update_global_transform_();
     }
@@ -130,147 +128,6 @@ namespace huira {
         this->update_spice_transform_();
     }
 
-
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    std::weak_ptr<Node<TSpectral, TFloat>> Node<TSpectral, TFloat>::new_child()
-    {
-        validate_scene_unlocked_("new_child()");
-
-        auto child = std::make_shared<Node<TSpectral, TFloat>>(scene_);
-        child->set_parent_(this);
-        children_.push_back(child);
-
-        HUIRA_LOG_INFO(this->get_info_() + " - new child added: " + child->get_info_());
-
-        return child;
-    }
-
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    void Node<TSpectral, TFloat>::delete_child(std::weak_ptr<Node<TSpectral, TFloat>> child_weak)
-    {
-        validate_scene_unlocked_("delete_child()");
-
-        auto child = child_weak.lock();
-        if (!child) {
-            HUIRA_THROW_ERROR(this->get_info_() + " - delete_child() called with expired weak_ptr");
-        }
-
-        if (child->parent_ != this) {
-            HUIRA_THROW_ERROR(this->get_info_() + " - delete_child() called with a child that does not belong to this node");
-        }
-
-        auto it = std::find(children_.begin(), children_.end(), child);
-        if (it != children_.end()) {
-            HUIRA_LOG_INFO(this->get_info_() + " - deleting child: " + child->get_info_());
-            children_.erase(it);
-        }
-    }
-
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    void Node<TSpectral, TFloat>::change_parent(std::weak_ptr<Node<TSpectral, TFloat>> self_weak, Node<TSpectral, TFloat>* new_parent)
-    {
-        validate_scene_unlocked_("change_parent()");
-
-        auto self = self_weak.lock();
-        if (!self || self.get() != this) {
-            HUIRA_THROW_ERROR(this->get_info_() + " - change_parent() called with invalid weak_ptr");
-        }
-
-        if (!new_parent) {
-            HUIRA_THROW_ERROR(this->get_info_() + " - change_parent() called with null new_parent");
-        }
-
-        if (!parent_) {
-            HUIRA_THROW_ERROR(this->get_info_() + " - change_parent() called on root node");
-        }
-
-        if (parent_ == new_parent) {
-            return; // Already the parent, nothing to do
-        }
-
-        // Check SPICE constraints for position
-        if (this->position_source_ == TransformSource::SPICE_TRANSFORM) {
-            if (new_parent->position_source_ != TransformSource::SPICE_TRANSFORM) {
-                HUIRA_THROW_ERROR(this->get_info_() + " - cannot change parent: node uses SPICE for position " +
-                    "(spice_origin_=" + spice_origin_ + ") but new parent (" +
-                    new_parent->get_info_() + ") has manually set position");
-            }
-        }
-
-        // Check SPICE constraints for rotation
-        if (this->rotation_source_ == TransformSource::SPICE_TRANSFORM) {
-            if (new_parent->rotation_source_ != TransformSource::SPICE_TRANSFORM) {
-                HUIRA_THROW_ERROR(this->get_info_() + " - cannot change parent: node uses SPICE for rotation " +
-                    "(spice_frame_=" + spice_frame_ + ") but new parent (" +
-                    new_parent->get_info_() + ") has manually set rotation");
-            }
-        }
-
-        // Remove from old parent's children
-        auto& old_children = parent_->children_;
-        auto it = std::find(old_children.begin(), old_children.end(), self);
-        if (it != old_children.end()) {
-            old_children.erase(it);
-            HUIRA_LOG_INFO(parent_->get_info_() + " - child detached: " + this->get_info_());
-        }
-
-        // Add to new parent's children
-        new_parent->children_.push_back(self);
-        HUIRA_LOG_INFO(new_parent->get_info_() + " - child attached: " + this->get_info_());
-
-        // Update parent pointer
-        parent_ = new_parent;
-
-        // Recalculate transforms since hierarchy changed
-        if (this->position_source_ == TransformSource::SPICE_TRANSFORM || this->rotation_source_ == TransformSource::SPICE_TRANSFORM) {
-            this->update_spice_transform_();
-        }
-        else {
-            this->update_global_transform_();
-        }
-    }
-
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    std::weak_ptr<UnresolvedObject<TSpectral, TFloat>> Node<TSpectral, TFloat>::new_unresolved_object()
-    {
-        validate_scene_unlocked_("new_unresolved()");
-
-
-        auto child = std::make_shared<UnresolvedObject<TSpectral, TFloat>>(scene_);
-        child->set_parent_(this);
-
-        HUIRA_LOG_INFO(this->get_info_() + " - new unresolved added: " + child->get_info_());
-
-        children_.push_back(child);
-        return child;
-    }
-
-    // ========================= //
-    // === Protected Members === //
-    // ========================= //
-
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    std::shared_ptr<Node<TSpectral, TFloat>> Node<TSpectral, TFloat>::child_spice_origins_() const
-    {
-        for (const auto& child : children_) {
-            if (child->position_source_ == TransformSource::SPICE_TRANSFORM) {
-                return child;
-            }
-        }
-        return nullptr;
-    }
-
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    std::shared_ptr<Node<TSpectral, TFloat>> Node<TSpectral, TFloat>::child_spice_frames_() const
-    {
-        for (const auto& child : children_) {
-            if (child->rotation_source_ == TransformSource::SPICE_TRANSFORM) {
-                return child;
-            }
-        }
-        return nullptr;
-    }
-
     template <IsSpectral TSpectral, IsFloatingPoint TFloat>
     void Node<TSpectral, TFloat>::update_spice_transform_()
     {
@@ -288,20 +145,17 @@ namespace huira {
             compute_local_rotation_from_global_();
         }
 
-        // Process-children:
-        for (auto& child : children_) {
-            child->update_global_transform_();
-        }
+        // Notify derived classes (FrameNode will propagate to children)
+        on_transform_changed_();
     }
 
     template <IsSpectral TSpectral, IsFloatingPoint TFloat>
     void Node<TSpectral, TFloat>::update_all_spice_transforms_()
     {
-        // Root node: just propagate to children
+        // For leaf nodes, just update this node's transform
+        // FrameNode overrides this to also propagate to children
         if (parent_ == nullptr) {
-            for (auto& child : children_) {
-                child->update_all_spice_transforms_();
-            }
+            // Root node: nothing to compute for self, children handled by FrameNode override
             return;
         }
 
@@ -322,16 +176,12 @@ namespace huira {
         }
 
         this->global_transform_.scale = parent_->global_transform_.scale * this->local_transform_.scale;
-
-        for (auto& child : children_) {
-            child->update_all_spice_transforms_();
-        }
     }
 
     template <IsSpectral TSpectral, IsFloatingPoint TFloat>
     void Node<TSpectral, TFloat>::update_global_transform_()
     {
-        // Compute global from parent (only called for manual nodes)
+        // Compute global from parent
         if (this->parent_) {
             if (this->position_source_ == TransformSource::SPICE_TRANSFORM) {
                 compute_local_position_from_global_();
@@ -350,10 +200,8 @@ namespace huira {
             this->global_transform_.scale = parent_->global_transform_.scale * this->local_transform_.scale;
         }
 
-        // Recursively propagate to all children (handles both SPICE and Manual)
-        for (auto& child : children_) {
-            child->update_global_transform_();
-        }
+        // Notify derived classes (FrameNode will propagate to children)
+        on_transform_changed_();
     }
 
     template <IsSpectral TSpectral, IsFloatingPoint TFloat>
@@ -363,10 +211,10 @@ namespace huira {
     }
 
 
+    // ========================= //
+    // === Protected Members === //
+    // ========================= //
 
-    // ======================= //
-    // === Private Members === //
-    // ======================= //
     template <IsSpectral TSpectral, IsFloatingPoint TFloat>
     void Node<TSpectral, TFloat>::validate_scene_unlocked_(const std::string function_name)
     {

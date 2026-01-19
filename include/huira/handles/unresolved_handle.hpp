@@ -17,13 +17,15 @@ namespace huira {
         UnresolvedHandle() = delete;
         using Handle<UnresolvedObject<TSpectral, TFloat>>::Handle;
 
+        // Position
         void set_position(const Vec3<TFloat>& position) const { this->get()->set_position(position); }
         void set_position(double x, double y, double z) const { this->get()->set_position(Vec3<TFloat>{x, y, z}); }
 
+        // Velocity
         void set_velocity(const Vec3<TFloat>& velocity) const { this->get()->set_velocity(velocity); }
         void set_velocity(double vx, double vy, double vz) const { this->get()->set_velocity(Vec3<TFloat>{vx, vy, vz}); }
 
+        // SPICE origin only (no frame for point objects)
         void set_spice_origin(const std::string& spice_origin) const { this->get()->set_spice_origin(spice_origin); }
     };
-
 }

@@ -14,6 +14,7 @@ namespace huira {
         RootFrameHandle() = delete;
         using FrameHandle<TSpectral, TFloat>::FrameHandle;
 
+        // Disable transform modification for root
         void set_position(const Vec3<TFloat>&) = delete;
         void set_rotation(const Rotation<TFloat>&) = delete;
         void set_scale(const Vec3<TFloat>&) = delete;

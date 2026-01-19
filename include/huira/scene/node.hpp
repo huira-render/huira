@@ -1,6 +1,5 @@
 #pragma once
 
-#include <vector>
 #include <memory>
 #include <string>
 #include <stdexcept>
@@ -18,13 +17,24 @@ namespace huira {
     class Scene;
 
     template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    class UnresolvedObject;
+    class FrameNode;
 
     enum class TransformSource {
         MANUAL_TRANSFORM,
         SPICE_TRANSFORM
     };
 
+    /**
+     * @brief Base class for all scene graph nodes.
+     *
+     * Node represents a transformable entity in the scene graph. It handles:
+     * - Local and global transforms (position, rotation, scale)
+     * - SPICE-based transforms for celestial mechanics
+     * - Parent-child relationships (being a child)
+     *
+     * Node itself cannot have children - use FrameNode for nodes that need children.
+     * Leaf nodes (lights, unresolved objects, etc.) should derive from Node directly.
+     */
     template <IsSpectral TSpectral, IsFloatingPoint TFloat>
     class Node {
     public:
@@ -51,17 +61,10 @@ namespace huira {
         std::string get_spice_origin() const { return spice_origin_; }
         std::string get_spice_frame() const { return spice_frame_; }
 
-
-        std::weak_ptr<Node<TSpectral, TFloat>> new_child();
-        void delete_child(std::weak_ptr<Node<TSpectral, TFloat>> child);
-        void change_parent(std::weak_ptr<Node<TSpectral, TFloat>> self_weak, Node<TSpectral, TFloat>* new_parent);
-
-        std::weak_ptr<UnresolvedObject<TSpectral, TFloat>> new_unresolved_object();
-
     protected:
         Transform<TFloat> local_transform_;
         Transform<TFloat> global_transform_;
-        
+
         TransformSource position_source_ = TransformSource::MANUAL_TRANSFORM;
         TransformSource rotation_source_ = TransformSource::MANUAL_TRANSFORM;
 
@@ -71,24 +74,24 @@ namespace huira {
         std::uint64_t id_ = 0;
         static inline std::uint64_t next_id_ = 0;
 
+        Scene<TSpectral, TFloat>* scene_;
+        Node<TSpectral, TFloat>* parent_ = nullptr;
+
         void set_parent_(Node<TSpectral, TFloat>* parent) { parent_ = parent; }
 
-        std::shared_ptr<Node<TSpectral, TFloat>> child_spice_origins_() const;
-        std::shared_ptr<Node<TSpectral, TFloat>> child_spice_frames_() const;
+        
+        virtual void on_transform_changed_() {}
+
+        virtual const std::vector<std::shared_ptr<Node<TSpectral, TFloat>>>* get_children_() const { return nullptr; }
+        virtual std::shared_ptr<Node<TSpectral, TFloat>> child_spice_origins_() const { return nullptr; }
+        virtual std::shared_ptr<Node<TSpectral, TFloat>> child_spice_frames_() const { return nullptr; }
 
         void update_spice_transform_();
-        void update_all_spice_transforms_();
-
+        virtual void update_all_spice_transforms_();
         virtual void update_global_transform_();
 
         virtual std::string get_info_();
         virtual std::string get_type_name_() const { return "Node"; }
-
-    private:
-        Scene<TSpectral, TFloat>* scene_;
-        Node<TSpectral, TFloat>* parent_ = nullptr;
-
-        std::vector<std::shared_ptr<Node<TSpectral, TFloat>>> children_;
 
         void validate_scene_unlocked_(const std::string function_name);
         void validate_spice_origin_allowed_();
@@ -104,6 +107,7 @@ namespace huira {
         void compute_global_rotation_from_local_();
 
         friend class Scene<TSpectral, TFloat>;
+        friend class FrameNode<TSpectral, TFloat>;
     };
 }
 
