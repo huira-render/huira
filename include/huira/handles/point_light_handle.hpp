@@ -4,18 +4,14 @@
 #include "huira/detail/concepts/spectral_concepts.hpp"
 
 #include "huira/handles/handle.hpp"
-#include "huira/scene/unresolved_object.hpp"
+#include "huira/lights/point_light.hpp"
 
 namespace huira {
-    // Forward Declare:
     template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    class FrameHandle;
-
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    class UnresolvedHandle : public Handle<UnresolvedObject<TSpectral, TFloat>> {
+    class PointLightHandle : public Handle<PointLight<TSpectral, TFloat>> {
     public:
-        UnresolvedHandle() = delete;
-        using Handle<UnresolvedObject<TSpectral, TFloat>>::Handle;
+        PointLightHandle() = delete;
+        using Handle<PointLight<TSpectral, TFloat>>::Handle;
 
         void set_position(const Vec3<TFloat>& position) const { this->get()->set_position(position); }
         void set_position(double x, double y, double z) const { this->get()->set_position(Vec3<TFloat>{x, y, z}); }
@@ -24,6 +20,7 @@ namespace huira {
         void set_velocity(double vx, double vy, double vz) const { this->get()->set_velocity(Vec3<TFloat>{vx, vy, vz}); }
 
         void set_spice_origin(const std::string& spice_origin) const { this->get()->set_spice_origin(spice_origin); }
-    };
 
+        void set_intensity(const TSpectral& intensity) const { this->get()->set_intensity(intensity); }
+    };
 }

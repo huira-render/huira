@@ -17,7 +17,13 @@ namespace huira {
         void set_position(const Vec3<TFloat>& position) const { this->get()->set_position(position); }
         void set_position(double x, double y, double z) const { this->get()->set_position(Vec3<TFloat>{x, y, z}); }
 
+        void set_velocity(const Vec3<TFloat>& velocity) const { this->get()->set_velocity(velocity); }
+        void set_velocity(double vx, double vy, double vz) const { this->get()->set_velocity(Vec3<TFloat>{vx, vy, vz}); }
+
         void set_rotation(const Rotation<TFloat>& rotation) const { this->get()->set_rotation(rotation); }
+
+        void set_angular_velocity(const Vec3<TFloat>& angular_velocity) const { this->get()->set_angular_velocity(angular_velocity); }
+        void set_angular_velocity(double wx, double wy, double wz) const { this->get()->set_angular_velocity(Vec3<TFloat>{wx, wy, wz}); }
 
         void set_scale(const Vec3<TFloat>& scale) const { this->get()->set_scale(scale); }
         void set_scale(double sx, double sy, double sz) const { this->get()->set_scale(Vec3<TFloat>{sx, sy, sz}); }
