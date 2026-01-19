@@ -17,8 +17,6 @@ namespace huira {
         UnresolvedHandle() = delete;
         using Handle<UnresolvedObject<TSpectral, TFloat>>::Handle;
 
-        const std::string& name() const { return this->get()->name(); }
-
         void set_position(const Vec3<TFloat>& position) const { this->get()->set_position(position); }
         void set_position(double x, double y, double z) const { this->get()->set_position(Vec3<TFloat>{x, y, z}); }
 

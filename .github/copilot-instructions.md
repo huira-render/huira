@@ -9,7 +9,7 @@
 - Use PascalCase for classes (e.g., `UserAccount`, `HttpRequestHandler`)
 - Use snake_case for variables and functions (e.g., `user_count`, `calculate_total()`)
 - Use trailing underscores for private members (e.g., `private_foo_`)
-- Use SCREAMING_SNAKE_CASE for constants and macros (e.g., `MAX_BUFFER_SIZE`, `DEBUG_MODE`)
+- Use SCREAMING_SNAKE_CASE for enums, constants, and macros (e.g., `MAX_BUFFER_SIZE`, `DEBUG_MODE`)
 
 ## Avoid
 - `using namespace std;` in headers
@@ -25,3 +25,7 @@
 ## Namespaces
 - All library code lives in the `huira` namespace
 - sub-namespaces (e.g. `huira::detail` or `huira::units`) are allowed, but not required
+
+## Tests
+- Tests should be implemented for as much of the public API as possible
+- `tests/unittests/explicit_instantiations.cpp` should be updated as new classes are added for accurate code coverage.

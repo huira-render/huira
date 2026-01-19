@@ -21,6 +21,10 @@ namespace huira {
 
         }
 
+        // Delete copying:
+        UnresolvedObject(const UnresolvedObject&) = delete;
+        UnresolvedObject& operator=(const UnresolvedObject&) = delete;
+
         // Remove functionality from the base class that doesn't make sense for UnresolvedObject:
         void set_rotation(const Rotation<TFloat>& rotation) = delete;
         void set_scale(const Vec3<TFloat>& scale) = delete;

@@ -31,7 +31,7 @@ namespace huira {
         }
 
         this->local_transform_.position = position;
-        this->position_source_ = TransformSource::Manual;
+        this->position_source_ = TransformSource::MANUAL_TRANSFORM;
         this->spice_origin_ = "";
         this->update_global_transform_();
     }
@@ -47,7 +47,7 @@ namespace huira {
         }
 
         this->local_transform_.rotation = rotation;
-        this->rotation_source_ = TransformSource::Manual;
+        this->rotation_source_ = TransformSource::MANUAL_TRANSFORM;
         this->spice_frame_ = "";
         this->update_global_transform_();
     }
@@ -69,7 +69,7 @@ namespace huira {
     void Node<TSpectral, TFloat>::set_velocity(const Vec3<TFloat>& velocity)
     {
         validate_scene_unlocked_("set_velocity()");
-        if (this->position_source_ == TransformSource::Spice) {
+        if (this->position_source_ == TransformSource::SPICE_TRANSFORM) {
             HUIRA_THROW_ERROR(this->get_info_() + " - cannot manually set velocity when node uses SPICE for position " +
                 "(spice_origin_=" + spice_origin_ + ")");
         }
@@ -82,7 +82,7 @@ namespace huira {
     void Node<TSpectral, TFloat>::set_angular_velocity(const Vec3<TFloat>& angular_velocity)
     {
         validate_scene_unlocked_("set_angular_velocity()");
-        if (this->rotation_source_ == TransformSource::Spice) {
+        if (this->rotation_source_ == TransformSource::SPICE_TRANSFORM) {
             HUIRA_THROW_ERROR(this->get_info_() + " - cannot manually set angular velocity when node uses SPICE for rotation " +
                 "(spice_frame_=" + spice_frame_ + ")");
         }
@@ -99,7 +99,7 @@ namespace huira {
         HUIRA_LOG_INFO(this->get_info_() + " - set_spice_origin('" + spice_origin + "')");
 
         this->spice_origin_ = spice_origin;
-        this->position_source_ = TransformSource::Spice;
+        this->position_source_ = TransformSource::SPICE_TRANSFORM;
         this->update_spice_transform_();
     }
 
@@ -111,7 +111,7 @@ namespace huira {
         HUIRA_LOG_INFO(this->get_info_() + " - set_spice_frame('" + spice_frame + "')");
 
         this->spice_frame_ = spice_frame;
-        this->rotation_source_ = TransformSource::Spice;
+        this->rotation_source_ = TransformSource::SPICE_TRANSFORM;
         this->update_spice_transform_();
     }
 
@@ -125,8 +125,8 @@ namespace huira {
 
         this->spice_origin_ = spice_origin;
         this->spice_frame_ = spice_frame;
-        this->position_source_ = TransformSource::Spice;
-        this->rotation_source_ = TransformSource::Spice;
+        this->position_source_ = TransformSource::SPICE_TRANSFORM;
+        this->rotation_source_ = TransformSource::SPICE_TRANSFORM;
         this->update_spice_transform_();
     }
 
@@ -189,8 +189,8 @@ namespace huira {
         }
 
         // Check SPICE constraints for position
-        if (this->position_source_ == TransformSource::Spice) {
-            if (new_parent->position_source_ != TransformSource::Spice) {
+        if (this->position_source_ == TransformSource::SPICE_TRANSFORM) {
+            if (new_parent->position_source_ != TransformSource::SPICE_TRANSFORM) {
                 HUIRA_THROW_ERROR(this->get_info_() + " - cannot change parent: node uses SPICE for position " +
                     "(spice_origin_=" + spice_origin_ + ") but new parent (" +
                     new_parent->get_info_() + ") has manually set position");
@@ -198,8 +198,8 @@ namespace huira {
         }
 
         // Check SPICE constraints for rotation
-        if (this->rotation_source_ == TransformSource::Spice) {
-            if (new_parent->rotation_source_ != TransformSource::Spice) {
+        if (this->rotation_source_ == TransformSource::SPICE_TRANSFORM) {
+            if (new_parent->rotation_source_ != TransformSource::SPICE_TRANSFORM) {
                 HUIRA_THROW_ERROR(this->get_info_() + " - cannot change parent: node uses SPICE for rotation " +
                     "(spice_frame_=" + spice_frame_ + ") but new parent (" +
                     new_parent->get_info_() + ") has manually set rotation");
@@ -222,7 +222,7 @@ namespace huira {
         parent_ = new_parent;
 
         // Recalculate transforms since hierarchy changed
-        if (this->position_source_ == TransformSource::Spice || this->rotation_source_ == TransformSource::Spice) {
+        if (this->position_source_ == TransformSource::SPICE_TRANSFORM || this->rotation_source_ == TransformSource::SPICE_TRANSFORM) {
             this->update_spice_transform_();
         }
         else {
@@ -253,7 +253,7 @@ namespace huira {
     std::shared_ptr<Node<TSpectral, TFloat>> Node<TSpectral, TFloat>::child_spice_origins_() const
     {
         for (const auto& child : children_) {
-            if (child->position_source_ == TransformSource::Spice) {
+            if (child->position_source_ == TransformSource::SPICE_TRANSFORM) {
                 return child;
             }
         }
@@ -264,7 +264,7 @@ namespace huira {
     std::shared_ptr<Node<TSpectral, TFloat>> Node<TSpectral, TFloat>::child_spice_frames_() const
     {
         for (const auto& child : children_) {
-            if (child->rotation_source_ == TransformSource::Spice) {
+            if (child->rotation_source_ == TransformSource::SPICE_TRANSFORM) {
                 return child;
             }
         }
@@ -278,12 +278,12 @@ namespace huira {
             return;
         }
 
-        if (this->position_source_ == TransformSource::Spice) {
+        if (this->position_source_ == TransformSource::SPICE_TRANSFORM) {
             compute_global_spice_position_();
             compute_local_position_from_global_();
         }
 
-        if (this->rotation_source_ == TransformSource::Spice) {
+        if (this->rotation_source_ == TransformSource::SPICE_TRANSFORM) {
             compute_global_spice_rotation_();
             compute_local_rotation_from_global_();
         }
@@ -305,7 +305,7 @@ namespace huira {
             return;
         }
 
-        if (this->position_source_ == TransformSource::Spice) {
+        if (this->position_source_ == TransformSource::SPICE_TRANSFORM) {
             compute_global_spice_position_();
             compute_local_position_from_global_();
         }
@@ -313,7 +313,7 @@ namespace huira {
             compute_global_position_from_local_();
         }
 
-        if (this->rotation_source_ == TransformSource::Spice) {
+        if (this->rotation_source_ == TransformSource::SPICE_TRANSFORM) {
             compute_global_spice_rotation_();
             compute_local_rotation_from_global_();
         }
@@ -333,14 +333,14 @@ namespace huira {
     {
         // Compute global from parent (only called for manual nodes)
         if (this->parent_) {
-            if (this->position_source_ == TransformSource::Spice) {
+            if (this->position_source_ == TransformSource::SPICE_TRANSFORM) {
                 compute_local_position_from_global_();
             }
             else {
                 compute_global_position_from_local_();
             }
 
-            if (this->rotation_source_ == TransformSource::Spice) {
+            if (this->rotation_source_ == TransformSource::SPICE_TRANSFORM) {
                 compute_local_rotation_from_global_();
             }
             else {
@@ -379,7 +379,7 @@ namespace huira {
     void Node<TSpectral, TFloat>::validate_spice_origin_allowed_()
     {
         if (parent_) {
-            if (parent_->position_source_ != TransformSource::Spice) {
+            if (parent_->position_source_ != TransformSource::SPICE_TRANSFORM) {
                 HUIRA_THROW_ERROR(this->get_info_() + " - cannot set SPICE origin: parent node (" +
                     parent_->get_info_() + ") has manually set position");
             }
@@ -390,7 +390,7 @@ namespace huira {
     void Node<TSpectral, TFloat>::validate_spice_frame_allowed_()
     {
         if (parent_) {
-            if (parent_->rotation_source_ != TransformSource::Spice) {
+            if (parent_->rotation_source_ != TransformSource::SPICE_TRANSFORM) {
                 HUIRA_THROW_ERROR(this->get_info_() + " - cannot set SPICE frame: parent node (" +
                     parent_->get_info_() + ") has manually set rotation");
             }
