@@ -18,6 +18,7 @@ namespace huira {
         UnresolvedObject(Scene<TSpectral, TFloat>* scene)
             : Node<TSpectral, TFloat>(scene)
         {
+
         }
 
         // Remove functionality from the base class that doesn't make sense for UnresolvedObject:

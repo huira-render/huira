@@ -400,21 +400,22 @@ namespace huira {
     template <IsSpectral TSpectral, IsFloatingPoint TFloat>
     void Node<TSpectral, TFloat>::compute_global_spice_position_()
     {
-        std::array<TFloat, 6> state = spice::spkezr<TFloat>(
+        auto [position, velocity, _] = spice::spkezr<TFloat>(
             this->spice_origin_, scene_->get_time(),
             scene_->root.get_spice_frame(), scene_->root.get_spice_origin()
         );
-        this->global_transform_.position = Vec3<TFloat>{ state[0], state[1], state[2] };
-        this->global_transform_.velocity = Vec3<TFloat>{ state[3], state[4], state[5] };
+        this->global_transform_.position = position;
+        this->global_transform_.velocity = velocity;
     }
 
     template <IsSpectral TSpectral, IsFloatingPoint TFloat>
     void Node<TSpectral, TFloat>::compute_global_spice_rotation_()
     {
-        this->global_transform_.rotation = spice::pxform<TFloat>(
+        auto [rotation, angular_velocity] = spice::sxform<TFloat>(
             this->spice_frame_, scene_->root.get_spice_frame(), scene_->get_time()
         );
-        // TODO angular velocity
+        this->global_transform_.rotation = rotation;
+        this->global_transform_.angular_velocity = angular_velocity;
     }
 
     template <IsSpectral TSpectral, IsFloatingPoint TFloat>
@@ -435,7 +436,9 @@ namespace huira {
         this->local_transform_.rotation =
             parent_->global_transform_.rotation.inverse() * this->global_transform_.rotation;
 
-        // TODO: angular velocity
+        this->local_transform_.angular_velocity =
+            parent_->global_transform_.rotation.inverse() *
+            (this->global_transform_.angular_velocity - parent_->global_transform_.angular_velocity);
     }
 
     template <IsSpectral TSpectral, IsFloatingPoint TFloat>
@@ -455,6 +458,9 @@ namespace huira {
         this->global_transform_.rotation =
             parent_->global_transform_.rotation * this->local_transform_.rotation;
 
-        // TODO: angular velocity
+        this->global_transform_.angular_velocity =
+            parent_->global_transform_.angular_velocity +
+            parent_->global_transform_.rotation * this->local_transform_.angular_velocity;
     }
+
 }
