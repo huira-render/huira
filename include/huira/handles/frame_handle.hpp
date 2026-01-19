@@ -4,6 +4,7 @@
 #include "huira/detail/concepts/spectral_concepts.hpp"
 
 #include "huira/handles/handle.hpp"
+#include "huira/handles/point_light_handle.hpp"
 #include "huira/handles/unresolved_handle.hpp"
 #include "huira/scene/frame_node.hpp"
 
@@ -75,6 +76,16 @@ namespace huira {
             UnresolvedHandle<TSpectral, TFloat> unresolved = this->new_unresolved_object();
             unresolved.set_spice_origin(spice_origin);
             return unresolved;
+        }
+
+        PointLightHandle<TSpectral, TFloat> new_point_light(TSpectral spectral_intensity) const {
+            return PointLightHandle<TSpectral, TFloat>{ this->get()->new_point_light(spectral_intensity) };
+        }
+
+        PointLightHandle<TSpectral, TFloat> new_spice_point_light(const std::string& spice_origin, TSpectral spectral_intensity) const {
+            PointLightHandle<TSpectral, TFloat> light = this->new_point_light(spectral_intensity);
+            light.set_spice_origin(spice_origin);
+            return light;
         }
 
         friend class UnresolvedHandle<TSpectral, TFloat>;

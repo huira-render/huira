@@ -18,6 +18,10 @@ namespace huira {
     template <IsSpectral TSpectral, IsFloatingPoint TFloat>
     class UnresolvedObject;
 
+    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
+    class PointLight;
+
+
 
     template <IsSpectral TSpectral, IsFloatingPoint TFloat>
     class FrameNode : public Node<TSpectral, TFloat> {
@@ -36,6 +40,7 @@ namespace huira {
 
         // Factory methods for leaf nodes:
         std::weak_ptr<UnresolvedObject<TSpectral, TFloat>> new_unresolved_object();
+        std::weak_ptr<PointLight<TSpectral, TFloat>> new_point_light(TSpectral spectral_intensity);
 
     protected:
         std::string get_type_name_() const override { return "FrameNode"; }
