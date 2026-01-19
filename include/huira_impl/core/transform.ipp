@@ -15,10 +15,10 @@ namespace huira {
             }
         }
 
-        // Apply translation
-        result[0][3] = translation.x;
-        result[1][3] = translation.y;
-        result[2][3] = translation.z;
+        // Apply position
+        result[0][3] = position.x;
+        result[1][3] = position.y;
+        result[2][3] = position.z;
 
         // Set homogeneous coordinate
         result[3][3] = T(1);
@@ -37,13 +37,13 @@ namespace huira {
         // Inverse rotation
         result.rotation = rotation.inverse();
 
-        // Inverse translation: rotate and scale the negated translation
-        Vec3<T> scaled_translation{
-            translation.x / scale.x,
-            translation.y / scale.y,
-            translation.z / scale.z
+        // Inverse position: rotate and scale the negated position
+        Vec3<T> scaled_position{
+            position.x / scale.x,
+            position.y / scale.y,
+            position.z / scale.z
         };
-        result.translation = result.rotation * -scaled_translation;
+        result.position = result.rotation * -scaled_position;
 
         return result;
     }
@@ -59,14 +59,65 @@ namespace huira {
         // Combine rotations (quaternion multiplication)
         result.rotation = b.rotation * rotation;
 
-        // Combine translations
-        Vec3<T> scaled_translation{
-            translation.x * b.scale.x,
-            translation.y * b.scale.y,
-            translation.z * b.scale.z
+        // Combine positions
+        Vec3<T> scaled_position{
+            position.x * b.scale.x,
+            position.y * b.scale.y,
+            position.z * b.scale.z
         };
-        result.translation = (b.rotation * scaled_translation) + b.translation;
+        result.position = (b.rotation * scaled_position) + b.position;
 
         return result;
+    }
+
+    template <IsFloatingPoint T>
+    Vec3<T> Transform<T>::apply_to_point(const Vec3<T>& point) const
+    {
+        Vec3<T> scaled_point{
+            point.x * scale.x,
+            point.y * scale.y,
+            point.z * scale.z
+        };
+        
+        Vec3<T> rotated_point = rotation * scaled_point;
+        
+        Vec3<T> transformed_point = rotated_point + position;
+        return transformed_point;
+    }
+
+    template <IsFloatingPoint T>
+    Vec3<T> Transform<T>::apply_to_direction(const Vec3<T>& dir) const
+    {
+        Vec3<T> scaled_dir{
+            dir.x * scale.x,
+            dir.y * scale.y,
+            dir.z * scale.z
+        };
+        
+        Vec3<T> rotated_dir = rotation * scaled_dir;
+        return rotated_dir;
+    }
+
+    template <IsFloatingPoint T>
+    Vec3<T> Transform<T>::apply_to_velocity(const Vec3<T>& vel) const
+    {
+        // TODO REVIEW
+        Vec3<T> scaled_vel{
+            vel.x * scale.x,
+            vel.y * scale.y,
+            vel.z * scale.z
+        };
+        
+        Vec3<T> rotated_vel = rotation * scaled_vel;
+        Vec3<T> transformed_vel = rotated_vel + velocity;
+        return transformed_vel;
+    }
+
+    template <IsFloatingPoint T>
+    Vec3<T> Transform<T>::apply_to_angular_velocity(const Vec3<T>& ang_vel) const
+    {
+        // TODO IMPLEMENT APPLYING ANGULAR_VELOCITY
+        Vec3<T> rotated_ang_vel = rotation * ang_vel;
+        return rotated_ang_vel;
     }
 }

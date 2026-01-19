@@ -6,6 +6,8 @@
 
 #include "cspice/SpiceUsr.h"
 
+#include "huira/detail/logger.hpp"
+
 namespace huira::spice {
 
     class SpiceError : public std::runtime_error {
@@ -31,7 +33,7 @@ namespace huira::spice {
             error += ": " + std::string(long_msg);
         }
 
-        throw SpiceError(error);
+        HUIRA_THROW_ERROR(error);
     }
 
     template <typename Func, typename... Args>

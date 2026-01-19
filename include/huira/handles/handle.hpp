@@ -7,8 +7,8 @@ namespace huira {
     template <typename T>
     class Handle {
     public:
-        Handle(std::weak_ptr<T> ptr, const bool* scene_locked)
-            : ptr_(ptr), scene_locked_(scene_locked)
+        Handle(std::weak_ptr<T> ptr)
+            : ptr_(ptr)
         {
 
         }
@@ -23,14 +23,9 @@ namespace huira {
                 throw std::runtime_error("Attempted to access an invalid handle");
             }
 
-            if (*scene_locked_) {
-                throw std::runtime_error("Attempted to access a handle while the scene is locked");
-            }
-
             return p;
         }
 
         std::weak_ptr<T> ptr_;
-        const bool* scene_locked_;
     };
 }

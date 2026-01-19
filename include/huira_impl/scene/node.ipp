@@ -7,11 +7,13 @@
 #include "huira/detail/concepts/numeric_concepts.hpp"
 #include "huira/detail/concepts/spectral_concepts.hpp"
 #include "huira/detail/logger.hpp"
+#include "huira/detail/validate.hpp"
+#include "huira/spice/spice_states.hpp"
 
 namespace huira {
     template <IsSpectral TSpectral, IsFloatingPoint TFloat>
     Node<TSpectral, TFloat>::Node(Scene<TSpectral, TFloat>* scene)
-        : scene_(scene)
+        : id_(next_id_++), scene_(scene)
     {
 
     }
@@ -20,13 +22,16 @@ namespace huira {
     std::weak_ptr<Node<TSpectral, TFloat>> Node<TSpectral, TFloat>::new_child(std::string name)
     {
         if (scene_->is_locked()) {
-            HUIRA_THROW_ERROR("Attempted to add a Node to a locked scene");
+            HUIRA_THROW_ERROR(this->get_info_() + " - new_child() was called with a locked scene");
         }
 
-        auto child = std::make_shared<Node<TSpectral, TFloat>>(scene_);
-        child->set_parent(this);
 
-        scene_->add_node_name(name, child);
+        auto child = std::make_shared<Node<TSpectral, TFloat>>(scene_);
+        child->set_parent_(this);
+
+        scene_->add_node_name_(name, child);
+
+        HUIRA_LOG_INFO(this->get_info_() + " - new child added: " + child->get_info_());
 
         children_.push_back(child);
         return child;
@@ -35,94 +40,325 @@ namespace huira {
     template <IsSpectral TSpectral, IsFloatingPoint TFloat>
     void Node<TSpectral, TFloat>::set_position(const Vec3<TFloat>& position)
     {
-        if (has_spice_descendant_positions()) {
-            HUIRA_THROW_ERROR("Cannot set manual position: node has descendants with SPICE positions");
+        if (scene_->is_locked()) {
+            HUIRA_THROW_ERROR(this->get_info_() + " - set_position() was called with a locked scene");
         }
-        this->local_transform_.translation = position;
+
+        if (auto spice_child = child_spice_origins_()) {
+            HUIRA_THROW_ERROR(this->get_info_() +
+                " - Cannot manually set position when child has a spice_origin_ (see child "
+                + spice_child->get_info_() + ")");
+        }
+
+        this->local_transform_.position = position;
         this->position_source_ = TransformSource::Manual;
         this->spice_origin_ = "";
+
+        // Update the global pose:
+        this->update_global_transform_();
     }
 
     template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    void Node<TSpectral, TFloat>::set_orientation(const Rotation<TFloat>& orientation)
+    void Node<TSpectral, TFloat>::set_rotation(const Rotation<TFloat>& rotation)
     {
-        if (has_spice_descendant_orientations()) {
-            HUIRA_THROW_ERROR("Cannot set manual orientation: node has descendants with SPICE orientations");
+        if (scene_->is_locked()) {
+            HUIRA_THROW_ERROR(this->get_info_() + " - set_rotation() was called with a locked scene");
         }
-        this->local_transform_.rotation = orientation;
-        this->orientation_source_ = TransformSource::Manual;
-        this->spice_ref_ = "";
+
+        if (auto spice_child = child_spice_frames_()) {
+            HUIRA_THROW_ERROR(this->get_info_() +
+                " - Cannot manually set rotation when child has a spice_frame_ (see child "
+                + spice_child->get_info_() + ")");
+        }
+        this->local_transform_.rotation = rotation;
+        this->rotation_source_ = TransformSource::Manual;
+        this->spice_frame_ = "";
+
+        // Update the global pose:
+        this->update_global_transform_();
     }
 
     template <IsSpectral TSpectral, IsFloatingPoint TFloat>
     void Node<TSpectral, TFloat>::set_scale(const Vec3<TFloat>& scale)
     {
+        if (scene_->is_locked()) {
+            HUIRA_THROW_ERROR(this->get_info_() + " - set_scale() was called with a locked scene");
+        }
+
         this->local_transform_.scale = scale;
+
+        // Update the global pose:
+        this->update_global_transform_();
     }
 
     template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    void Node<TSpectral, TFloat>::set_position_from_spice(const std::string& spice_origin)
+    void Node<TSpectral, TFloat>::set_velocity(const Vec3<TFloat>& velocity)
     {
-        if (!parent_) {
-            HUIRA_THROW_ERROR("Cannot set SPICE position on a root node");
+        if (scene_->is_locked()) {
+            HUIRA_THROW_ERROR(this->get_info_() + " - set_velocity() was called with a locked scene");
         }
 
-        if (parent_->position_source_ == TransformSource::Manual) {
-            HUIRA_THROW_ERROR("Cannot set SPICE position: parent node has manual position");
+        if (this->position_source_ == TransformSource::Spice) {
+            HUIRA_THROW_ERROR(this->get_info_() + " - Cannot manually set velocity when node uses SPICE for position " +
+                "(spice_origin_=" + spice_origin_ + ")");
         }
+        this->local_transform_.velocity = velocity;
+
+        // Update the global pose:
+        this->update_global_transform_();
+    }
+
+    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
+    void Node<TSpectral, TFloat>::set_angular_velocity(const Vec3<TFloat>& angular_velocity)
+    {
+        if (scene_->is_locked()) {
+            HUIRA_THROW_ERROR(this->get_info_() + " - set_angular_velocity() was called with a locked scene");
+        }
+
+        if (this->rotation_source_ == TransformSource::Spice) {
+            HUIRA_THROW_ERROR(this->get_info_() + " - Cannot manually set angular velocity when node uses SPICE for rotation " +
+                "(spice_frame_=" + spice_frame_ + ")");
+        }
+        this->local_transform_.angular_velocity = angular_velocity;
+
+        // Update the global pose:
+        this->update_global_transform_();
+    }
+
+    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
+    void Node<TSpectral, TFloat>::set_spice_origin(const std::string& spice_origin)
+    {
+        if (scene_->is_locked()) {
+            HUIRA_THROW_ERROR(this->get_info_() + " - set_spice_origin() was called with a locked scene");
+        }
+
+        if (parent_) {
+            if (parent_->position_source_ != TransformSource::Spice) {
+                HUIRA_THROW_ERROR(this->get_info_() + " - Cannot set SPICE origin: parent node (" +
+                    parent_->get_info_() + ") has manually set position");
+            }
+        }
+
+        HUIRA_LOG_INFO(this->get_info_() + " - set_spice_origin('" + spice_origin + "')");
 
         this->spice_origin_ = spice_origin;
         this->position_source_ = TransformSource::Spice;
+
+        this->update_spice_transform_();
     }
 
     template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    void Node<TSpectral, TFloat>::set_orientation_from_spice(const std::string& spice_ref)
+    void Node<TSpectral, TFloat>::set_spice_frame(const std::string& spice_frame)
     {
-        if (!parent_) {
-            HUIRA_THROW_ERROR("Cannot set SPICE orientation on a root node");
+        if (scene_->is_locked()) {
+            HUIRA_THROW_ERROR(this->get_info_() + " - set_spice_frame() was called with a locked scene");
         }
 
-        if (parent_->orientation_source_ == TransformSource::Manual) {
-            HUIRA_THROW_ERROR("Cannot set SPICE orientation: parent node has manual orientation");
+        if (parent_) {
+            if (parent_->rotation_source_ != TransformSource::Spice) {
+                HUIRA_THROW_ERROR(this->get_info_() + " - Cannot set SPICE frame: parent node (" +
+                    parent_->get_info_() + ") has manually set rotation");
+            }
         }
 
-        this->spice_ref_ = spice_ref;
-        this->orientation_source_ = TransformSource::Spice;
+        HUIRA_LOG_INFO(this->get_info_() + " - set_spice_frame('" + spice_frame + "')");
+
+        this->spice_frame_ = spice_frame;
+        this->rotation_source_ = TransformSource::Spice;
+
+        this->update_spice_transform_();
     }
 
     template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    void Node<TSpectral, TFloat>::set_spice(const std::string& spice_origin, const std::string& spice_ref)
+    void Node<TSpectral, TFloat>::set_spice(const std::string& spice_origin, const std::string& spice_frame)
     {
-        this->set_position_from_spice(spice_origin);
-        this->set_orientation_from_spice(spice_ref);
+        this->set_spice_origin(spice_origin);
+        this->set_spice_frame(spice_frame);
     }
 
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    void Node<TSpectral, TFloat>::update_spice_transform(const Time& time)
-    {
-        // TODO
-        (void)time;
-    }
+
+
+    // ========================= //
+    // === Protected Members === //
+    // ========================= //
 
     template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    bool Node<TSpectral, TFloat>::has_spice_descendant_positions() const
+    std::shared_ptr<Node<TSpectral, TFloat>> Node<TSpectral, TFloat>::child_spice_origins_() const
     {
-        for (auto& child : children_) {
+        for (const auto& child : children_) {
             if (child->position_source_ == TransformSource::Spice) {
-                return true;
+                return child;
             }
         }
-        return false;
+        return nullptr;
     }
 
     template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    bool Node<TSpectral, TFloat>::has_spice_descendant_orientations() const
+    std::shared_ptr<Node<TSpectral, TFloat>> Node<TSpectral, TFloat>::child_spice_frames_() const
     {
-        for (auto& child : children_) {
-            if (child->orientation_source_ == TransformSource::Spice) {
-                return true;
+        for (const auto& child : children_) {
+            if (child->rotation_source_ == TransformSource::Spice) {
+                return child;
             }
         }
-        return false;
+        return nullptr;
+    }
+
+    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
+    void Node<TSpectral, TFloat>::update_spice_transform_()
+    {
+        if (parent_ == nullptr) {
+            return;
+        }
+
+        if (this->position_source_ == TransformSource::Spice) {
+            std::array<TFloat, 6> state = spice::spkezr<TFloat>(
+                this->spice_origin_,
+                scene_->get_time(),
+                scene_->get_spice_frame(),
+                scene_->get_spice_origin()
+            );
+            this->global_transform_.position = Vec3<TFloat>{ state[0], state[1], state[2] };
+            this->global_transform_.velocity = Vec3<TFloat>{ state[3], state[4], state[5] };
+
+            this->local_transform_.position =
+                parent_->global_transform_.rotation.inverse() *
+                (this->global_transform_.position - parent_->global_transform_.position);
+            this->local_transform_.velocity =
+                parent_->global_transform_.rotation.inverse() *
+                (this->global_transform_.velocity - parent_->global_transform_.velocity);
+        }
+
+        if (this->rotation_source_ == TransformSource::Spice) {
+            this->global_transform_.rotation = spice::pxform<TFloat>(
+                this->spice_frame_,
+                scene_->get_spice_frame(),
+                scene_->get_time()
+            );
+
+            this->local_transform_.rotation =
+                parent_->global_transform_.rotation.inverse() * this->global_transform_.rotation;
+
+            // TODO: angular velocity
+        }
+
+        // Process-children:
+        for (auto& child : children_) {
+            child->update_global_transform_();
+        }
+    }
+
+    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
+    void Node<TSpectral, TFloat>::update_all_spice_transforms_()
+    {
+        if (parent_ == nullptr) {
+            for (auto& child : children_) {
+                child->update_all_spice_transforms_();
+            }
+            return;
+        }
+
+        if (this->position_source_ == TransformSource::Spice) {
+            std::array<TFloat, 6> state = spice::spkezr<TFloat>(
+                this->spice_origin_,
+                scene_->get_time(),
+                scene_->get_spice_frame(),
+                scene_->get_spice_origin()
+            );
+            this->global_transform_.position = Vec3<TFloat>{ state[0], state[1], state[2] };
+            this->global_transform_.velocity = Vec3<TFloat>{ state[3], state[4], state[5] };
+
+            // Back-compute local for completeness
+            this->local_transform_.position =
+                parent_->global_transform_.rotation.inverse() *
+                (this->global_transform_.position - parent_->global_transform_.position);
+            this->local_transform_.velocity =
+                parent_->global_transform_.rotation.inverse() *
+                (this->global_transform_.velocity - parent_->global_transform_.velocity);
+        }
+        else {
+            this->global_transform_.position =
+                parent_->global_transform_.position +
+                parent_->global_transform_.rotation * this->local_transform_.position;
+            this->global_transform_.velocity =
+                parent_->global_transform_.velocity +
+                parent_->global_transform_.rotation * this->local_transform_.velocity;
+        }
+
+        if (this->rotation_source_ == TransformSource::Spice) {
+            this->global_transform_.rotation = spice::pxform<TFloat>(
+                this->spice_frame_,
+                scene_->get_spice_frame(),
+                scene_->get_time()
+            );
+            // TODO: angular velocity
+
+            // Back-compute local for completeness
+            this->local_transform_.rotation =
+                parent_->global_transform_.rotation.inverse() * this->global_transform_.rotation;
+        }
+        else {
+            this->global_transform_.rotation =
+                parent_->global_transform_.rotation * this->local_transform_.rotation;
+            // TODO: angular velocity
+        }
+
+        this->global_transform_.scale =
+            parent_->global_transform_.scale * this->local_transform_.scale;
+
+        for (auto& child : children_) {
+            child->update_all_spice_transforms_();
+        }
+    }
+
+    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
+    void Node<TSpectral, TFloat>::update_global_transform_()
+    {
+        // Compute global from parent (only called for manual nodes)
+        if (this->parent_) {
+            if (this->position_source_ == TransformSource::Spice) {
+                this->local_transform_.position =
+                    parent_->global_transform_.rotation.inverse() *
+                    (this->global_transform_.position - parent_->global_transform_.position);
+                this->local_transform_.velocity =
+                    parent_->global_transform_.rotation.inverse() *
+                    (this->global_transform_.velocity - parent_->global_transform_.velocity);
+            }
+            else {
+                this->global_transform_.position =
+                    parent_->global_transform_.position +
+                    parent_->global_transform_.rotation * this->local_transform_.position;
+                this->global_transform_.velocity =
+                    parent_->global_transform_.velocity +
+                    parent_->global_transform_.rotation * this->local_transform_.velocity;
+            }
+
+            if (this->rotation_source_ == TransformSource::Spice) {
+                this->local_transform_.rotation =
+                    parent_->global_transform_.rotation.inverse() * this->global_transform_.rotation;
+                // TODO: angular velocity
+            }
+            else {
+                this->global_transform_.rotation =
+                    parent_->global_transform_.rotation * this->local_transform_.rotation;
+                // TODO: angular velocity
+            }
+
+            this->global_transform_.scale =
+                parent_->global_transform_.scale * this->local_transform_.scale;
+        }
+
+        // All children must be manual (invariant), so just propagate
+        for (auto& child : children_) {
+            child->update_global_transform_();
+        }
+    }
+
+    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
+    std::string Node<TSpectral, TFloat>::get_info_() {
+        std::string identifier_str = "[" + std::to_string(this->id()) + "]";
+
+        std::string info = "Node" + identifier_str;
+        return info;
     }
 }

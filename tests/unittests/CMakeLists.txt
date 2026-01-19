@@ -1,9 +1,8 @@
 find_package(Catch2 CONFIG REQUIRED)
 
-#################################
-### Test Configuration List  ###
-#################################
-
+###############################
+### Test Configuration List ###
+###############################
 # Single source of truth for all unit tests
 # Just add the source file path - test name is derived from filename
 set(UNIT_TESTS
@@ -13,12 +12,10 @@ set(UNIT_TESTS
     huira/units/test_units.cpp
 )
 
-#############################
+##############################
 ### Coverage Configuration ###
-#############################
-
+##############################
 option(HUIRA_COVERAGE "Enable code coverage reporting" OFF)
-
 if(HUIRA_COVERAGE)
     if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
         # GCC coverage flags
@@ -40,10 +37,10 @@ if(HUIRA_COVERAGE)
     endif()
 endif()
 
-#####################################
-### Explicit Template Instantiations ###
-#####################################
 
+########################################
+### Explicit Template Instantiations ###
+########################################
 # This library explicitly instantiates all template classes with test types.
 # This ensures coverage tools can measure template code, which would otherwise
 # only show coverage for the specific instantiations used in each test.
@@ -69,10 +66,10 @@ if(HUIRA_COVERAGE)
     endif()
 endif()
 
-###############################
-### Test Creation Function ###
-###############################
 
+##############################
+### Test Creation Function ###
+##############################
 function(add_unit_test test_name source_file)
     add_executable(${test_name} ${source_file})
     
@@ -119,10 +116,10 @@ function(add_unit_test test_name source_file)
     endif()
 endfunction()
 
-############################
-### Create All Unit Tests ###
-############################
 
+#############################
+### Create All Unit Tests ###
+#############################
 # Create the test-results directory
 set(CATCH2_OUTPUT_DIR "${CMAKE_BINARY_DIR}/test-results")
 file(MAKE_DIRECTORY ${CATCH2_OUTPUT_DIR})
@@ -135,10 +132,10 @@ foreach(source_file ${UNIT_TESTS})
     add_unit_test(${test_name} ${source_file})
 endforeach()
 
-###########################
-### Coverage Target Setup ###
-###########################
 
+#############################
+### Coverage Target Setup ###
+#############################
 if(HUIRA_COVERAGE)
     set(COVERAGE_OUTPUT_DIR "${CMAKE_BINARY_DIR}/coverage")
     file(MAKE_DIRECTORY ${COVERAGE_OUTPUT_DIR})
@@ -204,10 +201,10 @@ if(HUIRA_COVERAGE)
     endif()
 endif()
 
-############################
-### Convenience Targets ###
-############################
 
+###########################
+### Convenience Targets ###
+###########################
 # Run all unit tests
 add_custom_target(run_unit_tests
     COMMAND ctest --output-on-failure -L unit
