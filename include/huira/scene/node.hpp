@@ -86,6 +86,19 @@ namespace huira {
 
         std::vector<std::shared_ptr<Node<TSpectral, TFloat>>> children_;
 
+        void validate_scene_unlocked_(const std::string function_name);
+        void validate_spice_origin_allowed_();
+        void validate_spice_frame_allowed_();
+
+        void compute_global_spice_position_();
+        void compute_global_spice_rotation_();
+
+        void compute_local_position_from_global_();
+        void compute_local_rotation_from_global_();
+
+        void compute_global_position_from_local_();
+        void compute_global_rotation_from_local_();
+
         friend class Scene<TSpectral, TFloat>;
     };
 }
