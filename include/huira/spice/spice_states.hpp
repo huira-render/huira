@@ -1,7 +1,7 @@
 #pragma once
 
 #include <string>
-#include <array>
+#include <utility>
 
 #include "cspice/SpiceUsr.h"
 
@@ -15,23 +15,17 @@
 namespace huira::spice {
 
     template <huira::IsFloatingPoint T>
-    inline std::array<T, 6> spkezr(const std::string& TARGET, const huira::Time& time, const std::string& FRAME,
+    inline std::tuple<Vec3<T>, Vec3<T>, double> spkezr(const std::string& TARGET, const huira::Time& time, const std::string& FRAME,
         const std::string& OBSERVER, const std::string& ABCORR = "NONE") {
         SpiceDouble et = time.et();
         SpiceDouble state[6];
         SpiceDouble lt;
 
         call_spice(spkezr_c, TARGET.c_str(), et, FRAME.c_str(), ABCORR.c_str(), OBSERVER.c_str(), state, &lt);
-        //HUIRA_THROW_ERROR("spkezr() failed for target '" + TARGET + "', observer '" + OBSERVER + "': " + e.what());
 
-        return std::array<T, 6>{
-            static_cast<T>(state[0]),
-            static_cast<T>(state[1]),
-            static_cast<T>(state[2]),
-            static_cast<T>(state[3]),
-            static_cast<T>(state[4]),
-            static_cast<T>(state[5])
-        };
+        Vec3<T> position{ static_cast<T>(state[0]), static_cast<T>(state[1]), static_cast<T>(state[2]) };
+        Vec3<T> velocity{ static_cast<T>(state[3]), static_cast<T>(state[4]), static_cast<T>(state[5]) };
+        return { position, velocity, static_cast<double>(lt) };
     }
 
     template <huira::IsFloatingPoint T>
@@ -50,4 +44,35 @@ namespace huira::spice {
         return huira::Rotation<T>{ rotation };
     }
 
+    template <huira::IsFloatingPoint T>
+    inline std::pair<huira::Rotation<T>, huira::Vec3<T>> sxform(
+        const std::string& FROM,
+        const std::string& TO,
+        const huira::Time& time
+    ) {
+        SpiceDouble et = time.et();
+        SpiceDouble state_xform[6][6];
+        SpiceDouble rotation[3][3];
+        SpiceDouble angular_velocity[3];
+
+        // Get state transformation matrix (includes rotation + derivatives)
+        call_spice(sxform_c, FROM.c_str(), TO.c_str(), et, state_xform);
+
+        // Extract rotation matrix and angular velocity vector
+        xf2rav_c(state_xform, rotation, angular_velocity);
+
+        huira::Mat3<T> rot{
+            static_cast<T>(rotation[0][0]), static_cast<T>(rotation[0][1]), static_cast<T>(rotation[0][2]),
+            static_cast<T>(rotation[1][0]), static_cast<T>(rotation[1][1]), static_cast<T>(rotation[1][2]),
+            static_cast<T>(rotation[2][0]), static_cast<T>(rotation[2][1]), static_cast<T>(rotation[2][2])
+        };
+
+        huira::Vec3<T> ang_vel{
+            static_cast<T>(angular_velocity[0]),
+            static_cast<T>(angular_velocity[1]),
+            static_cast<T>(angular_velocity[2])
+        };
+
+        return { huira::Rotation<T>{ rot }, ang_vel };
+    }
 }
