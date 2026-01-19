@@ -6,6 +6,7 @@
 #include "huira/detail/concepts/spectral_concepts.hpp"
 #include "huira/detail/logger.hpp"
 
+#include "huira/lights/point_light.hpp"
 #include "huira/scene/unresolved_object.hpp"
 
 namespace huira {
@@ -25,7 +26,7 @@ namespace huira {
         child->set_parent_(this);
         children_.push_back(child);
 
-        HUIRA_LOG_INFO(this->get_info_() + " - new child added: " + child->get_info_());
+        HUIRA_LOG_INFO(this->get_info_() + " - new FrameNode added: " + child->get_info_());
 
         return child;
     }
@@ -59,7 +60,21 @@ namespace huira {
         auto child = std::make_shared<UnresolvedObject<TSpectral, TFloat>>(this->scene_);
         child->set_parent_(this);
 
-        HUIRA_LOG_INFO(this->get_info_() + " - new unresolved added: " + child->get_info_());
+        HUIRA_LOG_INFO(this->get_info_() + " - new UnresolvedObject added: " + child->get_info_());
+
+        children_.push_back(child);
+        return child;
+    }
+
+    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
+    std::weak_ptr<PointLight<TSpectral, TFloat>> FrameNode<TSpectral, TFloat>::new_point_light(TSpectral spectral_intensity)
+    {
+        this->validate_scene_unlocked_("new_point_light()");
+
+        auto child = std::make_shared<PointLight<TSpectral, TFloat>>(this->scene_, spectral_intensity);
+        child->set_parent_(this);
+
+        HUIRA_LOG_INFO(this->get_info_() + " - new PointLight added: " + child->get_info_());
 
         children_.push_back(child);
         return child;
