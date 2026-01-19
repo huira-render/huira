@@ -1,6 +1,7 @@
 #include "huira/detail/logger.hpp"
 
 #include "huira/core/constants.hpp"
+#include "huira/core/ray.hpp"
 #include "huira/core/rotation.hpp"
 #include "huira/core/time.hpp"
 #include "huira/core/types.hpp"

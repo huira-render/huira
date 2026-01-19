@@ -11,7 +11,7 @@ namespace huira {
     template <IsSpectral TSpectral, IsFloatingPoint TFloat>
     class RootFrameHandle : public FrameHandle<TSpectral, TFloat> {
     public:
-        RootFrameHandle() : FrameHandle<TSpectral, TFloat>() {}  // Need to allow default construction
+        RootFrameHandle() = delete;
         using FrameHandle<TSpectral, TFloat>::FrameHandle;
 
         void set_position(const Vec3<TFloat>&) = delete;

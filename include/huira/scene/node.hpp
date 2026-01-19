@@ -21,8 +21,8 @@ namespace huira {
     class UnresolvedObject;
 
     enum class TransformSource {
-        Manual,
-        Spice
+        MANUAL_TRANSFORM,
+        SPICE_TRANSFORM
     };
 
     template <IsSpectral TSpectral, IsFloatingPoint TFloat>
@@ -30,6 +30,10 @@ namespace huira {
     public:
         Node(Scene<TSpectral, TFloat>* scene);
         virtual ~Node() = default;
+
+        // Delete copying:
+        Node(const Node&) = delete;
+        Node& operator=(const Node&) = delete;
 
         std::uint64_t id() const { return id_; }
 
@@ -58,8 +62,8 @@ namespace huira {
         Transform<TFloat> local_transform_;
         Transform<TFloat> global_transform_;
         
-        TransformSource position_source_ = TransformSource::Manual;
-        TransformSource rotation_source_ = TransformSource::Manual;
+        TransformSource position_source_ = TransformSource::MANUAL_TRANSFORM;
+        TransformSource rotation_source_ = TransformSource::MANUAL_TRANSFORM;
 
         std::string spice_origin_ = "";
         std::string spice_frame_ = "";
