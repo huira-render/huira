@@ -23,6 +23,10 @@ namespace huira {
         void set_position(double x, double y, double z) const { this->get()->set_position(Vec3<TFloat>{x, y, z}); }
 
         void set_spice_origin(const std::string& spice_origin) const { this->get()->set_spice_origin(spice_origin); }
+
+        void move_to(FrameHandle<TSpectral, TFloat> new_parent) const {
+            this->get()->change_parent(std::weak_ptr<UnresolvedObject<TSpectral, TFloat>>(this->ptr_), new_parent.get().get());
+        }
     };
 
 }

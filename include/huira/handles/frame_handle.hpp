@@ -46,6 +46,8 @@ namespace huira {
 
 
 
+        friend class UnresolvedHandle<TSpectral, TFloat>;
+
         UnresolvedHandle<TSpectral, TFloat> new_unresolved_object() const {
             return UnresolvedHandle<TSpectral, TFloat>{ this->get()->new_unresolved_object() };
         }

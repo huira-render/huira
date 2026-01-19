@@ -21,11 +21,20 @@ namespace huira {
         }
 
         // Remove functionality from the base class that doesn't make sense for UnresolvedObject:
+        void set_rotation(const Rotation<TFloat>& rotation) = delete;
+        void set_scale(const Vec3<TFloat>& scale) = delete;
+
+        void set_angular_velocity(const Vec3<TFloat>& angular_velocity) = delete;
+
+        void set_spice_frame(const std::string& spice_frame) = delete;
+        void set_spice(const std::string& spice_origin, const std::string& spice_frame) = delete;
+
+        std::string get_spice_frame() = delete;
+
         std::weak_ptr<Node<TSpectral, TFloat>> new_child() = delete;
         void delete_child(std::weak_ptr<Node<TSpectral, TFloat>> child) = delete;
-        void change_parent(std::weak_ptr<Node<TSpectral, TFloat>> self_weak, Node<TSpectral, TFloat>* new_parent) = delete;
 
-        std::weak_ptr<UnresolvedObject<TSpectral, TFloat>> new_unresolved() = delete;
+        std::weak_ptr<UnresolvedObject<TSpectral, TFloat>> new_unresolved_object() = delete;
 
 
     protected:
