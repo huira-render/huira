@@ -82,7 +82,7 @@ namespace huira {
         virtual void update_global_transform_();
 
         virtual std::string get_info_();
-        virtual std::string get_type_name() const { return "Node"; }
+        virtual std::string get_type_name_() const { return "Node"; }
 
     private:
         Scene<TSpectral, TFloat>* scene_;

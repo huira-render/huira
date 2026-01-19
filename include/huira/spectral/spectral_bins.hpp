@@ -44,6 +44,12 @@ namespace huira {
             initialize_bins_static();
         }
 
+        // Assignment from NumericArray (for arithmetic operation results)
+        constexpr SpectralBins& operator=(const NumericArray<float, N>& other) {
+            NumericArray<float, N>::operator=(other);
+            return *this;
+        }
+
         // Access to bin information
         constexpr const Bin& get_bin(size_t index) const { return bins_[index]; }
         constexpr const std::array<Bin, N>& get_all_bins() const { return bins_; }

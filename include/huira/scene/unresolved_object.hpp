@@ -43,7 +43,7 @@ namespace huira {
 
 
     protected:
-        std::string get_type_name() const override { return "UnresolvedObject"; }
+        std::string get_type_name_() const override { return "UnresolvedObject"; }
 
         friend class Scene<TSpectral, TFloat>;
     };

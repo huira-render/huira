@@ -64,7 +64,7 @@ namespace huira {
         // Print current node
         std::cout << prefix;
         std::cout << (is_last ? "+-- " : "|-- ");
-        std::cout << node->get_type_name() + " ";
+        std::cout << node->get_type_name_() + " ";
         print_node_details_(node);
         std::cout << "\n";
 

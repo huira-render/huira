@@ -9,6 +9,9 @@
 
 #include "huira/handles/frame_handle.hpp"
 #include "huira/handles/unresolved_handle.hpp"
+#include "huira/handles/point_light_handle.hpp"
+
+#include "huira/lights/point_light.hpp"
 
 #include "huira/scene/scene.hpp"
 

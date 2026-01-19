@@ -358,7 +358,7 @@ namespace huira {
 
     template <IsSpectral TSpectral, IsFloatingPoint TFloat>
     std::string Node<TSpectral, TFloat>::get_info_() {
-        std::string info = get_type_name() + "[" + std::to_string(this->id()) + "]";
+        std::string info = get_type_name_() + "[" + std::to_string(this->id()) + "]";
         return info;
     }
 
