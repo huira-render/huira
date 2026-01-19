@@ -2,6 +2,8 @@
 
 #include <string>
 #include <sstream>
+#include <vector>
+#include <cstdint>
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include "glm/glm.hpp"
@@ -9,6 +11,7 @@
 #include <glm/gtx/string_cast.hpp>
 
 #include "huira/detail/concepts/numeric_concepts.hpp"
+#include "huira/detail/concepts/spectral_concepts.hpp"
 
 namespace huira {
     template <int N, IsFloatingPoint T>
@@ -90,5 +93,34 @@ namespace huira {
     typedef ShusterQuaternion<float> ShusterQuaternion_f;
     typedef ShusterQuaternion<double> ShusterQuaternion_d;
 
-    
+
+    template <IsSpectral TSpectral, IsFloatingPoint T>
+    struct Vertex {
+        Vec3<T> position{};
+        TSpectral albedo{ 1 };
+        Vec3<float> normal{ 0 };
+        Vec2<float> uv{ 0 };
+
+        bool operator==(const Vertex& other) const {
+            return position == other.position &&
+                albedo == other.albedo &&
+                normal == other.normal &&
+                uv == other.uv;
+        }
+
+        template <IsFloatingPoint T2>
+        operator Vertex<TSpectral, T2>() {
+            Vertex<TSpectral, T2> cast_vertex;
+            cast_vertex.position = this->position;
+            cast_vertex.albedo = this->albedo;
+            cast_vertex.normal = this->normal;
+            cast_vertex.uv = this->uv;
+            return cast_vertex;
+        }
+    };
+
+    typedef std::vector<std::uint32_t> IndexBuffer;
+
+    template <IsSpectral TSpectral, IsFloatingPoint T>
+    using VertexBuffer = std::vector<Vertex<TSpectral, T>>;
 }
