@@ -10,6 +10,8 @@
 #include "huira/detail/validate.hpp"
 #include "huira/spice/spice_states.hpp"
 
+#include "huira/scene/unresolved_object.hpp"
+
 namespace huira {
     template <IsSpectral TSpectral, IsFloatingPoint TFloat>
     Node<TSpectral, TFloat>::Node(Scene<TSpectral, TFloat>* scene)
@@ -27,7 +29,7 @@ namespace huira {
 
         if (auto spice_child = child_spice_origins_()) {
             HUIRA_THROW_ERROR(this->get_info_() +
-                " - Cannot manually set position when child has a spice_origin_ (see child "
+                " - cannot manually set position when child has a spice_origin_ (see child "
                 + spice_child->get_info_() + ")");
         }
 
@@ -48,7 +50,7 @@ namespace huira {
 
         if (auto spice_child = child_spice_frames_()) {
             HUIRA_THROW_ERROR(this->get_info_() +
-                " - Cannot manually set rotation when child has a spice_frame_ (see child "
+                " - cannot manually set rotation when child has a spice_frame_ (see child "
                 + spice_child->get_info_() + ")");
         }
         this->local_transform_.rotation = rotation;
@@ -80,7 +82,7 @@ namespace huira {
         }
 
         if (this->position_source_ == TransformSource::Spice) {
-            HUIRA_THROW_ERROR(this->get_info_() + " - Cannot manually set velocity when node uses SPICE for position " +
+            HUIRA_THROW_ERROR(this->get_info_() + " - cannot manually set velocity when node uses SPICE for position " +
                 "(spice_origin_=" + spice_origin_ + ")");
         }
         this->local_transform_.velocity = velocity;
@@ -97,7 +99,7 @@ namespace huira {
         }
 
         if (this->rotation_source_ == TransformSource::Spice) {
-            HUIRA_THROW_ERROR(this->get_info_() + " - Cannot manually set angular velocity when node uses SPICE for rotation " +
+            HUIRA_THROW_ERROR(this->get_info_() + " - cannot manually set angular velocity when node uses SPICE for rotation " +
                 "(spice_frame_=" + spice_frame_ + ")");
         }
         this->local_transform_.angular_velocity = angular_velocity;
@@ -115,7 +117,7 @@ namespace huira {
 
         if (parent_) {
             if (parent_->position_source_ != TransformSource::Spice) {
-                HUIRA_THROW_ERROR(this->get_info_() + " - Cannot set SPICE origin: parent node (" +
+                HUIRA_THROW_ERROR(this->get_info_() + " - cannot set SPICE origin: parent node (" +
                     parent_->get_info_() + ") has manually set position");
             }
         }
@@ -137,7 +139,7 @@ namespace huira {
 
         if (parent_) {
             if (parent_->rotation_source_ != TransformSource::Spice) {
-                HUIRA_THROW_ERROR(this->get_info_() + " - Cannot set SPICE frame: parent node (" +
+                HUIRA_THROW_ERROR(this->get_info_() + " - cannot set SPICE frame: parent node (" +
                     parent_->get_info_() + ") has manually set rotation");
             }
         }
@@ -159,12 +161,12 @@ namespace huira {
 
         if (parent_) {
             if (parent_->position_source_ != TransformSource::Spice) {
-                HUIRA_THROW_ERROR(this->get_info_() + " - Cannot set SPICE origin: parent node (" +
+                HUIRA_THROW_ERROR(this->get_info_() + " - cannot set SPICE origin: parent node (" +
                     parent_->get_info_() + ") has manually set position");
             }
 
             if (parent_->rotation_source_ != TransformSource::Spice) {
-                HUIRA_THROW_ERROR(this->get_info_() + " - Cannot set SPICE frame: parent node (" +
+                HUIRA_THROW_ERROR(this->get_info_() + " - cannot set SPICE frame: parent node (" +
                     parent_->get_info_() + ") has manually set rotation");
             }
         }
@@ -182,7 +184,7 @@ namespace huira {
 
 
     template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    std::weak_ptr<Node<TSpectral, TFloat>> Node<TSpectral, TFloat>::new_child(std::string name)
+    std::weak_ptr<Node<TSpectral, TFloat>> Node<TSpectral, TFloat>::new_child()
     {
         if (scene_->is_locked()) {
             HUIRA_THROW_ERROR(this->get_info_() + " - new_child() was called with a locked scene");
@@ -191,8 +193,6 @@ namespace huira {
 
         auto child = std::make_shared<Node<TSpectral, TFloat>>(scene_);
         child->set_parent_(this);
-
-        scene_->add_node_name_(name, child);
 
         HUIRA_LOG_INFO(this->get_info_() + " - new child added: " + child->get_info_());
 
@@ -219,7 +219,6 @@ namespace huira {
         auto it = std::find(children_.begin(), children_.end(), child);
         if (it != children_.end()) {
             HUIRA_LOG_INFO(this->get_info_() + " - deleting child: " + child->get_info_());
-            scene_->remove_node_name_(child);
             children_.erase(it);
         }
     }
@@ -251,7 +250,7 @@ namespace huira {
         // Check SPICE constraints for position
         if (this->position_source_ == TransformSource::Spice) {
             if (new_parent->position_source_ != TransformSource::Spice) {
-                HUIRA_THROW_ERROR(this->get_info_() + " - Cannot change parent: node uses SPICE for position " +
+                HUIRA_THROW_ERROR(this->get_info_() + " - cannot change parent: node uses SPICE for position " +
                     "(spice_origin_=" + spice_origin_ + ") but new parent (" +
                     new_parent->get_info_() + ") has manually set position");
             }
@@ -260,7 +259,7 @@ namespace huira {
         // Check SPICE constraints for rotation
         if (this->rotation_source_ == TransformSource::Spice) {
             if (new_parent->rotation_source_ != TransformSource::Spice) {
-                HUIRA_THROW_ERROR(this->get_info_() + " - Cannot change parent: node uses SPICE for rotation " +
+                HUIRA_THROW_ERROR(this->get_info_() + " - cannot change parent: node uses SPICE for rotation " +
                     "(spice_frame_=" + spice_frame_ + ") but new parent (" +
                     new_parent->get_info_() + ") has manually set rotation");
             }
@@ -288,6 +287,23 @@ namespace huira {
         else {
             this->update_global_transform_();
         }
+    }
+
+    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
+    std::weak_ptr<UnresolvedObject<TSpectral, TFloat>> Node<TSpectral, TFloat>::new_unresolved_object()
+    {
+        if (scene_->is_locked()) {
+            HUIRA_THROW_ERROR(this->get_info_() + " - new_unresolved() was called with a locked scene");
+        }
+
+
+        auto child = std::make_shared<UnresolvedObject<TSpectral, TFloat>>(scene_);
+        child->set_parent_(this);
+
+        HUIRA_LOG_INFO(this->get_info_() + " - new unresolved added: " + child->get_info_());
+
+        children_.push_back(child);
+        return child;
     }
 
     // ========================= //
@@ -327,8 +343,8 @@ namespace huira {
             std::array<TFloat, 6> state = spice::spkezr<TFloat>(
                 this->spice_origin_,
                 scene_->get_time(),
-                scene_->get_spice_frame(),
-                scene_->get_spice_origin()
+                scene_->root.get_spice_frame(),
+                scene_->root.get_spice_origin()
             );
             this->global_transform_.position = Vec3<TFloat>{ state[0], state[1], state[2] };
             this->global_transform_.velocity = Vec3<TFloat>{ state[3], state[4], state[5] };
@@ -344,7 +360,7 @@ namespace huira {
         if (this->rotation_source_ == TransformSource::Spice) {
             this->global_transform_.rotation = spice::pxform<TFloat>(
                 this->spice_frame_,
-                scene_->get_spice_frame(),
+                scene_->root.get_spice_frame(),
                 scene_->get_time()
             );
 
@@ -374,8 +390,8 @@ namespace huira {
             std::array<TFloat, 6> state = spice::spkezr<TFloat>(
                 this->spice_origin_,
                 scene_->get_time(),
-                scene_->get_spice_frame(),
-                scene_->get_spice_origin()
+                scene_->root.get_spice_frame(),
+                scene_->root.get_spice_origin()
             );
             this->global_transform_.position = Vec3<TFloat>{ state[0], state[1], state[2] };
             this->global_transform_.velocity = Vec3<TFloat>{ state[3], state[4], state[5] };
@@ -400,7 +416,7 @@ namespace huira {
         if (this->rotation_source_ == TransformSource::Spice) {
             this->global_transform_.rotation = spice::pxform<TFloat>(
                 this->spice_frame_,
-                scene_->get_spice_frame(),
+                scene_->root_node_->spice_frame_,
                 scene_->get_time()
             );
             // TODO: angular velocity
