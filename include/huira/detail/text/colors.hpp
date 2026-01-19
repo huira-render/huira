@@ -3,7 +3,7 @@
 #include <string>
 
 #ifdef _WIN32
-    #include <windows.h>
+    #include <Windows.h>
     #include <io.h>
     #define ISATTY _isatty
     #define FILENO _fileno

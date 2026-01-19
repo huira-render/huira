@@ -56,6 +56,7 @@ namespace huira {
 
         const std::string& name_of_node_(const Node<TSpectral, TFloat>* node) const;
         void add_node_name_(const std::string& name, std::weak_ptr<Node<TSpectral, TFloat>> node);
+        void remove_node_name_(std::weak_ptr<Node<TSpectral, TFloat>> node);
 
         void print_node_(const Node<TSpectral, TFloat>* node, const std::string& prefix, bool is_last) const;
         void print_node_details_(const Node<TSpectral, TFloat>* node) const;

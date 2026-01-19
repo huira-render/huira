@@ -82,6 +82,25 @@ namespace huira {
     }
 
     template <IsSpectral TSpectral, IsFloatingPoint TFloat>
+    void Scene<TSpectral, TFloat>::remove_node_name_(std::weak_ptr<Node<TSpectral, TFloat>> node)
+    {
+        auto node_ptr = node.lock();
+        if (!node_ptr) {
+            return; // Node already deleted, nothing to remove
+        }
+
+        // Find and erase the name entry for this node
+        for (auto it = node_names_.begin(); it != node_names_.end(); ++it) {
+            if (auto stored_ptr = it->second.lock()) {
+                if (stored_ptr == node_ptr) {
+                    node_names_.erase(it);
+                    return;
+                }
+            }
+        }
+    }
+
+    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
     const std::string& Scene<TSpectral, TFloat>::name_of_node_(const Node<TSpectral, TFloat>* node) const {
         for (const auto& [name, ptr] : node_names_) {
             if (auto sptr = ptr.lock()) {

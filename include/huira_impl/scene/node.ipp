@@ -19,25 +19,6 @@ namespace huira {
     }
 
     template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    std::weak_ptr<Node<TSpectral, TFloat>> Node<TSpectral, TFloat>::new_child(std::string name)
-    {
-        if (scene_->is_locked()) {
-            HUIRA_THROW_ERROR(this->get_info_() + " - new_child() was called with a locked scene");
-        }
-
-
-        auto child = std::make_shared<Node<TSpectral, TFloat>>(scene_);
-        child->set_parent_(this);
-
-        scene_->add_node_name_(name, child);
-
-        HUIRA_LOG_INFO(this->get_info_() + " - new child added: " + child->get_info_());
-
-        children_.push_back(child);
-        return child;
-    }
-
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
     void Node<TSpectral, TFloat>::set_position(const Vec3<TFloat>& position)
     {
         if (scene_->is_locked()) {
@@ -177,6 +158,114 @@ namespace huira {
     }
 
 
+    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
+    std::weak_ptr<Node<TSpectral, TFloat>> Node<TSpectral, TFloat>::new_child(std::string name)
+    {
+        if (scene_->is_locked()) {
+            HUIRA_THROW_ERROR(this->get_info_() + " - new_child() was called with a locked scene");
+        }
+
+
+        auto child = std::make_shared<Node<TSpectral, TFloat>>(scene_);
+        child->set_parent_(this);
+
+        scene_->add_node_name_(name, child);
+
+        HUIRA_LOG_INFO(this->get_info_() + " - new child added: " + child->get_info_());
+
+        children_.push_back(child);
+        return child;
+    }
+
+    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
+    void Node<TSpectral, TFloat>::delete_child(std::weak_ptr<Node<TSpectral, TFloat>> child_weak)
+    {
+        if (scene_->is_locked()) {
+            HUIRA_THROW_ERROR(this->get_info_() + " - delete_child() was called with a locked scene");
+        }
+
+        auto child = child_weak.lock();
+        if (!child) {
+            HUIRA_THROW_ERROR(this->get_info_() + " - delete_child() called with expired weak_ptr");
+        }
+
+        if (child->parent_ != this) {
+            HUIRA_THROW_ERROR(this->get_info_() + " - delete_child() called with a child that does not belong to this node");
+        }
+
+        auto it = std::find(children_.begin(), children_.end(), child);
+        if (it != children_.end()) {
+            HUIRA_LOG_INFO(this->get_info_() + " - deleting child: " + child->get_info_());
+            scene_->remove_node_name_(child);
+            children_.erase(it);
+        }
+    }
+
+    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
+    void Node<TSpectral, TFloat>::change_parent(std::weak_ptr<Node<TSpectral, TFloat>> self_weak, Node<TSpectral, TFloat>* new_parent)
+    {
+        if (scene_->is_locked()) {
+            HUIRA_THROW_ERROR(this->get_info_() + " - change_parent() was called with a locked scene");
+        }
+
+        auto self = self_weak.lock();
+        if (!self || self.get() != this) {
+            HUIRA_THROW_ERROR(this->get_info_() + " - change_parent() called with invalid weak_ptr");
+        }
+
+        if (!new_parent) {
+            HUIRA_THROW_ERROR(this->get_info_() + " - change_parent() called with null new_parent");
+        }
+
+        if (!parent_) {
+            HUIRA_THROW_ERROR(this->get_info_() + " - change_parent() called on root node");
+        }
+
+        if (parent_ == new_parent) {
+            return; // Already the parent, nothing to do
+        }
+
+        // Check SPICE constraints for position
+        if (this->position_source_ == TransformSource::Spice) {
+            if (new_parent->position_source_ != TransformSource::Spice) {
+                HUIRA_THROW_ERROR(this->get_info_() + " - Cannot change parent: node uses SPICE for position " +
+                    "(spice_origin_=" + spice_origin_ + ") but new parent (" +
+                    new_parent->get_info_() + ") has manually set position");
+            }
+        }
+
+        // Check SPICE constraints for rotation
+        if (this->rotation_source_ == TransformSource::Spice) {
+            if (new_parent->rotation_source_ != TransformSource::Spice) {
+                HUIRA_THROW_ERROR(this->get_info_() + " - Cannot change parent: node uses SPICE for rotation " +
+                    "(spice_frame_=" + spice_frame_ + ") but new parent (" +
+                    new_parent->get_info_() + ") has manually set rotation");
+            }
+        }
+
+        // Remove from old parent's children
+        auto& old_children = parent_->children_;
+        auto it = std::find(old_children.begin(), old_children.end(), self);
+        if (it != old_children.end()) {
+            old_children.erase(it);
+            HUIRA_LOG_INFO(parent_->get_info_() + " - child detached: " + this->get_info_());
+        }
+
+        // Add to new parent's children
+        new_parent->children_.push_back(self);
+        HUIRA_LOG_INFO(new_parent->get_info_() + " - child attached: " + this->get_info_());
+
+        // Update parent pointer
+        parent_ = new_parent;
+
+        // Recalculate transforms since hierarchy changed
+        if (this->position_source_ == TransformSource::Spice || this->rotation_source_ == TransformSource::Spice) {
+            this->update_spice_transform_();
+        }
+        else {
+            this->update_global_transform_();
+        }
+    }
 
     // ========================= //
     // === Protected Members === //
