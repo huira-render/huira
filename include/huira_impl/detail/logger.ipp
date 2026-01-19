@@ -187,8 +187,9 @@ namespace huira {
         if (!log_path.empty()) {
             std::cerr << detail::red("HUIRA " + std::string(crash_type)) << "\n";
             std::cerr << detail::yellow(" - Log file written to: " + std::filesystem::absolute(log_path).string()) << "\n";
-            std::cerr << detail::yellow(" - Please report this issue: ")
-                << detail::blue("https://github.com/huira-render/huira/issues/new?template=bug_report.md") << "\n";
+            std::cerr << detail::yellow(" - If this was a SPICE ERROR, consider reviewing your SPICE configuration\n");
+            std::cerr << detail::yellow(" - If you believe this is a bug with Huira, please report this issue:\n");
+            std::cerr << "       " << detail::blue("https://github.com/huira-render/huira/issues/new?template=bug_report.md") << "\n";
             std::cerr << detail::yellow(" - Include the log file in your report.") << "\n";
         }
     }
