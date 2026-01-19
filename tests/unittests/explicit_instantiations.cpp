@@ -1,3 +1,6 @@
+#include "huira/camera/distortion/brown_distortion.hpp"
+#include "huira/camera/distortion/opencv_distortion.hpp"
+#include "huira/camera/distortion/owen_distortion.hpp"
 
 #include "huira/core/ray.hpp"
 #include "huira/core/rotation.hpp"
@@ -21,6 +24,10 @@ namespace huira {
     using TestFloat = float;
 
     // Explicit instantiations - forces code generation for code coverage purposes
+
+    template class BrownDistortion<TestSpectral, TestFloat>;
+    template class OpenCVDistortion<TestSpectral, TestFloat>;
+    template class OwenDistortion<TestSpectral, TestFloat>;
 
     template class Ray<TestSpectral, TestFloat>;
     template class Rotation<TestFloat>;

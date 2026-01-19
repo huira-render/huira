@@ -1,3 +1,7 @@
+#include "huira/camera/distortion/brown_distortion.hpp"
+#include "huira/camera/distortion/opencv_distortion.hpp"
+#include "huira/camera/distortion/owen_distortion.hpp"
+
 #include "huira/detail/logger.hpp"
 
 #include "huira/core/constants.hpp"

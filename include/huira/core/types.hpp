@@ -94,6 +94,28 @@ namespace huira {
     typedef ShusterQuaternion<double> ShusterQuaternion_d;
 
 
+    template <IsFloatingPoint TFloat>
+    struct BasePixel {
+        TFloat x = TFloat{ 0 };
+        TFloat y = TFloat{ 0 };
+
+        constexpr BasePixel() noexcept = default;
+        constexpr BasePixel(TFloat x_val, TFloat y_val) noexcept : x(x_val), y(y_val) {}
+
+        [[nodiscard]] constexpr TFloat& operator[](std::size_t i) noexcept { return i == 0 ? x : y; }
+        [[nodiscard]] constexpr const TFloat& operator[](std::size_t i) const noexcept { return i == 0 ? x : y; }
+
+        constexpr BasePixel operator+(const BasePixel& rhs) const noexcept { return { x + rhs.x, y + rhs.y }; }
+        constexpr BasePixel operator-(const BasePixel& rhs) const noexcept { return { x - rhs.x, y - rhs.y }; }
+        constexpr BasePixel operator*(TFloat s) const noexcept { return { x * s, y * s }; }
+
+        friend constexpr BasePixel operator*(TFloat s, const BasePixel& p) noexcept { return p * s; }
+    };
+
+    using Pixel = BasePixel<float>;
+    using Pixel_d = BasePixel<double>;
+
+
     template <IsSpectral TSpectral, IsFloatingPoint T>
     struct Vertex {
         Vec3<T> position{};
