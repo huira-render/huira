@@ -1,4 +1,5 @@
-# Huira Renderer
+# <img src="./docs/_static/logo/full/adaptive.svg" width="400">
+
 *Huira* is a ray-tracing library for rendering large scenes, star fields, and simulating solar radiation pressure.
 
 
