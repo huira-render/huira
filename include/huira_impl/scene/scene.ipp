@@ -115,6 +115,9 @@ namespace huira {
 
     template <IsSpectral TSpectral, IsFloatingPoint TFloat>
     void Scene<TSpectral, TFloat>::print_node_details_(const Node<TSpectral, TFloat>* node) const {
+        // Print node ID
+        std::cout << "[" << node->id() << "] ";
+
         // Check for registered name
         bool name_found = false;
         for (const auto& [name, ptr] : node_names_) {
