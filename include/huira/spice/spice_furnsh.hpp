@@ -4,12 +4,14 @@
 
 #include "cspice/SpiceUsr.h"
 
+#include "huira/detail/logger.hpp"
 #include "huira/spice/spice_error.hpp"
 
 namespace fs = std::filesystem;
 
 namespace huira::spice {
     inline void furnsh(const fs::path& file_path) {
+        HUIRA_LOG_INFO("SPCIE Furnsh: " + file_path.string());
         call_spice(furnsh_c, file_path.string().c_str());
     }
 
@@ -18,6 +20,8 @@ namespace huira::spice {
             furnsh(kernel_path);
             return;
         }
+
+        HUIRA_LOG_INFO("SPCIE Furnsh (relative): " + kernel_path.string());
 
         struct DirectoryGuard {
             fs::path original;

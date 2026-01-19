@@ -8,6 +8,8 @@
 
 #include "huira/detail/paths.hpp"
 #include "huira/spice/spice_error.hpp"
+#include "huira/detail/logger.hpp"
+#include "huira/spice/spice_furnsh.hpp"
 
 namespace fs = std::filesystem;
 
@@ -43,7 +45,9 @@ namespace huira::spice {
             if (failed_c()) {
                 reset_c();
                 // No LSK loaded - load our default
-                printf("Loading default LSK from: %s\n", get_default_lsk_path().string().c_str());
+                std::string message = "Loading default LSK from: " + get_default_lsk_path().string();
+                std::cout << "\n" + message + "\n";
+                HUIRA_LOG_INFO(message);
                 furnsh_c(get_default_lsk_path().string().c_str());
                 if (failed_c()) {
                     SpiceChar msg[1841];
@@ -58,5 +62,15 @@ namespace huira::spice {
             erract_c("SET", 0, oldAction);
             lsk_loaded.store(true, std::memory_order_release);
             });
+    }
+
+    inline fs::path get_default_pck_path() {
+        fs::path data_directory = huira::data_dir();
+        return data_directory / "kernels" / "pck" / "pck00011.tpc";
+    }
+
+    inline void load_default_pck() {
+        HUIRA_LOG_INFO("Default PCK loaded from: " + get_default_pck_path().string());
+        furnsh(get_default_pck_path());
     }
 }

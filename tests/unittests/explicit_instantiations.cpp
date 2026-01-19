@@ -2,7 +2,7 @@
 #include "huira/core/rotation.hpp"
 #include "huira/core/transform.hpp"
 
-#include "huira/handles/node_handle.hpp"
+#include "huira/handles/frame_handle.hpp"
 
 #include "huira/scene/node.hpp"
 #include "huira/scene/scene.hpp"
@@ -17,7 +17,7 @@ namespace huira {
     template class Rotation<TestFloat>;
     template struct Transform<TestFloat>;
 
-    template class NodeHandle<TestSpectral, TestFloat>;
+    template class FrameHandle<TestSpectral, TestFloat>;
 
     template class Scene<TestSpectral, TestFloat>;
     template class Node<TestSpectral, TestFloat>;
