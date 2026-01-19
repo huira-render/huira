@@ -27,10 +27,7 @@ namespace huira {
 
         void set_spice_origin(const std::string& spice_origin) const { this->get()->set_spice_origin(spice_origin); }
         void set_spice_frame(const std::string& spice_frame) const { this->get()->set_spice_frame(spice_frame); }
-        void set_spice(const std::string& spice_origin, const std::string& spice_frame) const {
-            this->get()->set_spice_origin(spice_origin);
-            this->get()->set_spice_frame(spice_frame);
-        }
+        void set_spice(const std::string& spice_origin, const std::string& spice_frame) const { this->get()->set_spice(spice_origin, spice_frame); }
 
 
         FrameHandle<TSpectral, TFloat> new_subframe(std::string name = "") const {
@@ -39,8 +36,7 @@ namespace huira {
 
         FrameHandle<TSpectral, TFloat> new_spice_subframe(const std::string& spice_origin, const std::string& spice_frame, std::string name = "") const {
             FrameHandle<TSpectral, TFloat> subframe = this->new_subframe(name);
-            subframe.set_spice_origin(spice_origin);
-            subframe.set_spice_frame(spice_frame);
+            subframe.set_spice(spice_origin, spice_frame);
             return subframe;
         }
 
