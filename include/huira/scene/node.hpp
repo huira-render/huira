@@ -28,9 +28,8 @@ namespace huira {
         Node(Scene<TSpectral, TFloat>* scene);
         virtual ~Node() = default;
 
-        std::weak_ptr<Node<TSpectral, TFloat>> new_child(std::string name = "");
-
         const std::string& name() const { return scene_->name_of_node_(this); }
+        std::uint64_t id() const { return id_; }
 
         void set_position(const Vec3<TFloat>& position);
         void set_rotation(const Rotation<TFloat>& rotation);
@@ -43,7 +42,10 @@ namespace huira {
         void set_spice_frame(const std::string& spice_frame);
         void set_spice(const std::string& spice_origin, const std::string& spice_frame);
 
-        std::uint64_t id() const { return id_; }
+
+        std::weak_ptr<Node<TSpectral, TFloat>> new_child(std::string name = "");
+        void delete_child(std::weak_ptr<Node<TSpectral, TFloat>> child);
+        void change_parent(std::weak_ptr<Node<TSpectral, TFloat>> self_weak, Node<TSpectral, TFloat>* new_parent);
 
     protected:
         Transform<TFloat> local_transform_;

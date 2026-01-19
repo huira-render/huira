@@ -3,6 +3,8 @@
 #include <memory>
 #include <stdexcept>
 
+#include "huira/detail/logger.hpp"
+
 namespace huira {
     template <typename T>
     class Handle {
@@ -16,11 +18,11 @@ namespace huira {
         bool valid() const { return !ptr_.expired(); }
 
     protected:
-        std::shared_ptr<T> safe_get() const {
+        std::shared_ptr<T> get() const {
             std::shared_ptr<T> p = ptr_.lock();
 
             if (!p) {
-                throw std::runtime_error("Attempted to access an invalid handle");
+                HUIRA_THROW_ERROR("Attempted to access an invalid handle");
             }
 
             return p;
