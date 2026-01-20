@@ -1,4 +1,4 @@
-Math
+Core
 ====
 
 .. toctree::
@@ -7,3 +7,4 @@ Math
     constants
     types
     rotation
+    units

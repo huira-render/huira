@@ -30,6 +30,9 @@ namespace huira {
         UnresolvedObject(const UnresolvedObject&) = delete;
         UnresolvedObject& operator=(const UnresolvedObject&) = delete;
 
+        void set_irradiance(TSpectral irradiance) { irradiance_ = irradiance; }
+        TSpectral get_irradiance() const { return irradiance_; }
+
         // Explicitly delete methods that don't make sense for a point-like object:
         void set_rotation(const Rotation<TFloat>& rotation) = delete;
         void set_scale(const Vec3<TFloat>& scale) = delete;
@@ -39,6 +42,8 @@ namespace huira {
         std::string get_spice_frame() = delete;
 
     protected:
+        TSpectral irradiance_{ 0 };
+
         std::string get_type_name_() const override { return "UnresolvedObject"; }
 
         friend class Scene<TSpectral, TFloat>;

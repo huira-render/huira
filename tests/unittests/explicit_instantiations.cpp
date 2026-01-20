@@ -11,6 +11,7 @@
 #include "huira/handles/root_frame_handle.hpp"
 #include "huira/handles/unresolved_handle.hpp"
 #include "huira/handles/point_light_handle.hpp"
+#include "huira/handles/camera_handle.hpp"
 
 #include "huira/lights/point_light.hpp"
 
@@ -37,6 +38,7 @@ namespace huira {
 
     template class FrameHandle<TestSpectral, TestFloat>;
     template class RootFrameHandle<TestSpectral, TestFloat>;
+    template class CameraHandle<TestSpectral, TestFloat>;
     template class UnresolvedHandle<TestSpectral, TestFloat>;
     template class PointLightHandle<TestSpectral, TestFloat>;
 

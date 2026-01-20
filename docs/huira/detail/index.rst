@@ -1,7 +1,7 @@
-Units
+Detail
 ======
 
 .. toctree::
     :hidden:
-    
-    units
+
+    concepts/index
