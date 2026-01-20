@@ -43,9 +43,6 @@ namespace huira {
         void print_node_(const Node<TSpectral, TFloat>* node, const std::string& prefix, bool is_last) const;
         void print_node_details_(const Node<TSpectral, TFloat>* node) const;
 
-        // Helper to get children (works for FrameNode, returns empty for Node)
-        const std::vector<std::shared_ptr<Node<TSpectral, TFloat>>>* get_children_(const Node<TSpectral, TFloat>* node) const;
-
         friend class Node<TSpectral, TFloat>;
         friend class FrameNode<TSpectral, TFloat>;
     };

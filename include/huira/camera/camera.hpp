@@ -27,6 +27,10 @@ namespace huira {
 
         }
 
+        // Delete copying:
+        Camera(const Camera&) = delete;
+        Camera& operator=(const Camera&) = delete;
+
         void set_focal_length(TFloat focal_length) {
             focal_length_ = focal_length;
         }

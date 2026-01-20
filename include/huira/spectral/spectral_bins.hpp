@@ -20,28 +20,32 @@ namespace huira {
         }
     };
 
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable: 4686)  // Possible change in behavior in UDT return calling convention
+#endif
     template <size_t N, auto... Args>
     class SpectralBins : public NumericArray<float, N> {
     public:
         constexpr SpectralBins() : NumericArray<float, N>() {
-            initialize_bins_static();
+            initialize_bins_static_();
         }
 
         // Single value:
         explicit constexpr SpectralBins(float value) : NumericArray<float, N>(value) {
-            initialize_bins_static();
+            initialize_bins_static_();
         }
 
         // Initializer list:
         constexpr SpectralBins(std::initializer_list<float> init) : NumericArray<float, N>(init) {
-            initialize_bins_static();
+            initialize_bins_static_();
         }
 
         // Direct element initialization
         template <typename... Values>
             requires (sizeof...(Values) == N && (std::convertible_to<Values, float> && ...))
         constexpr SpectralBins(Values&&... values) : NumericArray<float, N>(static_cast<float>(values)...) {
-            initialize_bins_static();
+            initialize_bins_static_();
         }
 
         // Assignment from NumericArray (for arithmetic operation results)
@@ -57,11 +61,14 @@ namespace huira {
     private:
         static std::array<Bin, N> bins_;
 
-        static constexpr std::array<Bin, N> initialize_bins_static();
-        static constexpr std::array<Bin, N> initialize_uniform_static();
-        static constexpr std::array<Bin, N> initialize_pairs_static();
-        static constexpr std::array<Bin, N> initialize_edges_static();
+        static constexpr std::array<Bin, N> initialize_bins_static_();
+        static constexpr std::array<Bin, N> initialize_uniform_static_();
+        static constexpr std::array<Bin, N> initialize_pairs_static_();
+        static constexpr std::array<Bin, N> initialize_edges_static_();
     };
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
     // Aliases for faster setting:
     template <size_t N, int min, int max>
