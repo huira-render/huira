@@ -39,6 +39,10 @@ namespace huira {
 
         }
 
+        // Delete copying:
+        Light(const Light&) = delete;
+        Light& operator=(const Light&) = delete;
+
         ~Light() override = default;
 
         virtual LightSample<TSpectral, TFloat> sample_Li(const Vec3<TFloat>& point, Sampler<TFloat>& sampler) const = 0;

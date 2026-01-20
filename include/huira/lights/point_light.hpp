@@ -16,6 +16,10 @@ namespace huira {
 
         }
 
+        // Delete copying:
+        PointLight(const PointLight&) = delete;
+        PointLight& operator=(const PointLight&) = delete;
+
         LightSample<TSpectral, TFloat> sample_Li(const Vec3<TFloat>& point, Sampler<TFloat>& sampler) const override;
 
         float pdf_Li(const Vec3<TFloat>& point, const Vec3<TFloat>& wi) const override;

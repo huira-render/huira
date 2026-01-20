@@ -6,12 +6,15 @@
 #include "huira/core/ray.hpp"
 #include "huira/core/rotation.hpp"
 #include "huira/core/transform.hpp"
+#include "huira/core/types.hpp"
 
 #include "huira/handles/frame_handle.hpp"
 #include "huira/handles/root_frame_handle.hpp"
 #include "huira/handles/unresolved_handle.hpp"
 #include "huira/handles/point_light_handle.hpp"
 #include "huira/handles/camera_handle.hpp"
+
+#include "huira/images/image.hpp"
 
 #include "huira/lights/point_light.hpp"
 
@@ -41,6 +44,11 @@ namespace huira {
     template class CameraHandle<TestSpectral, TestFloat>;
     template class UnresolvedHandle<TestSpectral, TestFloat>;
     template class PointLightHandle<TestSpectral, TestFloat>;
+
+    template class Image<std::int8_t>;
+    template class Image<float>;
+    template class Image<Vec3<float>>;
+    template class Image<TestSpectral>;
 
     template class PointLight<TestSpectral, TestFloat>;
 

@@ -16,6 +16,8 @@
 #include "huira/handles/unresolved_handle.hpp"
 #include "huira/handles/point_light_handle.hpp"
 
+#include "huira/images/image.hpp"
+
 #include "huira/lights/point_light.hpp"
 
 #include "huira/scene/scene.hpp"
