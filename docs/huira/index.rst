@@ -4,6 +4,7 @@ Huira C++ API Reference
 .. toctree::
     :hidden:
 
-    concepts/index
-    math/index
-    units/index
+    detail/index
+    core/index
+    handles/index
+

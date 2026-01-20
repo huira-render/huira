@@ -20,6 +20,7 @@ namespace huira {
         void set_velocity(double vx, double vy, double vz) const { this->get()->set_velocity(Vec3<TFloat>{vx, vy, vz}); }
 
         void set_spice_origin(const std::string& spice_origin) const { this->get()->set_spice_origin(spice_origin); }
+        std::string get_spice_origin() const { return this->get()->get_spice_origin(); }
 
         void set_intensity(const TSpectral& intensity) const { this->get()->set_intensity(intensity); }
     };

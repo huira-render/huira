@@ -80,6 +80,19 @@ namespace huira {
         return child;
     }
 
+    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
+    std::weak_ptr<Camera<TSpectral, TFloat>> FrameNode<TSpectral, TFloat>::new_camera()
+    {
+        this->validate_scene_unlocked_("new_camera()");
+
+        auto child = std::make_shared<Camera<TSpectral, TFloat>>(this->scene_);
+        child->set_parent_(this);
+
+        HUIRA_LOG_INFO(this->get_info_() + " - new Camera added: " + child->get_info_());
+
+        children_.push_back(child);
+        return child;
+    }
 
     // ========================= //
     // === Protected Members === //

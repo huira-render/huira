@@ -3,6 +3,7 @@
 #include "huira/detail/concepts/numeric_concepts.hpp"
 #include "huira/detail/concepts/spectral_concepts.hpp"
 
+#include "huira/handles/camera_handle.hpp"
 #include "huira/handles/handle.hpp"
 #include "huira/handles/point_light_handle.hpp"
 #include "huira/handles/unresolved_handle.hpp"
@@ -73,21 +74,32 @@ namespace huira {
         }
 
         UnresolvedHandle<TSpectral, TFloat> new_spice_unresolved_object(const std::string& spice_origin) const {
-            UnresolvedHandle<TSpectral, TFloat> unresolved = this->new_unresolved_object();
-            unresolved.set_spice_origin(spice_origin);
-            return unresolved;
+            UnresolvedHandle<TSpectral, TFloat> child = this->new_unresolved_object();
+            child.set_spice_origin(spice_origin);
+            return child;
         }
+
+
 
         PointLightHandle<TSpectral, TFloat> new_point_light(TSpectral spectral_intensity) const {
             return PointLightHandle<TSpectral, TFloat>{ this->get()->new_point_light(spectral_intensity) };
         }
 
         PointLightHandle<TSpectral, TFloat> new_spice_point_light(const std::string& spice_origin, TSpectral spectral_intensity) const {
-            PointLightHandle<TSpectral, TFloat> light = this->new_point_light(spectral_intensity);
-            light.set_spice_origin(spice_origin);
-            return light;
+            PointLightHandle<TSpectral, TFloat> child = this->new_point_light(spectral_intensity);
+            child.set_spice_origin(spice_origin);
+            return child;
         }
 
-        friend class UnresolvedHandle<TSpectral, TFloat>;
+
+        CameraHandle<TSpectral, TFloat> new_camera() const {
+            return CameraHandle<TSpectral, TFloat>{ this->get()->new_camera() };
+        }
+
+        CameraHandle<TSpectral, TFloat> new_spice_camera(const std::string& spice_origin, const std::string& spice_frame) const {
+            CameraHandle<TSpectral, TFloat> child = this->new_camera();
+            child.set_spice(spice_origin, spice_frame);
+            return child;
+        }
     };
 }
