@@ -59,12 +59,9 @@ namespace huira {
         void set_spice(const std::string& spice_origin, const std::string& spice_frame);
 
 
-        virtual std::string get_info();
+        virtual std::string get_info() const;
         virtual std::string get_type_name() const { return "Node"; }
 
-
-        std::string get_spice_origin() const { return spice_origin_; }
-        std::string get_spice_frame() const { return spice_frame_; }
 
         Vec3<TFloat> get_global_position() const { return global_transform_.position; }
         Vec3<TFloat> get_local_position() const { return local_transform_.position; }
@@ -80,6 +77,21 @@ namespace huira {
 
         Vec3<TFloat> get_global_angular_velocity() const { return global_transform_.angular_velocity; }
         Vec3<TFloat> get_local_angular_velocity() const { return local_transform_.angular_velocity; }
+
+
+        std::string get_spice_origin() const { return spice_origin_; }
+        std::string get_spice_frame() const { return spice_frame_; }
+
+
+        // Query state relative to arbitrary SPICE frames
+        Vec3<TFloat> get_position_in_frame(const std::string& target_origin, const std::string& target_frame) const;
+        Vec3<TFloat> get_velocity_in_frame(const std::string& target_origin, const std::string& target_frame) const;
+
+        Rotation<TFloat> get_rotation_in_frame(const std::string& target_frame) const;
+        Vec3<TFloat> get_angular_velocity_in_frame(const std::string& target_frame) const;
+
+        std::pair<Vec3<TFloat>, Vec3<TFloat>> get_state_in_frame(const std::string& target_origin, const std::string& target_frame) const;
+        std::pair<Rotation<TFloat>, Vec3<TFloat>> get_attitude_in_frame(const std::string& target_frame) const;
 
     protected:
         Transform<TFloat> local_transform_;
@@ -122,6 +134,9 @@ namespace huira {
 
         void compute_global_position_from_local_();
         void compute_global_rotation_from_local_();
+
+        std::pair<const Node<TSpectral, TFloat>*, Transform<TFloat>> find_spice_origin_ancestor_() const;
+        std::pair<const Node<TSpectral, TFloat>*, std::pair<Rotation<TFloat>, Vec3<TFloat>>> find_spice_frame_ancestor_() const;
 
         friend class Scene<TSpectral, TFloat>;
         friend class FrameNode<TSpectral, TFloat>;
