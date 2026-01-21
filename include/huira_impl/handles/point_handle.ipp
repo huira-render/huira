@@ -132,4 +132,50 @@ namespace huira {
     Vec3<TFloat> PointHandle<TSpectral, TFloat, TNode>::get_local_velocity() const {
         return this->get()->get_local_velocity();
     }
+
+
+    /**
+     * @brief Gets the position in a specified SPICE frame.
+     *
+     * @tparam TSpectral The spectral type satisfying the IsSpectral concept
+     * @tparam TFloat The floating-point type satisfying the IsFloatingPoint concept
+     * @param target_origin The target SPICE origin identifier
+     * @param target_frame The target SPICE frame identifier
+     * @return Vec3<TFloat> The position in the specified SPICE frame
+     */
+    template <IsSpectral TSpectral, IsFloatingPoint TFloat, typename TNode>
+    Vec3<TFloat> PointHandle<TSpectral, TFloat, TNode>::get_position_in_frame(const std::string& target_origin, const std::string& target_frame) const
+    {
+        return this->get()->get_position_in_frame(target_origin, target_frame);
+    }
+
+    /**
+     * @brief Gets the velocity in a specified SPICE frame.
+     *
+     * @tparam TSpectral The spectral type satisfying the IsSpectral concept
+     * @tparam TFloat The floating-point type satisfying the IsFloatingPoint concept
+     * @param target_origin The target SPICE origin identifier
+     * @param target_frame The target SPICE frame identifier
+     * @return Vec3<TFloat> The velocity in the specified SPICE frame
+     */
+    template <IsSpectral TSpectral, IsFloatingPoint TFloat, typename TNode>
+    Vec3<TFloat> PointHandle<TSpectral, TFloat, TNode>::get_velocity_in_frame(const std::string& target_origin, const std::string& target_frame) const
+    {
+        return this->get()->get_velocity_in_frame(target_origin, target_frame);
+    }
+
+    /**
+     * @brief Gets the state (position and velocity) in a specified SPICE frame.
+     *
+     * @tparam TSpectral The spectral type satisfying the IsSpectral concept
+     * @tparam TFloat The floating-point type satisfying the IsFloatingPoint concept
+     * @param target_origin The target SPICE origin identifier
+     * @param target_frame The target SPICE frame identifier
+     * @return std::pair<Vec3<TFloat>, Vec3<TFloat>> The position and velocity in the specified SPICE frame
+     */
+    template <IsSpectral TSpectral, IsFloatingPoint TFloat, typename TNode>
+    std::pair<Vec3<TFloat>, Vec3<TFloat>> PointHandle<TSpectral, TFloat, TNode>::get_state_in_frame(const std::string& target_origin, const std::string& target_frame) const
+    {
+        return this->get()->get_state_in_frame(target_origin, target_frame);
+    }
 }

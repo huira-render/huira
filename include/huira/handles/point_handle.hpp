@@ -31,6 +31,11 @@ namespace huira {
         void set_spice_origin(const std::string& spice_origin) const;
 
         std::string get_spice_origin() const;
+
+        Vec3<TFloat> get_position_in_frame(const std::string& target_origin, const std::string& target_frame) const;
+        Vec3<TFloat> get_velocity_in_frame(const std::string& target_origin, const std::string& target_frame) const;
+
+        std::pair<Vec3<TFloat>, Vec3<TFloat>> get_state_in_frame(const std::string& target_origin, const std::string& target_frame) const;
     };
 }
 

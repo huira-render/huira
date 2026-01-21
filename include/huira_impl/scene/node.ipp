@@ -131,9 +131,240 @@ namespace huira {
 
 
     template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    std::string Node<TSpectral, TFloat>::get_info() {
+    std::string Node<TSpectral, TFloat>::get_info() const {
         std::string info = get_type_name() + "[" + std::to_string(this->id()) + "]";
         return info;
+    }
+
+
+
+    /**
+     * @brief Get position relative to a SPICE origin in a SPICE frame
+     * @param target_origin SPICE body to measure position relative to (e.g., "SSB", "EARTH", "SUN")
+     * @param target_frame SPICE reference frame for the result (e.g., "J2000", "ECLIPJ2000")
+     * @return Position vector in the target frame relative to target origin
+     * @throws std::runtime_error if no SPICE-enabled ancestor is found in scene graph
+     */
+    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
+    Vec3<TFloat> Node<TSpectral, TFloat>::get_position_in_frame(const std::string& target_origin, const std::string& target_frame) const
+    {
+        auto [pos, vel] = get_state_in_frame(target_origin, target_frame);
+        return pos;
+    }
+
+    /**
+     * @brief Get velocity relative to a SPICE origin in a SPICE frame
+     * @param target_origin SPICE body to measure velocity relative to (e.g., "SSB", "EARTH", "SUN")
+     * @param target_frame SPICE reference frame for the result (e.g., "J2000", "ECLIPJ2000")
+     * @return Velocity vector in the target frame relative to target origin
+     * @throws std::runtime_error if no SPICE-enabled ancestor is found in scene graph
+     */
+    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
+    Vec3<TFloat> Node<TSpectral, TFloat>::get_velocity_in_frame(const std::string& target_origin, const std::string& target_frame) const
+    {
+        auto [pos, vel] = get_state_in_frame(target_origin, target_frame);
+        return vel;
+    }
+
+    /**
+     * @brief Get rotation relative to a SPICE frame
+     * @param target_frame SPICE reference frame (e.g., "J2000", "ECLIPJ2000", "IAU_EARTH")
+     * @return Rotation from target frame to this node's orientation
+     * @throws std::runtime_error if no SPICE-enabled ancestor is found in scene graph
+     */
+    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
+    Rotation<TFloat> Node<TSpectral, TFloat>::get_rotation_in_frame(const std::string& target_frame) const
+    {
+        auto [rot, ang_vel] = get_attitude_in_frame(target_frame);
+        return rot;
+    }
+
+    /**
+     * @brief Get angular velocity relative to a SPICE frame
+     * @param target_frame SPICE reference frame (e.g., "J2000", "ECLIPJ2000", "IAU_EARTH")
+     * @return Angular velocity vector in the target frame
+     * @throws std::runtime_error if no SPICE-enabled ancestor is found in scene graph
+     */
+    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
+    Vec3<TFloat> Node<TSpectral, TFloat>::get_angular_velocity_in_frame(const std::string& target_frame) const
+    {
+        auto [rot, ang_vel] = get_attitude_in_frame(target_frame);
+        return ang_vel;
+    }
+
+    /**
+     * @brief Get complete state (position + velocity) relative to a SPICE origin and frame
+     * @param target_origin SPICE body to measure state relative to
+     * @param target_frame SPICE reference frame for the result
+     * @return Pair of (position, velocity) in the target frame relative to target origin
+     * @throws std::runtime_error if no SPICE-enabled ancestor is found in scene graph
+     */
+    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
+    std::pair<Vec3<TFloat>, Vec3<TFloat>> Node<TSpectral, TFloat>::get_state_in_frame(
+        const std::string& target_origin,
+        const std::string& target_frame) const
+    {
+        // Find the first SPICE-enabled ancestor
+        auto [spice_ancestor, accumulated_transform] = find_spice_origin_ancestor_();
+
+        // Get the SPICE ancestor's state in the target frame
+        auto [spice_pos, spice_vel, lt] = spice::spkezr<TFloat>(
+            spice_ancestor->get_spice_origin(),
+            scene_->get_time(),
+            target_frame,
+            target_origin
+        );
+
+        // We need the rotation from target_frame to the SPICE ancestor's frame
+        // to properly transform the accumulated offset
+        auto [frame_rotation, frame_ang_vel] = spice::sxform<TFloat>(
+            target_frame,
+            spice_ancestor->get_spice_frame(),
+            scene_->get_time()
+        );
+
+        // Transform accumulated position: rotate from ancestor frame to target frame
+        Vec3<TFloat> position = spice_pos + frame_rotation.inverse() * accumulated_transform.position;
+
+        // Transform accumulated velocity: rotate and account for frame rotation
+        // v_target = v_spice + R^-1 * v_accumulated
+        // Note: We're not adding rotational velocity contribution (omega x r) since we're
+        // assuming the accumulated velocity is already in the proper reference
+        Vec3<TFloat> velocity = spice_vel + frame_rotation.inverse() * accumulated_transform.velocity;
+
+        return { position, velocity };
+    }
+
+    /**
+     * @brief Get complete attitude (rotation + angular velocity) relative to a SPICE frame
+     * @param target_frame SPICE reference frame for the result
+     * @return Pair of (rotation, angular_velocity) in the target frame
+     * @throws std::runtime_error if no SPICE-enabled ancestor is found in scene graph
+     */
+    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
+    std::pair<Rotation<TFloat>, Vec3<TFloat>> Node<TSpectral, TFloat>::get_attitude_in_frame(const std::string& target_frame) const
+    {
+        // Find the first SPICE-enabled ancestor
+        auto [spice_ancestor, accumulated_rotation_data] = find_spice_frame_ancestor_();
+        auto [accumulated_rotation, accumulated_ang_vel] = accumulated_rotation_data;
+
+        // Get the rotation from target_frame to the SPICE ancestor's frame
+        auto [spice_rotation, spice_ang_vel] = spice::sxform<TFloat>(
+            target_frame,
+            spice_ancestor->get_spice_frame(),
+            scene_->get_time()
+        );
+
+        // Compose rotations: R_total = R_spice * R_accumulated
+        // This gives rotation from target_frame to this node's frame
+        Rotation<TFloat> rotation = spice_rotation * accumulated_rotation;
+
+        // Transform angular velocity to target frame
+        // ω_target = R_spice^-1 * (ω_spice + ω_accumulated)
+        Vec3<TFloat> angular_velocity = spice_rotation.inverse() * (spice_ang_vel + accumulated_ang_vel);
+
+        return { rotation, angular_velocity };
+    }
+
+
+    /**
+     * @brief Find the first ancestor (including self) with a SPICE origin
+     * @return Pair of (ancestor node, accumulated transform from this to ancestor)
+     * @throws std::runtime_error if no SPICE origin found in ancestry
+     */
+    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
+    std::pair<const Node<TSpectral, TFloat>*, Transform<TFloat>> Node<TSpectral, TFloat>::find_spice_origin_ancestor_() const
+    {
+        Transform<TFloat> accumulated;
+        accumulated.position = Vec3<TFloat>{ 0, 0, 0 };
+        accumulated.velocity = Vec3<TFloat>{ 0, 0, 0 };
+        accumulated.rotation = Rotation<TFloat>{};
+        accumulated.scale = Vec3<TFloat>{ 1, 1, 1 };
+
+        const Node<TSpectral, TFloat>* current = this;
+
+        // Walk up the scene graph
+        while (current != nullptr) {
+            // Check if this node has a SPICE origin
+            if (current->position_source_ == TransformSource::SPICE_TRANSFORM &&
+                !current->spice_origin_.empty()) {
+                return { current, accumulated };
+            }
+
+            // If this is not the starting node, accumulate its transform
+            if (current != this) {
+                // Accumulate position in parent's frame
+                accumulated.position = current->local_transform_.position +
+                    current->local_transform_.rotation * accumulated.position;
+
+                // Accumulate velocity
+                accumulated.velocity = current->local_transform_.velocity +
+                    current->local_transform_.rotation * accumulated.velocity;
+
+                // Accumulate rotation
+                accumulated.rotation = current->local_transform_.rotation * accumulated.rotation;
+
+                // Accumulate scale (component-wise multiplication)
+                accumulated.scale = current->local_transform_.scale * accumulated.scale;
+            }
+            else {
+                // For the starting node, initialize with its local transform
+                accumulated = this->local_transform_;
+            }
+
+            // Move to parent
+            current = current->parent_;
+        }
+
+        // No SPICE origin found in the entire ancestry chain
+        HUIRA_THROW_ERROR(this->get_info() +
+            " - cannot query SPICE frame: no ancestor with SPICE origin found in scene graph");
+    }
+
+    /**
+     * @brief Find the first ancestor (including self) with a SPICE frame
+     * @return Pair of (ancestor node, accumulated rotation from this to ancestor)
+     * @throws std::runtime_error if no SPICE frame found in ancestry
+     */
+    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
+    std::pair<const Node<TSpectral, TFloat>*, std::pair<Rotation<TFloat>, Vec3<TFloat>>> Node<TSpectral, TFloat>::find_spice_frame_ancestor_() const
+    {
+        Rotation<TFloat> accumulated_rotation = Rotation<TFloat>{};
+        Vec3<TFloat> accumulated_ang_vel{ 0, 0, 0 };
+
+        const Node<TSpectral, TFloat>* current = this;
+
+        // Walk up the scene graph
+        while (current != nullptr) {
+            // Check if this node has a SPICE frame
+            if (current->rotation_source_ == TransformSource::SPICE_TRANSFORM &&
+                !current->spice_frame_.empty()) {
+                return { current, {accumulated_rotation, accumulated_ang_vel} };
+            }
+
+            // Accumulate rotation
+            if (current != this) {
+                // Compose rotations going up the tree
+                accumulated_rotation = current->local_transform_.rotation * accumulated_rotation;
+
+                // Accumulate angular velocity
+                // ω_total = ω_parent + R_parent * ω_child
+                accumulated_ang_vel = current->local_transform_.angular_velocity +
+                    current->local_transform_.rotation * accumulated_ang_vel;
+            }
+            else {
+                // For the starting node, initialize with its local transform
+                accumulated_rotation = this->local_transform_.rotation;
+                accumulated_ang_vel = this->local_transform_.angular_velocity;
+            }
+
+            // Move to parent
+            current = current->parent_;
+        }
+
+        // No SPICE frame found in the entire ancestry chain
+        HUIRA_THROW_ERROR(this->get_info() +
+            " - cannot query SPICE frame: no ancestor with SPICE rotation frame found in scene graph");
     }
 
 

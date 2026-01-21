@@ -322,4 +322,91 @@ namespace huira {
     std::string NodeHandle<TSpectral, TFloat, TNode>::get_spice_frame() const {
         return this->get()->get_spice_frame();
     }
+
+    /**
+     * @brief Gets the position in a specified SPICE frame.
+     *
+     * @tparam TSpectral The spectral type satisfying the IsSpectral concept
+     * @tparam TFloat The floating-point type satisfying the IsFloatingPoint concept
+     * @param target_origin The target SPICE origin identifier
+     * @param target_frame The target SPICE frame identifier
+     * @return Vec3<TFloat> The position in the specified SPICE frame
+     */
+    template <IsSpectral TSpectral, IsFloatingPoint TFloat, typename TNode>
+    Vec3<TFloat> NodeHandle<TSpectral, TFloat, TNode>::get_position_in_frame(const std::string& target_origin, const std::string& target_frame) const
+    {
+        return this->get()->get_position_in_frame(target_origin, target_frame);
+    }
+
+    /**
+     * @brief Gets the velocity in a specified SPICE frame.
+     *
+     * @tparam TSpectral The spectral type satisfying the IsSpectral concept
+     * @tparam TFloat The floating-point type satisfying the IsFloatingPoint concept
+     * @param target_origin The target SPICE origin identifier
+     * @param target_frame The target SPICE frame identifier
+     * @return Vec3<TFloat> The velocity in the specified SPICE frame
+     */
+    template <IsSpectral TSpectral, IsFloatingPoint TFloat, typename TNode>
+    Vec3<TFloat> NodeHandle<TSpectral, TFloat, TNode>::get_velocity_in_frame(const std::string& target_origin, const std::string& target_frame) const
+    {
+        return this->get()->get_velocity_in_frame(target_origin, target_frame);
+    }
+
+    /**
+     * @brief Gets the rotation in a specified SPICE frame.
+     *
+     * @tparam TSpectral The spectral type satisfying the IsSpectral concept
+     * @tparam TFloat The floating-point type satisfying the IsFloatingPoint concept
+     * @param target_frame The target SPICE frame identifier
+     * @return Rotation<TFloat> The rotation in the specified SPICE frame
+     */
+    template <IsSpectral TSpectral, IsFloatingPoint TFloat, typename TNode>
+    Rotation<TFloat> NodeHandle<TSpectral, TFloat, TNode>::get_rotation_in_frame(const std::string& target_frame) const
+    {
+        return this->get()->get_rotation_in_frame(target_frame);
+    }
+
+    /**
+     * @brief Gets the angular velocity in a specified SPICE frame.
+     *
+     * @tparam TSpectral The spectral type satisfying the IsSpectral concept
+     * @tparam TFloat The floating-point type satisfying the IsFloatingPoint concept
+     * @param target_frame The target SPICE frame identifier
+     * @return Vec3<TFloat> The angular velocity in the specified SPICE frame
+     */
+    template <IsSpectral TSpectral, IsFloatingPoint TFloat, typename TNode>
+    Vec3<TFloat> NodeHandle<TSpectral, TFloat, TNode>::get_angular_velocity_in_frame(const std::string& target_frame) const
+    {
+        return this->get()->get_angular_velocity_in_frame(target_frame);
+    }
+
+    /**
+     * @brief Gets the state (position and velocity) in a specified SPICE frame.
+     *
+     * @tparam TSpectral The spectral type satisfying the IsSpectral concept
+     * @tparam TFloat The floating-point type satisfying the IsFloatingPoint concept
+     * @param target_origin The target SPICE origin identifier
+     * @param target_frame The target SPICE frame identifier
+     * @return std::pair<Vec3<TFloat>, Vec3<TFloat>> The position and velocity in the specified SPICE frame
+     */
+    template <IsSpectral TSpectral, IsFloatingPoint TFloat, typename TNode>
+    std::pair<Vec3<TFloat>, Vec3<TFloat>> NodeHandle<TSpectral, TFloat, TNode>::get_state_in_frame(const std::string& target_origin, const std::string& target_frame) const
+    {
+        return this->get()->get_state_in_frame(target_origin, target_frame);
+    }
+
+    /**
+     * @brief Gets the attitude (rotation and angular velocity) in a specified SPICE frame.
+     *
+     * @tparam TSpectral The spectral type satisfying the IsSpectral concept
+     * @tparam TFloat The floating-point type satisfying the IsFloatingPoint concept
+     * @param target_frame The target SPICE frame identifier
+     * @return std::pair<Rotation<TFloat>, Vec3<TFloat>> The rotation and angular velocity in the specified SPICE frame
+     */
+    template <IsSpectral TSpectral, IsFloatingPoint TFloat, typename TNode>
+    std::pair<Rotation<TFloat>, Vec3<TFloat>> NodeHandle<TSpectral, TFloat, TNode>::get_attitude_in_frame(const std::string& target_frame) const
+    {
+        return this->get()->get_attitude_in_frame(target_frame);
+    }
 }
