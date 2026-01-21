@@ -1,10 +1,7 @@
 #pragma once
 
-#include <string>
-
 #include "huira/detail/concepts/numeric_concepts.hpp"
 #include "huira/detail/concepts/spectral_concepts.hpp"
-#include "huira/core/types.hpp"
 
 #include "huira/handles/point_handle.hpp"
 #include "huira/scene/unresolved_object.hpp"
