@@ -64,7 +64,7 @@ namespace huira {
     void Scene<TSpectral, TFloat>::print_node_(const Node<TSpectral, TFloat>* node, const std::string& prefix, bool is_last) const {
         std::cout << prefix;
         std::cout << (is_last ? "+-- " : "|-- ");
-        std::cout << node->get_type_name_() + " ";
+        std::cout << node->get_type_name() + " ";
         print_node_details_(node);
         std::cout << "\n";
 

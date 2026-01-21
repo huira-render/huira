@@ -23,9 +23,9 @@ namespace huira {
     {
         validate_scene_unlocked_("set_position()");
         if (auto spice_child = child_spice_origins_()) {
-            HUIRA_THROW_ERROR(this->get_info_() +
+            HUIRA_THROW_ERROR(this->get_info() +
                 " - cannot manually set position when child has a spice_origin_ (see child "
-                + spice_child->get_info_() + ")");
+                + spice_child->get_info() + ")");
         }
 
         this->local_transform_.position = position;
@@ -39,9 +39,9 @@ namespace huira {
     {
         validate_scene_unlocked_("set_rotation()");
         if (auto spice_child = child_spice_frames_()) {
-            HUIRA_THROW_ERROR(this->get_info_() +
+            HUIRA_THROW_ERROR(this->get_info() +
                 " - cannot manually set rotation when child has a spice_frame_ (see child "
-                + spice_child->get_info_() + ")");
+                + spice_child->get_info() + ")");
         }
 
         this->local_transform_.rotation = rotation;
@@ -54,7 +54,7 @@ namespace huira {
     void Node<TSpectral, TFloat>::set_scale(const Vec3<TFloat>& scale)
     {
         validate_scene_unlocked_("set_scale()");
-        HUIRA_LOG_INFO(this->get_info_() + " - set_scale(" +
+        HUIRA_LOG_INFO(this->get_info() + " - set_scale(" +
             std::to_string(scale[0]) + ", " +
             std::to_string(scale[1]) + ", " +
             std::to_string(scale[2]) + ")");
@@ -68,7 +68,7 @@ namespace huira {
     {
         validate_scene_unlocked_("set_velocity()");
         if (this->position_source_ == TransformSource::SPICE_TRANSFORM) {
-            HUIRA_THROW_ERROR(this->get_info_() + " - cannot manually set velocity when node uses SPICE for position " +
+            HUIRA_THROW_ERROR(this->get_info() + " - cannot manually set velocity when node uses SPICE for position " +
                 "(spice_origin_=" + spice_origin_ + ")");
         }
 
@@ -81,7 +81,7 @@ namespace huira {
     {
         validate_scene_unlocked_("set_angular_velocity()");
         if (this->rotation_source_ == TransformSource::SPICE_TRANSFORM) {
-            HUIRA_THROW_ERROR(this->get_info_() + " - cannot manually set angular velocity when node uses SPICE for rotation " +
+            HUIRA_THROW_ERROR(this->get_info() + " - cannot manually set angular velocity when node uses SPICE for rotation " +
                 "(spice_frame_=" + spice_frame_ + ")");
         }
 
@@ -94,7 +94,7 @@ namespace huira {
     {
         validate_scene_unlocked_("set_spice_origin()");
         validate_spice_origin_allowed_();
-        HUIRA_LOG_INFO(this->get_info_() + " - set_spice_origin('" + spice_origin + "')");
+        HUIRA_LOG_INFO(this->get_info() + " - set_spice_origin('" + spice_origin + "')");
 
         this->spice_origin_ = spice_origin;
         this->position_source_ = TransformSource::SPICE_TRANSFORM;
@@ -106,7 +106,7 @@ namespace huira {
     {
         validate_scene_unlocked_("set_spice_frame()");
         validate_spice_frame_allowed_();
-        HUIRA_LOG_INFO(this->get_info_() + " - set_spice_frame('" + spice_frame + "')");
+        HUIRA_LOG_INFO(this->get_info() + " - set_spice_frame('" + spice_frame + "')");
 
         this->spice_frame_ = spice_frame;
         this->rotation_source_ = TransformSource::SPICE_TRANSFORM;
@@ -119,7 +119,7 @@ namespace huira {
         validate_scene_unlocked_("set_spice()");
         validate_spice_origin_allowed_();
         validate_spice_frame_allowed_();
-        HUIRA_LOG_INFO(this->get_info_() + " - set_spice('" + spice_origin + ", " + spice_frame + "')");
+        HUIRA_LOG_INFO(this->get_info() + " - set_spice('" + spice_origin + ", " + spice_frame + "')");
 
         this->spice_origin_ = spice_origin;
         this->spice_frame_ = spice_frame;
@@ -127,6 +127,16 @@ namespace huira {
         this->rotation_source_ = TransformSource::SPICE_TRANSFORM;
         this->update_spice_transform_();
     }
+
+
+
+    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
+    std::string Node<TSpectral, TFloat>::get_info() {
+        std::string info = get_type_name() + "[" + std::to_string(this->id()) + "]";
+        return info;
+    }
+
+
 
     template <IsSpectral TSpectral, IsFloatingPoint TFloat>
     void Node<TSpectral, TFloat>::update_spice_transform_()
@@ -204,12 +214,6 @@ namespace huira {
         on_transform_changed_();
     }
 
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    std::string Node<TSpectral, TFloat>::get_info_() {
-        std::string info = get_type_name_() + "[" + std::to_string(this->id()) + "]";
-        return info;
-    }
-
 
     // ========================= //
     // === Protected Members === //
@@ -219,7 +223,7 @@ namespace huira {
     void Node<TSpectral, TFloat>::validate_scene_unlocked_(const std::string function_name)
     {
         if (scene_->is_locked()) {
-            HUIRA_THROW_ERROR(this->get_info_() + " - " + function_name + " was called with a locked scene");
+            HUIRA_THROW_ERROR(this->get_info() + " - " + function_name + " was called with a locked scene");
         }
     };
 
@@ -228,8 +232,8 @@ namespace huira {
     {
         if (parent_) {
             if (parent_->position_source_ != TransformSource::SPICE_TRANSFORM) {
-                HUIRA_THROW_ERROR(this->get_info_() + " - cannot set SPICE origin: parent node (" +
-                    parent_->get_info_() + ") has manually set position");
+                HUIRA_THROW_ERROR(this->get_info() + " - cannot set SPICE origin: parent node (" +
+                    parent_->get_info() + ") has manually set position");
             }
         }
     }
@@ -239,8 +243,8 @@ namespace huira {
     {
         if (parent_) {
             if (parent_->rotation_source_ != TransformSource::SPICE_TRANSFORM) {
-                HUIRA_THROW_ERROR(this->get_info_() + " - cannot set SPICE frame: parent node (" +
-                    parent_->get_info_() + ") has manually set rotation");
+                HUIRA_THROW_ERROR(this->get_info() + " - cannot set SPICE frame: parent node (" +
+                    parent_->get_info() + ") has manually set rotation");
             }
         }
     }

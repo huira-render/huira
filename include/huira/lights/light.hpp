@@ -51,7 +51,6 @@ namespace huira {
 
         virtual LightType get_type() const = 0;
 
-    protected:
-        std::string get_type_name_() const override = 0;
+        std::string get_type_name() const override = 0;
     };
 }

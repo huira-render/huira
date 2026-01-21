@@ -20,6 +20,8 @@
 
 #include "huira/lights/point_light.hpp"
 
+#include "huira/render/unresolved_render.hpp"
+
 #include "huira/scene/scene.hpp"
 
 #include "huira/spectral/spectral_bins.hpp"

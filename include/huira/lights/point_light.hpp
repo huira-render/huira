@@ -26,11 +26,10 @@ namespace huira {
 
         LightType get_type() const override { return LightType::Point; }
 
+        std::string get_type_name() const override { return "PointLight"; }
+
         // Setters for scene editing
         void set_intensity(const TSpectral& intensity) { spectral_intensity_ = intensity; }
-
-    protected:
-        std::string get_type_name_() const override { return "PointLight"; }
 
     private:
         TSpectral spectral_intensity_{ 0 };

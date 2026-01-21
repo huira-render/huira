@@ -33,6 +33,9 @@ namespace huira {
         void set_irradiance(TSpectral irradiance) { irradiance_ = irradiance; }
         TSpectral get_irradiance() const { return irradiance_; }
 
+
+        std::string get_type_name() const override { return "UnresolvedObject"; }
+
         // Explicitly delete methods that don't make sense for a point-like object:
         void set_rotation(const Rotation<TFloat>& rotation) = delete;
         void set_scale(const Vec3<TFloat>& scale) = delete;
@@ -43,8 +46,6 @@ namespace huira {
 
     protected:
         TSpectral irradiance_{ 0 };
-
-        std::string get_type_name_() const override { return "UnresolvedObject"; }
 
         friend class Scene<TSpectral, TFloat>;
         friend class FrameNode<TSpectral, TFloat>;

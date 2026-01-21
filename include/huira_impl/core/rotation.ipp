@@ -104,6 +104,16 @@ namespace huira {
 		this->set_matrix(matrix);
 	}
 
+    template <IsFloatingPoint T>
+    Rotation<T>::Rotation(Vec3<T> x_axis, Vec3<T> y_axis, Vec3<T> z_axis)
+    {
+        Mat3<T> matrix;
+        matrix[0] = x_axis;
+        matrix[1] = y_axis;
+        matrix[2] = z_axis;
+        this->set_matrix(matrix);
+    }
+
 
 	// ========================= //
 	// === Memeber Functions === //
