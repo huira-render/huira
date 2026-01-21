@@ -58,8 +58,28 @@ namespace huira {
         void set_spice_frame(const std::string& spice_frame);
         void set_spice(const std::string& spice_origin, const std::string& spice_frame);
 
+
+        virtual std::string get_info();
+        virtual std::string get_type_name() const { return "Node"; }
+
+
         std::string get_spice_origin() const { return spice_origin_; }
         std::string get_spice_frame() const { return spice_frame_; }
+
+        Vec3<TFloat> get_global_position() const { return global_transform_.position; }
+        Vec3<TFloat> get_local_position() const { return local_transform_.position; }
+
+        Rotation<TFloat> get_global_rotation() const { return global_transform_.rotation; }
+        Rotation<TFloat> get_local_rotation() const { return local_transform_.rotation; }
+
+        Vec3<TFloat> get_global_scale() const { return global_transform_.scale; }
+        Vec3<TFloat> get_local_scale() const { return local_transform_.scale; }
+
+        Vec3<TFloat> get_global_velocity() const { return global_transform_.velocity; }
+        Vec3<TFloat> get_local_velocity() const { return local_transform_.velocity; }
+
+        Vec3<TFloat> get_global_angular_velocity() const { return global_transform_.angular_velocity; }
+        Vec3<TFloat> get_local_angular_velocity() const { return local_transform_.angular_velocity; }
 
     protected:
         Transform<TFloat> local_transform_;
@@ -89,9 +109,6 @@ namespace huira {
         void update_spice_transform_();
         virtual void update_all_spice_transforms_();
         virtual void update_global_transform_();
-
-        virtual std::string get_info_();
-        virtual std::string get_type_name_() const { return "Node"; }
 
         void validate_scene_unlocked_(const std::string function_name);
         void validate_spice_origin_allowed_();

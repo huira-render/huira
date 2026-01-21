@@ -26,7 +26,7 @@ namespace huira {
         child->set_parent_(this);
         children_.push_back(child);
 
-        HUIRA_LOG_INFO(this->get_info_() + " - new FrameNode added: " + child->get_info_());
+        HUIRA_LOG_INFO(this->get_info() + " - new FrameNode added: " + child->get_info());
 
         return child;
     }
@@ -38,16 +38,16 @@ namespace huira {
 
         auto child = child_weak.lock();
         if (!child) {
-            HUIRA_THROW_ERROR(this->get_info_() + " - delete_child() called with expired weak_ptr");
+            HUIRA_THROW_ERROR(this->get_info() + " - delete_child() called with expired weak_ptr");
         }
 
         if (child->parent_ != this) {
-            HUIRA_THROW_ERROR(this->get_info_() + " - delete_child() called with a child that does not belong to this node");
+            HUIRA_THROW_ERROR(this->get_info() + " - delete_child() called with a child that does not belong to this node");
         }
 
         auto it = std::find(children_.begin(), children_.end(), child);
         if (it != children_.end()) {
-            HUIRA_LOG_INFO(this->get_info_() + " - deleting child: " + child->get_info_());
+            HUIRA_LOG_INFO(this->get_info() + " - deleting child: " + child->get_info());
             children_.erase(it);
         }
     }
@@ -60,7 +60,7 @@ namespace huira {
         auto child = std::make_shared<UnresolvedObject<TSpectral, TFloat>>(this->scene_);
         child->set_parent_(this);
 
-        HUIRA_LOG_INFO(this->get_info_() + " - new UnresolvedObject added: " + child->get_info_());
+        HUIRA_LOG_INFO(this->get_info() + " - new UnresolvedObject added: " + child->get_info());
 
         children_.push_back(child);
         return child;
@@ -74,7 +74,7 @@ namespace huira {
         auto child = std::make_shared<PointLight<TSpectral, TFloat>>(this->scene_, spectral_intensity);
         child->set_parent_(this);
 
-        HUIRA_LOG_INFO(this->get_info_() + " - new PointLight added: " + child->get_info_());
+        HUIRA_LOG_INFO(this->get_info() + " - new PointLight added: " + child->get_info());
 
         children_.push_back(child);
         return child;
@@ -88,7 +88,7 @@ namespace huira {
         auto child = std::make_shared<Camera<TSpectral, TFloat>>(this->scene_);
         child->set_parent_(this);
 
-        HUIRA_LOG_INFO(this->get_info_() + " - new Camera added: " + child->get_info_());
+        HUIRA_LOG_INFO(this->get_info() + " - new Camera added: " + child->get_info());
 
         children_.push_back(child);
         return child;

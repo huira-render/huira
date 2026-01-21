@@ -18,6 +18,8 @@
 
 #include "huira/lights/point_light.hpp"
 
+#include "huira/render/unresolved_render.hpp"
+
 #include "huira/scene/node.hpp"
 #include "huira/scene/scene.hpp"
 #include "huira/scene/unresolved_object.hpp"
@@ -42,7 +44,7 @@ namespace huira {
     template class FrameHandle<TestSpectral, TestFloat>;
     template class RootFrameHandle<TestSpectral, TestFloat>;
     template class CameraHandle<TestSpectral, TestFloat>;
-    template class UnresolvedHandle<TestSpectral, TestFloat>;
+    template class UnresolvedObjectHandle<TestSpectral, TestFloat>;
     template class PointLightHandle<TestSpectral, TestFloat>;
 
     template class Image<std::int8_t>;
@@ -51,6 +53,11 @@ namespace huira {
     template class Image<TestSpectral>;
 
     template class PointLight<TestSpectral, TestFloat>;
+
+    template UnresolvedRenderResult<TestSpectral, TestFloat> unresolved_render<TestSpectral, TestFloat>(
+        const Scene<TestSpectral, TestFloat>&,
+        const CameraHandle<TestSpectral, TestFloat>&,
+        UnresolvedRenderSettings);
 
     template class Scene<TestSpectral, TestFloat>;
     template class Node<TestSpectral, TestFloat>;

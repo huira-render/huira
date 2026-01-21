@@ -44,8 +44,9 @@ namespace huira {
         std::weak_ptr<PointLight<TSpectral, TFloat>> new_point_light(TSpectral spectral_intensity);
         std::weak_ptr<Camera<TSpectral, TFloat>> new_camera();
 
+        std::string get_type_name() const override { return "FrameNode"; }
+
     protected:
-        std::string get_type_name_() const override { return "FrameNode"; }
 
         // Override to propagate transform changes to children
         void on_transform_changed_() override;
