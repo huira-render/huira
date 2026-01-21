@@ -3,12 +3,12 @@
 #include "huira/detail/concepts/numeric_concepts.hpp"
 #include "huira/detail/concepts/spectral_concepts.hpp"
 #include "huira/handles/handle.hpp"
-#include "huira/scene/node.hpp"
 
 namespace huira {
     template <IsSpectral TSpectral, IsFloatingPoint TFloat, typename TNode>
     class NodeHandle : public Handle<TNode> {
     public:
+        NodeHandle() = delete;
         using Handle<TNode>::Handle;
 
         // Position

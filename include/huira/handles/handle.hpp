@@ -9,11 +9,7 @@ namespace huira {
     template <typename T>
     class Handle {
     public:
-        Handle(std::weak_ptr<T> ptr)
-            : ptr_(ptr)
-        {
-
-        }
+        Handle(std::weak_ptr<T> ptr) : ptr_(ptr) {}
 
         bool valid() const { return !ptr_.expired(); }
 
