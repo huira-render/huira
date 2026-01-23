@@ -46,6 +46,8 @@ autosectionlabel_prefix_document = True
 
 # Breathe Configuration
 breathe_default_project = "huira"
+breathe_default_members = ('members', 'undoc-members')
+breathe_show_include = False
 
 html_theme = "furo"
 html_static_path = ['_static']
