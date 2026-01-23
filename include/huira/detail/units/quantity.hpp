@@ -5,8 +5,8 @@
 #include <string>
 #include <type_traits>
 
-#include "huira/core/constants.hpp"
-#include "huira/core/units/dimensionality.hpp"
+#include "huira/detail/constants.hpp"
+#include "huira/detail/units/dimensionality.hpp"
 
 #include "huira/detail/concepts/unit_concepts.hpp"
 #include "huira/detail/validate.hpp"

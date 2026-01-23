@@ -6,7 +6,6 @@
 #include <cstdint>
 
 #include "huira/core/transform.hpp"
-#include "huira/core/time.hpp"
 
 #include "huira/detail/concepts/numeric_concepts.hpp"
 #include "huira/detail/concepts/spectral_concepts.hpp"
@@ -143,4 +142,4 @@ namespace huira {
     };
 }
 
-#include "huira_impl/scene/node.ipp"
+#include "huira_impl/objects/scene_graph/node.ipp"

@@ -9,7 +9,7 @@
 #include "huira/detail/concepts/numeric_concepts.hpp"
 #include "huira/detail/concepts/spectral_concepts.hpp"
 
-#include "huira/scene/frame_node.hpp"
+#include "huira/objects/scene_graph/frame_node.hpp"
 #include "huira/handles/root_frame_handle.hpp"
 
 namespace huira {
@@ -48,4 +48,4 @@ namespace huira {
     };
 }
 
-#include "huira_impl/scene/scene.ipp"
+#include "huira_impl/core/scene.ipp"

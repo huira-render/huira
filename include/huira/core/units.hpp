@@ -2,7 +2,7 @@
 
 #include <ratio>
 
-#include "huira/core/units/quantity.hpp"
+#include "huira/detail/units/quantity.hpp"
 
 /**
  * @file units.hpp

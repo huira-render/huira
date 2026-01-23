@@ -1,30 +1,38 @@
-#include "huira/camera/distortion/brown_distortion.hpp"
-#include "huira/camera/distortion/opencv_distortion.hpp"
-#include "huira/camera/distortion/owen_distortion.hpp"
-#include "huira/camera/camera.hpp"
-
 #include "huira/core/ray.hpp"
+//#include "huira/core/ray_hit.hpp"
 #include "huira/core/rotation.hpp"
+#include "huira/core/scene.hpp"
+#include "huira/core/spectral_bins.hpp"
+//#include "huira/core/spice.hpp"
+//#include "huira/core/time.hpp"
 #include "huira/core/transform.hpp"
 #include "huira/core/types.hpp"
+//#include "huira/core/units.hpp"
 
+#include "huira/handles/camera_handle.hpp"
 #include "huira/handles/frame_handle.hpp"
+#include "huira/handles/handle.hpp"
+#include "huira/handles/node_handle.hpp"
+#include "huira/handles/point_handle.hpp"
+#include "huira/handles/point_light_handle.hpp"
 #include "huira/handles/root_frame_handle.hpp"
 #include "huira/handles/unresolved_handle.hpp"
-#include "huira/handles/point_light_handle.hpp"
-#include "huira/handles/camera_handle.hpp"
 
 #include "huira/images/image.hpp"
 
-#include "huira/lights/point_light.hpp"
+#include "huira/objects/cameras/camera.hpp"
+#include "huira/objects/cameras/distortion/brown_distortion.hpp"
+#include "huira/objects/cameras/distortion/opencv_distortion.hpp"
+#include "huira/objects/cameras/distortion/owen_distortion.hpp"
+
+#include "huira/objects/lights/point_light.hpp"
+
+#include "huira/objects/scene_graph/frame_node.hpp"
+#include "huira/objects/scene_graph/node.hpp"
+
+#include "huira/objects/unresolved_object.hpp"
 
 #include "huira/render/unresolved_render.hpp"
-
-#include "huira/scene/node.hpp"
-#include "huira/scene/scene.hpp"
-#include "huira/scene/unresolved_object.hpp"
-
-#include "huira/spectral/spectral_bins.hpp"
 
 namespace huira {
     using TestSpectral = RGB;

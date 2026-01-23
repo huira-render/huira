@@ -7,7 +7,7 @@
 #include "huira/handles/node_handle.hpp"
 #include "huira/handles/point_light_handle.hpp"
 #include "huira/handles/unresolved_handle.hpp"
-#include "huira/scene/frame_node.hpp"
+#include "huira/objects/scene_graph/frame_node.hpp"
 
 namespace huira {
     template <IsSpectral TSpectral, IsFloatingPoint TFloat>

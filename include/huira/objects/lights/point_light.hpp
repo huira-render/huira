@@ -3,7 +3,7 @@
 #include "huira/core/types.hpp"
 #include "huira/detail/concepts/numeric_concepts.hpp"
 #include "huira/detail/concepts/spectral_concepts.hpp"
-#include "huira/lights/light.hpp"
+#include "huira/objects/lights/light.hpp"
 
 namespace huira {
     template <IsSpectral TSpectral, IsFloatingPoint TFloat>
@@ -36,4 +36,4 @@ namespace huira {
     };
 }
 
-#include "huira_impl/lights/point_light.ipp"
+#include "huira_impl/objects/lights/point_light.ipp"

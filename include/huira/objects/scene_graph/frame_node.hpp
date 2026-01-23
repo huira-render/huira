@@ -5,7 +5,7 @@
 #include <string>
 #include <algorithm>
 
-#include "huira/scene/node.hpp"
+#include "huira/objects/scene_graph/node.hpp"
 
 #include "huira/detail/concepts/numeric_concepts.hpp"
 #include "huira/detail/concepts/spectral_concepts.hpp"
@@ -66,4 +66,4 @@ namespace huira {
     };
 }
 
-#include "huira_impl/scene/frame_node.ipp"
+#include "huira_impl/objects/scene_graph/frame_node.ipp"

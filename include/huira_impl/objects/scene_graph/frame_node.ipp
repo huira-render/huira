@@ -6,8 +6,8 @@
 #include "huira/detail/concepts/spectral_concepts.hpp"
 #include "huira/detail/logger.hpp"
 
-#include "huira/lights/point_light.hpp"
-#include "huira/scene/unresolved_object.hpp"
+#include "huira/objects/lights/point_light.hpp"
+#include "huira/objects/unresolved_object.hpp"
 
 namespace huira {
     template <IsSpectral TSpectral, IsFloatingPoint TFloat>

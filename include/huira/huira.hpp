@@ -1,30 +1,31 @@
-#include "huira/camera/distortion/brown_distortion.hpp"
-#include "huira/camera/distortion/opencv_distortion.hpp"
-#include "huira/camera/distortion/owen_distortion.hpp"
-#include "huira/camera/camera.hpp"
-
-#include "huira/detail/logger.hpp"
-
-#include "huira/core/constants.hpp"
+// Core API header for the Huira library.
 #include "huira/core/ray.hpp"
+#include "huira/core/ray_hit.hpp"
 #include "huira/core/rotation.hpp"
+#include "huira/core/scene.hpp"
+#include "huira/core/spectral_bins.hpp"
+#include "huira/core/spice.hpp"
 #include "huira/core/time.hpp"
+#include "huira/core/transform.hpp"
 #include "huira/core/types.hpp"
 #include "huira/core/units.hpp"
 
-#include "huira/handles/frame_handle.hpp"
-#include "huira/handles/unresolved_handle.hpp"
-#include "huira/handles/point_light_handle.hpp"
+// detail/ is not part of the public API
 
+// Handles for various scene elements
+#include "huira/handles/camera_handle.hpp"
+#include "huira/handles/frame_handle.hpp"
+//#include "huira/handles/handle.hpp"            // Not part of public API
+//#include "huira/handles/node_handle.hpp"       // Not part of public API
+//#include "huira/handles/point_handle.hpp"      // Not part of public API
+#include "huira/handles/point_light_handle.hpp"
+//#include "huira/handles/root_frame_handle.hpp" // Not part of public API
+#include "huira/handles/unresolved_handle.hpp"
+
+// Image interfaces
 #include "huira/images/image.hpp"
 
-#include "huira/lights/point_light.hpp"
+// objects/ is not part of the public API
 
+// Rendering interfaces:
 #include "huira/render/unresolved_render.hpp"
-
-#include "huira/scene/scene.hpp"
-
-#include "huira/spectral/spectral_bins.hpp"
-
-#include "huira/spice/spice_default.hpp"
-#include "huira/spice/spice_furnsh.hpp"

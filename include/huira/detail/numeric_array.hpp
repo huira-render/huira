@@ -171,4 +171,4 @@ namespace huira {
     constexpr NumericArray<T, N> operator/(const U& lhs, const NumericArray<T, N>& rhs);
 }
 
-#include "huira_impl/spectral/numeric_array.ipp"
+#include "huira_impl/detail/numeric_array.ipp"

@@ -2,8 +2,8 @@
 
 #include "catch2/catch_test_macros.hpp"
 
-#include "huira/core/constants.hpp"
 #include "huira/core/units.hpp"
+#include "huira/detail/constants.hpp"
 
 using namespace huira;
 using namespace huira::units::literals;

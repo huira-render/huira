@@ -1,4 +1,4 @@
-#include "huira/spice/spice_time.hpp"
+#include "huira/core/spice.hpp"
 
 namespace huira {
 

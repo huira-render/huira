@@ -8,7 +8,7 @@
 
 namespace huira {
     // Threshold below which we use direct floating-point offset
-    template <IsFloat T>
+    template <IsFloatingPoint T>
     constexpr T origin() {
         if constexpr (std::is_same_v<T, float>) {
             return 1.0f / 32.0f;
@@ -19,7 +19,7 @@ namespace huira {
     }
 
     // Scale factor for direct floating-point offset
-    template <IsFloat T>
+    template <IsFloatingPoint T>
     constexpr T float_scale() {
         if constexpr (std::is_same_v<T, float>) {
             return 1.0f / 65536.0f;
@@ -30,7 +30,7 @@ namespace huira {
     }
 
     // Scale factor for integer-space offset
-    template <IsFloat T>
+    template <IsFloatingPoint T>
     constexpr T int_scale() {
         if constexpr (std::is_same_v<T, float>) {
             return 256.0f;
