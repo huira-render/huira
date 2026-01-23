@@ -8,33 +8,32 @@
 
 namespace huira {
 
-    template <IsFloatingPoint TFloat>
     struct OpenCVCoefficients : public DistortionCoefficients {
         // Radial distortion coefficients
-        TFloat k1 = TFloat{ 0 };
-        TFloat k2 = TFloat{ 0 };
-        TFloat k3 = TFloat{ 0 };
-        TFloat k4 = TFloat{ 0 };
-        TFloat k5 = TFloat{ 0 };
-        TFloat k6 = TFloat{ 0 };
+        double k1 = 0;
+        double k2 = 0;
+        double k3 = 0;
+        double k4 = 0;
+        double k5 = 0;
+        double k6 = 0;
 
         // Tangential distortion coefficients
-        TFloat p1 = TFloat{ 0 };
-        TFloat p2 = TFloat{ 0 };
+        double p1 = 0;
+        double p2 = 0;
 
         // Thin prism distortion coefficients
-        TFloat s1 = TFloat{ 0 };
-        TFloat s2 = TFloat{ 0 };
-        TFloat s3 = TFloat{ 0 };
-        TFloat s4 = TFloat{ 0 };
+        double s1 = 0;
+        double s2 = 0;
+        double s3 = 0;
+        double s4 = 0;
 
         OpenCVCoefficients() = default;
 
-        constexpr OpenCVCoefficients(TFloat k1_val, TFloat k2_val, TFloat k3_val,
-            TFloat k4_val, TFloat k5_val, TFloat k6_val,
-            TFloat p1_val, TFloat p2_val,
-            TFloat s1_val, TFloat s2_val,
-            TFloat s3_val, TFloat s4_val)
+        constexpr OpenCVCoefficients(double k1_val, double k2_val, double k3_val,
+            double k4_val, double k5_val, double k6_val,
+            double p1_val, double p2_val,
+            double s1_val, double s2_val,
+            double s3_val, double s4_val)
             : k1(k1_val), k2(k2_val), k3(k3_val), k4(k4_val), k5(k5_val), k6(k6_val),
             p1(p1_val), p2(p2_val), s1(s1_val), s2(s2_val), s3(s3_val), s4(s4_val) {
         }
@@ -43,10 +42,8 @@ namespace huira {
     template <IsSpectral TSpectral, IsFloatingPoint TFloat>
     class OpenCVDistortion : public Distortion<TSpectral, TFloat> {
     public:
-        using CoefficientsType = OpenCVCoefficients<TFloat>;
-
         OpenCVDistortion() = default;
-        explicit OpenCVDistortion(CoefficientsType coefficients);
+        explicit OpenCVDistortion(OpenCVCoefficients coefficients);
 
 
         [[nodiscard]] Pixel compute_delta(Pixel homogeneous_coords) const;
@@ -59,7 +56,7 @@ namespace huira {
         [[nodiscard]] const DistortionCoefficients* get_coefficients() const override { return &coefficients_; }
 
     private:
-        CoefficientsType coefficients_{};
+        OpenCVCoefficients coefficients_{};
         
         static constexpr TFloat kMinDenominator = static_cast<TFloat>(1e-10);
     };
