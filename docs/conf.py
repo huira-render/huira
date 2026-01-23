@@ -47,7 +47,7 @@ autosectionlabel_prefix_document = True
 # Breathe Configuration
 breathe_default_project = "huira"
 
-html_theme = "sphinx_rtd_theme"
+html_theme = "furo"
 html_static_path = ['_static']
 html_logo = '_static/logo/full/white_on_transparent.svg'
 
@@ -61,13 +61,16 @@ html_js_files = [
     'js/logo_link.js',
 ]
 
-# Add global toc tree to all html pages
-html_sidebars = { '**': ['globaltoc.html', 'relations.html', 'sourcelink.html', 'searchbox.html'] }
-
-# Custom RTD settings:
+# Furo theme options:
 html_theme_options = {
-    'collapse_navigation': False,
-    'style_external_links': True,
-    'titles_only': True
+    "light_css_variables": {
+        "color-brand-primary": "#2980b9",
+        "color-brand-content": "#2980b9",
+    },
+    "dark_css_variables": {
+        "color-brand-primary": "#5ba3d0",
+        "color-brand-content": "#5ba3d0",
+    },
+    "sidebar_hide_name": True,
 }
 
