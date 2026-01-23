@@ -7,8 +7,6 @@ namespace huira {
     /**
      * @brief Sets the position using a Vec3.
      *
-     * @tparam TSpectral The spectral type satisfying the IsSpectral concept
-     * @tparam TFloat The floating-point type satisfying the IsFloatingPoint concept
      * @param position The 3D position vector to set
      */
     template <IsSpectral TSpectral, IsFloatingPoint TFloat, typename TNode>
@@ -19,8 +17,6 @@ namespace huira {
     /**
      * @brief Sets the position using individual coordinates.
      *
-     * @tparam TSpectral The spectral type satisfying the IsSpectral concept
-     * @tparam TFloat The floating-point type satisfying the IsFloatingPoint concept
      * @param x The x-coordinate
      * @param y The y-coordinate
      * @param z The z-coordinate
@@ -33,8 +29,6 @@ namespace huira {
     /**
      * @brief Gets the global position.
      *
-     * @tparam TSpectral The spectral type satisfying the IsSpectral concept
-     * @tparam TFloat The floating-point type satisfying the IsFloatingPoint concept
      * @return Vec3<TFloat> The global 3D position vector
      */
     template <IsSpectral TSpectral, IsFloatingPoint TFloat, typename TNode>
@@ -45,8 +39,6 @@ namespace huira {
     /**
      * @brief Gets the local position.
      *
-     * @tparam TSpectral The spectral type satisfying the IsSpectral concept
-     * @tparam TFloat The floating-point type satisfying the IsFloatingPoint concept
      * @return Vec3<TFloat> The local 3D position vector
      */
     template <IsSpectral TSpectral, IsFloatingPoint TFloat, typename TNode>
@@ -59,8 +51,6 @@ namespace huira {
     /**
      * @brief Sets the velocity using a Vec3.
      *
-     * @tparam TSpectral The spectral type satisfying the IsSpectral concept
-     * @tparam TFloat The floating-point type satisfying the IsFloatingPoint concept
      * @param velocity The 3D velocity vector to set
      */
     template <IsSpectral TSpectral, IsFloatingPoint TFloat, typename TNode>
@@ -71,8 +61,6 @@ namespace huira {
     /**
      * @brief Sets the velocity using individual components.
      *
-     * @tparam TSpectral The spectral type satisfying the IsSpectral concept
-     * @tparam TFloat The floating-point type satisfying the IsFloatingPoint concept
      * @param vx The x-component of velocity
      * @param vy The y-component of velocity
      * @param vz The z-component of velocity
@@ -85,8 +73,6 @@ namespace huira {
     /**
      * @brief Gets the global velocity.
      *
-     * @tparam TSpectral The spectral type satisfying the IsSpectral concept
-     * @tparam TFloat The floating-point type satisfying the IsFloatingPoint concept
      * @return Vec3<TFloat> The global 3D velocity vector
      */
     template <IsSpectral TSpectral, IsFloatingPoint TFloat, typename TNode>
@@ -97,8 +83,6 @@ namespace huira {
     /**
      * @brief Gets the local velocity.
      *
-     * @tparam TSpectral The spectral type satisfying the IsSpectral concept
-     * @tparam TFloat The floating-point type satisfying the IsFloatingPoint concept
      * @return Vec3<TFloat> The local 3D velocity vector
      */
     template <IsSpectral TSpectral, IsFloatingPoint TFloat, typename TNode>
@@ -110,8 +94,6 @@ namespace huira {
     /**
      * @brief Sets the rotation.
      *
-     * @tparam TSpectral The spectral type satisfying the IsSpectral concept
-     * @tparam TFloat The floating-point type satisfying the IsFloatingPoint concept
      * @param rotation The rotation to set
      */
     template <IsSpectral TSpectral, IsFloatingPoint TFloat, typename TNode>
@@ -122,8 +104,6 @@ namespace huira {
     /**
      * @brief Gets the global rotation.
      *
-     * @tparam TSpectral The spectral type satisfying the IsSpectral concept
-     * @tparam TFloat The floating-point type satisfying the IsFloatingPoint concept
      * @return Rotation<TFloat> The global rotation
      */
     template <IsSpectral TSpectral, IsFloatingPoint TFloat, typename TNode>
@@ -134,8 +114,6 @@ namespace huira {
     /**
      * @brief Gets the local rotation.
      *
-     * @tparam TSpectral The spectral type satisfying the IsSpectral concept
-     * @tparam TFloat The floating-point type satisfying the IsFloatingPoint concept
      * @return Rotation<TFloat> The local rotation
      */
     template <IsSpectral TSpectral, IsFloatingPoint TFloat, typename TNode>
@@ -147,8 +125,6 @@ namespace huira {
     /**
      * @brief Sets the angular velocity using a Vec3.
      *
-     * @tparam TSpectral The spectral type satisfying the IsSpectral concept
-     * @tparam TFloat The floating-point type satisfying the IsFloatingPoint concept
      * @param angular_velocity The 3D angular velocity vector to set
      */
     template <IsSpectral TSpectral, IsFloatingPoint TFloat, typename TNode>
@@ -159,8 +135,6 @@ namespace huira {
     /**
      * @brief Sets the angular velocity using individual components.
      *
-     * @tparam TSpectral The spectral type satisfying the IsSpectral concept
-     * @tparam TFloat The floating-point type satisfying the IsFloatingPoint concept
      * @param wx The x-component of angular velocity
      * @param wy The y-component of angular velocity
      * @param wz The z-component of angular velocity
@@ -173,8 +147,6 @@ namespace huira {
     /**
      * @brief Gets the global angular velocity.
      *
-     * @tparam TSpectral The spectral type satisfying the IsSpectral concept
-     * @tparam TFloat The floating-point type satisfying the IsFloatingPoint concept
      * @return Vec3<TFloat> The global 3D angular velocity vector
      */
     template <IsSpectral TSpectral, IsFloatingPoint TFloat, typename TNode>
@@ -185,8 +157,6 @@ namespace huira {
     /**
      * @brief Gets the local angular velocity.
      *
-     * @tparam TSpectral The spectral type satisfying the IsSpectral concept
-     * @tparam TFloat The floating-point type satisfying the IsFloatingPoint concept
      * @return Vec3<TFloat> The local 3D angular velocity vector
      */
     template <IsSpectral TSpectral, IsFloatingPoint TFloat, typename TNode>
@@ -198,8 +168,6 @@ namespace huira {
     /**
      * @brief Sets the scale using a Vec3.
      *
-     * @tparam TSpectral The spectral type satisfying the IsSpectral concept
-     * @tparam TFloat The floating-point type satisfying the IsFloatingPoint concept
      * @param s The 3D scale vector to set
      */
     template <IsSpectral TSpectral, IsFloatingPoint TFloat, typename TNode>
@@ -210,8 +178,6 @@ namespace huira {
     /**
      * @brief Sets the scale using individual components.
      *
-     * @tparam TSpectral The spectral type satisfying the IsSpectral concept
-     * @tparam TFloat The floating-point type satisfying the IsFloatingPoint concept
      * @param sx The x-component of the scale
      * @param sy The y-component of the scale
      * @param sz The z-component of the scale
@@ -224,8 +190,6 @@ namespace huira {
     /**
      * @brief Sets the scale using a single scale factor.
      *
-     * @tparam TSpectral The spectral type satisfying the IsSpectral concept
-     * @tparam TFloat The floating-point type satisfying the IsFloatingPoint concept
      * @param s The 3D scale factor to set
      */
     template <IsSpectral TSpectral, IsFloatingPoint TFloat, typename TNode>
@@ -237,8 +201,6 @@ namespace huira {
     /**
      * @brief Gets the global scale.
      *
-     * @tparam TSpectral The spectral type satisfying the IsSpectral concept
-     * @tparam TFloat The floating-point type satisfying the IsFloatingPoint concept
      * @return Vec3<TFloat> The local 3D scale
      */
     template <IsSpectral TSpectral, IsFloatingPoint TFloat, typename TNode>
@@ -250,8 +212,6 @@ namespace huira {
     /**
      * @brief Gets the local scale.
      *
-     * @tparam TSpectral The spectral type satisfying the IsSpectral concept
-     * @tparam TFloat The floating-point type satisfying the IsFloatingPoint concept
      * @return Vec3<TFloat> The local 3D scale
      */
     template <IsSpectral TSpectral, IsFloatingPoint TFloat, typename TNode>
@@ -263,8 +223,6 @@ namespace huira {
     /**
      * @brief Sets the SPICE origin identifier.
      *
-     * @tparam TSpectral The spectral type satisfying the IsSpectral concept
-     * @tparam TFloat The floating-point type satisfying the IsFloatingPoint concept
      * @param spice_origin The SPICE origin string identifier
      */
     template <IsSpectral TSpectral, IsFloatingPoint TFloat, typename TNode>
@@ -276,8 +234,6 @@ namespace huira {
     /**
      * @brief Sets the SPICE frame identifier.
      *
-     * @tparam TSpectral The spectral type satisfying the IsSpectral concept
-     * @tparam TFloat The floating-point type satisfying the IsFloatingPoint concept
      * @param spice_origin The SPICE frame string identifier
      */
     template <IsSpectral TSpectral, IsFloatingPoint TFloat, typename TNode>
@@ -290,8 +246,6 @@ namespace huira {
     /**
      * @brief Sets the SPICE frame identifier.
      *
-     * @tparam TSpectral The spectral type satisfying the IsSpectral concept
-     * @tparam TFloat The floating-point type satisfying the IsFloatingPoint concept
      * @param spice_origin The SPICE frame string identifier
      */
     template <IsSpectral TSpectral, IsFloatingPoint TFloat, typename TNode>
@@ -302,8 +256,6 @@ namespace huira {
     /**
      * @brief Gets the SPICE origin identifier.
      *
-     * @tparam TSpectral The spectral type satisfying the IsSpectral concept
-     * @tparam TFloat The floating-point type satisfying the IsFloatingPoint concept
      * @return std::string The SPICE origin string identifier
      */
     template <IsSpectral TSpectral, IsFloatingPoint TFloat, typename TNode>
@@ -314,8 +266,6 @@ namespace huira {
     /**
      * @brief Gets the SPICE frame identifier.
      *
-     * @tparam TSpectral The spectral type satisfying the IsSpectral concept
-     * @tparam TFloat The floating-point type satisfying the IsFloatingPoint concept
      * @return std::string The SPICE frame string identifier
      */
     template <IsSpectral TSpectral, IsFloatingPoint TFloat, typename TNode>
@@ -326,8 +276,6 @@ namespace huira {
     /**
      * @brief Gets the position in a specified SPICE frame.
      *
-     * @tparam TSpectral The spectral type satisfying the IsSpectral concept
-     * @tparam TFloat The floating-point type satisfying the IsFloatingPoint concept
      * @param target_origin The target SPICE origin identifier
      * @param target_frame The target SPICE frame identifier
      * @return Vec3<TFloat> The position in the specified SPICE frame
@@ -341,8 +289,6 @@ namespace huira {
     /**
      * @brief Gets the velocity in a specified SPICE frame.
      *
-     * @tparam TSpectral The spectral type satisfying the IsSpectral concept
-     * @tparam TFloat The floating-point type satisfying the IsFloatingPoint concept
      * @param target_origin The target SPICE origin identifier
      * @param target_frame The target SPICE frame identifier
      * @return Vec3<TFloat> The velocity in the specified SPICE frame
@@ -356,8 +302,6 @@ namespace huira {
     /**
      * @brief Gets the rotation in a specified SPICE frame.
      *
-     * @tparam TSpectral The spectral type satisfying the IsSpectral concept
-     * @tparam TFloat The floating-point type satisfying the IsFloatingPoint concept
      * @param target_frame The target SPICE frame identifier
      * @return Rotation<TFloat> The rotation in the specified SPICE frame
      */
@@ -370,8 +314,6 @@ namespace huira {
     /**
      * @brief Gets the angular velocity in a specified SPICE frame.
      *
-     * @tparam TSpectral The spectral type satisfying the IsSpectral concept
-     * @tparam TFloat The floating-point type satisfying the IsFloatingPoint concept
      * @param target_frame The target SPICE frame identifier
      * @return Vec3<TFloat> The angular velocity in the specified SPICE frame
      */
@@ -384,8 +326,6 @@ namespace huira {
     /**
      * @brief Gets the state (position and velocity) in a specified SPICE frame.
      *
-     * @tparam TSpectral The spectral type satisfying the IsSpectral concept
-     * @tparam TFloat The floating-point type satisfying the IsFloatingPoint concept
      * @param target_origin The target SPICE origin identifier
      * @param target_frame The target SPICE frame identifier
      * @return std::pair<Vec3<TFloat>, Vec3<TFloat>> The position and velocity in the specified SPICE frame
@@ -399,8 +339,6 @@ namespace huira {
     /**
      * @brief Gets the attitude (rotation and angular velocity) in a specified SPICE frame.
      *
-     * @tparam TSpectral The spectral type satisfying the IsSpectral concept
-     * @tparam TFloat The floating-point type satisfying the IsFloatingPoint concept
      * @param target_frame The target SPICE frame identifier
      * @return std::pair<Rotation<TFloat>, Vec3<TFloat>> The rotation and angular velocity in the specified SPICE frame
      */

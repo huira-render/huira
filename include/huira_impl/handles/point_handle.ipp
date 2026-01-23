@@ -7,8 +7,6 @@ namespace huira {
     /**
      * @brief Sets the position of the unresolved light source using a Vec3.
      *
-     * @tparam TSpectral The spectral type satisfying the IsSpectral concept
-     * @tparam TFloat The floating-point type satisfying the IsFloatingPoint concept
      * @param position The 3D position vector to set
      */
     template <IsSpectral TSpectral, IsFloatingPoint TFloat, typename TNode>
@@ -19,8 +17,6 @@ namespace huira {
     /**
      * @brief Sets the position of the unresolved light source using individual coordinates.
      *
-     * @tparam TSpectral The spectral type satisfying the IsSpectral concept
-     * @tparam TFloat The floating-point type satisfying the IsFloatingPoint concept
      * @param x The x-coordinate
      * @param y The y-coordinate
      * @param z The z-coordinate
@@ -35,8 +31,6 @@ namespace huira {
     /**
      * @brief Sets the velocity of the unresolved light source using a Vec3.
      *
-     * @tparam TSpectral The spectral type satisfying the IsSpectral concept
-     * @tparam TFloat The floating-point type satisfying the IsFloatingPoint concept
      * @param velocity The 3D velocity vector to set
      */
     template <IsSpectral TSpectral, IsFloatingPoint TFloat, typename TNode>
@@ -47,8 +41,6 @@ namespace huira {
     /**
      * @brief Sets the velocity of the unresolved light source using individual components.
      *
-     * @tparam TSpectral The spectral type satisfying the IsSpectral concept
-     * @tparam TFloat The floating-point type satisfying the IsFloatingPoint concept
      * @param vx The x-component of velocity
      * @param vy The y-component of velocity
      * @param vz The z-component of velocity
@@ -63,8 +55,6 @@ namespace huira {
     /**
      * @brief Sets the SPICE origin identifier for the unresolved light source.
      *
-     * @tparam TSpectral The spectral type satisfying the IsSpectral concept
-     * @tparam TFloat The floating-point type satisfying the IsFloatingPoint concept
      * @param spice_origin The SPICE origin string identifier
      */
     template <IsSpectral TSpectral, IsFloatingPoint TFloat, typename TNode>
@@ -76,8 +66,6 @@ namespace huira {
     /**
      * @brief Gets the SPICE origin identifier for the unresolved light source.
      *
-     * @tparam TSpectral The spectral type satisfying the IsSpectral concept
-     * @tparam TFloat The floating-point type satisfying the IsFloatingPoint concept
      * @return std::string The SPICE origin string identifier
      */
     template <IsSpectral TSpectral, IsFloatingPoint TFloat, typename TNode>
@@ -88,8 +76,6 @@ namespace huira {
     /**
      * @brief Gets the global position of the unresolved light source.
      *
-     * @tparam TSpectral The spectral type satisfying the IsSpectral concept
-     * @tparam TFloat The floating-point type satisfying the IsFloatingPoint concept
      * @return Vec3<TFloat> The global 3D position vector
      */
     template <IsSpectral TSpectral, IsFloatingPoint TFloat, typename TNode>
@@ -100,8 +86,6 @@ namespace huira {
     /**
      * @brief Gets the local position of the unresolved light source.
      *
-     * @tparam TSpectral The spectral type satisfying the IsSpectral concept
-     * @tparam TFloat The floating-point type satisfying the IsFloatingPoint concept
      * @return Vec3<TFloat> The local 3D position vector
      */
     template <IsSpectral TSpectral, IsFloatingPoint TFloat, typename TNode>
@@ -112,8 +96,6 @@ namespace huira {
     /**
      * @brief Gets the global velocity of the unresolved light source.
      *
-     * @tparam TSpectral The spectral type satisfying the IsSpectral concept
-     * @tparam TFloat The floating-point type satisfying the IsFloatingPoint concept
      * @return Vec3<TFloat> The global 3D velocity vector
      */
     template <IsSpectral TSpectral, IsFloatingPoint TFloat, typename TNode>
@@ -124,8 +106,6 @@ namespace huira {
     /**
      * @brief Gets the local velocity of the unresolved light source.
      *
-     * @tparam TSpectral The spectral type satisfying the IsSpectral concept
-     * @tparam TFloat The floating-point type satisfying the IsFloatingPoint concept
      * @return Vec3<TFloat> The local 3D velocity vector
      */
     template <IsSpectral TSpectral, IsFloatingPoint TFloat, typename TNode>
@@ -137,8 +117,6 @@ namespace huira {
     /**
      * @brief Gets the position in a specified SPICE frame.
      *
-     * @tparam TSpectral The spectral type satisfying the IsSpectral concept
-     * @tparam TFloat The floating-point type satisfying the IsFloatingPoint concept
      * @param target_origin The target SPICE origin identifier
      * @param target_frame The target SPICE frame identifier
      * @return Vec3<TFloat> The position in the specified SPICE frame
@@ -152,8 +130,6 @@ namespace huira {
     /**
      * @brief Gets the velocity in a specified SPICE frame.
      *
-     * @tparam TSpectral The spectral type satisfying the IsSpectral concept
-     * @tparam TFloat The floating-point type satisfying the IsFloatingPoint concept
      * @param target_origin The target SPICE origin identifier
      * @param target_frame The target SPICE frame identifier
      * @return Vec3<TFloat> The velocity in the specified SPICE frame
@@ -167,8 +143,6 @@ namespace huira {
     /**
      * @brief Gets the state (position and velocity) in a specified SPICE frame.
      *
-     * @tparam TSpectral The spectral type satisfying the IsSpectral concept
-     * @tparam TFloat The floating-point type satisfying the IsFloatingPoint concept
      * @param target_origin The target SPICE origin identifier
      * @param target_frame The target SPICE frame identifier
      * @return std::pair<Vec3<TFloat>, Vec3<TFloat>> The position and velocity in the specified SPICE frame
