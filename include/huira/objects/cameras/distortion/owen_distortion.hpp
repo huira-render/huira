@@ -1,10 +1,9 @@
 #pragma once
 
-#include "huira/camera/distortion/distortion.hpp"
-
 #include "huira/core/types.hpp"
 #include "huira/detail/concepts/numeric_concepts.hpp"
 #include "huira/detail/concepts/spectral_concepts.hpp"
+#include "huira/objects/cameras/distortion/distortion.hpp"
 
 namespace huira {
 
@@ -47,5 +46,5 @@ namespace huira {
 
 }
 
-#include "huira_impl/camera/distortion/owen_distortion.ipp"
+#include "huira_impl/objects/cameras/distortion/owen_distortion.ipp"
 

@@ -1,6 +1,7 @@
 #include <memory>
 #include <string>
 
+#include "huira/core/spice.hpp"
 #include "huira/core/time.hpp"
 #include "huira/core/types.hpp"
 
@@ -8,7 +9,6 @@
 #include "huira/detail/concepts/spectral_concepts.hpp"
 #include "huira/detail/logger.hpp"
 #include "huira/detail/validate.hpp"
-#include "huira/spice/spice_states.hpp"
 
 namespace huira {
     template <IsSpectral TSpectral, IsFloatingPoint TFloat>

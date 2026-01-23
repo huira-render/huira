@@ -4,7 +4,7 @@
 #include "huira/detail/concepts/spectral_concepts.hpp"
 
 #include "huira/handles/point_handle.hpp"
-#include "huira/lights/point_light.hpp"
+#include "huira/objects/lights/point_light.hpp"
 
 namespace huira {
     template <IsSpectral TSpectral, IsFloatingPoint TFloat>

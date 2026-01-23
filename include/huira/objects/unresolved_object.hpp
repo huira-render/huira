@@ -5,7 +5,7 @@
 
 #include "huira/detail/concepts/numeric_concepts.hpp"
 #include "huira/detail/concepts/spectral_concepts.hpp"
-#include "huira/scene/node.hpp"
+#include "huira/objects/scene_graph/node.hpp"
 
 namespace huira {
     // Forward declare:
@@ -52,4 +52,4 @@ namespace huira {
     };
 }
 
-#include "huira_impl/scene/unresolved_object.ipp"
+#include "huira_impl/objects/unresolved_object.ipp"
