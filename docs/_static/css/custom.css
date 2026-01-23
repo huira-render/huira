@@ -5,3 +5,27 @@ span.eqno {
 .wy-table-responsive table td, .wy-table-responsive table th {
 	white-space: inherit;
 }
+
+/* Logo styling */
+.wy-side-nav-search {
+	background-color: #2980b9;
+}
+
+.wy-side-nav-search img.logo {
+	max-width: 100%;
+	height: auto;
+	margin: 10px auto;
+	display: block;
+}
+
+/* Hide project title text, show only logo */
+.wy-side-nav-search .wy-breadcrumbs {
+	display: none;
+}
+
+.wy-side-nav-search > a {
+	color: transparent;
+	font-size: 0;
+	padding: 0;
+	margin: 0;
+}

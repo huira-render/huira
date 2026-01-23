@@ -14,7 +14,7 @@
  * @section usage_examples Usage Examples
  *
  * Basic unit operations:
- * @code
+ * @code{.cpp}
  * // Create units explicitly (required due to explicit constructors)
  * auto area = huira::Meter(1) * huira::Foot(1);
  *
