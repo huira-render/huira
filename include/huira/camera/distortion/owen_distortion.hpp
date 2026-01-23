@@ -8,19 +8,18 @@
 
 namespace huira {
 
-    template <IsFloatingPoint TFloat>
     struct OwenCoefficients : public DistortionCoefficients {
-        TFloat e1 = TFloat{ 0 };
-        TFloat e2 = TFloat{ 0 };
-        TFloat e3 = TFloat{ 0 };
-        TFloat e4 = TFloat{ 0 };
-        TFloat e5 = TFloat{ 0 };
-        TFloat e6 = TFloat{ 0 };
+        double e1 = 0;
+        double e2 = 0;
+        double e3 = 0;
+        double e4 = 0;
+        double e5 = 0;
+        double e6 = 0;
 
         OwenCoefficients() = default;
 
-        constexpr OwenCoefficients(TFloat e1_val, TFloat e2_val, TFloat e3_val,
-            TFloat e4_val, TFloat e5_val, TFloat e6_val)
+        constexpr OwenCoefficients(double e1_val, double e2_val, double e3_val,
+            double e4_val, double e5_val, double e6_val)
             : e1(e1_val), e2(e2_val), e3(e3_val), e4(e4_val), e5(e5_val), e6(e6_val) {
         }
     };
@@ -29,10 +28,9 @@ namespace huira {
     template <IsSpectral TSpectral, IsFloatingPoint TFloat>
     class OwenDistortion : public Distortion<TSpectral, TFloat> {
     public:
-        using CoefficientsType = OwenCoefficients<TFloat>;
 
         OwenDistortion() = default;
-        explicit OwenDistortion(CoefficientsType coefficients);
+        explicit OwenDistortion(OwenCoefficients coefficients);
         
         [[nodiscard]] Pixel compute_delta(Pixel homogeneous_coords) const;
 
@@ -44,7 +42,7 @@ namespace huira {
         [[nodiscard]] const DistortionCoefficients* get_coefficients() const override { return &coefficients_; }
 
     private:
-        CoefficientsType coefficients_{};
+        OwenCoefficients coefficients_{};
     };
 
 }

@@ -7,7 +7,7 @@
 namespace huira {
 
     template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    OwenDistortion<TSpectral, TFloat>::OwenDistortion(CoefficientsType coefficients)
+    OwenDistortion<TSpectral, TFloat>::OwenDistortion(OwenCoefficients coefficients)
         : coefficients_(coefficients) {
     }
 
@@ -24,13 +24,16 @@ namespace huira {
         const TFloat r4 = r2 * r2;
 
         // Radial distortion factor for coordinate-aligned terms
-        const TFloat radial_factor = coefficients_.e2 * r2 +
-            coefficients_.e4 * r4 +
-            coefficients_.e5 * y +
-            coefficients_.e6 * x;
+        const TFloat radial_factor =
+            static_cast<TFloat>(coefficients_.e2) * r2 +
+            static_cast<TFloat>(coefficients_.e4) * r4 +
+            static_cast<TFloat>(coefficients_.e5) * y +
+            static_cast<TFloat>(coefficients_.e6) * x;
 
         // Radial distortion factor for rotated coordinate terms
-        const TFloat rotated_factor = coefficients_.e1 * r + coefficients_.e3 * r3;
+        const TFloat rotated_factor =
+            static_cast<TFloat>(coefficients_.e1) * r +
+            static_cast<TFloat>(coefficients_.e3) * r3;
 
         // Apply distortion to original and 90-degree rotated coordinates
         const Pixel rotated_coords{ -y, x };

@@ -8,7 +8,7 @@
 namespace huira {
 
     template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    OpenCVDistortion<TSpectral, TFloat>::OpenCVDistortion(CoefficientsType coefficients)
+    OpenCVDistortion<TSpectral, TFloat>::OpenCVDistortion(OpenCVCoefficients coefficients)
         : coefficients_(coefficients) {
     }
 
@@ -31,12 +31,14 @@ namespace huira {
         const TFloat r6 = r4 * r2;
 
         // Rational radial distortion factor
-        const TFloat numerator = TFloat{ 1 } + coefficients_.k1 * r2 +
-            coefficients_.k2 * r4 +
-            coefficients_.k3 * r6;
-        const TFloat denominator_raw = TFloat{ 1 } + coefficients_.k4 * r2 +
-            coefficients_.k5 * r4 +
-            coefficients_.k6 * r6;
+        const TFloat numerator = TFloat{ 1 } +
+            static_cast<TFloat>(coefficients_.k1) * r2 +
+            static_cast<TFloat>(coefficients_.k2) * r4 +
+            static_cast<TFloat>(coefficients_.k3) * r6;
+        const TFloat denominator_raw = TFloat{ 1 } +
+            static_cast<TFloat>(coefficients_.k4) * r2 +
+            static_cast<TFloat>(coefficients_.k5) * r4 +
+            static_cast<TFloat>(coefficients_.k6) * r6;
 
         // Prevent division by zero with sign-preserving clamping
         const TFloat denominator = (std::abs(denominator_raw) < kMinDenominator)
@@ -48,12 +50,14 @@ namespace huira {
         // Tangential and thin prism distortion components
         const TFloat xy = x * y;
         const Pixel tangential_and_prism{
-            TFloat{2} * coefficients_.p1 * xy +
-                coefficients_.p2 * (r2 + TFloat{2} * x2) +
-                coefficients_.s1 * r2 + coefficients_.s2 * r4,
-            coefficients_.p1 * (r2 + TFloat{2} * y2) +
-                TFloat{2} * coefficients_.p2 * xy +
-                coefficients_.s3 * r2 + coefficients_.s4 * r4
+            TFloat{2} * static_cast<TFloat>(coefficients_.p1) * xy +
+            static_cast<TFloat>(coefficients_.p2) * (r2 + TFloat{2} * x2) +
+            static_cast<TFloat>(coefficients_.s1) * r2 +
+            static_cast<TFloat>(coefficients_.s2) * r4,
+            static_cast<TFloat>(coefficients_.p1) * (r2 + TFloat{2} * y2) +
+            TFloat{2} * static_cast<TFloat>(coefficients_.p2) * xy +
+            static_cast<TFloat>(coefficients_.s3) * r2 +
+            static_cast<TFloat>(coefficients_.s4) * r4
         };
 
         return radial_factor * homogeneous_coords + tangential_and_prism;

@@ -6,7 +6,7 @@
 
 namespace huira {
     template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    BrownDistortion<TSpectral, TFloat>::BrownDistortion(BrownCoefficients<TFloat> coefficients)
+    BrownDistortion<TSpectral, TFloat>::BrownDistortion(BrownCoefficients coefficients)
         : coefficients_(coefficients) {
     }
 
@@ -22,16 +22,19 @@ namespace huira {
         const TFloat r6 = r4 * r2;
 
         // Radial distortion component
-        const TFloat radial_factor = coefficients_.k1 * r2 +
-            coefficients_.k2 * r4 +
-            coefficients_.k3 * r6;
+        const TFloat radial_factor =
+            static_cast<TFloat>(coefficients_.k1) * r2 +
+            static_cast<TFloat>(coefficients_.k2) * r4 +
+            static_cast<TFloat>(coefficients_.k3) * r6;
         const Pixel radial_distortion = radial_factor * homogeneous_coords;
 
         // Tangential distortion component
         const TFloat xy = x * y;
         const Pixel tangential_distortion{
-            TFloat{2} * coefficients_.p1 * xy + coefficients_.p2 * (r2 + TFloat{2} * x2),
-            coefficients_.p1 * (r2 + TFloat{2} * y2) + TFloat{2} * coefficients_.p2 * xy
+            TFloat{2} * static_cast<TFloat>(coefficients_.p1) * xy +
+            static_cast<TFloat>(coefficients_.p2) * (r2 + TFloat{2} * x2),
+            static_cast<TFloat>(coefficients_.p1) * (r2 + TFloat{2} * y2) +
+            TFloat{2} * static_cast<TFloat>(coefficients_.p2) * xy
         };
 
         return radial_distortion + tangential_distortion;
