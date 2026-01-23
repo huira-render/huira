@@ -49,10 +49,16 @@ breathe_default_project = "huira"
 
 html_theme = "sphinx_rtd_theme"
 html_static_path = ['_static']
+html_logo = '_static/logo/full/white_on_transparent.svg'
 
 # Custom CSS overrides:
 html_css_files = [
     'css/custom.css',
+]
+
+# Custom JavaScript:
+html_js_files = [
+    'js/logo_link.js',
 ]
 
 # Add global toc tree to all html pages
@@ -61,7 +67,7 @@ html_sidebars = { '**': ['globaltoc.html', 'relations.html', 'sourcelink.html', 
 # Custom RTD settings:
 html_theme_options = {
     'collapse_navigation': False,
-    'logo_only': True,
-    'style_external_links': True
+    'style_external_links': True,
+    'titles_only': True
 }
 

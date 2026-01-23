@@ -5,16 +5,18 @@ Huira
 
 .. toctree::
     :hidden:
-    :maxdepth: 1
-    :caption: Build
+    :maxdepth: 2
+    :caption: For Users
 
-    build/index
+    api/index
 
 .. toctree::
     :hidden:
-    :caption: C++ API
-   
-    huira/index
+    :maxdepth: 2
+    :caption: For Researchers & Contributors
+
+    build/index
+    implementation/index
 
 * :ref:`genindex`
 * :ref:`modindex`
