@@ -19,9 +19,9 @@ extensions = [
     'sphinx.ext.githubpages',
     'sphinx.ext.mathjax',
     'sphinx.ext.autosectionlabel',
-    'sphinx_rtd_theme',
     'sphinx_autodoc_typehints',
     'sphinx_toolbox.sidebar_links',
+    'sphinx_design',
     'myst_parser'
 ]
 

@@ -19,13 +19,13 @@
 
 # Building Huira
 Please see the platform specific quickstart guides:
-- **[Linux](docs/build/linux.md)**
-- **[macOS](docs/build/macos.md)**
-- **[Windows (Powershell)](docs/build/windows.md)**
-- **[Windows (Visual Studio)](docs/build/visual-studio.md)**
+- **[Linux](docs/for_contributors/build_instructions/linux.md)**
+- **[macOS](docs/for_contributors/build_instructions/macos.md)**
+- **[Windows (Powershell)](docs/for_contributors/build_instructions/windows.md)**
+- **[Windows (Visual Studio)](docs/for_contributors/build_instructions/visual-studio.md)**
 
 To see additional optionals for building *Huira*, please refer to:
-- **[Huira Build Options](docs/build/options.md)**
+- **[Huira Build Options](docs/for_contributors/build_instructions/options.md)**
 
 # Examples
 Example programs demonstrating common usage patterns are available in the [`examples/`](examples/) directory.

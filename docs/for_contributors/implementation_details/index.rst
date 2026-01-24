@@ -1,5 +1,5 @@
-Implementation Guide
-====================
+Implementation Details
+======================
 
 .. warning::
    **Internal API Documentation**
@@ -9,8 +9,6 @@ Implementation Guide
    to understand or extend the library's internals.
    
    **Internal APIs may change without notice between versions.**
-   
-   For stable APIs, see the :doc:`../api/index` section.
 
 .. toctree::
    :maxdepth: 2
