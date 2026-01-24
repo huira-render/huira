@@ -18,6 +18,9 @@ namespace huira {
     template <IsSpectral TSpectral>
     class FrameNode;
 
+    template <IsSpectral TSpectral, typename TNode>
+    class NodeHandle;
+
     enum class TransformMode {
         MANUAL_TRANSFORM,
         SPICE_TRANSFORM
@@ -73,6 +76,11 @@ namespace huira {
 
         std::string get_spice_origin() const;
         std::string get_spice_frame() const;
+
+        NodeHandle<TSpectral, Node<TSpectral>> get_parent() const;
+        
+        template <typename TParentNode>
+        NodeHandle<TSpectral, TParentNode> get_parent_as() const;
 
     protected:
         Transform<double> local_transform_;
