@@ -5,21 +5,20 @@
 #include "huira/core/time.hpp"
 #include "huira/core/types.hpp"
 
-#include "huira/detail/concepts/numeric_concepts.hpp"
 #include "huira/detail/concepts/spectral_concepts.hpp"
 #include "huira/detail/logger.hpp"
 #include "huira/detail/validate.hpp"
 
 namespace huira {
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    Node<TSpectral, TFloat>::Node(Scene<TSpectral, TFloat>* scene)
+    template <IsSpectral TSpectral>
+    Node<TSpectral>::Node(Scene<TSpectral>* scene)
         : id_(next_id_++), scene_(scene)
     {
 
     }
 
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    void Node<TSpectral, TFloat>::set_position(const Vec3<TFloat>& position)
+    template <IsSpectral TSpectral>
+    void Node<TSpectral>::set_position(const Vec3<double>& position)
     {
         validate_scene_unlocked_("set_position()");
         if (auto spice_child = child_spice_origins_()) {
@@ -34,8 +33,8 @@ namespace huira {
         this->update_global_transform_();
     }
 
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    void Node<TSpectral, TFloat>::set_rotation(const Rotation<TFloat>& rotation)
+    template <IsSpectral TSpectral>
+    void Node<TSpectral>::set_rotation(const Rotation<double>& rotation)
     {
         validate_scene_unlocked_("set_rotation()");
         if (auto spice_child = child_spice_frames_()) {
@@ -50,8 +49,8 @@ namespace huira {
         this->update_global_transform_();
     }
 
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    void Node<TSpectral, TFloat>::set_scale(const Vec3<TFloat>& scale)
+    template <IsSpectral TSpectral>
+    void Node<TSpectral>::set_scale(const Vec3<double>& scale)
     {
         validate_scene_unlocked_("set_scale()");
         HUIRA_LOG_INFO(this->get_info() + " - set_scale(" +
@@ -63,8 +62,8 @@ namespace huira {
         this->update_global_transform_();
     }
 
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    void Node<TSpectral, TFloat>::set_velocity(const Vec3<TFloat>& velocity)
+    template <IsSpectral TSpectral>
+    void Node<TSpectral>::set_velocity(const Vec3<double>& velocity)
     {
         validate_scene_unlocked_("set_velocity()");
         if (this->position_source_ == TransformSource::SPICE_TRANSFORM) {
@@ -76,8 +75,8 @@ namespace huira {
         this->update_global_transform_();
     }
 
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    void Node<TSpectral, TFloat>::set_angular_velocity(const Vec3<TFloat>& angular_velocity)
+    template <IsSpectral TSpectral>
+    void Node<TSpectral>::set_angular_velocity(const Vec3<double>& angular_velocity)
     {
         validate_scene_unlocked_("set_angular_velocity()");
         if (this->rotation_source_ == TransformSource::SPICE_TRANSFORM) {
@@ -89,8 +88,8 @@ namespace huira {
         this->update_global_transform_();
     }
 
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    void Node<TSpectral, TFloat>::set_spice_origin(const std::string& spice_origin)
+    template <IsSpectral TSpectral>
+    void Node<TSpectral>::set_spice_origin(const std::string& spice_origin)
     {
         validate_scene_unlocked_("set_spice_origin()");
         validate_spice_origin_allowed_();
@@ -101,8 +100,8 @@ namespace huira {
         this->update_spice_transform_();
     }
 
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    void Node<TSpectral, TFloat>::set_spice_frame(const std::string& spice_frame)
+    template <IsSpectral TSpectral>
+    void Node<TSpectral>::set_spice_frame(const std::string& spice_frame)
     {
         validate_scene_unlocked_("set_spice_frame()");
         validate_spice_frame_allowed_();
@@ -113,8 +112,8 @@ namespace huira {
         this->update_spice_transform_();
     }
 
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    void Node<TSpectral, TFloat>::set_spice(const std::string& spice_origin, const std::string& spice_frame)
+    template <IsSpectral TSpectral>
+    void Node<TSpectral>::set_spice(const std::string& spice_origin, const std::string& spice_frame)
     {
         validate_scene_unlocked_("set_spice()");
         validate_spice_origin_allowed_();
@@ -130,8 +129,8 @@ namespace huira {
 
 
 
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    std::string Node<TSpectral, TFloat>::get_info() const {
+    template <IsSpectral TSpectral>
+    std::string Node<TSpectral>::get_info() const {
         std::string info = get_type_name() + "[" + std::to_string(this->id()) + "]";
         return info;
     }
@@ -145,8 +144,8 @@ namespace huira {
      * @return Position vector in the target frame relative to target origin
      * @throws std::runtime_error if no SPICE-enabled ancestor is found in scene graph
      */
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    Vec3<TFloat> Node<TSpectral, TFloat>::get_position_in_frame(const std::string& target_origin, const std::string& target_frame) const
+    template <IsSpectral TSpectral>
+    Vec3<double> Node<TSpectral>::get_position_in_frame(const std::string& target_origin, const std::string& target_frame) const
     {
         auto [pos, vel] = get_state_in_frame(target_origin, target_frame);
         return pos;
@@ -159,8 +158,8 @@ namespace huira {
      * @return Velocity vector in the target frame relative to target origin
      * @throws std::runtime_error if no SPICE-enabled ancestor is found in scene graph
      */
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    Vec3<TFloat> Node<TSpectral, TFloat>::get_velocity_in_frame(const std::string& target_origin, const std::string& target_frame) const
+    template <IsSpectral TSpectral>
+    Vec3<double> Node<TSpectral>::get_velocity_in_frame(const std::string& target_origin, const std::string& target_frame) const
     {
         auto [pos, vel] = get_state_in_frame(target_origin, target_frame);
         return vel;
@@ -172,8 +171,8 @@ namespace huira {
      * @return Rotation from target frame to this node's orientation
      * @throws std::runtime_error if no SPICE-enabled ancestor is found in scene graph
      */
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    Rotation<TFloat> Node<TSpectral, TFloat>::get_rotation_in_frame(const std::string& target_frame) const
+    template <IsSpectral TSpectral>
+    Rotation<double> Node<TSpectral>::get_rotation_in_frame(const std::string& target_frame) const
     {
         auto [rot, ang_vel] = get_attitude_in_frame(target_frame);
         return rot;
@@ -185,8 +184,8 @@ namespace huira {
      * @return Angular velocity vector in the target frame
      * @throws std::runtime_error if no SPICE-enabled ancestor is found in scene graph
      */
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    Vec3<TFloat> Node<TSpectral, TFloat>::get_angular_velocity_in_frame(const std::string& target_frame) const
+    template <IsSpectral TSpectral>
+    Vec3<double> Node<TSpectral>::get_angular_velocity_in_frame(const std::string& target_frame) const
     {
         auto [rot, ang_vel] = get_attitude_in_frame(target_frame);
         return ang_vel;
@@ -199,8 +198,8 @@ namespace huira {
      * @return Pair of (position, velocity) in the target frame relative to target origin
      * @throws std::runtime_error if no SPICE-enabled ancestor is found in scene graph
      */
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    std::pair<Vec3<TFloat>, Vec3<TFloat>> Node<TSpectral, TFloat>::get_state_in_frame(
+    template <IsSpectral TSpectral>
+    std::pair<Vec3<double>, Vec3<double>> Node<TSpectral>::get_state_in_frame(
         const std::string& target_origin,
         const std::string& target_frame) const
     {
@@ -208,7 +207,7 @@ namespace huira {
         auto [spice_ancestor, accumulated_transform] = find_spice_origin_ancestor_();
 
         // Get the SPICE ancestor's state in the target frame
-        auto [spice_pos, spice_vel, lt] = spice::spkezr<TFloat>(
+        auto [spice_pos, spice_vel, lt] = spice::spkezr<double>(
             spice_ancestor->get_spice_origin(),
             scene_->get_time(),
             target_frame,
@@ -217,20 +216,20 @@ namespace huira {
 
         // We need the rotation from target_frame to the SPICE ancestor's frame
         // to properly transform the accumulated offset
-        auto [frame_rotation, frame_ang_vel] = spice::sxform<TFloat>(
+        auto [frame_rotation, frame_ang_vel] = spice::sxform<double>(
             target_frame,
             spice_ancestor->get_spice_frame(),
             scene_->get_time()
         );
 
         // Transform accumulated position: rotate from ancestor frame to target frame
-        Vec3<TFloat> position = spice_pos + frame_rotation.inverse() * accumulated_transform.position;
+        Vec3<double> position = spice_pos + frame_rotation.inverse() * accumulated_transform.position;
 
         // Transform accumulated velocity: rotate and account for frame rotation
         // v_target = v_spice + R^-1 * v_accumulated
         // Note: We're not adding rotational velocity contribution (omega x r) since we're
         // assuming the accumulated velocity is already in the proper reference
-        Vec3<TFloat> velocity = spice_vel + frame_rotation.inverse() * accumulated_transform.velocity;
+        Vec3<double> velocity = spice_vel + frame_rotation.inverse() * accumulated_transform.velocity;
 
         return { position, velocity };
     }
@@ -241,15 +240,15 @@ namespace huira {
      * @return Pair of (rotation, angular_velocity) in the target frame
      * @throws std::runtime_error if no SPICE-enabled ancestor is found in scene graph
      */
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    std::pair<Rotation<TFloat>, Vec3<TFloat>> Node<TSpectral, TFloat>::get_attitude_in_frame(const std::string& target_frame) const
+    template <IsSpectral TSpectral>
+    std::pair<Rotation<double>, Vec3<double>> Node<TSpectral>::get_attitude_in_frame(const std::string& target_frame) const
     {
         // Find the first SPICE-enabled ancestor
         auto [spice_ancestor, accumulated_rotation_data] = find_spice_frame_ancestor_();
         auto [accumulated_rotation, accumulated_ang_vel] = accumulated_rotation_data;
 
         // Get the rotation from target_frame to the SPICE ancestor's frame
-        auto [spice_rotation, spice_ang_vel] = spice::sxform<TFloat>(
+        auto [spice_rotation, spice_ang_vel] = spice::sxform<double>(
             target_frame,
             spice_ancestor->get_spice_frame(),
             scene_->get_time()
@@ -257,11 +256,11 @@ namespace huira {
 
         // Compose rotations: R_total = R_spice * R_accumulated
         // This gives rotation from target_frame to this node's frame
-        Rotation<TFloat> rotation = spice_rotation * accumulated_rotation;
+        Rotation<double> rotation = spice_rotation * accumulated_rotation;
 
         // Transform angular velocity to target frame
         // ω_target = R_spice^-1 * (ω_spice + ω_accumulated)
-        Vec3<TFloat> angular_velocity = spice_rotation.inverse() * (spice_ang_vel + accumulated_ang_vel);
+        Vec3<double> angular_velocity = spice_rotation.inverse() * (spice_ang_vel + accumulated_ang_vel);
 
         return { rotation, angular_velocity };
     }
@@ -272,16 +271,16 @@ namespace huira {
      * @return Pair of (ancestor node, accumulated transform from this to ancestor)
      * @throws std::runtime_error if no SPICE origin found in ancestry
      */
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    std::pair<const Node<TSpectral, TFloat>*, Transform<TFloat>> Node<TSpectral, TFloat>::find_spice_origin_ancestor_() const
+    template <IsSpectral TSpectral>
+    std::pair<const Node<TSpectral>*, Transform<double>> Node<TSpectral>::find_spice_origin_ancestor_() const
     {
-        Transform<TFloat> accumulated;
-        accumulated.position = Vec3<TFloat>{ 0, 0, 0 };
-        accumulated.velocity = Vec3<TFloat>{ 0, 0, 0 };
-        accumulated.rotation = Rotation<TFloat>{};
-        accumulated.scale = Vec3<TFloat>{ 1, 1, 1 };
+        Transform<double> accumulated;
+        accumulated.position = Vec3<double>{ 0, 0, 0 };
+        accumulated.velocity = Vec3<double>{ 0, 0, 0 };
+        accumulated.rotation = Rotation<double>{};
+        accumulated.scale = Vec3<double>{ 1, 1, 1 };
 
-        const Node<TSpectral, TFloat>* current = this;
+        const Node<TSpectral>* current = this;
 
         // Walk up the scene graph
         while (current != nullptr) {
@@ -326,13 +325,13 @@ namespace huira {
      * @return Pair of (ancestor node, accumulated rotation from this to ancestor)
      * @throws std::runtime_error if no SPICE frame found in ancestry
      */
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    std::pair<const Node<TSpectral, TFloat>*, std::pair<Rotation<TFloat>, Vec3<TFloat>>> Node<TSpectral, TFloat>::find_spice_frame_ancestor_() const
+    template <IsSpectral TSpectral>
+    std::pair<const Node<TSpectral>*, std::pair<Rotation<double>, Vec3<double>>> Node<TSpectral>::find_spice_frame_ancestor_() const
     {
-        Rotation<TFloat> accumulated_rotation = Rotation<TFloat>{};
-        Vec3<TFloat> accumulated_ang_vel{ 0, 0, 0 };
+        Rotation<double> accumulated_rotation = Rotation<double>{};
+        Vec3<double> accumulated_ang_vel{ 0, 0, 0 };
 
-        const Node<TSpectral, TFloat>* current = this;
+        const Node<TSpectral>* current = this;
 
         // Walk up the scene graph
         while (current != nullptr) {
@@ -369,8 +368,8 @@ namespace huira {
 
 
 
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    void Node<TSpectral, TFloat>::update_spice_transform_()
+    template <IsSpectral TSpectral>
+    void Node<TSpectral>::update_spice_transform_()
     {
         if (parent_ == nullptr) {
             return;
@@ -390,8 +389,8 @@ namespace huira {
         on_transform_changed_();
     }
 
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    void Node<TSpectral, TFloat>::update_all_spice_transforms_()
+    template <IsSpectral TSpectral>
+    void Node<TSpectral>::update_all_spice_transforms_()
     {
         // For leaf nodes, just update this node's transform
         // FrameNode overrides this to also propagate to children
@@ -419,8 +418,8 @@ namespace huira {
         this->global_transform_.scale = parent_->global_transform_.scale * this->local_transform_.scale;
     }
 
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    void Node<TSpectral, TFloat>::update_global_transform_()
+    template <IsSpectral TSpectral>
+    void Node<TSpectral>::update_global_transform_()
     {
         // Compute global from parent
         if (this->parent_) {
@@ -450,16 +449,16 @@ namespace huira {
     // === Protected Members === //
     // ========================= //
 
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    void Node<TSpectral, TFloat>::validate_scene_unlocked_(const std::string function_name)
+    template <IsSpectral TSpectral>
+    void Node<TSpectral>::validate_scene_unlocked_(const std::string function_name)
     {
         if (scene_->is_locked()) {
             HUIRA_THROW_ERROR(this->get_info() + " - " + function_name + " was called with a locked scene");
         }
     };
 
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    void Node<TSpectral, TFloat>::validate_spice_origin_allowed_()
+    template <IsSpectral TSpectral>
+    void Node<TSpectral>::validate_spice_origin_allowed_()
     {
         if (parent_) {
             if (parent_->position_source_ != TransformSource::SPICE_TRANSFORM) {
@@ -469,8 +468,8 @@ namespace huira {
         }
     }
 
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    void Node<TSpectral, TFloat>::validate_spice_frame_allowed_()
+    template <IsSpectral TSpectral>
+    void Node<TSpectral>::validate_spice_frame_allowed_()
     {
         if (parent_) {
             if (parent_->rotation_source_ != TransformSource::SPICE_TRANSFORM) {
@@ -480,10 +479,10 @@ namespace huira {
         }
     }
 
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    void Node<TSpectral, TFloat>::compute_global_spice_position_()
+    template <IsSpectral TSpectral>
+    void Node<TSpectral>::compute_global_spice_position_()
     {
-        auto [position, velocity, _] = spice::spkezr<TFloat>(
+        auto [position, velocity, _] = spice::spkezr<double>(
             this->spice_origin_, scene_->get_time(),
             scene_->root.get_spice_frame(), scene_->root.get_spice_origin()
         );
@@ -491,18 +490,18 @@ namespace huira {
         this->global_transform_.velocity = velocity;
     }
 
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    void Node<TSpectral, TFloat>::compute_global_spice_rotation_()
+    template <IsSpectral TSpectral>
+    void Node<TSpectral>::compute_global_spice_rotation_()
     {
-        auto [rotation, angular_velocity] = spice::sxform<TFloat>(
+        auto [rotation, angular_velocity] = spice::sxform<double>(
             this->spice_frame_, scene_->root.get_spice_frame(), scene_->get_time()
         );
         this->global_transform_.rotation = rotation;
         this->global_transform_.angular_velocity = angular_velocity;
     }
 
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    void Node<TSpectral, TFloat>::compute_local_position_from_global_()
+    template <IsSpectral TSpectral>
+    void Node<TSpectral>::compute_local_position_from_global_()
     {
         this->local_transform_.position =
             parent_->global_transform_.rotation.inverse() *
@@ -513,8 +512,8 @@ namespace huira {
             (this->global_transform_.velocity - parent_->global_transform_.velocity);
     }
 
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    void Node<TSpectral, TFloat>::compute_local_rotation_from_global_()
+    template <IsSpectral TSpectral>
+    void Node<TSpectral>::compute_local_rotation_from_global_()
     {
         this->local_transform_.rotation =
             parent_->global_transform_.rotation.inverse() * this->global_transform_.rotation;
@@ -524,8 +523,8 @@ namespace huira {
             (this->global_transform_.angular_velocity - parent_->global_transform_.angular_velocity);
     }
 
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    void Node<TSpectral, TFloat>::compute_global_position_from_local_()
+    template <IsSpectral TSpectral>
+    void Node<TSpectral>::compute_global_position_from_local_()
     {
         this->global_transform_.position =
             parent_->global_transform_.position +
@@ -535,8 +534,8 @@ namespace huira {
             parent_->global_transform_.rotation * this->local_transform_.velocity;
     }
 
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    void Node<TSpectral, TFloat>::compute_global_rotation_from_local_()
+    template <IsSpectral TSpectral>
+    void Node<TSpectral>::compute_global_rotation_from_local_()
     {
         this->global_transform_.rotation =
             parent_->global_transform_.rotation * this->local_transform_.rotation;

@@ -8,13 +8,13 @@
 #include "huira/detail/concepts/spectral_concepts.hpp"
 
 namespace huira {
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
+    template <IsSpectral TSpectral>
     struct RayHit {
-        TFloat t = std::numeric_limits<TFloat>::infinity();
+        float t = std::numeric_limits<float>::infinity();
 
-        std::array<Vertex<TSpectral, TFloat>, 3> vert;
+        std::array<Vertex<TSpectral>, 3> vert;
         Vec3<float> face_normal;
-        std::array<TFloat, 3> w;
+        std::array<float, 3> w;
     };
 
     template <IsFloatingPoint T>

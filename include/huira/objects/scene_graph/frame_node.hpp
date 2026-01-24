@@ -12,22 +12,22 @@
 
 namespace huira {
     // Forward declare:
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
+    template <IsSpectral TSpectral>
     class Scene;
 
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
+    template <IsSpectral TSpectral>
     class UnresolvedObject;
 
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
+    template <IsSpectral TSpectral>
     class PointLight;
 
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
+    template <IsSpectral TSpectral>
     class Camera;
 
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    class FrameNode : public Node<TSpectral, TFloat> {
+    template <IsSpectral TSpectral>
+    class FrameNode : public Node<TSpectral> {
     public:
-        FrameNode(Scene<TSpectral, TFloat>* scene);
+        FrameNode(Scene<TSpectral>* scene);
         ~FrameNode() override = default;
 
         // Delete copying:
@@ -36,13 +36,13 @@ namespace huira {
 
 
         // Child management:
-        std::weak_ptr<FrameNode<TSpectral, TFloat>> new_child();
-        void delete_child(std::weak_ptr<Node<TSpectral, TFloat>> child);
+        std::weak_ptr<FrameNode<TSpectral>> new_child();
+        void delete_child(std::weak_ptr<Node<TSpectral>> child);
 
         // Factory methods for leaf nodes:
-        std::weak_ptr<UnresolvedObject<TSpectral, TFloat>> new_unresolved_object();
-        std::weak_ptr<PointLight<TSpectral, TFloat>> new_point_light(TSpectral spectral_intensity);
-        std::weak_ptr<Camera<TSpectral, TFloat>> new_camera();
+        std::weak_ptr<UnresolvedObject<TSpectral>> new_unresolved_object();
+        std::weak_ptr<PointLight<TSpectral>> new_point_light(TSpectral spectral_intensity);
+        std::weak_ptr<Camera<TSpectral>> new_camera();
 
         std::string get_type_name() const override { return "FrameNode"; }
 
@@ -52,17 +52,17 @@ namespace huira {
         void on_transform_changed_() override;
 
         // Override to check children for SPICE constraints
-        const std::vector<std::shared_ptr<Node<TSpectral, TFloat>>>* get_children_() const override { return &children_; }
-        std::shared_ptr<Node<TSpectral, TFloat>> child_spice_origins_() const override;
-        std::shared_ptr<Node<TSpectral, TFloat>> child_spice_frames_() const override;
+        const std::vector<std::shared_ptr<Node<TSpectral>>>* get_children_() const override { return &children_; }
+        std::shared_ptr<Node<TSpectral>> child_spice_origins_() const override;
+        std::shared_ptr<Node<TSpectral>> child_spice_frames_() const override;
 
         // Override to propagate SPICE updates to children
         void update_all_spice_transforms_() override;
 
     private:
-        std::vector<std::shared_ptr<Node<TSpectral, TFloat>>> children_;
+        std::vector<std::shared_ptr<Node<TSpectral>>> children_;
 
-        friend class Scene<TSpectral, TFloat>;
+        friend class Scene<TSpectral>;
     };
 }
 

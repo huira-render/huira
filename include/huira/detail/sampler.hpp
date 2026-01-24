@@ -26,13 +26,13 @@ namespace huira {
 
     private:
         std::mt19937 rng;
-        std::uniform_real_distribution<TFloat> dist{ TFloat(0), TFloat(1) };
+        std::uniform_real_distribution<TFloat> dist{ TFloat(0)(1) };
     };
 
     template <IsFloatingPoint TFloat>
     class DeterministicSampler : public Sampler<TFloat> {
     public:
-        DeterministicSampler() : value_1d(TFloat(0.5)), value_2d{ TFloat(0.5), TFloat(0.5) } {}
+        DeterministicSampler() : value_1d(TFloat(0.5)), value_2d{ TFloat(0.5)(0.5) } {}
         DeterministicSampler(TFloat v1d, Vec2<TFloat> v2d) : value_1d(v1d), value_2d(v2d) {}
 
         TFloat get_1d() override { return value_1d; }

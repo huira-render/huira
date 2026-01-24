@@ -7,22 +7,17 @@
 
 namespace huira {
 
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    OpenCVDistortion<TSpectral, TFloat>::OpenCVDistortion(OpenCVCoefficients coefficients)
+    template <IsSpectral TSpectral>
+    OpenCVDistortion<TSpectral>::OpenCVDistortion(OpenCVCoefficients coefficients)
         : coefficients_(coefficients) {
     }
-
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    Pixel OpenCVDistortion<TSpectral, TFloat>::compute_delta(Pixel homogeneous_coords) const {
-        // Delta is defined as: distort(x) - x
-        // This is consistent with the fixed-point iteration in undistort()
-        return distort(homogeneous_coords) - homogeneous_coords;
-    }
-
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    Pixel OpenCVDistortion<TSpectral, TFloat>::distort(Pixel homogeneous_coords) const {
+    
+    template <IsSpectral TSpectral>
+    template <IsFloatingPoint TFloat>
+    BasePixel<TFloat> OpenCVDistortion<TSpectral>::compute_delta_(BasePixel<TFloat> homogeneous_coords) const {
         const TFloat x = static_cast<TFloat>(homogeneous_coords[0]);
         const TFloat y = static_cast<TFloat>(homogeneous_coords[1]);
+        BasePixel<TFloat> homogeneous_coords_tf{ x, y };
 
         const TFloat x2 = x * x;
         const TFloat y2 = y * y;
@@ -41,15 +36,15 @@ namespace huira {
             static_cast<TFloat>(coefficients_.k6) * r6;
 
         // Prevent division by zero with sign-preserving clamping
-        const TFloat denominator = (std::abs(denominator_raw) < kMinDenominator)
-            ? std::copysign(kMinDenominator, denominator_raw)
+        const TFloat denominator = (std::abs(denominator_raw) < static_cast<TFloat>(kMinDenominator))
+            ? std::copysign(static_cast<TFloat>(kMinDenominator), denominator_raw)
             : denominator_raw;
 
         const TFloat radial_factor = numerator / denominator;
 
         // Tangential and thin prism distortion components
         const TFloat xy = x * y;
-        const Pixel tangential_and_prism{
+        const BasePixel<TFloat> tangential_and_prism{
             TFloat{2} * static_cast<TFloat>(coefficients_.p1) * xy +
             static_cast<TFloat>(coefficients_.p2) * (r2 + TFloat{2} * x2) +
             static_cast<TFloat>(coefficients_.s1) * r2 +
@@ -60,27 +55,41 @@ namespace huira {
             static_cast<TFloat>(coefficients_.s4) * r4
         };
 
-        return radial_factor * homogeneous_coords + tangential_and_prism;
+        return radial_factor * homogeneous_coords_tf + tangential_and_prism;
     }
 
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    Pixel OpenCVDistortion<TSpectral, TFloat>::undistort(Pixel homogeneous_coords) const {
-        Pixel undistorted_coords = homogeneous_coords;
+    template <IsSpectral TSpectral>
+    Pixel OpenCVDistortion<TSpectral>::distort(Pixel homogeneous_coords) const {
+        return homogeneous_coords + compute_delta_<float>(homogeneous_coords);
+    }
+
+    template <IsSpectral TSpectral>
+    Pixel OpenCVDistortion<TSpectral>::undistort(Pixel homogeneous_coords) const {
+        BasePixel<double> homogeneous_coords_d{
+            static_cast<double>(homogeneous_coords[0]),
+            static_cast<double>(homogeneous_coords[1])
+        };
+        BasePixel<double> undistorted_coords_d = homogeneous_coords_d;
 
         for (std::size_t i = 0; i < this->max_iterations_; ++i) {
-            const Pixel delta = compute_delta(undistorted_coords);
-            const Pixel new_coords = homogeneous_coords - delta;
+            const BasePixel<double> delta = compute_delta_<double>(undistorted_coords_d);
+            const BasePixel<double> new_coords = homogeneous_coords_d - delta;
 
             // Check for convergence
-            const Pixel diff = new_coords - undistorted_coords;
-            const TFloat error_sq = static_cast<TFloat>(diff[0] * diff[0] + diff[1] * diff[1]);
+            const BasePixel<double> diff = new_coords - undistorted_coords_d;
+            const double error_sq = diff[0] * diff[0] + diff[1] * diff[1];
 
-            undistorted_coords = new_coords;
+            undistorted_coords_d = new_coords;
 
             if (error_sq < this->tol_sq_) {
                 break;
             }
         }
+
+        Pixel undistorted_coords{
+            static_cast<float>(undistorted_coords[0]),
+            static_cast<float>(undistorted_coords[1])
+        };
 
         return undistorted_coords;
     }

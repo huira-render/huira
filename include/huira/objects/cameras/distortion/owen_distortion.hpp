@@ -24,14 +24,11 @@ namespace huira {
     };
 
     
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    class OwenDistortion : public Distortion<TSpectral, TFloat> {
+    template <IsSpectral TSpectral>
+    class OwenDistortion : public Distortion<TSpectral> {
     public:
-
         OwenDistortion() = default;
         explicit OwenDistortion(OwenCoefficients coefficients);
-        
-        [[nodiscard]] Pixel compute_delta(Pixel homogeneous_coords) const;
 
         [[nodiscard]] Pixel distort(Pixel homogeneous_coords) const override;
         [[nodiscard]] Pixel undistort(Pixel homogeneous_coords) const override;
@@ -42,6 +39,9 @@ namespace huira {
 
     private:
         OwenCoefficients coefficients_{};
+
+        template <IsFloatingPoint TFloat>
+        [[nodiscard]] BasePixel<TFloat> compute_delta_(BasePixel<TFloat> homogeneous_coords) const;
     };
 
 }

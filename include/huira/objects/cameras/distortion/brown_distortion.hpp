@@ -21,13 +21,11 @@ namespace huira {
         }
     };
 
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    class BrownDistortion : public Distortion<TSpectral, TFloat> {
+    template <IsSpectral TSpectral>
+    class BrownDistortion : public Distortion<TSpectral> {
     public:
         BrownDistortion() = default;
         explicit BrownDistortion(BrownCoefficients coefficients);
-
-        [[nodiscard]] Pixel compute_delta(Pixel homogeneous_coords) const;
 
         [[nodiscard]] Pixel distort(Pixel homogeneous_coords) const override;
         [[nodiscard]] Pixel undistort(Pixel homogeneous_coords) const override;
@@ -39,6 +37,9 @@ namespace huira {
 
     private:
         BrownCoefficients coefficients_{};
+
+        template <IsFloatingPoint TFloat>
+        [[nodiscard]] BasePixel<TFloat> compute_delta_(BasePixel<TFloat> homogeneous_coords) const;
     };
 
 }

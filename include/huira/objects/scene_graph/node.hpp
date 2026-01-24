@@ -12,10 +12,10 @@
 
 namespace huira {
     // Forward declare:
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
+    template <IsSpectral TSpectral>
     class Scene;
 
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
+    template <IsSpectral TSpectral>
     class FrameNode;
 
     enum class TransformSource {
@@ -34,10 +34,10 @@ namespace huira {
      * Node itself cannot have children - use FrameNode for nodes that need children.
      * Leaf nodes (lights, unresolved objects, etc.) should derive from Node directly.
      */
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
+    template <IsSpectral TSpectral>
     class Node {
     public:
-        Node(Scene<TSpectral, TFloat>* scene);
+        Node(Scene<TSpectral>* scene);
         virtual ~Node() = default;
 
         // Delete copying:
@@ -46,12 +46,12 @@ namespace huira {
 
         std::uint64_t id() const { return id_; }
 
-        void set_position(const Vec3<TFloat>& position);
-        void set_rotation(const Rotation<TFloat>& rotation);
-        void set_scale(const Vec3<TFloat>& scale);
+        void set_position(const Vec3<double>& position);
+        void set_rotation(const Rotation<double>& rotation);
+        void set_scale(const Vec3<double>& scale);
 
-        void set_velocity(const Vec3<TFloat>& velocity);
-        void set_angular_velocity(const Vec3<TFloat>& angular_velocity);
+        void set_velocity(const Vec3<double>& velocity);
+        void set_angular_velocity(const Vec3<double>& angular_velocity);
 
         void set_spice_origin(const std::string& spice_origin);
         void set_spice_frame(const std::string& spice_frame);
@@ -62,20 +62,20 @@ namespace huira {
         virtual std::string get_type_name() const { return "Node"; }
 
 
-        Vec3<TFloat> get_global_position() const { return global_transform_.position; }
-        Vec3<TFloat> get_local_position() const { return local_transform_.position; }
+        Vec3<double> get_global_position() const { return global_transform_.position; }
+        Vec3<double> get_local_position() const { return local_transform_.position; }
 
-        Rotation<TFloat> get_global_rotation() const { return global_transform_.rotation; }
-        Rotation<TFloat> get_local_rotation() const { return local_transform_.rotation; }
+        Rotation<double> get_global_rotation() const { return global_transform_.rotation; }
+        Rotation<double> get_local_rotation() const { return local_transform_.rotation; }
 
-        Vec3<TFloat> get_global_scale() const { return global_transform_.scale; }
-        Vec3<TFloat> get_local_scale() const { return local_transform_.scale; }
+        Vec3<double> get_global_scale() const { return global_transform_.scale; }
+        Vec3<double> get_local_scale() const { return local_transform_.scale; }
 
-        Vec3<TFloat> get_global_velocity() const { return global_transform_.velocity; }
-        Vec3<TFloat> get_local_velocity() const { return local_transform_.velocity; }
+        Vec3<double> get_global_velocity() const { return global_transform_.velocity; }
+        Vec3<double> get_local_velocity() const { return local_transform_.velocity; }
 
-        Vec3<TFloat> get_global_angular_velocity() const { return global_transform_.angular_velocity; }
-        Vec3<TFloat> get_local_angular_velocity() const { return local_transform_.angular_velocity; }
+        Vec3<double> get_global_angular_velocity() const { return global_transform_.angular_velocity; }
+        Vec3<double> get_local_angular_velocity() const { return local_transform_.angular_velocity; }
 
 
         std::string get_spice_origin() const { return spice_origin_; }
@@ -83,18 +83,18 @@ namespace huira {
 
 
         // Query state relative to arbitrary SPICE frames
-        Vec3<TFloat> get_position_in_frame(const std::string& target_origin, const std::string& target_frame) const;
-        Vec3<TFloat> get_velocity_in_frame(const std::string& target_origin, const std::string& target_frame) const;
+        Vec3<double> get_position_in_frame(const std::string& target_origin, const std::string& target_frame) const;
+        Vec3<double> get_velocity_in_frame(const std::string& target_origin, const std::string& target_frame) const;
 
-        Rotation<TFloat> get_rotation_in_frame(const std::string& target_frame) const;
-        Vec3<TFloat> get_angular_velocity_in_frame(const std::string& target_frame) const;
+        Rotation<double> get_rotation_in_frame(const std::string& target_frame) const;
+        Vec3<double> get_angular_velocity_in_frame(const std::string& target_frame) const;
 
-        std::pair<Vec3<TFloat>, Vec3<TFloat>> get_state_in_frame(const std::string& target_origin, const std::string& target_frame) const;
-        std::pair<Rotation<TFloat>, Vec3<TFloat>> get_attitude_in_frame(const std::string& target_frame) const;
+        std::pair<Vec3<double>, Vec3<double>> get_state_in_frame(const std::string& target_origin, const std::string& target_frame) const;
+        std::pair<Rotation<double>, Vec3<double>> get_attitude_in_frame(const std::string& target_frame) const;
 
     protected:
-        Transform<TFloat> local_transform_;
-        Transform<TFloat> global_transform_;
+        Transform<double> local_transform_;
+        Transform<double> global_transform_;
 
         TransformSource position_source_ = TransformSource::MANUAL_TRANSFORM;
         TransformSource rotation_source_ = TransformSource::MANUAL_TRANSFORM;
@@ -105,17 +105,17 @@ namespace huira {
         std::uint64_t id_ = 0;
         static inline std::uint64_t next_id_ = 0;
 
-        Scene<TSpectral, TFloat>* scene_;
-        Node<TSpectral, TFloat>* parent_ = nullptr;
+        Scene<TSpectral>* scene_;
+        Node<TSpectral>* parent_ = nullptr;
 
-        void set_parent_(Node<TSpectral, TFloat>* parent) { parent_ = parent; }
+        void set_parent_(Node<TSpectral>* parent) { parent_ = parent; }
 
         
         virtual void on_transform_changed_() {}
 
-        virtual const std::vector<std::shared_ptr<Node<TSpectral, TFloat>>>* get_children_() const { return nullptr; }
-        virtual std::shared_ptr<Node<TSpectral, TFloat>> child_spice_origins_() const { return nullptr; }
-        virtual std::shared_ptr<Node<TSpectral, TFloat>> child_spice_frames_() const { return nullptr; }
+        virtual const std::vector<std::shared_ptr<Node<TSpectral>>>* get_children_() const { return nullptr; }
+        virtual std::shared_ptr<Node<TSpectral>> child_spice_origins_() const { return nullptr; }
+        virtual std::shared_ptr<Node<TSpectral>> child_spice_frames_() const { return nullptr; }
 
         void update_spice_transform_();
         virtual void update_all_spice_transforms_();
@@ -134,11 +134,11 @@ namespace huira {
         void compute_global_position_from_local_();
         void compute_global_rotation_from_local_();
 
-        std::pair<const Node<TSpectral, TFloat>*, Transform<TFloat>> find_spice_origin_ancestor_() const;
-        std::pair<const Node<TSpectral, TFloat>*, std::pair<Rotation<TFloat>, Vec3<TFloat>>> find_spice_frame_ancestor_() const;
+        std::pair<const Node<TSpectral>*, Transform<double>> find_spice_origin_ancestor_() const;
+        std::pair<const Node<TSpectral>*, std::pair<Rotation<double>, Vec3<double>>> find_spice_frame_ancestor_() const;
 
-        friend class Scene<TSpectral, TFloat>;
-        friend class FrameNode<TSpectral, TFloat>;
+        friend class Scene<TSpectral>;
+        friend class FrameNode<TSpectral>;
     };
 }
 

@@ -7,7 +7,6 @@
 #include <type_traits>
 
 #include "huira/core/types.hpp"
-#include "huira/detail/concepts/numeric_concepts.hpp"
 #include "huira/detail/concepts/spectral_concepts.hpp"
 
 namespace huira {
@@ -18,11 +17,9 @@ namespace huira {
         virtual ~DistortionCoefficients() = default;
     };
     
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
+    template <IsSpectral TSpectral>
     class Distortion {
     public:
-        using FloatType = TFloat;
-
         Distortion() = default;
         virtual ~Distortion() = default;
         
@@ -42,16 +39,16 @@ namespace huira {
 
     protected:
         std::size_t max_iterations_ = 20;
-        float tol_sq_ = 1e-12f;
-        float tolerance_ = 1e-6f;
+        double tol_sq_ = 1e-12;
+        double tolerance_ = 1e-6;
     };
 
     template <typename T>
     struct is_distortion : std::false_type {};
 
-    template <template <typename, typename> class Derived, typename TSpectral, typename TFloat>
-        requires std::derived_from<Derived<TSpectral, TFloat>, Distortion<TSpectral, TFloat>>
-    struct is_distortion<Derived<TSpectral, TFloat>> : std::true_type {};
+    template <template <typename> class Derived, typename TSpectral>
+        requires std::derived_from<Derived<TSpectral>, Distortion<TSpectral>>
+    struct is_distortion<Derived<TSpectral>> : std::true_type {};
 
     template <typename T>
     concept IsDistortion = is_distortion<T>::value;

@@ -40,35 +40,35 @@ namespace huira {
 
     // Explicit instantiations - forces code generation for code coverage purposes
 
-    template class BrownDistortion<TestSpectral, TestFloat>;
-    template class OpenCVDistortion<TestSpectral, TestFloat>;
-    template class OwenDistortion<TestSpectral, TestFloat>;
-    template class Camera<TestSpectral, TestFloat>;
+    template class BrownDistortion<TestSpectral>;
+    template class OpenCVDistortion<TestSpectral>;
+    template class OwenDistortion<TestSpectral>;
+    template class Camera<TestSpectral>;
 
-    template class Ray<TestSpectral, TestFloat>;
+    template class Ray<TestSpectral>;
     template class Rotation<TestFloat>;
     template struct Transform<TestFloat>;
 
-    template class FrameHandle<TestSpectral, TestFloat>;
-    template class RootFrameHandle<TestSpectral, TestFloat>;
-    template class CameraHandle<TestSpectral, TestFloat>;
-    template class UnresolvedObjectHandle<TestSpectral, TestFloat>;
-    template class PointLightHandle<TestSpectral, TestFloat>;
+    template class FrameHandle<TestSpectral>;
+    template class RootFrameHandle<TestSpectral>;
+    template class CameraHandle<TestSpectral>;
+    template class UnresolvedObjectHandle<TestSpectral>;
+    //template class PointLightHandle<TestSpectral>;
 
     template class Image<std::int8_t>;
     template class Image<float>;
     template class Image<Vec3<float>>;
     template class Image<TestSpectral>;
 
-    template class PointLight<TestSpectral, TestFloat>;
+    //template class PointLight<TestSpectral>;
 
-    template UnresolvedRenderResult<TestSpectral, TestFloat> unresolved_render<TestSpectral, TestFloat>(
-        const Scene<TestSpectral, TestFloat>&,
-        const CameraHandle<TestSpectral, TestFloat>&,
+    template UnresolvedRenderResult<TestSpectral> unresolved_render<TestSpectral>(
+        const Scene<TestSpectral>&,
+        const CameraHandle<TestSpectral>&,
         UnresolvedRenderSettings);
 
-    template class Scene<TestSpectral, TestFloat>;
-    template class Node<TestSpectral, TestFloat>;
-    template class UnresolvedObject<TestSpectral, TestFloat>;
+    template class Scene<TestSpectral>;
+    template class Node<TestSpectral>;
+    template class UnresolvedObject<TestSpectral>;
     
 }

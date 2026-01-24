@@ -8,7 +8,7 @@
 #include "huira/handles/camera_handle.hpp"
 
 namespace huira {
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
+    template <IsSpectral TSpectral>
     struct UnresolvedRenderResult {
         Image<TSpectral> received_power;
     };
@@ -17,10 +17,10 @@ namespace huira {
 
     };
 
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    UnresolvedRenderResult<TSpectral, TFloat> unresolved_render(
-        const Scene<TSpectral, TFloat>& scene,
-        const CameraHandle<TSpectral, TFloat>& camera,
+    template <IsSpectral TSpectral>
+    UnresolvedRenderResult<TSpectral> unresolved_render(
+        const Scene<TSpectral>& scene,
+        const CameraHandle<TSpectral>& camera,
         UnresolvedRenderSettings settings = UnresolvedRenderSettings{}
     );
 }

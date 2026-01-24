@@ -6,17 +6,16 @@
 #include <stdexcept>
 #include <string>
 
-#include "huira/detail/concepts/numeric_concepts.hpp"
 #include "huira/detail/concepts/spectral_concepts.hpp"
 
 #include "huira/objects/scene_graph/frame_node.hpp"
 #include "huira/handles/root_frame_handle.hpp"
 
 namespace huira {
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
+    template <IsSpectral TSpectral>
     class Scene {
     private:
-        std::shared_ptr<FrameNode<TSpectral, TFloat>> root_node_;
+        std::shared_ptr<FrameNode<TSpectral>> root_node_;
 
     public:
         Scene(const Scene&) = delete; // Delete the copy constructor
@@ -31,7 +30,7 @@ namespace huira {
         void set_time(const Time& time);
         Time get_time() const { return time_; }
 
-        RootFrameHandle<TSpectral, TFloat> root;
+        RootFrameHandle<TSpectral> root;
 
         void print_graph() const;
 
@@ -40,11 +39,11 @@ namespace huira {
 
         Time time_;
 
-        void print_node_(const Node<TSpectral, TFloat>* node, const std::string& prefix, bool is_last) const;
-        void print_node_details_(const Node<TSpectral, TFloat>* node) const;
+        void print_node_(const Node<TSpectral>* node, const std::string& prefix, bool is_last) const;
+        void print_node_details_(const Node<TSpectral>* node) const;
 
-        friend class Node<TSpectral, TFloat>;
-        friend class FrameNode<TSpectral, TFloat>;
+        friend class Node<TSpectral>;
+        friend class FrameNode<TSpectral>;
     };
 }
 
