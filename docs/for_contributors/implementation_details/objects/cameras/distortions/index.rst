@@ -1,10 +1,9 @@
-Cameras
-=======
+Distortions
+===========
 
 .. toctree::
    :maxdepth: 1
 
-   camera
    distortion
    brown_distortion
    opencv_distortion

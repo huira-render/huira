@@ -14,7 +14,7 @@
 - You can optionally select `C++ Clang Compiler for Windows`
 
 
-## Method 2: vcpkg Package Manager (Preferred)
+## Method 1: vcpkg Package Manager (Preferred)
 
 [vcpkg](https://github.com/microsoft/vcpkg) provides cross-platform package management through source compilation. Initial builds may take considerable time due to source-based dependency building. For developers of *Huira* using Visual Studio, we recommend using vcpkg.
 
