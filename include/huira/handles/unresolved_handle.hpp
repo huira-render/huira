@@ -4,7 +4,7 @@
 #include "huira/detail/concepts/spectral_concepts.hpp"
 
 #include "huira/handles/point_handle.hpp"
-#include "huira/objects/unresolved_object.hpp"
+#include "huira/assets/unresolved_object.hpp"
 
 namespace huira {
     template <IsSpectral TSpectral>

@@ -42,7 +42,7 @@ Select your operating system below to view specific build steps.
              :link-type: doc
              :class-card: sd-border-0
 
-             Generate a ``.sln`` solution file to build and debug inside the Visual Studio IDE.
+             Setup build and debug inside the Visual Studio IDE.
 
 .. grid:: 1
     :gutter: 3
