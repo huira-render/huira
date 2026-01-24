@@ -121,7 +121,6 @@ namespace huira {
         virtual void update_all_spice_transforms_();
         virtual void update_global_transform_();
 
-        void validate_scene_unlocked_(const std::string function_name);
         void validate_spice_origin_allowed_();
         void validate_spice_frame_allowed_();
 
