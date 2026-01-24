@@ -10,13 +10,3 @@ Unresolved Render
    :undoc-members:
 
 .. doxygenfunction:: huira::unresolved_render
-
-Overview
---------
-
-*Coming Soon*
-
-Usage Example
--------------
-
-*Coming Soon*

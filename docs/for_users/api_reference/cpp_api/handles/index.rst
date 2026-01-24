@@ -1,5 +1,5 @@
-Handles API
-===========
+Handles
+=======
 
 .. toctree::
    :maxdepth: 1

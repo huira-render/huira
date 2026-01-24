@@ -1,17 +1,7 @@
-Rotation Class
-==============
+Rotation
+========
 
 .. doxygenclass:: huira::Rotation
    :members:
    :undoc-members:
    :protected-members:
-
-Overview
---------
-
-*Coming Soon*
-
-Usage Example
--------------
-
-*Coming Soon*

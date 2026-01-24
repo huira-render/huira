@@ -40,3 +40,4 @@ The Huira C++ API is organized into four main modules. Select a module below to 
    handles/index
    images/index
    render/index
+   stars/index

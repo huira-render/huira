@@ -1,5 +1,5 @@
-Images API
-==========
+Images
+======
 
 .. toctree::
    :maxdepth: 1

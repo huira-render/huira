@@ -8,7 +8,7 @@
 
 #include "huira/detail/concepts/spectral_concepts.hpp"
 
-#include "huira/objects/scene_graph/frame_node.hpp"
+#include "huira/scene_graph/frame_node.hpp"
 #include "huira/handles/root_frame_handle.hpp"
 
 namespace huira {
