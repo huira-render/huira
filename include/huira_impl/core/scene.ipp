@@ -18,7 +18,6 @@ namespace huira {
     Scene<TSpectral>::Scene()
         : root_node_(std::make_shared<FrameNode<TSpectral>>(this))
         , root(root_node_)
-        , time_(Time::from_et(0))
     {
         root_node_->set_spice("SOLAR SYSTEM BARYCENTER", "J2000");
     };
@@ -26,15 +25,6 @@ namespace huira {
 #ifdef _MSC_VER
 #pragma warning(pop)
 #endif
-
-    template <IsSpectral TSpectral>
-    void Scene<TSpectral>::set_time(const Time& time) {
-        time_ = time;
-
-        HUIRA_LOG_INFO("Scene time set to " + time.to_utc_string() + " (et = " + std::to_string(time.et()) + ")");
-
-        root_node_->update_all_spice_transforms_();
-    }
 
     template <IsSpectral TSpectral>
     void Scene<TSpectral>::print_graph() const {

@@ -25,16 +25,7 @@ namespace huira {
     void NodeHandle<TSpectral, TNode>::set_position(double x, double y, double z) const {
         this->get()->set_position(Vec3<double>{x, y, z});
     }
-
-    /**
-     * @brief Gets the global position.
-     *
-     * @return Vec3<double> The global 3D position vector
-     */
-    template <IsSpectral TSpectral, typename TNode>
-    Vec3<double> NodeHandle<TSpectral, TNode>::get_global_position() const {
-        return this->get()->get_global_position();
-    }
+    
 
     /**
      * @brief Gets the local position.
@@ -42,8 +33,8 @@ namespace huira {
      * @return Vec3<double> The local 3D position vector
      */
     template <IsSpectral TSpectral, typename TNode>
-    Vec3<double> NodeHandle<TSpectral, TNode>::get_local_position() const {
-        return this->get()->get_local_position();
+    Vec3<double> NodeHandle<TSpectral, TNode>::get_static_position() const {
+        return this->get()->get_static_position();
     }
 
 
@@ -69,16 +60,7 @@ namespace huira {
     void NodeHandle<TSpectral, TNode>::set_velocity(double vx, double vy, double vz) const {
         this->get()->set_velocity(Vec3<double>{vx, vy, vz});
     }
-
-    /**
-     * @brief Gets the global velocity.
-     *
-     * @return Vec3<double> The global 3D velocity vector
-     */
-    template <IsSpectral TSpectral, typename TNode>
-    Vec3<double> NodeHandle<TSpectral, TNode>::get_global_velocity() const {
-        return this->get()->get_global_velocity();
-    }
+    
 
     /**
      * @brief Gets the local velocity.
@@ -86,8 +68,8 @@ namespace huira {
      * @return Vec3<double> The local 3D velocity vector
      */
     template <IsSpectral TSpectral, typename TNode>
-    Vec3<double> NodeHandle<TSpectral, TNode>::get_local_velocity() const {
-        return this->get()->get_local_velocity();
+    Vec3<double> NodeHandle<TSpectral, TNode>::get_static_velocity() const {
+        return this->get()->get_static_velocity();
     }
 
 
@@ -101,15 +83,6 @@ namespace huira {
         this->get()->set_rotation(rotation);
     }
 
-    /**
-     * @brief Gets the global rotation.
-     *
-     * @return Rotation<double> The global rotation
-     */
-    template <IsSpectral TSpectral, typename TNode>
-    Rotation<double> NodeHandle<TSpectral, TNode>::get_global_rotation() const {
-        return this->get()->get_global_rotation();
-    }
 
     /**
      * @brief Gets the local rotation.
@@ -117,8 +90,8 @@ namespace huira {
      * @return Rotation<double> The local rotation
      */
     template <IsSpectral TSpectral, typename TNode>
-    Rotation<double> NodeHandle<TSpectral, TNode>::get_local_rotation() const {
-        return this->get()->get_local_rotation();
+    Rotation<double> NodeHandle<TSpectral, TNode>::get_static_rotation() const {
+        return this->get()->get_static_rotation();
     }
 
 
@@ -145,23 +118,13 @@ namespace huira {
     }
 
     /**
-     * @brief Gets the global angular velocity.
-     *
-     * @return Vec3<double> The global 3D angular velocity vector
-     */
-    template <IsSpectral TSpectral, typename TNode>
-    Vec3<double> NodeHandle<TSpectral, TNode>::get_global_angular_velocity() const {
-        return this->get()->get_global_angular_velocity();
-    }
-
-    /**
      * @brief Gets the local angular velocity.
      *
      * @return Vec3<double> The local 3D angular velocity vector
      */
     template <IsSpectral TSpectral, typename TNode>
-    Vec3<double> NodeHandle<TSpectral, TNode>::get_local_angular_velocity() const {
-        return this->get()->get_local_angular_velocity();
+    Vec3<double> NodeHandle<TSpectral, TNode>::get_static_angular_velocity() const {
+        return this->get()->get_static_angular_velocity();
     }
 
 
@@ -199,24 +162,13 @@ namespace huira {
 
 
     /**
-     * @brief Gets the global scale.
-     *
-     * @return Vec3<double> The local 3D scale
-     */
-    template <IsSpectral TSpectral, typename TNode>
-    Vec3<double> NodeHandle<TSpectral, TNode>::get_global_scale() const {
-        return this->get()->get_global_scale();
-    }
-
-
-    /**
      * @brief Gets the local scale.
      *
      * @return Vec3<double> The local 3D scale
      */
     template <IsSpectral TSpectral, typename TNode>
-    Vec3<double> NodeHandle<TSpectral, TNode>::get_local_scale() const {
-        return this->get()->get_local_scale();
+    Vec3<double> NodeHandle<TSpectral, TNode>::get_static_scale() const {
+        return this->get()->get_static_scale();
     }
 
 
@@ -271,80 +223,5 @@ namespace huira {
     template <IsSpectral TSpectral, typename TNode>
     std::string NodeHandle<TSpectral, TNode>::get_spice_frame() const {
         return this->get()->get_spice_frame();
-    }
-
-    /**
-     * @brief Gets the position in a specified SPICE frame.
-     *
-     * @param target_origin The target SPICE origin identifier
-     * @param target_frame The target SPICE frame identifier
-     * @return Vec3<double> The position in the specified SPICE frame
-     */
-    template <IsSpectral TSpectral, typename TNode>
-    Vec3<double> NodeHandle<TSpectral, TNode>::get_position_in_frame(const std::string& target_origin, const std::string& target_frame) const
-    {
-        return this->get()->get_position_in_frame(target_origin, target_frame);
-    }
-
-    /**
-     * @brief Gets the velocity in a specified SPICE frame.
-     *
-     * @param target_origin The target SPICE origin identifier
-     * @param target_frame The target SPICE frame identifier
-     * @return Vec3<double> The velocity in the specified SPICE frame
-     */
-    template <IsSpectral TSpectral, typename TNode>
-    Vec3<double> NodeHandle<TSpectral, TNode>::get_velocity_in_frame(const std::string& target_origin, const std::string& target_frame) const
-    {
-        return this->get()->get_velocity_in_frame(target_origin, target_frame);
-    }
-
-    /**
-     * @brief Gets the rotation in a specified SPICE frame.
-     *
-     * @param target_frame The target SPICE frame identifier
-     * @return Rotation<double> The rotation in the specified SPICE frame
-     */
-    template <IsSpectral TSpectral, typename TNode>
-    Rotation<double> NodeHandle<TSpectral, TNode>::get_rotation_in_frame(const std::string& target_frame) const
-    {
-        return this->get()->get_rotation_in_frame(target_frame);
-    }
-
-    /**
-     * @brief Gets the angular velocity in a specified SPICE frame.
-     *
-     * @param target_frame The target SPICE frame identifier
-     * @return Vec3<double> The angular velocity in the specified SPICE frame
-     */
-    template <IsSpectral TSpectral, typename TNode>
-    Vec3<double> NodeHandle<TSpectral, TNode>::get_angular_velocity_in_frame(const std::string& target_frame) const
-    {
-        return this->get()->get_angular_velocity_in_frame(target_frame);
-    }
-
-    /**
-     * @brief Gets the state (position and velocity) in a specified SPICE frame.
-     *
-     * @param target_origin The target SPICE origin identifier
-     * @param target_frame The target SPICE frame identifier
-     * @return std::pair<Vec3<double>, Vec3<double>> The position and velocity in the specified SPICE frame
-     */
-    template <IsSpectral TSpectral, typename TNode>
-    std::pair<Vec3<double>, Vec3<double>> NodeHandle<TSpectral, TNode>::get_state_in_frame(const std::string& target_origin, const std::string& target_frame) const
-    {
-        return this->get()->get_state_in_frame(target_origin, target_frame);
-    }
-
-    /**
-     * @brief Gets the attitude (rotation and angular velocity) in a specified SPICE frame.
-     *
-     * @param target_frame The target SPICE frame identifier
-     * @return std::pair<Rotation<double>, Vec3<double>> The rotation and angular velocity in the specified SPICE frame
-     */
-    template <IsSpectral TSpectral, typename TNode>
-    std::pair<Rotation<double>, Vec3<double>> NodeHandle<TSpectral, TNode>::get_attitude_in_frame(const std::string& target_frame) const
-    {
-        return this->get()->get_attitude_in_frame(target_frame);
     }
 }

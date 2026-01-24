@@ -27,8 +27,6 @@ namespace huira {
         template <IsDistortion TDistortion, typename... Args>
         void set_distortion(Args&&... args);
 
-        void look_at(const Vec3<double>& target_position, Vec3<double> up = Vec3<double>{ 0,1,0 });
-
         std::string get_type_name() const override { return "Camera"; }
 
     protected:

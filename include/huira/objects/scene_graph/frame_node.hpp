@@ -48,16 +48,10 @@ namespace huira {
 
     protected:
 
-        // Override to propagate transform changes to children
-        void on_transform_changed_() override;
-
         // Override to check children for SPICE constraints
         const std::vector<std::shared_ptr<Node<TSpectral>>>* get_children_() const override { return &children_; }
         std::shared_ptr<Node<TSpectral>> child_spice_origins_() const override;
         std::shared_ptr<Node<TSpectral>> child_spice_frames_() const override;
-
-        // Override to propagate SPICE updates to children
-        void update_all_spice_transforms_() override;
 
     private:
         std::vector<std::shared_ptr<Node<TSpectral>>> children_;
