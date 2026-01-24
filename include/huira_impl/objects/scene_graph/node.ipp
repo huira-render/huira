@@ -27,9 +27,8 @@ namespace huira {
         }
 
         this->local_transform_.position = position;
-        this->position_source_ = TransformSource::MANUAL_TRANSFORM;
+        this->position_mode_ = TransformMode::MANUAL_TRANSFORM;
         this->spice_origin_ = "";
-        this->update_global_transform_();
     }
 
     template <IsSpectral TSpectral>
@@ -42,9 +41,8 @@ namespace huira {
         }
 
         this->local_transform_.rotation = rotation;
-        this->rotation_source_ = TransformSource::MANUAL_TRANSFORM;
+        this->rotation_mode_ = TransformMode::MANUAL_TRANSFORM;
         this->spice_frame_ = "";
-        this->update_global_transform_();
     }
 
     template <IsSpectral TSpectral>
@@ -56,31 +54,28 @@ namespace huira {
             std::to_string(scale[2]) + ")");
 
         this->local_transform_.scale = scale;
-        this->update_global_transform_();
     }
 
     template <IsSpectral TSpectral>
     void Node<TSpectral>::set_velocity(const Vec3<double>& velocity)
     {
-        if (this->position_source_ == TransformSource::SPICE_TRANSFORM) {
+        if (this->position_mode_ == TransformMode::SPICE_TRANSFORM) {
             HUIRA_THROW_ERROR(this->get_info() + " - cannot manually set velocity when node uses SPICE for position " +
                 "(spice_origin_=" + spice_origin_ + ")");
         }
 
         this->local_transform_.velocity = velocity;
-        this->update_global_transform_();
     }
 
     template <IsSpectral TSpectral>
     void Node<TSpectral>::set_angular_velocity(const Vec3<double>& angular_velocity)
     {
-        if (this->rotation_source_ == TransformSource::SPICE_TRANSFORM) {
+        if (this->rotation_mode_ == TransformMode::SPICE_TRANSFORM) {
             HUIRA_THROW_ERROR(this->get_info() + " - cannot manually set angular velocity when node uses SPICE for rotation " +
                 "(spice_frame_=" + spice_frame_ + ")");
         }
 
         this->local_transform_.angular_velocity = angular_velocity;
-        this->update_global_transform_();
     }
 
     template <IsSpectral TSpectral>
@@ -90,8 +85,7 @@ namespace huira {
         HUIRA_LOG_INFO(this->get_info() + " - set_spice_origin('" + spice_origin + "')");
 
         this->spice_origin_ = spice_origin;
-        this->position_source_ = TransformSource::SPICE_TRANSFORM;
-        this->update_spice_transform_();
+        this->position_mode_ = TransformMode::SPICE_TRANSFORM;
     }
 
     template <IsSpectral TSpectral>
@@ -101,8 +95,7 @@ namespace huira {
         HUIRA_LOG_INFO(this->get_info() + " - set_spice_frame('" + spice_frame + "')");
 
         this->spice_frame_ = spice_frame;
-        this->rotation_source_ = TransformSource::SPICE_TRANSFORM;
-        this->update_spice_transform_();
+        this->rotation_mode_ = TransformMode::SPICE_TRANSFORM;
     }
 
     template <IsSpectral TSpectral>
@@ -114,9 +107,8 @@ namespace huira {
 
         this->spice_origin_ = spice_origin;
         this->spice_frame_ = spice_frame;
-        this->position_source_ = TransformSource::SPICE_TRANSFORM;
-        this->rotation_source_ = TransformSource::SPICE_TRANSFORM;
-        this->update_spice_transform_();
+        this->position_mode_ = TransformMode::SPICE_TRANSFORM;
+        this->rotation_mode_ = TransformMode::SPICE_TRANSFORM;
     }
 
 
@@ -129,132 +121,66 @@ namespace huira {
 
 
 
-    /**
-     * @brief Get position relative to a SPICE origin in a SPICE frame
-     * @param target_origin SPICE body to measure position relative to (e.g., "SSB", "EARTH", "SUN")
-     * @param target_frame SPICE reference frame for the result (e.g., "J2000", "ECLIPJ2000")
-     * @return Position vector in the target frame relative to target origin
-     * @throws std::runtime_error if no SPICE-enabled ancestor is found in scene graph
-     */
     template <IsSpectral TSpectral>
-    Vec3<double> Node<TSpectral>::get_position_in_frame(const std::string& target_origin, const std::string& target_frame) const
+    Vec3<double> Node<TSpectral>::get_static_position() const
     {
-        auto [pos, vel] = get_state_in_frame(target_origin, target_frame);
-        return pos;
+        if (position_mode_ != TransformMode::MANUAL_TRANSFORM) {
+            HUIRA_THROW_ERROR(this->get_info() +
+                " - cannot get static position when position mode is not MANUAL_TRANSFORM");
+        }
+        return local_transform_.position;
+    }
+    template <IsSpectral TSpectral>
+    Rotation<double> Node<TSpectral>::get_static_rotation() const
+    {
+        if (position_mode_ != TransformMode::MANUAL_TRANSFORM) {
+            HUIRA_THROW_ERROR(this->get_info() +
+                " - cannot get static rotation when rotation mode is not MANUAL_TRANSFORM");
+        }
+        return local_transform_.rotation;
+    }
+    template <IsSpectral TSpectral>
+    Vec3<double> Node<TSpectral>::get_static_scale() const
+    {
+        return local_transform_.scale;
+    }
+    template <IsSpectral TSpectral>
+    Vec3<double> Node<TSpectral>::get_static_velocity() const
+    {
+        if (position_mode_ != TransformMode::MANUAL_TRANSFORM) {
+            HUIRA_THROW_ERROR(this->get_info() +
+                " - cannot get static velocity when position mode is not MANUAL_TRANSFORM");
+        }
+        return local_transform_.velocity;
+    }
+    template <IsSpectral TSpectral>
+    Vec3<double> Node<TSpectral>::get_static_angular_velocity() const
+    {
+        if (position_mode_ != TransformMode::MANUAL_TRANSFORM) {
+            HUIRA_THROW_ERROR(this->get_info() +
+                " - cannot get static angular velocity when rotation mode is not MANUAL_TRANSFORM");
+        }
+        return local_transform_.angular_velocity;
     }
 
-    /**
-     * @brief Get velocity relative to a SPICE origin in a SPICE frame
-     * @param target_origin SPICE body to measure velocity relative to (e.g., "SSB", "EARTH", "SUN")
-     * @param target_frame SPICE reference frame for the result (e.g., "J2000", "ECLIPJ2000")
-     * @return Velocity vector in the target frame relative to target origin
-     * @throws std::runtime_error if no SPICE-enabled ancestor is found in scene graph
-     */
+
     template <IsSpectral TSpectral>
-    Vec3<double> Node<TSpectral>::get_velocity_in_frame(const std::string& target_origin, const std::string& target_frame) const
-    {
-        auto [pos, vel] = get_state_in_frame(target_origin, target_frame);
-        return vel;
+    std::string Node<TSpectral>::get_spice_origin() const {
+        if (position_mode_ != TransformMode::SPICE_TRANSFORM) {
+            HUIRA_THROW_ERROR(this->get_info() +
+                " - cannot get spice origin when position mode is not SPICE_TRANSFORM");
+        }
+        return spice_origin_;
     }
 
-    /**
-     * @brief Get rotation relative to a SPICE frame
-     * @param target_frame SPICE reference frame (e.g., "J2000", "ECLIPJ2000", "IAU_EARTH")
-     * @return Rotation from target frame to this node's orientation
-     * @throws std::runtime_error if no SPICE-enabled ancestor is found in scene graph
-     */
     template <IsSpectral TSpectral>
-    Rotation<double> Node<TSpectral>::get_rotation_in_frame(const std::string& target_frame) const
+    std::string Node<TSpectral>::get_spice_frame() const
     {
-        auto [rot, ang_vel] = get_attitude_in_frame(target_frame);
-        return rot;
-    }
-
-    /**
-     * @brief Get angular velocity relative to a SPICE frame
-     * @param target_frame SPICE reference frame (e.g., "J2000", "ECLIPJ2000", "IAU_EARTH")
-     * @return Angular velocity vector in the target frame
-     * @throws std::runtime_error if no SPICE-enabled ancestor is found in scene graph
-     */
-    template <IsSpectral TSpectral>
-    Vec3<double> Node<TSpectral>::get_angular_velocity_in_frame(const std::string& target_frame) const
-    {
-        auto [rot, ang_vel] = get_attitude_in_frame(target_frame);
-        return ang_vel;
-    }
-
-    /**
-     * @brief Get complete state (position + velocity) relative to a SPICE origin and frame
-     * @param target_origin SPICE body to measure state relative to
-     * @param target_frame SPICE reference frame for the result
-     * @return Pair of (position, velocity) in the target frame relative to target origin
-     * @throws std::runtime_error if no SPICE-enabled ancestor is found in scene graph
-     */
-    template <IsSpectral TSpectral>
-    std::pair<Vec3<double>, Vec3<double>> Node<TSpectral>::get_state_in_frame(
-        const std::string& target_origin,
-        const std::string& target_frame) const
-    {
-        // Find the first SPICE-enabled ancestor
-        auto [spice_ancestor, accumulated_transform] = find_spice_origin_ancestor_();
-
-        // Get the SPICE ancestor's state in the target frame
-        auto [spice_pos, spice_vel, lt] = spice::spkezr<double>(
-            spice_ancestor->get_spice_origin(),
-            scene_->get_time(),
-            target_frame,
-            target_origin
-        );
-
-        // We need the rotation from target_frame to the SPICE ancestor's frame
-        // to properly transform the accumulated offset
-        auto [frame_rotation, frame_ang_vel] = spice::sxform<double>(
-            target_frame,
-            spice_ancestor->get_spice_frame(),
-            scene_->get_time()
-        );
-
-        // Transform accumulated position: rotate from ancestor frame to target frame
-        Vec3<double> position = spice_pos + frame_rotation.inverse() * accumulated_transform.position;
-
-        // Transform accumulated velocity: rotate and account for frame rotation
-        // v_target = v_spice + R^-1 * v_accumulated
-        // Note: We're not adding rotational velocity contribution (omega x r) since we're
-        // assuming the accumulated velocity is already in the proper reference
-        Vec3<double> velocity = spice_vel + frame_rotation.inverse() * accumulated_transform.velocity;
-
-        return { position, velocity };
-    }
-
-    /**
-     * @brief Get complete attitude (rotation + angular velocity) relative to a SPICE frame
-     * @param target_frame SPICE reference frame for the result
-     * @return Pair of (rotation, angular_velocity) in the target frame
-     * @throws std::runtime_error if no SPICE-enabled ancestor is found in scene graph
-     */
-    template <IsSpectral TSpectral>
-    std::pair<Rotation<double>, Vec3<double>> Node<TSpectral>::get_attitude_in_frame(const std::string& target_frame) const
-    {
-        // Find the first SPICE-enabled ancestor
-        auto [spice_ancestor, accumulated_rotation_data] = find_spice_frame_ancestor_();
-        auto [accumulated_rotation, accumulated_ang_vel] = accumulated_rotation_data;
-
-        // Get the rotation from target_frame to the SPICE ancestor's frame
-        auto [spice_rotation, spice_ang_vel] = spice::sxform<double>(
-            target_frame,
-            spice_ancestor->get_spice_frame(),
-            scene_->get_time()
-        );
-
-        // Compose rotations: R_total = R_spice * R_accumulated
-        // This gives rotation from target_frame to this node's frame
-        Rotation<double> rotation = spice_rotation * accumulated_rotation;
-
-        // Transform angular velocity to target frame
-        // ω_target = R_spice^-1 * (ω_spice + ω_accumulated)
-        Vec3<double> angular_velocity = spice_rotation.inverse() * (spice_ang_vel + accumulated_ang_vel);
-
-        return { rotation, angular_velocity };
+        if (position_mode_ != TransformMode::SPICE_TRANSFORM) {
+            HUIRA_THROW_ERROR(this->get_info() +
+                " - cannot get spice frame when rotation mode is not SPICE_TRANSFORM");
+        }
+        return spice_frame_;
     }
 
 
@@ -277,7 +203,7 @@ namespace huira {
         // Walk up the scene graph
         while (current != nullptr) {
             // Check if this node has a SPICE origin
-            if (current->position_source_ == TransformSource::SPICE_TRANSFORM &&
+            if (current->position_mode_ == TransformMode::SPICE_TRANSFORM &&
                 !current->spice_origin_.empty()) {
                 return { current, accumulated };
             }
@@ -328,7 +254,7 @@ namespace huira {
         // Walk up the scene graph
         while (current != nullptr) {
             // Check if this node has a SPICE frame
-            if (current->rotation_source_ == TransformSource::SPICE_TRANSFORM &&
+            if (current->rotation_mode_ == TransformMode::SPICE_TRANSFORM &&
                 !current->spice_frame_.empty()) {
                 return { current, {accumulated_rotation, accumulated_ang_vel} };
             }
@@ -359,84 +285,6 @@ namespace huira {
     }
 
 
-
-    template <IsSpectral TSpectral>
-    void Node<TSpectral>::update_spice_transform_()
-    {
-        if (parent_ == nullptr) {
-            return;
-        }
-
-        if (this->position_source_ == TransformSource::SPICE_TRANSFORM) {
-            compute_global_spice_position_();
-            compute_local_position_from_global_();
-        }
-
-        if (this->rotation_source_ == TransformSource::SPICE_TRANSFORM) {
-            compute_global_spice_rotation_();
-            compute_local_rotation_from_global_();
-        }
-
-        // Notify derived classes (FrameNode will propagate to children)
-        on_transform_changed_();
-    }
-
-    template <IsSpectral TSpectral>
-    void Node<TSpectral>::update_all_spice_transforms_()
-    {
-        // For leaf nodes, just update this node's transform
-        // FrameNode overrides this to also propagate to children
-        if (parent_ == nullptr) {
-            // Root node: nothing to compute for self, children handled by FrameNode override
-            return;
-        }
-
-        if (this->position_source_ == TransformSource::SPICE_TRANSFORM) {
-            compute_global_spice_position_();
-            compute_local_position_from_global_();
-        }
-        else {
-            compute_global_position_from_local_();
-        }
-
-        if (this->rotation_source_ == TransformSource::SPICE_TRANSFORM) {
-            compute_global_spice_rotation_();
-            compute_local_rotation_from_global_();
-        }
-        else {
-            compute_global_rotation_from_local_();
-        }
-
-        this->global_transform_.scale = parent_->global_transform_.scale * this->local_transform_.scale;
-    }
-
-    template <IsSpectral TSpectral>
-    void Node<TSpectral>::update_global_transform_()
-    {
-        // Compute global from parent
-        if (this->parent_) {
-            if (this->position_source_ == TransformSource::SPICE_TRANSFORM) {
-                compute_local_position_from_global_();
-            }
-            else {
-                compute_global_position_from_local_();
-            }
-
-            if (this->rotation_source_ == TransformSource::SPICE_TRANSFORM) {
-                compute_local_rotation_from_global_();
-            }
-            else {
-                compute_global_rotation_from_local_();
-            }
-
-            this->global_transform_.scale = parent_->global_transform_.scale * this->local_transform_.scale;
-        }
-
-        // Notify derived classes (FrameNode will propagate to children)
-        on_transform_changed_();
-    }
-
-
     // ========================= //
     // === Protected Members === //
     // ========================= //
@@ -444,7 +292,7 @@ namespace huira {
     void Node<TSpectral>::validate_spice_origin_allowed_()
     {
         if (parent_) {
-            if (parent_->position_source_ != TransformSource::SPICE_TRANSFORM) {
+            if (parent_->position_mode_ != TransformMode::SPICE_TRANSFORM) {
                 HUIRA_THROW_ERROR(this->get_info() + " - cannot set SPICE origin: parent node (" +
                     parent_->get_info() + ") has manually set position");
             }
@@ -455,77 +303,10 @@ namespace huira {
     void Node<TSpectral>::validate_spice_frame_allowed_()
     {
         if (parent_) {
-            if (parent_->rotation_source_ != TransformSource::SPICE_TRANSFORM) {
+            if (parent_->rotation_mode_ != TransformMode::SPICE_TRANSFORM) {
                 HUIRA_THROW_ERROR(this->get_info() + " - cannot set SPICE frame: parent node (" +
                     parent_->get_info() + ") has manually set rotation");
             }
         }
     }
-
-    template <IsSpectral TSpectral>
-    void Node<TSpectral>::compute_global_spice_position_()
-    {
-        auto [position, velocity, _] = spice::spkezr<double>(
-            this->spice_origin_, scene_->get_time(),
-            scene_->root.get_spice_frame(), scene_->root.get_spice_origin()
-        );
-        this->global_transform_.position = position;
-        this->global_transform_.velocity = velocity;
-    }
-
-    template <IsSpectral TSpectral>
-    void Node<TSpectral>::compute_global_spice_rotation_()
-    {
-        auto [rotation, angular_velocity] = spice::sxform<double>(
-            this->spice_frame_, scene_->root.get_spice_frame(), scene_->get_time()
-        );
-        this->global_transform_.rotation = rotation;
-        this->global_transform_.angular_velocity = angular_velocity;
-    }
-
-    template <IsSpectral TSpectral>
-    void Node<TSpectral>::compute_local_position_from_global_()
-    {
-        this->local_transform_.position =
-            parent_->global_transform_.rotation.inverse() *
-            (this->global_transform_.position - parent_->global_transform_.position);
-
-        this->local_transform_.velocity =
-            parent_->global_transform_.rotation.inverse() *
-            (this->global_transform_.velocity - parent_->global_transform_.velocity);
-    }
-
-    template <IsSpectral TSpectral>
-    void Node<TSpectral>::compute_local_rotation_from_global_()
-    {
-        this->local_transform_.rotation =
-            parent_->global_transform_.rotation.inverse() * this->global_transform_.rotation;
-
-        this->local_transform_.angular_velocity =
-            parent_->global_transform_.rotation.inverse() *
-            (this->global_transform_.angular_velocity - parent_->global_transform_.angular_velocity);
-    }
-
-    template <IsSpectral TSpectral>
-    void Node<TSpectral>::compute_global_position_from_local_()
-    {
-        this->global_transform_.position =
-            parent_->global_transform_.position +
-            parent_->global_transform_.rotation * this->local_transform_.position;
-        this->global_transform_.velocity =
-            parent_->global_transform_.velocity +
-            parent_->global_transform_.rotation * this->local_transform_.velocity;
-    }
-
-    template <IsSpectral TSpectral>
-    void Node<TSpectral>::compute_global_rotation_from_local_()
-    {
-        this->global_transform_.rotation =
-            parent_->global_transform_.rotation * this->local_transform_.rotation;
-
-        this->global_transform_.angular_velocity =
-            parent_->global_transform_.angular_velocity +
-            parent_->global_transform_.rotation * this->local_transform_.angular_velocity;
-    }
-
 }

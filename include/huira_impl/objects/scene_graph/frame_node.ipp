@@ -86,21 +86,11 @@ namespace huira {
     // ========================= //
     // === Protected Members === //
     // ========================= //
-
-    template <IsSpectral TSpectral>
-    void FrameNode<TSpectral>::on_transform_changed_()
-    {
-        // Propagate transform updates to all children
-        for (auto& child : children_) {
-            child->update_global_transform_();
-        }
-    }
-
     template <IsSpectral TSpectral>
     std::shared_ptr<Node<TSpectral>> FrameNode<TSpectral>::child_spice_origins_() const
     {
         for (const auto& child : children_) {
-            if (child->position_source_ == TransformSource::SPICE_TRANSFORM) {
+            if (child->position_mode_ == TransformMode::SPICE_TRANSFORM) {
                 return child;
             }
         }
@@ -111,23 +101,10 @@ namespace huira {
     std::shared_ptr<Node<TSpectral>> FrameNode<TSpectral>::child_spice_frames_() const
     {
         for (const auto& child : children_) {
-            if (child->rotation_source_ == TransformSource::SPICE_TRANSFORM) {
+            if (child->rotation_mode_ == TransformMode::SPICE_TRANSFORM) {
                 return child;
             }
         }
         return nullptr;
     }
-
-    template <IsSpectral TSpectral>
-    void FrameNode<TSpectral>::update_all_spice_transforms_()
-    {
-        // First update this node's transforms (parent class logic)
-        Node<TSpectral>::update_all_spice_transforms_();
-
-        // Then propagate to all children
-        for (auto& child : children_) {
-            child->update_all_spice_transforms_();
-        }
-    }
-
 }

@@ -23,16 +23,11 @@ namespace huira {
 
         Scene();
 
-        void set_time(const Time& time);
-        Time get_time() const { return time_; }
-
         RootFrameHandle<TSpectral> root;
 
         void print_graph() const;
 
     private:
-        Time time_;
-
         void print_node_(const Node<TSpectral>* node, const std::string& prefix, bool is_last) const;
         void print_node_details_(const Node<TSpectral>* node) const;
 

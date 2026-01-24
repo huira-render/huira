@@ -15,9 +15,6 @@ namespace huira {
 
         void set_focal_length(double focal_length) const;
 
-        void look_at(const UnresolvedObjectHandle<TSpectral>& target, Vec3<double> up = Vec3<double>{ 0,1,0 }) const;
-        void look_at(const Vec3<double>& target_position, Vec3<double> up = Vec3<double>{ 0,1,0 }) const;
-
     };
 }
 

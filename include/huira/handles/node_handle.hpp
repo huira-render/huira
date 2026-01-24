@@ -14,35 +14,24 @@ namespace huira {
         // Position
         void set_position(const Vec3<double>& position) const;
         void set_position(double x, double y, double z) const;
-
-        Vec3<double> get_global_position() const;
-        Vec3<double> get_local_position() const;
-
+        Vec3<double> get_static_position() const;
 
 
         // Velocity
         void set_velocity(const Vec3<double>& velocity) const;
         void set_velocity(double vx, double vy, double vz) const;
-
-        Vec3<double> get_global_velocity() const;
-        Vec3<double> get_local_velocity() const;
-
+        Vec3<double> get_static_velocity() const;
 
 
         // Rotation
         void set_rotation(const Rotation<double>& rotation) const;
-
-        Rotation<double> get_global_rotation() const;
-        Rotation<double> get_local_rotation() const;
-
+        Rotation<double> get_static_rotation() const;
 
 
         // Angular velocity
         void set_angular_velocity(const Vec3<double>& angular_velocity) const;
         void set_angular_velocity(double wx, double wy, double wz) const;
-
-        Vec3<double> get_global_angular_velocity() const;
-        Vec3<double> get_local_angular_velocity() const;
+        Vec3<double> get_static_angular_velocity() const;
 
 
 
@@ -50,9 +39,7 @@ namespace huira {
         void set_scale(const Vec3<double>& scale) const;
         void set_scale(double sx, double sy, double sz) const;
         void set_scale(double s) const;
-
-        Vec3<double> get_global_scale() const;
-        Vec3<double> get_local_scale() const;
+        Vec3<double> get_static_scale() const;
 
 
 
@@ -60,18 +47,8 @@ namespace huira {
         void set_spice_origin(const std::string& spice_origin) const;
         void set_spice_frame(const std::string& spice_frame) const;
         void set_spice(const std::string& spice_origin, const std::string& spice_frame) const;
-
         std::string get_spice_origin() const;
         std::string get_spice_frame() const;
-
-        Vec3<double> get_position_in_frame(const std::string& target_origin, const std::string& target_frame) const;
-        Vec3<double> get_velocity_in_frame(const std::string& target_origin, const std::string& target_frame) const;
-
-        Rotation<double> get_rotation_in_frame(const std::string& target_frame) const;
-        Vec3<double> get_angular_velocity_in_frame(const std::string& target_frame) const;
-
-        std::pair<Vec3<double>, Vec3<double>> get_state_in_frame(const std::string& target_origin, const std::string& target_frame) const;
-        std::pair<Rotation<double>, Vec3<double>> get_attitude_in_frame(const std::string& target_frame) const;
     };
 }
 
