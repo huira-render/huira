@@ -116,9 +116,9 @@ namespace huira {
     using Pixel_d = BasePixel<double>;
 
 
-    template <IsSpectral TSpectral, IsFloatingPoint T>
+    template <IsSpectral TSpectral>
     struct Vertex {
-        Vec3<T> position{};
+        Vec3<float> position{};
         TSpectral albedo{ 1 };
         Vec3<float> normal{ 0 };
         Vec2<float> uv{ 0 };
@@ -129,20 +129,10 @@ namespace huira {
                 normal == other.normal &&
                 uv == other.uv;
         }
-
-        template <IsFloatingPoint T2>
-        operator Vertex<TSpectral, T2>() {
-            Vertex<TSpectral, T2> cast_vertex;
-            cast_vertex.position = this->position;
-            cast_vertex.albedo = this->albedo;
-            cast_vertex.normal = this->normal;
-            cast_vertex.uv = this->uv;
-            return cast_vertex;
-        }
     };
 
     typedef std::vector<std::uint32_t> IndexBuffer;
 
-    template <IsSpectral TSpectral, IsFloatingPoint T>
-    using VertexBuffer = std::vector<Vertex<TSpectral, T>>;
+    template <IsSpectral TSpectral>
+    using VertexBuffer = std::vector<Vertex<TSpectral>>;
 }

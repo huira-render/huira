@@ -6,10 +6,10 @@
 #include "huira/handles/camera_handle.hpp"
 
 namespace huira {
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    UnresolvedRenderResult<TSpectral, TFloat> unresolved_render(
-        const Scene<TSpectral, TFloat>& scene,
-        const CameraHandle<TSpectral, TFloat>& camera,
+    template <IsSpectral TSpectral>
+    UnresolvedRenderResult<TSpectral> unresolved_render(
+        const Scene<TSpectral>& scene,
+        const CameraHandle<TSpectral>& camera,
         UnresolvedRenderSettings settings)
     {
         // Get the camera to look at the object:
@@ -17,7 +17,7 @@ namespace huira {
         (void)camera;
         (void)settings;
 
-        UnresolvedRenderResult<TSpectral, TFloat> result;
+        UnresolvedRenderResult<TSpectral> result;
 
         return result;
     }

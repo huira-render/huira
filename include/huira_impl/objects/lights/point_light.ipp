@@ -2,13 +2,13 @@
 #include "huira/detail/sampler.hpp"
 
 namespace huira {
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    LightSample<TSpectral, TFloat> PointLight<TSpectral, TFloat>::sample_Li(const Vec3<TFloat>& point, Sampler<TFloat>& sampler) const
+    template <IsSpectral TSpectral>
+    LightSample<TSpectral> PointLight<TSpectral>::sample_Li(const Vec3<float>& point, Sampler<float>& sampler) const
     {
         (void)sampler;
-        LightSample<TSpectral, TFloat> sample;
+        LightSample<TSpectral> sample;
 
-        Vec3<TFloat> to_light = this->global_transform_.position - point;
+        Vec3<float> to_light = this->global_transform_.position - point;
         sample.distance = length(to_light);
         float distance_sq = static_cast<float>(sample.distance * sample.distance);
 
@@ -19,8 +19,8 @@ namespace huira {
         return sample;
     }
 
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    float PointLight<TSpectral, TFloat>::pdf_Li(const Vec3<TFloat>& point, const Vec3<TFloat>& wi) const
+    template <IsSpectral TSpectral>
+    float PointLight<TSpectral>::pdf_Li(const Vec3<float>& point, const Vec3<float>& wi) const
     {
         (void)point;
         (void)wi;

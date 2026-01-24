@@ -1,7 +1,6 @@
 #include <stdexcept>
 #include <iostream>
 
-#include "huira/detail/concepts/numeric_concepts.hpp"
 #include "huira/detail/concepts/spectral_concepts.hpp"
 #include "huira/handles/frame_handle.hpp"
 #include "huira/detail/logger.hpp"
@@ -15,9 +14,9 @@ namespace huira {
 #pragma warning(disable: 4355)
 #endif
 
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    Scene<TSpectral, TFloat>::Scene()
-        : root_node_(std::make_shared<FrameNode<TSpectral, TFloat>>(this))
+    template <IsSpectral TSpectral>
+    Scene<TSpectral>::Scene()
+        : root_node_(std::make_shared<FrameNode<TSpectral>>(this))
         , root(root_node_)
         , time_(Time::from_et(0))
     {
@@ -28,8 +27,8 @@ namespace huira {
 #pragma warning(pop)
 #endif
 
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    void Scene<TSpectral, TFloat>::set_time(const Time& time) {
+    template <IsSpectral TSpectral>
+    void Scene<TSpectral>::set_time(const Time& time) {
         if (locked_) {
             throw std::runtime_error("Scene::set_time() was called on a locked scene");
         }
@@ -40,8 +39,8 @@ namespace huira {
         root_node_->update_all_spice_transforms_();
     }
 
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    void Scene<TSpectral, TFloat>::print_graph() const {
+    template <IsSpectral TSpectral>
+    void Scene<TSpectral>::print_graph() const {
         std::cout << "root ";
         print_node_details_(root_node_.get());
         std::cout << "\n";
@@ -60,8 +59,8 @@ namespace huira {
     // === Private Members === //
     // ======================= //
 
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    void Scene<TSpectral, TFloat>::print_node_(const Node<TSpectral, TFloat>* node, const std::string& prefix, bool is_last) const {
+    template <IsSpectral TSpectral>
+    void Scene<TSpectral>::print_node_(const Node<TSpectral>* node, const std::string& prefix, bool is_last) const {
         std::cout << prefix;
         std::cout << (is_last ? "+-- " : "|-- ");
         std::cout << node->get_type_name() + " ";
@@ -79,8 +78,8 @@ namespace huira {
         }
     }
 
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    void Scene<TSpectral, TFloat>::print_node_details_(const Node<TSpectral, TFloat>* node) const {
+    template <IsSpectral TSpectral>
+    void Scene<TSpectral>::print_node_details_(const Node<TSpectral>* node) const {
         // Print node ID
         std::cout << "[" << node->id() << "] ";
 

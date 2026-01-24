@@ -38,14 +38,11 @@ namespace huira {
         }
     };
 
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    class OpenCVDistortion : public Distortion<TSpectral, TFloat> {
+    template <IsSpectral TSpectral>
+    class OpenCVDistortion : public Distortion<TSpectral> {
     public:
         OpenCVDistortion() = default;
         explicit OpenCVDistortion(OpenCVCoefficients coefficients);
-
-
-        [[nodiscard]] Pixel compute_delta(Pixel homogeneous_coords) const;
 
         [[nodiscard]] Pixel distort(Pixel homogeneous_coords) const override;
         [[nodiscard]] Pixel undistort(Pixel homogeneous_coords) const override;
@@ -56,8 +53,11 @@ namespace huira {
 
     private:
         OpenCVCoefficients coefficients_{};
+
+        template <IsFloatingPoint TFloat>
+        [[nodiscard]] BasePixel<TFloat> compute_delta_(BasePixel<TFloat> homogeneous_coords) const;
         
-        static constexpr TFloat kMinDenominator = static_cast<TFloat>(1e-10);
+        static constexpr double kMinDenominator = 1e-10;
     };
 
 }

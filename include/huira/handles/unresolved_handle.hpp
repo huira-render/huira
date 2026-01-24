@@ -7,11 +7,11 @@
 #include "huira/objects/unresolved_object.hpp"
 
 namespace huira {
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    class UnresolvedObjectHandle : public PointHandle<TSpectral, TFloat, UnresolvedObject<TSpectral, TFloat>> {
+    template <IsSpectral TSpectral>
+    class UnresolvedObjectHandle : public PointHandle<TSpectral, UnresolvedObject<TSpectral>> {
     public:
         UnresolvedObjectHandle() = delete;
-        using PointHandle<TSpectral, TFloat, UnresolvedObject<TSpectral, TFloat>>::PointHandle;
+        using PointHandle<TSpectral, UnresolvedObject<TSpectral>>::PointHandle;
 
 
         void set_irradiance(const TSpectral& irradiance) const;

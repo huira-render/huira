@@ -13,27 +13,27 @@
 #include "huira/objects/scene_graph/node.hpp"
 
 namespace huira {
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    class Camera : public Node<TSpectral, TFloat> {
+    template <IsSpectral TSpectral>
+    class Camera : public Node<TSpectral> {
     public:
-        explicit Camera(Scene<TSpectral, TFloat>* scene) : Node<TSpectral, TFloat>(scene) {}
+        explicit Camera(Scene<TSpectral>* scene) : Node<TSpectral>(scene) {}
 
         // Delete copying:
         Camera(const Camera&) = delete;
         Camera& operator=(const Camera&) = delete;
 
-        void set_focal_length(TFloat focal_length);
+        void set_focal_length(double focal_length);
 
         template <IsDistortion TDistortion, typename... Args>
         void set_distortion(Args&&... args);
 
-        void look_at(const Vec3<TFloat>& target_position, Vec3<TFloat> up = Vec3<TFloat>{ 0,1,0 });
+        void look_at(const Vec3<double>& target_position, Vec3<double> up = Vec3<double>{ 0,1,0 });
 
         std::string get_type_name() const override { return "Camera"; }
 
     protected:
-        TFloat focal_length_ = static_cast<TFloat>(50.0);
-        std::unique_ptr<Distortion<TSpectral, TFloat>> distortion_ = nullptr;
+        double focal_length_ = 50.;
+        std::unique_ptr<Distortion<TSpectral>> distortion_ = nullptr;
     };
 }
 

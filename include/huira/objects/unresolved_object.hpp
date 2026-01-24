@@ -9,19 +9,19 @@
 
 namespace huira {
     // Forward declare:
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
+    template <IsSpectral TSpectral>
     class Scene;
 
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
+    template <IsSpectral TSpectral>
     class FrameNode;
 
 
 
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    class UnresolvedObject : public Node<TSpectral, TFloat> {
+    template <IsSpectral TSpectral>
+    class UnresolvedObject : public Node<TSpectral> {
     public:
-        UnresolvedObject(Scene<TSpectral, TFloat>* scene)
-            : Node<TSpectral, TFloat>(scene)
+        UnresolvedObject(Scene<TSpectral>* scene)
+            : Node<TSpectral>(scene)
         {
 
         }
@@ -37,9 +37,9 @@ namespace huira {
         std::string get_type_name() const override { return "UnresolvedObject"; }
 
         // Explicitly delete methods that don't make sense for a point-like object:
-        void set_rotation(const Rotation<TFloat>& rotation) = delete;
-        void set_scale(const Vec3<TFloat>& scale) = delete;
-        void set_angular_velocity(const Vec3<TFloat>& angular_velocity) = delete;
+        void set_rotation(const Rotation<double> & rotation) = delete;
+        void set_scale(const Vec3<double>& scale) = delete;
+        void set_angular_velocity(const Vec3<double>& angular_velocity) = delete;
         void set_spice_frame(const std::string& spice_frame) = delete;
         void set_spice(const std::string& spice_origin, const std::string& spice_frame) = delete;
         std::string get_spice_frame() = delete;
@@ -47,8 +47,8 @@ namespace huira {
     protected:
         TSpectral irradiance_{ 0 };
 
-        friend class Scene<TSpectral, TFloat>;
-        friend class FrameNode<TSpectral, TFloat>;
+        friend class Scene<TSpectral>;
+        friend class FrameNode<TSpectral>;
     };
 }
 

@@ -9,8 +9,8 @@ namespace huira {
      *
      * @param position The 3D position vector to set
      */
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat, typename TNode>
-    void PointHandle<TSpectral, TFloat, TNode>::set_position(const Vec3<TFloat>& position) const {
+    template <IsSpectral TSpectral, typename TNode>
+    void PointHandle<TSpectral, TNode>::set_position(const Vec3<double>& position) const {
         this->get()->set_position(position);
     }
 
@@ -21,9 +21,9 @@ namespace huira {
      * @param y The y-coordinate
      * @param z The z-coordinate
      */
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat, typename TNode>
-    void PointHandle<TSpectral, TFloat, TNode>::set_position(double x, double y, double z) const {
-        this->get()->set_position(Vec3<TFloat>{x, y, z});
+    template <IsSpectral TSpectral, typename TNode>
+    void PointHandle<TSpectral, TNode>::set_position(double x, double y, double z) const {
+        this->get()->set_position(Vec3<double>{x, y, z});
     }
 
 
@@ -33,8 +33,8 @@ namespace huira {
      *
      * @param velocity The 3D velocity vector to set
      */
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat, typename TNode>
-    void PointHandle<TSpectral, TFloat, TNode>::set_velocity(const Vec3<TFloat>& velocity) const {
+    template <IsSpectral TSpectral, typename TNode>
+    void PointHandle<TSpectral, TNode>::set_velocity(const Vec3<double>& velocity) const {
         this->get()->set_velocity(velocity);
     }
 
@@ -45,9 +45,9 @@ namespace huira {
      * @param vy The y-component of velocity
      * @param vz The z-component of velocity
      */
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat, typename TNode>
-    void PointHandle<TSpectral, TFloat, TNode>::set_velocity(double vx, double vy, double vz) const {
-        this->get()->set_velocity(Vec3<TFloat>{vx, vy, vz});
+    template <IsSpectral TSpectral, typename TNode>
+    void PointHandle<TSpectral, TNode>::set_velocity(double vx, double vy, double vz) const {
+        this->get()->set_velocity(Vec3<double>{vx, vy, vz});
     }
 
 
@@ -57,8 +57,8 @@ namespace huira {
      *
      * @param spice_origin The SPICE origin string identifier
      */
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat, typename TNode>
-    void PointHandle<TSpectral, TFloat, TNode>::set_spice_origin(const std::string& spice_origin) const
+    template <IsSpectral TSpectral, typename TNode>
+    void PointHandle<TSpectral, TNode>::set_spice_origin(const std::string& spice_origin) const
     {
         this->get()->set_spice_origin(spice_origin);
     }
@@ -68,48 +68,48 @@ namespace huira {
      *
      * @return std::string The SPICE origin string identifier
      */
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat, typename TNode>
-    std::string PointHandle<TSpectral, TFloat, TNode>::get_spice_origin() const {
+    template <IsSpectral TSpectral, typename TNode>
+    std::string PointHandle<TSpectral, TNode>::get_spice_origin() const {
         return this->get()->get_spice_origin();
     }
 
     /**
      * @brief Gets the global position of the unresolved light source.
      *
-     * @return Vec3<TFloat> The global 3D position vector
+     * @return Vec3<double> The global 3D position vector
      */
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat, typename TNode>
-    Vec3<TFloat> PointHandle<TSpectral, TFloat, TNode>::get_global_position() const {
+    template <IsSpectral TSpectral, typename TNode>
+    Vec3<double> PointHandle<TSpectral, TNode>::get_global_position() const {
         return this->get()->get_global_position();
     }
 
     /**
      * @brief Gets the local position of the unresolved light source.
      *
-     * @return Vec3<TFloat> The local 3D position vector
+     * @return Vec3<double> The local 3D position vector
      */
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat, typename TNode>
-    Vec3<TFloat> PointHandle<TSpectral, TFloat, TNode>::get_local_position() const {
+    template <IsSpectral TSpectral, typename TNode>
+    Vec3<double> PointHandle<TSpectral, TNode>::get_local_position() const {
         return this->get()->get_local_position();
     }
 
     /**
      * @brief Gets the global velocity of the unresolved light source.
      *
-     * @return Vec3<TFloat> The global 3D velocity vector
+     * @return Vec3<double> The global 3D velocity vector
      */
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat, typename TNode>
-    Vec3<TFloat> PointHandle<TSpectral, TFloat, TNode>::get_global_velocity() const {
+    template <IsSpectral TSpectral, typename TNode>
+    Vec3<double> PointHandle<TSpectral, TNode>::get_global_velocity() const {
         return this->get()->get_global_velocity();
     }
 
     /**
      * @brief Gets the local velocity of the unresolved light source.
      *
-     * @return Vec3<TFloat> The local 3D velocity vector
+     * @return Vec3<double> The local 3D velocity vector
      */
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat, typename TNode>
-    Vec3<TFloat> PointHandle<TSpectral, TFloat, TNode>::get_local_velocity() const {
+    template <IsSpectral TSpectral, typename TNode>
+    Vec3<double> PointHandle<TSpectral, TNode>::get_local_velocity() const {
         return this->get()->get_local_velocity();
     }
 
@@ -119,10 +119,10 @@ namespace huira {
      *
      * @param target_origin The target SPICE origin identifier
      * @param target_frame The target SPICE frame identifier
-     * @return Vec3<TFloat> The position in the specified SPICE frame
+     * @return Vec3<double> The position in the specified SPICE frame
      */
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat, typename TNode>
-    Vec3<TFloat> PointHandle<TSpectral, TFloat, TNode>::get_position_in_frame(const std::string& target_origin, const std::string& target_frame) const
+    template <IsSpectral TSpectral, typename TNode>
+    Vec3<double> PointHandle<TSpectral, TNode>::get_position_in_frame(const std::string& target_origin, const std::string& target_frame) const
     {
         return this->get()->get_position_in_frame(target_origin, target_frame);
     }
@@ -132,10 +132,10 @@ namespace huira {
      *
      * @param target_origin The target SPICE origin identifier
      * @param target_frame The target SPICE frame identifier
-     * @return Vec3<TFloat> The velocity in the specified SPICE frame
+     * @return Vec3<double> The velocity in the specified SPICE frame
      */
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat, typename TNode>
-    Vec3<TFloat> PointHandle<TSpectral, TFloat, TNode>::get_velocity_in_frame(const std::string& target_origin, const std::string& target_frame) const
+    template <IsSpectral TSpectral, typename TNode>
+    Vec3<double> PointHandle<TSpectral, TNode>::get_velocity_in_frame(const std::string& target_origin, const std::string& target_frame) const
     {
         return this->get()->get_velocity_in_frame(target_origin, target_frame);
     }
@@ -145,10 +145,10 @@ namespace huira {
      *
      * @param target_origin The target SPICE origin identifier
      * @param target_frame The target SPICE frame identifier
-     * @return std::pair<Vec3<TFloat>, Vec3<TFloat>> The position and velocity in the specified SPICE frame
+     * @return std::pair<Vec3<double>, Vec3<double>> The position and velocity in the specified SPICE frame
      */
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat, typename TNode>
-    std::pair<Vec3<TFloat>, Vec3<TFloat>> PointHandle<TSpectral, TFloat, TNode>::get_state_in_frame(const std::string& target_origin, const std::string& target_frame) const
+    template <IsSpectral TSpectral, typename TNode>
+    std::pair<Vec3<double>, Vec3<double>> PointHandle<TSpectral, TNode>::get_state_in_frame(const std::string& target_origin, const std::string& target_frame) const
     {
         return this->get()->get_state_in_frame(target_origin, target_frame);
     }

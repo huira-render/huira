@@ -5,16 +5,16 @@
 #include "huira/detail/concepts/spectral_concepts.hpp"
 
 namespace huira {
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    BrownDistortion<TSpectral, TFloat>::BrownDistortion(BrownCoefficients coefficients)
+    template <IsSpectral TSpectral>
+    BrownDistortion<TSpectral>::BrownDistortion(BrownCoefficients coefficients)
         : coefficients_(coefficients) {
     }
 
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    Pixel BrownDistortion<TSpectral, TFloat>::compute_delta(Pixel homogeneous_coords) const {
-        const TFloat x = static_cast<TFloat>(homogeneous_coords[0]);
-        const TFloat y = static_cast<TFloat>(homogeneous_coords[1]);
-
+    template <IsSpectral TSpectral>
+    template <IsFloatingPoint TFloat>
+    BasePixel<TFloat> BrownDistortion<TSpectral>::compute_delta_(BasePixel<TFloat> homogeneous_coords) const {
+        const TFloat x = homogeneous_coords[0];
+        const TFloat y = homogeneous_coords[1];
         const TFloat x2 = x * x;
         const TFloat y2 = y * y;
         const TFloat r2 = x2 + y2;
@@ -26,11 +26,11 @@ namespace huira {
             static_cast<TFloat>(coefficients_.k1) * r2 +
             static_cast<TFloat>(coefficients_.k2) * r4 +
             static_cast<TFloat>(coefficients_.k3) * r6;
-        const Pixel radial_distortion = radial_factor * homogeneous_coords;
+        const BasePixel<TFloat> radial_distortion = radial_factor * homogeneous_coords;
 
         // Tangential distortion component
         const TFloat xy = x * y;
-        const Pixel tangential_distortion{
+        const BasePixel<TFloat> tangential_distortion{
             TFloat{2} * static_cast<TFloat>(coefficients_.p1) * xy +
             static_cast<TFloat>(coefficients_.p2) * (r2 + TFloat{2} * x2),
             static_cast<TFloat>(coefficients_.p1) * (r2 + TFloat{2} * y2) +
@@ -40,29 +40,46 @@ namespace huira {
         return radial_distortion + tangential_distortion;
     }
 
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    Pixel BrownDistortion<TSpectral, TFloat>::distort(Pixel homogeneous_coords) const {
-        return homogeneous_coords + compute_delta(homogeneous_coords);
+    template <IsSpectral TSpectral>
+    Pixel BrownDistortion<TSpectral>::distort(Pixel homogeneous_coords) const {
+        return homogeneous_coords + compute_delta_<float>(homogeneous_coords);
     }
 
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    Pixel BrownDistortion<TSpectral, TFloat>::undistort(Pixel homogeneous_coords) const {
-        Pixel undistorted_coords = homogeneous_coords;
+    template <IsSpectral TSpectral>
+    Pixel BrownDistortion<TSpectral>::undistort(Pixel homogeneous_coords) const {
+        // TODO Consider using Newton-Raphson instead:
+        // Partial derivatives of Radial Factor (dK/dr2) * (dr2/dx)
+        // d(r2)/dx = 2x, d(r2)/dy = 2y
+        // dK/d(r2) = k1 + 2*k2*r2 + 3*k3*r4
+        // Derivatives of Tangential Component
+        // x_tan = 2*p1*x*y + p2*(r2 + 2x^2)
+        // y_tan = p1*(r2 + 2y^2) + 2*p2*x*y
+
+        BasePixel<double> homogeneous_coords_d{
+            static_cast<double>(homogeneous_coords[0]),
+            static_cast<double>(homogeneous_coords[1])
+        };
+        BasePixel<double> undistorted_coords_d = homogeneous_coords_d;
 
         for (std::size_t i = 0; i < this->max_iterations_; ++i) {
-            const Pixel delta = compute_delta(undistorted_coords);
-            const Pixel new_coords = homogeneous_coords - delta;
+            const BasePixel<double> delta = compute_delta_<double>(undistorted_coords_d);
+            const BasePixel<double> new_coords = homogeneous_coords_d - delta;
 
             // Check for convergence
-            const Pixel diff = new_coords - undistorted_coords;
-            const TFloat error_sq = static_cast<TFloat>(diff[0] * diff[0] + diff[1] * diff[1]);
+            const BasePixel<double> diff = new_coords - undistorted_coords_d;
+            const double error_sq = diff[0] * diff[0] + diff[1] * diff[1];
 
-            undistorted_coords = new_coords;
+            undistorted_coords_d = new_coords;
 
             if (error_sq < this->tol_sq_) {
                 break;
             }
         }
+
+        Pixel undistorted_coords{
+            static_cast<float>(undistorted_coords[0]),
+            static_cast<float>(undistorted_coords[1])
+        };
 
         return undistorted_coords;
     }

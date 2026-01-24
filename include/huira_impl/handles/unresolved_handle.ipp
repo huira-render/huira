@@ -11,8 +11,8 @@ namespace huira {
      * @tparam TFloat The floating-point type satisfying the IsFloatingPoint concept
      * @param irradiance The spectral irradiance value to set
      */
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    void UnresolvedObjectHandle<TSpectral, TFloat>::set_irradiance(const TSpectral& irradiance) const
+    template <IsSpectral TSpectral>
+    void UnresolvedObjectHandle<TSpectral>::set_irradiance(const TSpectral& irradiance) const
     {
         this->get()->set_irradiance(irradiance);
     }
@@ -24,8 +24,8 @@ namespace huira {
      * @tparam TFloat The floating-point type satisfying the IsFloatingPoint concept
      * @return TSpectral The current spectral irradiance value
      */
-    template <IsSpectral TSpectral, IsFloatingPoint TFloat>
-    TSpectral UnresolvedObjectHandle<TSpectral, TFloat>::get_irradiance() const {
+    template <IsSpectral TSpectral>
+    TSpectral UnresolvedObjectHandle<TSpectral>::get_irradiance() const {
         return this->get()->get_irradiance();
     }
 }
