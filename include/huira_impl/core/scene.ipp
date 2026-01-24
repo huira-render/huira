@@ -29,9 +29,6 @@ namespace huira {
 
     template <IsSpectral TSpectral>
     void Scene<TSpectral>::set_time(const Time& time) {
-        if (locked_) {
-            throw std::runtime_error("Scene::set_time() was called on a locked scene");
-        }
         time_ = time;
 
         HUIRA_LOG_INFO("Scene time set to " + time.to_utc_string() + " (et = " + std::to_string(time.et()) + ")");

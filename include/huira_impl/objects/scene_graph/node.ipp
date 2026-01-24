@@ -20,7 +20,6 @@ namespace huira {
     template <IsSpectral TSpectral>
     void Node<TSpectral>::set_position(const Vec3<double>& position)
     {
-        validate_scene_unlocked_("set_position()");
         if (auto spice_child = child_spice_origins_()) {
             HUIRA_THROW_ERROR(this->get_info() +
                 " - cannot manually set position when child has a spice_origin_ (see child "
@@ -36,7 +35,6 @@ namespace huira {
     template <IsSpectral TSpectral>
     void Node<TSpectral>::set_rotation(const Rotation<double>& rotation)
     {
-        validate_scene_unlocked_("set_rotation()");
         if (auto spice_child = child_spice_frames_()) {
             HUIRA_THROW_ERROR(this->get_info() +
                 " - cannot manually set rotation when child has a spice_frame_ (see child "
@@ -52,7 +50,6 @@ namespace huira {
     template <IsSpectral TSpectral>
     void Node<TSpectral>::set_scale(const Vec3<double>& scale)
     {
-        validate_scene_unlocked_("set_scale()");
         HUIRA_LOG_INFO(this->get_info() + " - set_scale(" +
             std::to_string(scale[0]) + ", " +
             std::to_string(scale[1]) + ", " +
@@ -65,7 +62,6 @@ namespace huira {
     template <IsSpectral TSpectral>
     void Node<TSpectral>::set_velocity(const Vec3<double>& velocity)
     {
-        validate_scene_unlocked_("set_velocity()");
         if (this->position_source_ == TransformSource::SPICE_TRANSFORM) {
             HUIRA_THROW_ERROR(this->get_info() + " - cannot manually set velocity when node uses SPICE for position " +
                 "(spice_origin_=" + spice_origin_ + ")");
@@ -78,7 +74,6 @@ namespace huira {
     template <IsSpectral TSpectral>
     void Node<TSpectral>::set_angular_velocity(const Vec3<double>& angular_velocity)
     {
-        validate_scene_unlocked_("set_angular_velocity()");
         if (this->rotation_source_ == TransformSource::SPICE_TRANSFORM) {
             HUIRA_THROW_ERROR(this->get_info() + " - cannot manually set angular velocity when node uses SPICE for rotation " +
                 "(spice_frame_=" + spice_frame_ + ")");
@@ -91,7 +86,6 @@ namespace huira {
     template <IsSpectral TSpectral>
     void Node<TSpectral>::set_spice_origin(const std::string& spice_origin)
     {
-        validate_scene_unlocked_("set_spice_origin()");
         validate_spice_origin_allowed_();
         HUIRA_LOG_INFO(this->get_info() + " - set_spice_origin('" + spice_origin + "')");
 
@@ -103,7 +97,6 @@ namespace huira {
     template <IsSpectral TSpectral>
     void Node<TSpectral>::set_spice_frame(const std::string& spice_frame)
     {
-        validate_scene_unlocked_("set_spice_frame()");
         validate_spice_frame_allowed_();
         HUIRA_LOG_INFO(this->get_info() + " - set_spice_frame('" + spice_frame + "')");
 
@@ -115,7 +108,6 @@ namespace huira {
     template <IsSpectral TSpectral>
     void Node<TSpectral>::set_spice(const std::string& spice_origin, const std::string& spice_frame)
     {
-        validate_scene_unlocked_("set_spice()");
         validate_spice_origin_allowed_();
         validate_spice_frame_allowed_();
         HUIRA_LOG_INFO(this->get_info() + " - set_spice('" + spice_origin + ", " + spice_frame + "')");
@@ -448,15 +440,6 @@ namespace huira {
     // ========================= //
     // === Protected Members === //
     // ========================= //
-
-    template <IsSpectral TSpectral>
-    void Node<TSpectral>::validate_scene_unlocked_(const std::string function_name)
-    {
-        if (scene_->is_locked()) {
-            HUIRA_THROW_ERROR(this->get_info() + " - " + function_name + " was called with a locked scene");
-        }
-    };
-
     template <IsSpectral TSpectral>
     void Node<TSpectral>::validate_spice_origin_allowed_()
     {

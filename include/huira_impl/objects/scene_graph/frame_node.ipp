@@ -19,8 +19,6 @@ namespace huira {
     template <IsSpectral TSpectral>
     std::weak_ptr<FrameNode<TSpectral>> FrameNode<TSpectral>::new_child()
     {
-        this->validate_scene_unlocked_("new_child()");
-
         auto child = std::make_shared<FrameNode<TSpectral>>(this->scene_);
         child->set_parent_(this);
         children_.push_back(child);
@@ -33,8 +31,6 @@ namespace huira {
     template <IsSpectral TSpectral>
     void FrameNode<TSpectral>::delete_child(std::weak_ptr<Node<TSpectral>> child_weak)
     {
-        this->validate_scene_unlocked_("delete_child()");
-
         auto child = child_weak.lock();
         if (!child) {
             HUIRA_THROW_ERROR(this->get_info() + " - delete_child() called with expired weak_ptr");
@@ -54,8 +50,6 @@ namespace huira {
     template <IsSpectral TSpectral>
     std::weak_ptr<UnresolvedObject<TSpectral>> FrameNode<TSpectral>::new_unresolved_object()
     {
-        this->validate_scene_unlocked_("new_unresolved_object()");
-
         auto child = std::make_shared<UnresolvedObject<TSpectral>>(this->scene_);
         child->set_parent_(this);
 
@@ -68,8 +62,6 @@ namespace huira {
     template <IsSpectral TSpectral>
     std::weak_ptr<PointLight<TSpectral>> FrameNode<TSpectral>::new_point_light(TSpectral spectral_intensity)
     {
-        this->validate_scene_unlocked_("new_point_light()");
-
         auto child = std::make_shared<PointLight<TSpectral>>(this->scene_, spectral_intensity);
         child->set_parent_(this);
 
@@ -82,8 +74,6 @@ namespace huira {
     template <IsSpectral TSpectral>
     std::weak_ptr<Camera<TSpectral>> FrameNode<TSpectral>::new_camera()
     {
-        this->validate_scene_unlocked_("new_camera()");
-
         auto child = std::make_shared<Camera<TSpectral>>(this->scene_);
         child->set_parent_(this);
 
