@@ -49,6 +49,13 @@ namespace huira {
         void set_spice(const std::string& spice_origin, const std::string& spice_frame) const;
         std::string get_spice_origin() const;
         std::string get_spice_frame() const;
+
+
+        // Parent access
+        NodeHandle<TSpectral, Node<TSpectral>> get_parent() const;
+        
+        template <typename TParentNode>
+        NodeHandle<TSpectral, TParentNode> get_parent_as() const;
     };
 }
 

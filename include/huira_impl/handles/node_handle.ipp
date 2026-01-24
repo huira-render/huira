@@ -224,4 +224,45 @@ namespace huira {
     std::string NodeHandle<TSpectral, TNode>::get_spice_frame() const {
         return this->get()->get_spice_frame();
     }
+
+
+    /**
+     * @brief Gets a handle to the parent node.
+     *
+     * Returns a base NodeHandle to the parent. This is safe for all node types
+     * but may require casting if you need access to parent-specific functionality.
+     * For type-specific access, use get_parent_as() instead.
+     *
+     * @return NodeHandle<TSpectral, Node<TSpectral>> Handle to the parent node
+     * @throws std::runtime_error If this node has no parent
+     */
+    template <IsSpectral TSpectral, typename TNode>
+    NodeHandle<TSpectral, Node<TSpectral>> NodeHandle<TSpectral, TNode>::get_parent() const {
+        return this->get()->get_parent();
+    }
+
+
+    /**
+     * @brief Gets a handle to the parent node with a specific type.
+     *
+     * Returns a handle to the parent cast to the specified node type. This is useful
+     * when you know the parent's type and need access to type-specific functionality
+     * (e.g., getting a FrameHandle to access frame-specific methods).
+     *
+     * Example usage:
+     * @code
+     * auto frame_parent = camera_handle.get_parent_as<FrameNode<RGB>>();
+     * auto grandparent = frame_parent.get_parent_as<FrameNode<RGB>>();
+     * @endcode
+     *
+     * @tparam TParentNode The expected type of the parent node (e.g., FrameNode<TSpectral>)
+     * @return NodeHandle<TSpectral, TParentNode> Handle to the parent with the specified type
+     * @throws std::runtime_error If this node has no parent
+     * @throws std::runtime_error If the parent is not of type TParentNode
+     */
+    template <IsSpectral TSpectral, typename TNode>
+    template <typename TParentNode>
+    NodeHandle<TSpectral, TParentNode> NodeHandle<TSpectral, TNode>::get_parent_as() const {
+        return this->get()->template get_parent_as<TParentNode>();
+    }
 }

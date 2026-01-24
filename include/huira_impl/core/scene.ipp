@@ -85,4 +85,66 @@ namespace huira {
             std::cout << ")";
         }
     }
+
+
+    /**
+     * @brief Finds the shared_ptr for a given raw Node pointer.
+     *
+     * Recursively searches the scene graph starting from the root to find
+     * the shared_ptr corresponding to the given raw pointer. This is needed
+     * for creating handles to existing nodes (e.g., parent nodes).
+     *
+     * @param target The raw pointer to search for
+     * @return std::shared_ptr<Node<TSpectral>> The shared_ptr if found, nullptr otherwise
+     */
+    template <IsSpectral TSpectral>
+    std::shared_ptr<Node<TSpectral>> Scene<TSpectral>::find_node_shared_ptr_(const Node<TSpectral>* target) const {
+        // Check if target is the root
+        if (root_node_.get() == target) {
+            return root_node_;
+        }
+
+        // Otherwise recursively search the tree
+        return find_node_in_tree_(root_node_, target);
+    }
+
+
+    /**
+     * @brief Recursively searches for a node in the scene graph tree.
+     *
+     * Helper function for find_node_shared_ptr_ that traverses the scene graph.
+     *
+     * @param current The current node being examined
+     * @param target The raw pointer to search for
+     * @return std::shared_ptr<Node<TSpectral>> The shared_ptr if found, nullptr otherwise
+     */
+    template <IsSpectral TSpectral>
+    std::shared_ptr<Node<TSpectral>> Scene<TSpectral>::find_node_in_tree_(
+        const std::shared_ptr<Node<TSpectral>>& current, 
+        const Node<TSpectral>* target) const 
+    {
+        // Check if current node is the target
+        if (current.get() == target) {
+            return current;
+        }
+
+        // Get children if this node has any
+        const auto* children = current->get_children_();
+        if (children) {
+            for (const auto& child : *children) {
+                // Check this child
+                if (child.get() == target) {
+                    return child;
+                }
+                
+                // Recursively search this child's subtree
+                auto result = find_node_in_tree_(child, target);
+                if (result) {
+                    return result;
+                }
+            }
+        }
+
+        return nullptr;
+    }
 }

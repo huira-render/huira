@@ -309,4 +309,74 @@ namespace huira {
             }
         }
     }
+
+
+    /**
+     * @brief Gets a handle to the parent node.
+     *
+     * Returns a base NodeHandle to the parent. This always returns the parent as a base
+     * Node type, even if the parent is actually a more specific type like FrameNode.
+     *
+     * @return NodeHandle<TSpectral, Node<TSpectral>> Handle to the parent node
+     * @throws std::runtime_error If this node has no parent (e.g., root node)
+     */
+    template <IsSpectral TSpectral>
+    NodeHandle<TSpectral, Node<TSpectral>> Node<TSpectral>::get_parent() const
+    {
+        if (!parent_) {
+            HUIRA_THROW_ERROR(this->get_info() + " - node has no parent");
+        }
+
+        // Find the shared_ptr for the parent from the scene
+        // We need to search through the scene graph to find the shared_ptr
+        auto parent_shared = scene_->find_node_shared_ptr_(parent_);
+        
+        if (!parent_shared) {
+            HUIRA_THROW_ERROR(this->get_info() + " - failed to find parent's shared_ptr");
+        }
+
+        return NodeHandle<TSpectral, Node<TSpectral>>(parent_shared);
+    }
+
+
+    /**
+     * @brief Gets a handle to the parent node with a specific type.
+     *
+     * Returns a handle to the parent cast to the specified node type. This performs
+     * a dynamic cast to verify the parent is actually of the requested type at runtime.
+     *
+     * @tparam TParentNode The expected type of the parent node (e.g., FrameNode<TSpectral>)
+     * @return NodeHandle<TSpectral, TParentNode> Handle to the parent with the specified type
+     * @throws std::runtime_error If this node has no parent
+     * @throws std::runtime_error If the parent is not of type TParentNode
+     */
+    template <IsSpectral TSpectral>
+    template <typename TParentNode>
+    NodeHandle<TSpectral, TParentNode> Node<TSpectral>::get_parent_as() const
+    {
+        if (!parent_) {
+            HUIRA_THROW_ERROR(this->get_info() + " - node has no parent");
+        }
+
+        // Verify that parent is of the requested type
+        TParentNode* typed_parent = dynamic_cast<TParentNode*>(parent_);
+        if (!typed_parent) {
+            HUIRA_THROW_ERROR(this->get_info() + " - parent is not of the requested type");
+        }
+
+        // Find the shared_ptr for the parent from the scene
+        auto parent_shared = scene_->find_node_shared_ptr_(parent_);
+        
+        if (!parent_shared) {
+            HUIRA_THROW_ERROR(this->get_info() + " - failed to find parent's shared_ptr");
+        }
+
+        // Cast the shared_ptr to the specific type
+        auto typed_parent_shared = std::dynamic_pointer_cast<TParentNode>(parent_shared);
+        if (!typed_parent_shared) {
+            HUIRA_THROW_ERROR(this->get_info() + " - failed to cast parent to requested type");
+        }
+
+        return NodeHandle<TSpectral, TParentNode>(typed_parent_shared);
+    }
 }
