@@ -53,6 +53,18 @@ html_theme = "furo"
 html_static_path = ['_static']
 html_logo = '_static/logo/full/white_on_transparent.svg'
 
+# Custom sidebar structure:
+html_sidebars = {
+    "**": [
+        "sidebar/brand.html",
+        "sidebar/website_link.html",
+        "sidebar/search.html",
+        "sidebar/scroll-start.html",
+        "sidebar/navigation.html",
+        "sidebar/scroll-end.html",
+    ]
+}
+
 # Custom CSS overrides:
 html_css_files = [
     'css/custom.css',
