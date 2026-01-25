@@ -4,6 +4,7 @@
 #include "huira/detail/concepts/spectral_concepts.hpp"
 #include "huira/handles/frame_handle.hpp"
 #include "huira/detail/logger.hpp"
+#include "huira/detail/text/colors.hpp"
 
 namespace huira {
 
@@ -27,8 +28,26 @@ namespace huira {
 #endif
 
     template <IsSpectral TSpectral>
+    void Scene<TSpectral>::print_meshes() const {
+        if (meshes_.size() == 0) {
+            std::cout << detail::red("No Meshes Loaded") << "\n";
+        }
+        else {
+            std::cout << "Meshes: (" << std::to_string(meshes_.size()) << " loaded)\n";
+            for (size_t i = 0; i < meshes_.size(); ++i) {
+                std::cout << " - " << detail::green("Mesh") << " [" << std::to_string(meshes_[i]->id()) << "] ";
+                std::cout << "(" << std::to_string(meshes_[i]->get_index_count()) << " vertices)\n";
+            }
+        }
+        std::cout << "\n";
+    }
+
+    template <IsSpectral TSpectral>
     void Scene<TSpectral>::print_graph() const {
-        std::cout << "root ";
+
+
+        std::cout << "Scene Graph:\n";
+        std::cout << detail::blue("root ");
         print_node_details_(root_node_.get());
         std::cout << "\n";
 
@@ -41,6 +60,13 @@ namespace huira {
         }
     }
 
+    template <IsSpectral TSpectral>
+    void Scene<TSpectral>::print_contents() const {
+        std::cout << "Scene Contents:\n";
+        print_meshes();
+        print_graph();
+    }
+
 
     // ======================= //
     // === Private Members === //
@@ -50,7 +76,7 @@ namespace huira {
     void Scene<TSpectral>::print_node_(const Node<TSpectral>* node, const std::string& prefix, bool is_last) const {
         std::cout << prefix;
         std::cout << (is_last ? "+-- " : "|-- ");
-        std::cout << node->get_type_name() + " ";
+        std::cout << detail::blue(node->get_type_name()) + " ";
         print_node_details_(node);
         std::cout << "\n";
 
