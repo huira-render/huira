@@ -29,7 +29,7 @@ namespace huira {
         TSpectral get_irradiance() const { return irradiance_; }
 
 
-        std::string get_type_name() const override { return "UnresolvedObject"; }
+        std::string get_info() const override { return "UnresolvedObject[" + std::to_string(this->id()) + "]" + (this->name_.empty() ? "" : " " + this->name_); }
 
         // Explicitly delete methods that don't make sense for a point-like object:
         void set_rotation(const Rotation<double> & rotation) = delete;

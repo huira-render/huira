@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
-#include <stdexcept>
+#include <tuple>
 
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
@@ -31,7 +31,10 @@ namespace huira {
             aiProcess_JoinIdenticalVertices |
             aiProcess_SortByPType;
         
-        static std::shared_ptr<Model<TSpectral>> load(
+        static std::tuple<
+            std::shared_ptr<Model<TSpectral>>,
+            std::vector<std::shared_ptr<Mesh<TSpectral>>>
+        > load(
             const fs::path& file_path,
             unsigned int post_process_flags = DEFAULT_POST_PROCESS_FLAGS
         );
@@ -40,6 +43,7 @@ namespace huira {
         struct LoadContext {
             const aiScene* ai_scene;
             Model<TSpectral>* model;
+            std::vector<std::shared_ptr<Mesh<TSpectral>>> meshes;
 
             // Maps ASSIMP mesh index to our Mesh pointer
             std::unordered_map<unsigned int, Mesh<TSpectral>*> mesh_map;

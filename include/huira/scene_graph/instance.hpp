@@ -25,9 +25,10 @@ namespace huira {
 
         const Instantiable<TSpectral>& asset() const { return asset_; }
 
-        std::string get_asset_name() const;
-        std::string get_info() const override;
-        std::string get_type_name() const override { return "Instance"; }
+        std::string get_info() const override {
+            return "Instance[" + std::to_string(this->id()) + "] " + this->name_ + " -> " +
+                std::visit([](auto* ptr) { return ptr->get_info(); }, asset_);
+        }
 
     private:
         Instantiable<TSpectral> asset_;

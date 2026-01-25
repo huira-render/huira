@@ -41,32 +41,26 @@ namespace huira {
         Model& operator=(Model&&) = default;
 
         std::uint64_t id() const noexcept { return id_; }
+        void set_name(const std::string& name) { name_ = name; }
+        const std::string& name() const noexcept { return name_; }
         
         FrameNode<TSpectral>* root() const noexcept { return root_node_.get(); }
-        const std::vector<std::shared_ptr<Mesh<TSpectral>>>& meshes() const noexcept { return meshes_; }
+        
         const fs::path& source_path() const noexcept { return source_path_; }
         
-        const std::string& name() const noexcept { return name_; }
-        void set_name(const std::string& name) { name_ = name; }
 
-        std::string get_info() const {
-            return "Model[id=" + std::to_string(id_) + ", name=" + name_ + 
-                   ", meshes=" + std::to_string(meshes_.size()) + "]";
-        }
+        std::string get_info() const { return "Model[" + std::to_string(id_) + "]" + (name_.empty() ? "" : " " + name_); }
         
         void print_graph() const;
 
     private:
         std::uint64_t id_ = 0;
         static inline std::uint64_t next_id_ = 0;
-
-        std::string name_;
+        std::string name_ = "";
+        
         fs::path source_path_;
         
         std::shared_ptr<FrameNode<TSpectral>> root_node_;
-
-        // Meshes owned by this model (not shared with Scene's mesh collection)
-        std::vector<std::shared_ptr<Mesh<TSpectral>>> meshes_;
 
         void print_node_(const Node<TSpectral>* node, const std::string& prefix, bool is_last) const;
 

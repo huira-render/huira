@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <string>
 
 #include "huira/core/types.hpp"
 #include "huira/detail/concepts/spectral_concepts.hpp"
@@ -18,13 +19,17 @@ namespace huira {
         {}
 
         std::uint64_t id() const noexcept { return id_; }
+        void set_name(const std::string& name) { name_ = name; }
+        const std::string& name() const noexcept { return name_; }
 
-        std::size_t get_index_count() const noexcept { return index_buffer_.size(); }
-        std::size_t get_vertex_count() const noexcept { return vertex_buffer_.size(); }
-        std::size_t get_triangle_count() const noexcept { return index_buffer_.size() / 3; }
+        std::string get_info() const { return "Mesh[" + std::to_string(id_) + "]" + (name_.empty() ? "" : " " + name_); }
 
-        [[nodiscard]] const IndexBuffer& get_index_buffer() const noexcept { return index_buffer_; }
-        [[nodiscard]] const VertexBuffer<TSpectral>& get_vertex_buffer() const noexcept { return vertex_buffer_; }
+        std::size_t index_count() const noexcept { return index_buffer_.size(); }
+        std::size_t vertex_count() const noexcept { return vertex_buffer_.size(); }
+        std::size_t triangle_count() const noexcept { return index_buffer_.size() / 3; }
+
+        [[nodiscard]] const IndexBuffer& index_buffer() const noexcept { return index_buffer_; }
+        [[nodiscard]] const VertexBuffer<TSpectral>& vertex_buffer() const noexcept { return vertex_buffer_; }
 
     private:
         IndexBuffer index_buffer_;
@@ -32,6 +37,7 @@ namespace huira {
 
         std::uint64_t id_ = 0;
         static inline std::uint64_t next_id_ = 0;
+        std::string name_;
     };
 
 }

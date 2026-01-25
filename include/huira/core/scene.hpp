@@ -52,6 +52,7 @@ namespace huira {
 
         void print_meshes() const;
         void print_lights() const;
+        void print_models() const;
         void print_graph() const;
         void print_contents() const;
 
