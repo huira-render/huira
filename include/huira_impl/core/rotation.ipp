@@ -114,6 +114,15 @@ namespace huira {
         this->set_matrix(matrix);
     }
 
+    template <IsFloatingPoint T>
+    template <IsFloatingPoint U>
+    Rotation<T>::operator Rotation<U>() const
+    {
+        Mat3<U> cast_matrix = this->matrix_;
+        return Rotation<U>(cast_matrix);
+    }
+
+
 
 	// ========================= //
 	// === Memeber Functions === //

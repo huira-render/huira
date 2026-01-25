@@ -7,6 +7,24 @@
 #include "huira/detail/text/colors.hpp"
 
 namespace huira {
+    // Suppressing C4355: 'this' is passed to FrameNode constructor, but FrameNode only stores
+    // the pointer without calling back into the incomplete Scene object.
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable: 4355)
+#endif
+
+    template <IsSpectral TSpectral>
+    Scene<TSpectral>::Scene()
+        : root_node_(std::make_shared<FrameNode<TSpectral>>(this))
+        , root(root_node_)
+    {
+        root_node_->set_spice("SOLAR SYSTEM BARYCENTER", "J2000");
+    };
+
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
     template <IsSpectral TSpectral>
     MeshHandle<TSpectral> Scene<TSpectral>::add_mesh(Mesh<TSpectral>&& mesh)
@@ -111,26 +129,6 @@ namespace huira {
             prune_references(root_node_.get());
         }
     }
-
-
-    // Suppressing C4355: 'this' is passed to FrameNode constructor, but FrameNode only stores
-    // the pointer without calling back into the incomplete Scene object.
-#ifdef _MSC_VER
-#pragma warning(push)
-#pragma warning(disable: 4355)
-#endif
-
-    template <IsSpectral TSpectral>
-    Scene<TSpectral>::Scene()
-        : root_node_(std::make_shared<FrameNode<TSpectral>>(this))
-        , root(root_node_)
-    {
-        root_node_->set_spice("SOLAR SYSTEM BARYCENTER", "J2000");
-    };
-
-#ifdef _MSC_VER
-#pragma warning(pop)
-#endif
 
     template <IsSpectral TSpectral>
     void Scene<TSpectral>::print_meshes() const {

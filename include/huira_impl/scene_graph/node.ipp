@@ -1,9 +1,13 @@
 #include <memory>
 #include <string>
 
+#include "glm/glm.hpp"
+
 #include "huira/core/spice.hpp"
 #include "huira/core/time.hpp"
 #include "huira/core/types.hpp"
+#include "huira/core/transform.hpp"
+#include "huira/core/spice.hpp"
 
 #include "huira/detail/concepts/spectral_concepts.hpp"
 #include "huira/detail/logger.hpp"
@@ -119,6 +123,166 @@ namespace huira {
         this->rotation_mode_ = TransformMode::SPICE_TRANSFORM;
     }
 
+
+    template <IsSpectral TSpectral>
+    Transform<double> Node<TSpectral>::get_apparent_transform(ObservationMode obs_mode, const Time& t_obs, const Transform<double>& observer_ssb_state) const
+    {
+        bool iterate = (obs_mode != ObservationMode::TRUE_STATE);
+        auto [apparent_state, _] = get_geometric_state_(t_obs, observer_ssb_state, iterate);
+
+        if (obs_mode == ObservationMode::ABERRATED_STATE) {
+            // Geometric Direction:
+            Vec3<double> P_ssb = apparent_state.position;
+            Vec3<double> P_obs = observer_ssb_state.position;
+            Vec3<double> P_rel = P_ssb - P_obs;
+
+            double dist = glm::length(P_rel);
+
+            // Safety check for degenerate geometry:
+            if (dist > 1e-8) {
+                Vec3<double> u = P_rel / dist;
+
+                // Calculate Relativistic Beta and Gamma
+                Vec3<double> v_obs = observer_ssb_state.velocity;
+                Vec3<double> beta = v_obs / SPEED_OF_LIGHT<double>();
+
+                double beta_sq = glm::dot(beta, beta);
+
+                // Check Observer Speed
+                if (beta_sq < 0.999999) {
+                    double gamma = 1.0 / std::sqrt(1.0 - beta_sq);
+                    double u_dot_beta = glm::dot(u, beta);
+
+                    // Relativistic Aberration Formula
+                    //    Transforms the direction vector 'u' into the moving frame 'u_app'.
+                    //    Formula: u_app = (u + beta + (gamma / (1+gamma)) * (u . beta) * beta) 
+                    //                     ----------------------------------------------------
+                    //                             gamma * (1 + u . beta)
+                    //
+                    // Because 'u' is (Observer -> Object) and we move 'v', 
+                    // the object should appear shifted TOWARDS 'v'. 
+                    // (u + beta) in the numerator achieves this correctly.
+
+                    Vec3<double> num = u + beta + (gamma / (1.0 + gamma)) * u_dot_beta * beta;
+                    double den = gamma * (1.0 + u_dot_beta);
+
+                    Vec3<double> u_app = num / den;
+
+                    // Aberrated Position
+                    apparent_state.position = P_obs + (u_app * dist);
+                }
+                else {
+                    HUIRA_THROW_ERROR("Observer is faster than speed of light");
+                }
+            }
+        }
+
+        return apparent_state;
+    }
+
+    template <IsSpectral TSpectral>
+    std::pair<Transform<double>, double> Node<TSpectral>::get_geometric_state_(const Time& t_obs, const Transform<double>& observer_ssb_state, bool iterate, double tol) const
+    {
+        if (!iterate) {
+            return { this->get_ssb_transform_(t_obs), 0.0 };
+        }
+
+        Transform<double> full_ssb_transform = this->get_ssb_transform_(t_obs);
+        double dt = glm::length(observer_ssb_state.position - full_ssb_transform.position) / SPEED_OF_LIGHT<double>();
+        for (std::size_t i = 0; i < 10; ++i) {
+            full_ssb_transform = this->get_ssb_transform_(t_obs, dt);
+
+            const double new_dt = glm::length(observer_ssb_state.position - full_ssb_transform.position) / SPEED_OF_LIGHT<double>();
+
+            if (std::abs(new_dt - dt) < tol) {
+                dt = new_dt;
+                break;
+            }
+
+            dt = new_dt;
+
+        }
+
+        return { full_ssb_transform, dt };
+    }
+
+    template <IsSpectral TSpectral>
+    Transform<double> Node<TSpectral>::get_ssb_transform_(const Time& t_obs, double dt) const
+    {
+        // The time at which the object emitted the light we are seeing now.
+        Time t_emit = Time::from_et(t_obs.et() - dt);
+
+        Transform<double> ssb_state{};
+
+        if (position_mode_ == TransformMode::SPICE_TRANSFORM) {
+            auto [pos, vel, _] = spice::spkezr<double>(this->spice_origin_, t_emit, "J2000", "SSB", "NONE");
+            ssb_state.position = pos;
+            ssb_state.velocity = vel;
+        }
+        else {
+            // Recurse for non-spice position:
+            if (!parent_) {
+                // This should never happen
+                HUIRA_THROW_ERROR(this->get_info() +
+                    " - cannot compute SSB transform: node has MANUAL position but no parent");
+            }
+            Transform<double> parent_ssb = parent_->get_ssb_transform_(t_obs, dt);
+            Transform<double> local = this->get_local_transform_at_(t_obs, dt);
+            ssb_state = parent_ssb * local;
+        }
+
+        if (rotation_mode_ == TransformMode::SPICE_TRANSFORM) {
+            auto [rotation, ang_vel] = spice::sxform<double>("J2000", this->spice_frame_, t_emit);
+            ssb_state.rotation = rotation;
+            ssb_state.angular_velocity = ang_vel;
+        }
+        else {
+            // Recurse for non-spice rotation:
+            Transform<double> parent_ssb_rot;
+            if (position_mode_ == TransformMode::MANUAL_TRANSFORM) {
+                parent_ssb_rot = ssb_state;
+            }
+            else {
+                // Position was SPICE, but Rotation is relative to parent.
+                if (!parent_) {
+                    // This should never happen
+                    HUIRA_THROW_ERROR(this->get_info() +
+                        " - cannot compute SSB transform: node has MANUAL rotation but no parent");
+                }
+                parent_ssb_rot = parent_->get_ssb_transform_(t_obs, dt);
+
+                Transform<double> local = this->get_local_transform_at_(t_obs, dt);
+                ssb_state.rotation = parent_ssb_rot.rotation * local.rotation;
+                ssb_state.angular_velocity = parent_ssb_rot.angular_velocity + (parent_ssb_rot.rotation * local.angular_velocity);
+            }
+        }
+
+        return ssb_state;
+    }
+
+    template <IsSpectral TSpectral>
+    Transform<double> Node<TSpectral>::get_local_transform_at_(const Time& t_obs, double dt) const
+    {
+        (void)t_obs; // Not used for manual.  Would be used for custom ball back functions.
+        Transform<double> local_transform_at_time{};
+        if (position_mode_ == TransformMode::MANUAL_TRANSFORM) {
+            local_transform_at_time.position = local_transform_.position - dt * local_transform_.velocity;
+            local_transform_at_time.velocity = local_transform_.velocity;
+        }
+        else {
+            HUIRA_THROW_ERROR("get_local_transform_at_ - Unknown position_mode_ TransformMode");
+        }
+
+        if (rotation_mode_ == TransformMode::MANUAL_TRANSFORM) {
+            // TODO Compute rotation at time t_obs - dt given angular velocity
+            local_transform_at_time.rotation = local_transform_.rotation;
+            local_transform_at_time.angular_velocity = local_transform_.angular_velocity;
+        }
+        else {
+            HUIRA_THROW_ERROR("get_local_transform_at_ - Unknown rotation_mode_ TransformMode");
+        }
+        return local_transform_at_time;
+    }
 
 
     template <IsSpectral TSpectral>

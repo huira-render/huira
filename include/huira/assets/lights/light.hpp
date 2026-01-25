@@ -3,6 +3,7 @@
 #include <string>
 #include <cstdint>
 #include <optional>
+#include <memory>
 
 #include "huira/core/types.hpp"
 #include "huira/core/transform.hpp"
@@ -25,7 +26,7 @@ namespace huira {
     };
 
     template <IsSpectral TSpectral>
-    class Light {
+    class Light : public std::enable_shared_from_this<Light<TSpectral>> {
     public:
         Light() : id_(next_id_++) {}
 

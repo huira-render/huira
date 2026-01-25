@@ -30,6 +30,9 @@ namespace huira {
 		Rotation(units::Degree angle1, units::Degree angle2, units::Degree angle3, std::string sequence = "XYZ");
         Rotation(Vec3<T> x_axis, Vec3<T> y_axis, Vec3<T> z_axis);
 
+        template <IsFloatingPoint U>
+        explicit operator Rotation<U>() const;
+
 		std::string to_string() const;
 		Rotation inverse() const;
 

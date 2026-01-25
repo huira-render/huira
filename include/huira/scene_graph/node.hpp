@@ -7,6 +7,7 @@
 #include <span>
 
 #include "huira/core/transform.hpp"
+#include "huira/core/time.hpp"
 
 #include "huira/detail/concepts/numeric_concepts.hpp"
 #include "huira/detail/concepts/spectral_concepts.hpp"
@@ -17,6 +18,9 @@ namespace huira {
     class Scene;
 
     template <IsSpectral TSpectral>
+    class SceneView;
+
+    template <IsSpectral TSpectral>
     class FrameNode;
 
     template <IsSpectral TSpectral, typename TNode>
@@ -25,6 +29,12 @@ namespace huira {
     enum class TransformMode {
         MANUAL_TRANSFORM,
         SPICE_TRANSFORM
+    };
+
+    enum class ObservationMode {
+        TRUE_STATE,
+        GEOMETRIC_STATE,
+        ABERRATED_STATE
     };
 
     /**
@@ -60,13 +70,13 @@ namespace huira {
         void set_spice_frame(const std::string& spice_frame);
         void set_spice(const std::string& spice_origin, const std::string& spice_frame);
 
-
         virtual std::string get_info() const;
         virtual std::string get_type_name() const { return "Node"; }
 
         TransformMode get_position_mode() const { return position_mode_; }
         TransformMode get_rotation_mode() const { return rotation_mode_; }
 
+        Transform<double> get_apparent_transform(ObservationMode obs_mode, const Time& t_obs, const Transform<double>& observer_ssb_state) const;
 
         Vec3<double> get_static_position() const;
         Rotation<double> get_static_rotation() const;
@@ -110,8 +120,14 @@ namespace huira {
         std::pair<const Node<TSpectral>*, Transform<double>> find_spice_origin_ancestor_() const;
         std::pair<const Node<TSpectral>*, std::pair<Rotation<double>, Vec3<double>>> find_spice_frame_ancestor_() const;
 
+        std::pair<Transform<double>, double> get_geometric_state_(const Time& t_obs, const Transform<double>& observer_ssb_state, bool iterate, double tol = 1e-12) const;
+
+        Transform<double> get_ssb_transform_(const Time& t_obs, double dt = 0.0) const;
+        Transform<double> get_local_transform_at_(const Time& t_obs, double dt) const;
+
         friend class Scene<TSpectral>;
         friend class FrameNode<TSpectral>;
+        friend class SceneView<TSpectral>;
     };
 }
 

@@ -2,6 +2,8 @@
 
 #include <memory>
 #include <vector>
+#include <cstddef>
+#include <unordered_map>
 
 #include "huira/assets/mesh.hpp"
 #include "huira/assets/lights/light.hpp"
@@ -20,16 +22,24 @@ namespace huira {
     template <IsSpectral TSpectral>
     struct LightInstance {
         std::shared_ptr<const Light<TSpectral>> light;
-        Transform<float> world_transform;
+        Transform<float> transform;
     };
 
     template <IsSpectral TSpectral>
     class SceneView {
     public:
-        SceneView(const Scene<TSpectral>& scene, const Time& time, const CameraHandle<TSpectral>& camera);
+        SceneView(const Scene<TSpectral>& scene, const Time& time, const CameraHandle<TSpectral>& camera, ObservationMode obs_mode);
 
     private:
+        void traverse_and_collect_(const std::shared_ptr<Node<TSpectral>>& node,
+            const Time& t_obs, const Transform<double> obs_ssb, ObservationMode obs_mode);
+
+        void add_mesh_instance_(std::shared_ptr<Mesh<TSpectral>> mesh, const Transform<float>& render_transform);
+        void add_light_instance_(std::shared_ptr<Light<TSpectral>> light, const Transform<float>& render_transform);
+
         std::vector<MeshBatch<TSpectral>> geometry_;
+        std::unordered_map<const Mesh<TSpectral>*, std::size_t> batch_lookup_;
+
         std::vector<LightInstance<TSpectral>> lights_;
     };
 }
