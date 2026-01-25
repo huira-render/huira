@@ -77,8 +77,8 @@ namespace huira {
         }
 
         Pixel undistorted_coords{
-            static_cast<float>(undistorted_coords[0]),
-            static_cast<float>(undistorted_coords[1])
+            static_cast<float>(undistorted_coords_d[0]),
+            static_cast<float>(undistorted_coords_d[1])
         };
 
         return undistorted_coords;
