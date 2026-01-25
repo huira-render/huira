@@ -35,6 +35,8 @@ namespace huira {
         template <typename THandle>
             requires std::is_constructible_v<Instantiable<TSpectral>, decltype(std::declval<THandle>().get().get())>
         InstanceHandle<TSpectral> new_instance(const THandle& asset_handle) const;
+
+        void delete_instance(InstanceHandle<TSpectral> instance) const;
     };
 }
 

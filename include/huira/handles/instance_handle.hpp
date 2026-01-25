@@ -6,9 +6,15 @@
 
 namespace huira {
     template <IsSpectral TSpectral>
+    class FrameHandle;
+
+
+    template <IsSpectral TSpectral>
     class InstanceHandle : public Handle<Instance<TSpectral>> {
     public:
         InstanceHandle() = delete;
         using Handle<Instance<TSpectral>>::Handle;
+
+        friend class FrameHandle<TSpectral>;
     };
 }
