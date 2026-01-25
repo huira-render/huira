@@ -48,8 +48,8 @@ namespace huira::spice {
         const std::string& TARGET,
         const huira::Time& time,
         const std::string& FRAME,
-        const std::string& OBSERVER,
-        const std::string& ABCORR = "NONE");
+        const std::string& ABCORR,
+        const std::string& OBSERVER);
 
     template <huira::IsFloatingPoint T>
     inline huira::Rotation<T> pxform(

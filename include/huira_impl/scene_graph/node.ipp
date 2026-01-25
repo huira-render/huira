@@ -215,7 +215,7 @@ namespace huira {
         Transform<double> ssb_state{};
 
         if (position_mode_ == TransformMode::SPICE_TRANSFORM) {
-            auto [pos, vel, _] = spice::spkezr<double>(this->spice_origin_, t_emit, "J2000", "SSB", "NONE");
+            auto [pos, vel, _] = spice::spkezr<double>(this->spice_origin_, t_emit, "J2000", "NONE", "SSB");
             ssb_state.position = pos;
             ssb_state.velocity = vel;
         }
