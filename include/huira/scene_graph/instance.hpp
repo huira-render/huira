@@ -25,27 +25,8 @@ namespace huira {
 
         const Instantiable<TSpectral>& asset() const { return asset_; }
 
-        std::string get_asset_name() const
-        {
-            std::string asset_name;
-            std::visit([&asset_name](auto&& arg) {
-                using T = std::decay_t<decltype(arg)>;
-                if constexpr (std::is_same_v<T, Mesh<TSpectral>*>) {
-                    asset_name += "Mesh[" + std::to_string(arg->id()) + "]";
-                }
-                else if constexpr (std::is_same_v<T, Light<TSpectral>*>) {
-                    asset_name += "Light[" + std::to_string(arg->id()) + "]";
-                }
-                }, asset_);
-            return asset_name;
-        }
-
-        std::string get_info() const override
-        {
-            std::string info = "Instance[" + std::to_string(this->id()) + "] -> ";
-            info += get_asset_name();
-            return info;
-        }
+        std::string get_asset_name() const;
+        std::string get_info() const override;
         std::string get_type_name() const override { return "Instance"; }
 
     private:

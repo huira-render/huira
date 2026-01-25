@@ -11,6 +11,7 @@
 #include "huira/core/ray.hpp"
 #include "huira/core/rotation.hpp"
 #include "huira/core/scene.hpp"
+#include "huira/core/scene_view.hpp"
 #include "huira/core/spectral_bins.hpp"
 #include "huira/core/spice.hpp"
 #include "huira/core/time.hpp"
@@ -45,6 +46,9 @@ namespace huira {
 
     // Explicit instantiations - forces code generation for code coverage purposes
 
+    template class Scene<TestSpectral>;
+    template class SceneView<TestSpectral>;
+
     template class BrownDistortion<TestSpectral>;
     template class OpenCVDistortion<TestSpectral>;
     template class OwenDistortion<TestSpectral>;
@@ -74,7 +78,6 @@ namespace huira {
         const CameraHandle<TestSpectral>&,
         UnresolvedRenderSettings);
 
-    template class Scene<TestSpectral>;
     template class Node<TestSpectral>;
     template class UnresolvedObject<TestSpectral>;
     
