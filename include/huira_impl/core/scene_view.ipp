@@ -19,6 +19,43 @@ namespace huira {
 
         HUIRA_LOG_INFO("SceneView collected " + std::to_string(geometry_.size()) + " unique mesh batches and " +
             std::to_string(lights_.size()) + " light instances.");
+
+        // Check for unlinked objects:
+        for (auto& mesh : scene.meshes_) {
+            auto* key = mesh.get();
+            if (batch_lookup_.find(key) == batch_lookup_.end()) {
+                HUIRA_LOG_WARNING("Mesh[" + std::to_string(mesh->id()) + "] '" + mesh->name() +
+                    "' is unlinked in the scene graph and will not be rendered.");
+            }
+        }
+
+        for (auto& light : scene.lights_) {
+            bool found = false;
+            for (const auto& instance : lights_) {
+                if (instance.light->id() == light->id()) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                HUIRA_LOG_WARNING("Light[" + std::to_string(light->id()) + "] '" + light->name() +
+                    "' is unlinked in the scene graph and will not be rendered.");
+            }
+        }
+
+        for (auto& unresolved_object : scene.unresolved_objects_) {
+            bool found = false;
+            for (const auto& instance : unresolved_objects_) {
+                if (instance.unresolved_object->id() == unresolved_object->id()) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                HUIRA_LOG_WARNING("UnresolvedObject[" + std::to_string(unresolved_object->id()) + "] '" + unresolved_object->name() +
+                    "' is unlinked in the scene graph and will not be rendered.");
+            }
+        }
     }
 
     template <IsSpectral TSpectral>

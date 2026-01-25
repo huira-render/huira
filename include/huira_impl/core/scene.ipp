@@ -214,6 +214,16 @@ namespace huira {
     }
 
     template <IsSpectral TSpectral>
+    void Scene<TSpectral>::print_unresolved_objects() const {
+        if (lights_.size() == 0) {
+            std::cout << detail::red("No UnresolvedObjects Loaded") << "\n";
+        }
+        else {
+            std::cout << detail::yellow("UnresolvedObjects: (" + std::to_string(lights_.size()) + " loaded)") << "\n";
+        }
+    }
+
+    template <IsSpectral TSpectral>
     void Scene<TSpectral>::print_models() const {
         if (models_.size() == 0) {
             std::cout << detail::red("No Models Loaded") << "\n";
@@ -240,6 +250,7 @@ namespace huira {
     void Scene<TSpectral>::print_contents() const {
         print_meshes();
         print_lights();
+        print_unresolved_objects();
         print_models();
         print_graph();
     }
