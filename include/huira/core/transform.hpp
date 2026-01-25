@@ -15,6 +15,9 @@ namespace huira {
         Vec3<T> velocity{ 0,0,0 };
         Vec3<T> angular_velocity{ 0,0,0 };
 
+        template <IsFloatingPoint U>
+        explicit operator Transform<U>() const;
+
         Mat4<T> to_matrix() const;
         Transform<T> inverse() const;
         Transform<T> operator* (const Transform<T>& b) const;

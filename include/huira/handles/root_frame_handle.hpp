@@ -12,6 +12,9 @@ namespace huira {
     public:
         RootFrameHandle() = delete;
         using FrameHandle<TSpectral>::FrameHandle;
+        
+        RootFrameHandle(const RootFrameHandle&) = delete;
+        RootFrameHandle& operator=(const RootFrameHandle&) = delete;
 
         // Disable transform modification for root
         void set_position(const Vec3<double>&) = delete;

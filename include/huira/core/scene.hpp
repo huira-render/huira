@@ -13,6 +13,11 @@
 #include "huira/handles/mesh_handle.hpp"
 
 namespace huira {
+    // Forward declare:
+    template <IsSpectral TSpectral>
+    class SceneView;
+
+
     template <IsSpectral TSpectral>
     class Scene {
     private:
@@ -53,6 +58,7 @@ namespace huira {
 
         friend class Node<TSpectral>;
         friend class FrameNode<TSpectral>;
+        friend class SceneView<TSpectral>;
     };
 }
 

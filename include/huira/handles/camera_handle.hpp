@@ -6,6 +6,9 @@
 
 namespace huira {
     template <IsSpectral TSpectral>
+    class SceneView;
+
+    template <IsSpectral TSpectral>
     class CameraHandle : public NodeHandle<TSpectral, Camera<TSpectral>> {
     public:
         CameraHandle() = delete;
@@ -13,6 +16,7 @@ namespace huira {
 
         void set_focal_length(double focal_length) const;
 
+        friend class SceneView<TSpectral>;
     };
 }
 

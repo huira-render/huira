@@ -1,13 +1,14 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
 
 #include "huira/core/types.hpp"
 #include "huira/detail/concepts/spectral_concepts.hpp"
 
 namespace huira {
     template <IsSpectral TSpectral>
-    class Mesh {
+    class Mesh : public std::enable_shared_from_this<Mesh<TSpectral>> {
     public:
         Mesh() : id_(next_id_++) {}
         Mesh(IndexBuffer index_buffer, VertexBuffer<TSpectral> vertex_buffer)

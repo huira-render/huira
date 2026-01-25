@@ -2,6 +2,19 @@
 
 namespace huira {
     template <IsFloatingPoint T>
+    template <IsFloatingPoint U>
+    Transform<T>::operator Transform<U>() const
+    {
+        Transform<U> result;
+        result.position = this->position;
+        result.rotation = static_cast<Rotation<U>>(this->rotation);
+        result.scale = this->scale;
+        result.velocity = this->velocity;
+        result.angular_velocity = this->angular_velocity;
+        return result;
+    }
+
+    template <IsFloatingPoint T>
     Mat4<T> Transform<T>::to_matrix() const
     {
         // Create transformation matrix: T * R * S
