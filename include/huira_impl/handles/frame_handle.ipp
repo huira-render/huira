@@ -44,4 +44,9 @@ namespace huira {
 
         return InstanceHandle<TSpectral>(instance_weak);
     }
+
+    template <IsSpectral TSpectral>
+    void FrameHandle<TSpectral>::delete_instance(InstanceHandle<TSpectral> instance) const {
+        this->get()->delete_child(std::weak_ptr<Node<TSpectral>>(instance.get()));
+    }
 }
