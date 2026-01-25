@@ -31,8 +31,10 @@ endif()
 include(huiraFindCSPICE)
 huira_find_cspice()
 
+find_package(assimp CONFIG REQUIRED)
 
 target_link_libraries(huira INTERFACE
     glm::glm
     cspice
+    assimp::assimp
 )

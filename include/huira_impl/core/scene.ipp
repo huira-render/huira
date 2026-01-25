@@ -2,6 +2,8 @@
 #include <iostream>
 
 #include "huira/detail/concepts/spectral_concepts.hpp"
+#include "huira/assets/io/model_loader.hpp"
+#include "huira/handles/model_handle.hpp"
 #include "huira/handles/frame_handle.hpp"
 #include "huira/detail/logger.hpp"
 #include "huira/detail/text/colors.hpp"
@@ -29,9 +31,10 @@ namespace huira {
     template <IsSpectral TSpectral>
     MeshHandle<TSpectral> Scene<TSpectral>::add_mesh(Mesh<TSpectral>&& mesh)
     {
-        auto ptr = std::make_shared<Mesh<TSpectral>>(std::move(mesh));
-        meshes_.push_back(ptr);
-        return MeshHandle<TSpectral>{ ptr };
+        auto mesh_shared = std::make_shared<Mesh<TSpectral>>(std::move(mesh));
+        meshes_.push_back(mesh_shared);
+        HUIRA_LOG_INFO("Scene - Mesh added: Mesh[" + std::to_string(mesh_shared->id()) + "]");
+        return MeshHandle<TSpectral>{ mesh_shared };
     };
 
     template <IsSpectral TSpectral>
@@ -55,9 +58,9 @@ namespace huira {
     template <IsSpectral TSpectral>
     PointLightHandle<TSpectral> Scene<TSpectral>::new_point_light(TSpectral intensity)
     {
-        auto light = std::make_shared<PointLight<TSpectral>>(intensity);
-        lights_.push_back(light);
-        return PointLightHandle<TSpectral>{ light };
+        auto light_shared = std::make_shared<PointLight<TSpectral>>(intensity);
+        lights_.push_back(light_shared);
+        return PointLightHandle<TSpectral>{ light_shared };
     };
 
     template <IsSpectral TSpectral>
@@ -77,6 +80,24 @@ namespace huira {
 
         lights_.erase(it);
     }
+
+    template <IsSpectral TSpectral>
+    ModelHandle<TSpectral> Scene<TSpectral>::load_model(const fs::path& file, unsigned int post_process_flags)
+    {
+        // Load the model using ModelLoader
+        auto model_shared = ModelLoader<TSpectral>::load(file, post_process_flags);
+        models_.push_back(model_shared);
+        HUIRA_LOG_INFO("Scene - Model loaded: " + model_shared->get_info());
+        return ModelHandle<TSpectral>{ model_shared };
+    }
+
+    template <IsSpectral TSpectral>
+    void Scene<TSpectral>::delete_model(const ModelHandle<TSpectral>& model_handle)
+    {
+        (void)model_handle;
+    }
+
+
 
     template <IsSpectral TSpectral>
     template <typename TAssetPtr>
