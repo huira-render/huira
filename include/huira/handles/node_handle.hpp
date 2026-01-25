@@ -3,6 +3,7 @@
 #include "huira/detail/concepts/numeric_concepts.hpp"
 #include "huira/detail/concepts/spectral_concepts.hpp"
 #include "huira/handles/handle.hpp"
+#include "huira/scene_graph/node.hpp"
 
 namespace huira {
     template <IsSpectral TSpectral, typename TNode>

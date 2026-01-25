@@ -8,8 +8,9 @@
 
 #include "huira/detail/concepts/spectral_concepts.hpp"
 
-#include "huira/scene_graph/frame_node.hpp"
+#include "huira/assets/mesh.hpp"
 #include "huira/handles/root_frame_handle.hpp"
+#include "huira/handles/mesh_handle.hpp"
 
 namespace huira {
     template <IsSpectral TSpectral>
@@ -25,9 +26,35 @@ namespace huira {
 
         RootFrameHandle<TSpectral> root;
 
+
+        MeshHandle<TSpectral> add_mesh(Mesh<TSpectral>&& mesh)
+        {
+            auto ptr = std::make_shared<Mesh<TSpectral>>(std::move(mesh));
+            meshes_.push_back(ptr);
+            return MeshHandle<TSpectral>{ ptr };
+        };
+
+        void delete_mesh(const MeshHandle<TSpectral>& mesh_handle)
+        {
+            auto ptr = mesh_handle.get();  // shared_ptr<Mesh>
+
+            auto it = std::find(meshes_.begin(), meshes_.end(), ptr);
+            if (it == meshes_.end()) {
+                HUIRA_THROW_ERROR("Mesh does not exist in the scene");
+            }
+
+            // TODO Check the Scene graph and remove instances of the Mesh
+
+            meshes_.erase(it);
+        };
+
+        void print_meshes() const;
         void print_graph() const;
+        void print_contents() const;
 
     private:
+        std::vector<std::shared_ptr<Mesh<TSpectral>>> meshes_;
+
         void print_node_(const Node<TSpectral>* node, const std::string& prefix, bool is_last) const;
         void print_node_details_(const Node<TSpectral>* node) const;
 
