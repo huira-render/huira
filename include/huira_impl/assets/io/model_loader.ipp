@@ -122,7 +122,7 @@ namespace huira {
             ctx.mesh_map[i] = mesh.get();
             ctx.meshes.push_back(std::move(mesh));
 
-            HUIRA_LOG_DEBUG("  Processed mesh " + std::to_string(i) + ": " +
+            HUIRA_LOG_DEBUG("ModelLoader - Processed mesh " + std::to_string(i) + ": " +
                            std::string(ai_mesh->mName.C_Str()) +
                            " (" + std::to_string(ai_mesh->mNumVertices) + " vertices, " +
                            std::to_string(ai_mesh->mNumFaces) + " faces)");

@@ -23,7 +23,7 @@ namespace huira {
         child->set_parent_(this);
         children_.push_back(child);
 
-        HUIRA_LOG_INFO(this->get_info() + " - new FrameNode added: " + child->get_info());
+        HUIRA_LOG_INFO(this->get_info() + " - Added: " + child->get_info());
 
         return child;
     }
@@ -42,7 +42,7 @@ namespace huira {
 
         auto it = std::find(children_.begin(), children_.end(), child);
         if (it != children_.end()) {
-            HUIRA_LOG_INFO(this->get_info() + " - deleting child: " + child->get_info());
+            HUIRA_LOG_INFO(this->get_info() + " - Deleting " + child->get_info());
             children_.erase(it);
         }
     }
@@ -53,7 +53,7 @@ namespace huira {
         auto child = std::make_shared<UnresolvedObject<TSpectral>>(this->scene_);
         child->set_parent_(this);
 
-        HUIRA_LOG_INFO(this->get_info() + " - new UnresolvedObject added: " + child->get_info());
+        HUIRA_LOG_INFO(this->get_info() + " - Added: " + child->get_info());
 
         children_.push_back(child);
         return child;
@@ -65,7 +65,7 @@ namespace huira {
         auto child = std::make_shared<PointLight<TSpectral>>(this->scene_, intensity);
         child->set_parent_(this);
 
-        HUIRA_LOG_INFO(this->get_info() + " - new PointLight added: " + child->get_info());
+        HUIRA_LOG_INFO(this->get_info() + " - Added: " + child->get_info());
 
         children_.push_back(child);
         return child;
@@ -77,7 +77,43 @@ namespace huira {
         auto child = std::make_shared<Camera<TSpectral>>(this->scene_);
         child->set_parent_(this);
 
-        HUIRA_LOG_INFO(this->get_info() + " - new Camera added: " + child->get_info());
+        HUIRA_LOG_INFO(this->get_info() + " - Added: " + child->get_info());
+
+        children_.push_back(child);
+        return child;
+    }
+
+    template <IsSpectral TSpectral>
+    std::weak_ptr<Instance<TSpectral>> FrameNode<TSpectral>::new_instance(Mesh<TSpectral>* mesh)
+    {
+        auto child = std::make_shared<Instance<TSpectral>>(this->scene_, mesh);
+        child->set_parent_(this);
+
+        HUIRA_LOG_INFO(this->get_info() + " - Added: " + child->get_info());
+
+        children_.push_back(child);
+        return child;
+    }
+
+    template <IsSpectral TSpectral>
+    std::weak_ptr<Instance<TSpectral>> FrameNode<TSpectral>::new_instance(Light<TSpectral>* light)
+    {
+        auto child = std::make_shared<Instance<TSpectral>>(this->scene_, light);
+        child->set_parent_(this);
+
+        HUIRA_LOG_INFO(this->get_info() + " - Added: " + child->get_info());
+
+        children_.push_back(child);
+        return child;
+    }
+
+    template <IsSpectral TSpectral>
+    std::weak_ptr<Instance<TSpectral>> FrameNode<TSpectral>::new_instance(Model<TSpectral>* model)
+    {
+        auto child = std::make_shared<Instance<TSpectral>>(this->scene_, model);
+        child->set_parent_(this);
+
+        HUIRA_LOG_INFO(this->get_info() + " - Added: " + child->get_info());
 
         children_.push_back(child);
         return child;
