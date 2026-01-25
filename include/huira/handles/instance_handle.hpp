@@ -1,0 +1,13 @@
+#pragma once
+
+#include "huira/scene_graph/instance.hpp"
+#include "huira/detail/concepts/spectral_concepts.hpp"
+
+namespace huira {
+    template <IsSpectral TSpectral>
+    class InstanceHandle : public Handle<Instance<TSpectral>> {
+    public:
+        InstanceHandle() = delete;
+        using Handle<Instance<TSpectral>>::Handle;
+    };
+}

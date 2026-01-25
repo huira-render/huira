@@ -44,7 +44,11 @@ namespace huira::detail {
 
         // Check if output is a terminal (not redirected to file)
         inline bool is_terminal() {
-            static bool is_tty = ISATTY(FILENO(stderr)) != 0;
+#ifdef _WIN32
+            static bool is_tty = _isatty(_fileno(stderr)) != 0;
+#else
+            static bool is_tty = isatty(fileno(stderr)) != 0;
+#endif
             return is_tty;
         }
 
@@ -86,6 +90,30 @@ namespace huira::detail {
 
     inline std::string white(const std::string& text) {
         return colorize(text, "37");
+    }
+
+    inline std::string on_red(const std::string& text) {
+        return colorize(text, "41");
+    }
+
+    inline std::string on_green(const std::string& text) {
+        return colorize(text, "42");
+    }
+
+    inline std::string on_yellow(const std::string& text) {
+        return colorize(text, "43");
+    }
+
+    inline std::string on_blue(const std::string& text) {
+        return colorize(text, "44");
+    }
+
+    inline std::string on_magenta(const std::string& text) {
+        return colorize(text, "45");
+    }
+
+    inline std::string on_cyan(const std::string& text) {
+        return colorize(text, "46");
     }
 
     inline std::string grey(const std::string& text) {

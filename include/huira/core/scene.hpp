@@ -25,28 +25,9 @@ namespace huira {
         Scene();
 
         RootFrameHandle<TSpectral> root;
-
-
-        MeshHandle<TSpectral> add_mesh(Mesh<TSpectral>&& mesh)
-        {
-            auto ptr = std::make_shared<Mesh<TSpectral>>(std::move(mesh));
-            meshes_.push_back(ptr);
-            return MeshHandle<TSpectral>{ ptr };
-        };
-
-        void delete_mesh(const MeshHandle<TSpectral>& mesh_handle)
-        {
-            auto ptr = mesh_handle.get();  // shared_ptr<Mesh>
-
-            auto it = std::find(meshes_.begin(), meshes_.end(), ptr);
-            if (it == meshes_.end()) {
-                HUIRA_THROW_ERROR("Mesh does not exist in the scene");
-            }
-
-            // TODO Check the Scene graph and remove instances of the Mesh
-
-            meshes_.erase(it);
-        };
+        
+        MeshHandle<TSpectral> add_mesh(Mesh<TSpectral>&& mesh);
+        void delete_mesh(const MeshHandle<TSpectral>& mesh_handle);
 
         void print_meshes() const;
         void print_graph() const;

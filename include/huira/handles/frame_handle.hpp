@@ -7,6 +7,8 @@
 #include "huira/handles/node_handle.hpp"
 #include "huira/handles/point_light_handle.hpp"
 #include "huira/handles/unresolved_handle.hpp"
+#include "huira/handles/instance_handle.hpp"
+#include "huira/handles/mesh_handle.hpp"
 #include "huira/scene_graph/frame_node.hpp"
 
 namespace huira {
@@ -37,6 +39,13 @@ namespace huira {
         // New Camera:
         CameraHandle<TSpectral> new_camera() const;
         CameraHandle<TSpectral> new_spice_camera(const std::string& spice_origin, const std::string& spice_frame) const;
+
+
+        // New Mesh Instance:
+        InstanceHandle<TSpectral> new_instance(const MeshHandle<TSpectral>& mesh_handle) const
+        {
+            return InstanceHandle<TSpectral>{ this->get()->new_instance(mesh_handle.get().get()) };
+        }
     };
 }
 

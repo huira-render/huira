@@ -4,6 +4,7 @@
 #include <string>
 #include <stdexcept>
 #include <cstdint>
+#include <span>
 
 #include "huira/core/transform.hpp"
 
@@ -82,6 +83,8 @@ namespace huira {
         template <typename TParentNode>
         NodeHandle<TSpectral, TParentNode> get_parent_as() const;
 
+        virtual std::span<const std::shared_ptr<Node<TSpectral>>> get_children() const { return {}; }
+
     protected:
         Transform<double> local_transform_;
 
@@ -91,6 +94,12 @@ namespace huira {
         std::string spice_origin_ = "";
         std::string spice_frame_ = "";
 
+        bool position_can_be_spice_() const;
+        virtual bool position_can_be_manual_() const { return true; }
+
+        bool rotation_can_be_spice_() const;
+        virtual bool rotation_can_be_manual_() const { return true; }
+
         std::uint64_t id_ = 0;
         static inline std::uint64_t next_id_ = 0;
 
@@ -98,13 +107,6 @@ namespace huira {
         Node<TSpectral>* parent_ = nullptr;
 
         void set_parent_(Node<TSpectral>* parent) { parent_ = parent; }
-
-        virtual const std::vector<std::shared_ptr<Node<TSpectral>>>* get_children_() const { return nullptr; }
-        virtual std::shared_ptr<Node<TSpectral>> child_spice_origins_() const { return nullptr; }
-        virtual std::shared_ptr<Node<TSpectral>> child_spice_frames_() const { return nullptr; }
-
-        void validate_spice_origin_allowed_();
-        void validate_spice_frame_allowed_();
 
         std::pair<const Node<TSpectral>*, Transform<double>> find_spice_origin_ancestor_() const;
         std::pair<const Node<TSpectral>*, std::pair<Rotation<double>, Vec3<double>>> find_spice_frame_ancestor_() const;
