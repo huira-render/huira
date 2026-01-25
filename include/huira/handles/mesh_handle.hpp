@@ -21,7 +21,7 @@ namespace huira {
         using Handle<Mesh<TSpectral>>::Handle;
 
         std::size_t get_vertex_count() const {
-            return this->get()->get_vertex_buffer().size();
+            return this->get()->vertex_buffer().size();
         }
 
         friend class Scene<TSpectral>;

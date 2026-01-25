@@ -65,7 +65,7 @@ namespace huira {
             return child;
         }
 
-        std::string get_type_name() const override { return "FrameNode"; }
+        std::string get_info() const override { return "FrameNode[" + std::to_string(this->id()) + "]" + (this->name_.empty() ? "" : " " + this->name_); }
 
         // Override to check children for SPICE constraints
         std::span<const std::shared_ptr<Node<TSpectral>>> get_children() const override { return children_; }

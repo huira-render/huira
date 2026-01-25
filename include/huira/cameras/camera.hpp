@@ -26,7 +26,7 @@ namespace huira {
         template <IsDistortion TDistortion, typename... Args>
         void set_distortion(Args&&... args);
 
-        std::string get_type_name() const override { return "Camera"; }
+        std::string get_info() const override { return "Camera[" + std::to_string(this->id()) + "]" + (this->name_.empty() ? "" : " " + this->name_); }
 
     protected:
         double focal_length_ = 50.;

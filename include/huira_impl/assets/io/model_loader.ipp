@@ -1,5 +1,6 @@
 #include <cmath>
 #include <iostream>
+#include <tuple>
 
 #include "huira/core/types.hpp"
 #include "huira/core/rotation.hpp"
@@ -15,7 +16,10 @@ namespace huira {
      * @throws ModelLoadException if loading fails
      */
     template <IsSpectral TSpectral>
-    std::shared_ptr<Model<TSpectral>> ModelLoader<TSpectral>::load(
+    std::tuple<
+        std::shared_ptr<Model<TSpectral>>,
+        std::vector<std::shared_ptr<Mesh<TSpectral>>>
+        > ModelLoader<TSpectral>::load(
         const fs::path& file_path,
         unsigned int post_process_flags
     ) {
@@ -103,7 +107,7 @@ namespace huira {
 
         HUIRA_LOG_INFO("Model loaded successfully: " + model->get_info());
 
-        return model;
+        return  { model, ctx.meshes };
     }
 
     /**
@@ -116,7 +120,7 @@ namespace huira {
 
             auto mesh = convert_mesh_(ai_mesh, ctx);
             ctx.mesh_map[i] = mesh.get();
-            ctx.model->meshes_.push_back(std::move(mesh));
+            ctx.meshes.push_back(std::move(mesh));
 
             HUIRA_LOG_DEBUG("  Processed mesh " + std::to_string(i) + ": " +
                            std::string(ai_mesh->mName.C_Str()) +
@@ -198,8 +202,9 @@ namespace huira {
         // unsigned int material_index = ai_mesh->mMaterialIndex;
         // Material<TSpectral>* material = ctx.material_map[material_index];
         // The Mesh constructor or a setter would then associate the material.
-
-        return std::make_shared<Mesh<TSpectral>>(std::move(indices), std::move(vertices));
+        auto mesh = std::make_shared<Mesh<TSpectral>>(std::move(indices), std::move(vertices));
+        mesh->set_name(std::string(ai_mesh->mName.C_Str()));
+        return mesh;
     }
 
     /**
@@ -229,6 +234,7 @@ namespace huira {
         child->set_position(transform.position);
         child->set_rotation(transform.rotation);
         child->set_scale(transform.scale);
+        child->set_name(std::string(ai_node->mName.C_Str()));
 
         // Create instances for any meshes attached to this node
         for (unsigned int i = 0; i < ai_node->mNumMeshes; ++i) {

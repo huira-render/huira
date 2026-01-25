@@ -5,10 +5,9 @@ namespace huira {
 
     template <IsSpectral TSpectral>
     void Model<TSpectral>::print_graph() const {
-        std::cout << "Model: " << name_ << " (id=" << id_ << ")\n";
+        std::cout << "Model: " << name_ << "\n";
         std::cout << "Source: " << source_path_.string() << "\n";
-        std::cout << "Meshes: " << meshes_.size() << "\n";
-        std::cout << "Scene Graph:\n";
+        std::cout << "Model Graph:\n";
 
         if (root_node_) {
             print_node_(root_node_.get(), "", true);
@@ -23,12 +22,7 @@ namespace huira {
 
         std::cout << prefix;
         std::cout << (is_last ? "+-- " : "|-- ");
-        std::cout << node->get_type_name();
-
-        // Print additional info based on node type
-        if (auto* instance = dynamic_cast<const Instance<TSpectral>*>(node)) {
-            std::cout << " -> " << instance->get_asset_name();
-        }
+        std::cout << node->get_info();
 
         std::cout << "\n";
 

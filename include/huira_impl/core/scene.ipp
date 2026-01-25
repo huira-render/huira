@@ -85,9 +85,14 @@ namespace huira {
     ModelHandle<TSpectral> Scene<TSpectral>::load_model(const fs::path& file, unsigned int post_process_flags)
     {
         // Load the model using ModelLoader
-        auto model_shared = ModelLoader<TSpectral>::load(file, post_process_flags);
+        auto [model_shared, new_meshes] = ModelLoader<TSpectral>::load(file, post_process_flags);
         models_.push_back(model_shared);
         HUIRA_LOG_INFO("Scene - Model loaded: " + model_shared->get_info());
+        // Add new meshes to the scene's mesh list
+        for (const auto& mesh : new_meshes) {
+            meshes_.push_back(mesh);
+            HUIRA_LOG_INFO("Scene - Mesh added from Model: Mesh[" + std::to_string(mesh->id()) + "]");
+        }
         return ModelHandle<TSpectral>{ model_shared };
     }
 
@@ -157,13 +162,8 @@ namespace huira {
             std::cout << detail::red("No Meshes Loaded") << "\n";
         }
         else {
-            std::cout << "Meshes: (" << std::to_string(meshes_.size()) << " loaded)\n";
-            for (size_t i = 0; i < meshes_.size(); ++i) {
-                std::cout << " - " << detail::green("Mesh") << "[" << std::to_string(meshes_[i]->id()) << "] ";
-                std::cout << "(" << std::to_string(meshes_[i]->get_index_count()) << " vertices)\n";
-            }
+            std::cout << detail::green("Meshes: (" + std::to_string(meshes_.size()) + " loaded)") << "\n";
         }
-        std::cout << "\n";
     }
 
     template <IsSpectral TSpectral>
@@ -172,17 +172,23 @@ namespace huira {
             std::cout << detail::red("No Lights Loaded") << "\n";
         }
         else {
-            std::cout << "Lights: (" << std::to_string(lights_.size()) << " loaded)\n";
-            for (size_t i = 0; i < lights_.size(); ++i) {
-                std::cout << " - " << detail::yellow("Light") << "[" << std::to_string(lights_[i]->id()) << "] (" << lights_[i]->get_type_name() << ")\n";
-            }
+            std::cout << detail::yellow("Lights: (" + std::to_string(lights_.size()) + " loaded)") << "\n";
         }
-        std::cout << "\n";
+    }
+
+    template <IsSpectral TSpectral>
+    void Scene<TSpectral>::print_models() const {
+        if (models_.size() == 0) {
+            std::cout << detail::red("No Models Loaded") << "\n";
+        }
+        else {
+            std::cout << detail::magenta("Models: (" + std::to_string(models_.size()) + " loaded)") << "\n";
+        }
     }
 
     template <IsSpectral TSpectral>
     void Scene<TSpectral>::print_graph() const {
-        std::cout << detail::blue("root ");
+        std::cout << detail::blue("root") << " ";
         print_node_details_(root_node_.get());
         std::cout << "\n";
 
@@ -197,6 +203,7 @@ namespace huira {
     void Scene<TSpectral>::print_contents() const {
         print_meshes();
         print_lights();
+        print_models();
         print_graph();
     }
 
@@ -212,24 +219,17 @@ namespace huira {
         
         // Check if the node is an Instance
         if (const auto* instance_node = dynamic_cast<const Instance<TSpectral>*>(node)) {
-            std::cout << detail::on_green(node->get_type_name()) << "[" << node->id() << "] ";
-            std::string asset_name = instance_node->get_asset_name();
-            if (asset_name.starts_with("Mesh")) {
-                std::cout << "-> " << detail::green(asset_name);
-            }
-            else {
-                std::cout << "-> " << detail::yellow(asset_name);
-            }
+            std::cout << detail::on_green(instance_node->get_info());
             
         }
         else if (const auto* unresolved_node = dynamic_cast<const UnresolvedObject<TSpectral>*>(node)) {
-            std::cout << detail::on_cyan(node->get_type_name()) << "[" << node->id() << "] ";
+            std::cout << detail::on_cyan(unresolved_node->get_info());
         }
         else if (const auto* camera_node = dynamic_cast<const Camera<TSpectral>*>(node)) {
-            std::cout << detail::on_magenta(node->get_type_name()) << "[" << node->id() << "]";
+            std::cout << detail::on_magenta(camera_node->get_info());
         }
         else {
-            std::cout << detail::blue(node->get_type_name()) << "[" << node->id() << "] ";
+            std::cout << detail::blue(node->get_info());
         }
         print_node_details_(node);
         std::cout << "\n";

@@ -285,13 +285,6 @@ namespace huira {
     }
 
 
-    template <IsSpectral TSpectral>
-    std::string Node<TSpectral>::get_info() const {
-        std::string info = get_type_name() + "[" + std::to_string(this->id()) + "]";
-        return info;
-    }
-
-
 
     template <IsSpectral TSpectral>
     Vec3<double> Node<TSpectral>::get_static_position() const
