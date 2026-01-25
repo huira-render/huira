@@ -9,16 +9,21 @@
 namespace huira {
     // Forward declarations
     template <IsSpectral TSpectral>
+    class Scene;
+
+    template <IsSpectral TSpectral>
     class Mesh;
 
     template <IsSpectral TSpectral>
     class Light;
 
     template <IsSpectral TSpectral>
-    class Model;
+    class UnresolvedObject;
 
     template <IsSpectral TSpectral>
-    class UnresolvedObject;
+    class Model;
+
+    
 
     template <IsSpectral TSpectral>
     using Instantiable = std::variant<
@@ -43,6 +48,8 @@ namespace huira {
 
     private:
         Instantiable<TSpectral> asset_;
+
+        friend class Scene<TSpectral>;
     };
 
 }

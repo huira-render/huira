@@ -195,42 +195,22 @@ namespace huira {
 
     template <IsSpectral TSpectral>
     void Scene<TSpectral>::print_meshes() const {
-        if (meshes_.size() == 0) {
-            std::cout << detail::red("No Meshes Loaded") << "\n";
-        }
-        else {
-            std::cout << detail::green("Meshes: (" + std::to_string(meshes_.size()) + " loaded)") << "\n";
-        }
+        std::cout << detail::green("Meshes: " + std::to_string(meshes_.size()) + " loaded") << "\n";
     }
 
     template <IsSpectral TSpectral>
     void Scene<TSpectral>::print_lights() const {
-        if (lights_.size() == 0) {
-            std::cout << detail::red("No Lights Loaded") << "\n";
-        }
-        else {
-            std::cout << detail::yellow("Lights: (" + std::to_string(lights_.size()) + " loaded)") << "\n";
-        }
+        std::cout << detail::yellow("Lights: " + std::to_string(lights_.size()) + " loaded") << "\n";
     }
 
     template <IsSpectral TSpectral>
     void Scene<TSpectral>::print_unresolved_objects() const {
-        if (lights_.size() == 0) {
-            std::cout << detail::red("No UnresolvedObjects Loaded") << "\n";
-        }
-        else {
-            std::cout << detail::yellow("UnresolvedObjects: (" + std::to_string(lights_.size()) + " loaded)") << "\n";
-        }
+        std::cout << detail::cyan("UnresolvedObjects: " + std::to_string(lights_.size()) + " loaded") << "\n";
     }
 
     template <IsSpectral TSpectral>
     void Scene<TSpectral>::print_models() const {
-        if (models_.size() == 0) {
-            std::cout << detail::red("No Models Loaded") << "\n";
-        }
-        else {
-            std::cout << detail::magenta("Models: (" + std::to_string(models_.size()) + " loaded)") << "\n";
-        }
+        std::cout << detail::magenta("Models: " + std::to_string(models_.size()) + " loaded") << "\n";
     }
 
     template <IsSpectral TSpectral>
@@ -267,8 +247,24 @@ namespace huira {
         
         // Check if the node is an Instance
         if (const auto* instance_node = dynamic_cast<const Instance<TSpectral>*>(node)) {
-            std::cout << detail::on_green(instance_node->get_info());
-            
+            std::string instance_str = "Instance[" + std::to_string(instance_node->id()) + "]";
+            instance_str += instance_node->name_.empty() ? "" : " " + instance_node->name_;
+            std::cout << detail::on_green(instance_str) << " -> ";
+            std::visit([&](auto* raw_ptr) noexcept {
+                using AssetType = std::decay_t<decltype(*raw_ptr)>;
+                if constexpr (std::is_same_v<AssetType, Mesh<TSpectral>>) {
+                    std::cout << detail::green(raw_ptr->get_info());
+                }
+                else if constexpr (std::is_same_v<AssetType, Light<TSpectral>>) {
+                    std::cout << detail::yellow(raw_ptr->get_info());
+                }
+                else if constexpr (std::is_same_v<AssetType, Model<TSpectral>>) {
+                    std::cout << detail::magenta(raw_ptr->get_info());
+                }
+                else if constexpr (std::is_same_v<AssetType, UnresolvedObject<TSpectral>>) {
+                    std::cout << detail::cyan(raw_ptr->get_info());
+                }
+                }, instance_node->asset_);
         }
         else if (const auto* unresolved_node = dynamic_cast<const UnresolvedObject<TSpectral>*>(node)) {
             std::cout << detail::on_cyan(unresolved_node->get_info());
