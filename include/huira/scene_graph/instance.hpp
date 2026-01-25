@@ -1,18 +1,24 @@
 #pragma once
 
 #include <variant>
+#include <string>
 
 #include "huira/detail/concepts/spectral_concepts.hpp"
 #include "huira/scene_graph/node.hpp"
 
-#include "huira/assets/mesh.hpp"
-#include "huira/assets/lights/light.hpp"
-
 namespace huira {
+    // Forward declarations
     template <IsSpectral TSpectral>
-    using Instantiable = std::variant<Mesh<TSpectral>*, Light<TSpectral>*>;
+    class Mesh;
 
+    template <IsSpectral TSpectral>
+    class Light;
 
+    template <IsSpectral TSpectral>
+    class Model;
+
+    template <IsSpectral TSpectral>
+    using Instantiable = std::variant<Mesh<TSpectral>*, Light<TSpectral>*, Model<TSpectral>*>;
 
     template <IsSpectral TSpectral>
     class Instance : public Node<TSpectral> {
@@ -25,10 +31,7 @@ namespace huira {
 
         const Instantiable<TSpectral>& asset() const { return asset_; }
 
-        std::string get_info() const override {
-            return "Instance[" + std::to_string(this->id()) + "] " + this->name_ + " -> " +
-                std::visit([](auto* ptr) { return ptr->get_info(); }, asset_);
-        }
+        std::string get_info() const override;
 
     private:
         Instantiable<TSpectral> asset_;
