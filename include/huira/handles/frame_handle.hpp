@@ -26,11 +26,6 @@ namespace huira {
         void delete_subframe(FrameHandle<TSpectral> subframe) const;
 
 
-        // Unresolbed Object
-        UnresolvedObjectHandle<TSpectral> new_unresolved_object() const;
-        UnresolvedObjectHandle<TSpectral> new_spice_unresolved_object(const std::string& spice_origin) const;
-
-        
         // New Camera:
         CameraHandle<TSpectral> new_camera() const;
         CameraHandle<TSpectral> new_spice_camera(const std::string& spice_origin, const std::string& spice_frame) const;

@@ -1,21 +1,26 @@
 #pragma once
 
-#include "huira/detail/concepts/numeric_concepts.hpp"
-#include "huira/detail/concepts/spectral_concepts.hpp"
-
-#include "huira/handles/point_handle.hpp"
 #include "huira/assets/unresolved_object.hpp"
+#include "huira/detail/concepts/spectral_concepts.hpp"
+#include "huira/handles/handle.hpp"
 
 namespace huira {
+    // Forward declaration
     template <IsSpectral TSpectral>
-    class UnresolvedObjectHandle : public PointHandle<TSpectral, UnresolvedObject<TSpectral>> {
+    class FrameHandle;
+
+    template <IsSpectral TSpectral>
+    class UnresolvedObjectHandle : public Handle<UnresolvedObject<TSpectral>> {
     public:
         UnresolvedObjectHandle() = delete;
-        using PointHandle<TSpectral, UnresolvedObject<TSpectral>>::PointHandle;
+        using Handle<UnresolvedObject<TSpectral>>::Handle;
 
 
         void set_irradiance(const TSpectral& irradiance) const;
         TSpectral get_irradiance() const;
+
+        friend class Scene<TSpectral>;
+        friend class FrameHandle<TSpectral>;
     };
 }
 

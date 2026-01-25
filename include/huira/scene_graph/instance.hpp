@@ -18,7 +18,15 @@ namespace huira {
     class Model;
 
     template <IsSpectral TSpectral>
-    using Instantiable = std::variant<Mesh<TSpectral>*, Light<TSpectral>*, Model<TSpectral>*>;
+    class UnresolvedObject;
+
+    template <IsSpectral TSpectral>
+    using Instantiable = std::variant<
+        Mesh<TSpectral>*,
+        Light<TSpectral>*,
+        Model<TSpectral>*,
+        UnresolvedObject<TSpectral>*
+    >;
 
     template <IsSpectral TSpectral>
     class Instance : public Node<TSpectral> {

@@ -57,6 +57,12 @@ namespace huira {
     }
 
     template <IsSpectral TSpectral>
+    void SceneView<TSpectral>::handle_asset_ptr_(UnresolvedObject<TSpectral>* light, const Transform<float>& xf)
+    {
+        add_unresolved_instance_(light->shared_from_this(), xf);
+    }
+
+    template <IsSpectral TSpectral>
     void SceneView<TSpectral>::handle_asset_ptr_(Model<TSpectral>* model, const Transform<float>& instance_apparent_xf)
     {
         if (!model) {
@@ -95,6 +101,16 @@ namespace huira {
         instance.transform = render_transform;
 
         lights_.push_back(std::move(instance));
+    }
+
+    template <IsSpectral TSpectral>
+    void SceneView<TSpectral>::add_unresolved_instance_(std::shared_ptr<UnresolvedObject<TSpectral>> unresolved_object, const Transform<float>& render_transform)
+    {
+        UnresolvedInstance<TSpectral> instance;
+        instance.unresolved_object = unresolved_object;
+        instance.transform = render_transform;
+
+        unresolved_objects_.push_back(std::move(instance));
     }
 
     template <IsSpectral TSpectral>

@@ -44,12 +44,11 @@ namespace huira {
         void delete_child(std::weak_ptr<Node<TSpectral>> child);
 
         // Factory methods for leaf nodes:
-        std::weak_ptr<UnresolvedObject<TSpectral>> new_unresolved_object();
-        std::weak_ptr<PointLight<TSpectral>> new_point_light(TSpectral spectral_intensity);
         std::weak_ptr<Camera<TSpectral>> new_camera();
         std::weak_ptr<Instance<TSpectral>> new_instance(Mesh<TSpectral>* mesh);
         std::weak_ptr<Instance<TSpectral>> new_instance(Light<TSpectral>* light);
         std::weak_ptr<Instance<TSpectral>> new_instance(Model<TSpectral>* model);
+        std::weak_ptr<Instance<TSpectral>> new_instance(UnresolvedObject<TSpectral>* unresolved_object);
 
         std::string get_info() const override { return "FrameNode[" + std::to_string(this->id()) + "]" + (this->name_.empty() ? "" : " " + this->name_); }
 

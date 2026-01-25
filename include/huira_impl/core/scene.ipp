@@ -48,7 +48,7 @@ namespace huira {
             HUIRA_THROW_ERROR("Mesh does not exist in the scene");
         }
 
-        HUIRA_LOG_INFO("Requested to delete Mesh[" + std::to_string(target_ptr->id()) + "]");
+        HUIRA_LOG_INFO("Requested to delete " + mesh_shared->get_info());
 
         prune_graph_references_(target_ptr);
 
@@ -74,11 +74,37 @@ namespace huira {
             HUIRA_THROW_ERROR("Light does not exist in the scene");
         }
 
-        HUIRA_LOG_INFO("Requested to delete Light[" + std::to_string(target_ptr->id()) + "]");
+        HUIRA_LOG_INFO("Requested to delete " + light_shared->get_info());
 
         prune_graph_references_(target_ptr);
 
         lights_.erase(it);
+    }
+
+    template <IsSpectral TSpectral>
+    UnresolvedObjectHandle<TSpectral> Scene<TSpectral>::new_unresolved_object(TSpectral irradiance)
+    {
+        auto unresolved_shared = std::make_shared<UnresolvedObject<TSpectral>>(irradiance);
+        unresolved_objects_.push_back(unresolved_shared);
+        return UnresolvedObjectHandle<TSpectral>{ unresolved_shared };
+    }
+
+    template <IsSpectral TSpectral>
+    void Scene<TSpectral>::delete_unresolved_object(const UnresolvedObjectHandle<TSpectral>& unresolved_object_handle)
+    {
+        auto unresolved_shared = unresolved_object_handle.get();
+        UnresolvedObject<TSpectral>* target_ptr = unresolved_shared.get();
+
+        auto it = std::find(unresolved_objects_.begin(), unresolved_objects_.end(), unresolved_shared);
+        if (it == unresolved_objects_.end()) {
+            HUIRA_THROW_ERROR("UnresolvedObject does not exist in the scene");
+        }
+
+        HUIRA_LOG_INFO("Requested to delete " + unresolved_shared->get_info());
+
+        prune_graph_references_(target_ptr);
+
+        unresolved_objects_.erase(it);
     }
 
     template <IsSpectral TSpectral>
@@ -126,11 +152,9 @@ namespace huira {
     template <typename TAssetPtr>
     void Scene<TSpectral>::prune_graph_references_(TAssetPtr target_ptr)
     {
-        // 1. Define the recursive pruning lambda genericly
         std::function<void(Node<TSpectral>*)> prune_references =
             [&](Node<TSpectral>* parent)
             {
-                // Snapshot children (Deep copy for safety)
                 std::vector<std::shared_ptr<Node<TSpectral>>> children_snapshot(
                     parent->get_children().begin(),
                     parent->get_children().end()
@@ -139,12 +163,10 @@ namespace huira {
                 for (const auto& child_node : children_snapshot) {
                     bool deleted = false;
 
-                    // Is this node an Instance?
                     if (auto instance = std::dynamic_pointer_cast<Instance<TSpectral>>(child_node)) {
                         const auto& asset_var = instance->asset();
 
-                        // --- GENERIC CHECK START ---
-                        // We check if the variant holds our specific pointer type
+                        // We check if the variant holds specific pointer type:
                         if (std::holds_alternative<TAssetPtr>(asset_var)) {
                             // Compare the pointers
                             if (std::get<TAssetPtr>(asset_var) == target_ptr) {
@@ -158,7 +180,6 @@ namespace huira {
                                 }
                             }
                         }
-                        // --- GENERIC CHECK END ---
                     }
 
                     // Recurse if the node itself wasn't deleted
@@ -167,8 +188,6 @@ namespace huira {
                     }
                 }
             };
-
-        // 2. Kick off the traversal from the root
         if (root_node_) {
             prune_references(root_node_.get());
         }

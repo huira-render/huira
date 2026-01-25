@@ -7,6 +7,7 @@
 
 #include "huira/assets/mesh.hpp"
 #include "huira/assets/lights/light.hpp"
+#include "huira/assets/unresolved_object.hpp"
 #include "huira/core/scene.hpp"
 #include "huira/core/time.hpp"
 #include "huira/core/transform.hpp"
@@ -26,6 +27,12 @@ namespace huira {
     };
 
     template <IsSpectral TSpectral>
+    struct UnresolvedInstance {
+        std::shared_ptr<const UnresolvedObject<TSpectral>> unresolved_object;
+        Transform<float> transform;
+    };
+
+    template <IsSpectral TSpectral>
     class SceneView {
     public:
         SceneView(const Scene<TSpectral>& scene, const Time& time, const CameraHandle<TSpectral>& camera, ObservationMode obs_mode);
@@ -36,16 +43,20 @@ namespace huira {
 
         void handle_asset_ptr_(Mesh<TSpectral>* mesh, const Transform<float>&);
         void handle_asset_ptr_(Light<TSpectral>* light, const Transform<float>&);
+        void handle_asset_ptr_(UnresolvedObject<TSpectral>* light, const Transform<float>&);
         void handle_asset_ptr_(Model<TSpectral>* model, const Transform<float>&);
 
         void add_mesh_instance_(std::shared_ptr<Mesh<TSpectral>> mesh, const Transform<float>& render_transform);
         void add_light_instance_(std::shared_ptr<Light<TSpectral>> light, const Transform<float>& render_transform);
+        void add_unresolved_instance_(std::shared_ptr<UnresolvedObject<TSpectral>> unresolved_object, const Transform<float>& render_transform);
         void traverse_model_graph_(const std::shared_ptr<Node<TSpectral>> node, const Transform<float>& parent_tf);
 
         std::vector<MeshBatch<TSpectral>> geometry_;
         std::unordered_map<const Mesh<TSpectral>*, std::size_t> batch_lookup_;
 
         std::vector<LightInstance<TSpectral>> lights_;
+
+        std::vector<UnresolvedInstance<TSpectral>> unresolved_objects_;
     };
 }
 

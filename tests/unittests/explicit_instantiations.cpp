@@ -25,7 +25,6 @@
 #include "huira/handles/instance_handle.hpp"
 #include "huira/handles/mesh_handle.hpp"
 #include "huira/handles/node_handle.hpp"
-#include "huira/handles/point_handle.hpp"
 #include "huira/handles/point_light_handle.hpp"
 #include "huira/handles/root_frame_handle.hpp"
 #include "huira/handles/unresolved_handle.hpp"
