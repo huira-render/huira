@@ -5,12 +5,18 @@
 #include <unordered_map>
 #include <stdexcept>
 #include <string>
+#include <filesystem>
 
 #include "huira/detail/concepts/spectral_concepts.hpp"
 
 #include "huira/assets/mesh.hpp"
+#include "huira/assets/model.hpp"
+#include "huira/assets/io/model_loader.hpp"
+#include "huira/handles/model_handle.hpp"
 #include "huira/handles/root_frame_handle.hpp"
 #include "huira/handles/mesh_handle.hpp"
+
+namespace fs = std::filesystem;
 
 namespace huira {
     // Forward declare:
@@ -37,6 +43,13 @@ namespace huira {
         PointLightHandle<TSpectral> new_point_light(TSpectral intensity);
         void delete_light(const PointLightHandle<TSpectral>& light_handle);
 
+        ModelHandle<TSpectral> load_model(
+            const fs::path& file,
+            unsigned int post_process_flags = ModelLoader<TSpectral>::DEFAULT_POST_PROCESS_FLAGS
+        );
+
+        void delete_model(const ModelHandle<TSpectral>& model_handle);
+
         void print_meshes() const;
         void print_lights() const;
         void print_graph() const;
@@ -46,6 +59,7 @@ namespace huira {
         // Assets:
         std::vector<std::shared_ptr<Mesh<TSpectral>>> meshes_;
         std::vector<std::shared_ptr<Light<TSpectral>>> lights_;
+        std::vector<std::shared_ptr<Model<TSpectral>>> models_;
 
         void print_node_(const Node<TSpectral>* node, const std::string& prefix, bool is_last) const;
         void print_node_details_(const Node<TSpectral>* node) const;

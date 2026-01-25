@@ -1,6 +1,7 @@
 #pragma once
 
 #include "huira/scene_graph/instance.hpp"
+#include "huira/handles/handle.hpp"
 #include "huira/detail/concepts/spectral_concepts.hpp"
 
 namespace huira {
