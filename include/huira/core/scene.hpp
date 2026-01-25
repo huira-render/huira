@@ -50,6 +50,8 @@ namespace huira {
 
         void delete_model(const ModelHandle<TSpectral>& model_handle);
 
+        void prune_unreferenced_assets();
+
         void print_meshes() const;
         void print_lights() const;
         void print_models() const;
