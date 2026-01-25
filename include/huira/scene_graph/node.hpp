@@ -44,7 +44,6 @@ namespace huira {
         Node(Scene<TSpectral>* scene);
         virtual ~Node() = default;
 
-        // Delete copying:
         Node(const Node&) = delete;
         Node& operator=(const Node&) = delete;
 

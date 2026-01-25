@@ -29,24 +29,64 @@ namespace huira {
 
         HUIRA_LOG_INFO("Requested to delete Mesh[" + std::to_string(target_ptr->id()) + "]");
 
-        // We use std::function to allow the lambda to call itself recursively
+        prune_graph_references_(target_ptr);
+
+        meshes_.erase(it);
+    }
+
+    template <IsSpectral TSpectral>
+    PointLightHandle<TSpectral> Scene<TSpectral>::new_point_light(TSpectral intensity)
+    {
+        auto light = std::make_shared<PointLight<TSpectral>>(intensity);
+        lights_.push_back(light);
+        return PointLightHandle<TSpectral>{ light };
+    };
+
+    template <IsSpectral TSpectral>
+    void Scene<TSpectral>::delete_light(const PointLightHandle<TSpectral>& light_handle)
+    {
+        auto light_shared = light_handle.get();
+        Light<TSpectral>* target_ptr = light_shared.get();
+
+        auto it = std::find(lights_.begin(), lights_.end(), light_shared);
+        if (it == lights_.end()) {
+            HUIRA_THROW_ERROR("Light does not exist in the scene");
+        }
+
+        HUIRA_LOG_INFO("Requested to delete Light[" + std::to_string(target_ptr->id()) + "]");
+
+        prune_graph_references_(target_ptr);
+
+        lights_.erase(it);
+    }
+
+    template <IsSpectral TSpectral>
+    template <typename TAssetPtr>
+    void Scene<TSpectral>::prune_graph_references_(TAssetPtr target_ptr)
+    {
+        // 1. Define the recursive pruning lambda genericly
         std::function<void(Node<TSpectral>*)> prune_references =
             [&](Node<TSpectral>* parent)
             {
-                std::vector<std::shared_ptr<Node<TSpectral>>> children_copy(
+                // Snapshot children (Deep copy for safety)
+                std::vector<std::shared_ptr<Node<TSpectral>>> children_snapshot(
                     parent->get_children().begin(),
                     parent->get_children().end()
                 );
 
-                for (const auto& child_node : children_copy) {
+                for (const auto& child_node : children_snapshot) {
                     bool deleted = false;
 
                     // Is this node an Instance?
                     if (auto instance = std::dynamic_pointer_cast<Instance<TSpectral>>(child_node)) {
                         const auto& asset_var = instance->asset();
-                        if (std::holds_alternative<Mesh<TSpectral>*>(asset_var)) {
-                            if (std::get<Mesh<TSpectral>*>(asset_var) == target_ptr) {
-                                
+
+                        // --- GENERIC CHECK START ---
+                        // We check if the variant holds our specific pointer type
+                        if (std::holds_alternative<TAssetPtr>(asset_var)) {
+                            // Compare the pointers
+                            if (std::get<TAssetPtr>(asset_var) == target_ptr) {
+
                                 if (auto* frame_parent = dynamic_cast<FrameNode<TSpectral>*>(parent)) {
                                     frame_parent->delete_child(child_node);
                                     deleted = true;
@@ -56,22 +96,21 @@ namespace huira {
                                 }
                             }
                         }
+                        // --- GENERIC CHECK END ---
                     }
 
+                    // Recurse if the node itself wasn't deleted
                     if (!deleted) {
-                        if (child_node.get() == nullptr) {
-                            std::cout << "hello there";
-                        }
                         prune_references(child_node.get());
                     }
                 }
-                
             };
 
-        prune_references(root_node_.get());
-
-        meshes_.erase(it);
-    };
+        // 2. Kick off the traversal from the root
+        if (root_node_) {
+            prune_references(root_node_.get());
+        }
+    }
 
 
     // Suppressing C4355: 'this' is passed to FrameNode constructor, but FrameNode only stores
@@ -109,6 +148,20 @@ namespace huira {
     }
 
     template <IsSpectral TSpectral>
+    void Scene<TSpectral>::print_lights() const {
+        if (lights_.size() == 0) {
+            std::cout << detail::red("No Lights Loaded") << "\n";
+        }
+        else {
+            std::cout << "Lights: (" << std::to_string(lights_.size()) << " loaded)\n";
+            for (size_t i = 0; i < lights_.size(); ++i) {
+                std::cout << " - " << detail::yellow("Light") << "[" << std::to_string(lights_[i]->id()) << "] (" << lights_[i]->get_type_name() << ")\n";
+            }
+        }
+        std::cout << "\n";
+    }
+
+    template <IsSpectral TSpectral>
     void Scene<TSpectral>::print_graph() const {
         std::cout << detail::blue("root ");
         print_node_details_(root_node_.get());
@@ -124,6 +177,7 @@ namespace huira {
     template <IsSpectral TSpectral>
     void Scene<TSpectral>::print_contents() const {
         print_meshes();
+        print_lights();
         print_graph();
     }
 

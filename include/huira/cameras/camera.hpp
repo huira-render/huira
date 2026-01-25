@@ -18,7 +18,6 @@ namespace huira {
     public:
         explicit Camera(Scene<TSpectral>* scene) : Node<TSpectral>(scene) {}
 
-        // Delete copying:
         Camera(const Camera&) = delete;
         Camera& operator=(const Camera&) = delete;
 

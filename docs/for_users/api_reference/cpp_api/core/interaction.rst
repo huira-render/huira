@@ -1,7 +1,7 @@
 RayHit
 ======
 
-.. doxygenstruct:: huira::RayHit
+.. doxygenstruct:: huira::Interaction
    :members:
    :undoc-members:
 

@@ -20,13 +20,8 @@ namespace huira {
     template <IsSpectral TSpectral>
     class UnresolvedObject : public Node<TSpectral> {
     public:
-        UnresolvedObject(Scene<TSpectral>* scene)
-            : Node<TSpectral>(scene)
-        {
+        UnresolvedObject(Scene<TSpectral>* scene) : Node<TSpectral>(scene) {}
 
-        }
-
-        // Delete copying:
         UnresolvedObject(const UnresolvedObject&) = delete;
         UnresolvedObject& operator=(const UnresolvedObject&) = delete;
 

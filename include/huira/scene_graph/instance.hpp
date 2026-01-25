@@ -18,12 +18,8 @@ namespace huira {
     class Instance : public Node<TSpectral> {
     public:
         Instance(Scene<TSpectral>* scene, const Instantiable<TSpectral>& asset)
-            : Node<TSpectral>(scene),
-            asset_(asset)
-        {
-        }
+            : Node<TSpectral>(scene), asset_(asset) {}
 
-        // Delete copying:
         Instance(const Instance&) = delete;
         Instance& operator=(const Instance&) = delete;
 
