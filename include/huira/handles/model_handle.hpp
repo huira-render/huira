@@ -9,6 +9,9 @@ namespace huira {
     class Scene;
 
     template <IsSpectral TSpectral>
+    class FrameHandle;
+
+    template <IsSpectral TSpectral>
     class ModelHandle : public Handle<Model<TSpectral>> {
     public:
         ModelHandle() = delete;
@@ -20,6 +23,7 @@ namespace huira {
 
     private:
         friend class Scene<TSpectral>;
+        friend class FrameHandle<TSpectral>;
     };
 
 }

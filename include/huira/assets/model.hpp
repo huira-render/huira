@@ -30,7 +30,7 @@ namespace huira {
      *   auto instance = some_frame_handle.new_instance(model_handle.get());
      */
     template <IsSpectral TSpectral>
-    class Model {
+    class Model : public std::enable_shared_from_this<Model<TSpectral>> {
     public:
         Model() = default;
         ~Model() = default;

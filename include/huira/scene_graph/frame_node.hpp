@@ -64,6 +64,16 @@ namespace huira {
             children_.push_back(child);
             return child;
         }
+        std::weak_ptr<Instance<TSpectral>> new_instance(Model<TSpectral>* model)
+        {
+            auto child = std::make_shared<Instance<TSpectral>>(this->scene_, model);
+            child->set_parent_(this);
+
+            HUIRA_LOG_INFO(this->get_info() + " - new Model Instance added: " + child->get_info());
+
+            children_.push_back(child);
+            return child;
+        }
 
         std::string get_info() const override { return "FrameNode[" + std::to_string(this->id()) + "]" + (this->name_.empty() ? "" : " " + this->name_); }
 
