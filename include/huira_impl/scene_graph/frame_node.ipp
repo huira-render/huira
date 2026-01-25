@@ -60,9 +60,9 @@ namespace huira {
     }
 
     template <IsSpectral TSpectral>
-    std::weak_ptr<PointLight<TSpectral>> FrameNode<TSpectral>::new_point_light(TSpectral spectral_intensity)
+    std::weak_ptr<PointLight<TSpectral>> FrameNode<TSpectral>::new_point_light(TSpectral intensity)
     {
-        auto child = std::make_shared<PointLight<TSpectral>>(this->scene_, spectral_intensity);
+        auto child = std::make_shared<PointLight<TSpectral>>(this->scene_, intensity);
         child->set_parent_(this);
 
         HUIRA_LOG_INFO(this->get_info() + " - new PointLight added: " + child->get_info());

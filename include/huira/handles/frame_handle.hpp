@@ -30,11 +30,6 @@ namespace huira {
         UnresolvedObjectHandle<TSpectral> new_unresolved_object() const;
         UnresolvedObjectHandle<TSpectral> new_spice_unresolved_object(const std::string& spice_origin) const;
 
-
-        // New Point Light:
-        //PointLightHandle<TSpectral> new_point_light(TSpectral spectral_intensity) const;
-        //PointLightHandle<TSpectral> new_spice_point_light(const std::string& spice_origin, TSpectral spectral_intensity) const;
-
         
         // New Camera:
         CameraHandle<TSpectral> new_camera() const;
@@ -45,6 +40,12 @@ namespace huira {
         InstanceHandle<TSpectral> new_instance(const MeshHandle<TSpectral>& mesh_handle) const
         {
             return InstanceHandle<TSpectral>{ this->get()->new_instance(mesh_handle.get().get()) };
+        }
+
+        // New Light Instance:
+        InstanceHandle<TSpectral> new_instance(const PointLightHandle<TSpectral>& light_handle) const
+        {
+            return InstanceHandle<TSpectral>{ this->get()->new_instance(light_handle.get().get()) };
         }
     };
 }

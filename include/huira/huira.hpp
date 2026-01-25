@@ -1,6 +1,6 @@
 // Core API header for the Huira library.
+#include "huira/core/interaction.hpp"
 #include "huira/core/ray.hpp"
-#include "huira/core/ray_hit.hpp"
 #include "huira/core/rotation.hpp"
 #include "huira/core/scene.hpp"
 #include "huira/core/spectral_bins.hpp"
@@ -16,6 +16,8 @@
 #include "huira/handles/camera_handle.hpp"
 #include "huira/handles/frame_handle.hpp"
 //#include "huira/handles/handle.hpp"            // Not part of public API
+#include "huira/handles/instance_handle.hpp"
+#include "huira/handles/mesh_handle.hpp"
 //#include "huira/handles/node_handle.hpp"       // Not part of public API
 //#include "huira/handles/point_handle.hpp"      // Not part of public API
 #include "huira/handles/point_light_handle.hpp"

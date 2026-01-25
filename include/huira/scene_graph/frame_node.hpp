@@ -32,7 +32,6 @@ namespace huira {
         FrameNode(Scene<TSpectral>* scene);
         ~FrameNode() override = default;
 
-        // Delete copying:
         FrameNode(const FrameNode&) = delete;
         FrameNode& operator=(const FrameNode&) = delete;
 

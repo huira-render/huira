@@ -33,22 +33,6 @@ namespace huira {
 
 
 
-
-    // New Point Light:
-    //template <IsSpectral TSpectral>
-    //PointLightHandle<TSpectral> FrameHandle<TSpectral>::new_point_light(TSpectral spectral_intensity) const {
-    //    return PointLightHandle<TSpectral>{ this->get()->new_point_light(spectral_intensity) };
-    //}
-    //
-    //template <IsSpectral TSpectral>
-    //PointLightHandle<TSpectral> FrameHandle<TSpectral>::new_spice_point_light(const std::string& spice_origin, TSpectral spectral_intensity) const {
-    //    PointLightHandle<TSpectral> child = this->new_point_light(spectral_intensity);
-    //    child.set_spice_origin(spice_origin);
-    //    return child;
-    //}
-
-
-
     // New Camera:
     template <IsSpectral TSpectral>
     CameraHandle<TSpectral> FrameHandle<TSpectral>::new_camera() const {

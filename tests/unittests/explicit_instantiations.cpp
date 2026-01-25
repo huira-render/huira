@@ -7,8 +7,8 @@
 #include "huira/cameras/distortion/opencv_distortion.hpp"
 #include "huira/cameras/distortion/owen_distortion.hpp"
 
+#include "huira/core/interaction.hpp"
 #include "huira/core/ray.hpp"
-#include "huira/core/ray_hit.hpp"
 #include "huira/core/rotation.hpp"
 #include "huira/core/scene.hpp"
 #include "huira/core/spectral_bins.hpp"
@@ -21,6 +21,8 @@
 #include "huira/handles/camera_handle.hpp"
 #include "huira/handles/frame_handle.hpp"
 #include "huira/handles/handle.hpp"
+#include "huira/handles/instance_handle.hpp"
+#include "huira/handles/mesh_handle.hpp"
 #include "huira/handles/node_handle.hpp"
 #include "huira/handles/point_handle.hpp"
 #include "huira/handles/point_light_handle.hpp"
@@ -52,11 +54,13 @@ namespace huira {
     template class Rotation<TestFloat>;
     template struct Transform<TestFloat>;
 
-    template class FrameHandle<TestSpectral>;
-    template class RootFrameHandle<TestSpectral>;
     template class CameraHandle<TestSpectral>;
+    template class FrameHandle<TestSpectral>;
+    template class InstanceHandle<TestSpectral>;
+    template class MeshHandle<TestSpectral>;
+    template class PointLightHandle<TestSpectral>;
+    template class RootFrameHandle<TestSpectral>;
     template class UnresolvedObjectHandle<TestSpectral>;
-    //template class PointLightHandle<TestSpectral>;
 
     template class Image<std::int8_t>;
     template class Image<float>;

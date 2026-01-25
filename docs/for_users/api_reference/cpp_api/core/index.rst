@@ -27,8 +27,8 @@ System Utilities
 .. toctree::
    :hidden:
 
+   interaction
    ray
-   ray_hit
    rotation
    scene
    spectral_bins

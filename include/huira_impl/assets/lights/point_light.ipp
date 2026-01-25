@@ -1,31 +1,55 @@
+#include <optional>
+
+#include "glm/glm.hpp"
+
 #include "huira/core/types.hpp"
+#include "huira/core/transform.hpp"
+#include "huira/core/interaction.hpp"
 #include "huira/detail/sampler.hpp"
+#include "huira/detail/concepts/spectral_concepts.hpp"
 
 namespace huira {
     template <IsSpectral TSpectral>
-    LightSample<TSpectral> PointLight<TSpectral>::sample_Li(const Vec3<float>& point, Sampler<float>& sampler) const
+    std::optional<LightSample<TSpectral>> PointLight<TSpectral>::sample_li(
+        const Interaction<TSpectral>& ref,
+        const Transform<float>& light_to_world,
+        const Sampler<float>& sampler
+    ) const
     {
         (void)sampler;
         LightSample<TSpectral> sample;
+        
+        Vec3<float> p_light = light_to_world.apply_to_point(Vec3<float>(0, 0, 0));
 
-        Vec3<float> to_light = this->global_transform_.position - point;
-        sample.distance = length(to_light);
-        float distance_sq = static_cast<float>(sample.distance * sample.distance);
+        // Compute shading point:
+        Vec3<float> wi_unorm = p_light - ref.position;
+        float dist_sq = glm::dot(wi_unorm, wi_unorm);
+        sample.distance = std::sqrt(dist_sq);
 
-        sample.wi = to_light / sample.distance;
-        sample.Li = this->spectral_intensity_ / distance_sq;
-        sample.pdf = 1.f;  // Delta distribution
+        // Shading point exactly coincides with light:
+        if (sample.distance == 0) return std::nullopt;
+
+        sample.wi = wi_unorm / sample.distance;
+
+        // Compute irradiance (radiance for point light):
+        sample.Li = intensity_ / dist_sq;
+        
+        // Point lights have PDF of 1
+        sample.pdf = 1.0f;
 
         return sample;
     }
 
     template <IsSpectral TSpectral>
-    float PointLight<TSpectral>::pdf_Li(const Vec3<float>& point, const Vec3<float>& wi) const
+    float PointLight<TSpectral>::pdf_li(
+        const Interaction<TSpectral>& ref,
+        const Transform<float>& light_to_world,
+        const Vec3<float>& wi
+    ) const
     {
-        (void)point;
+        (void)ref;
+        (void)light_to_world;
         (void)wi;
-
-        // Delta light - zero probability of sampling any specific direction
-        return 0.f;
+        return 1.f;
     }
 }
