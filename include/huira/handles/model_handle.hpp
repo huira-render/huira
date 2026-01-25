@@ -5,6 +5,8 @@
 #include "huira/handles/handle.hpp"
 
 namespace huira {
+    template <IsSpectral TSpectral>
+    class Scene;
 
     template <IsSpectral TSpectral>
     class ModelHandle : public Handle<Model<TSpectral>> {
@@ -15,6 +17,9 @@ namespace huira {
         void print_graph() const {
             this->get()->print_graph();
         }
+
+    private:
+        friend class Scene<TSpectral>;
     };
 
 }

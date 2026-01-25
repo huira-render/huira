@@ -99,7 +99,25 @@ namespace huira {
     template <IsSpectral TSpectral>
     void Scene<TSpectral>::delete_model(const ModelHandle<TSpectral>& model_handle)
     {
-        (void)model_handle;
+        auto model_shared = model_handle.get();
+        Model<TSpectral>* target_ptr = model_shared.get();
+
+        auto it = std::find(models_.begin(), models_.end(), model_shared);
+        if (it == models_.end()) {
+            HUIRA_THROW_ERROR("Model does not exist in the scene");
+        }
+
+        HUIRA_LOG_INFO("Requested to delete Model[" + std::to_string(target_ptr->id()) + "]");
+
+        //prune_graph_references_(target_ptr);
+
+        models_.erase(it);
+    }
+
+    template <IsSpectral TSpectral>
+    void Scene<TSpectral>::prune_unreferenced_assets()
+    {
+        
     }
 
 
