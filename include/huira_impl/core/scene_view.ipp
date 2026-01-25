@@ -31,21 +31,32 @@ namespace huira {
             Transform<float> render_transform = static_cast<Transform<float>>(local_apparent);
 
             const auto& asset_var = instance->asset();
-            std::visit([&](auto* raw_ptr) {
-                using T = std::remove_pointer_t<decltype(raw_ptr)>;
-
-                if constexpr (std::is_same_v<T, Mesh<TSpectral>>) {
-                    add_mesh_instance_(raw_ptr->shared_from_this(), render_transform);
-                }
-                else if constexpr (std::is_same_v<T, Light<TSpectral>>) {
-                    add_light_instance_(raw_ptr->shared_from_this(), render_transform);
-                }
+            std::visit([&](auto* raw_ptr) noexcept {
+                handle_asset_ptr_(raw_ptr, render_transform);
                 }, asset_var);
         }
 
         for (const auto& child : node->get_children()) {
             traverse_and_collect_(child, t_obs, obs_ssb, obs_mode);
         }
+    }
+
+    template <IsSpectral TSpectral>
+    void SceneView<TSpectral>::handle_asset_ptr_(Mesh<TSpectral>* mesh, const Transform<float>& xf)
+    {
+        add_mesh_instance_(mesh->shared_from_this(), xf);
+    }
+
+    template <IsSpectral TSpectral>
+    void SceneView<TSpectral>::handle_asset_ptr_(Light<TSpectral>* light, const Transform<float>& xf)
+    {
+        add_light_instance_(light->shared_from_this(), xf);
+    }
+
+    template <IsSpectral TSpectral>
+    void SceneView<TSpectral>::handle_asset_ptr_(Model<TSpectral>*, const Transform<float>&)
+    {
+        // intentionally ignored for now
     }
 
     template <IsSpectral TSpectral>

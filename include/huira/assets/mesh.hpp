@@ -12,7 +12,7 @@ namespace huira {
     class Mesh : public std::enable_shared_from_this<Mesh<TSpectral>> {
     public:
         Mesh() : id_(next_id_++) {}
-        Mesh(IndexBuffer index_buffer, VertexBuffer<TSpectral> vertex_buffer)
+        Mesh(IndexBuffer index_buffer, VertexBuffer<TSpectral> vertex_buffer) noexcept
             : index_buffer_(std::move(index_buffer)),
             vertex_buffer_(std::move(vertex_buffer)),
             id_(next_id_++)
