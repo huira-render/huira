@@ -31,6 +31,7 @@ System Utilities
    ray
    rotation
    scene
+   scene_view
    spectral_bins
    spice
    time

@@ -3,6 +3,7 @@
 #include "huira/core/ray.hpp"
 #include "huira/core/rotation.hpp"
 #include "huira/core/scene.hpp"
+#include "huira/core/scene_view.hpp"
 #include "huira/core/spectral_bins.hpp"
 #include "huira/core/spice.hpp"
 #include "huira/core/time.hpp"
