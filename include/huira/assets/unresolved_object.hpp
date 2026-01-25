@@ -1,49 +1,36 @@
 #pragma once
 
 #include <string>
-#include <memory>
+#include <cstdint>
 
-#include "huira/detail/concepts/numeric_concepts.hpp"
 #include "huira/detail/concepts/spectral_concepts.hpp"
 #include "huira/scene_graph/node.hpp"
 
 namespace huira {
-    // Forward declare:
     template <IsSpectral TSpectral>
-    class Scene;
-
-    template <IsSpectral TSpectral>
-    class FrameNode;
-
-
-
-    template <IsSpectral TSpectral>
-    class UnresolvedObject : public Node<TSpectral> {
+    class UnresolvedObject : public std::enable_shared_from_this<UnresolvedObject<TSpectral>> {
     public:
-        UnresolvedObject(Scene<TSpectral>* scene) : Node<TSpectral>(scene) {}
+        UnresolvedObject(TSpectral irradiance = TSpectral{ 0 })
+            : id_(next_id_++), irradiance_(irradiance) {}
 
         UnresolvedObject(const UnresolvedObject&) = delete;
         UnresolvedObject& operator=(const UnresolvedObject&) = delete;
 
+        std::uint64_t id() const noexcept { return id_; }
+        void set_name(const std::string& name) { name_ = name; }
+        const std::string& name() const noexcept { return name_; }
+
         void set_irradiance(TSpectral irradiance) { irradiance_ = irradiance; }
         TSpectral get_irradiance() const { return irradiance_; }
-
-
-        std::string get_info() const override { return "UnresolvedObject[" + std::to_string(this->id()) + "]" + (this->name_.empty() ? "" : " " + this->name_); }
-
-        // Explicitly delete methods that don't make sense for a point-like object:
-        void set_rotation(const Rotation<double> & rotation) = delete;
-        void set_scale(const Vec3<double>& scale) = delete;
-        void set_angular_velocity(const Vec3<double>& angular_velocity) = delete;
-        void set_spice_frame(const std::string& spice_frame) = delete;
-        void set_spice(const std::string& spice_origin, const std::string& spice_frame) = delete;
-        std::string get_spice_frame() = delete;
+        
+        std::string get_info() const { return "UnresolvedObject[" + std::to_string(id_) + "]" + (this->name_.empty() ? "" : " " + this->name_); }
 
     protected:
-        TSpectral irradiance_{ 0 };
+        std::uint64_t id_ = 0;
+        static inline std::uint64_t next_id_ = 0;
+        std::string name_ = "";
 
-        friend class Scene<TSpectral>;
-        friend class FrameNode<TSpectral>;
+        TSpectral irradiance_{ 0 };
     };
 }
 

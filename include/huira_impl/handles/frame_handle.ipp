@@ -18,21 +18,6 @@ namespace huira {
 
 
 
-    // Unresolbed Object:
-    template <IsSpectral TSpectral>
-    UnresolvedObjectHandle<TSpectral> FrameHandle<TSpectral>::new_unresolved_object() const {
-        return UnresolvedObjectHandle<TSpectral>{ this->get()->new_unresolved_object() };
-    }
-
-    template <IsSpectral TSpectral>
-    UnresolvedObjectHandle<TSpectral> FrameHandle<TSpectral>::new_spice_unresolved_object(const std::string& spice_origin) const {
-        UnresolvedObjectHandle<TSpectral> child = this->new_unresolved_object();
-        child.set_spice_origin(spice_origin);
-        return child;
-    }
-
-
-
     // New Camera:
     template <IsSpectral TSpectral>
     CameraHandle<TSpectral> FrameHandle<TSpectral>::new_camera() const {
