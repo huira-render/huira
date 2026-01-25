@@ -18,6 +18,9 @@ namespace huira {
     class Scene;
 
     template <IsSpectral TSpectral>
+    class SceneView;
+
+    template <IsSpectral TSpectral>
     class UnresolvedObject;
 
     template <IsSpectral TSpectral>
@@ -87,6 +90,7 @@ namespace huira {
         bool rotation_can_be_manual_() const override;
 
         friend class Scene<TSpectral>;
+        friend class SceneView<TSpectral>;
     };
 }
 

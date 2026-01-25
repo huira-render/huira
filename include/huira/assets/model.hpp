@@ -10,9 +10,12 @@
 #include "huira/scene_graph/frame_node.hpp"
 #include "huira/assets/mesh.hpp"
 
+namespace fs = std::filesystem;
+
 namespace huira {
 
-    namespace fs = std::filesystem;
+    template <IsSpectral TSpectral>
+    class SceneView;
 
     /**
      * @brief Represents a loaded 3D model with its own isolated scene graph.
@@ -44,8 +47,6 @@ namespace huira {
         void set_name(const std::string& name) { name_ = name; }
         const std::string& name() const noexcept { return name_; }
         
-        FrameNode<TSpectral>* root() const noexcept { return root_node_.get(); }
-        
         const fs::path& source_path() const noexcept { return source_path_; }
         
 
@@ -67,6 +68,8 @@ namespace huira {
         // ModelLoader needs access to populate the model
         template <IsSpectral U>
         friend class ModelLoader;
+
+        friend class SceneView<TSpectral>;
     };
 
 }

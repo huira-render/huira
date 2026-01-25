@@ -34,12 +34,13 @@ namespace huira {
         void traverse_and_collect_(const std::shared_ptr<Node<TSpectral>>& node,
             const Time& t_obs, const Transform<double> obs_ssb, ObservationMode obs_mode);
 
-        void handle_asset_ptr_(Mesh<TSpectral>*, const Transform<float>&);
-        void handle_asset_ptr_(Light<TSpectral>*, const Transform<float>&);
-        void handle_asset_ptr_(Model<TSpectral>*, const Transform<float>&);
+        void handle_asset_ptr_(Mesh<TSpectral>* mesh, const Transform<float>&);
+        void handle_asset_ptr_(Light<TSpectral>* light, const Transform<float>&);
+        void handle_asset_ptr_(Model<TSpectral>* model, const Transform<float>&);
 
         void add_mesh_instance_(std::shared_ptr<Mesh<TSpectral>> mesh, const Transform<float>& render_transform);
         void add_light_instance_(std::shared_ptr<Light<TSpectral>> light, const Transform<float>& render_transform);
+        void traverse_model_graph_(const std::shared_ptr<Node<TSpectral>> node, const Transform<float>& parent_tf);
 
         std::vector<MeshBatch<TSpectral>> geometry_;
         std::unordered_map<const Mesh<TSpectral>*, std::size_t> batch_lookup_;
