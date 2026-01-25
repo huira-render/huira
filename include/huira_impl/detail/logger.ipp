@@ -58,6 +58,9 @@ namespace huira {
         , write_index_(0)
         , min_level_(LogLevel::Info)
         , crash_handler_enabled_(false)
+        , console_debug_(false)
+        , console_info_(false)
+        , console_warning_(true)  // Warning is on by default
         , custom_sink_(nullptr) {
         // Automatically enable crash handler
         enable_crash_handler(true);
@@ -179,6 +182,48 @@ namespace huira {
         if (enable) {
             install_crash_handlers();
         }
+    }
+
+    // Console output configuration with hierarchy enforcement
+    void Logger::enable_console_debug(bool enable) {
+        console_debug_.store(enable, std::memory_order_relaxed);
+        if (enable) {
+            // If DEBUG is on, INFO and WARNING must also be on
+            console_info_.store(true, std::memory_order_relaxed);
+            console_warning_.store(true, std::memory_order_relaxed);
+        }
+    }
+
+    void Logger::enable_console_info(bool enable) {
+        console_info_.store(enable, std::memory_order_relaxed);
+        if (enable) {
+            // If INFO is on, WARNING must also be on
+            console_warning_.store(true, std::memory_order_relaxed);
+        } else {
+            // If INFO is off, DEBUG must also be off
+            console_debug_.store(false, std::memory_order_relaxed);
+        }
+    }
+
+    void Logger::enable_console_warning(bool enable) {
+        console_warning_.store(enable, std::memory_order_relaxed);
+        if (!enable) {
+            // If WARNING is off, INFO and DEBUG must also be off
+            console_info_.store(false, std::memory_order_relaxed);
+            console_debug_.store(false, std::memory_order_relaxed);
+        }
+    }
+
+    bool Logger::is_console_debug_enabled() const {
+        return console_debug_.load(std::memory_order_relaxed);
+    }
+
+    bool Logger::is_console_info_enabled() const {
+        return console_info_.load(std::memory_order_relaxed);
+    }
+
+    bool Logger::is_console_warning_enabled() const {
+        return console_warning_.load(std::memory_order_relaxed);
     }
 
     // ===== Crash Handler Implementation =====

@@ -58,6 +58,14 @@ namespace huira {
         std::string dump_to_file(const std::string& filepath = "");
         void enable_crash_handler(bool enable = true);
 
+        // Console output configuration
+        void enable_console_debug(bool enable = true);
+        void enable_console_info(bool enable = true);
+        void enable_console_warning(bool enable = true);
+        bool is_console_debug_enabled() const;
+        bool is_console_info_enabled() const;
+        bool is_console_warning_enabled() const;
+
     private:
         Logger();
         ~Logger();
@@ -77,6 +85,9 @@ namespace huira {
         std::atomic<size_t> write_index_;
         std::atomic<LogLevel> min_level_;
         std::atomic<bool> crash_handler_enabled_;
+        std::atomic<bool> console_debug_;
+        std::atomic<bool> console_info_;
+        std::atomic<bool> console_warning_;
         CustomSink custom_sink_;
     };
 
@@ -97,6 +108,18 @@ namespace huira {
         return Logger::instance().dump_to_file(filepath);
     }
 
+    inline void enable_console_debug(bool enable = true) {
+        Logger::instance().enable_console_debug(enable);
+    }
+
+    inline void enable_console_info(bool enable = true) {
+        Logger::instance().enable_console_info(enable);
+    }
+
+    inline void enable_console_warning(bool enable = true) {
+        Logger::instance().enable_console_warning(enable);
+    }
+
 }
 
 
@@ -104,14 +127,22 @@ namespace huira {
 #define HUIRA_LOG_DEBUG(msg) \
     do { \
         if (huira::Logger::instance().get_level() <= huira::LogLevel::Debug) { \
-            huira::Logger::instance().log(huira::LogLevel::Debug, msg); \
+            std::string _huira_debug_msg = (msg); \
+            huira::Logger::instance().log(huira::LogLevel::Debug, _huira_debug_msg); \
+            if (huira::Logger::instance().is_console_debug_enabled()) { \
+                std::cout << "[DEBUG] " << _huira_debug_msg << std::endl; \
+            } \
         } \
     } while(0)
 
 #define HUIRA_LOG_INFO(msg) \
     do { \
         if (huira::Logger::instance().get_level() <= huira::LogLevel::Info) { \
-            huira::Logger::instance().log(huira::LogLevel::Info, msg); \
+            std::string _huira_info_msg = (msg); \
+            huira::Logger::instance().log(huira::LogLevel::Info, _huira_info_msg); \
+            if (huira::Logger::instance().is_console_info_enabled()) { \
+                std::cout << "[INFO] " << _huira_info_msg << std::endl; \
+            } \
         } \
     } while(0)
 
@@ -120,14 +151,18 @@ namespace huira {
         if (huira::Logger::instance().get_level() <= huira::LogLevel::Warning) { \
             std::string _huira_warning_msg = (msg); \
             huira::Logger::instance().log(huira::LogLevel::Warning, _huira_warning_msg); \
-            std::cerr << huira::detail::yellow("[WARNING] " + _huira_warning_msg) << std::endl; \
+            if (huira::Logger::instance().is_console_warning_enabled()) { \
+                std::cerr << huira::detail::yellow("[WARNING] " + _huira_warning_msg) << std::endl; \
+            } \
         } \
     } while(0)
 
 #define HUIRA_LOG_ERROR(msg) \
     do { \
         if (huira::Logger::instance().get_level() <= huira::LogLevel::Error) { \
-            huira::Logger::instance().log(huira::LogLevel::Error, msg); \
+            std::string _huira_error_msg = (msg); \
+            huira::Logger::instance().log(huira::LogLevel::Error, _huira_error_msg); \
+            std::cerr << huira::detail::red("[ERROR] " + _huira_error_msg) << std::endl; \
         } \
     } while(0)
 
