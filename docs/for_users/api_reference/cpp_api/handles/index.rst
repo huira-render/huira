@@ -7,6 +7,8 @@ Handles
    camera_handle
    frame_handle
    handle
+   instance_handle
+   mesh_handle
    node_handle
    point_handle
    point_light_handle

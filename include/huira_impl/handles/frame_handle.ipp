@@ -45,4 +45,18 @@ namespace huira {
         child.set_spice(spice_origin, spice_frame);
         return child;
     }
+
+
+    // New Instance:
+    template <IsSpectral TSpectral>
+    template <typename THandle>
+        requires std::is_constructible_v<Instantiable<TSpectral>, decltype(std::declval<THandle>().get().get())>
+    InstanceHandle<TSpectral> FrameHandle<TSpectral>::new_instance(const THandle& asset_handle) const
+    {
+        auto asset_shared = asset_handle.get();
+        auto* asset_raw = asset_shared.get();
+        auto instance_weak = this->get()->new_instance(asset_raw);
+
+        return InstanceHandle<TSpectral>(instance_weak);
+    }
 }
