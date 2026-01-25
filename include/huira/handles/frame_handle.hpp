@@ -36,17 +36,10 @@ namespace huira {
         CameraHandle<TSpectral> new_spice_camera(const std::string& spice_origin, const std::string& spice_frame) const;
 
 
-        // New Mesh Instance:
-        InstanceHandle<TSpectral> new_instance(const MeshHandle<TSpectral>& mesh_handle) const
-        {
-            return InstanceHandle<TSpectral>{ this->get()->new_instance(mesh_handle.get().get()) };
-        }
-
-        // New Light Instance:
-        InstanceHandle<TSpectral> new_instance(const PointLightHandle<TSpectral>& light_handle) const
-        {
-            return InstanceHandle<TSpectral>{ this->get()->new_instance(light_handle.get().get()) };
-        }
+        // New Instance
+        template <typename THandle>
+            requires std::is_constructible_v<Instantiable<TSpectral>, decltype(std::declval<THandle>().get().get())>
+        InstanceHandle<TSpectral> new_instance(const THandle& asset_handle) const;
     };
 }
 
