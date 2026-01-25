@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <cstdint>
 
 #include "huira/core/types.hpp"
 #include "huira/detail/sampler.hpp"
@@ -23,13 +24,15 @@ namespace huira {
     template <IsSpectral TSpectral>
     class Light {
     public:
-        Light() = default;
+        Light() : id_(next_id_++) {}
 
         // Delete copying:
         Light(const Light&) = delete;
         Light& operator=(const Light&) = delete;
 
-        ~Light() override = default;
+        virtual ~Light() = default;
+
+        std::uint64_t id() const noexcept { return id_; }
 
         virtual LightSample<TSpectral> sample_Li(const Vec3<float>& point, Sampler<float>& sampler) const = 0;
 
@@ -37,6 +40,10 @@ namespace huira {
 
         virtual LightType get_type() const = 0;
 
-        std::string get_type_name() const override = 0;
+        virtual std::string get_type_name() const = 0;
+
+    private:
+        std::uint64_t id_ = 0;
+        static inline std::uint64_t next_id_ = 0;
     };
 }

@@ -28,20 +28,11 @@ if(NOT glm_FOUND)
     target_include_directories(glm::glm INTERFACE ${GLM_INCLUDE_DIR})
 endif()
 
-# Find termcolor
-find_package(termcolor CONFIG QUIET)
-if(NOT termcolor_FOUND)
-    find_path(TERMCOLOR_INCLUDE_DIR termcolor/termcolor.hpp REQUIRED)
-    add_library(termcolor::termcolor INTERFACE IMPORTED)
-    target_include_directories(termcolor::termcolor INTERFACE ${TERMCOLOR_INCLUDE_DIR})
-endif()
-
 include(huiraFindCSPICE)
 huira_find_cspice()
 
 
 target_link_libraries(huira INTERFACE
     glm::glm
-    termcolor::termcolor
     cspice
 )

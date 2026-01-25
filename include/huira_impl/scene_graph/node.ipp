@@ -20,10 +20,9 @@ namespace huira {
     template <IsSpectral TSpectral>
     void Node<TSpectral>::set_position(const Vec3<double>& position)
     {
-        if (auto spice_child = child_spice_origins_()) {
+        if (!this->position_can_be_manual_()) {
             HUIRA_THROW_ERROR(this->get_info() +
-                " - cannot manually set position when child has a spice_origin_ (see child "
-                + spice_child->get_info() + ")");
+                " - cannot manually set position when child has a spice_origin");
         }
 
         this->local_transform_.position = position;
@@ -34,10 +33,9 @@ namespace huira {
     template <IsSpectral TSpectral>
     void Node<TSpectral>::set_rotation(const Rotation<double>& rotation)
     {
-        if (auto spice_child = child_spice_frames_()) {
+        if (!this->rotation_can_be_manual_()) {
             HUIRA_THROW_ERROR(this->get_info() +
-                " - cannot manually set rotation when child has a spice_frame_ (see child "
-                + spice_child->get_info() + ")");
+                " - cannot manually set rotation when child has a spice_frame");
         }
 
         this->local_transform_.rotation = rotation;
@@ -59,9 +57,8 @@ namespace huira {
     template <IsSpectral TSpectral>
     void Node<TSpectral>::set_velocity(const Vec3<double>& velocity)
     {
-        if (this->position_mode_ == TransformMode::SPICE_TRANSFORM) {
-            HUIRA_THROW_ERROR(this->get_info() + " - cannot manually set velocity when node uses SPICE for position " +
-                "(spice_origin_=" + spice_origin_ + ")");
+        if (this->position_mode_ != TransformMode::MANUAL_TRANSFORM) {
+            HUIRA_THROW_ERROR(this->get_info() + " - cannot manually set velocity when node does not use manual position");
         }
 
         this->local_transform_.velocity = velocity;
@@ -70,9 +67,8 @@ namespace huira {
     template <IsSpectral TSpectral>
     void Node<TSpectral>::set_angular_velocity(const Vec3<double>& angular_velocity)
     {
-        if (this->rotation_mode_ == TransformMode::SPICE_TRANSFORM) {
-            HUIRA_THROW_ERROR(this->get_info() + " - cannot manually set angular velocity when node uses SPICE for rotation " +
-                "(spice_frame_=" + spice_frame_ + ")");
+        if (this->rotation_mode_ != TransformMode::MANUAL_TRANSFORM) {
+            HUIRA_THROW_ERROR(this->get_info() + " - cannot manually set angular velocity when node does not use manual rotation");
         }
 
         this->local_transform_.angular_velocity = angular_velocity;
@@ -81,7 +77,10 @@ namespace huira {
     template <IsSpectral TSpectral>
     void Node<TSpectral>::set_spice_origin(const std::string& spice_origin)
     {
-        validate_spice_origin_allowed_();
+        if (!position_can_be_spice_()) {
+            HUIRA_THROW_ERROR(this->get_info() + " - cannot set SPICE progom: parent node (" +
+                parent_->get_info() + ") has manually set position");
+        }
         HUIRA_LOG_INFO(this->get_info() + " - set_spice_origin('" + spice_origin + "')");
 
         this->spice_origin_ = spice_origin;
@@ -91,7 +90,10 @@ namespace huira {
     template <IsSpectral TSpectral>
     void Node<TSpectral>::set_spice_frame(const std::string& spice_frame)
     {
-        validate_spice_frame_allowed_();
+        if (!rotation_can_be_spice_()) {
+            HUIRA_THROW_ERROR(this->get_info() + " - cannot set SPICE frame: parent node (" +
+                parent_->get_info() + ") has manually set rotation");
+        }
         HUIRA_LOG_INFO(this->get_info() + " - set_spice_frame('" + spice_frame + "')");
 
         this->spice_frame_ = spice_frame;
@@ -101,8 +103,14 @@ namespace huira {
     template <IsSpectral TSpectral>
     void Node<TSpectral>::set_spice(const std::string& spice_origin, const std::string& spice_frame)
     {
-        validate_spice_origin_allowed_();
-        validate_spice_frame_allowed_();
+        if (!position_can_be_spice_()) {
+            HUIRA_THROW_ERROR(this->get_info() + " - cannot set SPICE progom: parent node (" +
+                parent_->get_info() + ") has manually set position");
+        }
+        if (!rotation_can_be_spice_()) {
+            HUIRA_THROW_ERROR(this->get_info() + " - cannot set SPICE frame: parent node (" +
+                parent_->get_info() + ") has manually set rotation");
+        }
         HUIRA_LOG_INFO(this->get_info() + " - set_spice('" + spice_origin + ", " + spice_frame + "')");
 
         this->spice_origin_ = spice_origin;
@@ -289,25 +297,25 @@ namespace huira {
     // === Protected Members === //
     // ========================= //
     template <IsSpectral TSpectral>
-    void Node<TSpectral>::validate_spice_origin_allowed_()
+    bool Node<TSpectral>::position_can_be_spice_() const
     {
         if (parent_) {
             if (parent_->position_mode_ != TransformMode::SPICE_TRANSFORM) {
-                HUIRA_THROW_ERROR(this->get_info() + " - cannot set SPICE origin: parent node (" +
-                    parent_->get_info() + ") has manually set position");
+                return false;
             }
         }
+        return true;
     }
 
     template <IsSpectral TSpectral>
-    void Node<TSpectral>::validate_spice_frame_allowed_()
+    bool Node<TSpectral>::rotation_can_be_spice_() const
     {
         if (parent_) {
             if (parent_->rotation_mode_ != TransformMode::SPICE_TRANSFORM) {
-                HUIRA_THROW_ERROR(this->get_info() + " - cannot set SPICE frame: parent node (" +
-                    parent_->get_info() + ") has manually set rotation");
+                return false;
             }
         }
+        return true;
     }
 
 

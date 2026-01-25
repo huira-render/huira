@@ -12,6 +12,9 @@ namespace huira {
     class Scene;
 
     template <IsSpectral TSpectral>
+    class FrameHandle;
+
+    template <IsSpectral TSpectral>
     class MeshHandle : public Handle<Mesh<TSpectral>> {
     public:
         MeshHandle() = delete;
@@ -21,6 +24,7 @@ namespace huira {
             return this->get()->get_vertex_buffer().size();
         }
 
-        friend Scene<TSpectral>;
+        friend class Scene<TSpectral>;
+        friend class FrameHandle<TSpectral>;
     };
 }

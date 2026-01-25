@@ -87,24 +87,24 @@ namespace huira {
     // === Protected Members === //
     // ========================= //
     template <IsSpectral TSpectral>
-    std::shared_ptr<Node<TSpectral>> FrameNode<TSpectral>::child_spice_origins_() const
+    bool FrameNode<TSpectral>::position_can_be_manual_() const
     {
         for (const auto& child : children_) {
             if (child->position_mode_ == TransformMode::SPICE_TRANSFORM) {
-                return child;
+                return false;
             }
         }
-        return nullptr;
+        return true;
     }
 
     template <IsSpectral TSpectral>
-    std::shared_ptr<Node<TSpectral>> FrameNode<TSpectral>::child_spice_frames_() const
+    bool FrameNode<TSpectral>::rotation_can_be_manual_() const
     {
         for (const auto& child : children_) {
             if (child->rotation_mode_ == TransformMode::SPICE_TRANSFORM) {
-                return child;
+                return false;
             }
         }
-        return nullptr;
+        return true;
     }
 }
