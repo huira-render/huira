@@ -27,6 +27,8 @@
 
 // Image interfaces
 #include "huira/images/image.hpp"
+#include "huira/images/io/read_image.hpp"
+#include "huira/images/io/write_image.hpp"
 
 // objects/ is not part of the public API
 
