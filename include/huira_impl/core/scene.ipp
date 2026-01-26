@@ -222,26 +222,41 @@ namespace huira {
     template <IsSpectral TSpectral>
     void Scene<TSpectral>::print_meshes() const {
         std::cout << detail::green("Meshes: " + std::to_string(meshes_.size()) + " loaded") << "\n";
+        for (const auto& mesh : meshes_) {
+            std::cout << " - " << mesh->get_info();
+        }
     }
 
     template <IsSpectral TSpectral>
     void Scene<TSpectral>::print_lights() const {
         std::cout << detail::yellow("Lights: " + std::to_string(lights_.size()) + " loaded") << "\n";
+        for (const auto& light : lights_) {
+            std::cout << " - " << light->get_info();
+        }
     }
 
     template <IsSpectral TSpectral>
     void Scene<TSpectral>::print_unresolved_objects() const {
         std::cout << detail::cyan("UnresolvedObjects: " + std::to_string(unresolved_objects_.size()) + " loaded") << "\n";
+        for (const auto& unresolved_object : unresolved_objects_) {
+            std::cout << " - " << unresolved_object->get_info();
+        }
     }
 
     template <IsSpectral TSpectral>
     void Scene<TSpectral>::print_camera_models() const {
         std::cout << detail::blue("CameraModels: " + std::to_string(camera_models_.size()) + " loaded") << "\n";
+        for (const auto& camera_model : camera_models_) {
+            std::cout << " - " << camera_model->get_info();
+        }
     }
 
     template <IsSpectral TSpectral>
     void Scene<TSpectral>::print_models() const {
         std::cout << detail::magenta("Models: " + std::to_string(models_.size()) + " loaded") << "\n";
+        for (const auto& model : models_) {
+            std::cout << " - " << model->get_info();
+        }
     }
 
     template <IsSpectral TSpectral>
@@ -259,11 +274,13 @@ namespace huira {
 
     template <IsSpectral TSpectral>
     void Scene<TSpectral>::print_contents() const {
-        print_meshes();
-        print_lights();
-        print_unresolved_objects();
-        print_camera_models();
-        print_models();
+        std::cout << "Scene Contents:\n";
+        std::cout << " - " << detail::blue("CameraModels: " + std::to_string(camera_models_.size()) + " loaded") << "\n";
+        std::cout << " - " << detail::green("Meshes: " + std::to_string(meshes_.size()) + " loaded") << "\n";
+        std::cout << " - " << detail::yellow("Lights: " + std::to_string(lights_.size()) + " loaded") << "\n";
+        std::cout << " - " << detail::cyan("UnresolvedObjects: " + std::to_string(unresolved_objects_.size()) + " loaded") << "\n";
+        std::cout << " - " << detail::magenta("Models: " + std::to_string(models_.size()) + " loaded") << "\n";
+        std::cout << "Scene Graph:\n";
         print_graph();
     }
 

@@ -21,18 +21,6 @@ namespace huira {
 
     template <IsImagePixel T>
     std::pair<Image<T>, Image<float>> read_image(const fs::path& filepath);
-
-    template <IsImagePixel T>
-    std::pair<Image<T>, Image<float>> read_image_png(const fs::path& filepath);
-
-    template <IsImagePixel T>
-    std::pair<Image<T>, Image<float>> read_image_jpeg(const fs::path& filepath);
-
-    template <IsImagePixel T>
-    std::pair<Image<T>, Image<float>> read_image_tiff(const fs::path& filepath);
-
-    template <IsImagePixel T>
-    std::pair<Image<T>, Image<float>> read_image_fits(const fs::path& filepath);
 }
 
 #include "huira_impl/images/io/read_image.ipp"
