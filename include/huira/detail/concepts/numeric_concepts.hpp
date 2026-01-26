@@ -8,23 +8,37 @@
 namespace huira {
     /// @concept IsFloatingPoint
     template<typename T>
-    concept IsFloatingPoint = std::same_as<T, float> || std::same_as<T, double>;
-
-    /// @concept IsInteger
-    template <typename T>
-    concept IsInteger = std::is_integral_v<T>;
+    concept IsFloatingPoint =
+        std::same_as<T, float> ||
+        std::same_as<T, double>;
 
     /// @concept IsUnsignedInteger
     template <typename T>
-    concept IsUnsignedInteger = std::is_unsigned_v<std::remove_cv_t<T>>;
+    concept IsUnsignedInteger =
+        std::same_as<T, std::uint8_t> ||
+        std::same_as<T, std::uint16_t> ||
+        std::same_as<T, std::uint32_t> ||
+        std::same_as<T, std::uint64_t>;
 
     // @concept IsSignedInteger
     template <typename T>
-    concept IsSignedInteger = std::is_signed_v<std::remove_cv_t<T>>;
+    concept IsSignedInteger =
+        std::same_as<T, std::int8_t> ||
+        std::same_as<T, std::int16_t> ||
+        std::same_as<T, std::int32_t> ||
+        std::same_as<T, std::int64_t>;
+
+    /// @concept IsInteger
+    template <typename T>
+    concept IsInteger =
+        IsUnsignedInteger<T> ||
+        IsSignedInteger<T>;
 
     /// @concept IsNumeric
     template<typename T>
-    concept IsNumeric = std::is_arithmetic_v<T>;
+    concept IsNumeric =
+        IsFloatingPoint<T> ||
+        IsInteger<T>;
 
 
     // Detect glm::vec
