@@ -68,4 +68,45 @@ namespace huira {
             static_assert(std::is_arithmetic_v<T>, "convert_pixel: Unsupported pixel type for Vec3<float> conversion.");
         }
     }
+
+
+
+    template <IsUnsignedInteger T>
+    float integer_to_float(T value, float min_range, float max_range)
+    {
+        float normalized = static_cast<float>(value) / static_cast<float>(std::numeric_limits<T>::max());
+        return min_range + normalized * (max_range - min_range);
+    }
+
+    template <IsSignedInteger T>
+    float integer_to_float(T value, float min_range, float max_range)
+    {
+        // Map signed integer from [min, max] to [min_range, max_range]
+        float true_min = static_cast<float>(std::numeric_limits<T>::min());
+        float true_max = static_cast<float>(std::numeric_limits<T>::max());
+        float normalized = (static_cast<float>(value) - true_min) / (true_max - true_min);
+        return min_range + normalized * (max_range - min_range);
+    }
+
+
+
+    template <IsUnsignedInteger T>
+    T float_to_integer(float value, float min_range, float max_range)
+    {
+        float normalized = (value - min_range) / (max_range - min_range);
+        normalized = std::clamp(normalized, 0.0f, 1.0f);
+        return static_cast<T>(normalized * static_cast<float>(std::numeric_limits<T>::max()) + 0.5f);
+    }
+
+    template <IsSignedInteger T>
+    T float_to_integer(float value, float min_range, float max_range)
+    {
+        float type_min = static_cast<float>(std::numeric_limits<T>::min());
+        float type_max = static_cast<float>(std::numeric_limits<T>::max());
+        
+        float normalized = (value - min_range) / (max_range - min_range);
+        normalized = std::clamp(normalized, 0.0f, 1.0f);
+        
+        return static_cast<T>(type_min + normalized * (type_max - type_min) + 0.5f);
+    }
 }
