@@ -16,4 +16,16 @@ namespace huira {
     {
         return std::pow(encoded, decoding_gamma);
     }
+
+
+
+    inline float linear_to_srgb(float linear)
+    {
+        if (linear <= 0.0031308f) {
+            return linear * 12.92f;
+        }
+        return 1.055f * std::pow(linear, 1.0f / 2.4f) - 0.055f;
+    }
+
+
 }

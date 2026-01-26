@@ -27,20 +27,16 @@ namespace huira {
     template<typename T>
     inline constexpr bool is_vec3_v = is_vec3<T>::value;
 
+    template <typename T>
+    concept IsNonSpectralPixel =
+        IsSignedInteger<T> ||
+        IsUnsignedInteger<T> ||
+        IsFloatingPoint<T> ||
+        is_vec3_v<T>;
+
     // Valid pixel types for Image<T>
     template<typename T>
     concept IsImagePixel =
-        std::same_as<T, std::int8_t> ||
-        std::same_as<T, std::int16_t> ||
-        std::same_as<T, std::int32_t> ||
-        std::same_as<T, std::int64_t> ||
-        std::same_as<T, std::uint8_t> ||
-        std::same_as<T, std::uint16_t> ||
-        std::same_as<T, std::uint32_t> ||
-        std::same_as<T, std::uint64_t> ||
-        std::same_as<T, std::size_t> ||
-        std::same_as<T, float> ||
-        std::same_as<T, double> ||
-        is_vec3_v<T> ||
+        IsNonSpectralPixel<T> ||
         is_spectral_bins_v<T>;
 }

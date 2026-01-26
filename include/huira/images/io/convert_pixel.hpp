@@ -5,21 +5,25 @@
 #include "huira/core/types.hpp"
 
 namespace huira {
-    template <IsImagePixel T>
-    T convert_pixel(const float& value);
+    template <IsNonSpectralPixel T>
+    T convert_float_to_pixel(float value);
 
-    template <IsImagePixel T>
-    T convert_pixel(const Vec3<float>&value);
+    template <IsNonSpectralPixel T>
+    T convert_vec3_to_pixel(Vec3<float> value);
 
+    template <IsNonSpectralPixel T>
+    float convert_pixel_to_float(T value);
+
+    template <IsNonSpectralPixel T>
+    Vec3<float> convert_pixel_to_vec3(T value);
     
+
 
     template <IsUnsignedInteger T>
     float integer_to_float(T value, float min_range = 0.f, float max_range = 1.f);
 
     template <IsSignedInteger T>
     float integer_to_float(T value, float min_range = 0.f, float max_range = 1.f);
-
-
 
 
     template <IsUnsignedInteger T>
