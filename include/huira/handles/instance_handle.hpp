@@ -8,6 +8,9 @@ namespace huira {
     template <IsSpectral TSpectral>
     class FrameHandle;
 
+    template <IsSpectral TSpectral>
+    class SceneView;
+
 
     template <IsSpectral TSpectral>
     class InstanceHandle : public Handle<Instance<TSpectral>> {
@@ -16,5 +19,6 @@ namespace huira {
         using Handle<Instance<TSpectral>>::Handle;
 
         friend class FrameHandle<TSpectral>;
+        friend class SceneView<TSpectral>;
     };
 }

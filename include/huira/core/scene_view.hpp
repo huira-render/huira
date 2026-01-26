@@ -35,21 +35,27 @@ namespace huira {
     template <IsSpectral TSpectral>
     class SceneView {
     public:
-        SceneView(const Scene<TSpectral>& scene, const Time& time, const CameraHandle<TSpectral>& camera, ObservationMode obs_mode);
+        SceneView(const Scene<TSpectral>& scene,
+            const Time& time,
+            const InstanceHandle<TSpectral>& camera_instance,
+            ObservationMode obs_mode);
 
     private:
         void traverse_and_collect_(const std::shared_ptr<Node<TSpectral>>& node,
             const Time& t_obs, const Transform<double> obs_ssb, ObservationMode obs_mode);
 
-        void handle_asset_ptr_(Mesh<TSpectral>* mesh, const Transform<float>&);
-        void handle_asset_ptr_(Light<TSpectral>* light, const Transform<float>&);
-        void handle_asset_ptr_(UnresolvedObject<TSpectral>* light, const Transform<float>&);
-        void handle_asset_ptr_(Model<TSpectral>* model, const Transform<float>&);
+        void handle_asset_ptr_(Mesh<TSpectral>* mesh, const Transform<float>& xf);
+        void handle_asset_ptr_(Light<TSpectral>* light, const Transform<float>& xf);
+        void handle_asset_ptr_(CameraModel<TSpectral>* camera, const Transform<float>& xf);
+        void handle_asset_ptr_(UnresolvedObject<TSpectral>* light, const Transform<float>& xf);
+        void handle_asset_ptr_(Model<TSpectral>* model, const Transform<float>& xf);
 
         void add_mesh_instance_(std::shared_ptr<Mesh<TSpectral>> mesh, const Transform<float>& render_transform);
         void add_light_instance_(std::shared_ptr<Light<TSpectral>> light, const Transform<float>& render_transform);
         void add_unresolved_instance_(std::shared_ptr<UnresolvedObject<TSpectral>> unresolved_object, const Transform<float>& render_transform);
         void traverse_model_graph_(const std::shared_ptr<Node<TSpectral>> node, const Transform<float>& parent_tf);
+
+        std::shared_ptr<CameraModel<TSpectral>> camera_model_;
 
         std::vector<MeshBatch<TSpectral>> geometry_;
         std::unordered_map<const Mesh<TSpectral>*, std::size_t> batch_lookup_;

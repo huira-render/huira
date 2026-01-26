@@ -10,9 +10,20 @@
 
 namespace huira {
     template <IsSpectral TSpectral>
-    SceneView<TSpectral>::SceneView(const Scene<TSpectral>& scene, const Time& t_obs, const CameraHandle<TSpectral>& camera, ObservationMode obs_mode)
+    SceneView<TSpectral>::SceneView(const Scene<TSpectral>& scene,
+        const Time& t_obs,
+        const InstanceHandle<TSpectral>& camera_instance,
+        ObservationMode obs_mode)
     {
-        auto camera_node = camera.get();
+        auto camera_node = camera_instance.get();
+
+        const auto& asset_var = camera_node->asset();
+        if (!std::holds_alternative<CameraModel<TSpectral>*>(asset_var)) {
+            HUIRA_THROW_ERROR("SceneView received an Instance for the observer that does not contain a CameraModel!");
+        }
+
+        this->camera_model_ = std::get<CameraModel<TSpectral>*>(asset_var)->shared_from_this();
+
         Transform<double> obs_ssb = camera_node->get_ssb_transform_(t_obs);
         
         traverse_and_collect_(scene.root_node_, t_obs, obs_ssb, obs_mode);
@@ -91,6 +102,13 @@ namespace huira {
     void SceneView<TSpectral>::handle_asset_ptr_(Light<TSpectral>* light, const Transform<float>& xf)
     {
         add_light_instance_(light->shared_from_this(), xf);
+    }
+
+    template <IsSpectral TSpectral>
+    void SceneView<TSpectral>::handle_asset_ptr_(CameraModel<TSpectral>* camera, const Transform<float>& xf)
+    {
+        (void)camera;
+        (void)xf;
     }
 
     template <IsSpectral TSpectral>

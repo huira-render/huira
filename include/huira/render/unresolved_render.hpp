@@ -20,7 +20,7 @@ namespace huira {
     template <IsSpectral TSpectral>
     UnresolvedRenderResult<TSpectral> unresolved_render(
         const Scene<TSpectral>& scene,
-        const CameraHandle<TSpectral>& camera,
+        const InstanceHandle<TSpectral>& camera_instance,
         UnresolvedRenderSettings settings = UnresolvedRenderSettings{}
     );
 }

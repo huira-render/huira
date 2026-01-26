@@ -2,7 +2,7 @@
 #include "huira/assets/mesh.hpp"
 #include "huira/assets/unresolved_object.hpp"
 
-#include "huira/cameras/camera.hpp"
+#include "huira/cameras/camera_model.hpp"
 #include "huira/cameras/distortion/brown_distortion.hpp"
 #include "huira/cameras/distortion/opencv_distortion.hpp"
 #include "huira/cameras/distortion/owen_distortion.hpp"
@@ -51,13 +51,13 @@ namespace huira {
     template class BrownDistortion<TestSpectral>;
     template class OpenCVDistortion<TestSpectral>;
     template class OwenDistortion<TestSpectral>;
-    template class Camera<TestSpectral>;
+    template class CameraModel<TestSpectral>;
 
     template class Ray<TestSpectral>;
     template class Rotation<TestFloat>;
     template struct Transform<TestFloat>;
 
-    template class CameraHandle<TestSpectral>;
+    template class CameraModelHandle<TestSpectral>;
     template class FrameHandle<TestSpectral>;
     template class InstanceHandle<TestSpectral>;
     template class MeshHandle<TestSpectral>;
@@ -74,7 +74,7 @@ namespace huira {
 
     template UnresolvedRenderResult<TestSpectral> unresolved_render<TestSpectral>(
         const Scene<TestSpectral>&,
-        const CameraHandle<TestSpectral>&,
+        const InstanceHandle<TestSpectral>&,
         UnresolvedRenderSettings);
 
     template class Node<TestSpectral>;

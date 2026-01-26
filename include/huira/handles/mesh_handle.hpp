@@ -14,6 +14,7 @@ namespace huira {
     template <IsSpectral TSpectral>
     class FrameHandle;
 
+
     template <IsSpectral TSpectral>
     class MeshHandle : public Handle<Mesh<TSpectral>> {
     public:

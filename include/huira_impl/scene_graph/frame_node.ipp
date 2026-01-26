@@ -105,6 +105,16 @@ namespace huira {
         return child;
     }
 
+    template <IsSpectral TSpectral>
+    std::weak_ptr<Instance<TSpectral>> FrameNode<TSpectral>::new_instance(CameraModel<TSpectral>* camera_model)
+    {
+        auto child = std::make_shared<Instance<TSpectral>>(this->scene_, camera_model);
+        child->set_parent_(this);
+        HUIRA_LOG_INFO(this->get_info() + " - Added: " + child->get_info());
+        children_.push_back(child);
+        return child;
+    }
+
     // ========================= //
     // === Protected Members === //
     // ========================= //

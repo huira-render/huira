@@ -17,21 +17,6 @@ namespace huira {
     }
 
 
-
-    // New Camera:
-    template <IsSpectral TSpectral>
-    CameraHandle<TSpectral> FrameHandle<TSpectral>::new_camera() const {
-        return CameraHandle<TSpectral>{ this->get()->new_camera() };
-    }
-
-    template <IsSpectral TSpectral>
-    CameraHandle<TSpectral> FrameHandle<TSpectral>::new_spice_camera(const std::string& spice_origin, const std::string& spice_frame) const {
-        CameraHandle<TSpectral> child = this->new_camera();
-        child.set_spice(spice_origin, spice_frame);
-        return child;
-    }
-
-
     // New Instance:
     template <IsSpectral TSpectral>
     template <typename THandle>
