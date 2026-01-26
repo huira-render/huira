@@ -33,8 +33,13 @@ huira_find_cspice()
 
 find_package(assimp CONFIG REQUIRED)
 
+find_package(JPEG REQUIRED)
+find_package(PNG REQUIRED)
+
 target_link_libraries(huira INTERFACE
     glm::glm
     cspice
     assimp::assimp
+    JPEG::JPEG
+    PNG::PNG
 )
