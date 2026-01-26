@@ -244,19 +244,24 @@ namespace huira {
     template <IsNumeric T>
     float linearize_png(T encoded, const PngColorInfo& color_info)
     {
-        float encoded_f = static_cast<float>(encoded) / static_cast<float>(std::numeric_limits<T>::max());
+        float encoded_f = integer_to_float<T>(encoded, 0.f, 1.f);
 
         switch (color_info.space) {
         case PngColorSpace::LINEAR:
             return encoded_f;
+
         case PngColorSpace::SRGB:
             return srgb_to_linear(encoded_f);
+
         case PngColorSpace::ICC_PROFILE:
             return srgb_to_linear(encoded_f);
+
         case PngColorSpace::UNKNOWN:
             return srgb_to_linear(encoded_f);
+
         case PngColorSpace::GAMMA:
             return gamma_to_linear(encoded_f, static_cast<float>(color_info.gamma));
+
         default:
             return srgb_to_linear(encoded_f);
         }

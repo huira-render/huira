@@ -14,6 +14,14 @@ namespace huira {
     template <typename T>
     concept IsInteger = std::is_integral_v<T>;
 
+    /// @concept IsUnsignedInteger
+    template <typename T>
+    concept IsUnsignedInteger = std::is_unsigned_v<std::remove_cv_t<T>>;
+
+    // @concept IsSignedInteger
+    template <typename T>
+    concept IsSignedInteger = std::is_signed_v<std::remove_cv_t<T>>;
+
     /// @concept IsNumeric
     template<typename T>
     concept IsNumeric = std::is_arithmetic_v<T>;
