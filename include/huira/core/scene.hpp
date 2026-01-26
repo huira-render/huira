@@ -46,6 +46,9 @@ namespace huira {
         UnresolvedObjectHandle<TSpectral> new_unresolved_object(TSpectral irradiance = TSpectral{ 0 });
         void delete_unresolved_object(const UnresolvedObjectHandle<TSpectral>& unresolved_object_handle);
 
+        CameraModelHandle<TSpectral> new_camera_model();
+        void delete_camera_model(const CameraModelHandle<TSpectral>& camera_model_handle);
+
         ModelHandle<TSpectral> load_model(
             const fs::path& file,
             unsigned int post_process_flags = ModelLoader<TSpectral>::DEFAULT_POST_PROCESS_FLAGS
@@ -58,6 +61,7 @@ namespace huira {
         void print_meshes() const;
         void print_lights() const;
         void print_unresolved_objects() const;
+        void print_camera_models() const;
         void print_models() const;
         void print_graph() const;
         void print_contents() const;
@@ -67,6 +71,7 @@ namespace huira {
         std::vector<std::shared_ptr<Mesh<TSpectral>>> meshes_;
         std::vector<std::shared_ptr<Light<TSpectral>>> lights_;
         std::vector<std::shared_ptr<UnresolvedObject<TSpectral>>> unresolved_objects_;
+        std::vector<std::shared_ptr<CameraModel<TSpectral>>> camera_models_;
         std::vector<std::shared_ptr<Model<TSpectral>>> models_;
 
         void print_node_(const Node<TSpectral>* node, const std::string& prefix, bool is_last) const;

@@ -108,6 +108,32 @@ namespace huira {
     }
 
     template <IsSpectral TSpectral>
+    CameraModelHandle<TSpectral> Scene<TSpectral>::new_camera_model()
+    {
+        auto camera_shared = std::make_shared<CameraModel<TSpectral>>();
+        camera_models_.push_back(camera_shared);
+        return CameraModelHandle<TSpectral>{ camera_shared };
+    }
+
+    template <IsSpectral TSpectral>
+    void Scene<TSpectral>::delete_camera_model(const CameraModelHandle<TSpectral>& camera_model_handle)
+    {
+        auto camera_shared = camera_model_handle.get();
+        CameraModel<TSpectral>* target_ptr = camera_shared.get();
+
+        auto it = std::find(camera_models_.begin(), camera_models_.end(), camera_shared);
+        if (it == camera_models_.end()) {
+            HUIRA_THROW_ERROR("CameraModel does not exist in the scene");
+        }
+
+        HUIRA_LOG_INFO("Requested to delete " + camera_shared->get_info());
+
+        prune_graph_references_(target_ptr);
+
+        camera_models_.erase(it);
+    }
+
+    template <IsSpectral TSpectral>
     ModelHandle<TSpectral> Scene<TSpectral>::load_model(const fs::path& file, unsigned int post_process_flags)
     {
         // Load the model using ModelLoader
@@ -205,7 +231,12 @@ namespace huira {
 
     template <IsSpectral TSpectral>
     void Scene<TSpectral>::print_unresolved_objects() const {
-        std::cout << detail::cyan("UnresolvedObjects: " + std::to_string(lights_.size()) + " loaded") << "\n";
+        std::cout << detail::cyan("UnresolvedObjects: " + std::to_string(unresolved_objects_.size()) + " loaded") << "\n";
+    }
+
+    template <IsSpectral TSpectral>
+    void Scene<TSpectral>::print_camera_models() const {
+        std::cout << detail::blue("CameraModels: " + std::to_string(camera_models_.size()) + " loaded") << "\n";
     }
 
     template <IsSpectral TSpectral>
@@ -215,7 +246,7 @@ namespace huira {
 
     template <IsSpectral TSpectral>
     void Scene<TSpectral>::print_graph() const {
-        std::cout << detail::blue("root") << " ";
+        std::cout << detail::on_blue("root");
         print_node_details_(root_node_.get());
         std::cout << "\n";
 
@@ -231,6 +262,7 @@ namespace huira {
         print_meshes();
         print_lights();
         print_unresolved_objects();
+        print_camera_models();
         print_models();
         print_graph();
     }
@@ -258,22 +290,19 @@ namespace huira {
                 else if constexpr (std::is_same_v<AssetType, Light<TSpectral>>) {
                     std::cout << detail::yellow(raw_ptr->get_info());
                 }
-                else if constexpr (std::is_same_v<AssetType, Model<TSpectral>>) {
-                    std::cout << detail::magenta(raw_ptr->get_info());
-                }
                 else if constexpr (std::is_same_v<AssetType, UnresolvedObject<TSpectral>>) {
                     std::cout << detail::cyan(raw_ptr->get_info());
                 }
+                else if constexpr (std::is_same_v<AssetType, CameraModel<TSpectral>>) {
+                    std::cout << detail::blue(raw_ptr->get_info());
+                }
+                else if constexpr (std::is_same_v<AssetType, Model<TSpectral>>) {
+                    std::cout << detail::magenta(raw_ptr->get_info());
+                }
                 }, instance_node->asset_);
         }
-        else if (const auto* unresolved_node = dynamic_cast<const UnresolvedObject<TSpectral>*>(node)) {
-            std::cout << detail::on_cyan(unresolved_node->get_info());
-        }
-        else if (const auto* camera_node = dynamic_cast<const Camera<TSpectral>*>(node)) {
-            std::cout << detail::on_magenta(camera_node->get_info());
-        }
         else {
-            std::cout << detail::blue(node->get_info());
+            std::cout << detail::on_blue(node->get_info());
         }
         print_node_details_(node);
         std::cout << "\n";
@@ -290,7 +319,7 @@ namespace huira {
     template <IsSpectral TSpectral>
     void Scene<TSpectral>::print_node_details_(const Node<TSpectral>* node) const {
         if (node->spice_origin_ != "" || node->spice_frame_ != "") {
-            std::cout << "(";
+            std::cout << " (";
             if (node->spice_origin_ != "") {
                 std::cout << node->spice_origin_;
                 if (node->spice_frame_ != "") {

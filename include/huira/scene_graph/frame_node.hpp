@@ -47,8 +47,9 @@ namespace huira {
         std::weak_ptr<Camera<TSpectral>> new_camera();
         std::weak_ptr<Instance<TSpectral>> new_instance(Mesh<TSpectral>* mesh);
         std::weak_ptr<Instance<TSpectral>> new_instance(Light<TSpectral>* light);
-        std::weak_ptr<Instance<TSpectral>> new_instance(Model<TSpectral>* model);
         std::weak_ptr<Instance<TSpectral>> new_instance(UnresolvedObject<TSpectral>* unresolved_object);
+        std::weak_ptr<Instance<TSpectral>> new_instance(CameraModel<TSpectral>* camera_model);
+        std::weak_ptr<Instance<TSpectral>> new_instance(Model<TSpectral>* model);
 
         std::string get_info() const override { return "FrameNode[" + std::to_string(this->id()) + "]" + (this->name_.empty() ? "" : " " + this->name_); }
 

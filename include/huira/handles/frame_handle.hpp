@@ -26,11 +26,6 @@ namespace huira {
         void delete_subframe(FrameHandle<TSpectral> subframe) const;
 
 
-        // New Camera:
-        CameraHandle<TSpectral> new_camera() const;
-        CameraHandle<TSpectral> new_spice_camera(const std::string& spice_origin, const std::string& spice_frame) const;
-
-
         // New Instance
         template <typename THandle>
             requires std::is_constructible_v<Instantiable<TSpectral>, decltype(std::declval<THandle>().get().get())>
