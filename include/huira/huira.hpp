@@ -33,4 +33,4 @@
 // objects/ is not part of the public API
 
 // Rendering interfaces:
-#include "huira/render/unresolved_render.hpp"
+#include "huira/render/raster_renderer.hpp"

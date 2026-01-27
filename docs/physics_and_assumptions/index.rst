@@ -7,3 +7,5 @@ An overview of the physics used, and assumptions made within Huira.
    :maxdepth: 2
 
    light_transport
+   aberration_frames
+   sensor_modeling
