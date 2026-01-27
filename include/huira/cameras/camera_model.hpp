@@ -32,9 +32,12 @@ namespace huira {
         template <IsDistortion TDistortion, typename... Args>
         void set_distortion(Args&&... args);
 
+        int res_x() const { return sensor_->res_x(); }
+        int res_y() const { return sensor_->res_y(); }
+
         std::string get_info() const { return "CameraModel[" + std::to_string(id_) + "]" + (name_.empty() ? "" : " " + name_); }
 
-        FrameBuffer<TSpectral> make_frame_buffer() const { return FrameBuffer<TSpectral>(0, 0); }
+        FrameBuffer<TSpectral> make_frame_buffer() const { return FrameBuffer<TSpectral>(res_x(), res_y()); }
 
     protected:
         double focal_length_ = 50.;

@@ -23,6 +23,8 @@ namespace huira {
 
         void set_focal_length(double focal_length) const;
 
+        FrameBuffer<TSpectral> make_frame_buffer() const;
+
         friend class Scene<TSpectral>;
         friend class SceneView<TSpectral>;
         friend class FrameHandle<TSpectral>;
