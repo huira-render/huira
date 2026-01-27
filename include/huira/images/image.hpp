@@ -13,20 +13,20 @@ namespace huira {
     template<IsImagePixel T>
     struct ImagePixelTraits {
         using Scalar = T;
-        static constexpr std::size_t channels = 1;
+        static constexpr int channels = 1;
     };
 
     template<IsFloatingPoint T>
     struct ImagePixelTraits<Vec3<T>> {
         using Scalar = T;
-        static constexpr std::size_t channels = 3;
+        static constexpr int channels = 3;
     };
 
-    template<std::size_t N, auto... Args>
-    struct ImagePixelTraits<SpectralBins<N, Args...>> {
-        using Scalar = float;
-        static constexpr std::size_t channels = N;
-    };
+template<std::size_t N, auto... Args>
+struct ImagePixelTraits<SpectralBins<N, Args...>> {
+    using Scalar = float;
+    static constexpr std::size_t channels = N;
+};
 
     enum class WrapMode {
         Clamp,
@@ -42,8 +42,8 @@ namespace huira {
         using Scalar = typename Traits::Scalar;
 
         Image();
-        Image(std::size_t width, std::size_t height);
-        Image(std::size_t width, std::size_t height, const PixelT& fill_value);
+        Image(int width, int height);
+        Image(int width, int height, const PixelT& fill_value);
 
         Image(const Image&) = default;
         Image(Image&&) noexcept = default;
@@ -55,23 +55,23 @@ namespace huira {
         [[nodiscard]] bool empty() const noexcept;
         explicit operator bool() const noexcept;
 
-        [[nodiscard]] std::size_t width() const noexcept;
-        [[nodiscard]] std::size_t height() const noexcept;
+        [[nodiscard]] int width() const noexcept;
+        [[nodiscard]] int height() const noexcept;
         [[nodiscard]] std::size_t size() const noexcept;
 
         // Unchecked access (asserts in debug builds only)
         [[nodiscard]] PixelT& operator[](std::size_t index);
         [[nodiscard]] const PixelT& operator[](std::size_t index) const;
 
-        [[nodiscard]] PixelT& operator()(std::size_t x, std::size_t y);
-        [[nodiscard]] const PixelT& operator()(std::size_t x, std::size_t y) const;
+        [[nodiscard]] PixelT& operator()(int x, int y);
+        [[nodiscard]] const PixelT& operator()(int x, int y) const;
 
         // Checked access (throws std::out_of_range)
         [[nodiscard]] PixelT& at(std::size_t index);
         [[nodiscard]] const PixelT& at(std::size_t index) const;
 
-        [[nodiscard]] PixelT& at(std::size_t x, std::size_t y);
-        [[nodiscard]] const PixelT& at(std::size_t x, std::size_t y) const;
+        [[nodiscard]] PixelT& at(int x, int y);
+        [[nodiscard]] const PixelT& at(int x, int y) const;
 
         [[nodiscard]] PixelT& at(const Pixel& pixel);
         [[nodiscard]] const PixelT& at(const Pixel& pixel) const;
@@ -86,18 +86,18 @@ namespace huira {
         [[nodiscard]] PixelT* data() noexcept;
         [[nodiscard]] const PixelT* data() const noexcept;
 
-        void resize(std::size_t width, std::size_t height);
-        void resize(std::size_t width, std::size_t height, const PixelT& fill_value);
+        void resize(int width, int height);
+        void resize(int width, int height, const PixelT& fill_value);
 
         void clear();
         void fill(const PixelT& value);
 
     private:
         std::vector<PixelT> data_;
-        std::size_t width_;
-        std::size_t height_;
+        int width_;
+        int height_;
 
-        [[nodiscard]] std::size_t to_linear(std::size_t x, std::size_t y) const noexcept;
+        [[nodiscard]] std::size_t to_linear(int x, int y) const noexcept;
 
         template<WrapMode W>
         [[nodiscard]] float wrap_coordinate(float coord, float max) const noexcept;

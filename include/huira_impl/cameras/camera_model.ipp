@@ -1,4 +1,14 @@
+#include <memory>
+
+#include "huira/cameras/sensors/simple_sensor.hpp"
+
 namespace huira {
+    template <IsSpectral TSpectral>
+    CameraModel<TSpectral>::CameraModel() : id_(next_id_++)
+    {
+        this->sensor_ = std::make_unique<SimpleSensor<TSpectral>>(1920, 1080, 4.8e-3f, 2.7e-3f);
+    }
+
     template <IsSpectral TSpectral>
     void CameraModel<TSpectral>::set_focal_length(double focal_length) {
         focal_length_ = focal_length;

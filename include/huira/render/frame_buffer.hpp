@@ -16,13 +16,29 @@ namespace huira {
         std::size_t width() const { return width_; }
         std::size_t height() const { return height_; }
 
-        void ensure_depth() {
+
+        void enable_depth() {
             if (depth_.width() != width_ || depth_.height() != height_) {
                 depth_ = Image<float>(width_, height_);
             }
         }
-        void enable_depth() { if (!depth_) depth_ = Image<float>(width_, height_); }
         Image<float>& depth() { return depth_; }
+
+
+        void enable_received_power() {
+            if (received_power_.width() != width_ || received_power_.height() != height_) {
+                received_power_ = Image<TSpectral>(width_, height_);
+            }
+        }
+        Image<TSpectral>& received_power() { return received_power_; }
+
+
+        void enable_sensor_response() {
+            if (sensor_response_.width() != width_ || sensor_response_.height() != height_) {
+                sensor_response_ = Image<float>(width_, height_);
+            }
+        }
+        Image<float>& sensor_response() { return sensor_response_; }
 
     private:
         FrameBuffer(std::size_t width, std::size_t height)
@@ -30,6 +46,9 @@ namespace huira {
 
         std::size_t width_;
         std::size_t height_;
+
+        Image<TSpectral> received_power_;
+        Image<float> sensor_response_;
 
         Image<float> depth_;
 
