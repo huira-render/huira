@@ -11,6 +11,7 @@
 
 #include "huira/cameras/distortion/distortion.hpp"
 #include "huira/scene_graph/node.hpp"
+#include "huira/render/frame_buffer.hpp"
 
 namespace huira {
     template <IsSpectral TSpectral>
@@ -31,6 +32,8 @@ namespace huira {
         void set_distortion(Args&&... args);
 
         std::string get_info() const { return "CameraModel[" + std::to_string(id_) + "]" + (name_.empty() ? "" : " " + name_); }
+
+        FrameBuffer<TSpectral> make_frame_buffer() const { return FrameBuffer<TSpectral>(0, 0); }
 
     protected:
         double focal_length_ = 50.;

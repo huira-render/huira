@@ -31,7 +31,7 @@
 
 #include "huira/images/image.hpp"
 
-#include "huira/render/unresolved_render.hpp"
+#include "huira/render/raster_renderer.hpp"
 
 #include "huira/scene_graph/frame_node.hpp"
 #include "huira/scene_graph/instance.hpp"
@@ -70,12 +70,9 @@ namespace huira {
     template class Image<Vec3<float>>;
     template class Image<TestSpectral>;
 
-    //template class PointLight<TestSpectral>;
+    template class PointLight<TestSpectral>;
 
-    template UnresolvedRenderResult<TestSpectral> unresolved_render<TestSpectral>(
-        const Scene<TestSpectral>&,
-        const InstanceHandle<TestSpectral>&,
-        UnresolvedRenderSettings);
+    template class RasterRenderer<TestSpectral>;
 
     template class Node<TestSpectral>;
     template class UnresolvedObject<TestSpectral>;
