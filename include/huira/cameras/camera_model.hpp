@@ -12,12 +12,13 @@
 #include "huira/cameras/distortion/distortion.hpp"
 #include "huira/scene_graph/node.hpp"
 #include "huira/render/frame_buffer.hpp"
+#include "huira/cameras/sensors/sensor_model.hpp"
 
 namespace huira {
     template <IsSpectral TSpectral>
     class CameraModel : public std::enable_shared_from_this<CameraModel<TSpectral>> {
     public:
-        CameraModel() noexcept : id_(next_id_++) {}
+        CameraModel();
         
         CameraModel(const CameraModel&) = delete;
         CameraModel& operator=(const CameraModel&) = delete;
@@ -37,6 +38,8 @@ namespace huira {
 
     protected:
         double focal_length_ = 50.;
+
+        std::unique_ptr<SensorModel<TSpectral>> sensor_;
         std::unique_ptr<Distortion<TSpectral>> distortion_ = nullptr;
 
         std::uint64_t id_ = 0;

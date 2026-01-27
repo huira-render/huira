@@ -234,22 +234,24 @@ namespace huira {
         fclose(fp);
 
         // Create output images
-        Image<T> image(static_cast<std::size_t>(width),
-            static_cast<std::size_t>(height));
+        Image<T> image(static_cast<int>(width),
+            static_cast<int>(height));
         Image<float> alpha_image(0, 0);
 
         if (has_alpha) {
-            alpha_image = Image<float>(static_cast<std::size_t>(width),
-                static_cast<std::size_t>(height),
+            alpha_image = Image<float>(static_cast<int>(width),
+                static_cast<int>(height),
                 1.0f);
         }
 
-        for (std::size_t y = 0; y < height; ++y) {
-            for (std::size_t x = 0; x < width; ++x) {
+        for (int y = 0; y < static_cast<int>(height); ++y) {
+            for (int x = 0; x < static_cast<int>(width); ++x) {
+                std::size_t x_u = static_cast<std::size_t>(x);
+                std::size_t y_u = static_cast<std::size_t>(y);
 
                 if (final_bit_depth == 16) {
                     // Safe 16-bit extraction without alignment issues
-                    const png_byte* byte_ptr = raw_data.data() + y * row_bytes + x * channels * 2;
+                    const png_byte* byte_ptr = raw_data.data() + y_u * row_bytes + x_u * channels * 2;
 
                     auto read_u16 = [](const png_byte* p) -> uint16_t {
                         uint16_t val;
@@ -277,7 +279,7 @@ namespace huira {
                 }
                 else {
                     // 8-bit
-                    const png_byte* ptr = raw_data.data() + y * row_bytes + x * channels;
+                    const png_byte* ptr = raw_data.data() + y_u * row_bytes + x_u * channels;
 
                     if (is_gray) {
                         float mono = linearize_png_pixel_<uint8_t>(ptr[0], color_info);
@@ -343,8 +345,8 @@ namespace huira {
             channels = has_alpha ? 4 : 3;
         }
 
-        std::size_t width = image.width();
-        std::size_t height = image.height();
+        int width = image.width();
+        int height = image.height();
 
         // Cross-platform file opening
 #ifdef _MSC_VER
@@ -411,30 +413,31 @@ namespace huira {
 
         // Write image data row by row
         if (bit_depth == 16) {
-            std::vector<uint16_t> row_data(width * channels);
+            std::vector<uint16_t> row_data(static_cast<std::size_t>(width) * channels);
 
-            for (std::size_t y = 0; y < height; ++y) {
-                for (std::size_t x = 0; x < width; ++x) {
+            for (int y = 0; y < height; ++y) {
+                for (int x = 0; x < width; ++x) {
+                    std::size_t x_u = static_cast<std::size_t>(x);
                     const T& pixel = image(x, y);
 
                     if constexpr (is_gray) {
                         float linear = convert_pixel_to_float<T>(pixel);
                         float srgb = linear_to_srgb(linear);
-                        row_data[x * channels] = float_to_integer<uint16_t>(srgb);
+                        row_data[x_u * channels] = float_to_integer<uint16_t>(srgb);
 
                         if (has_alpha) {
-                            row_data[x * channels + 1] = float_to_integer<uint16_t>(alpha(x, y));
+                            row_data[x_u * channels + 1] = float_to_integer<uint16_t>(alpha(x, y));
                         }
                     }
                     else {
                         Vec3<float> linear = convert_pixel_to_vec3<T>(pixel);
 
-                        row_data[x * channels + 0] = float_to_integer<uint16_t>(linear_to_srgb(linear.x));
-                        row_data[x * channels + 1] = float_to_integer<uint16_t>(linear_to_srgb(linear.y));
-                        row_data[x * channels + 2] = float_to_integer<uint16_t>(linear_to_srgb(linear.z));
+                        row_data[x_u * channels + 0] = float_to_integer<uint16_t>(linear_to_srgb(linear.x));
+                        row_data[x_u * channels + 1] = float_to_integer<uint16_t>(linear_to_srgb(linear.y));
+                        row_data[x_u * channels + 2] = float_to_integer<uint16_t>(linear_to_srgb(linear.z));
 
                         if (has_alpha) {
-                            row_data[x * channels + 3] = float_to_integer<uint16_t>(alpha(x, y));
+                            row_data[x_u * channels + 3] = float_to_integer<uint16_t>(alpha(x, y));
                         }
                     }
                 }
@@ -445,30 +448,31 @@ namespace huira {
         }
         else {
             // 8-bit
-            std::vector<uint8_t> row_data(width * channels);
+            std::vector<uint8_t> row_data(static_cast<std::size_t>(width) * channels);
 
-            for (std::size_t y = 0; y < height; ++y) {
-                for (std::size_t x = 0; x < width; ++x) {
+            for (int y = 0; y < height; ++y) {
+                for (int x = 0; x < width; ++x) {
+                    std::size_t x_u = static_cast<std::size_t>(x);
                     const T& pixel = image(x, y);
 
                     if constexpr (is_gray) {
                         float linear = convert_pixel_to_float<T>(pixel);
                         float srgb = linear_to_srgb(linear);
-                        row_data[x * channels] = float_to_integer<uint8_t>(srgb);
+                        row_data[x_u * channels] = float_to_integer<uint8_t>(srgb);
 
                         if (has_alpha) {
-                            row_data[x * channels + 1] = float_to_integer<uint8_t>(alpha(x, y));
+                            row_data[x_u * channels + 1] = float_to_integer<uint8_t>(alpha(x, y));
                         }
                     }
                     else {
                         Vec3<float> linear = convert_pixel_to_vec3<T>(pixel);
 
-                        row_data[x * channels + 0] = float_to_integer<uint8_t>(linear_to_srgb(linear.x));
-                        row_data[x * channels + 1] = float_to_integer<uint8_t>(linear_to_srgb(linear.y));
-                        row_data[x * channels + 2] = float_to_integer<uint8_t>(linear_to_srgb(linear.z));
+                        row_data[x_u * channels + 0] = float_to_integer<uint8_t>(linear_to_srgb(linear.x));
+                        row_data[x_u * channels + 1] = float_to_integer<uint8_t>(linear_to_srgb(linear.y));
+                        row_data[x_u * channels + 2] = float_to_integer<uint8_t>(linear_to_srgb(linear.z));
 
                         if (has_alpha) {
-                            row_data[x * channels + 3] = float_to_integer<uint8_t>(alpha(x, y));
+                            row_data[x_u * channels + 3] = float_to_integer<uint8_t>(alpha(x, y));
                         }
                     }
                 }

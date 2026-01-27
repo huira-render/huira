@@ -16,16 +16,16 @@ namespace huira {
     }
 
     template<IsImagePixel PixelT>
-    Image<PixelT>::Image(std::size_t width, std::size_t height)
-        : data_(width * height)
+    Image<PixelT>::Image(int width, int height)
+        : data_(static_cast<std::size_t>(width * height))
         , width_{ width }
         , height_{ height }
     {
     }
 
     template<IsImagePixel PixelT>
-    Image<PixelT>::Image(std::size_t width, std::size_t height, const PixelT& fill_value)
-        : data_(width * height, fill_value)
+    Image<PixelT>::Image(int width, int height, const PixelT& fill_value)
+        : data_(static_cast<std::size_t>(width * height), fill_value)
         , width_{ width }
         , height_{ height }
     {
@@ -42,12 +42,12 @@ namespace huira {
     }
 
     template<IsImagePixel PixelT>
-    std::size_t Image<PixelT>::width() const noexcept {
+    int Image<PixelT>::width() const noexcept {
         return width_;
     }
 
     template<IsImagePixel PixelT>
-    std::size_t Image<PixelT>::height() const noexcept {
+    int Image<PixelT>::height() const noexcept {
         return height_;
     }
 
@@ -71,13 +71,13 @@ namespace huira {
 
     // Unchecked 2D access
     template<IsImagePixel PixelT>
-    PixelT& Image<PixelT>::operator()(std::size_t x, std::size_t y) {
+    PixelT& Image<PixelT>::operator()(int x, int y) {
         assert(x < width_ && y < height_);
         return data_[to_linear(x, y)];
     }
 
     template<IsImagePixel PixelT>
-    const PixelT& Image<PixelT>::operator()(std::size_t x, std::size_t y) const {
+    const PixelT& Image<PixelT>::operator()(int x, int y) const {
         assert(x < width_ && y < height_);
         return data_[to_linear(x, y)];
     }
@@ -101,7 +101,7 @@ namespace huira {
 
     // Checked 2D access
     template<IsImagePixel PixelT>
-    PixelT& Image<PixelT>::at(std::size_t x, std::size_t y) {
+    PixelT& Image<PixelT>::at(int x, int y) {
         if (x >= width_ || y >= height_) {
             throw std::out_of_range("Image coordinates out of bounds");
         }
@@ -109,7 +109,7 @@ namespace huira {
     }
 
     template<IsImagePixel PixelT>
-    const PixelT& Image<PixelT>::at(std::size_t x, std::size_t y) const {
+    const PixelT& Image<PixelT>::at(int x, int y) const {
         if (x >= width_ || y >= height_) {
             throw std::out_of_range("Image coordinates out of bounds");
         }
@@ -119,8 +119,8 @@ namespace huira {
     // Checked Pixel access
     template<IsImagePixel PixelT>
     PixelT& Image<PixelT>::at(const Pixel& pixel) {
-        auto x = static_cast<std::size_t>(pixel.x);
-        auto y = static_cast<std::size_t>(pixel.y);
+        auto x = static_cast<int>(pixel.x);
+        auto y = static_cast<int>(pixel.y);
         if (x >= width_ || y >= height_) {
             throw std::out_of_range("Image pixel coordinates out of bounds");
         }
@@ -129,8 +129,8 @@ namespace huira {
 
     template<IsImagePixel PixelT>
     const PixelT& Image<PixelT>::at(const Pixel& pixel) const {
-        auto x = static_cast<std::size_t>(pixel.x);
-        auto y = static_cast<std::size_t>(pixel.y);
+        auto x = static_cast<int>(pixel.x);
+        auto y = static_cast<int>(pixel.y);
         if (x >= width_ || y >= height_) {
             throw std::out_of_range("Image pixel coordinates out of bounds");
         }
@@ -150,8 +150,8 @@ namespace huira {
         float px = u * static_cast<float>(width_ - 1);
         float py = v * static_cast<float>(height_ - 1);
 
-        auto x = static_cast<std::size_t>(std::round(px));
-        auto y = static_cast<std::size_t>(std::round(py));
+        auto x = static_cast<int>(std::round(px));
+        auto y = static_cast<int>(std::round(py));
 
         x = std::min(x, width_ - 1);
         y = std::min(y, height_ - 1);
@@ -172,8 +172,8 @@ namespace huira {
         float px = u * static_cast<float>(width_ - 1);
         float py = v * static_cast<float>(height_ - 1);
 
-        auto x0 = static_cast<std::size_t>(px);
-        auto y0 = static_cast<std::size_t>(py);
+        auto x0 = static_cast<int>(px);
+        auto y0 = static_cast<int>(py);
         auto x1 = std::min(x0 + 1, width_ - 1);
         auto y1 = std::min(y0 + 1, height_ - 1);
 
@@ -224,17 +224,17 @@ namespace huira {
     }
 
     template<IsImagePixel PixelT>
-    void Image<PixelT>::resize(std::size_t width, std::size_t height) {
+    void Image<PixelT>::resize(int width, int height) {
         width_ = width;
         height_ = height;
-        data_.resize(width * height);
+        data_.resize(static_cast<std::size_t>(width * height));
     }
 
     template<IsImagePixel PixelT>
-    void Image<PixelT>::resize(std::size_t width, std::size_t height, const PixelT& fill_value) {
+    void Image<PixelT>::resize(int width, int height, const PixelT& fill_value) {
         width_ = width;
         height_ = height;
-        data_.assign(width * height, fill_value);
+        data_.assign(static_cast<std::size_t>(width * height), fill_value);
     }
 
     template<IsImagePixel PixelT>
@@ -250,8 +250,8 @@ namespace huira {
     }
 
     template<IsImagePixel PixelT>
-    std::size_t Image<PixelT>::to_linear(std::size_t x, std::size_t y) const noexcept {
-        return y * width_ + x;
+    std::size_t Image<PixelT>::to_linear(int x, int y) const noexcept {
+        return static_cast<std::size_t>(y * width_ + x);
     }
 
     template<IsImagePixel PixelT>

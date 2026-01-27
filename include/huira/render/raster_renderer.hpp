@@ -9,7 +9,7 @@ namespace huira {
     template <IsSpectral TSpectral>
     class RasterRenderer : public Renderer<TSpectral> {
     public:
-        ~RasterRenderer() = default;
+        ~RasterRenderer() override = default;
 
         void render(SceneView<TSpectral>& scene_view, FrameBuffer<TSpectral>& frame_buffer) override;
     };
