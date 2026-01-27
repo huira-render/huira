@@ -32,8 +32,20 @@ namespace huira {
                 for (auto& vertex : vertices) {
                     auto v = instance_tf.apply_to_point(vertex.position);
 
-                    Pixel v_p{ 17*v.x + 0.5f * res_x, 17*v.y + 0.5f * res_y };
-                    //std::cout << v_p.x << " " << v_p.y << "\n";
+                    //Pixel v_p{ 17*v.x + 0.5f * res_x, 17*v.y + 0.5f * res_y };
+                    //depth_buffer(v_p) = 0.f;
+
+                    auto v_p = camera->project_point(v);
+                    if (std::isnan(v_p.x) || std::isnan(v_p.y)) {
+                        // Vertex is behind the camera; skip
+                        continue;
+                    }
+
+                    if (v_p.x < 0 || v_p.x >= res_x || v_p.y < 0 || v_p.y >= res_y) {
+                        // Vertex is outside the image bounds; skip
+                        continue;
+                    }
+
                     depth_buffer(v_p) = 0.f;
                 }
                 //// Loop over triangles (from index buffer):

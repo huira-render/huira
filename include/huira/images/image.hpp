@@ -94,6 +94,7 @@ struct ImagePixelTraits<SpectralBins<N, Args...>> {
 
         void clear();
         void fill(const PixelT& value);
+        void reset(const PixelT& value = PixelT{ 0 }) { fill(value); }
 
     private:
         std::vector<PixelT> data_;

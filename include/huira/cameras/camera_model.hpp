@@ -44,7 +44,7 @@ namespace huira {
         FrameBuffer<TSpectral> make_frame_buffer() const { return FrameBuffer<TSpectral>(res_x(), res_y()); }
 
     protected:
-        double focal_length_ = 50e-3;
+        double focal_length_ = .05;
 
         std::unique_ptr<SensorModel<TSpectral>> sensor_;
         std::unique_ptr<Distortion<TSpectral>> distortion_ = nullptr;
