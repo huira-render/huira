@@ -41,11 +41,11 @@ namespace huira {
         Image<float>& sensor_response() { return sensor_response_; }
 
     private:
-        FrameBuffer(std::size_t width, std::size_t height)
+        FrameBuffer(int width, int height)
             : width_(width), height_(height) {}
 
-        std::size_t width_;
-        std::size_t height_;
+        int width_;
+        int height_;
 
         Image<TSpectral> received_power_;
         Image<float> sensor_response_;
