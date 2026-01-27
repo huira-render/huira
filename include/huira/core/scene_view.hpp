@@ -15,6 +15,9 @@
 
 namespace huira {
     template <IsSpectral TSpectral>
+    class Renderer;
+
+    template <IsSpectral TSpectral>
     struct MeshBatch {
         std::shared_ptr<const Mesh<TSpectral>> mesh;
         std::vector<Transform<float>> instances;
@@ -63,6 +66,8 @@ namespace huira {
         std::vector<LightInstance<TSpectral>> lights_;
 
         std::vector<UnresolvedInstance<TSpectral>> unresolved_objects_;
+
+        friend class Renderer<TSpectral>;
     };
 }
 

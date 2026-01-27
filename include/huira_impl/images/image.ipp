@@ -82,6 +82,25 @@ namespace huira {
         return data_[to_linear(x, y)];
     }
 
+    // Unchecked Pixel access
+    template<IsImagePixel PixelT>
+    PixelT& Image<PixelT>::operator()(const Pixel& pixel) {
+        // TODO Do proper rounding/conversion
+        auto x = static_cast<int>(pixel.x);
+        auto y = static_cast<int>(pixel.y);
+        assert(x < width_ && y < height_);
+        return data_[to_linear(x, y)];
+    }
+
+    template<IsImagePixel PixelT>
+    const PixelT& Image<PixelT>::operator()(const Pixel& pixel) const {
+        // TODO Do proper rounding/conversion
+        auto x = static_cast<int>(pixel.x);
+        auto y = static_cast<int>(pixel.y);
+        assert(x < width_ && y < height_);
+        return data_[to_linear(x, y)];
+    }
+
     // Checked linear access
     template<IsImagePixel PixelT>
     PixelT& Image<PixelT>::at(std::size_t index) {
@@ -119,6 +138,7 @@ namespace huira {
     // Checked Pixel access
     template<IsImagePixel PixelT>
     PixelT& Image<PixelT>::at(const Pixel& pixel) {
+        // TODO Do proper rounding/conversion
         auto x = static_cast<int>(pixel.x);
         auto y = static_cast<int>(pixel.y);
         if (x >= width_ || y >= height_) {
@@ -129,6 +149,7 @@ namespace huira {
 
     template<IsImagePixel PixelT>
     const PixelT& Image<PixelT>::at(const Pixel& pixel) const {
+        // TODO Do proper rounding/conversion
         auto x = static_cast<int>(pixel.x);
         auto y = static_cast<int>(pixel.y);
         if (x >= width_ || y >= height_) {

@@ -13,10 +13,10 @@ namespace huira {
 
 
     template <IsSpectral TSpectral>
-    class InstanceHandle : public Handle<Instance<TSpectral>> {
+    class InstanceHandle : public NodeHandle<TSpectral, Instance<TSpectral>> {
     public:
         InstanceHandle() = delete;
-        using Handle<Instance<TSpectral>>::Handle;
+        using NodeHandle<TSpectral, Instance<TSpectral>>::NodeHandle;
 
         friend class FrameHandle<TSpectral>;
         friend class SceneView<TSpectral>;

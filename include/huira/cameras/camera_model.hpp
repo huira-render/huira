@@ -32,6 +32,10 @@ namespace huira {
         template <IsDistortion TDistortion, typename... Args>
         void set_distortion(Args&&... args);
 
+
+        Pixel project_point(const Vec3<float>& point_camera_coords) const;
+
+
         int res_x() const { return sensor_->res_x(); }
         int res_y() const { return sensor_->res_y(); }
 
@@ -40,7 +44,7 @@ namespace huira {
         FrameBuffer<TSpectral> make_frame_buffer() const { return FrameBuffer<TSpectral>(res_x(), res_y()); }
 
     protected:
-        double focal_length_ = 50.;
+        double focal_length_ = 50e-3;
 
         std::unique_ptr<SensorModel<TSpectral>> sensor_;
         std::unique_ptr<Distortion<TSpectral>> distortion_ = nullptr;
