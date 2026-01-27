@@ -71,7 +71,7 @@ namespace huira {
         ~Logger();
 
         // Centralized crash report output
-        static void output_crash_report(const std::string& log_path, const char* crash_type = "CRASH DETECTED");
+        static void output_crash_report(const std::string& log_path);
         
         static void handle_crash(int signal);
         [[noreturn]] static void handle_terminate();
@@ -89,6 +89,9 @@ namespace huira {
         std::atomic<bool> console_info_;
         std::atomic<bool> console_warning_;
         CustomSink custom_sink_;
+
+        // Ensures only one crash report is printed per process
+        static std::atomic<bool> crash_reported_;
     };
 
     // Convenience functions
