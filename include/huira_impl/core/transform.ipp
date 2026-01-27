@@ -44,27 +44,20 @@ namespace huira {
     {
         Transform<T> result;
 
-        // Inverse scale: 1 / scale for each component
-        result.scale = Vec3<T>(T(1) / scale.x, T(1) / scale.y, T(1) / scale.z);
-
         // Inverse rotation
-        result.rotation = rotation.inverse();
+        result.rotation = rotation.inverse();  // conjugate for unit quaternion
 
-        // Inverse position: rotate and scale the negated position
-        Vec3<T> scaled_position{
-            position.x / scale.x,
-            position.y / scale.y,
-            position.z / scale.z
-        };
-        result.position = result.rotation * -scaled_position;
+        // Inverse scale (assuming no zero components!)
+        result.scale = Vec3<T>{ T(1) / scale.x, T(1) / scale.y, T(1) / scale.z };
 
-        // Inverse velocity: transform back and account for rotating frame
-        // v_inv = R^-1 * (v_frame - w x p)
-        Vec3<T> vel_contribution = cross(angular_velocity, position);
-        result.velocity = result.rotation * (velocity - vel_contribution);
+        // Inverse position: undo the rotation and scale
+        result.position = result.rotation * (-position * result.scale);
 
-        // Inverse angular velocity: just rotate back
-        result.angular_velocity = result.rotation * -angular_velocity;
+        // Inverse velocity (in the new frame)
+        result.velocity = result.rotation * (-velocity * result.scale);
+
+        // Inverse angular velocity
+        result.angular_velocity = result.rotation * (-angular_velocity);
 
         return result;
     }
@@ -74,27 +67,23 @@ namespace huira {
     {
         Transform<T> result;
 
-        // Combine scales (component-wise multiplication)
-        result.scale = Vec3<T>(scale.x * b.scale.x, scale.y * b.scale.y, scale.z * b.scale.z);
+        // Position: rotate and scale b's position by this transform, then add this position
+        result.position = position + rotation * (scale * b.position);
 
-        // Combine rotations (quaternion multiplication)
-        result.rotation = b.rotation * rotation;
+        // Rotation: compose rotations
+        result.rotation = rotation * b.rotation;
 
-        // Combine positions
-        Vec3<T> scaled_position{
-            position.x * b.scale.x,
-            position.y * b.scale.y,
-            position.z * b.scale.z
-        };
-        result.position = (b.rotation * scaled_position) + b.position;
+        // Scale: component-wise multiply
+        result.scale = scale * b.scale;
 
-        // Combine velocities: v_result = v_b + w_b x p_transformed + R_b * v_a
-        Vec3<T> transformed_pos = b.rotation * scaled_position;
-        Vec3<T> vel_from_rotation = cross(b.angular_velocity, transformed_pos);
-        result.velocity = b.velocity + vel_from_rotation + (b.rotation * velocity);
+        // Velocity: this is trickier - b's velocity needs to be transformed
+        // and we need to account for angular velocity contribution
+        result.velocity = velocity
+            + rotation * (scale * b.velocity)
+            + glm::cross(angular_velocity, rotation * (scale * b.position));
 
-        // Combine angular velocities: w_result = w_b + R_b * w_a
-        result.angular_velocity = b.angular_velocity + (b.rotation * angular_velocity);
+        // Angular velocity: rotate b's angular velocity and add
+        result.angular_velocity = angular_velocity + rotation * (b.angular_velocity);
 
         return result;
     }
