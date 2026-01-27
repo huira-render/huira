@@ -1,8 +1,24 @@
+#include <tuple>
+
 #include "huira/detail/concepts/spectral_concepts.hpp"
 #include "huira/core/scene_view.hpp"
 #include "huira/render/frame_buffer.hpp"
 
 namespace huira {
+
+    static std::tuple<float, float, float> barycentric_coordinates(
+        const Pixel& v0,
+        const Pixel& v1,
+        const Pixel& v2,
+        const Pixel& p)
+    {
+        float denom = (v1.y - v2.y) * (v0.x - v2.x) + (v2.x - v1.x) * (v0.y - v2.y);
+        float u = ((v1.y - v2.y) * (p.x - v2.x) + (v2.x - v1.x) * (p.y - v2.y)) / denom;
+        float v = ((v2.y - v0.y) * (p.x - v2.x) + (v0.x - v2.x) * (p.y - v2.y)) / denom;
+        float w = 1.0f - u - v;
+        return { u, v, w };
+    }
+
     template <IsSpectral TSpectral>
     void RasterRenderer<TSpectral>::render(
         SceneView<TSpectral>& scene_view,
@@ -19,6 +35,16 @@ namespace huira {
 
         // Buffer we'll be writing to:
         Image<float>& depth_buffer = frame_buffer.depth();
+        depth_buffer.fill(std::numeric_limits<float>::infinity());
+
+        if (frame_buffer.has_mesh_ids()) {
+            frame_buffer.mesh_ids().fill(0);
+        }
+
+        if (frame_buffer.has_camera_normals()) {
+            frame_buffer.camera_normals().fill(Vec3<float>{ 0.f, 0.f, 0.f });
+        }
+
 
         // Loop over all instances:
         for (auto& batch : meshes) {
@@ -27,79 +53,76 @@ namespace huira {
             auto indices = mesh->index_buffer();
 
             for (const Transform<float>& instance_tf : batch.instances) {
+                // Loop over triangles (from index buffer):
+                for (size_t i = 0; i + 2 < indices.size(); i += 3) {
+                    auto idx0 = indices[i];
+                    auto idx1 = indices[i + 1];
+                    auto idx2 = indices[i + 2];
+                
+                    auto v0 = instance_tf.apply_to_point(vertices[idx0].position);
+                    auto v1 = instance_tf.apply_to_point(vertices[idx1].position);
+                    auto v2 = instance_tf.apply_to_point(vertices[idx2].position);
 
+                    auto n0 = glm::normalize(instance_tf.apply_to_direction(vertices[idx0].normal));
+                    auto n1 = glm::normalize(instance_tf.apply_to_direction(vertices[idx1].normal));
+                    auto n2 = glm::normalize(instance_tf.apply_to_direction(vertices[idx2].normal));
 
-                for (auto& vertex : vertices) {
-                    auto v = instance_tf.apply_to_point(vertex.position);
+                    // Triangle (v0, v1, v2) can be processed here
+                    Pixel v0_p = camera->project_point(v0);
+                    Pixel v1_p = camera->project_point(v1);
+                    Pixel v2_p = camera->project_point(v2);
+                
+                    // Compute bounding box in pixel coordinates
+                    int min_x = static_cast<int>(std::floor(std::min(std::min(v0_p.x, v1_p.x), v2_p.x)));
+                    int max_x = static_cast<int>(std::ceil(std::max(std::max(v0_p.x, v1_p.x), v2_p.x)));
+                    int min_y = static_cast<int>(std::floor(std::min(std::min(v0_p.y, v1_p.y), v2_p.y)));
+                    int max_y = static_cast<int>(std::ceil(std::max(std::max(v0_p.y, v1_p.y), v2_p.y)));
 
-                    //Pixel v_p{ 17*v.x + 0.5f * res_x, 17*v.y + 0.5f * res_y };
-                    //depth_buffer(v_p) = 0.f;
+                    // Clamp to image dimensions:
+                    min_x = std::max(min_x, 0);
+                    max_x = std::min(max_x, static_cast<int>(res_x) - 1);
+                    min_y = std::max(min_y, 0);
+                    max_y = std::min(max_y, static_cast<int>(res_y) - 1);
 
-                    auto v_p = camera->project_point(v);
-                    if (std::isnan(v_p.x) || std::isnan(v_p.y)) {
-                        // Vertex is behind the camera; skip
-                        continue;
+                    // Rasterize the triangle within the bounding box
+                    for (int y = min_y; y <= max_y; ++y) {
+                        for (int x = min_x; x <= max_x; ++x) {
+                            Pixel p{ static_cast<float>(x) + 0.5f, static_cast<float>(y) + 0.5f };
+                            auto [u, v, w] = barycentric_coordinates(v0_p, v1_p, v2_p, p);
+                            if (u >= 0 && v >= 0 && w >= 0) {
+                                // Interpolate depth
+                                // Perspective-correct depth interpolation
+                                float z0 = v0.z;
+                                float z1 = v1.z;
+                                float z2 = v2.z;
+                                float denom = u / z0 + v / z1 + w / z2;
+                                float depth = 1.0f / denom;
+
+                                // Depth test
+                                if (depth < depth_buffer(x, y)) {
+                                    depth_buffer(x, y) = depth;
+
+                                    if (frame_buffer.has_mesh_ids()) {
+                                        frame_buffer.mesh_ids()(x, y) = mesh->id();
+                                    }
+
+                                    if (frame_buffer.has_camera_normals()) {
+                                        // Interpolate normals
+                                        Vec3<float> n_interp = glm::normalize(
+                                            (u * n0 / z0 + v * n1 / z1 + w * n2 / z2) * depth);
+                                        Vec3<float> n_display = n_interp;
+                                        n_display[0] = 0.5f * (n_display[0] + 1.0f);
+                                        n_display[1] = 0.5f * (n_display[1] + 1.0f);
+                                        n_display[2] = 0.5f * (n_display[2] + 1.0f);
+                                        frame_buffer.camera_normals()(x, y) = n_display;
+                                    }
+                                }
+                            }
+                        }
                     }
-
-                    if (v_p.x < 0 || v_p.x >= res_x || v_p.y < 0 || v_p.y >= res_y) {
-                        // Vertex is outside the image bounds; skip
-                        continue;
-                    }
-
-                    depth_buffer(v_p) = 0.f;
                 }
-                //// Loop over triangles (from index buffer):
-                //for (size_t i = 0; i + 2 < indices.size(); i += 3) {
-                //    auto idx0 = indices[i];
-                //    auto idx1 = indices[i + 1];
-                //    auto idx2 = indices[i + 2];
-                //
-                //    auto v0 = instance_tf.apply_to_point(vertices[idx0].position);
-                //    auto v1 = instance_tf.apply_to_point(vertices[idx1].position);
-                //    auto v2 = instance_tf.apply_to_point(vertices[idx2].position);
-                //
-                //    // Triangle (v0, v1, v2) can be processed here
-                //    Pixel v0_p = camera->project_point(v0);
-                //    Pixel v1_p = camera->project_point(v1);
-                //    Pixel v2_p = camera->project_point(v2);
-                //
-                //    //if (std::isnan(v0_p.x) || std::isnan(v0_p.y) ||
-                //    //    std::isnan(v1_p.x) || std::isnan(v1_p.y) ||
-                //    //    std::isnan(v2_p.x) || std::isnan(v2_p.y)) {
-                //    //    // One or more vertices are behind the camera; skip this triangle
-                //    //    continue;
-                //    //}
-                //    //
-                //    //if (v0_p.x < 0 || v0_p.x >= res_x || v0_p.y < 0 || v0_p.y >= res_y ||
-                //    //    v1_p.x < 0 || v1_p.x >= res_x || v1_p.y < 0 || v1_p.y >= res_y ||
-                //    //    v2_p.x < 0 || v2_p.x >= res_x || v2_p.y < 0 || v2_p.y >= res_y) {
-                //    //    // One or more vertices are outside the image bounds; skip this triangle
-                //    //    continue;
-                //    //}
-                //    //
-                //    //depth_buffer(v0_p) = 0.f;
-                //    //depth_buffer(v1_p) = 0.f;
-                //    //depth_buffer(v2_p) = 0.f;
-                //
-                //    v0_p.x = (v0_p.x + 0.5f) / res_x;
-                //    v0_p.y = (v0_p.y + 0.5f) / res_y;
-                //    v1_p.x = (v1_p.x + 0.5f) / res_x;
-                //    v1_p.y = (v1_p.y + 0.5f) / res_y;
-                //    v2_p.x = (v2_p.x + 0.5f) / res_x;
-                //    v2_p.y = (v2_p.y + 0.5f) / res_y;
-                //
-                //    if (v0_p.x < 0.f || v0_p.x >= 1.f || v0_p.y < 0.f || v0_p.y >= 1.f ||
-                //        v1_p.x < 0.f || v1_p.x >= 1.f || v1_p.y < 0.f || v1_p.y >= 1.f ||
-                //        v2_p.x < 0.f || v2_p.x >= 1.f || v2_p.y < 0.f || v2_p.y >= 1.f) {
-                //        // One or more vertices are outside the image bounds; skip this triangle
-                //        continue;
-                //    }
-                //
-                //    depth_buffer(v0_p) = 0.f;
-                //    depth_buffer(v1_p) = 0.f;
-                //    depth_buffer(v2_p) = 0.f;
-                //}
             }
         }
     }
 }
+
