@@ -66,6 +66,9 @@ struct ImagePixelTraits<SpectralBins<N, Args...>> {
         [[nodiscard]] PixelT& operator()(int x, int y);
         [[nodiscard]] const PixelT& operator()(int x, int y) const;
 
+        [[nodiscard]] PixelT& operator()(const Pixel& pixel);
+        [[nodiscard]] const PixelT& operator()(const Pixel& pixel) const;
+
         // Checked access (throws std::out_of_range)
         [[nodiscard]] PixelT& at(std::size_t index);
         [[nodiscard]] const PixelT& at(std::size_t index) const;

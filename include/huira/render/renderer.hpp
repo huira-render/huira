@@ -1,5 +1,8 @@
 #pragma once
 
+#include <vector>
+#include <memory>
+
 #include "huira/detail/concepts/spectral_concepts.hpp"
 #include "huira/core/scene_view.hpp"
 #include "huira/render/frame_buffer.hpp"
@@ -18,5 +21,8 @@ namespace huira {
             (void)scene_view;
             (void)frame_buffer;
         }
+
+        std::shared_ptr<CameraModel<TSpectral>> get_camera(SceneView<TSpectral>& scene_view) const { return scene_view.camera_model_; }
+        std::vector<MeshBatch<TSpectral>> get_meshes(SceneView<TSpectral>& scene_view) const { return scene_view.geometry_; }
     };
 }

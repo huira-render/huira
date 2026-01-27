@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <limits>
 
 #include "huira/images/image.hpp"
 
@@ -19,7 +20,7 @@ namespace huira {
 
         void enable_depth() {
             if (depth_.width() != width_ || depth_.height() != height_) {
-                depth_ = Image<float>(width_, height_);
+                depth_ = Image<float>(width_, height_, std::numeric_limits<float>::infinity());
             }
         }
         Image<float>& depth() { return depth_; }
@@ -35,7 +36,7 @@ namespace huira {
 
         void enable_sensor_response() {
             if (sensor_response_.width() != width_ || sensor_response_.height() != height_) {
-                sensor_response_ = Image<float>(width_, height_);
+                sensor_response_ = Image<float>(width_, height_, 0.f);
             }
         }
         Image<float>& sensor_response() { return sensor_response_; }
