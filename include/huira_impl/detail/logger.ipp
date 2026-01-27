@@ -52,6 +52,8 @@ namespace huira {
     }
 
     // ===== Logger Implementation =====
+    // Ensures only one crash report is printed per process
+    inline std::atomic<bool> Logger::crash_reported_{false};
 
     Logger::Logger()
         : buffer_(1000)
@@ -228,9 +230,9 @@ namespace huira {
 
     // ===== Crash Handler Implementation =====
 
-    void Logger::output_crash_report(const std::string& log_path, const char* crash_type) {
+    void Logger::output_crash_report(const std::string& log_path) {
         if (!log_path.empty()) {
-            std::cerr << detail::red("HUIRA " + std::string(crash_type)) << "\n";
+            std::cerr << detail::red("HUIRA UNCAUGHT EXCEPTION") << "\n";
             std::cerr << detail::yellow(" - Log file written to: " + std::filesystem::absolute(log_path).string()) << "\n";
             std::cerr << detail::yellow(" - If this was a SPICE ERROR, consider reviewing your SPICE configuration\n");
             std::cerr << detail::yellow(" - If you believe this is a bug with Huira, please report this issue:\n");
@@ -244,7 +246,14 @@ namespace huira {
         if (!logger.crash_handler_enabled_.load(std::memory_order_relaxed)) {
             return;
         }
-
+        // Only print crash report once
+        bool expected = false;
+        if (!Logger::crash_reported_.compare_exchange_strong(expected, true, std::memory_order_relaxed)) {
+            // Already reported
+            std::signal(signal, SIG_DFL);
+            std::raise(signal);
+            return;
+        }
         logger.log(LogLevel::Error, "Crash detected with signal: " + std::to_string(signal));
         std::string log_path = logger.dump_to_file();
         output_crash_report(log_path);
@@ -279,7 +288,11 @@ namespace huira {
         if (!logger.crash_handler_enabled_.load(std::memory_order_relaxed)) {
             std::abort();
         }
-
+        // Only print crash report once
+        bool expected = false;
+        if (!Logger::crash_reported_.compare_exchange_strong(expected, true, std::memory_order_relaxed)) {
+            std::abort();
+        }
         try {
             auto exception_ptr = std::current_exception();
             if (exception_ptr) {
@@ -296,10 +309,8 @@ namespace huira {
         } catch (...) {
             // Failed to log the exception
         }
-
         std::string log_path = logger.dump_to_file();
-        output_crash_report(log_path, "UNCAUGHT EXCEPTION");
-
+        output_crash_report(log_path);
         std::abort();
     }
 
