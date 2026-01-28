@@ -12,7 +12,7 @@ namespace huira {
         Vec3<float> normal_g; // Geometric Normal
         Vec3<float> normal_s; // Shading Normal
 
-        Vec2<float> uv;       // Barycentric Coordinates (u,v)
+        Vec3<float> uvw;       // Barycentric Coordinates (u,v,w)
 
         Vec3<float> wo;       // Vector towards camera ("out")
     };

@@ -6,7 +6,7 @@
 
 namespace huira {
 
-    static std::tuple<float, float, float> barycentric_coordinates(
+    static Vec3<float> barycentric_coordinates(
         const Pixel& v0,
         const Pixel& v1,
         const Pixel& v2,
@@ -16,7 +16,7 @@ namespace huira {
         float u = ((v1.y - v2.y) * (p.x - v2.x) + (v2.x - v1.x) * (p.y - v2.y)) / denom;
         float v = ((v2.y - v0.y) * (p.x - v2.x) + (v0.x - v2.x) * (p.y - v2.y)) / denom;
         float w = 1.0f - u - v;
-        return { u, v, w };
+        return Vec3<float>{ u, v, w };
     }
 
     template <IsSpectral TSpectral>
@@ -26,13 +26,18 @@ namespace huira {
     {
         // Extract the camera:
         auto camera = this->get_camera(scene_view);
+        float res_x = static_cast<float>(camera->res_x());
+        float res_y = static_cast<float>(camera->res_y());
+
 
         // Extract meshes and their instances from the scene view
         auto meshes = this->get_meshes(scene_view);
 
-        float res_x = static_cast<float>(camera->res_x());
-        float res_y = static_cast<float>(camera->res_y());
 
+        // Extract the lights:
+        auto lights = this->get_lights(scene_view);
+
+        
         // Reset any existing data in the frame buffer:
         frame_buffer.clear();
 
@@ -79,10 +84,14 @@ namespace huira {
                     max_y = std::min(max_y, static_cast<int>(res_y) - 1);
 
                     // Rasterize the triangle within the bounding box
+                    Interaction<TSpectral> interaction;
                     for (int y = min_y; y <= max_y; ++y) {
                         for (int x = min_x; x <= max_x; ++x) {
                             Pixel p{ static_cast<float>(x) + 0.5f, static_cast<float>(y) + 0.5f };
-                            auto [u, v, w] = barycentric_coordinates(v0_p, v1_p, v2_p, p);
+                            interaction.uvw = barycentric_coordinates(v0_p, v1_p, v2_p, p);
+                            float u = interaction.uvw[0];
+                            float v = interaction.uvw[1];
+                            float w = interaction.uvw[2];
                             if (u >= 0 && v >= 0 && w >= 0) {
                                 // Interpolate depth
                                 // Perspective-correct depth interpolation
@@ -96,15 +105,40 @@ namespace huira {
                                 if (depth < depth_buffer(x, y)) {
                                     depth_buffer(x, y) = depth;
 
+                                    interaction.position = depth * (
+                                        u * v0 / z0 +
+                                        v * v1 / z1 +
+                                        w * v2 / z2);
+
+                                    interaction.normal_s = glm::normalize(
+                                        u * n0 / z0 +
+                                        v * n1 / z1 +
+                                        w * n2 / z2);
+
+                                    if (frame_buffer.has_received_power()) {
+                                        TSpectral fragment_radiance{ 0 };
+                                        for (auto& light_instance : lights) {
+                                            auto& light = light_instance.light;
+                                            auto& light_transform = light_instance.transform;
+
+                                            auto sample = light->sample_li(interaction, light_transform, this->sampler_);
+
+                                            // Apply lambertian:
+                                            if (sample) {
+                                                const auto& s = *sample;
+                                                fragment_radiance += s.Li * std::max(0.0f, glm::dot(interaction.normal_s, s.wi));
+                                            }
+                                        }
+                                        frame_buffer.received_power()(x, y) = fragment_radiance;
+                                    }
+
                                     if (frame_buffer.has_mesh_ids()) {
                                         frame_buffer.mesh_ids()(x, y) = mesh->id();
                                     }
 
                                     if (frame_buffer.has_camera_normals()) {
                                         // Interpolate normals
-                                        Vec3<float> n_interp = glm::normalize(
-                                            (u * n0 / z0 + v * n1 / z1 + w * n2 / z2) * depth);
-                                        Vec3<float> n_display = n_interp;
+                                        Vec3<float> n_display = interaction.normal_s;
                                         n_display[0] = 0.5f * (n_display[0] + 1.0f);
                                         n_display[1] = 0.5f * (n_display[1] + 1.0f);
                                         n_display[2] = 0.5f * (n_display[2] + 1.0f);
