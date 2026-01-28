@@ -2,6 +2,10 @@
 #include <iostream>
 #include <tuple>
 
+#include <assimp/Importer.hpp>
+#include <assimp/scene.h>
+#include <assimp/postprocess.h>
+
 #include "huira/core/types.hpp"
 #include "huira/core/rotation.hpp"
 #include "huira/detail/logger.hpp"
@@ -298,6 +302,7 @@ namespace huira {
             col0.y, col1.y, col2.y,
             col0.z, col1.z, col2.z
         };
+        matrix = glm::transpose(matrix); // Convert from row-major to column-major
         transform.rotation = Rotation<double>(matrix);
 
         return transform;
