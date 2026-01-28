@@ -14,22 +14,5 @@ namespace huira {
     std::pair<Image<T>, Image<float>> read_image_tiff(const fs::path& filepath)
     {
         HUIRA_THROW_ERROR("TIFF reading not yet implemented: " + filepath.string());
-
-        //bool has_alpha = false;
-        //std::size_t width = 0;
-        //std::size_t height = 0;
-        //
-        //// Create output images
-        //Image<T> image(static_cast<std::size_t>(width),
-        //    static_cast<std::size_t>(height));
-        //Image<float> alpha_image(0, 0);
-        //
-        //if (has_alpha) {
-        //    alpha_image = Image<float>(static_cast<std::size_t>(width),
-        //        static_cast<std::size_t>(height),
-        //        1.0f);
-        //}
-        //
-        //return { std::move(image), std::move(alpha_image) };
     }
 }
