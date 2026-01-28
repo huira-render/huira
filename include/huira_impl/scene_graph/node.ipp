@@ -227,7 +227,7 @@ namespace huira {
                     " - cannot compute SSB transform: node has MANUAL position but no parent");
             }
             Transform<double> parent_ssb = parent_->get_ssb_transform_(t_obs, dt);
-            Transform<double> local = this->get_local_transform_at_(t_obs, dt);
+            Transform<double> local = this->get_local_position_at_(t_obs, dt);
             ssb_state = parent_ssb * local;
         }
 
@@ -239,29 +239,23 @@ namespace huira {
         else {
             // Recurse for non-spice rotation:
             Transform<double> parent_ssb_rot;
-            if (position_mode_ == TransformMode::MANUAL_TRANSFORM) {
-                parent_ssb_rot = ssb_state;
+            if (!parent_) {
+                // This should never happen
+                HUIRA_THROW_ERROR(this->get_info() +
+                    " - cannot compute SSB transform: node has MANUAL rotation but no parent");
             }
-            else {
-                // Position was SPICE, but Rotation is relative to parent.
-                if (!parent_) {
-                    // This should never happen
-                    HUIRA_THROW_ERROR(this->get_info() +
-                        " - cannot compute SSB transform: node has MANUAL rotation but no parent");
-                }
-                parent_ssb_rot = parent_->get_ssb_transform_(t_obs, dt);
+            parent_ssb_rot = parent_->get_ssb_transform_(t_obs, dt);
 
-                Transform<double> local = this->get_local_transform_at_(t_obs, dt);
-                ssb_state.rotation = parent_ssb_rot.rotation * local.rotation;
-                ssb_state.angular_velocity = parent_ssb_rot.angular_velocity + (parent_ssb_rot.rotation * local.angular_velocity);
-            }
+            Transform<double> local = this->get_local_rotation_at_(t_obs, dt);
+            ssb_state.rotation = parent_ssb_rot.rotation * local.rotation;
+            ssb_state.angular_velocity = parent_ssb_rot.angular_velocity + (parent_ssb_rot.rotation * local.angular_velocity);
         }
 
         return ssb_state;
     }
 
     template <IsSpectral TSpectral>
-    Transform<double> Node<TSpectral>::get_local_transform_at_(const Time& t_obs, double dt) const
+    Transform<double> Node<TSpectral>::get_local_position_at_(const Time& t_obs, double dt) const
     {
         (void)t_obs; // Not used for manual.  Would be used for custom ball back functions.
         Transform<double> local_transform_at_time{};
@@ -270,16 +264,28 @@ namespace huira {
             local_transform_at_time.velocity = local_transform_.velocity;
         }
         else {
-            HUIRA_THROW_ERROR("get_local_transform_at_ - Unknown position_mode_ TransformMode");
+            HUIRA_THROW_ERROR("get_local_position_at_ - Unknown position_mode_ TransformMode");
         }
+        return local_transform_at_time;
+    }
 
+    template <IsSpectral TSpectral>
+    Transform<double> Node<TSpectral>::get_local_rotation_at_(const Time& t_obs, double dt) const
+    {
+        (void)t_obs; // Not used for manual.  Would be used for custom ball back functions.
+        Transform<double> local_transform_at_time{};
         if (rotation_mode_ == TransformMode::MANUAL_TRANSFORM) {
-            // TODO Compute rotation at time t_obs - dt given angular velocity
-            local_transform_at_time.rotation = local_transform_.rotation;
+            // Approximate rotation by treat angular_velocity * dt as euler angles
+            Vec3<double> euler_angles = local_transform_.angular_velocity * dt;
+            Rotation<double> delta_rotation = Rotation<double>(
+                units::Radian{ euler_angles[0] },
+                units::Radian{ euler_angles[1] },
+                units::Radian{ euler_angles[2] });
+            local_transform_at_time.rotation = delta_rotation * local_transform_.rotation;
             local_transform_at_time.angular_velocity = local_transform_.angular_velocity;
         }
         else {
-            HUIRA_THROW_ERROR("get_local_transform_at_ - Unknown rotation_mode_ TransformMode");
+            HUIRA_THROW_ERROR("get_local_rotation_at_ - Unknown rotation_mode_ TransformMode");
         }
         return local_transform_at_time;
     }

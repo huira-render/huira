@@ -41,8 +41,6 @@ namespace huira::spice {
         if (long_msg[0] != '\0') {
             error += ": " + std::string(long_msg);
         }
-        std::cerr << "SPICE ERROR: ";
-        std::cerr << error << std::endl;
         HUIRA_THROW_ERROR(error);
     }
 

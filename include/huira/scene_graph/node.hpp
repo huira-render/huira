@@ -126,7 +126,8 @@ namespace huira {
         std::pair<Transform<double>, double> get_geometric_state_(const Time& t_obs, const Transform<double>& observer_ssb_state, bool iterate, double tol = 1e-12) const;
 
         Transform<double> get_ssb_transform_(const Time& t_obs, double dt = 0.0) const;
-        Transform<double> get_local_transform_at_(const Time& t_obs, double dt) const;
+        Transform<double> get_local_position_at_(const Time& t_obs, double dt) const;
+        Transform<double> get_local_rotation_at_(const Time& t_obs, double dt) const;
 
         friend class Scene<TSpectral>;
         friend class FrameNode<TSpectral>;

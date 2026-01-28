@@ -33,18 +33,12 @@ namespace huira {
         float res_x = static_cast<float>(camera->res_x());
         float res_y = static_cast<float>(camera->res_y());
 
-        // Buffer we'll be writing to:
+        // Reset any existing data in the frame buffer:
+        frame_buffer.clear();
+
+        // Make sure depth buffer is enabled:
+        frame_buffer.enable_depth();
         Image<float>& depth_buffer = frame_buffer.depth();
-        depth_buffer.fill(std::numeric_limits<float>::infinity());
-
-        if (frame_buffer.has_mesh_ids()) {
-            frame_buffer.mesh_ids().fill(0);
-        }
-
-        if (frame_buffer.has_camera_normals()) {
-            frame_buffer.camera_normals().fill(Vec3<float>{ 0.f, 0.f, 0.f });
-        }
-
 
         // Loop over all instances:
         for (auto& batch : meshes) {
