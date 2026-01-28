@@ -46,4 +46,5 @@ install(FILES
         "${CMAKE_BINARY_DIR}/huiraConfig.cmake"
         "${CMAKE_BINARY_DIR}/huiraConfigVersion.cmake"
         "${CMAKE_SOURCE_DIR}/cmake/find/huiraFindCSPICE.cmake"
+        "${CMAKE_SOURCE_DIR}/cmake/find/huiraFindSphinx.cmake"
         DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/huira)

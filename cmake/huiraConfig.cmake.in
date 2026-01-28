@@ -16,5 +16,10 @@ huira_find_cspice()
 
 find_package(assimp CONFIG REQUIRED)
 
+find_package(JPEG REQUIRED)
+find_package(PNG REQUIRED)
+
+find_package(TBB CONFIG REQUIRED)
+
 include("${CMAKE_CURRENT_LIST_DIR}/huiraTargets.cmake")
 check_required_components(huira)
