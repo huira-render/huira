@@ -17,11 +17,7 @@ namespace huira {
         virtual void render(SceneView<TSpectral>& scene_view, FrameBuffer<TSpectral>& frame_buffer) = 0;
 
     protected:
-        virtual void render_unresolved_(SceneView<TSpectral>& scene_view, FrameBuffer<TSpectral>& frame_buffer)
-        {
-            (void)scene_view;
-            (void)frame_buffer;
-        }
+        virtual void render_unresolved_(SceneView<TSpectral>& scene_view, FrameBuffer<TSpectral>& frame_buffer);
 
         std::shared_ptr<CameraModel<TSpectral>> get_camera(SceneView<TSpectral>& scene_view) const { return scene_view.camera_model_; }
         std::vector<MeshBatch<TSpectral>> get_meshes(SceneView<TSpectral>& scene_view) const { return scene_view.geometry_; }
@@ -30,3 +26,5 @@ namespace huira {
         RandomSampler<float> sampler_;
     };
 }
+
+#include "huira_impl/render/renderer.ipp"

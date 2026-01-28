@@ -36,10 +36,14 @@ find_package(assimp CONFIG REQUIRED)
 find_package(JPEG REQUIRED)
 find_package(PNG REQUIRED)
 
+find_package(TBB CONFIG REQUIRED)
+
 target_link_libraries(huira INTERFACE
     glm::glm
     cspice
     assimp::assimp
     JPEG::JPEG
     PNG::PNG
+    TBB::tbb
+    TBB::tbbmalloc
 )
