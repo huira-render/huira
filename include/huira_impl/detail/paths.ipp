@@ -54,4 +54,14 @@ namespace huira {
         data_dir_override_.reset();
     }
 
+
+    inline void make_path(fs::path path)
+    {
+        if (!path.empty()) {
+            path.remove_filename();
+            if (!path.empty()) {
+                std::filesystem::create_directories(path);
+            }
+        }
+    };
 }

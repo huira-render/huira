@@ -13,6 +13,7 @@
 #include "huira/detail/concepts/numeric_concepts.hpp"
 #include "huira/detail/concepts/pixel_concepts.hpp"
 #include "huira/detail/logger.hpp"
+#include "huira/detail/paths.hpp"
 #include "huira/images/image.hpp"
 #include "huira/images/io/convert_pixel.hpp"
 #include "huira/images/io/color_space.hpp"
@@ -314,7 +315,7 @@ namespace huira {
     {
         HUIRA_LOG_INFO("write_image_png - Writing to: " + filepath.string());
         if (image.width() == 0 || image.height() == 0) {
-            HUIRA_THROW_ERROR("write_image_png - Cannot write empty image to PNG: " + filepath.string());
+            HUIRA_THROW_ERROR("write_image_png - Cannot write empty image: " + filepath.string());
         }
 
         bool has_alpha = (alpha.width() != 0 && alpha.height() != 0);
@@ -330,6 +331,8 @@ namespace huira {
         if (bit_depth != 8 && bit_depth != 16) {
             HUIRA_THROW_ERROR("write_image_png - bit_depth must be 8 or 16, got: " + std::to_string(bit_depth));
         }
+
+        make_path(filepath);
 
         // Determine if source pixel type is grayscale or RGB
         constexpr bool is_gray = IsNumeric<T>;
