@@ -38,9 +38,13 @@ namespace huira {
         explicit constexpr SpectralBins(const float& value) { data_.fill(value); }
 
         constexpr SpectralBins(std::initializer_list<float> init) {
-            std::copy(init.begin(),
-                std::next(init.begin(), static_cast<std::ptrdiff_t>(std::min(init.size(), N))),
-                data_.begin());
+            if (init.size() == 1) {
+                data_.fill(*init.begin());
+            } else {
+                std::copy(init.begin(),
+                    std::next(init.begin(), static_cast<std::ptrdiff_t>(std::min(init.size(), N))),
+                    data_.begin());
+            }
         }
 
         template <typename... Args2>

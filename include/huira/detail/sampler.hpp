@@ -26,7 +26,7 @@ namespace huira {
 
     private:
         std::mt19937 rng;
-        std::uniform_real_distribution<TFloat> dist{ TFloat(0)(1) };
+        std::uniform_real_distribution<TFloat> dist{ TFloat(0), TFloat(1) };
     };
 
     template <IsFloatingPoint TFloat>
