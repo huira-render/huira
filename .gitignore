@@ -11,6 +11,8 @@ CMakeSettings.json
 
 staged_diff.txt
 
+.DS_Store
+
 #####################
 ### SPICE Ignores ###
 #####################
