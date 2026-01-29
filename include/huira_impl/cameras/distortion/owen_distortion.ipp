@@ -1,8 +1,8 @@
 #include <cmath>
 
 #include "huira/core/types.hpp"
-#include "huira/detail/concepts/numeric_concepts.hpp"
-#include "huira/detail/concepts/spectral_concepts.hpp"
+#include "huira/core/concepts/numeric_concepts.hpp"
+#include "huira/core/concepts/spectral_concepts.hpp"
 
 namespace huira {
 

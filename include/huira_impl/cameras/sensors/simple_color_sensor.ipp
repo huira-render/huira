@@ -1,5 +1,5 @@
-#include "huira/detail/concepts/spectral_concepts.hpp"
-#include "huira/detail/logger.hpp"
+#include "huira/core/concepts/spectral_concepts.hpp"
+#include "huira/util/logger.hpp"
 #include "huira/render/frame_buffer.hpp"
 #include "huira/images/image.hpp"
 

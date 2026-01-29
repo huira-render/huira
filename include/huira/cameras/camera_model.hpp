@@ -5,12 +5,12 @@
 #include <cstdint>
 
 #include "huira/core/types.hpp"
-#include "huira/detail/sampler.hpp"
-#include "huira/detail/concepts/numeric_concepts.hpp"
-#include "huira/detail/concepts/spectral_concepts.hpp"
+#include "huira/render/sampler.hpp"
+#include "huira/core/concepts/numeric_concepts.hpp"
+#include "huira/core/concepts/spectral_concepts.hpp"
 
 #include "huira/cameras/distortion/distortion.hpp"
-#include "huira/scene_graph/node.hpp"
+#include "huira/scene/node.hpp"
 #include "huira/render/frame_buffer.hpp"
 #include "huira/cameras/sensors/sensor_model.hpp"
 

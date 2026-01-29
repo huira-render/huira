@@ -3,7 +3,7 @@
 #include <filesystem>
 #include <utility>
 
-#include "huira/detail/concepts/pixel_concepts.hpp"
+#include "huira/core/concepts/pixel_concepts.hpp"
 #include "huira/images/image.hpp"
 
 namespace fs = std::filesystem;

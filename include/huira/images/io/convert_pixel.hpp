@@ -1,7 +1,7 @@
 #pragma once
 
-#include "huira/detail/concepts/numeric_concepts.hpp"
-#include "huira/detail/concepts/pixel_concepts.hpp"
+#include "huira/core/concepts/numeric_concepts.hpp"
+#include "huira/core/concepts/pixel_concepts.hpp"
 #include "huira/core/types.hpp"
 
 namespace huira {

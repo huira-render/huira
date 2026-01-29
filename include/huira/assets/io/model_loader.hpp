@@ -11,10 +11,10 @@
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
 
-#include "huira/detail/concepts/spectral_concepts.hpp"
+#include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/assets/model.hpp"
-#include "huira/scene_graph/frame_node.hpp"
-#include "huira/scene_graph/instance.hpp"
+#include "huira/scene/frame_node.hpp"
+#include "huira/scene/instance.hpp"
 #include "huira/assets/mesh.hpp"
 #include "huira/core/types.hpp"
 

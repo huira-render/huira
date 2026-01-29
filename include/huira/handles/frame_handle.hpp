@@ -1,7 +1,7 @@
 #pragma once
 
-#include "huira/detail/concepts/numeric_concepts.hpp"
-#include "huira/detail/concepts/spectral_concepts.hpp"
+#include "huira/core/concepts/numeric_concepts.hpp"
+#include "huira/core/concepts/spectral_concepts.hpp"
 
 #include "huira/handles/camera_handle.hpp"
 #include "huira/handles/node_handle.hpp"
@@ -9,7 +9,7 @@
 #include "huira/handles/unresolved_handle.hpp"
 #include "huira/handles/instance_handle.hpp"
 #include "huira/handles/mesh_handle.hpp"
-#include "huira/scene_graph/frame_node.hpp"
+#include "huira/scene/frame_node.hpp"
 
 namespace huira {
     template <IsSpectral TSpectral>

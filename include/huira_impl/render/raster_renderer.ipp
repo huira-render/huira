@@ -1,7 +1,7 @@
 #include <tuple>
 
-#include "huira/detail/concepts/spectral_concepts.hpp"
-#include "huira/core/scene_view.hpp"
+#include "huira/core/concepts/spectral_concepts.hpp"
+#include "huira/scene/scene_view.hpp"
 #include "huira/render/frame_buffer.hpp"
 
 namespace huira {

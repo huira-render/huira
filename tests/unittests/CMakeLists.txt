@@ -9,7 +9,7 @@ set(UNIT_TESTS
     huira/core/test_rotation.cpp
     huira/core/test_time.cpp
 
-    huira/units/test_units.cpp
+    huira/core/units/test_units.cpp
 )
 
 ##############################

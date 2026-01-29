@@ -4,7 +4,7 @@
 #include "pybind11/pybind11.h"
 #include "pybind11/stl.h"
 
-#include "pyhuira/units/units_py.ipp"
+#include "pyhuira/core/units/units_py.ipp"
 
 namespace py = pybind11;
 
