@@ -1,0 +1,7 @@
+Ephemeris
+=========
+
+.. toctree::
+   :hidden:
+
+   spice

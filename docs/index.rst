@@ -6,25 +6,24 @@ Huira
 .. toctree::
     :hidden:
     :maxdepth: 2
-    :caption: Physics and Assumptions
+    :caption: Design Overview
 
-    physics_and_assumptions/index
-
-.. toctree::
-    :hidden:
-    :maxdepth: 2
-    :caption: For Users
-
-    for_users/api_reference/cpp_api/index
-    for_users/api_reference/python_api/index
+    design_overview/index
 
 .. toctree::
     :hidden:
     :maxdepth: 2
-    :caption: For Contributors
+    :caption: API Reference
 
-    for_contributors/build_instructions/index
-    for_contributors/implementation_details/index
+    api_reference/cpp_api/index
+    api_reference/python_api/index
+
+.. toctree::
+    :hidden:
+    :maxdepth: 2
+    :caption: Getting Started
+
+    getting_started/build_instructions/index
 
 * :ref:`genindex`
 * :ref:`modindex`
