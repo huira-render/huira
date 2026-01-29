@@ -1,4 +1,4 @@
-#include "huira/detail/concepts/spectral_concepts.hpp"
+#include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/render/frame_buffer.hpp"
 #include "huira/images/image.hpp"
 

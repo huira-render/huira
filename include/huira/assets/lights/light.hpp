@@ -7,9 +7,9 @@
 
 #include "huira/core/types.hpp"
 #include "huira/core/transform.hpp"
-#include "huira/core/interaction.hpp"
-#include "huira/detail/sampler.hpp"
-#include "huira/detail/concepts/spectral_concepts.hpp"
+#include "huira/render/interaction.hpp"
+#include "huira/render/sampler.hpp"
+#include "huira/core/concepts/spectral_concepts.hpp"
 
 namespace huira {
     enum class LightType {

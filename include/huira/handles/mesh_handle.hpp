@@ -4,7 +4,7 @@
 
 #include "huira/handles/handle.hpp"
 #include "huira/assets/mesh.hpp"
-#include "huira/detail/concepts/spectral_concepts.hpp"
+#include "huira/core/concepts/spectral_concepts.hpp"
 
 namespace huira {
     // Forward Declarations

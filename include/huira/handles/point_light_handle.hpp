@@ -1,7 +1,7 @@
 #pragma once
 
 #include "huira/assets/lights/point_light.hpp"
-#include "huira/detail/concepts/spectral_concepts.hpp"
+#include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/handles/handle.hpp"
 
 namespace huira {

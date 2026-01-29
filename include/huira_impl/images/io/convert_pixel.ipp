@@ -1,9 +1,9 @@
 #include <limits>
 
-#include "huira/detail/concepts/numeric_concepts.hpp"
-#include "huira/detail/concepts/spectral_concepts.hpp"
-#include "huira/detail/concepts/pixel_concepts.hpp"
-#include "huira/detail/logger.hpp"
+#include "huira/core/concepts/numeric_concepts.hpp"
+#include "huira/core/concepts/spectral_concepts.hpp"
+#include "huira/core/concepts/pixel_concepts.hpp"
+#include "huira/util/logger.hpp"
 #include "huira/core/types.hpp"
 
 namespace huira {

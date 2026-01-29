@@ -8,7 +8,7 @@
 
 #include "huira/core/types.hpp"
 #include "huira/core/rotation.hpp"
-#include "huira/detail/logger.hpp"
+#include "huira/util/logger.hpp"
 
 namespace huira {
     /**

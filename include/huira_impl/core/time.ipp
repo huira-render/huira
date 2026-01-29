@@ -1,4 +1,4 @@
-#include "huira/core/spice.hpp"
+#include "huira/ephemeris/spice.hpp"
 
 namespace huira {
 

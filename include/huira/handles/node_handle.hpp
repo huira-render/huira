@@ -1,9 +1,9 @@
 #pragma once
 
-#include "huira/detail/concepts/numeric_concepts.hpp"
-#include "huira/detail/concepts/spectral_concepts.hpp"
+#include "huira/core/concepts/numeric_concepts.hpp"
+#include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/handles/handle.hpp"
-#include "huira/scene_graph/node.hpp"
+#include "huira/scene/node.hpp"
 
 namespace huira {
     template <IsSpectral TSpectral, typename TNode>

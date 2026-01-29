@@ -1,6 +1,6 @@
 #pragma once
 
-#include "huira/detail/concepts/spectral_concepts.hpp"
+#include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/handles/node_handle.hpp"
 #include "huira/cameras/camera_model.hpp"
 

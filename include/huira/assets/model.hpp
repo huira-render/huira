@@ -6,8 +6,8 @@
 #include <vector>
 #include <cstdint>
 
-#include "huira/detail/concepts/spectral_concepts.hpp"
-#include "huira/scene_graph/frame_node.hpp"
+#include "huira/core/concepts/spectral_concepts.hpp"
+#include "huira/scene/frame_node.hpp"
 #include "huira/assets/mesh.hpp"
 
 namespace fs = std::filesystem;

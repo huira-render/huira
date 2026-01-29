@@ -1,43 +1,68 @@
+// assets/
+#include "huira/assets/io/model_loader.hpp"
+
 #include "huira/assets/lights/point_light.hpp"
+
 #include "huira/assets/mesh.hpp"
+#include "huira/assets/model.hpp"
 #include "huira/assets/unresolved_object.hpp"
 
-#include "huira/cameras/camera_model.hpp"
+// cameras/
 #include "huira/cameras/distortion/brown_distortion.hpp"
 #include "huira/cameras/distortion/opencv_distortion.hpp"
 #include "huira/cameras/distortion/owen_distortion.hpp"
 
-#include "huira/core/interaction.hpp"
-#include "huira/core/ray.hpp"
+#include "huira/cameras/sensors/sensor_model.hpp"
+#include "huira/cameras/sensors/simple_color_sensor.hpp"
+#include "huira/cameras/sensors//simple_sensor.hpp"
+
+#include "huira/cameras/camera_model.hpp"
+
+
+// core/
+#include "huira/core/units/units.hpp"
+
 #include "huira/core/rotation.hpp"
-#include "huira/core/scene.hpp"
-#include "huira/core/scene_view.hpp"
 #include "huira/core/spectral_bins.hpp"
-#include "huira/core/spice.hpp"
 #include "huira/core/time.hpp"
 #include "huira/core/transform.hpp"
 #include "huira/core/types.hpp"
-#include "huira/core/units.hpp"
 
+// ephemeris/
+#include "huira/ephemeris/spice.hpp"
+
+// handles/
 #include "huira/handles/camera_handle.hpp"
 #include "huira/handles/frame_handle.hpp"
 #include "huira/handles/handle.hpp"
 #include "huira/handles/instance_handle.hpp"
 #include "huira/handles/mesh_handle.hpp"
+#include "huira/handles/model_handle.hpp"
 #include "huira/handles/node_handle.hpp"
 #include "huira/handles/point_light_handle.hpp"
 #include "huira/handles/root_frame_handle.hpp"
 #include "huira/handles/unresolved_handle.hpp"
 
+// images/
 #include "huira/images/image.hpp"
 
+// render/
+#include "huira/render/frame_buffer.hpp"
+#include "huira/render/interaction.hpp"
 #include "huira/render/raster_renderer.hpp"
+#include "huira/render/ray.hpp"
+#include "huira/render/sampler.hpp"
 
-#include "huira/scene_graph/frame_node.hpp"
-#include "huira/scene_graph/instance.hpp"
-#include "huira/scene_graph/node.hpp"
+// scene/
+#include "huira/scene/frame_node.hpp"
+#include "huira/scene/instance.hpp"
+#include "huira/scene/node.hpp"
+#include "huira/scene/scene.hpp"
+#include "huira/scene/scene_view.hpp"
 
+// stars/
 #include "huira/stars/star.hpp"
+
 
 namespace huira {
     using TestSpectral = RGB;

@@ -3,8 +3,8 @@
 #include <string>
 #include <cstdint>
 
-#include "huira/detail/concepts/spectral_concepts.hpp"
-#include "huira/scene_graph/node.hpp"
+#include "huira/core/concepts/spectral_concepts.hpp"
+#include "huira/scene/node.hpp"
 
 namespace huira {
     template <IsSpectral TSpectral>

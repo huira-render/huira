@@ -4,9 +4,9 @@
 #include <string>
 
 #include "huira/core/types.hpp"
-#include "huira/core/units.hpp"
+#include "huira/core/units/units.hpp"
 
-#include "huira/detail/concepts/numeric_concepts.hpp"
+#include "huira/core/concepts/numeric_concepts.hpp"
 
 namespace huira {
 	/**

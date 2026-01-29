@@ -2,8 +2,8 @@
 
 #include <memory>
 
-#include "huira/detail/logger.hpp"
-#include "huira/detail/concepts/spectral_concepts.hpp"
+#include "huira/util/logger.hpp"
+#include "huira/core/concepts/spectral_concepts.hpp"
 
 namespace huira {
     template <typename T>

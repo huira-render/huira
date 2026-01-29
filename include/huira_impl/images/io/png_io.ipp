@@ -10,10 +10,10 @@
 
 #include <png.h>
 
-#include "huira/detail/concepts/numeric_concepts.hpp"
-#include "huira/detail/concepts/pixel_concepts.hpp"
-#include "huira/detail/logger.hpp"
-#include "huira/detail/paths.hpp"
+#include "huira/core/concepts/numeric_concepts.hpp"
+#include "huira/core/concepts/pixel_concepts.hpp"
+#include "huira/util/logger.hpp"
+#include "huira/util/paths.hpp"
 #include "huira/images/image.hpp"
 #include "huira/images/io/convert_pixel.hpp"
 #include "huira/images/io/color_space.hpp"
