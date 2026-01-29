@@ -8,4 +8,10 @@ namespace huira {
 
     template <IsFloatingPoint T>
     constexpr T SPEED_OF_LIGHT() { return static_cast<T>(299792458.0); }
+
+    template <IsFloatingPoint T>
+    constexpr T H_PLANCK() { return static_cast<T>(6.62607015e-34); }
+
+    template <IsFloatingPoint T>
+    constexpr T K_BOLTZ() { return static_cast<T>(1.380649e-23); }
 }

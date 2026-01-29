@@ -5,7 +5,8 @@ namespace huira {
         SceneView<TSpectral>& scene_view,
         FrameBuffer<TSpectral>& frame_buffer)
     {
-
+        (void)scene_view;
+        (void)frame_buffer;
     }
 
 }
