@@ -13,7 +13,7 @@
 #include "huira/cameras/distortion/owen_distortion.hpp"
 
 #include "huira/cameras/sensors/sensor_model.hpp"
-#include "huira/cameras/sensors/simple_color_sensor.hpp"
+#include "huira/cameras/sensors/simple_rgb_sensor.hpp"
 #include "huira/cameras/sensors//simple_sensor.hpp"
 
 #include "huira/cameras/camera_model.hpp"
@@ -76,6 +76,8 @@ namespace huira {
     template class BrownDistortion<TestSpectral>;
     template class OpenCVDistortion<TestSpectral>;
     template class OwenDistortion<TestSpectral>;
+    template class SimpleSensor<TestSpectral>;
+    template class SimpleRGBSensor<TestSpectral>;
     template class CameraModel<TestSpectral>;
 
     template class Ray<TestSpectral>;
