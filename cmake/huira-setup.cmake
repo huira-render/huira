@@ -28,8 +28,7 @@ if(NOT glm_FOUND)
     target_include_directories(glm::glm INTERFACE ${GLM_INCLUDE_DIR})
 endif()
 
-include(huiraFindCSPICE)
-huira_find_cspice()
+find_package(CSPICE REQUIRED)
 
 find_package(assimp CONFIG REQUIRED)
 
@@ -40,7 +39,7 @@ find_package(TBB CONFIG REQUIRED)
 
 target_link_libraries(huira INTERFACE
     glm::glm
-    cspice
+    CSPICE::cspice
     assimp::assimp
     JPEG::JPEG
     PNG::PNG

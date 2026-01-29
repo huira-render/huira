@@ -2,6 +2,9 @@
 
 include(CMakeFindDependencyMacro)
 
+# Add installed find modules to module path
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}")
+
 # Find GLM
 find_dependency(glm CONFIG QUIET)
 if(NOT glm_FOUND)
@@ -10,16 +13,14 @@ if(NOT glm_FOUND)
     target_include_directories(glm::glm INTERFACE ${GLM_INCLUDE_DIR})
 endif()
 
-# Include our CSPICE finder and call it
-include("${CMAKE_CURRENT_LIST_DIR}/huiraFindCSPICE.cmake")
-huira_find_cspice()
+find_dependency(CSPICE)
 
-find_package(assimp CONFIG REQUIRED)
+find_dependency(assimp CONFIG)
 
-find_package(JPEG REQUIRED)
-find_package(PNG REQUIRED)
+find_dependency(JPEG)
+find_dependency(PNG)
 
-find_package(TBB CONFIG REQUIRED)
+find_dependency(TBB CONFIG)
 
 include("${CMAKE_CURRENT_LIST_DIR}/huiraTargets.cmake")
 check_required_components(huira)
