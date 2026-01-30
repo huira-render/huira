@@ -6,6 +6,7 @@
     "assimp",
     "cfitsio",
     "cspice",
+    "curl",
     {
       "name": "embree3",
       "default-features": false,
@@ -49,6 +50,10 @@
       "version": "3.49#6"
     },
     {
+      "name": "curl",
+      "version": "8.18.0#1"
+    },
+    {
       "name": "cspice",
       "version": "67#3"
     },
@@ -79,7 +84,7 @@
     {
       "name": "tclap",
       "version": "1.2.5#0"
-    }
+    },
     {
       "name": "tiff",
       "version": "4.7.0"
