@@ -22,6 +22,7 @@ find_path(TCLAP_INCLUDE_DIRS
         ${TCLAP_ROOT}
         $ENV{TCLAP_ROOT}
         ${CMAKE_PREFIX_PATH}
+        ${CMAKE_SOURCE_DIR}/third_party/tclap
     PATH_SUFFIXES
         include
 )
