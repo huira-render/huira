@@ -9,11 +9,13 @@ add_executable(huira_cli
 
 find_package(TCLAP REQUIRED)
 find_package(CURL REQUIRED)
+find_package(indicators REQUIRED)
 
 target_link_libraries(huira_cli PRIVATE
     huira::huira
     TCLAP::TCLAP
     CURL::libcurl
+    indicators::indicators
 )
 
 target_compile_features(huira_cli PRIVATE cxx_std_20)

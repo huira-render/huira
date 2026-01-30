@@ -57,11 +57,18 @@ namespace huira {
 
     inline void make_path(fs::path path)
     {
-        if (!path.empty()) {
-            path.remove_filename();
-            if (!path.empty()) {
-                std::filesystem::create_directories(path);
+        if (path.empty()) {
+            return;
+        }
+        
+        if (path.has_extension()) {
+            // Looks like a file, create parent directory
+            if (path.has_parent_path()) {
+                fs::create_directories(path.parent_path());
             }
+        } else {
+            // No extension, treat as directory
+            fs::create_directories(path);
         }
     };
 }

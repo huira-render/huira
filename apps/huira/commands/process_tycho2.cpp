@@ -30,11 +30,6 @@ int process(const std::filesystem::path& input_dir, const Context& ctx) {
         }
     }
 
-    if (ctx.dry_run) {
-        std::cout << "Dry run: would process " << input_dir << "\n";
-        return 0;
-    }
-
     // TODO: actual conversion to Huira format
     std::cout << "Processing complete.\n";
     return 0;

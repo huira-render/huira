@@ -10,6 +10,19 @@ option(HUIRA_PYTHON "Build Python Bindings" OFF)
 option(HUIRA_LOCAL_DEV "Build Local Development Directory" OFF)
 option(HUIRA_APPS "Build huira command line applications" ON)
 
+# Build vcpkg manifest features list based on options
+if(DEFINED CMAKE_TOOLCHAIN_FILE AND CMAKE_TOOLCHAIN_FILE MATCHES "vcpkg")
+    set(VCPKG_MANIFEST_FEATURES "")
+    
+    if(HUIRA_TESTS)
+        list(APPEND VCPKG_MANIFEST_FEATURES "tests")
+    endif()
+    
+    if(HUIRA_APPS)
+        list(APPEND VCPKG_MANIFEST_FEATURES "apps")
+    endif()
+endif()
+
 # Load modules from cmake/ directory
 list(APPEND CMAKE_MODULE_PATH 
     "${CMAKE_CURRENT_SOURCE_DIR}/cmake"
