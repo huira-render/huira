@@ -16,33 +16,33 @@ requirements:
     - cmake
     - ninja
   host:
-    - assimp =5.4.3         # Asset Importer (3d models)
-    - catch2 =3.8.0         # Testing Framework
-    - cfitsio =4.6.2        # FITS I/O
-    - cspice =67            # NASA SPICE
-    - embree3 =3.13.5       # Ray tracing Acceleration
-    - fftw =3.3.10          # Fast Fourier Transform
-    - gdal =3.10.0          # Geospatial Abstraction Library
-    - glm =1.0.1            # Linear Algebra for Graphics
-    - indicators =2.3       # Progress bars
-    - libtiff =4.7.0        # TIFF I/O
-    - plog =1.1.10          # Logging
-    - tbb-devel =2021.12.0  # Intel TBB
-    - yaml-cpp =0.8.0       # YAML parser
+    - assimp=5.4.3         # Asset Importer (3d models)
+    - catch2=3.8.0         # Testing Framework
+    - cfitsio=4.6.2        # FITS I/O
+    - cspice=67            # NASA SPICE 
+    - embree3=3.13.5       # Ray tracing Acceleration
+    - fftw=3.3.10          # Fast Fourier Transform
+    - gdal=3.10.0          # Geospatial Abstraction Library
+    - glm=1.0.1            # Linear Algebra for Graphics
+    - indicators=2.3       # Progress bars
+    - libcurl=8.18.0.      # URL Transfer Library
+    - libtiff=4.7.0        # TIFF I/O
+    - libpng=1.6.54        # PNG I/O
+    - libjpeg-turbo=3.1.2  # JPEG I/O
+    - tbb-devel=2021.12.0  # Intel TBB
   run:
     # For a header-only library, users need dev packages to compile against huira
-    - assimp =5.4.3         # Asset Importer (3d models)
-    - cfitsio =4.6.2        # FITS I/O
-    - cspice =67            # NASA SPICE
-    - embree3 =3.13.5       # Ray tracing Acceleration
-    - fftw =3.3.10          # Fast Fourier Transform
-    - gdal =3.10.0          # Geospatial Abstraction Library
-    - glm =1.0.1            # Linear Algebra for Graphics
-    - indicators =2.3       # Progress bars
-    - libtiff =4.7.0        # TIFF I/O
-    - plog =1.1.10          # Logging
-    - tbb-devel =2021.12.0  # Intel TBB
-    - yaml-cpp =0.8.0       # YAML parser
+    - assimp=5.4.3         # Asset Importer (3d models)
+    - cfitsio=4.6.2        # FITS I/O
+    - cspice=67            # NASA SPICE 
+    - embree3=3.13.5       # Ray tracing Acceleration
+    - fftw=3.3.10          # Fast Fourier Transform
+    - gdal=3.10.0          # Geospatial Abstraction Library
+    - glm=1.0.1            # Linear Algebra for Graphics
+    - libtiff=4.7.0        # TIFF I/O
+    - libpng=1.6.54        # PNG I/O
+    - libjpeg-turbo=3.1.2  # JPEG I/O
+    - tbb-devel=2021.12.0  # Intel TBB
 
 test:
   commands:

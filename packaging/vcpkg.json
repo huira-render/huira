@@ -37,8 +37,7 @@
         "description": "Build huira applications",
         "dependencies": [
           "curl",
-          "indicators",
-          "tclap"
+          "indicators"
         ]
     }
   },
@@ -90,10 +89,6 @@
     {
       "name": "libpng",
       "version": "1.6.53#0"
-    },
-    {
-      "name": "tclap",
-      "version": "1.2.5#0"
     },
     {
       "name": "tiff",
