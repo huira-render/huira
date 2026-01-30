@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../cli.hpp"
+#include "huira_cli/cli.hpp"
 
 #include <filesystem>
 

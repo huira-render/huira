@@ -3,21 +3,11 @@
 #include <filesystem>
 #include <vector>
 
+#include "huira/stars/io/star_data.hpp"
+
 namespace fs = std::filesystem;
 
 namespace huira {
-
-    struct StarData {
-        double RA;
-        double DEC;
-
-        double pmRA;
-        double pmDE;
-
-        double temperature;
-        double solid_angle;
-        double visual_magnitude;
-    };
 
     std::vector<StarData> read_tycho2_dat(const fs::path& filepath);
 

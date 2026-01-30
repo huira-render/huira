@@ -6,7 +6,6 @@
 #include <limits>
 
 #include "huira/core/constants.hpp"
-#include "huira/core/physics.hpp"
 #include "huira/util/logger.hpp"
 
 namespace fs = std::filesystem;
@@ -50,39 +49,6 @@ namespace huira {
         return !line.empty() && std::isdigit(static_cast<unsigned char>(line[0]));
     }
 
-
-    static void process_star_(double BTmag, double VTmag, StarData& star)
-    {
-        bool has_bt = !std::isnan(BTmag);
-        bool has_vt = !std::isnan(VTmag);
-
-        double bv_color_index = 0.3;  // Default: assume white star
-
-        if (has_bt && has_vt) {
-            star.visual_magnitude = VTmag - 0.090 * (BTmag - VTmag);
-            bv_color_index = 0.850 * (BTmag - VTmag);
-        }
-        else {
-            star.visual_magnitude = has_vt ? VTmag : BTmag;
-        }
-
-        star.temperature = 4600.0 * (1.0 / (0.92 * bv_color_index + 1.7) + 1.0 / (0.92 * bv_color_index + 0.62));
-
-        // Perform spectrophotometric calibration:
-        double irradiance_ref = v_band_irradiance(star.visual_magnitude);
-
-        std::size_t N = 1000; // Number of bins to use
-        std::vector<double> lambda;
-        std::vector<double> v_band_efficiency = johnson_vband_approximation(N, lambda);
-        std::vector<double> radiance = plancks_law(star.temperature, lambda);
-        std::vector<double> photon_counts(N);
-        for (size_t i = 0; i < N; ++i) {
-            photon_counts[i] = v_band_efficiency[i] * radiance[i] / photon_energy(lambda[i]);
-        }
-        double radiance_from_temp = integrate(lambda, photon_counts);
-        star.solid_angle = irradiance_ref / radiance_from_temp;
-    }
-
     std::vector<StarData> read_tycho2_dat(const fs::path& filepath)
     {
         std::vector<StarData> star_data(count_lines_(filepath));
@@ -104,24 +70,18 @@ namespace huira {
                 star_data[i].RA = RA * PI<double>() / 180.;
                 star_data[i].DEC = DEC * PI<double>() / 180.;
 
-                star_data[i].pmRA = read_entry_(line, 41, 48);
-                star_data[i].pmDE = read_entry_(line, 49, 56);
-                if (std::isnan(star_data[i].pmRA) || std::isnan(star_data[i].pmDE)) {
-                    // Proper motion not available, set to zero
-                    star_data[i].pmRA = 0.0;
-                    star_data[i].pmDE = 0.0;
+                if (!std::isnan(star_data[i].pmRA) && !std::isnan(star_data[i].pmDEC)) {
+                    star_data[i].pmRA = read_entry_(line, 41, 48);
+                    star_data[i].pmDEC = read_entry_(line, 49, 56);
                 }
 
                 double BTmag = read_entry_(line, 110, 116);
                 double VTmag = read_entry_(line, 123, 129);
-
                 if (std::isnan(BTmag) && std::isnan(VTmag)) {
                     // Skip entry if no magnitude information is given:
                     continue;
                 }
-
-                // Compute the temperature, solid angle, and visual magnitude of the star:
-                process_star_(BTmag, VTmag, star_data[i]);
+                star_data[i].process_magnitude(BTmag, VTmag);
 
                 i++;
             }

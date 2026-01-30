@@ -18,6 +18,10 @@ target_link_libraries(huira_cli PRIVATE
     indicators::indicators
 )
 
+target_include_directories(huira_cli PRIVATE
+    ${CMAKE_SOURCE_DIR}/apps/
+)
+
 target_compile_features(huira_cli PRIVATE cxx_std_20)
 
 set_target_properties(huira_cli PROPERTIES
