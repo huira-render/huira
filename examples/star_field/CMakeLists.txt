@@ -1,0 +1,2 @@
+add_executable(star_field_example main.cpp)
+target_link_libraries(star_field_example PRIVATE huira)

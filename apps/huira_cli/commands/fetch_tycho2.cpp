@@ -9,6 +9,7 @@
 
 #include "huira_cli/cli.hpp"
 #include "huira_cli/progress_bar.hpp"
+#include "huira_cli/commands/tycho2.hpp"
 #include "huira/util/paths.hpp"
 
 namespace fs = std::filesystem;
@@ -68,7 +69,7 @@ namespace huira::cli::tycho2 {
         return true;
     }
 
-    int fetch(const fs::path& output_dir, const Context& ctx, bool force) {
+    int fetch_tycho2(const fs::path& output_dir, const Context& ctx, bool force, bool process, bool clean) {
         huira::make_path(output_dir);
 
         constexpr std::string_view base_url = 
@@ -88,7 +89,7 @@ namespace huira::cli::tycho2 {
         // Create progress bar for non-verbose mode
         std::unique_ptr<indicators::ProgressBar> bar;
         if (!ctx.verbose) {
-            bar = make_progress_bar("Tycho-2 Download", file_count);
+            bar = make_progress_bar("Tycho-2 Download ", file_count);
         }
 
         int failures = 0;
@@ -128,15 +129,29 @@ namespace huira::cli::tycho2 {
         if (ctx.verbose) {
             std::cout << "Downloaded to: " << output_dir << "\n";
         }
+
+        if (process) {
+            if (ctx.verbose) {
+                std::cout << "Processing downloaded files...\n";
+            }
+            return process_tycho2(output_dir, output_dir, ctx, clean);
+        }
+
         return 0;
     }
 
-    int run(const Context& ctx, int argc, char** argv) {
+    int run_fetch(const Context& ctx, int argc, char** argv) {
         try {
             TCLAP::CmdLine cmd("Download Tycho-2 catalog from CDS Strasbourg", ' ', "", false);
 
             TCLAP::SwitchArg force_arg("f", "force", 
                 "Overwrite existing files instead of skipping", cmd, false);
+
+            TCLAP::SwitchArg process_arg("p", "process",
+                "Automatically process the files once downloaded", cmd, false);
+
+            TCLAP::SwitchArg clean_arg("c", "clean",
+                "Remove downloaded .dat files after processing", cmd, false);
 
             TCLAP::UnlabeledValueArg<std::string> output_arg("output", 
                 "Output directory for downloaded files", true, "", "output_directory", cmd);
@@ -144,7 +159,7 @@ namespace huira::cli::tycho2 {
             cmd.parse(argc, argv);
 
             fs::path output_dir = fs::path(output_arg.getValue()) / "tycho2";
-            return fetch(output_dir, ctx, force_arg.getValue());
+            return fetch_tycho2(output_dir, ctx, force_arg.getValue(), process_arg.getValue(), clean_arg.getValue());
 
         } catch (TCLAP::ArgException& e) {
             std::cerr << "Error: " << e.error() << " for arg " << e.argId() << "\n";
@@ -156,7 +171,7 @@ namespace huira::cli::tycho2 {
         Registry::instance().add({
             "fetch-tycho2",
             "Download Tycho-2 catalog from CDS Strasbourg",
-            run
+            run_fetch
         });
         return true;
     }();
