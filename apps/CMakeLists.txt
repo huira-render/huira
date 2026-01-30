@@ -1,1 +1,1 @@
-add_subdirectory(huira)
+add_subdirectory(huira_cli)

@@ -7,8 +7,8 @@
 #include "curl/curl.h"
 #include "tclap/CmdLine.h"
 
-#include "../cli.hpp"
-#include "../progress_bar.hpp"
+#include "huira_cli/cli.hpp"
+#include "huira_cli/progress_bar.hpp"
 #include "huira/util/paths.hpp"
 
 namespace fs = std::filesystem;
@@ -16,11 +16,16 @@ namespace fs = std::filesystem;
 namespace huira::cli::tycho2 {
 
     // Callback for libcurl to write data to a file
-    size_t write_callback(void* ptr, size_t size, size_t nmemb, void* userdata) {
-        auto* out = static_cast<std::ofstream*>(userdata);
-        const size_t bytes = size * nmemb;
-        out->write(static_cast<const char*>(ptr), static_cast<std::streamsize>(bytes));
-        return out->good() ? bytes : 0;
+    size_t write_callback(void* ptr, size_t size, size_t nmemb, void* userdata) noexcept {
+        try {
+            auto* out = static_cast<std::ofstream*>(userdata);
+            const size_t bytes = size * nmemb;
+            out->write(static_cast<const char*>(ptr), static_cast<std::streamsize>(bytes));
+            return out->good() ? bytes : 0;
+        } catch (...) {
+            // Prevent exceptions from propagating to C code
+            return 0;
+        }
     }
 
     // Download a single file. Returns true on success.

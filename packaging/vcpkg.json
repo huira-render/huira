@@ -34,7 +34,7 @@
       ]
     },
     "apps":{
-        "decription": "Build huira applications",
+        "description": "Build huira applications",
         "dependencies": [
           "curl",
           "indicators",

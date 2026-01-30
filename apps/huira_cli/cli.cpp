@@ -1,4 +1,4 @@
-#include "cli.hpp"
+#include "huira_cli/cli.hpp"
 
 #include "tclap/CmdLine.h"
 
