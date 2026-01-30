@@ -10,7 +10,6 @@ namespace huira::cli {
 
     struct Context {
         bool verbose = false;
-        bool dry_run = false;
     };
 
     using CommandFn = std::function<int(const Context&, int argc, char** argv)>;

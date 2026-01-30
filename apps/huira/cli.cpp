@@ -29,6 +29,9 @@ namespace huira::cli {
 
             TCLAP::CmdLine cmd("huira - CLI tool", ' ', HUIRA_VERSION);
 
+            // Global options
+            TCLAP::SwitchArg verbose_arg("v", "verbose", "Enable verbose output", cmd, false);
+
             // Unlabeled argument for the subcommand
             TCLAP::UnlabeledValueArg<std::string> subcommand_arg("command", "Subcommand to run", true, "", "command", cmd);
 
@@ -42,6 +45,7 @@ namespace huira::cli {
 
             // Build context from parsed global flags
             Context ctx{};
+            ctx.verbose = verbose_arg.getValue();
 
             // Find and dispatch to subcommand
             std::string cmd_name = subcommand_arg.getValue();
@@ -82,6 +86,7 @@ namespace huira::cli {
         }
         os << "\nGlobal options:\n"
         << "  -h, --help       Show this help message\n"
+        << "  -v, --verbose    Enable verbose output\n"
         << "  --version        Show version information\n\n";
     }
 
