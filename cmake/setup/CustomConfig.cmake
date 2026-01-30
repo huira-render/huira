@@ -187,6 +187,9 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
         -Wno-gnu-statement-expression
         -Wno-gnu-conditional-omitted-operand
         -Wno-gnu-empty-initializer
+
+        # Cross-compilation false positive from system compiler defaults
+        -Wno-poison-system-directories
     )
     
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")

@@ -16,4 +16,4 @@ dependencies:
   - libjpeg-turbo=3.1.2  # JPEG I/O
   - plog=1.1.10          # Logging
   - tbb-devel=2021.12.0  # Intel TBB
-  - yaml-cpp=0.8.0       # YAML parser
+  - tclap=1.2.5          # Command line argument parser
