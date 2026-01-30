@@ -4,7 +4,7 @@ add_executable(huira_cli
 
     commands/fetch_tycho2.cpp
     commands/process_tycho2.cpp
-    commands/import_tycho2.cpp
+    
 )
 
 find_package(TCLAP REQUIRED)

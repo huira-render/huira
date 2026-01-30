@@ -44,14 +44,14 @@ namespace huira {
         bool has_received_power() const { return has_(received_power_); }
 
         void enable_sensor_response(bool enable = true) {
-            enable_(received_power_, 0.f, enable); // Sensor response requires received power
+            enable_(received_power_, TSpectral{ 0 }, enable); // Sensor response requires received power
             enable_(sensor_response_, 0.f, enable);
         }
         Image<float>& sensor_response() { return sensor_response_; }
         bool has_sensor_response() const { return has_(sensor_response_); }
 
         void enable_sensor_response_rgb(bool enable = true) {
-            enable_(received_power_, 0.f, enable); // Sensor response requires received power
+            enable_(received_power_, TSpectral{ 0 }, enable); // Sensor response requires received power
             enable_(sensor_response_rgb_, Vec3<float>{0, 0, 0}, enable);
         }
         Image<Vec3<float>>& sensor_response_rgb() { return sensor_response_rgb_; }
