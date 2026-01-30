@@ -17,7 +17,7 @@ namespace fs = std::filesystem;
 namespace huira::cli::tycho2 {
 
     // Callback for libcurl to write data to a file
-    size_t write_callback(void* ptr, size_t size, size_t nmemb, void* userdata) noexcept {
+    static size_t write_callback(void* ptr, size_t size, size_t nmemb, void* userdata) noexcept {
         try {
             auto* out = static_cast<std::ofstream*>(userdata);
             const size_t bytes = size * nmemb;
@@ -30,7 +30,7 @@ namespace huira::cli::tycho2 {
     }
 
     // Download a single file. Returns true on success.
-    bool download_file(const std::string& url, const fs::path& dest, const Context& ctx) {
+    static bool download_file(const std::string& url, const fs::path& dest, const Context& ctx) {
         if (ctx.verbose) {
             std::cout << "  " << url << "\n";
             std::cout << "  -> " << dest << "\n";
@@ -140,7 +140,7 @@ namespace huira::cli::tycho2 {
         return 0;
     }
 
-    int run_fetch(const Context& ctx, int argc, char** argv) {
+    static int run_fetch(const Context& ctx, int argc, char** argv) {
         try {
             TCLAP::CmdLine cmd("Download Tycho-2 catalog from CDS Strasbourg", ' ', "", false);
 

@@ -85,7 +85,7 @@ namespace huira::cli::tycho2 {
         return 0;
     }
     
-    int run_process(const Context& ctx, int argc, char** argv) {
+    static int run_process(const Context& ctx, int argc, char** argv) {
         try {
             TCLAP::CmdLine cmd("Convert Tycho-2 catalog to Huira Star Catalog (.hrsc) format", ' ', "", false);
     

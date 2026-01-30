@@ -199,6 +199,7 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
         -Wno-float-equal
         -Wno-inline  # Disable inline warnings
         -Wno-system-headers  # Don't warn about system headers
+        -Wno-noexcept
         
         # Compatibility warnings for modern C++
         -Wno-c++11-compat

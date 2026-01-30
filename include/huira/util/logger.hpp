@@ -27,6 +27,12 @@ namespace huira {
         std::string message;
         std::thread::id thread_id;
 
+        LogEntry() = default;
+        LogEntry(std::chrono::system_clock::time_point ts, LogLevel lvl,
+            std::string msg, std::thread::id tid)
+            : timestamp(ts), level(lvl), message(std::move(msg)), thread_id(tid) {
+        }
+
         std::string to_string() const;
 
     private:
