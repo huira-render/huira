@@ -11,6 +11,7 @@ dependencies:
   - gdal=3.10.0          # Geospatial Abstraction Library
   - glm=1.0.1            # Linear Algebra for Graphics
   - indicators=2.3       # Progress bars
+  - libcurl=8.18.0.      # URL Transfer Library
   - libtiff=4.7.0        # TIFF I/O
   - libpng=1.6.54        # PNG I/O
   - libjpeg-turbo=3.1.2  # JPEG I/O

@@ -2,14 +2,18 @@ add_executable(huira_cli
     main.cpp
     cli.cpp
 
+    commands/fetch_tycho2.cpp
     commands/process_tycho2.cpp
+    commands/import_tycho2.cpp
 )
 
 find_package(TCLAP REQUIRED)
+find_package(CURL REQUIRED)
 
 target_link_libraries(huira_cli PRIVATE
     huira::huira
     TCLAP::TCLAP
+    CURL::libcurl
 )
 
 target_compile_features(huira_cli PRIVATE cxx_std_20)
