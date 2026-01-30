@@ -8,6 +8,7 @@ option(HUIRA_TESTS "Build Tests" OFF)
 option(HUIRA_DOCS "Build Documentation" OFF)
 option(HUIRA_PYTHON "Build Python Bindings" OFF)
 option(HUIRA_LOCAL_DEV "Build Local Development Directory" OFF)
+option(HUIRA_APPS "Build huira command line applications" ON)
 
 # Load modules from cmake/ directory
 list(APPEND CMAKE_MODULE_PATH 
@@ -81,4 +82,9 @@ if(HUIRA_LOCAL_DEV)
             add_subdirectory(local/${subdir})
         endif()
     endforeach()
+endif()
+
+if(HUIRA_APPS)
+    message(STATUS "Building huira command line applications")
+    add_subdirectory(apps)
 endif()
