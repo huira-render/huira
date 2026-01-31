@@ -15,6 +15,7 @@
 #include "huira/handles/model_handle.hpp"
 #include "huira/handles/root_frame_handle.hpp"
 #include "huira/handles/mesh_handle.hpp"
+#include "huira/stars/star.hpp"
 
 namespace fs = std::filesystem;
 
@@ -54,6 +55,10 @@ namespace huira {
             unsigned int post_process_flags = ModelLoader<TSpectral>::DEFAULT_POST_PROCESS_FLAGS
         );
 
+        void add_star(const Star<TSpectral>& star);
+        void set_stars(const std::vector<Star<TSpectral>>& stars);
+        void load_stars(const fs::path& star_catalog_path, const Time& time, double min_magnitude = 100.0);
+
         void delete_model(const ModelHandle<TSpectral>& model_handle);
 
         void prune_unreferenced_assets();
@@ -73,6 +78,7 @@ namespace huira {
         std::vector<std::shared_ptr<UnresolvedObject<TSpectral>>> unresolved_objects_;
         std::vector<std::shared_ptr<CameraModel<TSpectral>>> camera_models_;
         std::vector<std::shared_ptr<Model<TSpectral>>> models_;
+        std::vector<Star<TSpectral>> stars_;
 
         void print_node_(const Node<TSpectral>* node, const std::string& prefix, bool is_last) const;
         void print_node_details_(const Node<TSpectral>* node) const;

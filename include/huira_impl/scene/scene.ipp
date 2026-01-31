@@ -149,6 +149,34 @@ namespace huira {
     }
 
     template <IsSpectral TSpectral>
+    void Scene<TSpectral>::add_star(const Star<TSpectral>& star)
+    {
+        stars_.push_back(star);
+    }
+
+    template <IsSpectral TSpectral>
+    void Scene<TSpectral>::set_stars(const std::vector<Star<TSpectral>>& stars)
+    {
+        stars_ = stars;
+    }
+
+    template <IsSpectral TSpectral>
+    void Scene<TSpectral>::load_stars(const fs::path& star_catalog_path, const Time& time, double min_magnitude)
+    {
+        // Read the catalog:
+        std::vector<StarData> star_data = read_star_data(star_catalog_path, min_magnitude);
+
+        // Create the stars:
+        std::vector<Star<TSpectral>> stars(star_data.size());
+        for (std::size_t i = 0; i < star_data.size(); ++i) {
+            stars[i] = Star<TSpectral>(star_data[i], time);
+        }
+
+        // Add the stars to the scene:
+        set_stars(stars);
+    }
+
+    template <IsSpectral TSpectral>
     void Scene<TSpectral>::delete_model(const ModelHandle<TSpectral>& model_handle)
     {
         auto model_shared = model_handle.get();
