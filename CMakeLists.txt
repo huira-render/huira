@@ -10,6 +10,11 @@ option(HUIRA_PYTHON "Build Python Bindings" OFF)
 option(HUIRA_LOCAL_DEV "Build Local Development Directory" OFF)
 option(HUIRA_APPS "Build huira command line applications" ON)
 
+if(DEFINED ENV{CONDA_PREFIX} AND NOT DEFINED CMAKE_TOOLCHAIN_FILE)
+    set(CMAKE_TOOLCHAIN_FILE "${CMAKE_CURRENT_SOURCE_DIR}/cmake/conda-toolchain.cmake" CACHE FILEPATH "CMake toolchain file")
+    message(STATUS "Detected Conda environment, using conda toolchain")
+endif()
+
 # Build vcpkg manifest features list based on options
 if(DEFINED CMAKE_TOOLCHAIN_FILE AND CMAKE_TOOLCHAIN_FILE MATCHES "vcpkg")
     set(VCPKG_MANIFEST_FEATURES "")

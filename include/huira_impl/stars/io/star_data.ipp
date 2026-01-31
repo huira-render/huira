@@ -81,12 +81,12 @@ namespace huira {
         in.read(reinterpret_cast<char*>(&count), sizeof(count));
 
         // Binary search on file to find cutoff index
-        uint64_t low = 0, high = count;
+        std::uint64_t low = 0, high = count;
         StarData temp;
 
         while (low < high) {
-            uint64_t mid = low + (high - low) / 2;
-            in.seekg(static_cast<std::streamoff>(sizeof(uint64_t) + mid * sizeof(StarData)));
+            std::uint64_t mid = low + (high - low) / 2;
+            in.seekg(static_cast<std::streamoff>(sizeof(std::uint64_t) + mid * sizeof(StarData)));
             in.read(reinterpret_cast<char*>(&temp), sizeof(StarData));
 
             if (temp.visual_magnitude <= maximum_magnitude) {

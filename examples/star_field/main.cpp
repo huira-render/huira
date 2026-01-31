@@ -1,20 +1,36 @@
 #include "huira/huira.hpp"
 
-#include <iostream>
-#include <chrono>
 #include <filesystem>
-#include <iomanip>
-#include <sstream>
-#include <cstdio>
+#include <iostream>
+#include <utility>
 
 using Deg = huira::units::Degree;
+using Rad = huira::units::Radian;
 
-int main() {
+namespace fs = std::filesystem;
+
+std::pair<fs::path, fs::path> parse_input_paths(int argc, char** argv) {
+    if (argc != 3) {
+        std::cerr << "Usage: star_field <tycho2.hrsc_path> <kernel_path>" << std::endl;
+        std::exit(1);
+    }
+    fs::path star_catalog_path = argv[1];
+    fs::path kernel_path = argv[2];
+    return {star_catalog_path, kernel_path};
+}
+
+int main(int argc, char** argv) {
+    // Parsing input paths:
+    auto [star_catalog_path, kernel_path] = parse_input_paths(argc, argv);
+
     // Create the scene:
     huira::Scene<huira::RGB> scene;
 
     // Set the observation time:
     huira::Time time("2019-02-06T10:27:00");
+
+    // Load stars at a specific date:
+    //scene.load_stars(star_catalog_path, time);
 
     // Configure a camera model:
     auto camera_model = scene.new_camera_model();
