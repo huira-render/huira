@@ -3,6 +3,8 @@
 #include <vector>
 #include <cmath>
 
+#include "huira/core/types.hpp"
+
 namespace huira {
     inline double photon_energy(double lambda_meters);
 
@@ -25,6 +27,8 @@ namespace huira {
 
 
     inline double integrate(const std::vector<double>& x, const std::vector<double>& y);
+
+    inline Vec3<double> compute_aberrated_direction(Vec3<double> direction, Vec3<double> obs_velocity);
 
 }
 

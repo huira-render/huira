@@ -3,6 +3,7 @@
 #include <cstddef>
 
 #include "huira/core/constants.hpp"
+#include "huira/util/logger.hpp"
 
 namespace huira {
     inline double photon_energy(double lambda_meters) {
@@ -86,4 +87,35 @@ namespace huira {
         return sum;
     }
 
+    inline Vec3<double> compute_aberrated_direction(Vec3<double> direction, Vec3<double> v_obs)
+    {
+        // Calculate Relativistic Beta and Gamma
+        Vec3<double> beta = v_obs / SPEED_OF_LIGHT<double>();
+
+        double beta_sq = glm::dot(beta, beta);
+
+        // Check Observer Speed
+        if (beta_sq < 0.999999) {
+            double gamma = 1.0 / std::sqrt(1.0 - beta_sq);
+            double u_dot_beta = glm::dot(direction, beta);
+
+            // Relativistic Aberration Formula
+            //    Transforms the direction vector 'u' into the moving frame 'u_app'.
+            //    Formula: u_app = (u + beta + (gamma / (1+gamma)) * (u . beta) * beta) 
+            //                     ----------------------------------------------------
+            //                             gamma * (1 + u . beta)
+            //
+            // Because 'u' is (Observer -> Object) and we move 'v', 
+            // the object should appear shifted TOWARDS 'v'. 
+            // (u + beta) in the numerator achieves this correctly.
+
+            Vec3<double> num = direction + beta + (gamma / (1.0 + gamma)) * u_dot_beta * beta;
+            double den = gamma * (1.0 + u_dot_beta);
+
+            return num / den;
+        }
+        else {
+            HUIRA_THROW_ERROR("Observer is faster than speed of light");
+        }
+    }
 }
