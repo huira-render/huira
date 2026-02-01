@@ -36,11 +36,10 @@ namespace huira::spice {
 
 
     // SPICE time interfaces
-    inline double string_to_et(const std::string& time_string);
-    inline double et_to_julian_date(double et, const std::string& scale = "JDTDB");
-    inline double julian_date_to_et(double jd, const std::string& scale = "JDTDB");
-    inline std::string et_to_string(double et, const std::string& format);
-
+    inline double str2et(const std::string& time_string);
+    inline double deltet(double epoch, const std::string& eptype);
+    inline double unitim(double epoch, const std::string& insys, const std::string& outsys);
+    inline std::string timout(double et, const std::string& pictur, int lenout);
 
     // SPICE state interfaces
     template <huira::IsFloatingPoint T>
