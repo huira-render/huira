@@ -40,14 +40,10 @@ namespace huira {
     template <IsSpectral TSpectral>
     Star<TSpectral>::Star(const StarData& star_data, Time time)
     {
-        // Compute time:
-        double j2000_jd = 2451545.0;
-        double target_jd = time.to_julian_date();
-        double dt = (target_jd - j2000_jd) / 365.25;
+        double tsince = time.julian_years_since_j2000(TimeScale::TT);
 
-        // Compute the proper motion:
-        double delta = static_cast<double>(star_data.DEC + (star_data.pmDEC * dt));
-        double alpha = static_cast<double>(star_data.RA + (star_data.pmRA * dt / std::cos(star_data.DEC)));
+        double delta = static_cast<double>(star_data.DEC + (star_data.pmDEC * tsince));
+        double alpha = static_cast<double>(star_data.RA + (star_data.pmRA * tsince / std::cos(star_data.DEC)));
         
         double x = std::cos(delta) * std::cos(alpha);
         double y = std::cos(delta) * std::sin(alpha);

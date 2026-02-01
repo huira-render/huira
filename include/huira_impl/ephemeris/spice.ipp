@@ -169,38 +169,45 @@ namespace huira::spice {
     // ============================= //
     // === SPICE time interfaces === //
     // ============================= //
-    inline double string_to_et(const std::string& time_string) {
+    inline double str2et(const std::string& time_string)
+    {
         ensure_lsk_loaded();
-
         SpiceDouble et;
         call_spice(str2et_c, time_string.c_str(), &et);
         return static_cast<double>(et);
     }
 
-    inline double et_to_julian_date(double et, const std::string& scale) {
+    inline double deltet(double epoch, const std::string& eptype)
+    {
         ensure_lsk_loaded();
-
-        SpiceDouble result = call_spice(unitim_c, et, "ET", scale.c_str());
-        return static_cast<double>(result);
+        SpiceDouble delta;
+        call_spice(deltet_c, static_cast<SpiceDouble>(epoch), eptype.c_str(), &delta);
+        return static_cast<double>(delta);
     }
 
-    inline double julian_date_to_et(double jd, const std::string& scale) {
+    inline double unitim(double epoch, const std::string& insys, const std::string& outsys)
+    {
         ensure_lsk_loaded();
-
-        SpiceDouble result = call_spice(unitim_c, jd, scale.c_str(), "ET");
-        return static_cast<double>(result);
+        return static_cast<double>(call_spice(unitim_c,
+            static_cast<SpiceDouble>(epoch),
+            insys.c_str(),
+            outsys.c_str()));
     }
 
-    inline std::string et_to_string(double et, const std::string& format) {
+    inline std::string timout(double et, const std::string& pictur, int lenout)
+    {
         ensure_lsk_loaded();
-
-        constexpr int buffer_size = 256;
-        char buffer[buffer_size];
-
-        call_spice(timout_c, et, format.c_str(), buffer_size, buffer);
-        return std::string(buffer, strnlen(buffer, buffer_size));
+        std::string output(static_cast<size_t>(lenout), '\0');
+        call_spice(timout_c,
+            static_cast<SpiceDouble>(et),
+            pictur.c_str(),
+            static_cast<SpiceInt>(lenout),
+            output.data());
+        if (auto pos = output.find('\0'); pos != std::string::npos) {
+            output.resize(pos);
+        }
+        return output;
     }
-
 
     // ============================== //
     // === SPICE State interfaces === //
