@@ -13,8 +13,8 @@ namespace huira {
         Star(const Vec3<double>& direction, TSpectral irradiance);
         Star(const StarData& star_data, Time time);
 
-        TSpectral get_irradiance() { return irradiance_; }
-        Vec3<double> get_direction() { return direction_; }
+        Vec3<double> get_direction() const { return direction_; }
+        TSpectral get_irradiance() const { return irradiance_; }
 
     private:
         Vec3<double> direction_{ 0,0,0 };

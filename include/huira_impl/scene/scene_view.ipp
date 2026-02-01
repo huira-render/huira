@@ -7,6 +7,7 @@
 #include "huira/core/time.hpp"
 #include "huira/core/transform.hpp"
 #include "huira/handles/camera_handle.hpp"
+#include "huira/core/physics.hpp"
 
 namespace huira {
     template <IsSpectral TSpectral>
@@ -69,6 +70,18 @@ namespace huira {
                 HUIRA_LOG_WARNING("UnresolvedObject[" + std::to_string(unresolved_object->id()) + "] '" + unresolved_object->name() +
                     "' is unlinked in the scene graph and will not be rendered.");
             }
+        }
+
+        stars_.reserve(scene.stars_.size());
+        for (std::size_t i = 0; i < scene.stars_.size(); ++i) {
+            Vec3<double> direction = scene.stars_[i].get_direction();
+            TSpectral irradiance = scene.stars_[i].get_irradiance();
+
+            // Compute stellar aberration:
+            Vec3<double> aberrated_direction = compute_aberrated_direction(direction, obs_ssb.velocity);
+            Vec3<double> apparent_direction = obs_ssb.rotation * aberrated_direction;
+
+            stars_[i] = Star(apparent_direction, irradiance);
         }
     }
 

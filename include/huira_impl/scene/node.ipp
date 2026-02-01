@@ -7,6 +7,7 @@
 #include "huira/core/time.hpp"
 #include "huira/core/types.hpp"
 #include "huira/core/transform.hpp"
+#include "huira/core/physics.hpp"
 
 #include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/util/logger.hpp"
@@ -140,39 +141,8 @@ namespace huira {
             // Safety check for degenerate geometry:
             if (dist > 1e-8) {
                 Vec3<double> u = P_rel / dist;
-
-                // Calculate Relativistic Beta and Gamma
-                Vec3<double> v_obs = observer_ssb_state.velocity;
-                Vec3<double> beta = v_obs / SPEED_OF_LIGHT<double>();
-
-                double beta_sq = glm::dot(beta, beta);
-
-                // Check Observer Speed
-                if (beta_sq < 0.999999) {
-                    double gamma = 1.0 / std::sqrt(1.0 - beta_sq);
-                    double u_dot_beta = glm::dot(u, beta);
-
-                    // Relativistic Aberration Formula
-                    //    Transforms the direction vector 'u' into the moving frame 'u_app'.
-                    //    Formula: u_app = (u + beta + (gamma / (1+gamma)) * (u . beta) * beta) 
-                    //                     ----------------------------------------------------
-                    //                             gamma * (1 + u . beta)
-                    //
-                    // Because 'u' is (Observer -> Object) and we move 'v', 
-                    // the object should appear shifted TOWARDS 'v'. 
-                    // (u + beta) in the numerator achieves this correctly.
-
-                    Vec3<double> num = u + beta + (gamma / (1.0 + gamma)) * u_dot_beta * beta;
-                    double den = gamma * (1.0 + u_dot_beta);
-
-                    Vec3<double> u_app = num / den;
-
-                    // Aberrated Position
-                    apparent_state.position = P_obs + (u_app * dist);
-                }
-                else {
-                    HUIRA_THROW_ERROR("Observer is faster than speed of light");
-                }
+                Vec3<double> u_app = compute_aberrated_direction(u, observer_ssb_state.velocity);
+                apparent_state.position = P_obs + (u_app * dist);
             }
         }
 

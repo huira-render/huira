@@ -67,6 +67,8 @@ namespace huira {
 
         std::vector<UnresolvedInstance<TSpectral>> unresolved_objects_;
 
+        std::vector<Star<TSpectral>> stars_;
+
         friend class Renderer<TSpectral>;
     };
 }
