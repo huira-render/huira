@@ -13,10 +13,11 @@
 #include "huira/scene/node.hpp"
 #include "huira/render/frame_buffer.hpp"
 #include "huira/cameras/sensors/sensor_model.hpp"
+#include "huira/scene/scene_object.hpp"
 
 namespace huira {
     template <IsSpectral TSpectral>
-    class CameraModel : public std::enable_shared_from_this<CameraModel<TSpectral>> {
+    class CameraModel : public SceneObject<CameraModel<TSpectral>, TSpectral> {
     public:
         CameraModel();
         

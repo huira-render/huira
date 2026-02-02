@@ -5,10 +5,11 @@
 
 #include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/scene/node.hpp"
+#include "huira/scene/scene_object.hpp"
 
 namespace huira {
     template <IsSpectral TSpectral>
-    class UnresolvedObject : public std::enable_shared_from_this<UnresolvedObject<TSpectral>> {
+    class UnresolvedObject : public SceneObject<UnresolvedObject<TSpectral>, TSpectral> {
     public:
         UnresolvedObject(TSpectral irradiance = TSpectral{ 0 })
             : id_(next_id_++), irradiance_(irradiance) {}

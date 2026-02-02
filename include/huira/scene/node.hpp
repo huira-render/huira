@@ -8,6 +8,7 @@
 
 #include "huira/core/transform.hpp"
 #include "huira/core/time.hpp"
+#include "huira/scene/scene_object.hpp"
 
 #include "huira/core/concepts/numeric_concepts.hpp"
 #include "huira/core/concepts/spectral_concepts.hpp"
@@ -49,7 +50,7 @@ namespace huira {
      * Leaf nodes (lights, unresolved objects, etc.) should derive from Node directly.
      */
     template <IsSpectral TSpectral>
-    class Node {
+    class Node : public SceneObject<Node<TSpectral>, TSpectral> {
     public:
         Node(Scene<TSpectral>* scene);
         virtual ~Node() = default;

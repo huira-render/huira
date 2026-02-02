@@ -10,6 +10,7 @@
 #include "huira/render/interaction.hpp"
 #include "huira/render/sampler.hpp"
 #include "huira/core/concepts/spectral_concepts.hpp"
+#include "huira/scene/scene_object.hpp"
 
 namespace huira {
     enum class LightType {
@@ -26,7 +27,7 @@ namespace huira {
     };
 
     template <IsSpectral TSpectral>
-    class Light : public std::enable_shared_from_this<Light<TSpectral>> {
+    class Light : public SceneObject<Light<TSpectral>, TSpectral> {
     public:
         Light() : id_(next_id_++) {}
 

@@ -81,7 +81,7 @@ namespace huira {
             Vec3<double> aberrated_direction = compute_aberrated_direction(direction, obs_ssb.velocity);
             Vec3<double> apparent_direction = obs_ssb.rotation * aberrated_direction;
 
-            stars_[i] = Star(apparent_direction, irradiance);
+            stars_[i] = Star<TSpectral>(apparent_direction, irradiance);
         }
     }
 

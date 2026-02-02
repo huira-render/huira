@@ -54,12 +54,13 @@ namespace huira {
             const fs::path& file,
             unsigned int post_process_flags = ModelLoader<TSpectral>::DEFAULT_POST_PROCESS_FLAGS
         );
+        void delete_model(const ModelHandle<TSpectral>& model_handle);
+
 
         void add_star(const Star<TSpectral>& star);
         void set_stars(const std::vector<Star<TSpectral>>& stars);
         void load_stars(const fs::path& star_catalog_path, const Time& time, double min_magnitude = 100.0);
-
-        void delete_model(const ModelHandle<TSpectral>& model_handle);
+        
 
         void prune_unreferenced_assets();
 
