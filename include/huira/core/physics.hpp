@@ -2,13 +2,23 @@
 
 #include <vector>
 #include <cmath>
+#include <cstddef>
 
 #include "huira/core/types.hpp"
+#include "huira/core/concepts/numeric_concepts.hpp"
+#include "huira/core/concepts/spectral_concepts.hpp"
 
 namespace huira {
     inline double photon_energy(double lambda_meters);
 
     inline std::vector<double> plancks_law(double temp, const std::vector<double>& lambda);
+
+    template <IsFloatingPoint T>
+    std::vector<T> linspace(T min, T max, size_t N);
+
+    template <IsSpectral TSpectral>
+    TSpectral black_body(double temperature, std::size_t steps = 100);
+
 
     // Johnson V-Band Approximation (Gaussian fit):
     // Paper: Bessell, M. S. (1990). UBVRI passbands. Publications of the Astronomical Society of

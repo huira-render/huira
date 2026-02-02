@@ -129,8 +129,8 @@ namespace huira {
         std::string toString() const;
 
         // Access to bin information
-        constexpr const Bin& get_bin(size_t index) const { return bins_[index]; }
-        constexpr const std::array<Bin, N>& get_all_bins() const { return bins_; }
+        constexpr static const Bin& get_bin(size_t index) { return bins_[index]; }
+        constexpr static const std::array<Bin, N>& get_all_bins() { return bins_; }
 
     private:
         std::array<float, N> data_;
