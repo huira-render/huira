@@ -51,6 +51,7 @@ namespace huira {
         HUIRA_LOG_INFO("Requested to delete " + mesh_shared->get_info());
 
         prune_graph_references_(target_ptr);
+        target_ptr->set_scene_owned(false);
 
         meshes_.erase(it);
     }
@@ -77,6 +78,7 @@ namespace huira {
         HUIRA_LOG_INFO("Requested to delete " + light_shared->get_info());
 
         prune_graph_references_(target_ptr);
+        target_ptr->set_scene_owned(false);
 
         lights_.erase(it);
     }
@@ -103,6 +105,7 @@ namespace huira {
         HUIRA_LOG_INFO("Requested to delete " + unresolved_shared->get_info());
 
         prune_graph_references_(target_ptr);
+        target_ptr->set_scene_owned(false);
 
         unresolved_objects_.erase(it);
     }
@@ -129,6 +132,7 @@ namespace huira {
         HUIRA_LOG_INFO("Requested to delete " + camera_shared->get_info());
 
         prune_graph_references_(target_ptr);
+        target_ptr->set_scene_owned(false);
 
         camera_models_.erase(it);
     }
@@ -189,7 +193,8 @@ namespace huira {
 
         HUIRA_LOG_INFO("Requested to delete Model[" + std::to_string(target_ptr->id()) + "]");
 
-        //prune_graph_references_(target_ptr);
+        prune_graph_references_(target_ptr);
+        target_ptr->set_scene_owned(false);
 
         models_.erase(it);
     }

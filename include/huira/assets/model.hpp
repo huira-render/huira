@@ -9,6 +9,7 @@
 #include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/scene/frame_node.hpp"
 #include "huira/assets/mesh.hpp"
+#include "huira/scene/scene_object.hpp"
 
 namespace fs = std::filesystem;
 
@@ -33,7 +34,7 @@ namespace huira {
      *   auto instance = some_frame_handle.new_instance(model_handle.get());
      */
     template <IsSpectral TSpectral>
-    class Model : public std::enable_shared_from_this<Model<TSpectral>> {
+    class Model : public SceneObject<Model<TSpectral>, TSpectral> {
     public:
         Model() = default;
         ~Model() = default;

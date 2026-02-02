@@ -6,10 +6,11 @@
 
 #include "huira/core/types.hpp"
 #include "huira/core/concepts/spectral_concepts.hpp"
+#include "huira/scene/scene_object.hpp"
 
 namespace huira {
     template <IsSpectral TSpectral>
-    class Mesh : public std::enable_shared_from_this<Mesh<TSpectral>> {
+    class Mesh : public SceneObject<Mesh<TSpectral>, TSpectral> {
     public:
         Mesh() : id_(next_id_++) {}
         Mesh(IndexBuffer index_buffer, VertexBuffer<TSpectral> vertex_buffer) noexcept
@@ -17,6 +18,12 @@ namespace huira {
             vertex_buffer_(std::move(vertex_buffer)),
             id_(next_id_++)
         {}
+
+        Mesh(const Mesh&) = delete;
+        Mesh& operator=(const Mesh&) = delete;
+
+        Mesh(Mesh&&) = default;
+        Mesh& operator=(Mesh&&) = default;
 
         std::uint64_t id() const noexcept { return id_; }
         void set_name(const std::string& name) { name_ = name; }
