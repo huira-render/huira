@@ -7,6 +7,7 @@ The Core module contains the fundamental building blocks of the engine.
    :hidden:
 
    constants
+   physics
    rotation
    spectral_bins
    time

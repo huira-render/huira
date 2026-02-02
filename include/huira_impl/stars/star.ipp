@@ -5,6 +5,7 @@
 #include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/core/types.hpp"
 #include "huira/core/time.hpp"
+#include "huira/core/physics.hpp"
 #include "huira/stars/io/star_data.hpp"
 
 namespace huira {
@@ -40,6 +41,7 @@ namespace huira {
     template <IsSpectral TSpectral>
     Star<TSpectral>::Star(const StarData& star_data, Time time)
     {
+        // Compute the ICRF direction:
         double tsince = time.julian_years_since_j2000(TimeScale::TT);
 
         double delta = static_cast<double>(star_data.DEC + (star_data.pmDEC * tsince));
@@ -50,5 +52,9 @@ namespace huira {
         double z = std::sin(delta);
 
         direction_ = glm::normalize(Vec3<double>{ x, y, z });
+
+        // Compute the spectrum given the temperature:
+        TSpectral spectral_radiance = black_body<TSpectral>(star_data.temperature);
+        irradiance_ = spectral_radiance * star_data.solid_angle;
     }
 }

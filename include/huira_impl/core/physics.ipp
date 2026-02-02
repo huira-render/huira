@@ -4,6 +4,9 @@
 
 #include "huira/core/constants.hpp"
 #include "huira/util/logger.hpp"
+#include "huira/core/types.hpp"
+#include "huira/core/concepts/numeric_concepts.hpp"
+#include "huira/core/concepts/spectral_concepts.hpp"
 
 namespace huira {
     inline double photon_energy(double lambda_meters) {
@@ -24,6 +27,35 @@ namespace huira {
             double exponential = std::exp(c2 / (lam * temp)) - 1.0;
             radiance[i] = (c1 / std::pow(lam, 5)) / exponential;
         }
+        return radiance;
+    }
+
+    template <IsFloatingPoint T>
+    std::vector<T> linspace(T min, T max, size_t N)
+    {
+        std::vector<T> output(N);
+        T step = (max - min) / static_cast<T>(N - 1);
+        for (size_t i = 0; i < N; ++i) {
+            output[i] = min + (static_cast<T>(i) * step);
+        }
+        return output;
+    }
+
+    template <IsSpectral TSpectral>
+    TSpectral black_body(double temperature, std::size_t steps)
+    {
+        TSpectral radiance{ 0 };
+        auto bins = TSpectral::get_all_bins();
+        for (std::size_t i = 0; i < bins.size(); ++i) {
+            // Integrate black-body spectrum over the computed bounds:
+            double min_wavelength = static_cast<double>(bins[i].min);
+            double max_wavelength = static_cast<double>(bins[i].max);
+
+            std::vector<double> lambda = linspace(min_wavelength, max_wavelength, steps);
+            std::vector<double> rad = plancks_law(temperature, lambda);
+            radiance[i] = static_cast<float>(integrate(lambda, rad));
+        }
+
         return radiance;
     }
 
