@@ -25,7 +25,7 @@ namespace huira {
             object->name_ = name;
 
             HUIRA_LOG_INFO("Scene - Added: " + object->get_info());
-        };
+        }
 
         void remove(std::shared_ptr<T> object)
         {

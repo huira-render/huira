@@ -40,7 +40,7 @@ namespace huira {
     class Model : public SceneObject<Model<TSpectral>, TSpectral> {
     public:
         Model() : id_(next_id_++) {}
-        ~Model() = default;
+        ~Model() override = default;
 
         Model(const Model&) = delete;
         Model& operator=(const Model&) = delete;
@@ -49,7 +49,7 @@ namespace huira {
 
         const fs::path& source_path() const noexcept { return source_path_; }
 
-        std::uint64_t id() const noexcept { return id_; }
+        std::uint64_t id() const override { return id_; }
         std::string type() const override { return "Model"; }
 
         void print_graph() const;

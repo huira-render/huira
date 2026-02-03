@@ -34,7 +34,7 @@ namespace huira {
         Light(const Light&) = delete;
         Light& operator=(const Light&) = delete;
 
-        virtual ~Light() = default;
+        virtual ~Light() override = default;
 
         virtual std::optional<LightSample<TSpectral>> sample_li(
             const Interaction<TSpectral>& ref,

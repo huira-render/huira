@@ -9,7 +9,7 @@ using Rad = huira::units::Radian;
 
 namespace fs = std::filesystem;
 
-std::pair<fs::path, fs::path> parse_input_paths(int argc, char** argv) {
+static std::pair<fs::path, fs::path> parse_input_paths(int argc, char** argv) {
     if (argc != 3) {
         std::cerr << "Usage: star_field <tycho2.hrsc_path> <kernel_path>" << std::endl;
         std::exit(1);

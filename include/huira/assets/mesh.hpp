@@ -18,7 +18,7 @@ namespace huira {
             vertex_buffer_(std::move(vertex_buffer)),
             id_(next_id_++)
         {}
-        ~Mesh() = default;
+        ~Mesh() override = default;
 
         Mesh(const Mesh&) = delete;
         Mesh& operator=(const Mesh&) = delete;
