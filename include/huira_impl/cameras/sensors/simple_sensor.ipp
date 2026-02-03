@@ -28,7 +28,7 @@ namespace huira {
                 float signal_e = electrons.total();
 
                 // Dark Current
-                float dark_e = dark_current * exposure_time;
+                float dark_e = 0*dark_current * exposure_time;
 
                 // Shot Noise (Poisson)
                 //float noisy_e = sample_poisson(signal_e + dark_e);

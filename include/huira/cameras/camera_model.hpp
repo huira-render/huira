@@ -32,6 +32,7 @@ namespace huira {
 
         Pixel project_point(const Vec3<float>& point_camera_coords) const;
 
+        void readout(FrameBuffer<TSpectral>& fb, float exposure_time) const { sensor_->readout(fb, exposure_time); }
 
         int res_x() const { return sensor_->res_x(); }
         int res_y() const { return sensor_->res_y(); }

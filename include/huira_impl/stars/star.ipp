@@ -44,8 +44,12 @@ namespace huira {
         // Compute the ICRF direction:
         double tsince = time.julian_years_since_j2000(TimeScale::TT);
 
-        double delta = static_cast<double>(star_data.DEC + (star_data.pmDEC * tsince));
-        double alpha = static_cast<double>(star_data.RA + (star_data.pmRA * tsince / std::cos(star_data.DEC)));
+        constexpr double MAS_TO_RAD = PI<double>() / (180.0 * 3600.0 * 1000.0);
+        double pmDEC = static_cast<double>(star_data.pmDEC) * MAS_TO_RAD;
+        double pmRA = static_cast<double>(star_data.pmRA) * MAS_TO_RAD;
+
+        double delta = static_cast<double>(star_data.DEC + (pmDEC * tsince));
+        double alpha = static_cast<double>(star_data.RA + (pmRA * tsince / std::cos(star_data.DEC)));
         
         double x = std::cos(delta) * std::cos(alpha);
         double y = std::cos(delta) * std::sin(alpha);
@@ -54,7 +58,9 @@ namespace huira {
         direction_ = glm::normalize(Vec3<double>{ x, y, z });
 
         // Compute the spectrum given the temperature:
-        TSpectral spectral_radiance = black_body<TSpectral>(star_data.temperature);
-        irradiance_ = spectral_radiance * star_data.solid_angle;
+        TSpectral spectral_radiance = black_body<TSpectral>(static_cast<double>(star_data.temperature));
+        for (std::size_t i = 0; i < spectral_radiance.size(); ++i) {
+            irradiance_[i] = static_cast<float>(static_cast<double>(spectral_radiance[i]) * star_data.solid_angle);
+        }
     }
 }

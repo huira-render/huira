@@ -72,7 +72,7 @@ namespace huira {
             }
         }
 
-        stars_.reserve(scene.stars_.size());
+        stars_ = std::vector<Star<TSpectral>>(scene.stars_.size());
         for (std::size_t i = 0; i < scene.stars_.size(); ++i) {
             Vec3<double> direction = scene.stars_[i].get_direction();
             TSpectral irradiance = scene.stars_[i].get_irradiance();

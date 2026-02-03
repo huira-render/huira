@@ -197,7 +197,7 @@ namespace huira {
     }
 
     template <IsSpectral TSpectral>
-    void Scene<TSpectral>::load_stars(const fs::path& star_catalog_path, const Time& time, double min_magnitude)
+    void Scene<TSpectral>::load_stars(const fs::path& star_catalog_path, const Time& time, float min_magnitude)
     {
         // Read the catalog:
         std::vector<StarData> star_data = read_star_data(star_catalog_path, min_magnitude);

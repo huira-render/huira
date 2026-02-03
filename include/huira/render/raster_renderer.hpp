@@ -11,7 +11,10 @@ namespace huira {
     public:
         ~RasterRenderer() override = default;
 
-        void render(SceneView<TSpectral>& scene_view, FrameBuffer<TSpectral>& frame_buffer) override;
+        void render(SceneView<TSpectral>& scene_view, FrameBuffer<TSpectral>& frame_buffer, float exposure_time) override;
+
+    private:
+        void rasterize_(SceneView<TSpectral>& scene_view, FrameBuffer<TSpectral>& frame_buffer);
     };
 }
 
