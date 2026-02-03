@@ -17,6 +17,7 @@
 #include "huira/scene/instance.hpp"
 #include "huira/assets/mesh.hpp"
 #include "huira/core/types.hpp"
+#include "huira/handles/mesh_handle.hpp"
 
 namespace fs = std::filesystem;
 
@@ -31,11 +32,10 @@ namespace huira {
             aiProcess_JoinIdenticalVertices |
             aiProcess_SortByPType;
         
-        static std::tuple<
-            std::shared_ptr<Model<TSpectral>>,
-            std::vector<std::shared_ptr<Mesh<TSpectral>>>
-        > load(
+        static std::shared_ptr<Model<TSpectral>> load(
+            Scene<TSpectral>& scene,
             const fs::path& file_path,
+            std::string name,
             unsigned int post_process_flags = DEFAULT_POST_PROCESS_FLAGS
         );
 
@@ -43,10 +43,11 @@ namespace huira {
         struct LoadContext {
             const aiScene* ai_scene;
             Model<TSpectral>* model;
-            std::vector<std::shared_ptr<Mesh<TSpectral>>> meshes;
 
             // Maps ASSIMP mesh index to our Mesh pointer
-            std::unordered_map<unsigned int, Mesh<TSpectral>*> mesh_map;
+            std::unordered_map<unsigned int, MeshHandle<TSpectral>> mesh_map;
+
+            Scene<TSpectral>* scene;
 
             // TODO: material/texture support
             // std::unordered_map<unsigned int, Material<TSpectral>*> material_map;
@@ -56,7 +57,7 @@ namespace huira {
         
         static void process_meshes_(LoadContext& ctx);
 
-        static std::shared_ptr<Mesh<TSpectral>> convert_mesh_(const aiMesh* ai_mesh, LoadContext& ctx);
+        static MeshHandle<TSpectral> convert_mesh_(const aiMesh* ai_mesh, LoadContext& ctx);
 
         static void process_node_(const aiNode* ai_node, FrameNode<TSpectral>* parent_frame, LoadContext& ctx);
 

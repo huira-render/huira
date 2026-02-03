@@ -5,7 +5,6 @@ namespace huira {
 
     template <IsSpectral TSpectral>
     void Model<TSpectral>::print_graph() const {
-        std::cout << "Model: " << name_ << "\n";
         std::cout << "Source: " << source_path_.string() << "\n";
         std::cout << "Model Graph:\n";
 

@@ -20,11 +20,10 @@ namespace huira {
      * @throws ModelLoadException if loading fails
      */
     template <IsSpectral TSpectral>
-    std::tuple<
-        std::shared_ptr<Model<TSpectral>>,
-        std::vector<std::shared_ptr<Mesh<TSpectral>>>
-        > ModelLoader<TSpectral>::load(
+    std::shared_ptr<Model<TSpectral>> ModelLoader<TSpectral>::load(
+        Scene<TSpectral>& scene,
         const fs::path& file_path,
+        std::string name,
         unsigned int post_process_flags
     ) {
         // Validate file exists
@@ -55,20 +54,23 @@ namespace huira {
         HUIRA_LOG_INFO("  - Textures: " + std::to_string(ai_scene->mNumTextures));
 
         // Create the Model object
-        auto model = std::make_shared<Model<TSpectral>>();
-        model->id_ = Model<TSpectral>::next_id_++;
-        model->source_path_ = file_path;
-        model->name_ = file_path.stem().string();
+        auto shared_model = std::make_shared<Model<TSpectral>>();
+        shared_model->source_path_ = file_path;
+        if (name.empty()) {
+            name = file_path.stem().string();
+        }
+        scene.models_.add(shared_model, name);
 
         // Create the root node for the model's scene graph
         // Note: We pass nullptr for Scene* since this is a disconnected graph
         // This means SPICE-based transforms won't work within models
-        model->root_node_ = std::make_shared<FrameNode<TSpectral>>(nullptr);
+        shared_model->root_node_ = std::make_shared<FrameNode<TSpectral>>(nullptr);
 
         // Setup loading context
         LoadContext ctx;
         ctx.ai_scene = ai_scene;
-        ctx.model = model.get();
+        ctx.model = shared_model.get();
+        ctx.scene = &scene;
 
         // TODO: MATERIAL AND TEXTURE LOADING
         // // Load embedded textures
@@ -93,25 +95,30 @@ namespace huira {
         // Process the node hierarchy (creates FrameNodes and Instances)
         // The root ASSIMP node's transform is applied to our root node
         Transform<double> root_transform = convert_transform_(ai_scene->mRootNode->mTransformation);
-        model->root_node_->set_position(root_transform.position);
-        model->root_node_->set_rotation(root_transform.rotation);
-        model->root_node_->set_scale(root_transform.scale);
+        shared_model->root_node_->set_position(root_transform.position);
+        shared_model->root_node_->set_rotation(root_transform.rotation);
+        shared_model->root_node_->set_scale(root_transform.scale);
 
         // Process children of the root node
         for (unsigned int i = 0; i < ai_scene->mRootNode->mNumChildren; ++i) {
-            process_node_(ai_scene->mRootNode->mChildren[i], model->root_node_.get(), ctx);
+            process_node_(ai_scene->mRootNode->mChildren[i], shared_model->root_node_.get(), ctx);
         }
 
         // Also handle any meshes directly attached to the root node
         for (unsigned int i = 0; i < ai_scene->mRootNode->mNumMeshes; ++i) {
             unsigned int mesh_index = ai_scene->mRootNode->mMeshes[i];
-            Mesh<TSpectral>* mesh_ptr = ctx.mesh_map[mesh_index];
-            model->root_node_->new_instance(mesh_ptr);
+            auto it = ctx.mesh_map.find(mesh_index);
+            if (it != ctx.mesh_map.end()) {
+                MeshHandle<TSpectral> mesh_handle = it->second;
+                shared_model->root_node_->new_instance(mesh_handle.get_shared().get());
+            } else {
+                HUIRA_LOG_ERROR("Mesh index " + std::to_string(mesh_index) + " not found in mesh map");
+            }
         }
 
-        HUIRA_LOG_INFO("Model loaded successfully: " + model->get_info());
+        HUIRA_LOG_INFO("Model loaded successfully: " + shared_model->get_info());
 
-        return  { model, ctx.meshes };
+        return shared_model;
     }
 
     /**
@@ -122,9 +129,8 @@ namespace huira {
         for (unsigned int i = 0; i < ctx.ai_scene->mNumMeshes; ++i) {
             const aiMesh* ai_mesh = ctx.ai_scene->mMeshes[i];
 
-            auto mesh = convert_mesh_(ai_mesh, ctx);
-            ctx.mesh_map[i] = mesh.get();
-            ctx.meshes.push_back(std::move(mesh));
+            auto mesh_handle = convert_mesh_(ai_mesh, ctx);
+            ctx.mesh_map.emplace(i, mesh_handle);
 
             HUIRA_LOG_DEBUG("ModelLoader - Processed mesh " + std::to_string(i) + ": " +
                            std::string(ai_mesh->mName.C_Str()) +
@@ -137,7 +143,7 @@ namespace huira {
      * @brief Convert a single ASSIMP mesh to a huira Mesh.
      */
     template <IsSpectral TSpectral>
-    std::shared_ptr<Mesh<TSpectral>> ModelLoader<TSpectral>::convert_mesh_(
+    MeshHandle<TSpectral> ModelLoader<TSpectral>::convert_mesh_(
         const aiMesh* ai_mesh,
         LoadContext& ctx
     ) {
@@ -206,9 +212,9 @@ namespace huira {
         // unsigned int material_index = ai_mesh->mMaterialIndex;
         // Material<TSpectral>* material = ctx.material_map[material_index];
         // The Mesh constructor or a setter would then associate the material.
-        auto mesh = std::make_shared<Mesh<TSpectral>>(std::move(indices), std::move(vertices));
-        mesh->set_name(std::string(ai_mesh->mName.C_Str()));
-        return mesh;
+        auto mesh = Mesh<TSpectral>(std::move(indices), std::move(vertices));
+        auto mesh_handle = ctx.scene->add_mesh(std::move(mesh), std::string(ai_mesh->mName.C_Str()));
+        return mesh_handle;
     }
 
     /**
@@ -238,15 +244,20 @@ namespace huira {
         child->set_position(transform.position);
         child->set_rotation(transform.rotation);
         child->set_scale(transform.scale);
-        child->set_name(std::string(ai_node->mName.C_Str()));
+        ctx.scene->register_node_name_(child, std::string(ai_node->mName.C_Str()));
 
         // Create instances for any meshes attached to this node
         for (unsigned int i = 0; i < ai_node->mNumMeshes; ++i) {
             unsigned int mesh_index = ai_node->mMeshes[i];
-            Mesh<TSpectral>* mesh_ptr = ctx.mesh_map[mesh_index];
-
-            if (mesh_ptr) {
-                child->new_instance(mesh_ptr);
+            auto it = ctx.mesh_map.find(mesh_index);
+            if (it != ctx.mesh_map.end()) {
+                MeshHandle<TSpectral> mesh_handle = it->second;
+                Mesh<TSpectral>* mesh_ptr = mesh_handle.get_shared().get();
+                if (mesh_ptr) {
+                    child->new_instance(mesh_ptr);
+                } else {
+                    HUIRA_LOG_ERROR("MeshHandle for mesh index " + std::to_string(mesh_index) + " is invalid");
+                }
             } else {
                 HUIRA_LOG_ERROR("Mesh index " + std::to_string(mesh_index) + " not found in mesh map");
             }

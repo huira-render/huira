@@ -43,6 +43,7 @@ namespace huira {
         auto it = std::find(children_.begin(), children_.end(), child);
         if (it != children_.end()) {
             HUIRA_LOG_INFO(this->get_info() + " - Deleting " + child->get_info());
+            this->scene_->node_registry_.remove(child);
             children_.erase(it);
         }
     }

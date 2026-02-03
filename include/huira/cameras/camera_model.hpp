@@ -24,10 +24,6 @@ namespace huira {
         CameraModel(const CameraModel&) = delete;
         CameraModel& operator=(const CameraModel&) = delete;
 
-        std::uint64_t id() const noexcept { return id_; }
-        void set_name(const std::string& name) { name_ = name; }
-        const std::string& name() const noexcept { return name_; }
-
         void set_focal_length(double focal_length);
 
         template <IsDistortion TDistortion, typename... Args>
@@ -40,7 +36,8 @@ namespace huira {
         int res_x() const { return sensor_->res_x(); }
         int res_y() const { return sensor_->res_y(); }
 
-        std::string get_info() const { return "CameraModel[" + std::to_string(id_) + "]" + (name_.empty() ? "" : " " + name_); }
+        std::uint64_t id() const override { return id_; }
+        std::string type() const override { return "CameraModel"; }
 
         FrameBuffer<TSpectral> make_frame_buffer() const { return FrameBuffer<TSpectral>(res_x(), res_y()); }
 
@@ -52,7 +49,6 @@ namespace huira {
 
         std::uint64_t id_ = 0;
         static inline std::uint64_t next_id_ = 0;
-        std::string name_;
     };
 }
 

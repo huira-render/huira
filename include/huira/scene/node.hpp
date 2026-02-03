@@ -58,10 +58,6 @@ namespace huira {
         Node(const Node&) = delete;
         Node& operator=(const Node&) = delete;
 
-        std::uint64_t id() const { return id_; }
-        void set_name(const std::string& name) { name_ = name; }
-        const std::string& name() const noexcept { return name_; }
-
         void set_position(const Vec3<double>& position);
         void set_rotation(const Rotation<double>& rotation);
         void set_scale(const Vec3<double>& scale);
@@ -74,7 +70,8 @@ namespace huira {
         void set_spice(const std::string& spice_origin, const std::string& spice_frame);
 
 
-        virtual std::string get_info() const { return "Node[" + std::to_string(id_) + "]" + " " + name_; }
+        std::uint64_t id() const override { return id_; }
+        virtual std::string type() const override { return "Node"; }
 
         TransformMode get_position_mode() const { return position_mode_; }
         TransformMode get_rotation_mode() const { return rotation_mode_; }
@@ -114,7 +111,6 @@ namespace huira {
 
         std::uint64_t id_ = 0;
         static inline std::uint64_t next_id_ = 0;
-        std::string name_ = "";
 
         Scene<TSpectral>* scene_;
         Node<TSpectral>* parent_ = nullptr;

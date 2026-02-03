@@ -14,6 +14,9 @@ namespace huira {
     template <IsSpectral TSpectral>
     class FrameHandle;
 
+    template <IsSpectral TSpectral>
+    class ModelLoader;
+
 
     template <IsSpectral TSpectral>
     class MeshHandle : public Handle<Mesh<TSpectral>> {
@@ -25,7 +28,12 @@ namespace huira {
             return this->get()->vertex_buffer().size();
         }
 
+        std::shared_ptr<Mesh<TSpectral>> get_shared() const {
+            return this->get();
+        }
+
         friend class Scene<TSpectral>;
         friend class FrameHandle<TSpectral>;
+        friend class ModelLoader<TSpectral>;
     };
 }

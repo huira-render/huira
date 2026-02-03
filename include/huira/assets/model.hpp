@@ -18,6 +18,9 @@ namespace huira {
     template <IsSpectral TSpectral>
     class SceneView;
 
+    template <IsSpectral TSpectral>
+    class ModelLoader;
+
     /**
      * @brief Represents a loaded 3D model with its own isolated scene graph.
      *
@@ -36,7 +39,7 @@ namespace huira {
     template <IsSpectral TSpectral>
     class Model : public SceneObject<Model<TSpectral>, TSpectral> {
     public:
-        Model() = default;
+        Model() : id_(next_id_++) {}
         ~Model() = default;
 
         Model(const Model&) = delete;
@@ -44,21 +47,16 @@ namespace huira {
         Model(Model&&) = default;
         Model& operator=(Model&&) = default;
 
-        std::uint64_t id() const noexcept { return id_; }
-        void set_name(const std::string& name) { name_ = name; }
-        const std::string& name() const noexcept { return name_; }
-        
         const fs::path& source_path() const noexcept { return source_path_; }
-        
 
-        std::string get_info() const { return "Model[" + std::to_string(id_) + "]" + (name_.empty() ? "" : " " + name_); }
-        
+        std::uint64_t id() const noexcept { return id_; }
+        std::string type() const override { return "Model"; }
+
         void print_graph() const;
 
     private:
         std::uint64_t id_ = 0;
         static inline std::uint64_t next_id_ = 0;
-        std::string name_ = "";
         
         fs::path source_path_;
         
@@ -67,9 +65,7 @@ namespace huira {
         void print_node_(const Node<TSpectral>* node, const std::string& prefix, bool is_last) const;
 
         // ModelLoader needs access to populate the model
-        template <IsSpectral U>
-        friend class ModelLoader;
-
+        friend class ModelLoader<TSpectral>;
         friend class SceneView<TSpectral>;
     };
 

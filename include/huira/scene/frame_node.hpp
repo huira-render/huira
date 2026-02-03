@@ -51,7 +51,7 @@ namespace huira {
         std::weak_ptr<Instance<TSpectral>> new_instance(CameraModel<TSpectral>* camera_model);
         std::weak_ptr<Instance<TSpectral>> new_instance(Model<TSpectral>* model);
 
-        std::string get_info() const override { return "FrameNode[" + std::to_string(this->id()) + "]" + (this->name_.empty() ? "" : " " + this->name_); }
+        std::string type() const override { return "FrameNode"; }
 
         // Override to check children for SPICE constraints
         std::span<const std::shared_ptr<Node<TSpectral>>> get_children() const override { return children_; }

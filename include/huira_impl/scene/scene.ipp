@@ -29,128 +29,160 @@ namespace huira {
 #endif
 
     template <IsSpectral TSpectral>
-    MeshHandle<TSpectral> Scene<TSpectral>::add_mesh(Mesh<TSpectral>&& mesh)
+    MeshHandle<TSpectral> Scene<TSpectral>::add_mesh(Mesh<TSpectral>&& mesh, std::string name)
     {
         auto mesh_shared = std::make_shared<Mesh<TSpectral>>(std::move(mesh));
-        meshes_.push_back(mesh_shared);
-        HUIRA_LOG_INFO("Scene - Mesh added: Mesh[" + std::to_string(mesh_shared->id()) + "]");
+        meshes_.add(mesh_shared, name);
         return MeshHandle<TSpectral>{ mesh_shared };
     };
+
+    template <IsSpectral TSpectral>
+    void Scene<TSpectral>::set_name(const MeshHandle<TSpectral>& mesh_handle, const std::string& name)
+    {
+        meshes_.set_name(mesh_handle.get(), name);
+    };
+
+    template <IsSpectral TSpectral>
+    MeshHandle<TSpectral> Scene<TSpectral>::get_mesh(const std::string& name)
+    {
+        return MeshHandle<TSpectral>{ meshes_.lookup(name) };
+    }
 
     template <IsSpectral TSpectral>
     void Scene<TSpectral>::delete_mesh(const MeshHandle<TSpectral>& mesh_handle)
     {
         auto mesh_shared = mesh_handle.get();
-        Mesh<TSpectral>* target_ptr = mesh_shared.get();
-
-        auto it = std::find(meshes_.begin(), meshes_.end(), mesh_shared);
-        if (it == meshes_.end()) {
-            HUIRA_THROW_ERROR("Mesh does not exist in the scene");
-        }
-
-        HUIRA_LOG_INFO("Requested to delete " + mesh_shared->get_info());
-
-        prune_graph_references_(target_ptr);
-        target_ptr->set_scene_owned(false);
-
-        meshes_.erase(it);
+        prune_graph_references_(mesh_shared.get());
+        meshes_.remove(mesh_shared);
     }
 
+
+
+
     template <IsSpectral TSpectral>
-    PointLightHandle<TSpectral> Scene<TSpectral>::new_point_light(TSpectral intensity)
+    PointLightHandle<TSpectral> Scene<TSpectral>::new_point_light(TSpectral intensity, std::string name)
     {
         auto light_shared = std::make_shared<PointLight<TSpectral>>(intensity);
-        lights_.push_back(light_shared);
+        lights_.add(light_shared, name);
         return PointLightHandle<TSpectral>{ light_shared };
     };
+
+    template <IsSpectral TSpectral>
+    void Scene<TSpectral>::set_name(const PointLightHandle<TSpectral>& light_handle, const std::string& name)
+    {
+        lights_.set_name(light_handle.get(), name);
+    };
+
+    template <IsSpectral TSpectral>
+    PointLightHandle<TSpectral> Scene<TSpectral>::get_point_light(const std::string& name)
+    {
+        auto light_base = lights_.lookup(name);
+        auto point_light = std::dynamic_pointer_cast<PointLight<TSpectral>>(light_base);
+        if (!point_light) {
+            HUIRA_THROW_ERROR("Light with name '" + name + "' is not a PointLight.");
+        }
+        return PointLightHandle<TSpectral>{ point_light };
+    }
 
     template <IsSpectral TSpectral>
     void Scene<TSpectral>::delete_light(const PointLightHandle<TSpectral>& light_handle)
     {
         auto light_shared = light_handle.get();
-        Light<TSpectral>* target_ptr = light_shared.get();
+        prune_graph_references_(static_cast<Light<TSpectral>*>(light_shared.get()));
+        lights_.remove(light_shared);
+    }
+    
 
-        auto it = std::find(lights_.begin(), lights_.end(), light_shared);
-        if (it == lights_.end()) {
-            HUIRA_THROW_ERROR("Light does not exist in the scene");
-        }
 
-        HUIRA_LOG_INFO("Requested to delete " + light_shared->get_info());
-
-        prune_graph_references_(target_ptr);
-        target_ptr->set_scene_owned(false);
-
-        lights_.erase(it);
+    template <IsSpectral TSpectral>
+    UnresolvedObjectHandle<TSpectral> Scene<TSpectral>::new_unresolved_object(TSpectral irradiance, std::string name)
+    {
+        auto unresolved_shared = std::make_shared<UnresolvedObject<TSpectral>>(irradiance);
+        unresolved_objects_.add(unresolved_shared, name);
+        return UnresolvedObjectHandle<TSpectral>{ unresolved_shared };
     }
 
     template <IsSpectral TSpectral>
-    UnresolvedObjectHandle<TSpectral> Scene<TSpectral>::new_unresolved_object(TSpectral irradiance)
+    void Scene<TSpectral>::set_name(const UnresolvedObjectHandle<TSpectral>& unresolved, const std::string& name)
     {
-        auto unresolved_shared = std::make_shared<UnresolvedObject<TSpectral>>(irradiance);
-        unresolved_objects_.push_back(unresolved_shared);
-        return UnresolvedObjectHandle<TSpectral>{ unresolved_shared };
+        unresolved_objects_.set_name(unresolved.get(), name);
+    }
+
+    template <IsSpectral TSpectral>
+    UnresolvedObjectHandle<TSpectral> Scene<TSpectral>::get_unresolved_object(const std::string& name)
+    {
+        return UnresolvedObjectHandle<TSpectral>{ unresolved_objects_.lookup(name) };
     }
 
     template <IsSpectral TSpectral>
     void Scene<TSpectral>::delete_unresolved_object(const UnresolvedObjectHandle<TSpectral>& unresolved_object_handle)
     {
-        auto unresolved_shared = unresolved_object_handle.get();
-        UnresolvedObject<TSpectral>* target_ptr = unresolved_shared.get();
+        auto unresolved_object_shared = unresolved_object_handle.get();
+        prune_graph_references_(unresolved_object_shared.get());
+        unresolved_objects_.remove(unresolved_object_shared);
+    }
 
-        auto it = std::find(unresolved_objects_.begin(), unresolved_objects_.end(), unresolved_shared);
-        if (it == unresolved_objects_.end()) {
-            HUIRA_THROW_ERROR("UnresolvedObject does not exist in the scene");
-        }
 
-        HUIRA_LOG_INFO("Requested to delete " + unresolved_shared->get_info());
 
-        prune_graph_references_(target_ptr);
-        target_ptr->set_scene_owned(false);
-
-        unresolved_objects_.erase(it);
+    template <IsSpectral TSpectral>
+    CameraModelHandle<TSpectral> Scene<TSpectral>::new_camera_model(std::string name)
+    {
+        auto camera_shared = std::make_shared<CameraModel<TSpectral>>();
+        camera_models_.add(camera_shared, name);
+        return CameraModelHandle<TSpectral>{ camera_shared };
     }
 
     template <IsSpectral TSpectral>
-    CameraModelHandle<TSpectral> Scene<TSpectral>::new_camera_model()
+    void Scene<TSpectral>::set_name(const CameraModelHandle<TSpectral>& camera_model_handle, const std::string& name)
     {
-        auto camera_shared = std::make_shared<CameraModel<TSpectral>>();
-        camera_models_.push_back(camera_shared);
-        return CameraModelHandle<TSpectral>{ camera_shared };
+        camera_models_.set_name(camera_model_handle.get(), name);
+    }
+
+    template <IsSpectral TSpectral>
+    CameraModelHandle<TSpectral> Scene<TSpectral>::get_camera_model(const std::string& name)
+    {
+        return CameraModelHandle<TSpectral>{ camera_models_.lookup(name) };
     }
 
     template <IsSpectral TSpectral>
     void Scene<TSpectral>::delete_camera_model(const CameraModelHandle<TSpectral>& camera_model_handle)
     {
-        auto camera_shared = camera_model_handle.get();
-        CameraModel<TSpectral>* target_ptr = camera_shared.get();
+        auto camera_model_shared = camera_model_handle.get();
+        prune_graph_references_(camera_model_shared.get());
+        camera_models_.remove(camera_model_shared);
+    }
 
-        auto it = std::find(camera_models_.begin(), camera_models_.end(), camera_shared);
-        if (it == camera_models_.end()) {
-            HUIRA_THROW_ERROR("CameraModel does not exist in the scene");
-        }
 
-        HUIRA_LOG_INFO("Requested to delete " + camera_shared->get_info());
 
-        prune_graph_references_(target_ptr);
-        target_ptr->set_scene_owned(false);
-
-        camera_models_.erase(it);
+    template <IsSpectral TSpectral>
+    ModelHandle<TSpectral> Scene<TSpectral>::load_model(const fs::path& file, std::string name, unsigned int post_process_flags)
+    {
+        // Load the model using ModelLoader
+        auto model_shared = ModelLoader<TSpectral>::load(*this, file, name, post_process_flags);
+        return ModelHandle<TSpectral>{ model_shared };
     }
 
     template <IsSpectral TSpectral>
-    ModelHandle<TSpectral> Scene<TSpectral>::load_model(const fs::path& file, unsigned int post_process_flags)
+    void Scene<TSpectral>::set_name(const ModelHandle<TSpectral>& model_handle, const std::string& name)
     {
-        // Load the model using ModelLoader
-        auto [model_shared, new_meshes] = ModelLoader<TSpectral>::load(file, post_process_flags);
-        models_.push_back(model_shared);
-        HUIRA_LOG_INFO("Scene - Model loaded: " + model_shared->get_info());
-        // Add new meshes to the scene's mesh list
-        for (const auto& mesh : new_meshes) {
-            meshes_.push_back(mesh);
-            HUIRA_LOG_INFO("Scene - Mesh added from Model: Mesh[" + std::to_string(mesh->id()) + "]");
-        }
-        return ModelHandle<TSpectral>{ model_shared };
+        models_.set_name(model_handle.get(), name);
     }
+
+    template <IsSpectral TSpectral>
+    ModelHandle<TSpectral> Scene<TSpectral>::get_model(const std::string& name)
+    {
+        return ModelHandle<TSpectral>{ models_.lookup(name) };
+    }
+
+    template <IsSpectral TSpectral>
+    void Scene<TSpectral>::delete_model(const ModelHandle<TSpectral>& model_handle)
+    {
+        auto model_shared = model_handle.get();
+        prune_graph_references_(model_shared.get());
+        models_.remove(model_shared);
+    }
+
+
 
     template <IsSpectral TSpectral>
     void Scene<TSpectral>::add_star(const Star<TSpectral>& star)
@@ -178,25 +210,6 @@ namespace huira {
 
         // Add the stars to the scene:
         set_stars(stars);
-    }
-
-    template <IsSpectral TSpectral>
-    void Scene<TSpectral>::delete_model(const ModelHandle<TSpectral>& model_handle)
-    {
-        auto model_shared = model_handle.get();
-        Model<TSpectral>* target_ptr = model_shared.get();
-
-        auto it = std::find(models_.begin(), models_.end(), model_shared);
-        if (it == models_.end()) {
-            HUIRA_THROW_ERROR("Model does not exist in the scene");
-        }
-
-        HUIRA_LOG_INFO("Requested to delete Model[" + std::to_string(target_ptr->id()) + "]");
-
-        prune_graph_references_(target_ptr);
-        target_ptr->set_scene_owned(false);
-
-        models_.erase(it);
     }
 
     template <IsSpectral TSpectral>
@@ -442,5 +455,11 @@ namespace huira {
             }
 
         return nullptr;
+    }
+
+    template <IsSpectral TSpectral>
+    void Scene<TSpectral>::register_node_name_(const std::shared_ptr<Node<TSpectral>>& node, const std::string& name)
+    {
+        node_registry_.add(node, name);
     }
 }
