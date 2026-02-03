@@ -79,10 +79,20 @@ namespace huira::cli {
     }
 
     void Registry::print_help(std::ostream& os) const {
+        // Determine max size of command name:
+        std::size_t max_name_size = 0;
+        for (const auto& [_, cmd] : commands_) {
+            if (cmd.name.size() > max_name_size) {
+                max_name_size = cmd.name.size();
+            }
+        }
+
         os << "\nUsage: huira [global options] <command> [command options]\n\n";
         os << "Commands:\n";
         for (const auto& [_, cmd] : commands_) {
-            os << "  " << cmd.name << "\t" << cmd.description << "\n";
+            std::size_t length = max_name_size - cmd.name.size() + 4;
+            std::string spaces(length, ' ');
+            os << "  " << cmd.name << spaces << cmd.description << "\n";
         }
         os << "\nGlobal options:\n"
         << "  -h, --help       Show this help message\n"

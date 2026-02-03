@@ -70,9 +70,13 @@ namespace huira {
                 star_data[i].RA = RA * PI<double>() / 180.;
                 star_data[i].DEC = DEC * PI<double>() / 180.;
 
-                if (!std::isnan(star_data[i].pmRA) && !std::isnan(star_data[i].pmDEC)) {
-                    star_data[i].pmRA = read_entry_(line, 41, 48);
-                    star_data[i].pmDEC = read_entry_(line, 49, 56);
+                double pmRA = read_entry_(line, 41, 48);
+                double pmDEC = read_entry_(line, 49, 56);
+                if (!std::isnan(pmRA)) {
+                    star_data[i].pmRA = static_cast<float>(pmRA);
+                }
+                if (!std::isnan(pmDEC)) {
+                    star_data[i].pmDEC = static_cast<float>(pmDEC);
                 }
 
                 double BTmag = read_entry_(line, 110, 116);

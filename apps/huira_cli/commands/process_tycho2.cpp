@@ -59,7 +59,7 @@ namespace huira::cli::tycho2 {
             std::cout << "Reading files completed.\n";
         }
         else {
-            update_bar(bar, "Saving to " + output_path.string());
+            update_bar(bar, "Saving");
         }
         
         write_star_data(output_path, all_stars);

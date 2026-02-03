@@ -20,23 +20,28 @@ namespace huira {
         
         // Compute visual magnitude and B-V color index:
         double bv_color_index = 0.3;  // Default: assume white star
+        double vmag;
         if (has_bt && has_vt) {
-            visual_magnitude = VTmag - 0.090 * (BTmag - VTmag);
+            vmag = VTmag - 0.090 * (BTmag - VTmag);
             bv_color_index = 0.850 * (BTmag - VTmag);
         }
         else {
-            visual_magnitude = has_vt ? VTmag : BTmag;
+            vmag = has_vt ? VTmag : BTmag;
         }
 
         // Compute effective temperature from B-V color index:
-        temperature = 4600.0 * (1.0 / (0.92 * bv_color_index + 1.7) + 1.0 / (0.92 * bv_color_index + 0.62));
+        double temp = 4600.0 * (1.0 / (0.92 * bv_color_index + 1.7) + 1.0 / (0.92 * bv_color_index + 0.62));
+
+        // Store single precision:
+        visual_magnitude = static_cast<float>(vmag);
+        temperature = static_cast<float>(temp);
 
         // Perform spectrophotometric calibration:
-        double irradiance_ref = v_band_irradiance(visual_magnitude);
+        double irradiance_ref = v_band_irradiance(vmag);
         std::size_t N = 1000;
         std::vector<double> lambda;
         std::vector<double> v_band_efficiency = johnson_vband_approximation(N, lambda);
-        std::vector<double> radiance = plancks_law(temperature, lambda);
+        std::vector<double> radiance = plancks_law(temp, lambda);
         std::vector<double> photon_counts(N);
         for (size_t i = 0; i < N; ++i) {
             photon_counts[i] = v_band_efficiency[i] * radiance[i] / photon_energy(lambda[i]);
@@ -58,7 +63,7 @@ namespace huira {
 
         std::ofstream out(filepath, std::ios::binary);
         if (!out) {
-            HUIRA_THROW_ERROR("Failed to open file for writing: " + filepath.string());
+            HUIRA_THROW_ERROR("StarData - Failed to open file for writing: " + filepath.string());
         }
 
         // Write count first
@@ -70,11 +75,11 @@ namespace huira {
             static_cast<std::streamsize>(valid_stars.size() * sizeof(StarData)));
     }
 
-    inline std::vector<StarData> read_star_data(const fs::path& filepath, double maximum_magnitude)
+    inline std::vector<StarData> read_star_data(const fs::path& filepath, float maximum_magnitude)
     {
         std::ifstream in(filepath, std::ios::binary);
         if (!in) {
-            throw std::runtime_error("Failed to open file for reading: " + filepath.string());
+            HUIRA_THROW_ERROR("StarData - Failed to open file for reading: " + filepath.string());
         }
 
         uint64_t count = 0;

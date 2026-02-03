@@ -20,18 +20,23 @@ namespace huira::cli {
             );
     }
 
-    inline void update_bar(std::unique_ptr<indicators::ProgressBar>& bar, const std::string& postfix, std::size_t percentage = 0) {
-        bar->set_option(indicators::option::PostfixText{postfix});
-        if (percentage > 0) {
-            bar->set_progress(percentage);
-        } else {
-            bar->tick();
+    inline std::string truncate_postfix(const std::string& postfix, size_t max_len = 40) {
+        if (postfix.length() <= max_len) {
+            return postfix;
         }
+        return postfix.substr(0, max_len - 3) + "...";
+    }
+
+    inline void update_bar(std::unique_ptr<indicators::ProgressBar>& bar, const std::string& postfix) {
+        bar->set_option(indicators::option::PostfixText{ truncate_postfix(postfix) });
+        bar->tick();
     }
 
     inline void finish_bar(std::unique_ptr<indicators::ProgressBar>& bar, const std::string& postfix) {
-        bar->set_option(indicators::option::PostfixText{postfix});
-        bar->set_progress(100);
+        bar->set_option(indicators::option::PostfixText{ postfix });
+        if (!bar->is_completed()) {
+            bar->tick();
+        }
         indicators::show_console_cursor(true);
     }
 }

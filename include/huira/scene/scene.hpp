@@ -73,7 +73,7 @@ namespace huira {
 
         void add_star(const Star<TSpectral>& star);
         void set_stars(const std::vector<Star<TSpectral>>& stars);
-        void load_stars(const fs::path& star_catalog_path, const Time& time, double min_magnitude = 100.0);
+        void load_stars(const fs::path& star_catalog_path, const Time& time, float min_magnitude = 100.f);
         
 
         void prune_unreferenced_assets();

@@ -34,12 +34,13 @@ int main(int argc, char** argv) {
 
     // Configure a camera model:
     auto camera_model = scene.new_camera_model();
+    scene.load_stars(star_catalog_path, time, 10.0); // Load stars up to magnitude 6.0
 
     // Load the require SPICE kernels:
-    huira::spice::furnsh("kernels/naif0012.tls");
+    //huira::spice::furnsh("kernels/naif0012.tls");
 
     // Create the ECI frame:
-    auto eci = scene.root.new_spice_subframe("EARTH", "J2000");
+    auto eci = scene.root.new_spice_subframe("SSB", "J2000");
 
     // Create an instance of the camera in the ECI frame:
     auto navcam = eci.new_instance(camera_model);
@@ -53,12 +54,18 @@ int main(int argc, char** argv) {
     // Create the renderer:
     huira::RasterRenderer<huira::RGB> renderer;
 
-    // Create a scene view at the observation time:
-    auto scene_view = huira::SceneView<huira::RGB>(scene, time, navcam, huira::ObservationMode::ABERRATED_STATE);
+    for (std::size_t i = 0; i < 360; ++i) {
+        navcam.set_rotation(huira::Rotation<double>(Deg(i), Deg(i), Deg(i), "ZYX"));
 
-    // Render the current scene view:
-    renderer.render(scene_view, frame_buffer);
+        // Create a scene view at the observation time:
+        auto scene_view = huira::SceneView<huira::RGB>(scene, time, navcam, huira::ObservationMode::ABERRATED_STATE);
 
-    // Save the results:
-    huira::write_image_png("star_field.png", frame_buffer.sensor_response(), 8);
+        // Render the current scene view:
+        renderer.render(scene_view, frame_buffer, 10.f);
+
+        // Save the results:
+        std::string s = std::to_string(i);
+        std::string filename = "frame_" + std::string(3 - std::min(std::size_t{ 3 }, s.length()), '0') + s + ".png";
+        huira::write_image_png("output/" + filename, frame_buffer.sensor_response(), 8);
+    }
 }

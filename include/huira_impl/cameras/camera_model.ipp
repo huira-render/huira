@@ -42,6 +42,12 @@ namespace huira {
         float x = point_camera_coords.x;
         float y = point_camera_coords.y;
         float z = point_camera_coords.z;
+        auto NaN = std::numeric_limits<float>::quiet_NaN();
+
+        // Check if point is behind camera:
+        if (std::abs(z) < kEpsilon) {
+            return Pixel{ NaN, NaN };
+        }
 
         // Sensor Resolution:
         float rx = static_cast<float>(this->res_x());
@@ -54,11 +60,6 @@ namespace huira {
         float f = static_cast<float>(focal_length_);
 
         // Project to normalized image plane (meters)
-        if (std::abs(z) < kEpsilon) {
-            // Point is at or behind the camera; return invalid projection
-            return Pixel{std::numeric_limits<float>::quiet_NaN(),
-                               std::numeric_limits<float>::quiet_NaN()};
-        }
         float x_proj = (f * x) / z;
         float y_proj = (f * y) / z;
 
@@ -66,6 +67,11 @@ namespace huira {
         // Sensor center is at (sx/2, sy/2) in meters, (rx/2, ry/2) in pixels
         float px = (x_proj + sx * 0.5f) * (rx / sx);
         float py = (y_proj + sy * 0.5f) * (ry / sy);
+
+        // Check if point is outside the FOV:
+        if (px < 0 || px >= rx || py < 0 || py >= ry) {
+            return Pixel{ NaN, NaN };
+        }
 
         return Pixel{ px, py };
     }
