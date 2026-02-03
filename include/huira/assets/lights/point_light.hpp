@@ -29,9 +29,10 @@ namespace huira {
 
 
         LightType get_type() const override { return LightType::Point; }
-        std::string get_info() const override { return "PointLight[" + std::to_string(this->id()) + "]" + (this->name_.empty() ? "" : " " + this->name_); }
+        std::string type() const override { return "PointLight"; }
         
         void set_intensity(const TSpectral& intensity) { intensity_ = intensity; }
+
 
     private:
         TSpectral intensity_{ 0 };

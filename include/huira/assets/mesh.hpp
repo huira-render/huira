@@ -18,6 +18,7 @@ namespace huira {
             vertex_buffer_(std::move(vertex_buffer)),
             id_(next_id_++)
         {}
+        ~Mesh() = default;
 
         Mesh(const Mesh&) = delete;
         Mesh& operator=(const Mesh&) = delete;
@@ -25,11 +26,8 @@ namespace huira {
         Mesh(Mesh&&) = default;
         Mesh& operator=(Mesh&&) = default;
 
-        std::uint64_t id() const noexcept { return id_; }
-        void set_name(const std::string& name) { name_ = name; }
-        const std::string& name() const noexcept { return name_; }
-
-        std::string get_info() const { return "Mesh[" + std::to_string(id_) + "]" + (name_.empty() ? "" : " " + name_); }
+        std::uint64_t id() const override { return id_; }
+        std::string type() const override { return "Mesh"; }
 
         std::size_t index_count() const noexcept { return index_buffer_.size(); }
         std::size_t vertex_count() const noexcept { return vertex_buffer_.size(); }
@@ -44,7 +42,6 @@ namespace huira {
 
         std::uint64_t id_ = 0;
         static inline std::uint64_t next_id_ = 0;
-        std::string name_;
     };
 
 }

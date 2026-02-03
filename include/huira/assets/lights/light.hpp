@@ -36,10 +36,6 @@ namespace huira {
 
         virtual ~Light() = default;
 
-        std::uint64_t id() const noexcept { return id_; }
-        void set_name(const std::string& name) { name_ = name; }
-        const std::string& name() const noexcept { return name_; }
-
         virtual std::optional<LightSample<TSpectral>> sample_li(
             const Interaction<TSpectral>& ref,
             const Transform<float>& light_to_world,
@@ -54,11 +50,11 @@ namespace huira {
 
 
         virtual LightType get_type() const = 0;
-        virtual std::string get_info() const { return "Light[" + std::to_string(id_) + "]" + (name_.empty() ? "" : " " + name_); }
+
+        std::uint64_t id() const override { return id_; }
 
     protected:
         std::uint64_t id_ = 0;
         static inline std::uint64_t next_id_ = 0;
-        std::string name_ = "";
     };
 }

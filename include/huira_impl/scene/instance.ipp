@@ -9,7 +9,7 @@ namespace huira {
     template <IsSpectral TSpectral>
     std::string Instance<TSpectral>::get_info() const {
         return "Instance[" + std::to_string(this->id()) + "]" +
-            (this->name_.empty() ? "" : " " + this->name_) + " -> " +
+            (this->name().empty() ? "" : " " + this->name()) + " -> " +
             std::visit([](auto* ptr) { return ptr->get_info(); }, asset_);
     }
 }
