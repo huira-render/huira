@@ -53,7 +53,7 @@ namespace huira {
     class Node : public SceneObject<Node<TSpectral>, TSpectral> {
     public:
         Node(Scene<TSpectral>* scene);
-        virtual ~Node() = default;
+        virtual ~Node() override = default;
 
         Node(const Node&) = delete;
         Node& operator=(const Node&) = delete;
