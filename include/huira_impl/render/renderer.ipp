@@ -12,15 +12,22 @@ namespace huira {
                 continue;
             }
 
+            // Compute received energy:
+            TSpectral irradiance = star.get_irradiance();
+            float projected_area = scene_view.camera_model_->get_projected_aperture_area(star.get_direction());
+            TSpectral power = irradiance * projected_area;
+
             if (frame_buffer.has_received_power()) {
-                bool valid = true;
+                bool unobstructed = true;
                 if (frame_buffer.has_depth()) {
                     if (!std::isinf(frame_buffer.depth()(star_p))) {
-                        valid = false;
+                        unobstructed = false;
                     }
                 }
-                if (valid) {
-                    frame_buffer.received_power()(star_p) += 10000;
+                if (unobstructed) {
+                    // TODO compute PSF spreading:
+
+                    frame_buffer.received_power()(star_p) += power;
                 }
             }
         }

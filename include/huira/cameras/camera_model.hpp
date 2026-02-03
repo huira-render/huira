@@ -10,6 +10,7 @@
 #include "huira/core/concepts/spectral_concepts.hpp"
 
 #include "huira/cameras/distortion/distortion.hpp"
+#include "huira/cameras/aperture/aperture.hpp"
 #include "huira/scene/node.hpp"
 #include "huira/render/frame_buffer.hpp"
 #include "huira/cameras/sensors/sensor_model.hpp"
@@ -34,6 +35,19 @@ namespace huira {
 
         void readout(FrameBuffer<TSpectral>& fb, float exposure_time) const { sensor_->readout(fb, exposure_time); }
 
+        float get_projected_aperture_area(const Vec3<float>& direction) const
+        {
+            float cosTheta = glm::dot(glm::normalize(direction), Vec3<float>{0, 0, 1});
+            return this->aperture_->get_area() * std::abs(cosTheta);
+        }
+
+        void set_fstop(float fstop)
+        {
+            float aperture_diameter = static_cast<float>(focal_length_) / fstop;
+            float aperture_area = 3.14159265f * (aperture_diameter * aperture_diameter) / 4.f;
+            this->aperture_->set_area(aperture_area);
+        }
+
         int res_x() const { return sensor_->res_x(); }
         int res_y() const { return sensor_->res_y(); }
 
@@ -47,6 +61,7 @@ namespace huira {
 
         std::unique_ptr<SensorModel<TSpectral>> sensor_;
         std::unique_ptr<Distortion<TSpectral>> distortion_ = nullptr;
+        std::unique_ptr<Aperture> aperture_;
 
         std::uint64_t id_ = 0;
         static inline std::uint64_t next_id_ = 0;
