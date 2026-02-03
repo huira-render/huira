@@ -29,11 +29,13 @@ int main(int argc, char** argv) {
     // Set the observation time:
     huira::Time time("2019-02-06T10:27:00");
 
-    // Load stars at a specific date:
-    //scene.load_stars(star_catalog_path, time);
-
     // Configure a camera model:
     auto camera_model = scene.new_camera_model();
+    camera_model.set_focal_length(0.05);
+    camera_model.set_fstop(1.4);
+
+
+    // Load stars:
     scene.load_stars(star_catalog_path, time, 10.0); // Load stars up to magnitude 6.0
 
     // Load the require SPICE kernels:

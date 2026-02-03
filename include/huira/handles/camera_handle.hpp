@@ -22,6 +22,7 @@ namespace huira {
         using Handle<CameraModel<TSpectral>>::Handle;
 
         void set_focal_length(double focal_length) const;
+        void set_fstop(double fstop) const;
 
         FrameBuffer<TSpectral> make_frame_buffer() const;
 

@@ -1,12 +1,14 @@
 #include <memory>
 #include <limits>
 #include "huira/cameras/sensors/simple_sensor.hpp"
+#include "huira/cameras/aperture/circular_aperture.hpp"
 
 namespace huira {
     template <IsSpectral TSpectral>
     CameraModel<TSpectral>::CameraModel() : id_(next_id_++)
     {
         this->sensor_ = std::make_unique<SimpleSensor<TSpectral>>(1920, 1080, .036f, .02f);
+        this->aperture_ = std::make_unique<CircularAperture>(.025);
     }
 
     template <IsSpectral TSpectral>
