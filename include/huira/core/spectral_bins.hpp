@@ -98,6 +98,7 @@ namespace huira {
         float magnitude() const;
         float max() const;
         float min() const;
+        float integrate() const;
 
         // Array-Array Arithmetic Operations
         constexpr SpectralBins& operator+=(const SpectralBins& other);

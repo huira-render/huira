@@ -7,6 +7,7 @@
 
 #include "huira/core/constants.hpp"
 #include "huira/util/logger.hpp"
+#include "huira/stars/io/catalog_types.hpp"
 
 namespace fs = std::filesystem;
 
@@ -68,6 +69,20 @@ namespace huira {
         std::size_t i = 0;
         while (std::getline(file, line)) {
             if (is_valid_line_(line)) {
+                // Read identifer:
+                int tyc1 = static_cast<int>(read_entry_(line, 0, 4));
+                int tyc2 = static_cast<int>(read_entry_(line, 5, 10));
+                int tyc3 = static_cast<int>(read_entry_(line, 11, 12));
+                star_data[i].id = pack_tycho2_id(
+                    static_cast<uint16_t>(tyc1),
+                    static_cast<uint16_t>(tyc2),
+                    static_cast<uint8_t>(tyc3)
+                );
+                star_data[i].catalog = CatalogType::Tycho2;
+
+
+                float epochRA = 2000.0;
+                float epochDEC = 2000.0;
                 if (has_mean_position_(line)) {
                     // Mean position at bytes 15-27 and 28-40, epoch J2000.0
                     double RA = read_entry_(line, 15, 27);
@@ -77,7 +92,6 @@ namespace huira {
                     }
                     star_data[i].RA = RA * PI<double>() / 180.;
                     star_data[i].DEC = DEC * PI<double>() / 180.;
-                    star_data[i].epoch = 2000.0f;
                 }
                 else {
                     // Observed position at bytes 153-165 and 166-178
@@ -97,7 +111,8 @@ namespace huira {
                         continue;
                     }
                     // Take average of epRA and epDE to get a single epoch value for the star
-                    star_data[i].epoch = static_cast<float>(1990.0 + (epRA + epDE) / 2.0);
+                    epochRA = 1990.f + static_cast<float>(epRA);
+                    epochDEC = 1990.f + static_cast<float>(epDE);
                 }
                 
                 // Proper motion at bytes 41-48 and 49-56
@@ -109,6 +124,10 @@ namespace huira {
                 if (!std::isnan(pmDEC)) {
                     star_data[i].pmDEC = static_cast<float>(pmDEC);
                 }
+
+                // Normalize to epoch J2000.0
+                star_data[i].normalize_epoch(epochRA, epochDEC);
+
                 
                 // BT magnitude at bytes 110-116, VT at 123-129
                 double BTmag = read_entry_(line, 110, 116);
@@ -137,6 +156,17 @@ namespace huira {
         std::size_t i = 0;
         while (std::getline(file, line)) {
             if (is_valid_line_(line)) {
+                // Read identifer:
+                int tyc1 = static_cast<int>(read_entry_(line, 0, 4));
+                int tyc2 = static_cast<int>(read_entry_(line, 5, 10));
+                int tyc3 = static_cast<int>(read_entry_(line, 11, 12));
+                star_data[i].id = pack_tycho2_id(
+                    static_cast<uint16_t>(tyc1),
+                    static_cast<uint16_t>(tyc2),
+                    static_cast<uint8_t>(tyc3)
+                );
+                star_data[i].catalog = CatalogType::Tycho2;
+
                 // Supplement position at bytes 15-27 and 28-40
                 double RA = read_entry_(line, 15, 27);
                 double DEC = read_entry_(line, 28, 40);
@@ -156,8 +186,8 @@ namespace huira {
                     star_data[i].pmDEC = static_cast<float>(pmDEC);
                 }
 
-                // Supplement positions are at epoch J1991.25
-                star_data[i].epoch = 1991.25f;
+                // Normalize to epoch J2000.0
+                star_data[i].normalize_epoch(1991.25f, 1991.25f);
 
                 // BT magnitude at bytes 83-89, VT at 96-102
                 double BTmag = read_entry_(line, 83, 89);

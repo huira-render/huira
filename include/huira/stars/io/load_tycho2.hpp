@@ -2,6 +2,8 @@
 
 #include <filesystem>
 #include <vector>
+#include <cstdint>
+#include <string>
 
 #include "huira/stars/io/star_data.hpp"
 
