@@ -29,14 +29,15 @@ namespace huira::cli::tycho2 {
 
         fs::path output_path = output_dir / "tycho2.hrsc";
 
+        std::size_t file_count = tycho2_dat_files.size() + tycho2_suppl_files.size();
+
         std::unique_ptr<indicators::ProgressBar> bar;
         if (!ctx.verbose) {
-            bar = make_progress_bar("Tycho-2 Process ", 20+1);
+            bar = make_progress_bar("Tycho-2 Process ", file_count+1);
         }
 
         std::vector<StarData> all_stars;
-        for (int i = 0; i < 20; ++i) {
-            auto filename = std::format("tyc2.dat.{:02d}", i);
+        for (const auto& filename : tycho2_dat_files) {
             auto path = input_dir / filename;
             
             if (!std::filesystem::exists(path)) {
@@ -52,6 +53,25 @@ namespace huira::cli::tycho2 {
             }
 
             std::vector<StarData> new_stars = huira::read_tycho2_dat(path);
+            all_stars.insert(all_stars.end(), new_stars.begin(), new_stars.end());
+        }
+
+        for (const auto& filename : tycho2_suppl_files) {
+            auto path = input_dir / filename;
+
+            if (!std::filesystem::exists(path)) {
+                std::cerr << "Could not find file: " << path << "\n";
+                return 1;
+            }
+
+            if (ctx.verbose) {
+                std::cout << "Reading " << filename << "\n";
+            }
+            else {
+                update_bar(bar, "Reading " + filename);
+            }
+
+            std::vector<StarData> new_stars = huira::read_tycho2_suppl(path);
             all_stars.insert(all_stars.end(), new_stars.begin(), new_stars.end());
         }
 
@@ -75,8 +95,11 @@ namespace huira::cli::tycho2 {
             if (ctx.verbose) {
                 std::cout << "Cleaning up .dat files...\n";
             }
-            for (int i = 0; i < 20; ++i) {
-                auto filename = std::format("tyc2.dat.{:02d}", i);
+            for (const auto& filename : tycho2_dat_files) {
+                auto path = input_dir / filename;
+                std::filesystem::remove(path);
+            }
+            for (const auto& filename : tycho2_suppl_files) {
                 auto path = input_dir / filename;
                 std::filesystem::remove(path);
             }
@@ -92,13 +115,16 @@ namespace huira::cli::tycho2 {
             TCLAP::UnlabeledValueArg<std::string> input_arg("input",
                 "Input directory with tyc2.dat files", true, "", "input_directory", cmd);
     
-            TCLAP::UnlabeledValueArg<std::string> output_arg("output",
-                "Output directory for tycho2.hrsc", true, "", "output_directory", cmd);
+            TCLAP::ValueArg<std::string> output_arg("o", "output",
+                "Output directory for tycho2.hrsc", false, "", "output_directory", cmd);
     
             cmd.parse(argc, argv);
     
             fs::path input_dir = fs::path(input_arg.getValue());
             fs::path output_dir = fs::path(output_arg.getValue());
+            if (output_dir.empty()) {
+                output_dir = input_dir;
+            }
             return process_tycho2(input_dir, output_dir, ctx);
     
         }

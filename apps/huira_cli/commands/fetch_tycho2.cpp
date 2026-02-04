@@ -74,7 +74,6 @@ namespace huira::cli::tycho2 {
 
         constexpr std::string_view base_url = 
             "https://cdsarc.cds.unistra.fr/viz-bin/nph-Cat/txt?I/259";
-        constexpr int file_count = 20;
 
         // Global curl init (once per process is fine)
         static bool curl_initialized = [] {
@@ -86,6 +85,9 @@ namespace huira::cli::tycho2 {
             return 1;
         }
 
+        // Create list of files to download:
+        std::size_t file_count = tycho2_dat_files.size() + tycho2_suppl_files.size();
+
         // Create progress bar for non-verbose mode
         std::unique_ptr<indicators::ProgressBar> bar;
         if (!ctx.verbose) {
@@ -93,8 +95,7 @@ namespace huira::cli::tycho2 {
         }
 
         int failures = 0;
-        for (int i = 0; i < file_count; ++i) {
-            std::string filename = std::format("tyc2.dat.{:02d}", i);
+        for (const auto& filename : tycho2_dat_files) {
             std::string url = std::format("{}/{}.gz", base_url, filename);
             fs::path dest = output_dir / filename;
 
@@ -108,6 +109,29 @@ namespace huira::cli::tycho2 {
                 if (ctx.verbose) {
                     std::cout << "  Skipping (already exists)\n";
                 } 
+                continue;
+            }
+
+            if (!download_file(url, dest, ctx)) {
+                ++failures;
+            }
+        }
+
+        for (const auto& filename : tycho2_suppl_files) {
+            std::string url = std::format("{}/{}.gz", base_url, filename);
+            fs::path dest = output_dir / filename;
+
+            if (ctx.verbose) {
+                std::cout << "Downloading " << filename << "...\n";
+            }
+            else {
+                update_bar(bar, "Downloading " + filename);
+            }
+
+            if (fs::exists(dest) && !force) {
+                if (ctx.verbose) {
+                    std::cout << "  Skipping (already exists)\n";
+                }
                 continue;
             }
 
@@ -158,7 +182,7 @@ namespace huira::cli::tycho2 {
 
             cmd.parse(argc, argv);
 
-            fs::path output_dir = fs::path(output_arg.getValue()) / "tycho2";
+            fs::path output_dir = fs::path(output_arg.getValue());
             return fetch_tycho2(output_dir, ctx, force_arg.getValue(), process_arg.getValue(), clean_arg.getValue());
 
         } catch (TCLAP::ArgException& e) {

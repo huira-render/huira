@@ -6,7 +6,7 @@
 
 namespace huira {
 
-    static Vec3<float> barycentric_coordinates(
+    static inline Vec3<float> barycentric_coordinates(
         const Pixel& v0,
         const Pixel& v1,
         const Pixel& v2,
