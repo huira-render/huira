@@ -33,7 +33,7 @@ namespace huira::cli::tycho2 {
 
         std::unique_ptr<indicators::ProgressBar> bar;
         if (!ctx.verbose) {
-            bar = make_progress_bar("Tycho-2 Process ", file_count+1);
+            bar = make_progress_bar("Tycho-2 Process  ", file_count+1);
         }
 
         std::vector<StarData> all_stars;

@@ -61,6 +61,18 @@ namespace huira {
         return min_val;
     }
 
+    template <size_t N, auto... Args>
+    float SpectralBins<N, Args...>::integrate() const {
+        float integral = 0.0f;
+        for (size_t i = 0; i < N; ++i) {
+            float bin_width = (bins_[i].max - bins_[i].min) * 1e-9;
+            integral += data_[i] * bin_width;
+        }
+        return integral;
+
+    }
+
+
     // ========================================= //
     // === Array-Array Arithmetic Operations === //
     // ========================================= //

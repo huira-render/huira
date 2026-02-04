@@ -50,6 +50,26 @@ namespace huira {
         solid_angle = irradiance_ref / radiance_from_temp;
     }
 
+    inline void StarData::normalize_epoch(double epochRA, double epochDEC)
+    {
+        if (epochRA == 2000.0f && epochDEC == 2000.0f) {
+            return;
+        }
+
+        constexpr double MAS_TO_RAD = PI<double>() / (180.0 * 3600.0 * 1000.0);
+
+        // Years from each epoch to J2000
+        double years_RA = 2000.0 - static_cast<double>(epochRA);
+        double years_DEC = 2000.0 - static_cast<double>(epochDEC);
+
+        // Apply proper motion to bring position to J2000
+        double pmRA_rad = static_cast<double>(pmRA) * MAS_TO_RAD;
+        double pmDEC_rad = static_cast<double>(pmDEC) * MAS_TO_RAD;
+
+        DEC += pmDEC_rad * years_DEC;
+        RA += pmRA_rad * years_RA / std::cos(DEC);
+    }
+
     inline void write_star_data(const fs::path& filepath, const std::vector<StarData>& stars)
     {
         // Create a mutable copy, removing any stars with NaN visual_magnitude
@@ -66,13 +86,22 @@ namespace huira {
             HUIRA_THROW_ERROR("StarData - Failed to open file for writing: " + filepath.string());
         }
 
-        // Write count first
-        std::uint64_t count = valid_stars.size();
-        out.write(reinterpret_cast<const char*>(&count), sizeof(count));
+        // Write header
+        HrscHeader header{};
+        header.magic[0] = 'H';
+        header.magic[1] = 'R';
+        header.magic[2] = 'S';
+        header.magic[3] = 'C';
+        header.version = 1; // Current HRSC version
+        header.reserved = 0;
+        header.star_count = valid_stars.size();
+        out.write(reinterpret_cast<const char*>(&header), sizeof(header));
 
         // Write all star data
         out.write(reinterpret_cast<const char*>(valid_stars.data()),
             static_cast<std::streamsize>(valid_stars.size() * sizeof(StarData)));
+
+        HUIRA_LOG_INFO("StarData - " + std::to_string(valid_stars.size()) + " stars written to: " + filepath.string());
     }
 
     inline std::vector<StarData> read_star_data(const fs::path& filepath, float maximum_magnitude)
@@ -82,16 +111,25 @@ namespace huira {
             HUIRA_THROW_ERROR("StarData - Failed to open file for reading: " + filepath.string());
         }
 
-        uint64_t count = 0;
-        in.read(reinterpret_cast<char*>(&count), sizeof(count));
+        // Read and validate header
+        HrscHeader header{};
+        in.read(reinterpret_cast<char*>(&header), sizeof(header));
+        if (header.magic[0] != 'H' || header.magic[1] != 'R' ||
+            header.magic[2] != 'S' || header.magic[3] != 'C') {
+            HUIRA_THROW_ERROR("StarData - Invalid file format: " + filepath.string());
+        }
+
+        if (header.version != 1) {
+            HUIRA_THROW_ERROR("StarData - Unsupported version: " + std::to_string(header.version));
+        }
 
         // Binary search on file to find cutoff index
-        std::uint64_t low = 0, high = count;
+        std::uint64_t low = 0, high = header.star_count;
         StarData temp;
 
         while (low < high) {
             std::uint64_t mid = low + (high - low) / 2;
-            in.seekg(static_cast<std::streamoff>(sizeof(std::uint64_t) + mid * sizeof(StarData)));
+            in.seekg(static_cast<std::streamoff>(sizeof(HrscHeader) + mid * sizeof(StarData)));
             in.read(reinterpret_cast<char*>(&temp), sizeof(StarData));
 
             if (temp.visual_magnitude <= maximum_magnitude) {
@@ -104,9 +142,11 @@ namespace huira {
 
         // Read only the stars we need
         std::vector<StarData> stars(low);
-        in.seekg(static_cast<std::streamoff>(sizeof(uint64_t)));
+        in.seekg(static_cast<std::streamoff>(sizeof(HrscHeader)));
         in.read(reinterpret_cast<char*>(stars.data()),
             static_cast<std::streamsize>(low * sizeof(StarData)));
+
+        HUIRA_LOG_INFO("StarData - " + std::to_string(stars.size()) + " stars read from: " + filepath.string());
 
         return stars;
     }
