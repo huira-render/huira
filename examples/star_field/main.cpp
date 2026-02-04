@@ -36,7 +36,7 @@ int main(int argc, char** argv) {
 
 
     // Load stars:
-    scene.load_stars(star_catalog_path, time, 10.0); // Load stars up to magnitude 6.0
+    scene.load_stars(star_catalog_path, time, 12.0); // Load stars up to magnitude 6.0
 
     // Load the require SPICE kernels:
     //huira::spice::furnsh("kernels/naif0012.tls");
@@ -63,7 +63,7 @@ int main(int argc, char** argv) {
         auto scene_view = huira::SceneView<huira::RGB>(scene, time, navcam, huira::ObservationMode::ABERRATED_STATE);
 
         // Render the current scene view:
-        renderer.render(scene_view, frame_buffer, 10.f);
+        renderer.render(scene_view, frame_buffer, 0.1f);
 
         // Save the results:
         std::string s = std::to_string(i);

@@ -6,6 +6,8 @@ namespace huira {
     template <IsSpectral TSpectral>
     void SimpleSensor<TSpectral>::readout(FrameBuffer<TSpectral>& fb, float exposure_time) const {
 
+        const TSpectral photon_energy = TSpectral::photon_energies();
+
         Image<TSpectral>& received_power = fb.received_power();
         Image<float>& output = fb.sensor_response();
 
@@ -20,15 +22,14 @@ namespace huira {
                 TSpectral received_energy = received_power(x, y) * exposure_time;
 
                 // Photon Conversion
-                //TSpectral photons = energy_to_photons(received_energy);
-                TSpectral photons = received_energy; // Placeholder for energy to photon conversion
+                TSpectral photons = received_energy / photon_energy;
 
                 // Quantum Efficiency
                 TSpectral electrons = photons * quantum_efficiency;
                 float signal_e = electrons.total();
 
                 // Dark Current
-                float dark_e = 0*dark_current * exposure_time;
+                float dark_e = dark_current * exposure_time;
 
                 // Shot Noise (Poisson)
                 //float noisy_e = sample_poisson(signal_e + dark_e);
@@ -42,11 +43,12 @@ namespace huira {
                     noisy_e = full_well_capacity;
                 }
 
-                // Step F: Quantization (ADC)
+                // Quantization (ADC)
                 float max_dn = std::pow(2.f, static_cast<float>(bit_depth)) - 1.f;
                 float dn = std::floor(std::min(noisy_e / gain, max_dn));
 
-                output(x, y) = dn;
+                // Map back to floating point [0,1] for output image:
+                output(x, y) = dn / max_dn;
             }
         }
     }
