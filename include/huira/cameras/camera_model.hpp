@@ -44,7 +44,7 @@ namespace huira {
         void set_fstop(float fstop)
         {
             float aperture_diameter = static_cast<float>(focal_length_) / fstop;
-            float aperture_area = 3.14159265f * (aperture_diameter * aperture_diameter) / 4.f;
+            float aperture_area = PI<float>() * (aperture_diameter * aperture_diameter) / 4.f;
             this->aperture_->set_area(aperture_area);
         }
 

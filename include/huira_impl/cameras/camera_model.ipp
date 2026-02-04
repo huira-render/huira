@@ -7,8 +7,8 @@ namespace huira {
     template <IsSpectral TSpectral>
     CameraModel<TSpectral>::CameraModel() : id_(next_id_++)
     {
-        this->sensor_ = std::make_unique<SimpleSensor<TSpectral>>(1920, 1080, .036f, .02f);
-        this->aperture_ = std::make_unique<CircularAperture>(.025);
+        this->sensor_ = std::make_unique<SimpleSensor<TSpectral>>(1920, 1080, static_cast<float>(.036), static_cast<float>(.02));
+        this->aperture_ = std::make_unique<CircularAperture>(static_cast<float>(.025));
     }
 
     template <IsSpectral TSpectral>

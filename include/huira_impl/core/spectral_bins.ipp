@@ -2,12 +2,16 @@
 #include <iostream>
 #include <string>
 
+#include "huira/core/physics.hpp"
+
 namespace huira {
     // ======================== //
     // === Static Definition === //
     // ======================== //
     template <size_t N, auto... Args>
     std::array<Bin, N> SpectralBins<N, Args...>::bins_ = SpectralBins<N, Args...>::initialize_bins_static_();
+
+
     // ========================== //
     // === Summary Operations === //
     // ========================== //
@@ -165,7 +169,7 @@ namespace huira {
     // === String Functions === //
     // ======================== //
     template <size_t N, auto... Args>
-    std::string SpectralBins<N, Args...>::toString() const {
+    std::string SpectralBins<N, Args...>::to_string() const {
         std::string result = "[";
         for (size_t i = 0; i < N; ++i) {
             result += std::to_string(data_[i]);
@@ -174,6 +178,17 @@ namespace huira {
             }
         }
         result += "]";
+        return result;
+    }
+
+    template <size_t N, auto... Args>
+    constexpr SpectralBins<N, Args...> SpectralBins<N, Args...>::photon_energies()
+    {
+        SpectralBins<N, Args...> result;
+        for (size_t i = 0; i < N; ++i) {
+            double wavelength = static_cast<double>(bins_[i].center) * 1e-9;
+            result[i] = static_cast<float>(photon_energy(wavelength));
+        }
         return result;
     }
 
@@ -275,7 +290,7 @@ namespace huira {
     // ======================== //
     template <size_t N, auto... Args>
     std::ostream& operator<<(std::ostream& os, const SpectralBins<N, Args...>& v) {
-        os << v.toString();
+        os << v.to_string();
         return os;
     }
 

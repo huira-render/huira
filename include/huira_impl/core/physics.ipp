@@ -48,8 +48,8 @@ namespace huira {
         auto bins = TSpectral::get_all_bins();
         for (std::size_t i = 0; i < bins.size(); ++i) {
             // Integrate black-body spectrum over the computed bounds:
-            double min_wavelength = static_cast<double>(bins[i].min);
-            double max_wavelength = static_cast<double>(bins[i].max);
+            double min_wavelength = static_cast<double>(bins[i].min) * 1e-9;
+            double max_wavelength = static_cast<double>(bins[i].max) * 1e-9;
 
             std::vector<double> lambda = linspace(min_wavelength, max_wavelength, steps);
             std::vector<double> rad = plancks_law(temperature, lambda);

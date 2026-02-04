@@ -6,6 +6,7 @@
 namespace huira {
     // Bin definitions:
     struct Bin {
+        // Values in wavelengths:
         float min;
         float max;
         float center;
@@ -126,11 +127,13 @@ namespace huira {
         constexpr bool operator!=(const SpectralBins& other) const;
 
         // String functions
-        std::string toString() const;
+        std::string to_string() const;
 
         // Access to bin information
-        constexpr static const Bin& get_bin(size_t index) { return bins_[index]; }
-        constexpr static const std::array<Bin, N>& get_all_bins() { return bins_; }
+        static constexpr const Bin& get_bin(size_t index) { return bins_[index]; }
+        static constexpr const std::array<Bin, N>& get_all_bins() { return bins_; }
+
+        static constexpr SpectralBins photon_energies();
 
     private:
         std::array<float, N> data_;
