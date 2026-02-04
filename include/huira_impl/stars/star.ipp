@@ -42,7 +42,8 @@ namespace huira {
     Star<TSpectral>::Star(const StarData& star_data, Time time)
     {
         // Compute the ICRF direction:
-        double tsince = time.julian_years_since_j2000(TimeScale::TT);
+        double years_to_j2000 = (2000.0 - static_cast<double>(star_data.epoch));
+        double tsince = time.julian_years_since_j2000(TimeScale::TT) - years_to_j2000;
 
         constexpr double MAS_TO_RAD = PI<double>() / (180.0 * 3600.0 * 1000.0);
         double pmDEC = static_cast<double>(star_data.pmDEC) * MAS_TO_RAD;

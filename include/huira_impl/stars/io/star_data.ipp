@@ -50,7 +50,7 @@ namespace huira {
         solid_angle = irradiance_ref / radiance_from_temp;
     }
 
-    inline void write_star_data(const fs::path& filepath, std::vector<StarData>& stars)
+    inline void write_star_data(const fs::path& filepath, const std::vector<StarData>& stars)
     {
         // Create a mutable copy, removing any stars with NaN visual_magnitude
         std::vector<StarData> valid_stars;

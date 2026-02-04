@@ -11,6 +11,7 @@ namespace huira {
         // RA/DEC in radians:
         double RA;
         double DEC;
+        float epoch = 2000.f;
 
         // Proper motions in Milliarcseconds-per-year:
         float pmRA = 0.f;
