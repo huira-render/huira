@@ -11,6 +11,7 @@
 #include "huira_cli/commands/tycho2.hpp"
 
 #include "huira/stars/io/star_data.hpp"
+#include "huira/stars/io/star_catalog.hpp"
 #include "huira/stars/io/load_tycho2.hpp"
 
 namespace fs = std::filesystem;
@@ -75,6 +76,9 @@ namespace huira::cli::tycho2 {
             all_stars.insert(all_stars.end(), new_stars.begin(), new_stars.end());
         }
 
+        StarCatalog catalog(all_stars);
+        catalog.set_catalog_type(CatalogType::Tycho2);
+
         if (ctx.verbose) {
             std::cout << "Reading files completed.\n";
         }
@@ -82,7 +86,7 @@ namespace huira::cli::tycho2 {
             update_bar(bar, "Saving");
         }
         
-        write_star_data(output_path, all_stars);
+        catalog.write_star_data(output_path);
 
         if (ctx.verbose) {
             std::cout << std::to_string(all_stars.size()) << " stars written to " << output_path << "\n";

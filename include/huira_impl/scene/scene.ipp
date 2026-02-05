@@ -7,6 +7,7 @@
 #include "huira/handles/frame_handle.hpp"
 #include "huira/util/logger.hpp"
 #include "huira/util/colorful_text.hpp"
+#include "huira/stars/io/star_catalog.hpp"
 
 namespace huira {
     // Suppressing C4355: 'this' is passed to FrameNode constructor, but FrameNode only stores
@@ -200,7 +201,8 @@ namespace huira {
     void Scene<TSpectral>::load_stars(const fs::path& star_catalog_path, const Time& time, float min_magnitude)
     {
         // Read the catalog:
-        std::vector<StarData> star_data = read_star_data(star_catalog_path, min_magnitude);
+        StarCatalog star_catalog = StarCatalog::read_star_data(star_catalog_path, min_magnitude);
+        const std::vector<StarData>& star_data = star_catalog.get_star_data();
 
         // Create the stars:
         std::vector<Star<TSpectral>> stars(star_data.size());

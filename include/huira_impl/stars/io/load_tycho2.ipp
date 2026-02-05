@@ -5,9 +5,9 @@
 #include <algorithm>
 #include <limits>
 
-#include "huira/core/constants.hpp"
 #include "huira/util/logger.hpp"
-#include "huira/stars/io/catalog_types.hpp"
+#include "huira/stars/io/star_data.hpp"
+#include "huira/stars/io/tycho2_id.hpp"
 
 namespace fs = std::filesystem;
 
@@ -78,7 +78,6 @@ namespace huira {
                     static_cast<uint16_t>(tyc2),
                     static_cast<uint8_t>(tyc3)
                 );
-                star_data[i].catalog = CatalogType::Tycho2;
 
 
                 float epochRA = 2000.0;
@@ -165,7 +164,6 @@ namespace huira {
                     static_cast<uint16_t>(tyc2),
                     static_cast<uint8_t>(tyc3)
                 );
-                star_data[i].catalog = CatalogType::Tycho2;
 
                 // Supplement position at bytes 15-27 and 28-40
                 double RA = read_entry_(line, 15, 27);
