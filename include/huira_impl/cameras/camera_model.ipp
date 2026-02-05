@@ -7,14 +7,17 @@ namespace huira {
     template <IsSpectral TSpectral>
     CameraModel<TSpectral>::CameraModel() : id_(next_id_++)
     {
-        this->sensor_ = std::make_unique<SimpleSensor<TSpectral>>(1920, 1080, static_cast<float>(.036), static_cast<float>(.02));
-        this->aperture_ = std::make_unique<CircularAperture>(static_cast<float>(.025));
+        this->sensor_ = std::make_unique<SimpleSensor<TSpectral>>(1920, 1080, .036f, .02f);
+        this->aperture_ = std::make_unique<CircularAperture<TSpectral>>(.025f);
     }
 
     template <IsSpectral TSpectral>
-    void CameraModel<TSpectral>::set_focal_length(double focal_length)
+    void CameraModel<TSpectral>::set_focal_length(float focal_length)
     {
         focal_length_ = focal_length;
+        if (use_aperture_psf_) {
+            psf_ = aperture_->make_psf(focal_length_, sensor_->pixel_pitch());
+        }
     }
 
     template <IsSpectral TSpectral>
@@ -51,31 +54,34 @@ namespace huira {
             return Pixel{ NaN, NaN };
         }
 
-        // Sensor Resolution:
-        float rx = static_cast<float>(this->res_x());
-        float ry = static_cast<float>(this->res_y());
+        // Compute normalized image coordinates:
+        Pixel normalized{ x / z, y / z };
+        if (distortion_) {
+            normalized = distortion_->distort(normalized);
+        }
 
-        // Sensor Size:
-        float sx = this->sensor_->width();
-        float sy = this->sensor_->height();
-
-        float f = static_cast<float>(focal_length_);
-
-        // Project to normalized image plane (meters)
-        float x_proj = (f * x) / z;
-        float y_proj = (f * y) / z;
-
-        // Convert to pixel coordinates
-        // Sensor center is at (sx/2, sy/2) in meters, (rx/2, ry/2) in pixels
-        float px = (x_proj + sx * 0.5f) * (rx / sx);
-        float py = (y_proj + sy * 0.5f) * (ry / sy);
+        float px = fx_ * normalized[0] + cx_;
+        float py = fy_ * normalized[1] + cy_;
 
         // Check if point is outside the FOV:
-        if (px < 0 || px >= rx || py < 0 || py >= ry) {
+        if (px < 0 || px >= rx_ || py < 0 || py >= ry_) {
             return Pixel{ NaN, NaN };
         }
 
         return Pixel{ px, py };
+    }
+
+    template <IsSpectral TSpectral>
+    void CameraModel<TSpectral>::compute_intrinsics_()
+    {
+        fx_ = focal_length_ / sensor_->pitch_x();
+        fy_ = focal_length_ / sensor_->pitch_y();
+
+        cx_ = static_cast<float>(sensor_->res_x()) * 0.5f;
+        cy_ = static_cast<float>(sensor_->res_y()) * 0.5f;
+
+        rx_ = static_cast<float>(sensor_->res_x());
+        ry_ = static_cast<float>(sensor_->res_y());
     }
 }
 

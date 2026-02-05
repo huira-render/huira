@@ -15,6 +15,7 @@
 #include "huira/render/frame_buffer.hpp"
 #include "huira/cameras/sensors/sensor_model.hpp"
 #include "huira/scene/scene_object.hpp"
+#include "huira/cameras/psf/psf.hpp"
 
 namespace huira {
     template <IsSpectral TSpectral>
@@ -25,7 +26,7 @@ namespace huira {
         CameraModel(const CameraModel&) = delete;
         CameraModel& operator=(const CameraModel&) = delete;
 
-        void set_focal_length(double focal_length);
+        void set_focal_length(float focal_length);
 
         template <IsDistortion TDistortion, typename... Args>
         void set_distortion(Args&&... args);
@@ -46,6 +47,10 @@ namespace huira {
             float aperture_diameter = static_cast<float>(focal_length_) / fstop;
             float aperture_area = PI<float>() * (aperture_diameter * aperture_diameter) / 4.f;
             this->aperture_->set_area(aperture_area);
+
+            if (use_aperture_psf_) {
+                psf_ = aperture_->make_psf(focal_length_, sensor_->pixel_pitch());
+            }
         }
 
         int res_x() const { return sensor_->res_x(); }
@@ -54,17 +59,38 @@ namespace huira {
         std::uint64_t id() const override { return id_; }
         std::string type() const override { return "CameraModel"; }
 
+        void set_custom_psf(std::unique_ptr<PSF<TSpectral>> psf) {
+            psf_ = std::move(psf);
+            use_aperture_psf_ = false;
+        }
+
+        void use_aperture_psf(bool value = true) {
+            use_aperture_psf_ = value;
+            psf_ = aperture_->make_psf(focal_length_, sensor_->pixel_pitch());
+        }
+
         FrameBuffer<TSpectral> make_frame_buffer() const { return FrameBuffer<TSpectral>(res_x(), res_y()); }
 
     protected:
-        double focal_length_ = .05;
+        float focal_length_ = .05f;
 
         std::unique_ptr<SensorModel<TSpectral>> sensor_;
+        std::unique_ptr<Aperture<TSpectral>> aperture_;
         std::unique_ptr<Distortion<TSpectral>> distortion_ = nullptr;
-        std::unique_ptr<Aperture> aperture_;
+        std::unique_ptr<PSF<TSpectral>> psf_ = nullptr;
+
+        bool use_aperture_psf_ = false;
 
         std::uint64_t id_ = 0;
         static inline std::uint64_t next_id_ = 0;
+
+        float fx_;
+        float fy_;
+        float cx_;
+        float cy_;
+        float rx_;
+        float ry_;
+        void compute_intrinsics_();
     };
 }
 
