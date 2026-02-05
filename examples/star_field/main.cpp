@@ -31,8 +31,8 @@ int main(int argc, char** argv) {
 
     // Configure a camera model:
     auto camera_model = scene.new_camera_model();
-    camera_model.set_focal_length(0.05);
-    camera_model.set_fstop(1.4);
+    camera_model.set_focal_length(0.05f);
+    camera_model.set_fstop(1.4f);
 
 
     // Load stars:
