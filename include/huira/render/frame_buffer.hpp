@@ -14,8 +14,8 @@ namespace huira {
     public:
         FrameBuffer() = delete;
 
-        std::size_t width() const { return width_; }
-        std::size_t height() const { return height_; }
+        int width() const { return width_; }
+        int height() const { return height_; }
 
 
         void enable_depth(bool enable = true) { enable_(depth_, std::numeric_limits<float>::infinity(), enable); }

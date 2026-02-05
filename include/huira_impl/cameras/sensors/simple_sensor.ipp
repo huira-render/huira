@@ -11,10 +11,8 @@ namespace huira {
         Image<TSpectral>& received_power = fb.received_power();
         Image<float>& output = fb.sensor_response();
 
-        // 1. Prepare Random Number Generators (Poisson & Normal)
-        // (Implementation details below...)
-
-        // 2. Iterate Pixels (Parallelize this!)
+        // Prepare Random Number Generators (Poisson & Normal)
+        
         for (int y = 0; y < received_power.height(); ++y) {
             for (int x = 0; x < received_power.width(); ++x) {
 

@@ -59,6 +59,10 @@ namespace huira {
         std::uint64_t id() const override { return id_; }
         std::string type() const override { return "CameraModel"; }
 
+        void disable_psf() {
+            psf_ = nullptr;
+            use_aperture_psf_ = false;
+        }
         void set_custom_psf(std::unique_ptr<PSF<TSpectral>> psf) {
             psf_ = std::move(psf);
             use_aperture_psf_ = false;
@@ -67,6 +71,13 @@ namespace huira {
         void use_aperture_psf(bool value = true) {
             use_aperture_psf_ = value;
             psf_ = aperture_->make_psf(focal_length_, sensor_->pixel_pitch());
+        }
+        bool has_psf() const { return psf_ != nullptr; }
+        const Image<TSpectral>& get_psf_kernel(float u, float v) const {
+            return psf_->get_kernel(u, v);
+        }
+        int get_psf_radius() const {
+            return psf_->get_radius();
         }
 
         FrameBuffer<TSpectral> make_frame_buffer() const { return FrameBuffer<TSpectral>(res_x(), res_y()); }
