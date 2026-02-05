@@ -4,11 +4,6 @@
 #include <string>
 
 namespace huira {
-    enum class CatalogType : std::uint8_t {
-        Unknown = 0,
-        Tycho2 = 1,
-    };
-
     inline std::uint64_t pack_tycho2_id(std::uint16_t tyc1, std::uint16_t tyc2, std::uint8_t tyc3) {
         return (static_cast<std::uint64_t>(tyc1) << 20) |
             (static_cast<std::uint64_t>(tyc2) << 4) |
