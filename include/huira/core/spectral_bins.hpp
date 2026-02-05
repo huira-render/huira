@@ -6,15 +6,17 @@
 namespace huira {
     // Bin definitions:
     struct Bin {
-        // Values in wavelengths:
-        float min;
-        float max;
-        float center;
+        // Wavelengths are in meters:
+        double min_wavelength = 0;
+        double max_wavelength = 0;
+        double center_wavelength = 0;
 
-        constexpr Bin() : min(0), max(0), center(0) {}
+        constexpr Bin() = default;
 
-        constexpr Bin(float new_min, float new_max) :
-            min{ new_min }, max{ new_max }, center{ (min + max) / 2.0f }
+        constexpr Bin(double new_min, double new_max) :
+            min_wavelength{ new_min },
+            max_wavelength{ new_max },
+            center_wavelength{ (min_wavelength + max_wavelength) / 2.0 }
         {
         }
     };
@@ -23,7 +25,7 @@ namespace huira {
 #pragma warning(push)
 #pragma warning(disable: 4686)  // Possible change in behavior in UDT return calling convention
 #endif
-    template <size_t N, auto... Args>
+    template <std::size_t N, auto... Args>
     class SpectralBins {
     public:
         using value_type = float;
@@ -86,9 +88,8 @@ namespace huira {
         constexpr const_iterator cend() const noexcept { return data_.cend(); }
 
         // Capacity
-        constexpr bool empty() const noexcept { return N == 0; }
-        constexpr size_type size() const noexcept { return N; }
-        constexpr size_type max_size() const noexcept { return N; }
+        static constexpr bool empty() noexcept { return N == 0; }
+        static constexpr size_type size() noexcept { return N; }
 
         // Operations
         constexpr void fill(const float& value) { data_.fill(value); }
@@ -131,7 +132,7 @@ namespace huira {
         std::string to_string() const;
 
         // Access to bin information
-        static constexpr const Bin& get_bin(size_t index) { return bins_[index]; }
+        static constexpr const Bin& get_bin(std::size_t index) { return bins_[index]; }
         static constexpr const std::array<Bin, N>& get_all_bins() { return bins_; }
 
         static constexpr SpectralBins photon_energies();
@@ -150,10 +151,10 @@ namespace huira {
 #endif
 
     // Aliases for faster setting:
-    template <size_t N, int min, int max>
+    template <std::size_t N, int min, int max>
     using UniformSpectralBins = SpectralBins<N, min, max>;
 
-    template <size_t N, auto... Args>
+    template <std::size_t N, auto... Args>
     using SpectralBinEdges = SpectralBins<N, Args...>;
 
     // Helpful types:
