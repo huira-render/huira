@@ -9,12 +9,16 @@ namespace huira {
     {
         this->sensor_ = std::make_unique<SimpleSensor<TSpectral>>(1920, 1080, .036f, .02f);
         this->aperture_ = std::make_unique<CircularAperture<TSpectral>>(.025f);
+
+        compute_intrinsics_();
     }
 
     template <IsSpectral TSpectral>
     void CameraModel<TSpectral>::set_focal_length(float focal_length)
     {
         focal_length_ = focal_length;
+        compute_intrinsics_();
+
         if (use_aperture_psf_) {
             psf_ = aperture_->make_psf(focal_length_, sensor_->pixel_pitch());
         }

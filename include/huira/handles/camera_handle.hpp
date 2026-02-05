@@ -24,6 +24,10 @@ namespace huira {
         void set_focal_length(float focal_length) const;
         void set_fstop(float fstop) const;
 
+        void disable_psf() const { this->get()->disable_psf(); }
+        void use_aperture_psf(bool use_psf = true) const { this->get()->use_aperture_psf(use_psf); }
+        void set_custom_psf(std::unique_ptr<PSF<TSpectral>> psf) const { this->get()->set_custom_psf(std::move(psf)); }
+
         FrameBuffer<TSpectral> make_frame_buffer() const;
 
         friend class Scene<TSpectral>;

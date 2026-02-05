@@ -112,6 +112,9 @@ namespace huira {
         case CatalogType::Tycho2:
             return format_tycho2_id(star_data_[index].id);
 
+        case CatalogType::Unknown:
+            return std::to_string(star_data_[index].id);
+
         default:
             return std::to_string(star_data_[index].id);
         }
