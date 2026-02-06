@@ -116,7 +116,24 @@ namespace huira {
     using Pixel_d = BasePixel<double>;
 
     struct Resolution {
-        Resolution(int w, int h) : width(w), height(h) {}
+        Resolution(int w, int h)
+            : width(w), height(h), x(width), y(height) {
+        }
+
+        Resolution(const Resolution& other)
+            : width(other.width), height(other.height), x(width), y(height) {
+        }
+
+        Resolution& operator=(const Resolution& other) {
+            if (this != &other) {
+                width = other.width;
+                height = other.height;
+                // Rebind x and y to the new width/height
+                x = width;
+                y = height;
+            }
+            return *this;
+        }
 
         int width = 0;
         int height = 0;
@@ -150,6 +167,11 @@ namespace huira {
             return Vec2<TFloat>(
                 static_cast<TFloat>(width) / s,
                 static_cast<TFloat>(height) / s);
+        }
+
+        // Implement comparison operator:
+        bool operator==(const Resolution res) const {
+            return (width == res.width && height == res.height);
         }
     };
 

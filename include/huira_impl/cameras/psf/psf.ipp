@@ -32,6 +32,8 @@ namespace huira {
             HUIRA_THROW_ERROR("PSF::get_kernel() - Polyphase cache is empty.");
         }
 
+
+
         // Convert 0.0-1.0 fraction to 0-(banks-1) integer index
         // Clamp avoids floating point epsilon errors
         int bx = std::clamp(static_cast<int>(u * static_cast<float>(cache_.banks)), 0, static_cast<int>(cache_.banks) - 1);

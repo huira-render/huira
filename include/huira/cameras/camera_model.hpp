@@ -31,56 +31,37 @@ namespace huira {
         template <IsDistortion TDistortion, typename... Args>
         void set_distortion(Args&&... args);
 
+        template <IsSensor TSensor, typename... Args>
+        void set_sensor(Args&&... args);
+
+        template <IsAperture TAperture, typename... Args>
+        void set_aperture(Args&&... args);
+
+        template <IsPSF TPSF, typename... Args>
+        void set_psf(Args&&... args);
+
+        void use_aperture_psf(bool value = true);
+        void disable_psf();
+
+        bool has_psf() const { return psf_ != nullptr; }
+        const Image<TSpectral>& get_psf_kernel(float u, float v) const { return psf_->get_kernel(u, v); }
+        int get_psf_radius() const { return psf_->get_radius(); }
 
         Pixel project_point(const Vec3<float>& point_camera_coords) const;
 
         void readout(FrameBuffer<TSpectral>& fb, float exposure_time) const { sensor_->readout(fb, exposure_time); }
 
-        float get_projected_aperture_area(const Vec3<float>& direction) const
-        {
-            float cosTheta = glm::dot(glm::normalize(direction), Vec3<float>{0, 0, 1});
-            return this->aperture_->get_area() * std::abs(cosTheta);
-        }
+        float get_projected_aperture_area(const Vec3<float>& direction) const;
 
-        void set_fstop(float fstop)
-        {
-            float aperture_diameter = static_cast<float>(focal_length_) / fstop;
-            float aperture_area = PI<float>() * (aperture_diameter * aperture_diameter) / 4.f;
-            this->aperture_->set_area(aperture_area);
+        void set_fstop(float fstop);
+        float fstop() const;
 
-            if (use_aperture_psf_) {
-                psf_ = aperture_->make_psf(focal_length_, sensor_->pixel_pitch());
-            }
-        }
-
-        int res_x() const { return sensor_->resolution().x; }
-        int res_y() const { return sensor_->resolution().y; }
+        Resolution resolution() const { return sensor_->resolution(); }
 
         std::uint64_t id() const override { return id_; }
         std::string type() const override { return "CameraModel"; }
 
-        void disable_psf() {
-            psf_ = nullptr;
-            use_aperture_psf_ = false;
-        }
-        void set_custom_psf(std::unique_ptr<PSF<TSpectral>> psf) {
-            psf_ = std::move(psf);
-            use_aperture_psf_ = false;
-        }
-
-        void use_aperture_psf(bool value = true) {
-            use_aperture_psf_ = value;
-            psf_ = aperture_->make_psf(focal_length_, sensor_->pixel_pitch());
-        }
-        bool has_psf() const { return psf_ != nullptr; }
-        const Image<TSpectral>& get_psf_kernel(float u, float v) const {
-            return psf_->get_kernel(u, v);
-        }
-        int get_psf_radius() const {
-            return psf_->get_radius();
-        }
-
-        FrameBuffer<TSpectral> make_frame_buffer() const { return FrameBuffer<TSpectral>(res_x(), res_y()); }
+        FrameBuffer<TSpectral> make_frame_buffer() const { return FrameBuffer<TSpectral>(resolution()); }
 
     protected:
         float focal_length_ = .05f;

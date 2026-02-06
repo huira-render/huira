@@ -18,4 +18,14 @@ namespace huira {
         virtual std::unique_ptr<PSF<TSpectral>> make_psf(float focal_length, Vec2<float> pixel_pitch) = 0;
         
     };
+
+    template <typename T>
+    struct is_aperture : std::false_type {};
+
+    template <template <typename> class Derived, typename TSpectral>
+        requires std::derived_from<Derived<TSpectral>, Aperture<TSpectral>>
+    struct is_aperture<Derived<TSpectral>> : std::true_type {};
+
+    template <typename T>
+    concept IsAperture = is_aperture<T>::value;
 }

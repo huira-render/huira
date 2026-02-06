@@ -14,9 +14,9 @@ namespace huira {
     public:
         FrameBuffer() = delete;
 
-        int width() const { return width_; }
-        int height() const { return height_; }
-
+        Resolution resolution() const { return resolution_; }
+        int width() const { return resolution_.width; }
+        int height() const { return resolution_.height; }
 
         void enable_depth(bool enable = true) { enable_(depth_, std::numeric_limits<float>::infinity(), enable); }
         Image<float>& depth() { return depth_; }
@@ -83,11 +83,10 @@ namespace huira {
         }
 
     private:
-        FrameBuffer(int width, int height)
-            : width_(width), height_(height) {}
+        FrameBuffer(Resolution resolution)
+            : resolution_{ resolution } {}
 
-        int width_;
-        int height_;
+        Resolution resolution_;
 
         Image<float> depth_;
         Image<uint64_t> mesh_ids_;
@@ -101,7 +100,7 @@ namespace huira {
 
         template <IsImagePixel T>
         bool has_(const Image<T>& image) const {
-            return (image.width() == width_ && image.height() == height_);
+            return (image.width() == resolution_.width && image.height() == resolution_.height);
         }
 
         template <IsImagePixel T>
@@ -110,8 +109,8 @@ namespace huira {
                 image = Image<T>(0, 0);
                 return;
             }
-            if (image.width() != width_ || image.height() != height_) {
-                image = Image<T>(width_, height_, fill_value);
+            if (image.width() != resolution_.width || image.height() != resolution_.height) {
+                image = Image<T>(resolution_.width, resolution_.height, fill_value);
             }
         }
 

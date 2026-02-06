@@ -40,8 +40,8 @@ namespace huira {
     {
         // Extract the camera:
         auto camera = this->get_camera(scene_view);
-        float res_x = static_cast<float>(camera->res_x());
-        float res_y = static_cast<float>(camera->res_y());
+        float res_x = static_cast<float>(camera->resolution().x);
+        float res_y = static_cast<float>(camera->resolution().y);
 
 
         // Extract meshes and their instances from the scene view

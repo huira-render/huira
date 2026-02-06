@@ -31,6 +31,36 @@ namespace huira {
         distortion_ = std::make_unique<TDistortion>(std::forward<Args>(args)...);
     }
 
+    template <IsSpectral TSpectral>
+    template <IsSensor TSensor, typename... Args>
+    void CameraModel<TSpectral>::set_sensor(Args&&... args) {
+        sensor_ = std::make_unique<TSensor>(std::forward<Args>(args)...);
+    }
+
+    template <IsSpectral TSpectral>
+    template <IsAperture TAperture, typename... Args>
+    void CameraModel<TSpectral>::set_aperture(Args&&... args) {
+        aperture_ = std::make_unique<TAperture>(std::forward<Args>(args)...);
+    }
+
+    template <IsSpectral TSpectral>
+    template <IsPSF TPSF, typename... Args>
+    void CameraModel<TSpectral>::set_psf(Args&&... args) {
+        psf_ = std::make_unique<TPSF>(std::forward<Args>(args)...);
+        use_aperture_psf_ = false;
+    }
+
+    template <IsSpectral TSpectral>
+    void CameraModel<TSpectral>::use_aperture_psf(bool value) {
+        use_aperture_psf_ = value;
+        psf_ = aperture_->make_psf(focal_length_, sensor_->pixel_pitch());
+    }
+
+    template <IsSpectral TSpectral>
+    void CameraModel<TSpectral>::disable_psf() {
+        psf_ = nullptr;
+        use_aperture_psf_ = false;
+    }
 
     /**
      * @brief Projects a 3D point in camera coordinates onto the image plane.
@@ -74,6 +104,35 @@ namespace huira {
 
         return Pixel{ px, py };
     }
+
+    template <IsSpectral TSpectral>
+    float CameraModel<TSpectral>::get_projected_aperture_area(const Vec3<float>& direction) const
+    {
+        float cosTheta = glm::dot(glm::normalize(direction), Vec3<float>{0, 0, 1});
+        return this->aperture_->get_area() * std::abs(cosTheta);
+    }
+
+    template <IsSpectral TSpectral>
+    void CameraModel<TSpectral>::set_fstop(float fstop)
+    {
+        float aperture_diameter = focal_length_ / fstop;
+        float aperture_area = PI<float>() * (aperture_diameter * aperture_diameter) / 4.f;
+        this->aperture_->set_area(aperture_area);
+
+        if (use_aperture_psf_) {
+            psf_ = aperture_->make_psf(focal_length_, sensor_->pixel_pitch());
+        }
+    }
+
+    template <IsSpectral TSpectral>
+    float CameraModel<TSpectral>::fstop() const
+    {
+        this->aperture_->get_area();
+        float aperture_diameter = 2.f * std::sqrt(this->aperture_->get_area() / PI<float>());
+
+        return focal_length_ / aperture_diameter;
+    }
+
 
     template <IsSpectral TSpectral>
     void CameraModel<TSpectral>::compute_intrinsics_()
