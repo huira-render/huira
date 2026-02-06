@@ -22,11 +22,29 @@ namespace huira {
         using Handle<CameraModel<TSpectral>>::Handle;
 
         void set_focal_length(float focal_length) const;
-        void set_fstop(float fstop) const;
+        float focal_length() const;
 
-        void disable_psf() const { this->get()->disable_psf(); }
-        void use_aperture_psf(bool use_psf = true) const { this->get()->use_aperture_psf(use_psf); }
+        void set_fstop(float fstop) const;
+        float fstop() const;
+
+        template <IsDistortion TDistortion, typename... Args>
+        void set_distortion(Args&&... args);
+
+        void delete_distortion();
+
+        template <IsSensor TSensor, typename... Args>
+        void set_sensor(Args&&... args);
+
+        template <IsAperture TAperture, typename... Args>
+        void set_aperture(Args&&... args);
+
+        template <IsPSF TPSF, typename... Args>
+        void set_psf(Args&&... args);
+
+        void use_aperture_psf(bool use_psf = true) const;
+        void delete_psf() const;
         
+        Pixel project_point(const Vec3<float>& point_camera_coords) const;
 
         FrameBuffer<TSpectral> make_frame_buffer() const;
 

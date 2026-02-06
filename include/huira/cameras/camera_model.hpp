@@ -27,9 +27,15 @@ namespace huira {
         CameraModel& operator=(const CameraModel&) = delete;
 
         void set_focal_length(float focal_length);
+        float focal_length() const { return focal_length_; }
+
+        void set_fstop(float fstop);
+        float fstop() const;
 
         template <IsDistortion TDistortion, typename... Args>
         void set_distortion(Args&&... args);
+
+        void delete_distortion() { distortion_ = nullptr; }
 
         template <IsSensor TSensor, typename... Args>
         void set_sensor(Args&&... args);
@@ -41,7 +47,7 @@ namespace huira {
         void set_psf(Args&&... args);
 
         void use_aperture_psf(bool value = true);
-        void disable_psf();
+        void delete_psf();
 
         bool has_psf() const { return psf_ != nullptr; }
         const Image<TSpectral>& get_psf_kernel(float u, float v) const { return psf_->get_kernel(u, v); }
@@ -52,9 +58,6 @@ namespace huira {
         void readout(FrameBuffer<TSpectral>& fb, float exposure_time) const { sensor_->readout(fb, exposure_time); }
 
         float get_projected_aperture_area(const Vec3<float>& direction) const;
-
-        void set_fstop(float fstop);
-        float fstop() const;
 
         Resolution resolution() const { return sensor_->resolution(); }
 
