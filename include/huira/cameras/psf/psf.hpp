@@ -17,6 +17,7 @@ namespace huira {
         void build_polyphase_cache(int radius, int banks);
 
         const Image<TSpectral>& get_kernel(float u, float v) const;
+        std::vector<Image<TSpectral>> get_all_kernels() const { return cache_.kernels; }
 
         int get_radius() const { return cache_.radius; }
 

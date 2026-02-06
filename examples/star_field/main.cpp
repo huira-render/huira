@@ -36,7 +36,7 @@ int main(int argc, char** argv) {
     camera_model.use_aperture_psf();
 
     // Load stars:
-    scene.load_stars(star_catalog_path, time, 8.0); // Load stars up to magnitude 6.0
+    scene.load_stars(star_catalog_path, time, 10.0); // Load stars up to magnitude 6.0
 
     // Load the require SPICE kernels:
     //huira::spice::furnsh("kernels/naif0012.tls");
@@ -57,7 +57,8 @@ int main(int argc, char** argv) {
     huira::RasterRenderer<huira::RGB> renderer;
 
     for (std::size_t i = 0; i < 360; ++i) {
-        navcam.set_rotation(huira::Rotation<double>(Deg(i), Deg(i), Deg(i), "ZYX"));
+        float angle = static_cast<float>(i) / 10.f;
+        navcam.set_rotation(huira::Rotation<double>(Deg(angle), Deg(angle), Deg(angle), "ZYX"));
 
         // Create a scene view at the observation time:
         auto scene_view = huira::SceneView<huira::RGB>(scene, time, navcam, huira::ObservationMode::ABERRATED_STATE);

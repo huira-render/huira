@@ -10,7 +10,9 @@ namespace huira {
         : f_number_(focal_length / aperture_diameter)
         , pixel_pitch_(pixel_pitch)
     {
-        this->build_polyphase_cache(128, 16);
+        std::cout << "Building:\n";
+        this->build_polyphase_cache(64, 16);
+        std::cout << "DONE\n";
     }
 
     template <IsSpectral TSpectral>
