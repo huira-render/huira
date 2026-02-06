@@ -42,6 +42,8 @@ struct ImagePixelTraits<SpectralBins<N, Args...>> {
         using Scalar = typename Traits::Scalar;
 
         Image();
+        Image(Resolution resolution);
+        Image(Resolution resolution, const PixelT& fill_value);
         Image(int width, int height);
         Image(int width, int height, const PixelT& fill_value);
 
@@ -55,6 +57,7 @@ struct ImagePixelTraits<SpectralBins<N, Args...>> {
         [[nodiscard]] bool empty() const noexcept;
         explicit operator bool() const noexcept;
 
+        [[nodiscard]] Resolution resolution() const noexcept;
         [[nodiscard]] int width() const noexcept;
         [[nodiscard]] int height() const noexcept;
         [[nodiscard]] std::size_t size() const noexcept;
@@ -89,17 +92,13 @@ struct ImagePixelTraits<SpectralBins<N, Args...>> {
         [[nodiscard]] PixelT* data() noexcept;
         [[nodiscard]] const PixelT* data() const noexcept;
 
-        void resize(int width, int height);
-        void resize(int width, int height, const PixelT& fill_value);
-
         void clear();
         void fill(const PixelT& value);
         void reset(const PixelT& value = PixelT{ 0 }) { fill(value); }
 
     private:
         std::vector<PixelT> data_;
-        int width_;
-        int height_;
+        Resolution resolution_;
 
         [[nodiscard]] std::size_t to_linear(int x, int y) const noexcept;
 

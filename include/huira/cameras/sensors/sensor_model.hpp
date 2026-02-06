@@ -85,6 +85,16 @@ namespace huira {
 
         // TODO function to sample poisson distribution
     };
+
+    template <typename T>
+    struct is_sensor : std::false_type {};
+
+    template <template <typename> class Derived, typename TSpectral>
+        requires std::derived_from<Derived<TSpectral>, SensorModel<TSpectral>>
+    struct is_distortion<Derived<TSpectral>> : std::true_type {};
+
+    template <typename T>
+    concept IsSensor = is_sensor<T>::value;
 }
 
 #include "huira_impl/cameras/sensors/sensor_model.ipp"

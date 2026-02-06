@@ -185,6 +185,8 @@ namespace huira {
         png_byte color_type = png_get_color_type(png_ptr, info_ptr);
         png_byte bit_depth = png_get_bit_depth(png_ptr, info_ptr);
 
+        Resolution resolution{ static_cast<int>(width), static_cast<int>(height) };
+
         // Expand palette to RGB(A)
         if (color_type == PNG_COLOR_TYPE_PALETTE) {
             png_set_palette_to_rgb(png_ptr);
@@ -235,14 +237,11 @@ namespace huira {
         fclose(fp);
 
         // Create output images
-        Image<T> image(static_cast<int>(width),
-            static_cast<int>(height));
+        Image<T> image(resolution);
         Image<float> alpha_image(0, 0);
 
         if (has_alpha) {
-            alpha_image = Image<float>(static_cast<int>(width),
-                static_cast<int>(height),
-                1.0f);
+            alpha_image = Image<float>(resolution, 1.0f);
         }
 
         for (int y = 0; y < static_cast<int>(height); ++y) {

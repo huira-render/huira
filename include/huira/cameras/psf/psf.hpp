@@ -33,6 +33,16 @@ namespace huira {
         void generate_polyphase_data_();
         void normalize_kernel_(Image<TSpectral>& kernel, const TSpectral& total_energy);
     };
+
+    template <typename T>
+    struct is_psf : std::false_type {};
+
+    template <template <typename> class Derived, typename TSpectral>
+        requires std::derived_from<Derived<TSpectral>, PSF<TSpectral>>
+    struct is_psf<Derived<TSpectral>> : std::true_type {};
+
+    template <typename T>
+    concept IsPSF = is_psf<T>::value;
 }
 
 #include "huira_impl/cameras/psf/psf.ipp"
