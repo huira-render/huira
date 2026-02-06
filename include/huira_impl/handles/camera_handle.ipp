@@ -27,34 +27,112 @@ namespace huira {
 
     template <IsSpectral TSpectral>
     template <IsDistortion TDistortion, typename... Args>
-    void CameraModelHandle<TSpectral>::set_distortion(Args&&... args)
+    void CameraModelHandle<TSpectral>::set_distortion(Args&&... args) const
     {
         this->get()->template set_distortion<TDistortion>(std::forward<Args>(args)...);
     }
 
     template <IsSpectral TSpectral>
-    void CameraModelHandle<TSpectral>::delete_distortion()
+    void CameraModelHandle<TSpectral>::delete_distortion() const
     {
         this->get()->delete_distortion();
     }
 
     template <IsSpectral TSpectral>
     template <IsSensor TSensor, typename... Args>
-    void CameraModelHandle<TSpectral>::set_sensor(Args&&... args)
+    void CameraModelHandle<TSpectral>::set_sensor(Args&&... args) const
     {
         this->get()->template set_sensor<TSensor>(std::forward<Args>(args)...);
     }
 
     template <IsSpectral TSpectral>
+    void CameraModelHandle<TSpectral>::set_sensor_resolution(Resolution resolution) const
+    {
+        this->get()->sensor_->set_resolution(resolution);
+    }
+
+    template <IsSpectral TSpectral>
+    void CameraModelHandle<TSpectral>::set_sensor_resolution(int width, int height) const
+    {
+        this->get()->sensor_->set_resolution(Resolution{ width, height });
+    }
+
+    template <IsSpectral TSpectral>
+    void CameraModelHandle<TSpectral>::set_sensor_pixel_pitch(Vec2<float> pixel_pitch) const
+    {
+        this->get()->sensor_->set_pixel_pitch(pixel_pitch);
+    }
+
+    template <IsSpectral TSpectral>
+    void CameraModelHandle<TSpectral>::set_sensor_pixel_pitch(float pixel_pitch) const
+    {
+        this->get()->sensor_->set_pixel_pitch(Vec2<float>{ pixel_pitch, pixel_pitch });
+    }
+
+    template <IsSpectral TSpectral>
+    void CameraModelHandle<TSpectral>::set_sensor_quantum_efficiency(TSpectral qe) const
+    {
+        this->get()->sensor_->set_quantum_efficiency(qe);
+    }
+
+    template <IsSpectral TSpectral>
+    void CameraModelHandle<TSpectral>::set_sensor_full_well_capacity(float fwc) const
+    {
+        this->get()->sensor_->set_full_well_capacity(fwc);
+    }
+
+    template <IsSpectral TSpectral>
+    void CameraModelHandle<TSpectral>::set_sensor_read_noise(float read_noise) const
+    {
+        this->get()->sensor_->set_read_noise(read_noise);
+    }
+
+    template <IsSpectral TSpectral>
+    void CameraModelHandle<TSpectral>::set_sensor_dark_current(float dark_current) const
+    {
+        this->get()->sensor_->set_dark_current(dark_current);
+    }
+
+    template <IsSpectral TSpectral>
+    void CameraModelHandle<TSpectral>::set_sensor_bias_level(float bias_level) const
+    {
+        this->get()->sensor_->set_bias_level_dn(bias_level);
+    }
+
+    template <IsSpectral TSpectral>
+    void CameraModelHandle<TSpectral>::set_sensor_bit_depth(int bit_depth) const
+    {
+        this->get()->sensor_->set_bit_depth(bit_depth);
+    }
+
+    template <IsSpectral TSpectral>
+    void CameraModelHandle<TSpectral>::set_sensor_gain(float gain) const
+    {
+        this->get()->sensor_->set_gain_adu(gain);
+    }
+
+    template <IsSpectral TSpectral>
+    void CameraModelHandle<TSpectral>::set_sensor_gain_db(float gain_db) const
+    {
+        this->get()->sensor_->set_gain_db(gain_db);
+    }
+
+    template <IsSpectral TSpectral>
+    void CameraModelHandle<TSpectral>::set_sensor_uinty_db(float unity_db) const
+    {
+        this->get()->sensor_->set_unity_db(unity_db);
+    }
+
+    template <IsSpectral TSpectral>
     template <IsAperture TAperture, typename... Args>
-    void CameraModelHandle<TSpectral>::set_aperture(Args&&... args)
+    void CameraModelHandle<TSpectral>::set_aperture(Args&&... args) const
     {
         this->get()->template set_aperture<TAperture>(std::forward<Args>(args)...);
     }
 
     template <IsSpectral TSpectral>
     template <IsPSF TPSF, typename... Args>
-    void CameraModelHandle<TSpectral>::set_psf(Args&&... args)
+    void CameraModelHandle<TSpectral>::set_psf(Args&&... args) const
     {
         this->get()->template set_psf<TPSF>(std::forward<Args>(args)...);
     }

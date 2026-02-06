@@ -40,7 +40,7 @@ namespace huira {
         void set_resolution(Resolution res) {
             config_.resolution = res;
         }
-
+        
         Vec2<float> pixel_pitch() const { return { config_.pixel_pitch }; }
         void set_pixel_pitch(const Vec2<float>& pitch) {
             config_.pixel_pitch = pitch;
