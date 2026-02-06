@@ -22,6 +22,8 @@ static std::pair<fs::path, fs::path> parse_input_paths(int argc, char** argv) {
 int main(int argc, char** argv) {
     // Camera details (read from: https://sbnarchive.psi.edu/pds4/orex/orex.ocams/data_calibrated/cruise_1/20160919T162205S722_map_iofL2pan.xml)
     huira::Quaternion<double> quaternion{ 0.0122908778004389, 0.0239176965190355, 0.549506737933572, 0.835056419100963 };
+    quaternion = glm::inverse(quaternion);
+
     huira::Time time("2016-09-19T16:22:05.728");
     float exposure_time = 9.984285275f;
     huira::Vec2<float> pixel_pitch{ 8.5f * 1e-6f, 8.5f * 1e-6f };
@@ -41,6 +43,8 @@ int main(int argc, char** argv) {
     auto camera_model = scene.new_camera_model();
     camera_model.set_focal_length(focal_length);
     camera_model.set_fstop(f_number);
+    camera_model.set_sensor_pixel_pitch(pixel_pitch);
+    camera_model.set_sensor_resolution(resolution);
     camera_model.use_aperture_psf();
 
     // Load stars:
@@ -54,7 +58,7 @@ int main(int argc, char** argv) {
 
     // Create an instance of the camera in the ECI frame:
     auto mapcam = eci.new_instance(camera_model);
-    mapcam.set_position(0, 0, -100); // Set camera position (in ECI frame)
+    //mapcam.set_position(0, 0, -100); // Set camera position (in ECI frame)
 
     // Configure the render buffers:
     auto frame_buffer = camera_model.make_frame_buffer();

@@ -19,6 +19,9 @@
 
 namespace huira {
     template <IsSpectral TSpectral>
+    class CameraModelHandle;
+
+    template <IsSpectral TSpectral>
     class CameraModel : public SceneObject<CameraModel<TSpectral>, TSpectral> {
     public:
         CameraModel();
@@ -86,6 +89,8 @@ namespace huira {
         float rx_;
         float ry_;
         void compute_intrinsics_();
+
+        friend class CameraModelHandle<TSpectral>;
     };
 }
 
