@@ -57,7 +57,7 @@ namespace huira {
     }
 
     template <IsSpectral TSpectral>
-    void CameraModel<TSpectral>::disable_psf() {
+    void CameraModel<TSpectral>::delete_psf() {
         psf_ = nullptr;
         use_aperture_psf_ = false;
     }
