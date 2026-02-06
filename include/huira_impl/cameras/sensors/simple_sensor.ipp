@@ -13,10 +13,10 @@ namespace huira {
 
         // TODO Move this somewhere else?
         static std::mt19937 rng(1);
-        std::normal_distribution<float> read_noise_dist(0.0f, read_noise);
+        std::normal_distribution<float> read_noise_dist(0.0f, this->config_.read_noise);
 
         const TSpectral photon_energy = TSpectral::photon_energies();
-        float max_dn = std::pow(2.f, static_cast<float>(bit_depth)) - 1.f;
+        float max_dn = std::pow(2.f, static_cast<float>(this->config_.bit_depth)) - 1.f;
 
         for (int y = 0; y < received_power.height(); ++y) {
             for (int x = 0; x < received_power.width(); ++x) {
@@ -28,11 +28,11 @@ namespace huira {
                 TSpectral photons = received_energy / photon_energy;
 
                 // Quantum Efficiency
-                TSpectral electrons = photons * quantum_efficiency;
+                TSpectral electrons = photons * this->config_.quantum_efficiency;
                 float signal_e = electrons.total();
 
                 // Dark Current
-                float dark_e = dark_current * exposure_time;
+                float dark_e = this->config_.dark_current * exposure_time;
 
                 // Shot Noise (Poisson)  TODO THIS IS JUST A GAUSSIAN APPROXIMATION
                 float accumulated_e = signal_e + dark_e;
@@ -41,15 +41,15 @@ namespace huira {
                 float noisy_e = accumulated_e + shot_dist(rng);
 
                 // Well Saturation (basic clamping)
-                if (noisy_e > full_well_capacity) {
-                    noisy_e = full_well_capacity;
+                if (noisy_e > this->config_.full_well_capacity) {
+                    noisy_e = this->config_.full_well_capacity;
                 }
 
                 // Read Noise (Gaussian)
                 noisy_e += read_noise_dist(rng);
 
                 // System Gain & Quantization (ADC)
-                float dn_value = (noisy_e / gain) + bias_level_dn;
+                float dn_value = (noisy_e / this->config_.gain) + this->config_.bias_level_dn;
                 float dn = std::floor(std::min(dn_value, max_dn));
 
                 output(x, y) = std::max(0.f, dn) / max_dn;

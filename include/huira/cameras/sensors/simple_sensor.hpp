@@ -8,20 +8,20 @@
 
 namespace huira {
     template <IsSpectral TSpectral>
+    struct SimpleSensorConfig : public SensorConfig<TSpectral> {
+
+    };
+
+    template <IsSpectral TSpectral>
     class SimpleSensor : public SensorModel<TSpectral> {
     public:
-        SimpleSensor(int res_x, int res_y, float width, float height)
-            : SensorModel<TSpectral>(res_x, res_y, width, height) {}
-        ~SimpleSensor() override = default;
+        SimpleSensor(SimpleSensorConfig<TSpectral> config = SimpleSensorConfig<TSpectral>{})
+            : SensorModel<TSpectral>(config)
+        {
 
-        // Configuration
-        float full_well_capacity = 20000.f;
-        float gain = 4.8f;                  // e-/ADU
-        float read_noise = 50.f;            // e- RMS
-        float dark_current = 1.f;          // e-/s
-        float bias_level_dn = 20.f;        // ADU
-        int bit_depth = 12;
-        TSpectral quantum_efficiency = TSpectral{ 0.6f };
+        }
+
+        ~SimpleSensor() override = default;
 
         void readout(FrameBuffer<TSpectral>& fb, float exposure_time) const override;
     };

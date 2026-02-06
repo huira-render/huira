@@ -115,6 +115,72 @@ namespace huira {
     using Pixel = BasePixel<float>;
     using Pixel_d = BasePixel<double>;
 
+    struct Resolution {
+        Resolution(int w, int h) : width(w), height(h) {}
+
+        int width = 0;
+        int height = 0;
+
+        int& x = width;
+        int& y = height;
+
+        template <IsFloatingPoint TFloat>
+        Vec2<TFloat> operator*(const Vec2<TFloat>& v) const {
+            return Vec2<TFloat>(
+                v.x * static_cast<TFloat>(width),
+                v.y * static_cast<TFloat>(height));
+        }
+
+        template <IsFloatingPoint TFloat>
+        Vec2<TFloat> operator*(TFloat s) const {
+            return Vec2<TFloat>(
+                static_cast<TFloat>(width) * s,
+                static_cast<TFloat>(height) * s);
+        }
+
+        template <IsFloatingPoint TFloat>
+        Vec2<float> operator/(const Vec2<TFloat>& v) const {
+            return Vec2<TFloat>(
+                static_cast<TFloat>(width) / v.x,
+                static_cast<TFloat>(height) / v.y);
+        }
+
+        template <IsFloatingPoint TFloat>
+        Vec2<float> operator/(TFloat s) const {
+            return Vec2<TFloat>(
+                static_cast<TFloat>(width) / s,
+                static_cast<TFloat>(height) / s);
+        }
+    };
+
+    template <IsFloatingPoint TFloat>
+    inline Vec2<TFloat> operator*(const Vec2<TFloat>& v, const Resolution& res) {
+        return Vec2<TFloat>(
+            v.x * static_cast<TFloat>(res.width),
+            v.y * static_cast<TFloat>(res.height));
+    }
+
+    template <IsFloatingPoint TFloat>
+    inline Vec2<TFloat> operator*(TFloat s, const Resolution& res) {
+        return Vec2<TFloat>(
+            static_cast<TFloat>(res.width) * s,
+            static_cast<TFloat>(res.height) * s);
+    }
+
+    template <IsFloatingPoint TFloat>
+    inline Vec2<TFloat> operator/(const Vec2<TFloat>& v, const Resolution& res) {
+        return Vec2<TFloat>(
+            static_cast<TFloat>(res.width) / v.x,
+            static_cast<TFloat>(res.height) / v.y);
+    }
+
+    template <IsFloatingPoint TFloat>
+    inline Vec2<TFloat> operator/(TFloat s, const Resolution& res) {
+        return Vec2<TFloat>(
+            static_cast<TFloat>(res.width) / s,
+            static_cast<TFloat>(res.height) / s);
+    }
+
 
     template <IsSpectral TSpectral>
     struct Vertex {
