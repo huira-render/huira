@@ -42,25 +42,43 @@ namespace huira {
     Star<TSpectral>::Star(const StarData& star_data, Time time)
     {
         // Compute the ICRF direction:
-        double tsince = time.julian_years_since_j2000(TimeScale::TT);
+        double years_since_j2000 = time.julian_years_since_j2000(TimeScale::TT);
 
+        compute_direction_(star_data.RA, star_data.DEC, star_data.pmRA, star_data.pmDEC, years_since_j2000);
+        compute_irradiance_(star_data.temperature, star_data.solid_angle);
+    }
+
+
+    template <IsSpectral TSpectral>
+    Star<TSpectral>::Star(const StarData& star_data, double years_since_j2000)
+    {
+        compute_direction_(star_data.RA, star_data.DEC, star_data.pmRA, star_data.pmDEC, years_since_j2000);
+        compute_irradiance_(star_data.temperature, star_data.solid_angle);
+    }
+
+    template <IsSpectral TSpectral>
+    void Star<TSpectral>::compute_direction_(double RA, double DEC, float pmRAmas, float pmDECmas, double years_since_j2000)
+    {
         constexpr double MAS_TO_RAD = PI<double>() / (180.0 * 3600.0 * 1000.0);
-        double pmDEC = static_cast<double>(star_data.pmDEC) * MAS_TO_RAD;
-        double pmRA = static_cast<double>(star_data.pmRA) * MAS_TO_RAD;
+        double pmDEC = static_cast<double>(pmDECmas) * MAS_TO_RAD;
+        double pmRA = static_cast<double>(pmRAmas) * MAS_TO_RAD;
 
-        double delta = static_cast<double>(star_data.DEC + (pmDEC * tsince));
-        double alpha = static_cast<double>(star_data.RA + (pmRA * tsince / std::cos(delta)));
-        
+        double delta = static_cast<double>(DEC + (pmDEC * years_since_j2000));
+        double alpha = static_cast<double>(RA + (pmRA * years_since_j2000 / std::cos(delta)));
+
         double x = std::cos(delta) * std::cos(alpha);
         double y = std::cos(delta) * std::sin(alpha);
         double z = std::sin(delta);
 
         direction_ = glm::normalize(Vec3<double>{ x, y, z });
+    }
 
-        // Compute the spectrum given the temperature:
-        TSpectral spectral_radiance = black_body<TSpectral>(static_cast<double>(star_data.temperature));
+    template <IsSpectral TSpectral>
+    void Star<TSpectral>::compute_irradiance_(float temperature, double solid_angle)
+    {
+        TSpectral spectral_radiance = black_body<TSpectral>(static_cast<double>(temperature));
         for (std::size_t i = 0; i < spectral_radiance.size(); ++i) {
-            irradiance_[i] = static_cast<float>(static_cast<double>(spectral_radiance[i]) * star_data.solid_angle);
+            irradiance_[i] = static_cast<float>(static_cast<double>(spectral_radiance[i]) * solid_angle);
         }
     }
 }

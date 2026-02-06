@@ -69,7 +69,9 @@ namespace huira {
         }
 
         if (header.version != 1) {
-            HUIRA_THROW_ERROR("StarCatalog - Unsupported version: " + std::to_string(header.version));
+            auto name = filepath.filename().string();
+            HUIRA_THROW_ERROR("StarCatalog - " + name + " is out of date (version = " +
+                std::to_string(header.version) + ").  Please re-generate.");
         }
 
         // Binary search on file to find cutoff index

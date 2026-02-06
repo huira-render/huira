@@ -1,6 +1,9 @@
 #include <stdexcept>
 #include <iostream>
 
+#include "tbb/parallel_for.h"
+#include "tbb/blocked_range.h"
+
 #include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/assets/io/model_loader.hpp"
 #include "huira/handles/model_handle.hpp"
@@ -204,11 +207,18 @@ namespace huira {
         StarCatalog star_catalog = StarCatalog::read_star_data(star_catalog_path, min_magnitude);
         const std::vector<StarData>& star_data = star_catalog.get_star_data();
 
+        double tsince = time.julian_years_since_j2000(TimeScale::TT);
+
         // Create the stars:
         std::vector<Star<TSpectral>> stars(star_data.size());
-        for (std::size_t i = 0; i < star_data.size(); ++i) {
-            stars[i] = Star<TSpectral>(star_data[i], time);
-        }
+        tbb::parallel_for(
+            tbb::blocked_range<std::size_t>(0, star_data.size()),
+            [&](const tbb::blocked_range<std::size_t>& r) {
+                for (std::size_t i = r.begin(); i != r.end(); ++i) {
+                    stars[i] = Star<TSpectral>(star_data[i], tsince);
+                }
+            }
+        );
 
         // Add the stars to the scene:
         set_stars(stars);

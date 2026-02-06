@@ -63,8 +63,9 @@ namespace huira {
                 << std::setw(10) << "RA (deg)" << " "
                 << std::setw(10) << "DEC (deg)" << "  "
                 << std::setw(8) << "Temp (K)" << " "
-                << std::setw(8) << "Vmag" << "\n";
-            os << "--------------------------------------------------------\n";
+                << std::setw(8) << "Vmag" << " "
+                << std::setw(8) << "Omega (sr)\n";
+            os << "----------------------------------------------------------------------\n";
         }
 
         void print_entry(std::size_t index, std::ostream& os = std::cout) const {
@@ -76,7 +77,8 @@ namespace huira {
                 << std::setprecision(4) << std::setw(10) << star.RA * rad2deg << " "
                 << std::setprecision(4) << std::setw(10) << star.DEC * rad2deg << "  "
                 << std::setprecision(2) << std::setw(8) << star.temperature << " "
-                << std::setprecision(4) << std::setw(8) << star.visual_magnitude << "\n";
+                << std::setprecision(4) << std::setw(8) << star.visual_magnitude << " "
+                << std::scientific << std::setprecision(8) << std::setw(8) << star.solid_angle << "\n";
         }
 
         using value_type = StarData;

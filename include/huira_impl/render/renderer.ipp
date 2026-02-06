@@ -63,7 +63,7 @@ namespace huira {
                             for (int kx = kx_begin; kx < kx_end; ++kx) {
                                 int img_x = start_x + kx;
 
-                                power_buffer(img_x, img_y) += power * kernel(ky, kx);
+                                power_buffer(img_x, img_y) += power * kernel(kx, ky);
                             }
                         }
                     }
