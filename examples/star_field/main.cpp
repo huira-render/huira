@@ -31,7 +31,7 @@ int main(int argc, char** argv) {
 
     // Configure a camera model:
     auto camera_model = scene.new_camera_model();
-    camera_model.set_focal_length(0.05f);
+    camera_model.set_focal_length(0.25f);
     camera_model.set_fstop(1.4f);
     camera_model.use_aperture_psf();
 
@@ -64,7 +64,7 @@ int main(int argc, char** argv) {
         auto scene_view = huira::SceneView<huira::RGB>(scene, time, navcam, huira::ObservationMode::ABERRATED_STATE);
 
         // Render the current scene view:
-        renderer.render(scene_view, frame_buffer, 1.f);
+        renderer.render(scene_view, frame_buffer, 0.1f);
 
         // Save the results:
         std::string s = std::to_string(i);
