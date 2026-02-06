@@ -26,6 +26,8 @@ namespace huira {
 
         // Rotation
         void set_rotation(const Rotation<double>& rotation) const;
+        void set_rotation(const Quaternion<double>& quaternion) const;
+        void set_rotation(const ShusterQuaternion<double>& shuster_quaternion) const;
         Rotation<double> get_static_rotation() const;
 
 

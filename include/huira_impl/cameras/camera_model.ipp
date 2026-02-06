@@ -7,7 +7,7 @@ namespace huira {
     template <IsSpectral TSpectral>
     CameraModel<TSpectral>::CameraModel() : id_(next_id_++)
     {
-        this->sensor_ = std::make_unique<SimpleSensor<TSpectral>>(1920, 1080, .036f, .02f);
+        this->sensor_ = std::make_unique<SimpleSensor<TSpectral>>();
         this->aperture_ = std::make_unique<CircularAperture<TSpectral>>(.025f);
 
         compute_intrinsics_();
@@ -78,14 +78,14 @@ namespace huira {
     template <IsSpectral TSpectral>
     void CameraModel<TSpectral>::compute_intrinsics_()
     {
-        fx_ = focal_length_ / sensor_->pitch_x();
-        fy_ = focal_length_ / sensor_->pitch_y();
+        fx_ = focal_length_ / sensor_->pixel_pitch().x;
+        fy_ = focal_length_ / sensor_->pixel_pitch().y;
 
-        cx_ = static_cast<float>(sensor_->res_x()) * 0.5f;
-        cy_ = static_cast<float>(sensor_->res_y()) * 0.5f;
+        cx_ = static_cast<float>(sensor_->resolution().x) * 0.5f;
+        cy_ = static_cast<float>(sensor_->resolution().y) * 0.5f;
 
-        rx_ = static_cast<float>(sensor_->res_x());
-        ry_ = static_cast<float>(sensor_->res_y());
+        rx_ = static_cast<float>(sensor_->resolution().x);
+        ry_ = static_cast<float>(sensor_->resolution().y);
     }
 }
 

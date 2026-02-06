@@ -20,19 +20,27 @@ static std::pair<fs::path, fs::path> parse_input_paths(int argc, char** argv) {
 }
 
 int main(int argc, char** argv) {
+    // Camera details (read from: https://sbnarchive.psi.edu/pds4/orex/orex.ocams/data_calibrated/cruise_1/20160919T162205S722_map_iofL2pan.xml)
+    huira::Quaternion<double> quaternion{ 0.0122908778004389, 0.0239176965190355, 0.549506737933572, 0.835056419100963 };
+    huira::Time time("2016-09-19T16:22:05.728");
+    float exposure_time = 9.984285275f;
+    huira::Vec2<float> pixel_pitch{ 8.5f * 1e-6f, 8.5f * 1e-6f };
+    huira::Resolution resolution{ 1024, 1024 };
+    float focal_length = 125.00f * 1e-3f;
+    float f_number = 3.30f;
+    
+
+
     // Parsing input paths:
     auto [star_catalog_path, kernel_path] = parse_input_paths(argc, argv);
 
     // Create the scene:
     huira::Scene<huira::RGB> scene;
 
-    // Set the observation time:
-    huira::Time time("2019-02-06T10:27:00");
-
     // Configure a camera model:
     auto camera_model = scene.new_camera_model();
-    camera_model.set_focal_length(0.25f);
-    camera_model.set_fstop(1.4f);
+    camera_model.set_focal_length(focal_length);
+    camera_model.set_fstop(f_number);
     camera_model.use_aperture_psf();
 
     // Load stars:
@@ -45,8 +53,8 @@ int main(int argc, char** argv) {
     auto eci = scene.root.new_spice_subframe("SSB", "J2000");
 
     // Create an instance of the camera in the ECI frame:
-    auto navcam = eci.new_instance(camera_model);
-    navcam.set_position(0, 0, -100); // Set camera position (in ECI frame)
+    auto mapcam = eci.new_instance(camera_model);
+    mapcam.set_position(0, 0, -100); // Set camera position (in ECI frame)
 
     // Configure the render buffers:
     auto frame_buffer = camera_model.make_frame_buffer();
@@ -56,19 +64,14 @@ int main(int argc, char** argv) {
     // Create the renderer:
     huira::RasterRenderer<huira::RGB> renderer;
 
-    for (std::size_t i = 0; i < 360; ++i) {
-        float angle = static_cast<float>(i) / 10.f;
-        navcam.set_rotation(huira::Rotation<double>(Deg(angle), Deg(angle), Deg(angle), "ZYX"));
+    mapcam.set_rotation(quaternion);
 
-        // Create a scene view at the observation time:
-        auto scene_view = huira::SceneView<huira::RGB>(scene, time, navcam, huira::ObservationMode::ABERRATED_STATE);
+    // Create a scene view at the observation time:
+    auto scene_view = huira::SceneView<huira::RGB>(scene, time, mapcam, huira::ObservationMode::ABERRATED_STATE);
 
-        // Render the current scene view:
-        renderer.render(scene_view, frame_buffer, 0.1f);
+    // Render the current scene view:
+    renderer.render(scene_view, frame_buffer, exposure_time);
 
-        // Save the results:
-        std::string s = std::to_string(i);
-        std::string filename = "frame_" + std::string(3 - std::min(std::size_t{ 3 }, s.length()), '0') + s + ".png";
-        huira::write_image_png("output/" + filename, frame_buffer.sensor_response(), 8);
-    }
+    // Save the results:
+    huira::write_image_png("output/frame.png", frame_buffer.sensor_response(), 8);
 }

@@ -83,6 +83,16 @@ namespace huira {
         this->get()->set_rotation(rotation);
     }
 
+    template <IsSpectral TSpectral, typename TNode>
+    void NodeHandle<TSpectral, TNode>::set_rotation(const Quaternion<double>& quaternion) const {
+        this->get()->set_rotation(Rotation<double>(quaternion));
+    }
+
+    template <IsSpectral TSpectral, typename TNode>
+    void NodeHandle<TSpectral, TNode>::set_rotation(const ShusterQuaternion<double>& shuster_quaternion) const {
+        this->get()->set_rotation(Rotation<double>(shuster_quaternion));
+    }
+
 
     /**
      * @brief Gets the local rotation.

@@ -53,8 +53,8 @@ namespace huira {
             }
         }
 
-        int res_x() const { return sensor_->res_x(); }
-        int res_y() const { return sensor_->res_y(); }
+        int res_x() const { return sensor_->resolution().x; }
+        int res_y() const { return sensor_->resolution().y; }
 
         std::uint64_t id() const override { return id_; }
         std::string type() const override { return "CameraModel"; }
