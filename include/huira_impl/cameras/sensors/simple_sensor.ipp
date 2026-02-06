@@ -1,18 +1,23 @@
+#include <random>
+
 #include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/render/frame_buffer.hpp"
 #include "huira/images/image.hpp"
 
 namespace huira {
     template <IsSpectral TSpectral>
-    void SimpleSensor<TSpectral>::readout(FrameBuffer<TSpectral>& fb, float exposure_time) const {
-
-        const TSpectral photon_energy = TSpectral::photon_energies();
-
+    void SimpleSensor<TSpectral>::readout(FrameBuffer<TSpectral>& fb, float exposure_time) const
+    {
         Image<TSpectral>& received_power = fb.received_power();
         Image<float>& output = fb.sensor_response();
 
-        // Prepare Random Number Generators (Poisson & Normal)
-        
+        // TODO Move this somewhere else?
+        static std::mt19937 rng(1);
+        std::normal_distribution<float> read_noise_dist(0.0f, read_noise);
+
+        const TSpectral photon_energy = TSpectral::photon_energies();
+        float max_dn = std::pow(2.f, static_cast<float>(bit_depth)) - 1.f;
+
         for (int y = 0; y < received_power.height(); ++y) {
             for (int x = 0; x < received_power.width(); ++x) {
 
@@ -29,24 +34,25 @@ namespace huira {
                 // Dark Current
                 float dark_e = dark_current * exposure_time;
 
-                // Shot Noise (Poisson)
-                //float noisy_e = sample_poisson(signal_e + dark_e);
-                float noisy_e = signal_e + dark_e; // Placeholder for Poisson sampling
-
-                // Read Noise (Gaussian)
-                //noisy_e += sample_normal(0.0, read_noise);
+                // Shot Noise (Poisson)  TODO THIS IS JUST A GAUSSIAN APPROXIMATION
+                float accumulated_e = signal_e + dark_e;
+                float shot_noise_std = std::sqrt(accumulated_e);
+                std::normal_distribution<float> shot_dist(0.0f, shot_noise_std);
+                float noisy_e = accumulated_e + shot_dist(rng);
 
                 // Well Saturation (basic clamping)
                 if (noisy_e > full_well_capacity) {
                     noisy_e = full_well_capacity;
                 }
 
-                // Quantization (ADC)
-                float max_dn = std::pow(2.f, static_cast<float>(bit_depth)) - 1.f;
-                float dn = std::floor(std::min(noisy_e / gain, max_dn));
+                // Read Noise (Gaussian)
+                noisy_e += read_noise_dist(rng);
 
-                // Map back to floating point [0,1] for output image:
-                output(x, y) = dn / max_dn;
+                // System Gain & Quantization (ADC)
+                float dn_value = (noisy_e / gain) + bias_level_dn;
+                float dn = std::floor(std::min(dn_value, max_dn));
+
+                output(x, y) = std::max(0.f, dn) / max_dn;
             }
         }
     }

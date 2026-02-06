@@ -16,9 +16,10 @@ namespace huira {
 
         // Configuration
         float full_well_capacity = 20000.f;
-        float gain = 1.f;                   // e-/ADU
-        float read_noise = 10.f;            // e- RMS
-        float dark_current = 0.1f;          // e-/s
+        float gain = 4.8f;                  // e-/ADU
+        float read_noise = 50.f;            // e- RMS
+        float dark_current = 1.f;          // e-/s
+        float bias_level_dn = 20.f;        // ADU
         int bit_depth = 12;
         TSpectral quantum_efficiency = TSpectral{ 0.6f };
 
