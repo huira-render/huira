@@ -23,7 +23,7 @@ namespace huira::units {
             requires std::is_arithmetic_v<T>
         : value_(static_cast<double>(value))
         {
-            detail::validate_real(value_, "Unit[" + Dim::to_si_string() + "]");
+            validate_real(value_, "Unit[" + Dim::to_si_string() + "]");
         }
 
         template<IsRatioOrTag OtherScale>
@@ -149,6 +149,10 @@ namespace huira::units {
 
         constexpr bool operator>=(const Quantity& other) const {
             return value_ >= other.value_;
+        }
+
+        constexpr Quantity operator-() const {
+            return Quantity(-value_);
         }
 
         friend std::ostream& operator<<(std::ostream& os, const Quantity& quantity) {
@@ -374,7 +378,7 @@ namespace huira::units {
             requires std::is_arithmetic_v<T>
         : value_(static_cast<double>(value))
         {
-            detail::validate_real(value_, "Dimensionless");
+            validate_real(value_, "Dimensionless");
         }
 
         template<IsRatioOrTag OtherScale>
