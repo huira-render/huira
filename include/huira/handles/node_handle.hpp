@@ -26,8 +26,16 @@ namespace huira {
 
         // Rotation
         void set_rotation(const Rotation<double>& rotation) const;
-        void set_rotation(const Quaternion<double>& quaternion) const;
-        void set_rotation(const ShusterQuaternion<double>& shuster_quaternion) const;
+
+        void set_rotation_local_to_parent(const Mat3<double>& matrix) const;
+        void set_rotation_local_to_parent(const Quaternion<double>& quaternion) const;
+        void set_rotation_local_to_parent(const Vec3<double>& axis, units::Degree angle) const;
+
+        void set_rotation_parent_to_local(const Mat3<double>& matrix) const;
+        void set_rotation_parent_to_local(const Quaternion<double>& quaternion) const;
+        void set_rotation_parent_to_local(const Vec3<double>& axis, units::Degree angle) const;
+
+        void set_euler_angles(units::Radian x, units::Radian y, units::Radian z, std::string sequence = "XYZ") const;
         Rotation<double> get_static_rotation() const;
 
 

@@ -1,4 +1,5 @@
 #include "huira/ephemeris/spice.hpp"
+#include "huira/core/units/units.hpp"
 
 namespace huira {
     inline constexpr double SECONDS_PER_DAY = 86400.0;
@@ -281,6 +282,10 @@ namespace huira {
     
     inline bool Time::operator>=(const Time& other) const {
         return !(*this < other);
+    }
+
+    inline Time Time::operator+(units::Second delta) const {
+        return Time(et_ + delta.get_si_value());
     }
     /// @}
 }

@@ -30,6 +30,8 @@
 
 #include <string>
 
+#include "huira/core/units/units.hpp"
+
 namespace huira {
 
 /**
@@ -105,6 +107,7 @@ public:
     bool operator>(const Time& other) const;
     bool operator>=(const Time& other) const;
 
+    Time operator+(units::Second delta) const;
 
     /**
      * @brief Julian Date of J2000.0 epoch (2451545.0).

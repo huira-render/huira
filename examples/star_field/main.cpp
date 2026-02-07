@@ -23,7 +23,7 @@ int main(int argc, char** argv) {
     // Camera details (read from: https://sbnarchive.psi.edu/pds4/orex/orex.ocams/data_calibrated/cruise_1/20160919T162205S722_map_iofL2pan.xml)
     huira::Quaternion<double> quaternion{ 0.0122908778004389, 0.0239176965190355, 0.549506737933572, 0.835056419100963 };
     quaternion = glm::inverse(quaternion);
-
+    
     huira::Time time("2016-09-19T16:22:05.728");
     float exposure_time = 9.984285275f;
     huira::Vec2<float> pixel_pitch{ 8.5f * 1e-6f, 8.5f * 1e-6f };
@@ -68,7 +68,7 @@ int main(int argc, char** argv) {
     // Create the renderer:
     huira::RasterRenderer<huira::RGB> renderer;
 
-    mapcam.set_rotation(quaternion);
+    mapcam.set_rotation_parent_to_local(quaternion);
 
     // Create a scene view at the observation time:
     auto scene_view = huira::SceneView<huira::RGB>(scene, time, mapcam, huira::ObservationMode::ABERRATED_STATE);

@@ -194,10 +194,7 @@ namespace huira {
     Rotation<T>::operator Rotation<U>() const
     {
         Mat3<U> cast_matrix = this->matrix_;
-
-        Rotation<U> rotation;
-        rotation.set_matrix_(cast_matrix);
-        return rotation;
+        return Rotation<U>::from_local_to_parent(cast_matrix);
     }
 
 

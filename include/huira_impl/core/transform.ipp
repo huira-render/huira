@@ -21,10 +21,10 @@ namespace huira {
         Mat4<T> result{};
 
         // Apply scale and rotation
-        Mat4<T> rot = rotation.get_matrix();
+        Mat3<T> rot_basis = rotation.local_to_parent_matrix();
         for (int i = 0; i < 3; ++i) {
             for (int j = 0; j < 3; ++j) {
-                result[i][j] = rot[i][j] * scale[j];
+                result[i][j] = rot_basis[i][j] * scale[j];
             }
         }
 

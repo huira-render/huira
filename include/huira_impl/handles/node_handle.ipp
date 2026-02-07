@@ -84,13 +84,48 @@ namespace huira {
     }
 
     template <IsSpectral TSpectral, typename TNode>
-    void NodeHandle<TSpectral, TNode>::set_rotation(const Quaternion<double>& quaternion) const {
-        this->get()->set_rotation(Rotation<double>(quaternion));
+    void NodeHandle<TSpectral, TNode>::set_rotation_local_to_parent(const Mat3<double>& matrix) const
+    {
+        this->get()->set_rotation(Rotation<double>::from_local_to_parent(matrix));
     }
 
     template <IsSpectral TSpectral, typename TNode>
-    void NodeHandle<TSpectral, TNode>::set_rotation(const ShusterQuaternion<double>& shuster_quaternion) const {
-        this->get()->set_rotation(Rotation<double>(shuster_quaternion));
+    void NodeHandle<TSpectral, TNode>::set_rotation_local_to_parent(const Quaternion<double>& quaternion) const
+    {
+        this->get()->set_rotation(Rotation<double>::from_local_to_parent(quaternion));
+    }
+
+    template <IsSpectral TSpectral, typename TNode>
+    void NodeHandle<TSpectral, TNode>::set_rotation_local_to_parent(const Vec3<double>& axis, units::Degree angle) const
+    {
+        this->get()->set_rotation(Rotation<double>::from_local_to_parent(axis, angle));
+    }
+
+
+    template <IsSpectral TSpectral, typename TNode>
+    void NodeHandle<TSpectral, TNode>::set_rotation_parent_to_local(const Mat3<double>& matrix) const
+    {
+        this->get()->set_rotation(Rotation<double>::from_parent_to_local(matrix));
+    }
+
+    template <IsSpectral TSpectral, typename TNode>
+    void NodeHandle<TSpectral, TNode>::set_rotation_parent_to_local(const Quaternion<double>& quaternion) const
+    {
+        this->get()->set_rotation(Rotation<double>::from_parent_to_local(quaternion));
+    }
+
+    template <IsSpectral TSpectral, typename TNode>
+    void NodeHandle<TSpectral, TNode>::set_rotation_parent_to_local(const Vec3<double>& axis, units::Degree angle) const
+    {
+        this->get()->set_rotation(Rotation<double>::from_parent_to_local(axis, angle));
+    }
+
+
+
+    template <IsSpectral TSpectral, typename TNode>
+    void NodeHandle<TSpectral, TNode>::set_euler_angles(units::Radian x, units::Radian y, units::Radian z, std::string sequence) const
+    {
+        this->get()->set_rotation(Rotation<double>::extrinsic_euler_angles(x, y, z, sequence));
     }
 
 
