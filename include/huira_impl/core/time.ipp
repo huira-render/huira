@@ -1,10 +1,8 @@
 #include "huira/ephemeris/spice.hpp"
 
 namespace huira {
-    namespace detail {
-        inline constexpr double SECONDS_PER_DAY = 86400.0;
-        inline constexpr double SECONDS_PER_JULIAN_YEAR = 365.25 * SECONDS_PER_DAY;
-    }
+    inline constexpr double SECONDS_PER_DAY = 86400.0;
+    inline constexpr double SECONDS_PER_JULIAN_YEAR = 365.25 * SECONDS_PER_DAY;
 
     /**
      * @brief Constructs a Time from a UTC date-time string.
@@ -66,7 +64,7 @@ namespace huira {
      */
     inline Time Time::from_julian_date(double jd, TimeScale scale) {
         // Convert JD to seconds past J2000 in the input timescale
-        double seconds_past_j2000 = (jd - J2000_JD) * detail::SECONDS_PER_DAY;
+        double seconds_past_j2000 = (jd - J2000_JD) * SECONDS_PER_DAY;
     
         switch (scale) {
             case TimeScale::TDB:
@@ -159,7 +157,7 @@ namespace huira {
                 break;
         }
     
-        return J2000_JD + (seconds_past_j2000 / detail::SECONDS_PER_DAY);
+        return J2000_JD + (seconds_past_j2000 / SECONDS_PER_DAY);
     }
 
     /**
@@ -220,7 +218,7 @@ namespace huira {
                 break;
         }
     
-        return seconds_past_j2000 / detail::SECONDS_PER_JULIAN_YEAR;
+        return seconds_past_j2000 / SECONDS_PER_JULIAN_YEAR;
     }
     
     /**

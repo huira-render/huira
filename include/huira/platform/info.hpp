@@ -3,7 +3,7 @@
 #include <chrono>
 #include <string>
 
-namespace huira::detail {
+namespace huira {
 
     std::string get_platform();
 

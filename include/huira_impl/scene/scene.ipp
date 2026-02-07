@@ -279,7 +279,7 @@ namespace huira {
 
     template <IsSpectral TSpectral>
     void Scene<TSpectral>::print_meshes() const {
-        std::cout << detail::green("Meshes: " + std::to_string(meshes_.size()) + " loaded") << "\n";
+        std::cout << green("Meshes: " + std::to_string(meshes_.size()) + " loaded") << "\n";
         for (const auto& mesh : meshes_) {
             std::cout << " - " << mesh->get_info();
         }
@@ -287,7 +287,7 @@ namespace huira {
 
     template <IsSpectral TSpectral>
     void Scene<TSpectral>::print_lights() const {
-        std::cout << detail::yellow("Lights: " + std::to_string(lights_.size()) + " loaded") << "\n";
+        std::cout << yellow("Lights: " + std::to_string(lights_.size()) + " loaded") << "\n";
         for (const auto& light : lights_) {
             std::cout << " - " << light->get_info();
         }
@@ -295,7 +295,7 @@ namespace huira {
 
     template <IsSpectral TSpectral>
     void Scene<TSpectral>::print_unresolved_objects() const {
-        std::cout << detail::cyan("UnresolvedObjects: " + std::to_string(unresolved_objects_.size()) + " loaded") << "\n";
+        std::cout << cyan("UnresolvedObjects: " + std::to_string(unresolved_objects_.size()) + " loaded") << "\n";
         for (const auto& unresolved_object : unresolved_objects_) {
             std::cout << " - " << unresolved_object->get_info();
         }
@@ -303,7 +303,7 @@ namespace huira {
 
     template <IsSpectral TSpectral>
     void Scene<TSpectral>::print_camera_models() const {
-        std::cout << detail::blue("CameraModels: " + std::to_string(camera_models_.size()) + " loaded") << "\n";
+        std::cout << blue("CameraModels: " + std::to_string(camera_models_.size()) + " loaded") << "\n";
         for (const auto& camera_model : camera_models_) {
             std::cout << " - " << camera_model->get_info();
         }
@@ -311,7 +311,7 @@ namespace huira {
 
     template <IsSpectral TSpectral>
     void Scene<TSpectral>::print_models() const {
-        std::cout << detail::magenta("Models: " + std::to_string(models_.size()) + " loaded") << "\n";
+        std::cout << magenta("Models: " + std::to_string(models_.size()) + " loaded") << "\n";
         for (const auto& model : models_) {
             std::cout << " - " << model->get_info();
         }
@@ -319,7 +319,7 @@ namespace huira {
 
     template <IsSpectral TSpectral>
     void Scene<TSpectral>::print_graph() const {
-        std::cout << detail::on_blue("root");
+        std::cout << on_blue("root");
         print_node_details_(root_node_.get());
         std::cout << "\n";
 
@@ -333,11 +333,11 @@ namespace huira {
     template <IsSpectral TSpectral>
     void Scene<TSpectral>::print_contents() const {
         std::cout << "Scene Contents:\n";
-        std::cout << " - " << detail::blue("CameraModels: " + std::to_string(camera_models_.size()) + " loaded") << "\n";
-        std::cout << " - " << detail::green("Meshes: " + std::to_string(meshes_.size()) + " loaded") << "\n";
-        std::cout << " - " << detail::yellow("Lights: " + std::to_string(lights_.size()) + " loaded") << "\n";
-        std::cout << " - " << detail::cyan("UnresolvedObjects: " + std::to_string(unresolved_objects_.size()) + " loaded") << "\n";
-        std::cout << " - " << detail::magenta("Models: " + std::to_string(models_.size()) + " loaded") << "\n";
+        std::cout << " - " << blue("CameraModels: " + std::to_string(camera_models_.size()) + " loaded") << "\n";
+        std::cout << " - " << green("Meshes: " + std::to_string(meshes_.size()) + " loaded") << "\n";
+        std::cout << " - " << yellow("Lights: " + std::to_string(lights_.size()) + " loaded") << "\n";
+        std::cout << " - " << cyan("UnresolvedObjects: " + std::to_string(unresolved_objects_.size()) + " loaded") << "\n";
+        std::cout << " - " << magenta("Models: " + std::to_string(models_.size()) + " loaded") << "\n";
         std::cout << "Scene Graph:\n";
         print_graph();
     }
@@ -356,28 +356,28 @@ namespace huira {
         if (const auto* instance_node = dynamic_cast<const Instance<TSpectral>*>(node)) {
             std::string instance_str = "Instance[" + std::to_string(instance_node->id()) + "]";
             instance_str += instance_node->name_.empty() ? "" : " " + instance_node->name_;
-            std::cout << detail::on_green(instance_str) << " -> ";
+            std::cout << on_green(instance_str) << " -> ";
             std::visit([&](auto* raw_ptr) noexcept {
                 using AssetType = std::decay_t<decltype(*raw_ptr)>;
                 if constexpr (std::is_same_v<AssetType, Mesh<TSpectral>>) {
-                    std::cout << detail::green(raw_ptr->get_info());
+                    std::cout << green(raw_ptr->get_info());
                 }
                 else if constexpr (std::is_same_v<AssetType, Light<TSpectral>>) {
-                    std::cout << detail::yellow(raw_ptr->get_info());
+                    std::cout << yellow(raw_ptr->get_info());
                 }
                 else if constexpr (std::is_same_v<AssetType, UnresolvedObject<TSpectral>>) {
-                    std::cout << detail::cyan(raw_ptr->get_info());
+                    std::cout << cyan(raw_ptr->get_info());
                 }
                 else if constexpr (std::is_same_v<AssetType, CameraModel<TSpectral>>) {
-                    std::cout << detail::blue(raw_ptr->get_info());
+                    std::cout << blue(raw_ptr->get_info());
                 }
                 else if constexpr (std::is_same_v<AssetType, Model<TSpectral>>) {
-                    std::cout << detail::magenta(raw_ptr->get_info());
+                    std::cout << magenta(raw_ptr->get_info());
                 }
                 }, instance_node->asset_);
         }
         else {
-            std::cout << detail::on_blue(node->get_info());
+            std::cout << on_blue(node->get_info());
         }
         print_node_details_(node);
         std::cout << "\n";

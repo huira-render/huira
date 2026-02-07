@@ -78,7 +78,7 @@ namespace huira {
 
         // Centralized crash report output
         static void output_crash_report(const std::string& log_path);
-        
+
         static void handle_crash(int signal);
         [[noreturn]] static void handle_terminate();
         void install_crash_handlers();
@@ -161,7 +161,7 @@ namespace huira {
             std::string _huira_warning_msg = (msg); \
             huira::Logger::instance().log(huira::LogLevel::Warning, _huira_warning_msg); \
             if (huira::Logger::instance().is_console_warning_enabled()) { \
-                std::cerr << huira::detail::yellow("[WARNING] " + _huira_warning_msg) << std::endl; \
+                std::cerr << huira::yellow("[WARNING] " + _huira_warning_msg) << std::endl; \
             } \
         } \
     } while(0)
@@ -171,7 +171,7 @@ namespace huira {
         if (huira::Logger::instance().get_level() <= huira::LogLevel::Error) { \
             std::string _huira_error_msg = (msg); \
             huira::Logger::instance().log(huira::LogLevel::Error, _huira_error_msg); \
-            std::cerr << huira::detail::red("[ERROR] " + _huira_error_msg) << std::endl; \
+            std::cerr << huira::red("[ERROR] " + _huira_error_msg) << std::endl; \
         } \
     } while(0)
 
@@ -190,7 +190,7 @@ namespace huira {
     do { \
         std::string _huira_error_msg = (msg); \
         huira::Logger::instance().log(huira::LogLevel::Error, _huira_error_msg); \
-        std::cerr << huira::detail::red("[ERROR] " + _huira_error_msg) << std::endl; \
+        std::cerr << huira::red("[ERROR] " + _huira_error_msg) << std::endl; \
         throw std::runtime_error(_huira_error_msg); \
     } while(0)
 

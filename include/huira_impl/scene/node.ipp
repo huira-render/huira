@@ -246,7 +246,7 @@ namespace huira {
         if (rotation_mode_ == TransformMode::MANUAL_TRANSFORM) {
             // Approximate rotation by treat angular_velocity * dt as euler angles
             Vec3<double> euler_angles = local_transform_.angular_velocity * dt;
-            Rotation<double> delta_rotation = Rotation<double>(
+            Rotation<double> delta_rotation = Rotation<double>::intrinsic_euler_angles(
                 units::Radian{ euler_angles[0] },
                 units::Radian{ euler_angles[1] },
                 units::Radian{ euler_angles[2] });

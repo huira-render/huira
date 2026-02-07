@@ -1,5 +1,3 @@
-#pragma once
-
 #include <array>
 #include <chrono>
 #include <csignal>
@@ -139,7 +137,7 @@ namespace huira {
 
         if (filepath.empty()) {
             // Use platform-appropriate log directory
-            actual_path = detail::get_log_file_path();
+            actual_path = get_log_file_path();
         } else {
             actual_path = filepath;
         }
@@ -154,8 +152,8 @@ namespace huira {
             }
         }
 
-        std::string platform_str = detail::get_platform();
-        std::string compiler_str = detail::get_compiler_info();
+        std::string platform_str = get_platform();
+        std::string compiler_str = get_compiler_info();
 
         file << "Huira Log\n";
         file << "=========\n\n";
@@ -232,12 +230,12 @@ namespace huira {
 
     void Logger::output_crash_report(const std::string& log_path) {
         if (!log_path.empty()) {
-            std::cerr << detail::red("HUIRA UNCAUGHT EXCEPTION") << "\n";
-            std::cerr << detail::yellow(" - Log file written to: " + std::filesystem::absolute(log_path).string()) << "\n";
-            std::cerr << detail::yellow(" - If this was a SPICE error, consider reviewing your SPICE configuration\n");
-            std::cerr << detail::yellow(" - If you believe this is a bug with Huira, please report this issue:\n");
-            std::cerr << "       " << detail::blue("https://github.com/huira-render/huira/issues/new?template=bug_report.md") << "\n";
-            std::cerr << detail::yellow(" - Include the log file in your report.") << "\n";
+            std::cerr << red("HUIRA UNCAUGHT EXCEPTION") << "\n";
+            std::cerr << yellow(" - Log file written to: " + std::filesystem::absolute(log_path).string()) << "\n";
+            std::cerr << yellow(" - If this was a SPICE error, consider reviewing your SPICE configuration\n");
+            std::cerr << yellow(" - If you believe this is a bug with Huira, please report this issue:\n");
+            std::cerr << "       " << blue("https://github.com/huira-render/huira/issues/new?template=bug_report.md") << "\n";
+            std::cerr << yellow(" - Include the log file in your report.") << "\n";
         }
     }
 

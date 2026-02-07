@@ -2,7 +2,7 @@
 
 #include <string>
 
-namespace huira::detail {
+namespace huira {
 	std::string get_executable_path();
 }
 
