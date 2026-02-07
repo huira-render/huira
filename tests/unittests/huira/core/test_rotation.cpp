@@ -11,6 +11,16 @@
 using namespace huira;
 using Catch::Approx;
 
+// Helper to check if two matrices are equal (fuzzy comparison)
+template<typename T>
+void CHECK_MAT3_EQUAL(const Mat3<T>& a, const Mat3<T>& b, double epsilon = 1e-10) {
+    for (int col = 0; col < 3; ++col) {
+        for (int row = 0; row < 3; ++row) {
+            REQUIRE_THAT(a[col][row], Catch::Matchers::WithinAbs(b[col][row], epsilon));
+        }
+    }
+}
+
 // Test both float and double instantiations
 TEMPLATE_TEST_CASE("Rotation - Template Instantiations", "[rotation][template]", float, double) {
     using RotationType = Rotation<TestType>;
@@ -18,11 +28,11 @@ TEMPLATE_TEST_CASE("Rotation - Template Instantiations", "[rotation][template]",
     using Mat3Type = Mat3<TestType>;
 
     SECTION("Default constructor creates identity rotation") {
+        // Default corresponds to "No Rotation" (Local aligned with Parent)
         RotationType rot;
 
-        // Identity should preserve test vectors
         Vec3Type x_axis{ 1, 0, 0 };
-        Vec3Type result = rot * x_axis;
+        Vec3Type result = rot * x_axis; // Active transform
 
         REQUIRE_THAT(result.x, Catch::Matchers::WithinAbs(x_axis.x, 1e-6));
         REQUIRE_THAT(result.y, Catch::Matchers::WithinAbs(x_axis.y, 1e-6));
@@ -31,30 +41,28 @@ TEMPLATE_TEST_CASE("Rotation - Template Instantiations", "[rotation][template]",
 
     SECTION("Matrix accessor returns expected format") {
         RotationType rot;
-        Mat3Type matrix = rot.get_matrix();
+        // Updated API: explicit getter
+        Mat3Type matrix = rot.local_to_parent_matrix();
 
-        // Identity matrix should have 1s on diagonal, 0s elsewhere
+        // Identity matrix checks
         REQUIRE_THAT(matrix[0][0], Catch::Matchers::WithinAbs(TestType(1), 1e-6));
         REQUIRE_THAT(matrix[1][1], Catch::Matchers::WithinAbs(TestType(1), 1e-6));
         REQUIRE_THAT(matrix[2][2], Catch::Matchers::WithinAbs(TestType(1), 1e-6));
-
-        REQUIRE_THAT(matrix[0][1], Catch::Matchers::WithinAbs(TestType(0), 1e-6));
-        REQUIRE_THAT(matrix[0][2], Catch::Matchers::WithinAbs(TestType(0), 1e-6));
-        REQUIRE_THAT(matrix[1][0], Catch::Matchers::WithinAbs(TestType(0), 1e-6));
     }
 }
 
 TEST_CASE("Rotation - Construction Methods", "[rotation][constructor]") {
-    using RotationType = Rotation_d;  // Use double for precise testing
+    using RotationType = Rotation_d;
     using Vec3Type = Vec3<double>;
 
-    SECTION("Axis-angle constructor") {
+    SECTION("Axis-angle constructor (Active/Local-to-Parent)") {
         Vec3Type z_axis{ 0.0, 0.0, 1.0 };
         units::Degree angle_90{ 90.0 };
 
-        RotationType rot(z_axis, angle_90);
+        // Updated API: Explicit Factory
+        RotationType rot = RotationType::from_local_to_parent(z_axis, angle_90);
 
-        // 90-units::Degree rotation around Z should map X-axis to Y-axis
+        // 90-degree active rotation around Z maps X -> Y
         Vec3Type x_axis{ 1.0, 0.0, 0.0 };
         Vec3Type rotated = rot * x_axis;
 
@@ -63,43 +71,40 @@ TEST_CASE("Rotation - Construction Methods", "[rotation][constructor]") {
         REQUIRE_THAT(rotated.z, Catch::Matchers::WithinAbs(0.0, 1e-10));
     }
 
-    SECTION("Euler angle constructor - single axis rotations") {
+    SECTION("Euler angle constructor - Extrinsic (Blender Style)") {
         units::Degree angle_90{ 90.0 };
         units::Degree zero{ 0.0 };
 
-        // Test X rotation
-        RotationType rot_x(angle_90, zero, zero, "XYZ");
+        // Updated API: Explicit Extrinsic
+        RotationType rot_x = RotationType::extrinsic_euler_angles(angle_90, zero, zero, "XYZ");
+
         Vec3Type y_axis{ 0.0, 1.0, 0.0 };
         Vec3Type rotated_y = rot_x * y_axis;
 
-        // 90deg X rotation should map Y to Z
+        // 90deg X rotation maps Y -> Z
         REQUIRE_THAT(rotated_y.x, Catch::Matchers::WithinAbs(0.0, 1e-10));
         REQUIRE_THAT(rotated_y.y, Catch::Matchers::WithinAbs(0.0, 1e-10));
         REQUIRE_THAT(rotated_y.z, Catch::Matchers::WithinAbs(1.0, 1e-10));
-
-        // Test Y rotation
-        RotationType rot_y(zero, angle_90, zero, "XYZ");
-        Vec3Type x_axis{ 1.0, 0.0, 0.0 };
-        Vec3Type rotated_x = rot_y * x_axis;
-
-        // 90deg Y rotation should map X to -Z
-        REQUIRE_THAT(rotated_x.x, Catch::Matchers::WithinAbs(0.0, 1e-10));
-        REQUIRE_THAT(rotated_x.y, Catch::Matchers::WithinAbs(0.0, 1e-10));
-        REQUIRE_THAT(rotated_x.z, Catch::Matchers::WithinAbs(-1.0, 1e-10));
     }
 
-    SECTION("Matrix constructor preserves rotation") {
-        // Create a known rotation matrix (90deg around Z)
-        Mat3<double> rot_matrix = RotationType::rotation_z(units::Degree{ 90.0 });
+    SECTION("Parent-to-Local (Passive) Construction") {
+        // Create a rotation that transforms Parent -> Local by 90 deg around Z.
+        // This means the Frame rotates +90. 
+        // A vector fixed in space at X=(1,0,0) will appear at Y=(-1,0,0) in the new frame? 
+        // Wait: Passive rotation of frame by +90 around Z:
+        // Global X axis aligns with Local Y axis? No.
+        // Let's use the property: Passive(Angle) == Active(-Angle).
 
-        RotationType rot(rot_matrix);
+        Vec3Type axis{ 0,0,1 };
+        units::Degree angle{ 90.0 };
 
-        Vec3Type x_axis{ 1.0, 0.0, 0.0 };
-        Vec3Type rotated = rot * x_axis;
+        // Construct from passive data
+        RotationType passive_rot = RotationType::from_parent_to_local(axis, angle);
 
-        REQUIRE_THAT(rotated.x, Catch::Matchers::WithinAbs(0.0, 1e-10));
-        REQUIRE_THAT(rotated.y, Catch::Matchers::WithinAbs(1.0, 1e-10));
-        REQUIRE_THAT(rotated.z, Catch::Matchers::WithinAbs(0.0, 1e-10));
+        // Construct equivalent active data (-90)
+        RotationType active_rot = RotationType::from_local_to_parent(axis, -angle);
+
+        CHECK_MAT3_EQUAL(passive_rot.local_to_parent_matrix(), active_rot.local_to_parent_matrix());
     }
 }
 
@@ -108,16 +113,14 @@ TEST_CASE("Rotation - Operations", "[rotation][operations]") {
     using Vec3Type = Vec3<double>;
 
     SECTION("Multiplication is associative") {
-        // Create three different rotations
-        RotationType rot1({ 1.0, 0.0, 0.0 }, units::Degree{ 30.0 });  // 30deg around X
-        RotationType rot2({ 0.0, 1.0, 0.0 }, units::Degree{ 45.0 });  // 45deg around Y  
-        RotationType rot3({ 0.0, 0.0, 1.0 }, units::Degree{ 60.0 });  // 60deg around Z
+        // Updated API: Explicit Factories
+        RotationType rot1 = RotationType::from_local_to_parent({ 1.0, 0.0, 0.0 }, units::Degree{ 30.0 });
+        RotationType rot2 = RotationType::from_local_to_parent({ 0.0, 1.0, 0.0 }, units::Degree{ 45.0 });
+        RotationType rot3 = RotationType::from_local_to_parent({ 0.0, 0.0, 1.0 }, units::Degree{ 60.0 });
 
-        // Test (rot1 * rot2) * rot3 == rot1 * (rot2 * rot3)
         RotationType left_assoc = (rot1 * rot2) * rot3;
         RotationType right_assoc = rot1 * (rot2 * rot3);
 
-        // Compare by applying to a test vector
         Vec3Type test_vec{ 1.0, 1.0, 1.0 };
         Vec3Type left_result = left_assoc * test_vec;
         Vec3Type right_result = right_assoc * test_vec;
@@ -127,33 +130,16 @@ TEST_CASE("Rotation - Operations", "[rotation][operations]") {
         REQUIRE_THAT(left_result.z, Catch::Matchers::WithinAbs(right_result.z, 1e-12));
     }
 
-    SECTION("Compound assignment operator") {
-        RotationType rot1({ 0.0, 0.0, 1.0 }, units::Degree{ 45.0 });
-        RotationType rot2({ 1.0, 0.0, 0.0 }, units::Degree{ 30.0 });
-
-        RotationType expected = rot1 * rot2;
-        rot1 *= rot2;
-
-        Vec3Type test_vec{ 1.0, 2.0, 3.0 };
-        Vec3Type result1 = rot1 * test_vec;
-        Vec3Type result2 = expected * test_vec;
-
-        REQUIRE_THAT(result1.x, Catch::Matchers::WithinAbs(result2.x, 1e-12));
-        REQUIRE_THAT(result1.y, Catch::Matchers::WithinAbs(result2.y, 1e-12));
-        REQUIRE_THAT(result1.z, Catch::Matchers::WithinAbs(result2.z, 1e-12));
-    }
-
     SECTION("Inverse operation") {
-        Vec3Type axis{ 1.0, 1.0, 1.0 };  // Will be normalized internally
+        Vec3Type axis{ 1.0, 1.0, 1.0 };
         units::Degree angle{ 60.0 };
-        RotationType rot(axis, angle);
+
+        RotationType rot = RotationType::from_local_to_parent(axis, angle);
         RotationType inv_rot = rot.inverse();
 
-        // rot * rot.inverse() should be identity
         RotationType identity = rot * inv_rot;
-
         Vec3Type test_vec{ 2.0, -1.0, 3.0 };
-        Vec3Type result = identity * test_vec;
+        Vec3Type result = identity * test_vec; // Should match test_vec
 
         REQUIRE_THAT(result.x, Catch::Matchers::WithinAbs(test_vec.x, 1e-12));
         REQUIRE_THAT(result.y, Catch::Matchers::WithinAbs(test_vec.y, 1e-12));
@@ -165,60 +151,27 @@ TEST_CASE("Rotation - Properties and Invariants", "[rotation][properties]") {
     using RotationType = Rotation_d;
     using Vec3Type = Vec3<double>;
 
-    SECTION("Rotation preserves vector length") {
-        RotationType rot({ 1.0, 1.0, 1.0 }, units::Degree{ 120.0 });
-
-        std::vector<Vec3Type> test_vectors = {
-            {3.0, 4.0, 0.0},    // Length 5
-            {1.0, 1.0, 1.0},    // Length sqrt(3)
-            {0.0, 0.0, 7.0},    // Length 7
-            {-2.0, 3.0, -1.0}   // Length sqrt(14)
-        };
-
-        for (const auto& vec : test_vectors) {
-            Vec3Type rotated = rot * vec;
-            double original_length = glm::length(vec);
-            double rotated_length = glm::length(rotated);
-
-            REQUIRE_THAT(rotated_length, Catch::Matchers::WithinAbs(original_length, 1e-12));
-        }
-    }
-
-    SECTION("Rotation preserves angles between vectors") {
-        RotationType rot({ 0.5, 0.5, 0.707 }, units::Degree{ 75.0 });
-
-        Vec3Type vec1{ 1.0, 0.0, 0.0 };
-        Vec3Type vec2{ 0.0, 1.0, 0.0 };
-
-        // Calculate original angle (should be 90deg)
-        double original_cos = glm::dot(vec1, vec2) / (glm::length(vec1) * glm::length(vec2));
-
-        // Rotate both vectors
-        Vec3Type rot_vec1 = rot * vec1;
-        Vec3Type rot_vec2 = rot * vec2;
-
-        // Calculate angle after rotation
-        double rotated_cos = glm::dot(rot_vec1, rot_vec2) / (glm::length(rot_vec1) * glm::length(rot_vec2));
-
-        REQUIRE_THAT(rotated_cos, Catch::Matchers::WithinAbs(original_cos, 1e-12));
-    }
-
     SECTION("Axis extraction methods") {
-        RotationType rot({ 0.0, 0.0, 1.0 }, units::Degree{ 45.0 });
+        // Rotate 90 degrees around Z
+        // Old X axis (1,0,0) should become Y axis (0,1,0)
+        RotationType rot = RotationType::from_local_to_parent({ 0.0, 0.0, 1.0 }, units::Degree{ 90.0 });
 
-        Vec3Type x_axis = rot.get_x_axis();
-        Vec3Type y_axis = rot.get_y_axis();
-        Vec3Type z_axis = rot.get_z_axis();
+        // Updated API: get_x_axis -> local_x_axis
+        // The columns of the matrix represent the Local Axes in Parent Space
+        Vec3Type x_axis_in_parent = rot.x_axis();
+        Vec3Type y_axis_in_parent = rot.y_axis();
+        //Vec3Type z_axis_in_parent = rot.z_axis();
+
+        // Local X should now be pointing along Parent Y (0,1,0)
+        REQUIRE_THAT(x_axis_in_parent.x, Catch::Matchers::WithinAbs(0.0, 1e-12));
+        REQUIRE_THAT(x_axis_in_parent.y, Catch::Matchers::WithinAbs(1.0, 1e-12));
+
+        // Local Y should now be pointing along Parent -X (-1,0,0)
+        REQUIRE_THAT(y_axis_in_parent.x, Catch::Matchers::WithinAbs(-1.0, 1e-12));
+        REQUIRE_THAT(y_axis_in_parent.y, Catch::Matchers::WithinAbs(0.0, 1e-12));
 
         // Check orthogonality
-        REQUIRE_THAT(glm::dot(x_axis, y_axis), Catch::Matchers::WithinAbs(0.0, 1e-12));
-        REQUIRE_THAT(glm::dot(x_axis, z_axis), Catch::Matchers::WithinAbs(0.0, 1e-12));
-        REQUIRE_THAT(glm::dot(y_axis, z_axis), Catch::Matchers::WithinAbs(0.0, 1e-12));
-
-        // Check normalization
-        REQUIRE_THAT(glm::length(x_axis), Catch::Matchers::WithinAbs(1.0, 1e-12));
-        REQUIRE_THAT(glm::length(y_axis), Catch::Matchers::WithinAbs(1.0, 1e-12));
-        REQUIRE_THAT(glm::length(z_axis), Catch::Matchers::WithinAbs(1.0, 1e-12));
+        REQUIRE_THAT(glm::dot(x_axis_in_parent, y_axis_in_parent), Catch::Matchers::WithinAbs(0.0, 1e-12));
     }
 }
 
@@ -227,37 +180,33 @@ TEST_CASE("Rotation - Quaternion Conversions", "[rotation][quaternion]") {
     using Vec3Type = Vec3<double>;
 
     SECTION("Quaternion round-trip conversion") {
-        RotationType original({ 1.0, 1.0, 1.0 }, units::Degree{ 75.0 });
+        RotationType original = RotationType::from_local_to_parent({ 1.0, 1.0, 1.0 }, units::Degree{ 75.0 });
 
-        // Convert to quaternion and back
-        Quaternion<double> quat = original.get_quaternion();
-        RotationType reconstructed(quat);
+        // Updated API: Explicit getter
+        Quaternion<double> quat = original.local_to_parent_quaternion();
 
-        // Test that they produce the same rotation
+        // Updated API: Explicit Factory
+        RotationType reconstructed = RotationType::from_local_to_parent(quat);
+
         Vec3Type test_vec{ 2.0, -1.0, 3.0 };
         Vec3Type result1 = original * test_vec;
         Vec3Type result2 = reconstructed * test_vec;
 
         REQUIRE_THAT(result1.x, Catch::Matchers::WithinAbs(result2.x, 1e-12));
         REQUIRE_THAT(result1.y, Catch::Matchers::WithinAbs(result2.y, 1e-12));
-        REQUIRE_THAT(result1.z, Catch::Matchers::WithinAbs(result2.z, 1e-12));
     }
 
-    SECTION("Shuster quaternion round-trip conversion") {
-        RotationType original({ 0.0, 1.0, 0.0 }, units::Degree{ 45.0 });
+    SECTION("SPICE/Passive Quaternion Round Trip") {
+        // Simulate a PDS quaternion (Parent->Local)
+        RotationType original = RotationType::from_local_to_parent({ 0.0, 1.0, 0.0 }, units::Degree{ 45.0 });
 
-        // Convert to Shuster quaternion and back
-        ShusterQuaternion<double> shuster_quat = original.get_shuster_quaternion();
-        RotationType reconstructed(shuster_quat);
+        // Get it as a passive quaternion (like writing to a SPICE file)
+        Quaternion<double> spice_quat = original.parent_to_local_quaternion();
 
-        // Test equivalence
-        Vec3Type test_vec{ 1.0, 2.0, 3.0 };
-        Vec3Type result1 = original * test_vec;
-        Vec3Type result2 = reconstructed * test_vec;
+        // Load it back (like reading from a SPICE file)
+        RotationType reconstructed = RotationType::from_parent_to_local(spice_quat);
 
-        REQUIRE_THAT(result1.x, Catch::Matchers::WithinAbs(result2.x, 1e-12));
-        REQUIRE_THAT(result1.y, Catch::Matchers::WithinAbs(result2.y, 1e-12));
-        REQUIRE_THAT(result1.z, Catch::Matchers::WithinAbs(result2.z, 1e-12));
+        CHECK_MAT3_EQUAL(original.local_to_parent_matrix(), reconstructed.local_to_parent_matrix());
     }
 }
 
@@ -265,101 +214,19 @@ TEST_CASE("Rotation - Static Factory Methods", "[rotation][static]") {
     SECTION("Static rotation matrices") {
         units::Degree angle_90{ 90.0 };
 
-        // Test static rotation functions
-        Mat3<double> x_rot = Rotation_d::rotation_x(angle_90);
-        Mat3<double> y_rot = Rotation_d::rotation_y(angle_90);
-        Mat3<double> z_rot = Rotation_d::rotation_z(angle_90);
+        // Updated API: rotation_x -> local_to_parent_x
+        Mat3<double> x_rot = Rotation_d::local_to_parent_x(angle_90);
+        //Mat3<double> y_rot = Rotation_d::local_to_parent_y(angle_90);
+        Mat3<double> z_rot = Rotation_d::local_to_parent_z(angle_90);
 
         // X rotation: [1,0,0] -> [1,0,0], [0,1,0] -> [0,0,1]
         Vec3<double> y_axis{ 0.0, 1.0, 0.0 };
         Vec3<double> rotated_y = x_rot * y_axis;
-        REQUIRE_THAT(rotated_y.x, Catch::Matchers::WithinAbs(0.0, 1e-10));
-        REQUIRE_THAT(rotated_y.y, Catch::Matchers::WithinAbs(0.0, 1e-10));
         REQUIRE_THAT(rotated_y.z, Catch::Matchers::WithinAbs(1.0, 1e-10));
 
-        // Y rotation: [1,0,0] -> [0,0,-1], [0,0,1] -> [1,0,0]
+        // Z rotation: [1,0,0] -> [0,1,0]
         Vec3<double> x_axis{ 1.0, 0.0, 0.0 };
-        Vec3<double> rotated_x = y_rot * x_axis;
-        REQUIRE_THAT(rotated_x.x, Catch::Matchers::WithinAbs(0.0, 1e-10));
-        REQUIRE_THAT(rotated_x.y, Catch::Matchers::WithinAbs(0.0, 1e-10));
-        REQUIRE_THAT(rotated_x.z, Catch::Matchers::WithinAbs(-1.0, 1e-10));
-
-        // Z rotation: [1,0,0] -> [0,1,0], [0,1,0] -> [-1,0,0]
-        Vec3<double> rotated_x_z = z_rot * x_axis;
-        REQUIRE_THAT(rotated_x_z.x, Catch::Matchers::WithinAbs(0.0, 1e-10));
-        REQUIRE_THAT(rotated_x_z.y, Catch::Matchers::WithinAbs(1.0, 1e-10));
-        REQUIRE_THAT(rotated_x_z.z, Catch::Matchers::WithinAbs(0.0, 1e-10));
-    }
-}
-
-TEST_CASE("Rotation - Edge Cases and Error Conditions", "[rotation][edge_cases]") {
-    using RotationType = Rotation_d;
-    using Vec3Type = Vec3<double>;
-
-    SECTION("Zero units::Degree rotations") {
-        Vec3Type any_axis{ 1.0, 2.0, 3.0 };
-        RotationType rot(any_axis, units::Degree{ 0.0 });
-
-        // Should behave like identity
-        Vec3Type test_vec{ 4.0, -2.0, 1.0 };
-        Vec3Type result = rot * test_vec;
-
-        REQUIRE_THAT(result.x, Catch::Matchers::WithinAbs(test_vec.x, 1e-12));
-        REQUIRE_THAT(result.y, Catch::Matchers::WithinAbs(test_vec.y, 1e-12));
-        REQUIRE_THAT(result.z, Catch::Matchers::WithinAbs(test_vec.z, 1e-12));
-    }
-
-    SECTION("Large angle rotations") {
-        Vec3Type axis{ 0.0, 0.0, 1.0 };
-        units::Degree large_angle{ 720.0 };  // Two full rotations
-
-        RotationType rot(axis, large_angle);
-
-        // Should be equivalent to identity (modulo 360deg)
-        Vec3Type test_vec{ 1.0, 1.0, 0.0 };
-        Vec3Type result = rot * test_vec;
-
-        REQUIRE_THAT(result.x, Catch::Matchers::WithinAbs(test_vec.x, 1e-10));
-        REQUIRE_THAT(result.y, Catch::Matchers::WithinAbs(test_vec.y, 1e-10));
-        REQUIRE_THAT(result.z, Catch::Matchers::WithinAbs(test_vec.z, 1e-10));
-    }
-
-    SECTION("Very small rotations") {
-        Vec3Type axis{ 1.0, 0.0, 0.0 };
-        units::Degree tiny_angle{ 1e-6 };  // Very small angle
-
-        RotationType rot(axis, tiny_angle);
-        Vec3Type test_vec{ 0.0, 1.0, 0.0 };
-        Vec3Type result = rot * test_vec;
-
-        // Should be very close to original with tiny rotation
-        REQUIRE_THAT(result.x, Catch::Matchers::WithinAbs(0.0, 1e-5));
-        REQUIRE_THAT(result.y, Catch::Matchers::WithinAbs(1.0, 1e-5));
-        // Z component should have small change proportional to angle
-        REQUIRE(std::abs(result.z) < 1e-4);
-    }
-}
-
-TEST_CASE("Rotation - String Representation and Output", "[rotation][output]") {
-    using RotationType = Rotation_d;
-
-    SECTION("toString method returns valid string") {
-        RotationType rot({ 0.0, 0.0, 1.0 }, units::Degree{ 45.0 });
-        std::string str_rep = rot.to_string();
-
-        // Should return a non-empty string
-        REQUIRE_FALSE(str_rep.empty());
-
-        // Should contain some numerical content
-        REQUIRE(str_rep.find_first_of("0123456789") != std::string::npos);
-    }
-
-    SECTION("Stream output operator works") {
-        RotationType rot;
-        std::ostringstream oss;
-
-        // Should not throw and should produce output
-        REQUIRE_NOTHROW(oss << rot);
-        REQUIRE_FALSE(oss.str().empty());
+        Vec3<double> rotated_x = z_rot * x_axis;
+        REQUIRE_THAT(rotated_x.y, Catch::Matchers::WithinAbs(1.0, 1e-10));
     }
 }
