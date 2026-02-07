@@ -249,7 +249,7 @@ namespace huira::spice {
             static_cast<T>(matrix[2][0]), static_cast<T>(matrix[2][1]), static_cast<T>(matrix[2][2])
         };
 
-        return huira::Rotation<T>{ rotation };
+        return huira::Rotation<T>::from_parent_to_local(rotation);
     }
 
     template <huira::IsFloatingPoint T>
@@ -260,19 +260,19 @@ namespace huira::spice {
     ) {
         SpiceDouble et = time.et();
         SpiceDouble state_xform[6][6];
-        SpiceDouble rotation[3][3];
+        SpiceDouble matrix[3][3];
         SpiceDouble angular_velocity[3];
 
         // Get state transformation matrix (includes rotation + derivatives)
         call_spice(sxform_c, FROM.c_str(), TO.c_str(), et, state_xform);
 
         // Extract rotation matrix and angular velocity vector
-        xf2rav_c(state_xform, rotation, angular_velocity);
+        xf2rav_c(state_xform, matrix, angular_velocity);
 
-        huira::Mat3<T> rot{
-            static_cast<T>(rotation[0][0]), static_cast<T>(rotation[0][1]), static_cast<T>(rotation[0][2]),
-            static_cast<T>(rotation[1][0]), static_cast<T>(rotation[1][1]), static_cast<T>(rotation[1][2]),
-            static_cast<T>(rotation[2][0]), static_cast<T>(rotation[2][1]), static_cast<T>(rotation[2][2])
+        huira::Mat3<T> rotation{
+            static_cast<T>(matrix[0][0]), static_cast<T>(matrix[0][1]), static_cast<T>(matrix[0][2]),
+            static_cast<T>(matrix[1][0]), static_cast<T>(matrix[1][1]), static_cast<T>(matrix[1][2]),
+            static_cast<T>(matrix[2][0]), static_cast<T>(matrix[2][1]), static_cast<T>(matrix[2][2])
         };
 
         huira::Vec3<T> ang_vel{
@@ -281,6 +281,6 @@ namespace huira::spice {
             static_cast<T>(angular_velocity[2])
         };
 
-        return { huira::Rotation<T>{ rot }, ang_vel };
+        return { huira::Rotation<T>::from_parent_to_local(rotation), ang_vel };
     }
 }
