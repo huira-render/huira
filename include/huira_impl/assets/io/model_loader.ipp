@@ -308,13 +308,13 @@ namespace huira {
             col2.x /= scale_z; col2.y /= scale_z; col2.z /= scale_z;
         }
 
+        // Recall the column major ordering of GLM:
         Mat3<double> matrix{
-            col0.x, col1.x, col2.x,
-            col0.y, col1.y, col2.y,
-            col0.z, col1.z, col2.z
+            col0.x, col0.y, col0.z,
+            col1.x, col1.y, col1.z,
+            col2.x, col1.y, col2.z
         };
-        matrix = glm::transpose(matrix); // Convert from row-major to column-major
-        transform.rotation = Rotation<double>(matrix);
+        transform.rotation = Rotation<double>::from_local_to_parent(matrix);
 
         return transform;
     }
