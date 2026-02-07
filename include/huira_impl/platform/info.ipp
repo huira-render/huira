@@ -14,7 +14,7 @@
 #include <mach/mach.h>
 #endif
 
-namespace huira::detail {
+namespace huira {
     std::string get_platform() {
 #ifdef _WIN32
         return "Windows";

@@ -17,7 +17,7 @@
 #include <unistd.h>
 #endif
 
-namespace huira::detail {
+namespace huira {
 
     inline std::filesystem::path get_log_file_path(const std::string& filename) {
         std::string actual_filename = filename;
@@ -55,4 +55,4 @@ namespace huira::detail {
         return std::filesystem::current_path() / actual_filename;
     }
 
-} // namespace huira::detail
+} // namespace huira

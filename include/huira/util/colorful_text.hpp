@@ -13,55 +13,53 @@
     #define FILENO fileno
 #endif
 
-namespace huira::detail {
+namespace huira {
     
-    namespace {
-        // Initialize Windows console for ANSI color support
-        inline bool initialize_console_colors() {
+    // Initialize Windows console for ANSI color support
+    inline bool initialize_console_colors() {
 #ifdef _WIN32
-            static bool initialized = false;
-            if (!initialized) {
-                HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
-                HANDLE hErr = GetStdHandle(STD_ERROR_HANDLE);
-                
-                DWORD modeOut = 0;
-                DWORD modeErr = 0;
-                
-                if (GetConsoleMode(hOut, &modeOut)) {
-                    SetConsoleMode(hOut, modeOut | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
-                }
-                if (GetConsoleMode(hErr, &modeErr)) {
-                    SetConsoleMode(hErr, modeErr | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
-                }
-                
-                initialized = true;
-            }
-            return true;
-#else
-            return true;
-#endif
-        }
-
-        // Check if output is a terminal (not redirected to file)
-        inline bool is_terminal() {
-#ifdef _WIN32
-            static bool is_tty = _isatty(_fileno(stderr)) != 0;
-#else
-            static bool is_tty = isatty(fileno(stderr)) != 0;
-#endif
-            return is_tty;
-        }
-
-        inline std::string colorize(const std::string& text, const char* code) {
-            static bool init = initialize_console_colors();
-            (void)init;
+        static bool initialized = false;
+        if (!initialized) {
+            HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+            HANDLE hErr = GetStdHandle(STD_ERROR_HANDLE);
             
-            if (!is_terminal()) {
-                return text;  // No colors if redirected to file
+            DWORD modeOut = 0;
+            DWORD modeErr = 0;
+            
+            if (GetConsoleMode(hOut, &modeOut)) {
+                SetConsoleMode(hOut, modeOut | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+            }
+            if (GetConsoleMode(hErr, &modeErr)) {
+                SetConsoleMode(hErr, modeErr | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
             }
             
-            return std::string("\033[") + code + "m" + text + "\033[0m";
+            initialized = true;
         }
+        return true;
+#else
+        return true;
+#endif
+    }
+
+    // Check if output is a terminal (not redirected to file)
+    inline bool is_terminal() {
+#ifdef _WIN32
+        static bool is_tty = _isatty(_fileno(stderr)) != 0;
+#else
+        static bool is_tty = isatty(fileno(stderr)) != 0;
+#endif
+        return is_tty;
+    }
+
+    inline std::string colorize(const std::string& text, const char* code) {
+        static bool init = initialize_console_colors();
+        (void)init;
+        
+        if (!is_terminal()) {
+            return text;  // No colors if redirected to file
+        }
+        
+        return std::string("\033[") + code + "m" + text + "\033[0m";
     }
     
     inline std::string red(const std::string& text) {

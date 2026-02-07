@@ -17,7 +17,7 @@ namespace huira {
     }
 
     fs::path Paths::executable_path() {
-        return detail::get_executable_path();
+        return get_executable_path();
     }
 
     fs::path Paths::executable_dir() {

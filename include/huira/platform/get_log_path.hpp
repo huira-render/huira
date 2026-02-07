@@ -3,7 +3,7 @@
 #include <string>
 #include <filesystem>
 
-namespace huira::detail {   
+namespace huira {   
     // Get a full path for a log file with the given filename
     std::filesystem::path get_log_file_path(const std::string& filename = "");
 }
