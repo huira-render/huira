@@ -26,6 +26,8 @@ namespace huira {
         this->camera_model_ = std::get<CameraModel<TSpectral>*>(asset_var)->shared_from_this();
 
         Transform<double> obs_ssb = camera_node->get_ssb_transform_(t_obs);
+        Rotation<double> sensor_rotation = camera_model_->sensor_rotation();
+        obs_ssb.rotation = sensor_rotation * obs_ssb.rotation;
 
         HUIRA_LOG_INFO("Generating SceneView at time ET=" + std::to_string(t_obs.et()) +
             " for CameraModel[" + std::to_string(camera_model_->id()) + "] '" + camera_model_->name() + "'.");

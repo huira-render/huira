@@ -149,6 +149,12 @@ namespace huira {
     }
 
     template <IsSpectral TSpectral>
+    void CameraModelHandle<TSpectral>::set_sensor_rotation(units::Radian angle) const
+    {
+        this->get()->sensor_->set_rotation(angle);
+    }
+
+    template <IsSpectral TSpectral>
     template <IsAperture TAperture, typename... Args>
     void CameraModelHandle<TSpectral>::set_aperture(Args&&... args) const
     {
