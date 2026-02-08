@@ -192,8 +192,8 @@ namespace huira {
     template <IsFloatingPoint TFloat>
     inline Vec2<TFloat> operator/(const Vec2<TFloat>& v, const Resolution& res) {
         return Vec2<TFloat>(
-            static_cast<TFloat>(res.width) / v.x,
-            static_cast<TFloat>(res.height) / v.y);
+            v.x / static_cast<TFloat>(res.width),
+            v.y / static_cast<TFloat>(res.height));
     }
 
     template <IsFloatingPoint TFloat>

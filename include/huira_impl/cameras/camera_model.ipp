@@ -35,7 +35,63 @@ namespace huira {
     template <IsSensor TSensor, typename... Args>
     void CameraModel<TSpectral>::set_sensor(Args&&... args) {
         sensor_ = std::make_unique<TSensor>(std::forward<Args>(args)...);
+        compute_intrinsics_();
     }
+
+    template <IsSpectral TSpectral>
+    void CameraModel<TSpectral>::set_sensor_resolution(Resolution resolution)
+    {
+        sensor_->config_.resolution = resolution;
+        compute_intrinsics_();
+    }
+
+    template <IsSpectral TSpectral>
+    void CameraModel<TSpectral>::set_sensor_resolution(int width, int height)
+    {
+        this->set_sensor_resolution(Resolution{ width, height });
+    }
+
+    template <IsSpectral TSpectral>
+    void CameraModel<TSpectral>::set_sensor_pixel_pitch(Vec2<float> pixel_pitch)
+    {
+        sensor_->config_.pixel_pitch = pixel_pitch;
+        compute_intrinsics_();
+    }
+
+    template <IsSpectral TSpectral>
+    void CameraModel<TSpectral>::set_sensor_pixel_pitch(float pixel_pitch_x, float pixel_pitch_y)
+    {
+        this->set_sensor_pixel_pitch(Vec2<float>{ pixel_pitch_x, pixel_pitch_y });
+    }
+
+    template <IsSpectral TSpectral>
+    void CameraModel<TSpectral>::set_sensor_pixel_pitch(float pixel_pitch)
+    {
+        this->set_sensor_pixel_pitch(Vec2<float>{ pixel_pitch, pixel_pitch });
+    }
+
+    template <IsSpectral TSpectral>
+    void CameraModel<TSpectral>::set_sensor_size(Vec2<float> size)
+    {
+        Vec2<float> pixel_pitch = size / sensor_->resolution();
+        this->set_sensor_pixel_pitch(pixel_pitch);
+    }
+
+    template <IsSpectral TSpectral>
+    void CameraModel<TSpectral>::set_sensor_size(float width, float height)
+    {
+        Vec2<float> pixel_pitch = Vec2<float>{ width, height } / sensor_->resolution();
+        this->set_sensor_pixel_pitch(pixel_pitch);
+    }
+
+    template <IsSpectral TSpectral>
+    void CameraModel<TSpectral>::set_sensor_size(float width)
+    {
+        float height = width * static_cast<float>(sensor_->resolution().y) / static_cast<float>(sensor_->resolution().x);
+        Vec2<float> pixel_pitch = Vec2<float>{ width, height } / sensor_->resolution();
+        this->set_sensor_pixel_pitch(pixel_pitch);
+    }
+
 
     template <IsSpectral TSpectral>
     template <IsAperture TAperture, typename... Args>
@@ -83,25 +139,27 @@ namespace huira {
         float z = point_camera_coords.z;
         auto NaN = std::numeric_limits<float>::quiet_NaN();
 
-        // Check if point is behind camera:
-        if (std::abs(z) < kEpsilon) {
-            return Pixel{ NaN, NaN };
+
+        float depth = z;
+        float sign_y = 1.0f;
+        if (blender_convention_) {
+            depth = -z;
+            sign_y = -1.0f;
         }
 
+
+        if (depth < kEpsilon) {
+            return Pixel{ NaN, NaN };  // behind camera
+        }
+        
         // Compute normalized image coordinates:
-        Pixel normalized{ x / z, y / z };
+        Pixel normalized{ x / depth, sign_y * y / depth };
         if (distortion_) {
             normalized = distortion_->distort(normalized);
         }
 
         float px = fx_ * normalized[0] + cx_;
         float py = fy_ * normalized[1] + cy_;
-
-        // Check if point is outside the FOV:
-        if (px < 0 || px >= rx_ || py < 0 || py >= ry_) {
-            return Pixel{ NaN, NaN };
-        }
-
         return Pixel{ px, py };
     }
 

@@ -37,8 +37,15 @@ namespace huira {
 
         void set_sensor_resolution(Resolution resolution) const;
         void set_sensor_resolution(int width, int height) const;
+
         void set_sensor_pixel_pitch(Vec2<float> pixel_pitch) const;
+        void set_sensor_pixel_pitch(float pixel_pitch_x, float pixel_pitch_y) const;
         void set_sensor_pixel_pitch(float pixel_pitch) const;
+
+        void set_sensor_size(Vec2<float> size) const;
+        void set_sensor_size(float width, float height) const;
+        void set_sensor_size(float width) const;
+
         void set_sensor_quantum_efficiency(TSpectral qe) const;
         void set_sensor_full_well_capacity(float fwc) const;
         void set_sensor_read_noise(float read_noise) const;
@@ -61,6 +68,8 @@ namespace huira {
         Pixel project_point(const Vec3<float>& point_camera_coords) const;
 
         FrameBuffer<TSpectral> make_frame_buffer() const;
+
+        void use_blender_convention(bool value = true) const;
 
         friend class Scene<TSpectral>;
         friend class SceneView<TSpectral>;

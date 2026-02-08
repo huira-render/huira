@@ -43,6 +43,18 @@ namespace huira {
         template <IsSensor TSensor, typename... Args>
         void set_sensor(Args&&... args);
 
+        void set_sensor_resolution(Resolution resolution);
+        void set_sensor_resolution(int width, int height);
+
+        void set_sensor_pixel_pitch(Vec2<float> pixel_pitch);
+        void set_sensor_pixel_pitch(float pixel_pitch_x, float pixel_pitch_y);
+        void set_sensor_pixel_pitch(float pixel_pitch);
+
+        void set_sensor_size(Vec2<float> size);
+        void set_sensor_size(float width, float height);
+        void set_sensor_size(float width);
+
+
         template <IsAperture TAperture, typename... Args>
         void set_aperture(Args&&... args);
 
@@ -69,6 +81,9 @@ namespace huira {
 
         FrameBuffer<TSpectral> make_frame_buffer() const { return FrameBuffer<TSpectral>(resolution()); }
 
+        void use_blender_convention(bool value = true) { blender_convention_ = value; }
+        bool is_blender_convention() const { return blender_convention_; }
+
     protected:
         float focal_length_ = .05f;
 
@@ -89,6 +104,8 @@ namespace huira {
         float rx_;
         float ry_;
         void compute_intrinsics_();
+
+        bool blender_convention_ = false;
 
         friend class CameraModelHandle<TSpectral>;
     };

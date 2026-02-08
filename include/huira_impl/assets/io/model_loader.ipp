@@ -312,8 +312,9 @@ namespace huira {
         Mat3<double> matrix{
             col0.x, col0.y, col0.z,
             col1.x, col1.y, col1.z,
-            col2.x, col1.y, col2.z
+            col2.x, col2.y, col2.z
         };
+        
         transform.rotation = Rotation<double>::from_local_to_parent(matrix);
 
         return transform;
