@@ -333,6 +333,7 @@ namespace huira {
     template <IsSpectral TSpectral>
     void Scene<TSpectral>::print_contents() const {
         std::cout << "Scene Contents:\n";
+        std::cout << " - " << "Stars: " << std::to_string(stars_.size()) << " loaded\n";
         std::cout << " - " << blue("CameraModels: " + std::to_string(camera_models_.size()) + " loaded") << "\n";
         std::cout << " - " << green("Meshes: " + std::to_string(meshes_.size()) + " loaded") << "\n";
         std::cout << " - " << yellow("Lights: " + std::to_string(lights_.size()) + " loaded") << "\n";

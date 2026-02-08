@@ -54,6 +54,7 @@ namespace huira {
         void set_sensor_size(float width, float height);
         void set_sensor_size(float width);
 
+        Rotation<double> sensor_rotation() const;
 
         template <IsAperture TAperture, typename... Args>
         void set_aperture(Args&&... args);

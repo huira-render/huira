@@ -56,6 +56,8 @@ namespace huira {
         void set_sensor_gain_db(float gain_db) const;
         void set_sensor_uinty_db(float unity_db) const;
 
+        void set_sensor_rotation(units::Radian angle) const;
+
         template <IsAperture TAperture, typename... Args>
         void set_aperture(Args&&... args) const;
 

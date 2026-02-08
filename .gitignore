@@ -11,27 +11,35 @@ CMakeSettings.json
 
 staged_diff.txt
 
-.DS_Store
+*.DS_Store
 
 #####################
 ### SPICE Ignores ###
 #####################
-*.bsp # Binary Ephemerides (SPK)
-*.bds # Binary Digitial Shape Kernel (DSK)
+# Binary Ephemerides (SPK)
+*.bsp
 
-*.bls # Binary Leap Seconds Kernel (LSK)
-*.tls # Text Leap Seconds Kernel (LSK)
+# Binary Digitial Shape Kernel (DSK)
+*.bds
 
-*.tpc # Text Planetary Constants Kernel (PCK)
-*.bpc # Binary Planetary Constants Kernel (PCK)
+# Binary and Text Leap Seconds Kernel (LSK)
+*.bls
+*.tls
 
-*.bc # Binary C-kernel (CK)
-*.tc # Text C-kernel (CK)
+# Binary and Text Planetary Constants Kernel (PCK)
+*.tpc
+*.bpc
 
-*.bf # Binary Frames Kernel (FK)
-*.tf # Text Frames Kernel (FK)
+# Binary and Text C-kernel (CK)
+*.bc
+*.tc
 
-*.tsc # Text Spacecraft Clock Kernel (SCLK)
+# Binary and Text Frame Kernels (FK)
+*.bf
+*.tf
+
+# Text Spacecraft Clock Kernel (SCLK)
+*.tsc
 
 #########################
 ### 3d Format Ignores ###

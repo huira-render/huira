@@ -4,8 +4,7 @@
 #include <iostream>
 #include <utility>
 
-using Deg = huira::units::Degree;
-using Rad = huira::units::Radian;
+using namespace huira::units::literals;
 
 namespace fs = std::filesystem;
 
@@ -20,17 +19,13 @@ static std::pair<fs::path, fs::path> parse_input_paths(int argc, char** argv) {
 }
 
 int main(int argc, char** argv) {
-    // Camera details (read from: https://sbnarchive.psi.edu/pds4/orex/orex.ocams/data_calibrated/cruise_1/20160919T162205S722_map_iofL2pan.xml)
-    huira::Quaternion<double> quaternion{ 0.0122908778004389, 0.0239176965190355, 0.549506737933572, 0.835056419100963 };
-    
+    // Image details (read from: https://sbnarchive.psi.edu/pds4/orex/orex.ocams/data_calibrated/cruise_1/20160919T162205S722_map_iofL2pan.xml)
     huira::Time time("2016-09-19T16:22:05.728");
     float exposure_time = 9.984285275f;
     huira::Vec2<float> pixel_pitch{ 8.5f * 1e-6f, 8.5f * 1e-6f };
     huira::Resolution resolution{ 1024, 1024 };
     float focal_length = 125.00f * 1e-3f;
     float f_number = 3.30f;
-    
-
 
     // Parsing input paths:
     auto [star_catalog_path, kernel_path] = parse_input_paths(argc, argv);
@@ -42,6 +37,7 @@ int main(int argc, char** argv) {
     auto camera_model = scene.new_camera_model();
     camera_model.set_focal_length(focal_length);
     camera_model.set_fstop(f_number);
+    camera_model.set_sensor_rotation(-90_deg);
     camera_model.set_sensor_pixel_pitch(pixel_pitch);
     camera_model.set_sensor_resolution(resolution);
     camera_model.use_aperture_psf();
@@ -50,14 +46,18 @@ int main(int argc, char** argv) {
     scene.load_stars(star_catalog_path, time); // Load stars up to magnitude 6.0
 
     // Load the require SPICE kernels:
-    //huira::spice::furnsh("kernels/naif0012.tls");
-
-    // Create the ECI frame:
-    auto eci = scene.root.new_spice_subframe("SSB", "J2000");
+    huira::spice::furnsh(kernel_path / "fk/orx_v14.tf");
+    huira::spice::furnsh(kernel_path / "sclk/orx_sclkscet_00093.tsc");
+    huira::spice::furnsh(kernel_path / "ck/orx_struct_mapcam_v01.bc");
+    huira::spice::furnsh(kernel_path / "ck/orx_sc_rel_160919_160925_v01.bc");
+    huira::spice::furnsh(kernel_path / "spk/orx_struct_v04.bsp");
+    huira::spice::furnsh(kernel_path / "spk/orx_160909_171201_170830_od023_v1.bsp");
+    huira::spice::furnsh(kernel_path / "spk/de424.bsp");
 
     // Create an instance of the camera in the ECI frame:
-    auto mapcam = eci.new_instance(camera_model);
-    //mapcam.set_position(0, 0, -100); // Set camera position (in ECI frame)
+    auto mapcam = scene.root.new_instance(camera_model);
+    mapcam.set_spice("ORX_OCAMS_MAPCAM", "ORX_OCAMS_MAPCAM");
+    
 
     // Configure the render buffers:
     auto frame_buffer = camera_model.make_frame_buffer();
@@ -66,8 +66,6 @@ int main(int argc, char** argv) {
 
     // Create the renderer:
     huira::RasterRenderer<huira::RGB> renderer;
-
-    mapcam.set_rotation_parent_to_local(quaternion);
 
     // Create a scene view at the observation time:
     auto scene_view = huira::SceneView<huira::RGB>(scene, time, mapcam, huira::ObservationMode::ABERRATED_STATE);

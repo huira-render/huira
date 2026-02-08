@@ -92,6 +92,13 @@ namespace huira {
         this->set_sensor_pixel_pitch(pixel_pitch);
     }
 
+    template <IsSpectral TSpectral>
+    Rotation<double> CameraModel<TSpectral>::sensor_rotation() const
+    {
+        Mat3<double> rot_matrix = Rotation<double>::local_to_parent_z(sensor_->config_.rotation);
+        return Rotation<double>::from_local_to_parent(rot_matrix);
+    }
+
 
     template <IsSpectral TSpectral>
     template <IsAperture TAperture, typename... Args>

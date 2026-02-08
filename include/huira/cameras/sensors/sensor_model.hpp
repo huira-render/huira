@@ -4,6 +4,7 @@
 
 #include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/render/frame_buffer.hpp"
+#include "huira/core/units/units.hpp"
 
 namespace huira {
     // Forward Declare
@@ -26,6 +27,8 @@ namespace huira {
         int bit_depth = 12;
 
         float gain = 4.8f;                 // e-/ADU
+
+        units::Radian rotation = units::Radian{ 0 }; // Sensor rotation angle
 
         float unity_db = 0.f; // Reference level for gain in dB
         void set_gain_db(float gain_db) { gain = std::pow(10.f, (unity_db - gain_db) / 20.f); }
@@ -73,7 +76,9 @@ namespace huira {
 
         void set_gain_db(float gain_db) { config_.set_gain_db(gain_db); }
         float gain_db() const { return config_.gain_db(); }
-
+        
+        void set_rotation(units::Radian angle) { config_.rotation = angle; }
+        units::Radian rotation() const { return config_.rotation; }
 
         virtual void readout(FrameBuffer<TSpectral>& fb, float exposure_time) const = 0;
 
