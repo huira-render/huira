@@ -32,17 +32,19 @@ find_package(CSPICE REQUIRED)
 
 find_package(assimp CONFIG REQUIRED)
 
+find_package(TBB CONFIG REQUIRED)
+
 find_package(JPEG REQUIRED)
 find_package(PNG REQUIRED)
-
-find_package(TBB CONFIG REQUIRED)
+find_package(CFITSIO REQUIRED)
 
 target_link_libraries(huira INTERFACE
     glm::glm
     CSPICE::cspice
     assimp::assimp
-    JPEG::JPEG
-    PNG::PNG
     TBB::tbb
     TBB::tbbmalloc
+    CFITSIO::CFITSIO
+    JPEG::JPEG
+    PNG::PNG
 )

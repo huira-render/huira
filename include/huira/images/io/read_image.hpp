@@ -12,8 +12,6 @@ namespace huira {
     enum ImageFormat {
         IMAGE_FORMAT_PNG,
         IMAGE_FORMAT_JPEG,
-        IMAGE_FORMAT_TIFF,
-        IMAGE_FORMAT_FITS,
         IMAGE_FORMAT_UNKNOWN
     };
 

@@ -65,6 +65,7 @@ namespace huira {
         void set_psf(Args&&... args) const;
 
         void use_aperture_psf(bool use_psf = true) const;
+        void set_psf_accuracy(int radius, int subsample) const;
         void delete_psf() const;
         
         Pixel project_point(const Vec3<float>& point_camera_coords) const;

@@ -8,8 +8,6 @@
 
 #include "huira/images/io/png_io.hpp"
 #include "huira/images/io/jpeg_io.hpp"
-#include "huira/images/io/tiff_io.hpp"
-#include "huira/images/io/fits_io.hpp"
 
 namespace fs = std::filesystem;
 
@@ -23,12 +21,6 @@ namespace huira {
         }
         else if (ext == ".jpg" || ext == ".jpeg" || ext == ".JPG" || ext == ".JPEG") {
             return ImageFormat::IMAGE_FORMAT_JPEG;
-        }
-        else if (ext == ".tiff" || ext == ".tif" || ext == ".TIFF" || ext == ".TIF") {
-            return ImageFormat::IMAGE_FORMAT_TIFF;
-        }
-        else if (ext == ".fits" || ext == ".FITS") {
-            return ImageFormat::IMAGE_FORMAT_FITS;
         }
         else {
             return ImageFormat::IMAGE_FORMAT_UNKNOWN;
@@ -45,12 +37,6 @@ namespace huira {
         }
         else if (fmt == ImageFormat::IMAGE_FORMAT_JPEG) {
             return read_image_jpeg<T>(filepath);
-        }
-        else if (fmt == ImageFormat::IMAGE_FORMAT_TIFF) {
-            return read_image_tiff<T>(filepath);
-        }
-        else if (fmt == ImageFormat::IMAGE_FORMAT_FITS) {
-            return read_image_fits<T>(filepath);
         }
         else {
             HUIRA_THROW_ERROR("Unsupported or unknown image format for file: " + filepath.string());

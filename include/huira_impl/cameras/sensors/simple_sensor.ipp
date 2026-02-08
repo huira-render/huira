@@ -10,6 +10,7 @@ namespace huira {
     {
         Image<TSpectral>& received_power = fb.received_power();
         Image<float>& output = fb.sensor_response();
+        output.set_sensor_bit_depth(this->config_.bit_depth);
 
         // TODO Move this somewhere else?
         static std::mt19937 rng(1);
