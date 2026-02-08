@@ -175,6 +175,12 @@ namespace huira {
     }
 
     template <IsSpectral TSpectral>
+    void CameraModelHandle<TSpectral>::set_psf_accuracy(int radius, int subsample) const
+    {
+        this->get()->psf_->build_polyphase_cache(radius, subsample);
+    }
+
+    template <IsSpectral TSpectral>
     void CameraModelHandle<TSpectral>::delete_psf() const
     {
         this->get()->delete_psf();

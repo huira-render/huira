@@ -92,6 +92,9 @@ struct ImagePixelTraits<SpectralBins<N, Args...>> {
         [[nodiscard]] PixelT* data() noexcept;
         [[nodiscard]] const PixelT* data() const noexcept;
 
+        [[nodiscard]] int sensor_bit_depth() const noexcept { return sensor_bit_depth_; }
+        void set_sensor_bit_depth(int bits) noexcept { sensor_bit_depth_ = bits; }
+
         void clear();
         void fill(const PixelT& value);
         void reset(const PixelT& value = PixelT{ 0 }) { fill(value); }
@@ -99,6 +102,8 @@ struct ImagePixelTraits<SpectralBins<N, Args...>> {
     private:
         std::vector<PixelT> data_;
         Resolution resolution_;
+
+        int sensor_bit_depth_ = 0;
 
         [[nodiscard]] std::size_t to_linear(int x, int y) const noexcept;
 

@@ -46,4 +46,5 @@ install(FILES
         "${CMAKE_BINARY_DIR}/huiraConfig.cmake"
         "${CMAKE_BINARY_DIR}/huiraConfigVersion.cmake"
         "${CMAKE_SOURCE_DIR}/cmake/find/FindCSPICE.cmake"
+        "${CMAKE_SOURCE_DIR}/cmake/find/FindCFITSIO.cmake"
         DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/huira)
