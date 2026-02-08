@@ -20,6 +20,9 @@ namespace huira {
         std::uint16_t tyc1, tyc2;
         std::uint8_t tyc3;
         unpack_tycho2_id(id, tyc1, tyc2, tyc3);
-        return "TYC " + std::to_string(tyc1) + "-" + std::to_string(tyc2) + "-" + std::to_string(tyc3);
+        return "TYC " +
+            std::to_string(static_cast<unsigned int>(tyc1)) + "-" +
+            std::to_string(static_cast<unsigned int>(tyc2)) + "-" +
+            std::to_string(static_cast<unsigned int>(tyc3));
     }
 }

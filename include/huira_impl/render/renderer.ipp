@@ -15,10 +15,18 @@ namespace huira {
         const auto& depth_buffer = frame_buffer.depth();
         auto& power_buffer = frame_buffer.received_power();
 
+        float res_x = static_cast<float>(camera->resolution().x);
+        float res_y = static_cast<float>(camera->resolution().y);
+
         // Loop over all stars:
         for (const auto& star : scene_view.stars_) {
             Pixel star_p = camera->project_point(star.get_direction());
             if (std::isnan(star_p.x) || std::isnan(star_p.y)) {
+                continue;
+            }
+
+            if (star_p.x < 0.f || star_p.x > res_x ||
+                star_p.y < 0.f || star_p.y > res_y) {
                 continue;
             }
 
