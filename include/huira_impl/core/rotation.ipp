@@ -376,10 +376,34 @@ namespace huira {
 	template <IsFloatingPoint T>
 	void Rotation<T>::set_matrix_(Mat3<T> matrix)
 	{
-		constexpr T epsilon = static_cast<T>(1e-9);
-		if (std::fabs(glm::determinant(matrix) - 1.0) > epsilon) {
-            HUIRA_THROW_ERROR("Rotation matrix must have a determinant of 1. Given matrix has determinant: " + std::to_string(glm::determinant(matrix)));
-		}
-		this->matrix_ = matrix;
+        constexpr T loose_epsilon = static_cast<T>(1e-3);
+        T det = glm::determinant(matrix);
+        if (std::fabs(det - 1.0) > loose_epsilon) {
+            HUIRA_THROW_ERROR("Rotation matrix must have a determinant close to 1. Given matrix has determinant: " + std::to_string(det));
+        }
+        this->matrix_ = orthonormalize_(matrix);
 	}
+
+    template <IsFloatingPoint T>
+    Mat3<T> Rotation<T>::orthonormalize_(const Mat3<T>& matrix) const
+    {
+        // Extract columns (basis vectors)
+        Vec3<T> x = matrix[0];
+        Vec3<T> y = matrix[1];
+        Vec3<T> z = matrix[2];
+
+        // Gram-Schmidt orthonormalization
+        x = glm::normalize(x);
+        y = y - glm::dot(y, x) * x;
+        y = glm::normalize(y);
+        z = glm::cross(x, y);
+
+        // Construct orthonormal matrix
+        Mat3<T> result;
+        result[0] = x;
+        result[1] = y;
+        result[2] = z;
+
+        return result;
+    }
 }

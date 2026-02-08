@@ -6,6 +6,10 @@
 #include "huira/render/frame_buffer.hpp"
 
 namespace huira {
+    // Forward Declare
+    template <IsSpectral TSpectral>
+    class CameraModel;
+
     template <IsSpectral TSpectral>
     struct SensorConfig {
         Resolution resolution{ 1024, 1024 };
@@ -37,21 +41,14 @@ namespace huira {
         virtual ~SensorModel() = default;
 
         Resolution resolution() const { return { config_.resolution }; }
-        void set_resolution(Resolution res) {
-            config_.resolution = res;
-        }
-        
         Vec2<float> pixel_pitch() const { return { config_.pixel_pitch }; }
-        void set_pixel_pitch(const Vec2<float>& pitch) {
-            config_.pixel_pitch = pitch;
-        }
+        Vec2<float> sensor_size() const { return { config_.resolution * config_.pixel_pitch }; }
+
 
         TSpectral quantum_efficiency() const { return config_.quantum_efficiency; }
         void set_quantum_efficiency(const TSpectral& qe) {
             config_.quantum_efficiency = qe;
         }
-
-        Vec2<float> sensor_size() const { return { config_.resolution * config_.pixel_pitch }; }
 
         void set_full_well_capacity(float fwc) { config_.full_well_capacity = fwc; }
         float full_well_capacity() const { return config_.full_well_capacity; }
@@ -84,6 +81,7 @@ namespace huira {
         SensorConfig<TSpectral> config_;
 
         // TODO function to sample poisson distribution
+        friend class CameraModel<TSpectral>;
     };
 
     template <typename T>

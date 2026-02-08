@@ -87,6 +87,8 @@ namespace huira {
 		void set_matrix_(Mat3<T> matrix);
 
         Rotation(Mat3<T> matrix) { set_matrix_(matrix); }
+
+        Mat3<T> orthonormalize_(const Mat3<T>& matrix) const;
 	};
 
 	// Helpful typedefs:

@@ -48,26 +48,51 @@ namespace huira {
     template <IsSpectral TSpectral>
     void CameraModelHandle<TSpectral>::set_sensor_resolution(Resolution resolution) const
     {
-        this->get()->sensor_->set_resolution(resolution);
+        this->get()->set_sensor_resolution(resolution);
     }
 
     template <IsSpectral TSpectral>
     void CameraModelHandle<TSpectral>::set_sensor_resolution(int width, int height) const
     {
-        this->get()->sensor_->set_resolution(Resolution{ width, height });
+        this->get()->set_sensor_resolution(Resolution{ width, height });
     }
 
     template <IsSpectral TSpectral>
     void CameraModelHandle<TSpectral>::set_sensor_pixel_pitch(Vec2<float> pixel_pitch) const
     {
-        this->get()->sensor_->set_pixel_pitch(pixel_pitch);
+        this->get()->set_sensor_pixel_pitch(pixel_pitch);
     }
 
     template <IsSpectral TSpectral>
     void CameraModelHandle<TSpectral>::set_sensor_pixel_pitch(float pixel_pitch) const
     {
-        this->get()->sensor_->set_pixel_pitch(Vec2<float>{ pixel_pitch, pixel_pitch });
+        this->get()->set_sensor_pixel_pitch(Vec2<float>{ pixel_pitch, pixel_pitch });
     }
+
+    template <IsSpectral TSpectral>
+    void CameraModelHandle<TSpectral>::set_sensor_pixel_pitch(float pixel_pitch_x, float pixel_pitch_y) const
+    {
+        this->get()->set_sensor_pixel_pitch(Vec2<float>{ pixel_pitch_x, pixel_pitch_y });
+    }
+
+    template <IsSpectral TSpectral>
+    void CameraModelHandle<TSpectral>::set_sensor_size(Vec2<float> size) const
+    {
+        this->get()->set_sensor_size(size);
+    }
+
+    template <IsSpectral TSpectral>
+    void CameraModelHandle<TSpectral>::set_sensor_size(float width, float height) const
+    {
+        this->get()->set_sensor_size(Vec2<float>{ width, height });
+    }
+
+    template <IsSpectral TSpectral>
+    void CameraModelHandle<TSpectral>::set_sensor_size(float width) const
+    {
+        this->get()->set_sensor_size(width);
+    }
+
 
     template <IsSpectral TSpectral>
     void CameraModelHandle<TSpectral>::set_sensor_quantum_efficiency(TSpectral qe) const
@@ -159,5 +184,11 @@ namespace huira {
     template <IsSpectral TSpectral>
     FrameBuffer<TSpectral> CameraModelHandle<TSpectral>::make_frame_buffer() const {
         return this->get()->make_frame_buffer();
+    }
+
+    template <IsSpectral TSpectral>
+    void CameraModelHandle<TSpectral>::use_blender_convention(bool value) const
+    {
+        this->get()->use_blender_convention(value);
     }
 }

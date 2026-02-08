@@ -109,9 +109,17 @@ namespace huira {
                             if (u >= 0 && v >= 0 && w >= 0) {
                                 // Interpolate depth
                                 // Perspective-correct depth interpolation
-                                float z0 = v0.z;
-                                float z1 = v1.z;
-                                float z2 = v2.z;
+                                float z0, z1, z2;
+                                if (camera->is_blender_convention()) {
+                                    z0 = -v0.z;
+                                    z1 = -v1.z;
+                                    z2 = -v2.z;
+                                }
+                                else {
+                                    z0 = v0.z;
+                                    z1 = v1.z;
+                                    z2 = v2.z;
+                                }
                                 float denom = u / z0 + v / z1 + w / z2;
                                 float depth = 1.0f / denom;
 

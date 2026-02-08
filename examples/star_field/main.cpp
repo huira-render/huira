@@ -22,7 +22,6 @@ static std::pair<fs::path, fs::path> parse_input_paths(int argc, char** argv) {
 int main(int argc, char** argv) {
     // Camera details (read from: https://sbnarchive.psi.edu/pds4/orex/orex.ocams/data_calibrated/cruise_1/20160919T162205S722_map_iofL2pan.xml)
     huira::Quaternion<double> quaternion{ 0.0122908778004389, 0.0239176965190355, 0.549506737933572, 0.835056419100963 };
-    quaternion = glm::inverse(quaternion);
     
     huira::Time time("2016-09-19T16:22:05.728");
     float exposure_time = 9.984285275f;
@@ -48,7 +47,7 @@ int main(int argc, char** argv) {
     camera_model.use_aperture_psf();
 
     // Load stars:
-    scene.load_stars(star_catalog_path, time, 10.0); // Load stars up to magnitude 6.0
+    scene.load_stars(star_catalog_path, time); // Load stars up to magnitude 6.0
 
     // Load the require SPICE kernels:
     //huira::spice::furnsh("kernels/naif0012.tls");
