@@ -27,7 +27,7 @@ namespace huira {
 
         Transform<double> obs_ssb = camera_node->get_ssb_transform_(t_obs);
         Rotation<double> sensor_rotation = camera_model_->sensor_rotation();
-        obs_ssb.rotation = sensor_rotation * obs_ssb.rotation;
+        obs_ssb.rotation = obs_ssb.rotation * sensor_rotation;
 
         HUIRA_LOG_INFO("Generating SceneView at time ET=" + std::to_string(t_obs.et()) +
             " for CameraModel[" + std::to_string(camera_model_->id()) + "] '" + camera_model_->name() + "'.");
@@ -81,7 +81,7 @@ namespace huira {
 
             // Compute stellar aberration:
             Vec3<double> aberrated_direction = compute_aberrated_direction(direction, obs_ssb.velocity);
-            Vec3<double> apparent_direction = obs_ssb.rotation * aberrated_direction;
+            Vec3<double> apparent_direction = obs_ssb.rotation.inverse() * aberrated_direction;
 
             stars_[i] = Star<TSpectral>(apparent_direction, irradiance);
         }

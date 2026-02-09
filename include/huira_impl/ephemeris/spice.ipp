@@ -212,6 +212,28 @@ namespace huira::spice {
     // ============================== //
     // === SPICE State interfaces === //
     // ============================== //
+
+    /**
+     * @brief returns the state (position and velocity) of a target body relative to an observer.
+     *
+     * ## Coordinate System Contract
+     * - **Frame:** The returned Position and Velocity vectors are expressed in the coordinate system specified by the `FRAME` argument (e.g., "J2000").
+     * - **Reference:** These vectors represent the state of the TARGET *relative* to the OBSERVER.
+     * - **Consistency:** Since `spkezr` returns vectors already expressed in the `FRAME`, no additional rotation is required to use them in a `Transform` node (provided `FRAME` matches the node's Parent Frame).
+     *
+     * ## Comparison with sxform
+     * - Unlike `sxform` (which returns angular velocity in the Body/Local frame), `spkezr` returns linear velocity in the Reference/Parent frame.
+     * - Therefore, these vectors can be assigned directly to `Transform::position` and `Transform::velocity`.
+     *
+     * @param TARGET The name of the target body.
+     * @param time The time of observation.
+     * @param FRAME The reference frame relative to which the output vectors are expressed.
+     * @param ABCORR Aberration correction flag.
+     * @param OBSERVER The name of the observing body.
+     * @return std::tuple<Vec3<T>, Vec3<T>, double> {Position, Velocity, LightTime}
+     * - Position is in km (SPICE default).
+     * - Velocity is in km/s (SPICE default).
+     */
     template <huira::IsFloatingPoint T>
     inline std::tuple<Vec3<T>, Vec3<T>, double> spkezr(
         const std::string& TARGET,
@@ -243,12 +265,14 @@ namespace huira::spice {
 
         call_spice(pxform_c, FROM.c_str(), TO.c_str(), et, matrix);
 
+        // SPICE returns row-major, huira::Mat3 is column-major
         huira::Mat3<T> rotation{
-            static_cast<T>(matrix[0][0]), static_cast<T>(matrix[0][1]), static_cast<T>(matrix[0][2]),
-            static_cast<T>(matrix[1][0]), static_cast<T>(matrix[1][1]), static_cast<T>(matrix[1][2]),
-            static_cast<T>(matrix[2][0]), static_cast<T>(matrix[2][1]), static_cast<T>(matrix[2][2])
+            static_cast<T>(matrix[0][0]), static_cast<T>(matrix[1][0]), static_cast<T>(matrix[2][0]),
+            static_cast<T>(matrix[0][1]), static_cast<T>(matrix[1][1]), static_cast<T>(matrix[2][1]),
+            static_cast<T>(matrix[0][2]), static_cast<T>(matrix[1][2]), static_cast<T>(matrix[2][2])
         };
 
+        // SPICE represents tha passive rotation of parent-to-local:
         return huira::Rotation<T>::from_parent_to_local(rotation);
     }
 
@@ -269,18 +293,23 @@ namespace huira::spice {
         // Extract rotation matrix and angular velocity vector
         xf2rav_c(state_xform, matrix, angular_velocity);
 
+        // SPICE returns row-major, huira::Mat3 is column-major
         huira::Mat3<T> rotation{
-            static_cast<T>(matrix[0][0]), static_cast<T>(matrix[0][1]), static_cast<T>(matrix[0][2]),
-            static_cast<T>(matrix[1][0]), static_cast<T>(matrix[1][1]), static_cast<T>(matrix[1][2]),
-            static_cast<T>(matrix[2][0]), static_cast<T>(matrix[2][1]), static_cast<T>(matrix[2][2])
+            static_cast<T>(matrix[0][0]), static_cast<T>(matrix[1][0]), static_cast<T>(matrix[2][0]),
+            static_cast<T>(matrix[0][1]), static_cast<T>(matrix[1][1]), static_cast<T>(matrix[2][1]),
+            static_cast<T>(matrix[0][2]), static_cast<T>(matrix[1][2]), static_cast<T>(matrix[2][2])
         };
 
-        huira::Vec3<T> ang_vel{
+        huira::Vec3<T> ang_vel_local{
             static_cast<T>(angular_velocity[0]),
             static_cast<T>(angular_velocity[1]),
             static_cast<T>(angular_velocity[2])
         };
 
-        return { huira::Rotation<T>::from_parent_to_local(rotation), ang_vel };
+        Rotation<T> rotation_obj = huira::Rotation<T>::from_parent_to_local(rotation);
+        huira::Vec3<T> ang_vel_parent = rotation_obj * ang_vel_local;
+
+        // SPICE represents tha passive rotation of parent-to-local:
+        return { rotation_obj, ang_vel_parent };
     }
 }
