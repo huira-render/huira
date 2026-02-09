@@ -1,6 +1,6 @@
-# Star Field Example
+# Jupiter Long Range Example
 
-This example shows you how to render a star field using OSIRIS-REx ephemerides.
+This example shows you how to render a star field with Jupiter and it's moons.
 
 
 1. Fetch the Tycho-2 Star Catalog Data
@@ -27,17 +27,9 @@ On linux/macos:
 
 Inside of the provided `kernels/` it will download the following:
 ```
-├── ck
-│   ├── orx_sc_rel_160919_160925_v01.bc
-│   └── orx_struct_mapcam_v01.bc
-├── fk
-│   └── orx_v14.tf
-├── sclk
-│   └── orx_sclkscet_00093.tsc
 └── spk
-    ├── de424.bsp
-    ├── orx_160909_171201_170830_od023_v1.bsp
-    └── orx_struct_v04.bsp
+    ├── de440s.bsp
+    └── jup365.bsp
 ```
 
 3. Build the example:
@@ -52,5 +44,5 @@ cmake --build . -j
 4. Run the example:
 The example code allows you to pass in the location of the Tycho-2 star catalog file and the SPICE kernels via command line arguments.  For example:
 ```bash
-./star_field_example --tycho2 /your/output/path/tycho2.hrsc --spice /path/to/your/kernels/
+./jupiter_range_example --tycho2 /your/output/path/tycho2.hrsc --spice /path/to/your/kernels/
 ```
