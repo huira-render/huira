@@ -43,7 +43,7 @@ int main(int argc, char** argv) {
     auto camera_model = scene.new_camera_model();
     camera_model.set_focal_length(.125f);
     camera_model.set_fstop(3.30f);
-    camera_model.set_sensor_rotation(-90_deg);
+    camera_model.set_sensor_rotation(90_deg);
     camera_model.set_sensor_pixel_pitch(8.5e-6f, 8.5e-6f);
     camera_model.set_sensor_resolution(1024, 1024);
     camera_model.use_aperture_psf();
