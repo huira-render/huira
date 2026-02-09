@@ -20,9 +20,9 @@ namespace huira {
 
         float full_well_capacity = 20000.f; // e-
 
-        float read_noise = 50.f;           // e- RMS
+        float read_noise = 10.f;           // e- RMS
         float dark_current = 1.f;          // e-/s
-        float bias_level_dn = 20.f;        // ADU
+        float bias_level_dn = 10.f;        // ADU
 
         int bit_depth = 12;
 
