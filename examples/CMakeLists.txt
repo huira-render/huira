@@ -1,1 +1,2 @@
 add_subdirectory(star_field)
+add_subdirectory(jupiter_long_range)
