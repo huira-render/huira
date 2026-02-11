@@ -22,17 +22,13 @@ namespace huira {
         float get_area() const override { return area_; }
         void set_area(float area) override { area_ = area; }
 
-        void set_diameter(float diameter) {
-            area_ = PI<float>() * (diameter * diameter) / 4.f;
-        }
+        void set_diameter(float diameter) { area_ = PI<float>() * (diameter * diameter) / 4.f; }
 
-        float get_diameter() const {
-            return std::sqrt(4.f * area_ / PI<float>());
-        }
+        float get_diameter() const { return std::sqrt(4.f * area_ / PI<float>()); }
 
-        std::unique_ptr<PSF<TSpectral>> make_psf(float focal_length, Vec2<float> pixel_pitch) override
+        std::unique_ptr<PSF<TSpectral>> make_psf(float focal_length, Vec2<float> pixel_pitch, int radius, int banks) override
         {
-            return std::make_unique<AiryDisk<TSpectral>>(focal_length, pixel_pitch, get_diameter());
+            return std::make_unique<AiryDisk<TSpectral>>(focal_length, pixel_pitch, get_diameter(), radius, banks);
         }
 
     private:

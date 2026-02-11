@@ -169,15 +169,9 @@ namespace huira {
     }
 
     template <IsSpectral TSpectral>
-    void CameraModelHandle<TSpectral>::use_aperture_psf(bool use_psf) const
+    void CameraModelHandle<TSpectral>::use_aperture_psf(int radius, int banks) const
     {
-        this->get_()->use_aperture_psf(use_psf);
-    }
-
-    template <IsSpectral TSpectral>
-    void CameraModelHandle<TSpectral>::set_psf_accuracy(int radius, int subsample) const
-    {
-        this->get_()->psf_->build_polyphase_cache(radius, subsample);
+        this->get_()->use_aperture_psf(radius, banks);
     }
 
     template <IsSpectral TSpectral>

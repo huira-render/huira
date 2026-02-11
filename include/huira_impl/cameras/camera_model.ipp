@@ -20,7 +20,7 @@ namespace huira {
         compute_intrinsics_();
 
         if (use_aperture_psf_) {
-            psf_ = aperture_->make_psf(focal_length_, sensor_->pixel_pitch());
+            psf_ = aperture_->make_psf(focal_length_, sensor_->pixel_pitch(), psf_->get_radius(), psf_->get_banks());
         }
     }
 
@@ -114,9 +114,9 @@ namespace huira {
     }
 
     template <IsSpectral TSpectral>
-    void CameraModel<TSpectral>::use_aperture_psf(bool value) {
-        use_aperture_psf_ = value;
-        psf_ = aperture_->make_psf(focal_length_, sensor_->pixel_pitch());
+    void CameraModel<TSpectral>::use_aperture_psf(int radius, int banks) {
+        use_aperture_psf_ = true;
+        psf_ = aperture_->make_psf(focal_length_, sensor_->pixel_pitch(), radius, banks);
     }
 
     template <IsSpectral TSpectral>
@@ -185,7 +185,7 @@ namespace huira {
         this->aperture_->set_area(aperture_area);
 
         if (use_aperture_psf_) {
-            psf_ = aperture_->make_psf(focal_length_, sensor_->pixel_pitch());
+            psf_ = aperture_->make_psf(focal_length_, sensor_->pixel_pitch(), psf_->get_radius(), psf_->get_banks());
         }
     }
 

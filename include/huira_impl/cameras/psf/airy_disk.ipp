@@ -6,11 +6,11 @@
 
 namespace huira {
     template <IsSpectral TSpectral>
-    AiryDisk<TSpectral>::AiryDisk(float focal_length, Vec2<float> pixel_pitch, float aperture_diameter)
+    AiryDisk<TSpectral>::AiryDisk(float focal_length, Vec2<float> pixel_pitch, float aperture_diameter, int radius, int banks)
         : f_number_(focal_length / aperture_diameter)
         , pixel_pitch_(pixel_pitch)
     {
-        this->build_polyphase_cache(64, 16);
+        this->build_polyphase_cache(radius, banks);
     }
 
     template <IsSpectral TSpectral>
