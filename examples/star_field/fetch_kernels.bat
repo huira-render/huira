@@ -38,8 +38,8 @@ curl -o "%OUTPUT_DIR%\ck\orx_sc_rel_160919_160925_v01.bc" https://naif.jpl.nasa.
 
 REM Get the SPK kernels
 curl -o "%OUTPUT_DIR%\spk\orx_160909_171201_170830_od023_v1.bsp" https://naif.jpl.nasa.gov/pub/naif/pds/pds4/orex/orex_spice/spice_kernels/spk/orx_160909_171201_170830_od023_v1.bsp
-curl -p "%OUTPUT_DIR%\spk\orx_struct_v04.bsp" https://naif.jpl.nasa.gov/pub/naif/pds/pds4/orex/orex_spice/spice_kernels/spk/orx_struct_v04.bsp
-curl -p "%OUTPUT_DIR%\spk\de424.bsp" https://naif.jpl.nasa.gov/pub/naif/ORX/kernels/spk/de424.bsp
+curl -o "%OUTPUT_DIR%\spk\orx_struct_v04.bsp" https://naif.jpl.nasa.gov/pub/naif/pds/pds4/orex/orex_spice/spice_kernels/spk/orx_struct_v04.bsp
+curl -o "%OUTPUT_DIR%\spk\de424.bsp" https://naif.jpl.nasa.gov/pub/naif/ORX/kernels/spk/de424.bsp
 
 echo.
 echo Download complete! Files saved to: %OUTPUT_DIR%

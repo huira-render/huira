@@ -26,7 +26,7 @@ namespace huira {
 
         int bit_depth = 12;
 
-        float gain = 4.8f;                 // e-/ADU
+        float gain = 1.22f;                 // e-/ADU
 
         units::Radian rotation = units::Radian{ 0 }; // Sensor rotation angle
 
