@@ -62,7 +62,7 @@ namespace huira {
         template <IsPSF TPSF, typename... Args>
         void set_psf(Args&&... args);
 
-        void use_aperture_psf(bool value = true);
+        void use_aperture_psf(int radius = 64, int banks = 16);
         void delete_psf();
 
         bool has_psf() const { return psf_ != nullptr; }

@@ -40,9 +40,8 @@ int main(int argc, char** argv) {
     camera_model.set_fstop(3.30f);
     camera_model.set_sensor_pixel_pitch(8.5e-6f, 8.5e-6f);
     camera_model.set_sensor_resolution(1920, 1080);
-    camera_model.use_aperture_psf();
     camera_model.set_sensor_bit_depth(14);
-    camera_model.set_psf_accuracy(32, 16);
+    camera_model.use_aperture_psf(32, 16);
     
     huira::Time time("2016-09-19T16:22:05.728");
     float exposure_time = 1.f;

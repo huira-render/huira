@@ -20,6 +20,7 @@ namespace huira {
         std::vector<Image<TSpectral>> get_all_kernels() const { return cache_.kernels; }
 
         int get_radius() const { return cache_.radius; }
+        int get_banks() const { return cache_.banks; }
 
     protected:
         struct PolyphaseCache {
