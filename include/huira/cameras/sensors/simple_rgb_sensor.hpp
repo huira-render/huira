@@ -7,23 +7,21 @@
 #include "huira/cameras/sensors/sensor_model.hpp"
 
 namespace huira {
-    template <IsSpectral TSpectral>
-    struct SimpleRGBSensorConfig : public SensorConfig<TSpectral> {
+    struct SimpleRGBSensorConfig : public SensorConfig<RGB> {
 
     };
 
-    template <IsSpectral TSpectral>
-    class SimpleRGBSensor : public SensorModel<TSpectral> {
+    class SimpleRGBSensor : public SensorModel<RGB> {
     public:
-        SimpleRGBSensor(SimpleRGBSensorConfig<TSpectral> config = SimpleRGBSensorConfig<TSpectral>{})
-            : SensorModel<TSpectral>(config)
+        SimpleRGBSensor(SimpleRGBSensorConfig config = SimpleRGBSensorConfig{})
+            : SensorModel<RGB>(config)
         {
 
         }
 
         ~SimpleRGBSensor() override = default;
 
-        void readout(FrameBuffer<TSpectral>& fb, float exposure_time) const override;
+        void readout(FrameBuffer<RGB>& fb, float exposure_time) const override;
     };
 }
 

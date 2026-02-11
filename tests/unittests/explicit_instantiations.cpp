@@ -77,7 +77,6 @@ namespace huira {
     template class OpenCVDistortion<TestSpectral>;
     template class OwenDistortion<TestSpectral>;
     template class SimpleSensor<TestSpectral>;
-    template class SimpleRGBSensor<TestSpectral>;
     template class CameraModel<TestSpectral>;
 
     template class Ray<TestSpectral>;
