@@ -14,4 +14,7 @@ namespace huira {
 
     template <IsFloatingPoint T>
     constexpr T K_BOLTZ() { return static_cast<T>(1.380649e-23); }
+
+    template <IsFloatingPoint T>
+    constexpr T AU() { return static_cast<T>(149597870700.0); }
 }

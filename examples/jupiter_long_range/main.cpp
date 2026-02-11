@@ -56,26 +56,25 @@ int main(int argc, char** argv) {
     sun.set_spice_origin("SUN");
 
     // Create unresolved objects for Jupiter and its moons:
-    auto radius = 69911000_m;
-    TSpectral albedo = TSpectral{ 1 };
-    auto jupiter_model = scene.new_unresolved_sphere(radius, sun, albedo);
+    auto jupiter_model = scene.new_unresolved_sphere(69911000_m, sun, TSpectral{ 0.5f });
+    //auto jupiter_model = scene.new_unresolved_object_from_magnitude(-1.44, "Jupiter");
     //auto jupiter_model = scene.new_unresolved_object(TSpectral{ 1e-8 });
-    //auto io_model = scene.new_unresolved_object(TSpectral{ 1e-10 });
-    //auto europa_model = scene.new_unresolved_object(TSpectral{ 1e-10 });
-    //auto ganymede_model = scene.new_unresolved_object(TSpectral{ 1e-10 });
-    //auto callisto_model = scene.new_unresolved_object(TSpectral{ 1e-10 });
+    auto io_model = scene.new_unresolved_object_from_magnitude(5.02);
+    auto europa_model = scene.new_unresolved_object_from_magnitude(5.29);
+    auto ganymede_model = scene.new_unresolved_object_from_magnitude(4.61);
+    auto callisto_model = scene.new_unresolved_object_from_magnitude(5.65);
 
     // Create new instances of the unresolved objects:
     auto jupiter = scene.root.new_instance(jupiter_model);
     jupiter.set_spice_origin("JUPITER");
-    //auto io = scene.root.new_instance(io_model);
-    //io.set_spice_origin("IO");
-    //auto europa = scene.root.new_instance(europa_model);
-    //europa.set_spice_origin("EUROPA");
-    //auto ganymede = scene.root.new_instance(ganymede_model);
-    //ganymede.set_spice_origin("GANYMEDE");
-    //auto callisto = scene.root.new_instance(callisto_model);
-    //callisto.set_spice_origin("CALLISTO");
+    auto io = scene.root.new_instance(io_model);
+    io.set_spice_origin("IO");
+    auto europa = scene.root.new_instance(europa_model);
+    europa.set_spice_origin("EUROPA");
+    auto ganymede = scene.root.new_instance(ganymede_model);
+    ganymede.set_spice_origin("GANYMEDE");
+    auto callisto = scene.root.new_instance(callisto_model);
+    callisto.set_spice_origin("CALLISTO");
 
     // Create an instance of the camera:
     auto navcam = scene.root.new_instance(camera_model);
@@ -89,20 +88,14 @@ int main(int argc, char** argv) {
     // Create the renderer:
     huira::RasterRenderer<TSpectral> renderer;
 
-    // Create a scene view at the observation time:
-    for (int i = 0; i < 360; ++i) {
-        navcam.set_euler_angles(90_deg, 0_deg, i * 1_deg);
+    navcam.set_euler_angles(90_deg, 0_deg, 272_deg);
 
-        auto scene_view = huira::SceneView<TSpectral>(scene, time, navcam, huira::ObservationMode::ABERRATED_STATE);
+    auto scene_view = huira::SceneView<TSpectral>(scene, time, navcam, huira::ObservationMode::ABERRATED_STATE);
 
-        // Render the current scene view:
-        renderer.render(scene_view, frame_buffer, exposure_time);
+    // Render the current scene view:
+    renderer.render(scene_view, frame_buffer, exposure_time);
 
-        // Save the results:
-        char filename[64];
-        snprintf(filename, sizeof(filename), "jupiter/frame_%03d.png", i);
-        huira::write_image_png(filename, frame_buffer.sensor_response(), 8);
-        //huira::write_image_png("output/jupiter_long_range.png", frame_buffer.sensor_response(), 8);
-    }
+    // Save the results:
+    huira::write_image_png("output/jupiter_long_range.png", frame_buffer.sensor_response(), 8);
     
 }

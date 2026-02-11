@@ -35,6 +35,8 @@ namespace huira {
     // The Astronomical Journal, 104, 1650.
     inline double v_band_irradiance(double visual_magnitude);
 
+    template <IsSpectral TSpectral>
+    TSpectral visual_magnitude_to_irradiance(double visual_magnitude, TSpectral albedo = TSpectral{ 1.f });
 
     inline double integrate(const std::vector<double>& x, const std::vector<double>& y);
 

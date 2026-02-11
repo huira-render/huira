@@ -126,7 +126,21 @@ namespace huira {
     }
 
     template <IsSpectral TSpectral>
-    UnresolvedObjectHandle<TSpectral> Scene<TSpectral>::new_unresolved_object_from_power(TSpectral power, std::string name)
+    UnresolvedObjectHandle<TSpectral> Scene<TSpectral>::new_unresolved_object_from_magnitude(double visual_magnitude, std::string name)
+    {
+        return this->new_unresolved_object_from_magnitude(visual_magnitude, TSpectral{ 1.f }, name);
+    }
+
+    template <IsSpectral TSpectral>
+    UnresolvedObjectHandle<TSpectral> Scene<TSpectral>::new_unresolved_object_from_magnitude(double visual_magnitude, TSpectral albedo, std::string name)
+    {
+        TSpectral irradiance = visual_magnitude_to_irradiance<TSpectral>(visual_magnitude, albedo);
+        return this->new_unresolved_object(irradiance, name);
+    }
+
+
+    template <IsSpectral TSpectral>
+    UnresolvedObjectHandle<TSpectral> Scene<TSpectral>::new_unresolved_emitter(TSpectral power, std::string name)
     {
         auto unresolved_shared = std::make_shared<UnresolvedEmitter<TSpectral>>(power);
         return add_unresolved_object(unresolved_shared, name);
@@ -146,13 +160,13 @@ namespace huira {
     }
 
     template <IsSpectral TSpectral>
-    UnresolvedObjectHandle<TSpectral> Scene<TSpectral>::new_unresolved_asteroid(float H, float G, InstanceHandle<TSpectral> sun, std::string name)
+    UnresolvedObjectHandle<TSpectral> Scene<TSpectral>::new_unresolved_asteroid(double H, double G, InstanceHandle<TSpectral> sun, std::string name)
     {
         return this->new_unresolved_asteroid(H, G, sun, TSpectral{ 1.f }, name);
     }
     
     template <IsSpectral TSpectral>
-    UnresolvedObjectHandle<TSpectral> Scene<TSpectral>::new_unresolved_asteroid(float H, float G, InstanceHandle<TSpectral> sun, TSpectral albedo, std::string name)
+    UnresolvedObjectHandle<TSpectral> Scene<TSpectral>::new_unresolved_asteroid(double H, double G, InstanceHandle<TSpectral> sun, TSpectral albedo, std::string name)
     {
         auto unresolved_asteroid = std::make_shared<UnresolvedAsteroid<TSpectral>>(H, G, sun, albedo);
         return this->add_unresolved_object(unresolved_asteroid, name);

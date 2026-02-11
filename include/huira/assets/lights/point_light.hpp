@@ -28,6 +28,10 @@ namespace huira {
             const Vec3<float>& wi
         ) const override;
 
+        TSpectral irradiance_at(
+            const Vec3<float>& position,
+            const Transform<float>& light_to_world
+        ) const override;
 
         LightType get_type() const override { return LightType::Point; }
         std::string type() const override { return "PointLight"; }

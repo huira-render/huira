@@ -48,6 +48,10 @@ namespace huira {
             const Vec3<float>& wi
         ) const = 0;
 
+        virtual TSpectral irradiance_at(
+            const Vec3<float>& position,
+            const Transform<float>& light_to_world
+        ) const = 0;
 
         virtual LightType get_type() const = 0;
 

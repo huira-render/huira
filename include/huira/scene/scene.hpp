@@ -55,11 +55,13 @@ namespace huira {
         void delete_light(const LightHandle<TSpectral>& light_handle);
         
         UnresolvedObjectHandle<TSpectral> new_unresolved_object(TSpectral irradiance = TSpectral{ 0 }, std::string name = "");
-        UnresolvedObjectHandle<TSpectral> new_unresolved_object_from_power(TSpectral power, std::string name = "");
+        UnresolvedObjectHandle<TSpectral> new_unresolved_object_from_magnitude(double visual_magnitude, std::string name = "");
+        UnresolvedObjectHandle<TSpectral> new_unresolved_object_from_magnitude(double visual_magnitude, TSpectral albedo, std::string name = "");
+        UnresolvedObjectHandle<TSpectral> new_unresolved_emitter(TSpectral power, std::string name = "");
         UnresolvedObjectHandle<TSpectral> new_unresolved_sphere(units::Meter radius, InstanceHandle<TSpectral> sun, std::string name = "");
         UnresolvedObjectHandle<TSpectral> new_unresolved_sphere(units::Meter radius, InstanceHandle<TSpectral> sun, TSpectral albedo, std::string name = "");
-        UnresolvedObjectHandle<TSpectral> new_unresolved_asteroid(float H, float G, InstanceHandle<TSpectral> sun, std::string name = "");
-        UnresolvedObjectHandle<TSpectral> new_unresolved_asteroid(float H, float G, InstanceHandle<TSpectral> sun, TSpectral albedo, std::string name = "");
+        UnresolvedObjectHandle<TSpectral> new_unresolved_asteroid(double H, double G, InstanceHandle<TSpectral> sun, std::string name = "");
+        UnresolvedObjectHandle<TSpectral> new_unresolved_asteroid(double H, double G, InstanceHandle<TSpectral> sun, TSpectral albedo, std::string name = "");
         UnresolvedObjectHandle<TSpectral> add_unresolved_object(std::shared_ptr<UnresolvedObject<TSpectral>> unresolved_object, std::string name = "");
 
         void set_name(const UnresolvedObjectHandle<TSpectral>& unresolved_object_handle, const std::string& name);

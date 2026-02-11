@@ -1,7 +1,7 @@
 #pragma once
 
-#include <memory>
 #include <vector>
+#include <string>
 
 #include "huira/assets/unresolved/unresolved_object.hpp"
 #include "huira/core/concepts/spectral_concepts.hpp"
@@ -18,6 +18,8 @@ namespace huira {
             const Transform<float>& self_transform,
             const std::vector<LightInstance<TSpectral>>& lights
         ) override;
+
+        std::string type() const override { return "UnresolvedEmitter"; }
 
     private:
         TSpectral spectral_power_;
