@@ -34,7 +34,8 @@ namespace huira {
 
         // Perform spectrophotometric calibration:
         double irradiance_ref = v_band_irradiance(vmag);
-        std::size_t N = 1000;
+
+        constexpr std::size_t N = 1000;
         std::vector<double> lambda;
         std::vector<double> v_band_efficiency = johnson_vband_approximation(N, lambda);
         std::vector<double> radiance = plancks_law(temp, lambda);

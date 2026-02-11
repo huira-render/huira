@@ -27,7 +27,9 @@ namespace huira {
         sample.distance = std::sqrt(dist_sq);
 
         // Shading point exactly coincides with light:
-        if (sample.distance == 0) return std::nullopt;
+        if (sample.distance == 0) {
+            return std::nullopt;
+        }
 
         sample.wi = wi_unorm / sample.distance;
 
@@ -51,5 +53,16 @@ namespace huira {
         (void)light_to_world;
         (void)wi;
         return 1.f;
+    }
+
+    template <IsSpectral TSpectral>
+    TSpectral PointLight<TSpectral>::irradiance_at(
+        const Vec3<float>& position,
+        const Transform<float>& light_to_world
+    ) const
+    {
+        Vec3<float> p_light = light_to_world.apply_to_point(Vec3<float>(0, 0, 0));
+        float dist_sq = glm::dot(position - p_light, position - p_light);
+        return intensity_ / dist_sq;
     }
 }

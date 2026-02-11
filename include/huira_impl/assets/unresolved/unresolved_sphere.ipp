@@ -2,6 +2,8 @@
 #include <vector>
 #include <cmath>
 
+#include "glm/glm.hpp"
+
 #include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/assets/lights/light.hpp"
 #include "huira/util/logger.hpp"
@@ -34,9 +36,19 @@ namespace huira {
     ) {
         for (const auto& light_inst : lights) {
             if (light_inst.light.get() == light_) {
-                Vec3<float> to_light = light_inst.transform.position - self_transform.position;
+                Vec3<float> L = glm::normalize(light_inst.transform.position - self_transform.position);
                 
-                // TODO Compute
+                float distance = glm::length(self_transform.position);
+                Vec3<float> V = -self_transform.position / distance;
+
+                TSpectral incident_irradiance = light_->irradiance_at(self_transform.position, light_inst.transform);
+
+                float phase = std::acos(glm::dot(V, L));
+                float A = PI<float>() * radius_ * radius_; // Cross-sectional area
+                TSpectral reflectedPower = albedo_ * A * incident_irradiance * lambert_phase_function(phase);
+
+                TSpectral reflected_irradiance = reflectedPower / (4 * PI<float>() * distance * distance);
+                this->set_irradiance(reflected_irradiance);
                 
                 return;
             }

@@ -29,7 +29,7 @@ namespace huira {
         );
         
         std::uint64_t id() const override { return id_; }
-        std::string type() const override { return "UnresolvedObject"; }
+        virtual std::string type() const override { return "UnresolvedObject"; }
 
     protected:
         std::uint64_t id_ = 0;

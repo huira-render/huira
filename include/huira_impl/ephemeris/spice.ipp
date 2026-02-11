@@ -249,8 +249,12 @@ namespace huira::spice {
 
         call_spice(spkezr_c, TARGET.c_str(), et, FRAME.c_str(), ABCORR.c_str(), OBSERVER.c_str(), state, &lt);
 
-        Vec3<T> position{ static_cast<T>(state[0]), static_cast<T>(state[1]), static_cast<T>(state[2]) };
-        Vec3<T> velocity{ static_cast<T>(state[3]), static_cast<T>(state[4]), static_cast<T>(state[5]) };
+        // SPICE Returns values in Km and Km/s:
+        Vec3<T> position_km{ static_cast<T>(state[0]), static_cast<T>(state[1]), static_cast<T>(state[2]) };
+        Vec3<T> velocity_km{ static_cast<T>(state[3]), static_cast<T>(state[4]), static_cast<T>(state[5]) };
+
+        Vec3<T> position = position_km * static_cast<T>(1000.0); // Convert to meters
+        Vec3<T> velocity = velocity_km * static_cast<T>(1000.0); // Convert to meters per second
         return { position, velocity, static_cast<double>(lt) };
     }
 

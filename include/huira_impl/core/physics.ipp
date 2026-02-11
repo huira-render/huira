@@ -106,6 +106,54 @@ namespace huira {
     }
 
 
+
+    template <IsSpectral TSpectral>
+    TSpectral visual_magnitude_to_irradiance(double visual_magnitude, TSpectral albedo)
+    {
+        // Solar spectral shape (coarse, in arbitrary radiance units — only ratios matter):
+        TSpectral solar_template = black_body<TSpectral>(5778.0, 100);
+        double solar_total = static_cast<double>(solar_template.total());
+
+        // Fine-sample the solar spectrum convolved with V-band response:
+        constexpr std::size_t N = 500;
+        std::vector<double> vband_lambda;
+        std::vector<double> vband_response = johnson_vband_approximation(N, vband_lambda);
+        std::vector<double> solar_fine = plancks_law(5778.0, vband_lambda);
+
+        // V-baband weighted solar radiance:
+        std::vector<double> weighted(N);
+        for (std::size_t i = 0; i < N; ++i) {
+            weighted[i] = solar_fine[i] * vband_response[i];
+        }
+        double solar_vband_weighted = integrate(vband_lambda, weighted);
+
+        auto bins = TSpectral::get_all_bins();
+        double lambda_min = bins[0].min_wavelength;
+        double lambda_max = bins[0].max_wavelength;
+        for (std::size_t i = 1; i < TSpectral::size(); ++i) {
+            if (bins[i].min_wavelength < lambda_min) lambda_min = bins[i].min_wavelength;
+            if (bins[i].max_wavelength > lambda_max) lambda_max = bins[i].max_wavelength;
+        }
+
+        auto full_lambda = linspace(lambda_min, lambda_max, N);
+        auto solar_full = plancks_law(5778.0, full_lambda);
+        double solar_full_integral = integrate(full_lambda, solar_full);
+
+        // V-band observed photon flux:
+        double observed_vband_flux = v_band_irradiance(visual_magnitude);
+
+        // Total photon flux across all wavelengths, assuming solar spectrum:
+        double total_flux = observed_vband_flux * solar_full_integral / solar_vband_weighted;
+
+        // Distribute across bins proportionally to solar template:
+        double scale = total_flux / solar_total;
+
+        TSpectral photon_counts = solar_template * static_cast<float>(scale) * albedo;
+        TSpectral irradiance = photon_counts * TSpectral::photon_energies();
+        return irradiance;
+    }
+
+
     inline double integrate(const std::vector<double>& x, const std::vector<double>& y) {
         double sum = 0.0;
         for (size_t i = 0; i < x.size() - 1; ++i) {
