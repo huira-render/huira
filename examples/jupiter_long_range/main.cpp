@@ -36,13 +36,13 @@ int main(int argc, char** argv) {
 
     // Configure a camera model:
     auto camera_model = scene.new_camera_model();
-    camera_model.set_focal_length(.025f);
+    camera_model.set_focal_length(.125f);
     camera_model.set_fstop(3.30f);
     camera_model.set_sensor_pixel_pitch(8.5e-6f, 8.5e-6f);
     camera_model.set_sensor_resolution(1920, 1080);
     camera_model.use_aperture_psf();
     camera_model.set_sensor_bit_depth(14);
-    camera_model.set_psf_accuracy(64, 16);
+    camera_model.set_psf_accuracy(32, 16);
     
     huira::Time time("2016-09-19T16:22:05.728");
     float exposure_time = 1.f;
@@ -50,28 +50,36 @@ int main(int argc, char** argv) {
     // Load stars:
     scene.load_stars(star_catalog_path, time);
 
+    // Create the sun:
+    auto sun_light = scene.new_sun_light();
+    auto sun = scene.root.new_instance(sun_light);
+    sun.set_spice_origin("SUN");
+
     // Create unresolved objects for Jupiter and its moons:
-    auto jupiter_model = scene.new_unresolved_object(TSpectral{ 100 });
-    auto io_model = scene.new_unresolved_object(TSpectral{ 10 });
-    auto europa_model = scene.new_unresolved_object(TSpectral{ 10 });
-    auto ganymede_model = scene.new_unresolved_object(TSpectral{ 10 });
-    auto callisto_model = scene.new_unresolved_object(TSpectral{ 10 });
+    auto radius = 69911000_m;
+    TSpectral albedo = TSpectral{ 1 };
+    auto jupiter_model = scene.new_unresolved_sphere(radius, sun, albedo);
+    //auto jupiter_model = scene.new_unresolved_object(TSpectral{ 1e-8 });
+    //auto io_model = scene.new_unresolved_object(TSpectral{ 1e-10 });
+    //auto europa_model = scene.new_unresolved_object(TSpectral{ 1e-10 });
+    //auto ganymede_model = scene.new_unresolved_object(TSpectral{ 1e-10 });
+    //auto callisto_model = scene.new_unresolved_object(TSpectral{ 1e-10 });
 
     // Create new instances of the unresolved objects:
     auto jupiter = scene.root.new_instance(jupiter_model);
     jupiter.set_spice_origin("JUPITER");
-    auto io = scene.root.new_instance(io_model);
-    io.set_spice_origin("IO");
-    auto europa = scene.root.new_instance(europa_model);
-    europa.set_spice_origin("EUROPA");
-    auto ganymede = scene.root.new_instance(ganymede_model);
-    ganymede.set_spice_origin("GANYMEDE");
-    auto callisto = scene.root.new_instance(callisto_model);
-    callisto.set_spice_origin("CALLISTO");
+    //auto io = scene.root.new_instance(io_model);
+    //io.set_spice_origin("IO");
+    //auto europa = scene.root.new_instance(europa_model);
+    //europa.set_spice_origin("EUROPA");
+    //auto ganymede = scene.root.new_instance(ganymede_model);
+    //ganymede.set_spice_origin("GANYMEDE");
+    //auto callisto = scene.root.new_instance(callisto_model);
+    //callisto.set_spice_origin("CALLISTO");
 
     // Create an instance of the camera:
     auto navcam = scene.root.new_instance(camera_model);
-    camera_model.use_blender_convention();
+    navcam.set_spice_origin("EARTH_BARYCENTER");
     
     // Configure the render buffers:
     auto frame_buffer = camera_model.make_frame_buffer();
@@ -82,8 +90,8 @@ int main(int argc, char** argv) {
     huira::RasterRenderer<TSpectral> renderer;
 
     // Create a scene view at the observation time:
-    for (int i = 0; i < 36; ++i) {
-        navcam.set_euler_angles(90_deg, 0_deg, i * 10_deg);
+    for (int i = 0; i < 360; ++i) {
+        navcam.set_euler_angles(90_deg, 0_deg, i * 1_deg);
 
         auto scene_view = huira::SceneView<TSpectral>(scene, time, navcam, huira::ObservationMode::ABERRATED_STATE);
 

@@ -18,7 +18,7 @@ namespace huira {
         using Handle<Model<TSpectral>>::Handle;
 
         void print_graph() const {
-            this->get()->print_graph();
+            this->get_()->print_graph();
         }
 
     private:

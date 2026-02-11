@@ -5,7 +5,7 @@
 
 #include "huira/assets/mesh.hpp"
 #include "huira/assets/model.hpp"
-#include "huira/assets/unresolved_object.hpp"
+#include "huira/assets/unresolved/unresolved_object.hpp"
 
 // cameras/
 #include "huira/cameras/distortion/brown_distortion.hpp"
@@ -39,7 +39,7 @@
 #include "huira/handles/mesh_handle.hpp"
 #include "huira/handles/model_handle.hpp"
 #include "huira/handles/node_handle.hpp"
-#include "huira/handles/point_light_handle.hpp"
+#include "huira/handles/light_handle.hpp"
 #include "huira/handles/root_frame_handle.hpp"
 #include "huira/handles/unresolved_handle.hpp"
 
@@ -88,7 +88,7 @@ namespace huira {
     template class FrameHandle<TestSpectral>;
     template class InstanceHandle<TestSpectral>;
     template class MeshHandle<TestSpectral>;
-    template class PointLightHandle<TestSpectral>;
+    template class LightHandle<TestSpectral>;
     template class RootFrameHandle<TestSpectral>;
     template class UnresolvedObjectHandle<TestSpectral>;
 

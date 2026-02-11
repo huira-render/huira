@@ -11,6 +11,12 @@
 #include "huira/util/logger.hpp"
 #include "huira/util/colorful_text.hpp"
 #include "huira/stars/io/star_catalog.hpp"
+#include "huira/assets/lights/light.hpp"
+#include "huira/assets/lights/point_light.hpp"
+#include "huira/assets/unresolved/unresolved_object.hpp"
+#include "huira/assets/unresolved/unresolved_sphere.hpp"
+#include "huira/assets/unresolved/unresolved_asteroid.hpp"
+#include "huira/assets/unresolved/unresolved_emitter.hpp"
 
 namespace huira {
     // Suppressing C4355: 'this' is passed to FrameNode constructor, but FrameNode only stores
@@ -63,47 +69,100 @@ namespace huira {
 
 
 
+
     template <IsSpectral TSpectral>
-    PointLightHandle<TSpectral> Scene<TSpectral>::new_point_light(TSpectral intensity, std::string name)
+    LightHandle<TSpectral> Scene<TSpectral>::new_point_light(TSpectral intensity, std::string name)
     {
         auto light_shared = std::make_shared<PointLight<TSpectral>>(intensity);
-        lights_.add(light_shared, name);
-        return PointLightHandle<TSpectral>{ light_shared };
+        return this->add_light(light_shared, name);
     };
 
     template <IsSpectral TSpectral>
-    void Scene<TSpectral>::set_name(const PointLightHandle<TSpectral>& light_handle, const std::string& name)
+    LightHandle<TSpectral> Scene<TSpectral>::new_sun_light()
+    {
+        // TODO Make this a sphere light once implemented
+        TSpectral spectral_radiance = black_body<TSpectral>(5800, 1000);
+
+        // TODO Move solar radius into constants somehow?
+        constexpr float sun_radius = 6.957e8f;
+        constexpr float sun_area = 4.f * PI<float>() * sun_radius * sun_radius;
+        TSpectral spectral_power = spectral_radiance * PI<float>() * sun_area;
+
+        return this->new_point_light(spectral_power, "Sun");
+    }
+
+    template <IsSpectral TSpectral>
+    LightHandle<TSpectral> Scene<TSpectral>::add_light(std::shared_ptr<Light<TSpectral>> light, std::string name)
+    {
+        lights_.add(light, name);
+        return LightHandle<TSpectral>{ light };
+    }
+
+    template <IsSpectral TSpectral>
+    void Scene<TSpectral>::set_name(const LightHandle<TSpectral>& light_handle, const std::string& name)
     {
         lights_.set_name(light_handle.get(), name);
     };
 
     template <IsSpectral TSpectral>
-    PointLightHandle<TSpectral> Scene<TSpectral>::get_point_light(const std::string& name)
+    LightHandle<TSpectral> Scene<TSpectral>::get_light(const std::string& name)
     {
-        auto light_base = lights_.lookup(name);
-        auto point_light = std::dynamic_pointer_cast<PointLight<TSpectral>>(light_base);
-        if (!point_light) {
-            HUIRA_THROW_ERROR("Light with name '" + name + "' is not a PointLight.");
-        }
-        return PointLightHandle<TSpectral>{ point_light };
+        return LightHandle<TSpectral>{ lights_.lookup(name) };
     }
 
     template <IsSpectral TSpectral>
-    void Scene<TSpectral>::delete_light(const PointLightHandle<TSpectral>& light_handle)
+    void Scene<TSpectral>::delete_light(const LightHandle<TSpectral>& light_handle)
     {
         auto light_shared = light_handle.get();
-        prune_graph_references_(static_cast<Light<TSpectral>*>(light_shared.get()));
+        prune_graph_references_(light_shared.get());
         lights_.remove(light_shared);
     }
-    
-
 
     template <IsSpectral TSpectral>
     UnresolvedObjectHandle<TSpectral> Scene<TSpectral>::new_unresolved_object(TSpectral irradiance, std::string name)
     {
         auto unresolved_shared = std::make_shared<UnresolvedObject<TSpectral>>(irradiance);
-        unresolved_objects_.add(unresolved_shared, name);
-        return UnresolvedObjectHandle<TSpectral>{ unresolved_shared };
+        return add_unresolved_object(unresolved_shared, name);
+    }
+
+    template <IsSpectral TSpectral>
+    UnresolvedObjectHandle<TSpectral> Scene<TSpectral>::new_unresolved_object_from_power(TSpectral power, std::string name)
+    {
+        auto unresolved_shared = std::make_shared<UnresolvedEmitter<TSpectral>>(power);
+        return add_unresolved_object(unresolved_shared, name);
+    }
+
+    template <IsSpectral TSpectral>
+    UnresolvedObjectHandle<TSpectral> Scene<TSpectral>::new_unresolved_sphere(units::Meter radius, InstanceHandle<TSpectral> sun, std::string name)
+    {
+        return this->new_unresolved_sphere(radius, sun, TSpectral{ 1.f }, name);
+    }
+
+    template <IsSpectral TSpectral>
+    UnresolvedObjectHandle<TSpectral> Scene<TSpectral>::new_unresolved_sphere(units::Meter radius, InstanceHandle<TSpectral> sun, TSpectral albedo, std::string name)
+    {
+        auto unresolved_lambertian_sphere = std::make_shared<UnresolvedLambertianSphere<TSpectral>>(radius, sun, albedo);
+        return this->add_unresolved_object(unresolved_lambertian_sphere, name);
+    }
+
+    template <IsSpectral TSpectral>
+    UnresolvedObjectHandle<TSpectral> Scene<TSpectral>::new_unresolved_asteroid(float H, float G, InstanceHandle<TSpectral> sun, std::string name)
+    {
+        return this->new_unresolved_asteroid(H, G, sun, TSpectral{ 1.f }, name);
+    }
+    
+    template <IsSpectral TSpectral>
+    UnresolvedObjectHandle<TSpectral> Scene<TSpectral>::new_unresolved_asteroid(float H, float G, InstanceHandle<TSpectral> sun, TSpectral albedo, std::string name)
+    {
+        auto unresolved_asteroid = std::make_shared<UnresolvedAsteroid<TSpectral>>(H, G, sun, albedo);
+        return this->add_unresolved_object(unresolved_asteroid, name);
+    }
+
+    template <IsSpectral TSpectral>
+    UnresolvedObjectHandle<TSpectral> Scene<TSpectral>::add_unresolved_object(std::shared_ptr<UnresolvedObject<TSpectral>> unresolved_object, std::string name)
+    {
+        unresolved_objects_.add(unresolved_object, name);
+        return UnresolvedObjectHandle<TSpectral>{ unresolved_object };
     }
 
     template <IsSpectral TSpectral>
@@ -125,7 +184,6 @@ namespace huira {
         prune_graph_references_(unresolved_object_shared.get());
         unresolved_objects_.remove(unresolved_object_shared);
     }
-
 
 
     template <IsSpectral TSpectral>

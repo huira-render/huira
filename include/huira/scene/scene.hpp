@@ -45,12 +45,23 @@ namespace huira {
         MeshHandle<TSpectral> get_mesh(const std::string& name);
         void delete_mesh(const MeshHandle<TSpectral>& mesh_handle);
 
-        PointLightHandle<TSpectral> new_point_light(TSpectral intensity, std::string name = "");
-        void set_name(const PointLightHandle<TSpectral>& light_handle, const std::string& name);
-        PointLightHandle<TSpectral> get_point_light(const std::string& name);
-        void delete_light(const PointLightHandle<TSpectral>& light_handle);
 
+        LightHandle<TSpectral> new_point_light(TSpectral intensity, std::string name = "");
+        LightHandle<TSpectral> new_sun_light();
+        LightHandle<TSpectral> add_light(std::shared_ptr<Light<TSpectral>> light, std::string name = "");
+
+        void set_name(const LightHandle<TSpectral>& light_handle, const std::string& name);
+        LightHandle<TSpectral> get_light(const std::string& name);
+        void delete_light(const LightHandle<TSpectral>& light_handle);
+        
         UnresolvedObjectHandle<TSpectral> new_unresolved_object(TSpectral irradiance = TSpectral{ 0 }, std::string name = "");
+        UnresolvedObjectHandle<TSpectral> new_unresolved_object_from_power(TSpectral power, std::string name = "");
+        UnresolvedObjectHandle<TSpectral> new_unresolved_sphere(units::Meter radius, InstanceHandle<TSpectral> sun, std::string name = "");
+        UnresolvedObjectHandle<TSpectral> new_unresolved_sphere(units::Meter radius, InstanceHandle<TSpectral> sun, TSpectral albedo, std::string name = "");
+        UnresolvedObjectHandle<TSpectral> new_unresolved_asteroid(float H, float G, InstanceHandle<TSpectral> sun, std::string name = "");
+        UnresolvedObjectHandle<TSpectral> new_unresolved_asteroid(float H, float G, InstanceHandle<TSpectral> sun, TSpectral albedo, std::string name = "");
+        UnresolvedObjectHandle<TSpectral> add_unresolved_object(std::shared_ptr<UnresolvedObject<TSpectral>> unresolved_object, std::string name = "");
+
         void set_name(const UnresolvedObjectHandle<TSpectral>& unresolved_object_handle, const std::string& name);
         UnresolvedObjectHandle<TSpectral> get_unresolved_object(const std::string& name);
         void delete_unresolved_object(const UnresolvedObjectHandle<TSpectral>& unresolved_object_handle);

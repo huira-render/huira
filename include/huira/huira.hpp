@@ -22,10 +22,10 @@
 #include "huira/handles/frame_handle.hpp"
 //#include "huira/handles/handle.hpp"            // Not part of public API
 #include "huira/handles/instance_handle.hpp"
+#include "huira/handles/light_handle.hpp"
 #include "huira/handles/mesh_handle.hpp"
+#include "huira/handles/model_handle.hpp"
 //#include "huira/handles/node_handle.hpp"       // Not part of public API
-//#include "huira/handles/point_handle.hpp"      // Not part of public API
-#include "huira/handles/point_light_handle.hpp"
 //#include "huira/handles/root_frame_handle.hpp" // Not part of public API
 #include "huira/handles/unresolved_handle.hpp"
 

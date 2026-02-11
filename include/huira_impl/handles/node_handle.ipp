@@ -11,7 +11,7 @@ namespace huira {
      */
     template <IsSpectral TSpectral, typename TNode>
     void NodeHandle<TSpectral, TNode>::set_position(const Vec3<double>& position) const {
-        this->get()->set_position(position);
+        this->get_()->set_position(position);
     }
 
     /**
@@ -23,7 +23,7 @@ namespace huira {
      */
     template <IsSpectral TSpectral, typename TNode>
     void NodeHandle<TSpectral, TNode>::set_position(double x, double y, double z) const {
-        this->get()->set_position(Vec3<double>{x, y, z});
+        this->get_()->set_position(Vec3<double>{x, y, z});
     }
     
 
@@ -34,7 +34,7 @@ namespace huira {
      */
     template <IsSpectral TSpectral, typename TNode>
     Vec3<double> NodeHandle<TSpectral, TNode>::get_static_position() const {
-        return this->get()->get_static_position();
+        return this->get_()->get_static_position();
     }
 
 
@@ -46,7 +46,7 @@ namespace huira {
      */
     template <IsSpectral TSpectral, typename TNode>
     void NodeHandle<TSpectral, TNode>::set_velocity(const Vec3<double>& velocity) const {
-        this->get()->set_velocity(velocity);
+        this->get_()->set_velocity(velocity);
     }
 
     /**
@@ -58,7 +58,7 @@ namespace huira {
      */
     template <IsSpectral TSpectral, typename TNode>
     void NodeHandle<TSpectral, TNode>::set_velocity(double vx, double vy, double vz) const {
-        this->get()->set_velocity(Vec3<double>{vx, vy, vz});
+        this->get_()->set_velocity(Vec3<double>{vx, vy, vz});
     }
     
 
@@ -69,7 +69,7 @@ namespace huira {
      */
     template <IsSpectral TSpectral, typename TNode>
     Vec3<double> NodeHandle<TSpectral, TNode>::get_static_velocity() const {
-        return this->get()->get_static_velocity();
+        return this->get_()->get_static_velocity();
     }
 
 
@@ -80,44 +80,44 @@ namespace huira {
      */
     template <IsSpectral TSpectral, typename TNode>
     void NodeHandle<TSpectral, TNode>::set_rotation(const Rotation<double>& rotation) const {
-        this->get()->set_rotation(rotation);
+        this->get_()->set_rotation(rotation);
     }
 
     template <IsSpectral TSpectral, typename TNode>
     void NodeHandle<TSpectral, TNode>::set_rotation_local_to_parent(const Mat3<double>& matrix) const
     {
-        this->get()->set_rotation(Rotation<double>::from_local_to_parent(matrix));
+        this->get_()->set_rotation(Rotation<double>::from_local_to_parent(matrix));
     }
 
     template <IsSpectral TSpectral, typename TNode>
     void NodeHandle<TSpectral, TNode>::set_rotation_local_to_parent(const Quaternion<double>& quaternion) const
     {
-        this->get()->set_rotation(Rotation<double>::from_local_to_parent(quaternion));
+        this->get_()->set_rotation(Rotation<double>::from_local_to_parent(quaternion));
     }
 
     template <IsSpectral TSpectral, typename TNode>
     void NodeHandle<TSpectral, TNode>::set_rotation_local_to_parent(const Vec3<double>& axis, units::Degree angle) const
     {
-        this->get()->set_rotation(Rotation<double>::from_local_to_parent(axis, angle));
+        this->get_()->set_rotation(Rotation<double>::from_local_to_parent(axis, angle));
     }
 
 
     template <IsSpectral TSpectral, typename TNode>
     void NodeHandle<TSpectral, TNode>::set_rotation_parent_to_local(const Mat3<double>& matrix) const
     {
-        this->get()->set_rotation(Rotation<double>::from_parent_to_local(matrix));
+        this->get_()->set_rotation(Rotation<double>::from_parent_to_local(matrix));
     }
 
     template <IsSpectral TSpectral, typename TNode>
     void NodeHandle<TSpectral, TNode>::set_rotation_parent_to_local(const Quaternion<double>& quaternion) const
     {
-        this->get()->set_rotation(Rotation<double>::from_parent_to_local(quaternion));
+        this->get_()->set_rotation(Rotation<double>::from_parent_to_local(quaternion));
     }
 
     template <IsSpectral TSpectral, typename TNode>
     void NodeHandle<TSpectral, TNode>::set_rotation_parent_to_local(const Vec3<double>& axis, units::Degree angle) const
     {
-        this->get()->set_rotation(Rotation<double>::from_parent_to_local(axis, angle));
+        this->get_()->set_rotation(Rotation<double>::from_parent_to_local(axis, angle));
     }
 
 
@@ -125,7 +125,7 @@ namespace huira {
     template <IsSpectral TSpectral, typename TNode>
     void NodeHandle<TSpectral, TNode>::set_euler_angles(units::Radian x, units::Radian y, units::Radian z, std::string sequence) const
     {
-        this->get()->set_rotation(Rotation<double>::extrinsic_euler_angles(x, y, z, sequence));
+        this->get_()->set_rotation(Rotation<double>::extrinsic_euler_angles(x, y, z, sequence));
     }
 
 
@@ -136,7 +136,7 @@ namespace huira {
      */
     template <IsSpectral TSpectral, typename TNode>
     Rotation<double> NodeHandle<TSpectral, TNode>::get_static_rotation() const {
-        return this->get()->get_static_rotation();
+        return this->get_()->get_static_rotation();
     }
 
 
@@ -147,7 +147,7 @@ namespace huira {
      */
     template <IsSpectral TSpectral, typename TNode>
     void NodeHandle<TSpectral, TNode>::set_angular_velocity(const Vec3<double>& angular_velocity) const {
-        this->get()->set_angular_velocity(angular_velocity);
+        this->get_()->set_angular_velocity(angular_velocity);
     }
 
     /**
@@ -159,7 +159,7 @@ namespace huira {
      */
     template <IsSpectral TSpectral, typename TNode>
     void NodeHandle<TSpectral, TNode>::set_angular_velocity(double wx, double wy, double wz) const {
-        this->get()->set_angular_velocity(Vec3<double>{wx, wy, wz});
+        this->get_()->set_angular_velocity(Vec3<double>{wx, wy, wz});
     }
 
     /**
@@ -169,7 +169,7 @@ namespace huira {
      */
     template <IsSpectral TSpectral, typename TNode>
     Vec3<double> NodeHandle<TSpectral, TNode>::get_static_angular_velocity() const {
-        return this->get()->get_static_angular_velocity();
+        return this->get_()->get_static_angular_velocity();
     }
 
 
@@ -180,7 +180,7 @@ namespace huira {
      */
     template <IsSpectral TSpectral, typename TNode>
     void NodeHandle<TSpectral, TNode>::set_scale(const Vec3<double>& scale) const {
-        this->get()->set_scale(scale);
+        this->get_()->set_scale(scale);
     }
 
     /**
@@ -192,7 +192,7 @@ namespace huira {
      */
     template <IsSpectral TSpectral, typename TNode>
     void NodeHandle<TSpectral, TNode>::set_scale(double sx, double sy, double sz) const {
-        this->get()->set_scale(Vec3<double>{sx, sy, sz});
+        this->get_()->set_scale(Vec3<double>{sx, sy, sz});
     }
 
     /**
@@ -202,7 +202,7 @@ namespace huira {
      */
     template <IsSpectral TSpectral, typename TNode>
     void NodeHandle<TSpectral, TNode>::set_scale(double s) const {
-        this->get()->set_scale(Vec3<double>{s, s, s});
+        this->get_()->set_scale(Vec3<double>{s, s, s});
     }
 
 
@@ -213,7 +213,7 @@ namespace huira {
      */
     template <IsSpectral TSpectral, typename TNode>
     Vec3<double> NodeHandle<TSpectral, TNode>::get_static_scale() const {
-        return this->get()->get_static_scale();
+        return this->get_()->get_static_scale();
     }
 
 
@@ -225,7 +225,7 @@ namespace huira {
     template <IsSpectral TSpectral, typename TNode>
     void NodeHandle<TSpectral, TNode>::set_spice_origin(const std::string& spice_origin) const
     {
-        this->get()->set_spice_origin(spice_origin);
+        this->get_()->set_spice_origin(spice_origin);
     }
 
     /**
@@ -236,7 +236,7 @@ namespace huira {
     template <IsSpectral TSpectral, typename TNode>
     void NodeHandle<TSpectral, TNode>::set_spice_frame(const std::string& spice_frame) const
     {
-        this->get()->set_spice_frame(spice_frame);
+        this->get_()->set_spice_frame(spice_frame);
     }
 
 
@@ -247,7 +247,7 @@ namespace huira {
      */
     template <IsSpectral TSpectral, typename TNode>
     void NodeHandle<TSpectral, TNode>::set_spice(const std::string& spice_origin, const std::string& spice_frame) const {
-        this->get()->set_spice(spice_origin, spice_frame);
+        this->get_()->set_spice(spice_origin, spice_frame);
     }
 
     /**
@@ -257,7 +257,7 @@ namespace huira {
      */
     template <IsSpectral TSpectral, typename TNode>
     std::string NodeHandle<TSpectral, TNode>::get_spice_origin() const {
-        return this->get()->get_spice_origin();
+        return this->get_()->get_spice_origin();
     }
 
     /**
@@ -267,7 +267,7 @@ namespace huira {
      */
     template <IsSpectral TSpectral, typename TNode>
     std::string NodeHandle<TSpectral, TNode>::get_spice_frame() const {
-        return this->get()->get_spice_frame();
+        return this->get_()->get_spice_frame();
     }
 
 
@@ -283,7 +283,7 @@ namespace huira {
      */
     template <IsSpectral TSpectral, typename TNode>
     NodeHandle<TSpectral, Node<TSpectral>> NodeHandle<TSpectral, TNode>::get_parent() const {
-        return this->get()->get_parent();
+        return this->get_()->get_parent();
     }
 
 
@@ -308,6 +308,6 @@ namespace huira {
     template <IsSpectral TSpectral, typename TNode>
     template <typename TParentNode>
     NodeHandle<TSpectral, TParentNode> NodeHandle<TSpectral, TNode>::get_parent_as() const {
-        return this->get()->template get_parent_as<TParentNode>();
+        return this->get_()->template get_parent_as<TParentNode>();
     }
 }
