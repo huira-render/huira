@@ -17,6 +17,7 @@
 #include "huira/assets/unresolved/unresolved_sphere.hpp"
 #include "huira/assets/unresolved/unresolved_asteroid.hpp"
 #include "huira/assets/unresolved/unresolved_emitter.hpp"
+#include "huira/cameras/sensors/simple_rgb_sensor.hpp"
 
 namespace huira {
     // Suppressing C4355: 'this' is passed to FrameNode constructor, but FrameNode only stores
@@ -207,6 +208,17 @@ namespace huira {
         camera_models_.add(camera_shared, name);
         return CameraModelHandle<TSpectral>{ camera_shared };
     }
+
+    template <IsSpectral TSpectral>
+    CameraModelHandle<RGB> Scene<TSpectral>::new_rgb_camera_model(std::string name)
+        requires std::is_same_v<TSpectral, RGB>
+    {
+        auto camera_shared = std::make_shared<CameraModel<RGB>>();
+        camera_shared->set_sensor<SimpleRGBSensor>();
+        camera_models_.add(camera_shared, name);
+        return CameraModelHandle<RGB>{ camera_shared };
+    }
+
 
     template <IsSpectral TSpectral>
     void Scene<TSpectral>::set_name(const CameraModelHandle<TSpectral>& camera_model_handle, const std::string& name)

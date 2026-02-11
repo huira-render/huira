@@ -24,13 +24,21 @@ namespace huira {
     template <IsSpectral TSpectral>
     static std::vector<RadiusLUTEntry> build_radius_lut(
         const Image<TSpectral>& center_kernel,
-        int full_radius,
+        int full_radius_signed,
         float area,
         const TSpectral& photon_energies,
         const RadiusLUTConfig& config = {})
     {
         std::vector<RadiusLUTEntry> lut;
-        lut.reserve(static_cast<std::size_t>(full_radius));
+        if (full_radius_signed <= 0) {
+            return lut;
+        }
+
+        const std::size_t full_radius = static_cast<std::size_t>(full_radius_signed);
+        const std::size_t k_w = static_cast<std::size_t>(center_kernel.width());
+        const std::size_t k_h = static_cast<std::size_t>(center_kernel.height());
+
+        lut.reserve(full_radius);
 
         // Precompute per-channel conversion: area / photon_energy[c]
         TSpectral conversion;
@@ -39,38 +47,41 @@ namespace huira {
             conversion[c] = (e > 0.0f) ? (area / e) : 0.0f;
         }
 
-        for (int r = 1; r <= full_radius; ++r) {
-            // For this ring, find the minimum irradiance across all pixels
-            // and channels that would produce `threshold` photons.
+        // Helper: accumulate max sensitivity from a single kernel pixel.
+        auto scan_pixel = [&](std::size_t kx, std::size_t ky, float& max_sensitivity) {
+            if (kx >= k_w || ky >= k_h) {
+                return;
+            }
+            const TSpectral& w = center_kernel(static_cast<int>(kx), static_cast<int>(ky));
+            for (std::size_t c = 0; c < TSpectral::size(); ++c) {
+                float s = w[c] * conversion[c];
+                max_sensitivity = std::max(max_sensitivity, s);
+            }
+            };
+
+        for (std::size_t r = 1; r <= full_radius; ++r) {
             float max_sensitivity = 0.0f;
-            auto scan_pixel = [&](int kx, int ky) {
-                if (kx < 0 || kx >= center_kernel.width() ||
-                    ky < 0 || ky >= center_kernel.height()) {
-                    return;
-                }
 
-                const TSpectral& w = center_kernel(kx, ky);
-                for (std::size_t c = 0; c < TSpectral::size(); ++c) {
-                    float s = w[c] * conversion[c];
-                    max_sensitivity = std::max(max_sensitivity, s);
-                }
-                };
+            // Absolute kernel coordinates for this ring's bounding box.
+            // r <= full_radius, so lo >= 0 and hi <= 2*full_radius.
+            const std::size_t lo = full_radius - r;
+            const std::size_t hi = full_radius + r;
 
-            // Top & bottom rows of the ring
-            for (int dx = -r; dx <= r; ++dx) {
-                scan_pixel(full_radius + dx, full_radius - r);
-                scan_pixel(full_radius + dx, full_radius + r);
+            // Top & bottom rows: kx spans [lo .. hi]
+            for (std::size_t kx = lo; kx <= hi; ++kx) {
+                scan_pixel(kx, lo, max_sensitivity);
+                scan_pixel(kx, hi, max_sensitivity);
             }
 
-            // Left & right columns (excluding corners)
-            for (int dy = -r + 1; dy <= r - 1; ++dy) {
-                scan_pixel(full_radius - r, full_radius + dy);
-                scan_pixel(full_radius + r, full_radius + dy);
+            // Left & right columns (excluding corners): ky spans (lo .. hi)
+            for (std::size_t ky = lo + 1; ky < hi; ++ky) {
+                scan_pixel(lo, ky, max_sensitivity);
+                scan_pixel(hi, ky, max_sensitivity);
             }
 
             if (max_sensitivity > 0.0f) {
                 float min_irradiance = config.photon_threshold / max_sensitivity;
-                lut.push_back({ r, min_irradiance });
+                lut.push_back({ static_cast<int>(r), min_irradiance });
             }
         }
 
@@ -87,9 +98,10 @@ namespace huira {
             return min_radius;
         }
 
-        for (int i = static_cast<int>(lut.size()) - 1; i >= 0; --i) {
-            if (max_irradiance >= lut[static_cast<std::size_t>(i)].min_irradiance) {
-                return std::max(lut[static_cast<std::size_t>(i)].radius, min_radius);
+        std::size_t i = lut.size();
+        while (i-- > 0) {
+            if (max_irradiance >= lut[i].min_irradiance) {
+                return std::max(lut[i].radius, min_radius);
             }
         }
 
