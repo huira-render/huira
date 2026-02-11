@@ -14,7 +14,7 @@ namespace huira {
     template <IsSpectral TSpectral>
     void UnresolvedObjectHandle<TSpectral>::set_irradiance(const TSpectral& irradiance) const
     {
-        this->get()->set_irradiance(irradiance);
+        this->get_()->set_irradiance(irradiance);
     }
 
     /**
@@ -26,6 +26,6 @@ namespace huira {
      */
     template <IsSpectral TSpectral>
     TSpectral UnresolvedObjectHandle<TSpectral>::get_irradiance() const {
-        return this->get()->get_irradiance();
+        return this->get_()->get_irradiance();
     }
 }

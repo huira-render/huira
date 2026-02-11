@@ -5,7 +5,7 @@
 
 #include "huira/handles/camera_handle.hpp"
 #include "huira/handles/node_handle.hpp"
-#include "huira/handles/point_light_handle.hpp"
+#include "huira/handles/light_handle.hpp"
 #include "huira/handles/unresolved_handle.hpp"
 #include "huira/handles/instance_handle.hpp"
 #include "huira/handles/mesh_handle.hpp"

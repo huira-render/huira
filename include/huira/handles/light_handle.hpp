@@ -1,6 +1,6 @@
 #pragma once
 
-#include "huira/assets/lights/point_light.hpp"
+#include "huira/assets/lights/light.hpp"
 #include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/handles/handle.hpp"
 
@@ -13,12 +13,10 @@ namespace huira {
     class FrameHandle;
 
     template <IsSpectral TSpectral>
-    class PointLightHandle : public Handle<PointLight<TSpectral>> {
+    class LightHandle : public Handle<Light<TSpectral>> {
     public:
-        PointLightHandle() = delete;
-        using Handle<PointLight<TSpectral>>::Handle;
-
-        void set_intensity(const TSpectral& intensity) const { this->get()->set_intensity(intensity); }
+        LightHandle() = delete;
+        using Handle<Light<TSpectral>>::Handle;
 
         friend class Scene<TSpectral>;
         friend class FrameHandle<TSpectral>;

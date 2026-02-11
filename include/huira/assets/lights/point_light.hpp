@@ -3,6 +3,7 @@
 #include <optional>
 
 #include "huira/core/types.hpp"
+#include "huira/core/constants.hpp"
 #include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/assets/lights/light.hpp"
 
@@ -10,7 +11,7 @@ namespace huira {
     template <IsSpectral TSpectral>
     class PointLight : public Light<TSpectral> {
     public:
-        PointLight(const TSpectral& intensity) : intensity_{ intensity } {}
+        PointLight(const TSpectral& spectral_power) : intensity_{ spectral_power / (4.f * PI<float>())} {}
 
         PointLight(const PointLight&) = delete;
         PointLight& operator=(const PointLight&) = delete;

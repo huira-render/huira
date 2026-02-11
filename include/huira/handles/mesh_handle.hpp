@@ -25,11 +25,11 @@ namespace huira {
         using Handle<Mesh<TSpectral>>::Handle;
 
         std::size_t get_vertex_count() const {
-            return this->get()->vertex_buffer().size();
+            return this->get_()->vertex_buffer().size();
         }
 
         std::shared_ptr<Mesh<TSpectral>> get_shared() const {
-            return this->get();
+            return this->get_();
         }
 
         friend class Scene<TSpectral>;

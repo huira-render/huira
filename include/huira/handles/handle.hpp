@@ -28,8 +28,24 @@ namespace huira {
             return true;
         }
 
+        template <typename U = T>
+            requires std::derived_from<U, T> || std::same_as<U, T>
+        std::shared_ptr<U> get() const {
+            std::shared_ptr<T> p = get_();
+            
+            if constexpr (std::same_as<U, T>) {
+                return p;
+            } else {
+                std::shared_ptr<U> derived = std::dynamic_pointer_cast<U>(p);
+                if (!derived) {
+                    HUIRA_THROW_ERROR("Handle does not point to the requested type");
+                }
+                return derived;
+            }
+        }
+
     protected:
-        std::shared_ptr<T> get() const {
+        std::shared_ptr<T> get_() const {
             std::shared_ptr<T> p = ptr_.lock();
             if (!p) {
                 HUIRA_THROW_ERROR("Attempted to access an invalid handle");

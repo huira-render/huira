@@ -1,6 +1,6 @@
 #pragma once
 
-#include "huira/assets/unresolved_object.hpp"
+#include "huira/assets/unresolved/unresolved_object.hpp"
 #include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/handles/handle.hpp"
 

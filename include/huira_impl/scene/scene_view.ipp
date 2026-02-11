@@ -74,6 +74,7 @@ namespace huira {
             }
         }
 
+        // Copy stars in camera frame:
         stars_ = std::vector<Star<TSpectral>>(scene.stars_.size());
         for (std::size_t i = 0; i < scene.stars_.size(); ++i) {
             Vec3<double> direction = scene.stars_[i].get_direction();
@@ -84,6 +85,15 @@ namespace huira {
             Vec3<double> apparent_direction = obs_ssb.rotation.inverse() * aberrated_direction;
 
             stars_[i] = Star<TSpectral>(apparent_direction, irradiance);
+        }
+
+        
+        // Resolve all unresolved objects now that we have light positions
+        for (auto& unresolved_object : unresolved_objects_) {
+            unresolved_object.unresolved_object->resolve_irradiance(
+                unresolved_object.transform,
+                lights_
+            );
         }
     }
 

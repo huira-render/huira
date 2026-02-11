@@ -1,7 +1,7 @@
 namespace huira {
     template <IsSpectral TSpectral>
     FrameHandle<TSpectral> FrameHandle<TSpectral>::new_subframe() const {
-        return FrameHandle<TSpectral>{ this->get()->new_child() };
+        return FrameHandle<TSpectral>{ this->get_()->new_child() };
     }
 
     template <IsSpectral TSpectral>
@@ -13,7 +13,7 @@ namespace huira {
 
     template <IsSpectral TSpectral>
     void FrameHandle<TSpectral>::delete_subframe(FrameHandle<TSpectral> subframe) const {
-        this->get()->delete_child(std::weak_ptr<Node<TSpectral>>(subframe.get()));
+        this->get_()->delete_child(std::weak_ptr<Node<TSpectral>>(subframe.get()));
     }
 
 
@@ -25,13 +25,13 @@ namespace huira {
     {
         auto asset_shared = asset_handle.get();
         auto* asset_raw = asset_shared.get();
-        auto instance_weak = this->get()->new_instance(asset_raw);
+        auto instance_weak = this->get_()->new_instance(asset_raw);
 
         return InstanceHandle<TSpectral>(instance_weak);
     }
 
     template <IsSpectral TSpectral>
     void FrameHandle<TSpectral>::delete_instance(InstanceHandle<TSpectral> instance) const {
-        this->get()->delete_child(std::weak_ptr<Node<TSpectral>>(instance.get()));
+        this->get_()->delete_child(std::weak_ptr<Node<TSpectral>>(instance.get()));
     }
 }

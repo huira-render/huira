@@ -7,33 +7,16 @@
 
 #include "huira/assets/mesh.hpp"
 #include "huira/assets/lights/light.hpp"
-#include "huira/assets/unresolved_object.hpp"
+#include "huira/assets/unresolved/unresolved_object.hpp"
 #include "huira/scene/scene.hpp"
 #include "huira/core/time.hpp"
 #include "huira/core/transform.hpp"
 #include "huira/handles/camera_handle.hpp"
+#include "huira/scene/scene_view_types.hpp"
 
 namespace huira {
     template <IsSpectral TSpectral>
     class Renderer;
-
-    template <IsSpectral TSpectral>
-    struct MeshBatch {
-        std::shared_ptr<const Mesh<TSpectral>> mesh;
-        std::vector<Transform<float>> instances;
-    };
-
-    template <IsSpectral TSpectral>
-    struct LightInstance {
-        std::shared_ptr<const Light<TSpectral>> light;
-        Transform<float> transform;
-    };
-
-    template <IsSpectral TSpectral>
-    struct UnresolvedInstance {
-        std::shared_ptr<const UnresolvedObject<TSpectral>> unresolved_object;
-        Transform<float> transform;
-    };
 
     template <IsSpectral TSpectral>
     class SceneView {
