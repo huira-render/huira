@@ -1,5 +1,5 @@
 #include <filesystem>
-#include <format>
+#include <sstream>
 #include <fstream>
 #include <stdexcept>
 #include <memory>
@@ -96,7 +96,7 @@ namespace huira::cli::tycho2 {
 
         int failures = 0;
         for (const auto& filename : tycho2_dat_files) {
-            std::string url = std::format("{}/{}.gz", base_url, filename);
+            std::string url = std::string(base_url) + "/" + filename + ".gz";
             fs::path dest = output_dir / filename;
 
             if (ctx.verbose) {
@@ -118,7 +118,7 @@ namespace huira::cli::tycho2 {
         }
 
         for (const auto& filename : tycho2_suppl_files) {
-            std::string url = std::format("{}/{}.gz", base_url, filename);
+            std::string url = std::string(base_url) + "/" + filename + ".gz";
             fs::path dest = output_dir / filename;
 
             if (ctx.verbose) {
