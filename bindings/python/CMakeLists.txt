@@ -1,7 +1,8 @@
-include(huiraFetchPybind)
+include(FetchPybind)
 
-pybind11_add_module(_huira huira_module.cpp)
+pybind11_add_module(_huira src/huira_module.cpp)
 target_link_libraries(_huira PRIVATE huira::huira Python::Python)
+target_include_directories(_huira PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_compile_definitions(_huira PRIVATE PYBIND11_DETAILED_ERROR_MESSAGES)
 
 # Create the huira directory structure in build
@@ -27,13 +28,13 @@ endforeach()
 
 # Generate version file from the root project version
 configure_file(
-    "${CMAKE_CURRENT_SOURCE_DIR}/_version.py.in"
+    "${CMAKE_CURRENT_SOURCE_DIR}/huira/_version.py.in"
     "${PYTHON_PACKAGE_DIR}/_version.py"
     @ONLY
 )
 
 # Copy package files
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/__init__.py ${PYTHON_PACKAGE_DIR}/__init__.py COPYONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/huira/__init__.py ${PYTHON_PACKAGE_DIR}/__init__.py COPYONLY)
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/README.md ${PYTHON_PACKAGE_DIR}/README.md COPYONLY)
 configure_file(${CMAKE_SOURCE_DIR}/LICENSE ${PYTHON_PACKAGE_DIR}/LICENSE COPYONLY)
 

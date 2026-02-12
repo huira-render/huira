@@ -1,4 +1,8 @@
 Python API Reference
 ====================
 
-*Coming Soon*
+.. toctree::
+   :hidden:
+   :maxdepth: 2
+
+   core/index

@@ -8,6 +8,11 @@ set(DOXYFILE_IN ${CMAKE_CURRENT_SOURCE_DIR}/Doxyfile.in)
 set(DOXYFILE_OUT ${CMAKE_BINARY_DIR}/Doxyfile)
 
 configure_file(${DOXYFILE_IN} ${DOXYFILE_OUT} @ONLY)
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/conf.py.in"
+    "${CMAKE_CURRENT_SOURCE_DIR}/conf.py"
+    @ONLY
+)
 file(MAKE_DIRECTORY ${DOXYGEN_OUTPUT_DIR})
 
 add_custom_command(OUTPUT ${DOXYGEN_INDEX_FILE}
