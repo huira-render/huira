@@ -1,0 +1,108 @@
+name: Conda Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  version-check:
+    name: Version Check
+    uses: ./.github/workflows/version-check.yml
+
+  conda-build:
+    needs: version-check
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux
+            os: ubuntu-22.04
+          - platform: macos
+            os: macos-14
+          - platform: windows
+            os: windows-2022
+    runs-on: ${{ matrix.os }}
+    name: Build (${{ matrix.platform }})
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Miniconda
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          auto-update-conda: true
+          conda-solver: libmamba
+          channels: conda-forge
+
+      - name: Install conda-build
+        shell: bash -el {0}
+        run: conda install -y conda-build
+
+      - name: Build conda package
+        shell: bash -el {0}
+        run: conda build packaging/recipe/ --output-folder conda-output
+
+      - name: Upload conda package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: conda-package-${{ matrix.platform }}
+          path: conda-output/
+          retention-days: 1
+
+  conda-test:
+    needs: conda-build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux
+            os: ubuntu-22.04
+          - platform: macos
+            os: macos-14
+          - platform: windows
+            os: windows-2022
+    runs-on: ${{ matrix.os }}
+    name: Test (${{ matrix.platform }})
+
+    steps:
+      - name: Checkout code (for test files only)
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            tests/packaging
+            .github/actions/conda-test
+          sparse-checkout-cone-mode: false
+
+      - name: Run conda package test
+        uses: ./.github/actions/conda-test
+        with:
+          platform: ${{ matrix.platform }}
+          artifact-name: conda-package-${{ matrix.platform }}
+
+  # Gate job that depends on all other jobs - use this for branch protection
+  conda-ci:
+    name: Conda CI
+    if: always()
+    needs:
+      - version-check
+      - conda-build
+      - conda-test
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check all jobs passed
+        run: |
+          if [[ "${{ contains(needs.*.result, 'failure') }}" == "true" || "${{ contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
+            echo "One or more jobs failed or were cancelled"
+            exit 1
+          fi
+          echo "All jobs passed successfully"

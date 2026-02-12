@@ -1,0 +1,54 @@
+name: Version Check
+
+on:
+  workflow_call:
+
+jobs:
+  version-check:
+    runs-on: ubuntu-22.04
+    name: Version Check
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check version consistency
+        run: |
+          set -e
+
+          # Read version from VERSION file
+          VERSION_FILE=$(cat VERSION | tr -d '[:space:]')
+          echo "VERSION file: $VERSION_FILE"
+
+          # Read version from meta.yaml
+          # Try Jinja2 format first: {% set version = "x.y.z" %}
+          # Then fall back to direct YAML format: version: x.y.z
+          META_VERSION=$(grep -oP '{%\s*set\s+version\s*=\s*"\K[^"]+' packaging/recipe/meta.yaml 2>/dev/null || \
+                         grep -oP '^\s*version:\s*\K[0-9]+\.[0-9]+\.[0-9]+' packaging/recipe/meta.yaml | head -1)
+          echo "meta.yaml version: $META_VERSION"
+
+          # Check VERSION matches meta.yaml
+          if [ "$VERSION_FILE" != "$META_VERSION" ]; then
+            echo "::error::Version mismatch: VERSION file ($VERSION_FILE) != meta.yaml ($META_VERSION)"
+            exit 1
+          fi
+
+          # Get the latest git tag (if any exist)
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+
+          if [ -z "$LATEST_TAG" ]; then
+            echo "No git tags found - skipping tag check"
+          else
+            # Strip leading 'v' if present
+            TAG_VERSION="${LATEST_TAG#v}"
+            echo "Latest git tag: $LATEST_TAG (version: $TAG_VERSION)"
+
+            if [ "$VERSION_FILE" != "$TAG_VERSION" ]; then
+              echo "::error::Version mismatch: VERSION file ($VERSION_FILE) != git tag ($TAG_VERSION)"
+              exit 1
+            fi
+          fi
+
+          echo "All versions are consistent"
