@@ -43,6 +43,7 @@ jobs:
           auto-update-conda: true
           conda-solver: libmamba
           channels: conda-forge
+          conda-remove-defaults: true
 
       - name: Install conda-build
         shell: bash -el {0}
