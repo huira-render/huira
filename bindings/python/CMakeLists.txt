@@ -5,39 +5,32 @@ target_link_libraries(_huira PRIVATE huira::huira Python::Python)
 target_include_directories(_huira PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_compile_definitions(_huira PRIVATE PYBIND11_DETAILED_ERROR_MESSAGES)
 
-# Create the huira directory structure in build
-set(PYTHON_BINDINGS_OUTPUT "${CMAKE_BINARY_DIR}/huira_python_bindings")
-set(PYTHON_PACKAGE_DIR "${PYTHON_BINDINGS_OUTPUT}/huira")
-file(MAKE_DIRECTORY ${PYTHON_PACKAGE_DIR})
+# Generate version file from the root project version
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/huira/_version.py.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/huira/_version.py"
+    @ONLY
+)
 
-# Set output directory for the compiled module
-set_target_properties(_huira PROPERTIES 
+# Output directory for local development (cmake --build)
+# This gives you a usable package in the build tree without needing pip install
+set_target_properties(_huira PROPERTIES
     PREFIX ""
-    LIBRARY_OUTPUT_DIRECTORY "${PYTHON_PACKAGE_DIR}"
-    RUNTIME_OUTPUT_DIRECTORY "${PYTHON_PACKAGE_DIR}"
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/huira"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/huira"
 )
 
 # Handle multi-config generators (Visual Studio, Xcode)
 foreach(config ${CMAKE_CONFIGURATION_TYPES})
     string(TOUPPER ${config} CONFIG_UPPER)
-    set_target_properties(_huira PROPERTIES 
-        LIBRARY_OUTPUT_DIRECTORY_${CONFIG_UPPER} "${PYTHON_PACKAGE_DIR}"
-        RUNTIME_OUTPUT_DIRECTORY_${CONFIG_UPPER} "${PYTHON_PACKAGE_DIR}"
+    set_target_properties(_huira PROPERTIES
+        LIBRARY_OUTPUT_DIRECTORY_${CONFIG_UPPER} "${CMAKE_CURRENT_BINARY_DIR}/huira"
+        RUNTIME_OUTPUT_DIRECTORY_${CONFIG_UPPER} "${CMAKE_CURRENT_BINARY_DIR}/huira"
     )
 endforeach()
 
-# Generate version file from the root project version
-configure_file(
-    "${CMAKE_CURRENT_SOURCE_DIR}/huira/_version.py.in"
-    "${PYTHON_PACKAGE_DIR}/_version.py"
-    @ONLY
-)
-
-# Copy package files
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/huira/__init__.py ${PYTHON_PACKAGE_DIR}/__init__.py COPYONLY)
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/README.md ${PYTHON_PACKAGE_DIR}/README.md COPYONLY)
-configure_file(${CMAKE_SOURCE_DIR}/LICENSE ${PYTHON_PACKAGE_DIR}/LICENSE COPYONLY)
-
-# Copy packaging files
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/pyproject.toml.in ${PYTHON_BINDINGS_OUTPUT}/pyproject.toml @ONLY)
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/setup.py ${PYTHON_BINDINGS_OUTPUT}/setup.py COPYONLY)
+# Install rules — used by scikit-build-core to populate the wheel,
+# and by cmake --install for manual installations
+install(TARGETS _huira LIBRARY DESTINATION huira)
+install(FILES huira/__init__.py DESTINATION huira)
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/huira/_version.py" DESTINATION huira)

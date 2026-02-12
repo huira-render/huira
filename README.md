@@ -8,6 +8,9 @@
 [![macOS CI/CD](https://github.com/huira-render/huira/actions/workflows/macos-ci-cd.yml/badge.svg?branch=main)](https://github.com/huira-render/huira/actions/workflows/macos-ci-cd.yml?query=branch%3Amain)
 [![Coverage](https://codecov.io/gh/huira-render/huira/branch/main/graph/badge.svg)](https://app.codecov.io/gh/huira-render/huira/tree/main)
 
+[![Conda Build](https://github.com/huira-render/huira/actions/workflows/conda-build.yml/badge.svg?branch=main)](https://github.com/huira-render/huira/actions/workflows/conda-build.yml?query=branch%3Amain)
+[![Python](https://github.com/huira-render/huira/actions/workflows/python.yml/badge.svg?branch=main)](https://github.com/huira-render/huira/actions/workflows/python.yml?query=branch%3Amain)
+
 ***
 
 # Key Features
@@ -19,13 +22,17 @@
 
 # Building Huira
 Please see the platform specific quickstart guides:
-- **[Linux](docs/for_contributors/build_instructions/linux.md)**
-- **[macOS](docs/for_contributors/build_instructions/macos.md)**
-- **[Windows (Powershell)](docs/for_contributors/build_instructions/windows.md)**
-- **[Windows (Visual Studio)](docs/for_contributors/build_instructions/visual-studio.md)**
+- **[Linux](docs/getting_started/build_instructions/linux.md)**
+- **[macOS](docs/getting_started/build_instructions/macos.md)**
+- **[Windows (Powershell)](docs/getting_started/build_instructions/windows.md)**
+- **[Windows (Visual Studio)](docs/getting_started/build_instructions/visual-studio.md)**
 
 To see additional optionals for building *Huira*, please refer to:
-- **[Huira Build Options](docs/for_contributors/build_instructions/options.md)**
+- **[Huira Build Options](docs/getting_started/build_instructions/options.md)**
+
+## Python Bindings
+Python bindings are available for *Huira* and can be installed via pip or conda.
+- **[Python Bindings](docs/getting_started/build_instructions/python-bindings.md)**
 
 # Examples
 Example programs demonstrating common usage patterns are available in the [`examples/`](examples/) directory.

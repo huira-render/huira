@@ -4,6 +4,9 @@
 /build/
 /out/
 
+bindings/python/build/
+bindings/python/*.egg-info/
+
 /local/*
 !/local/README.md
 

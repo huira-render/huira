@@ -35,14 +35,20 @@ Select your operating system below to view specific build steps.
 
           
 
-.. grid:: 1
+.. grid:: 2
     :gutter: 3
 
     .. grid-item-card:: Build Options
        :link: options
        :link-type: doc
 
-       Reference for CMake flags (e.g., ``HUIRA_BUILD_TESTS``, ``HUIRA_USE_DOUBLE``) available on all platforms.
+       Reference for CMake flags (e.g., ``HUIRA_TESTS``) available on all platforms.
+
+    .. grid-item-card:: Python Bindings
+       :link: python-bindings
+       :link-type: doc
+
+        Installing the python bindings
 
 .. toctree::
    :hidden:
@@ -53,3 +59,4 @@ Select your operating system below to view specific build steps.
    windows
    visual-studio
    options
+   python-bindings

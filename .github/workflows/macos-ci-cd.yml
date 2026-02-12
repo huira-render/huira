@@ -15,53 +15,8 @@ permissions:
 
 jobs:
   version-check:
-    runs-on: ubuntu-22.04
     name: Version Check
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Check version consistency
-        run: |
-          set -e
-
-          # Read version from VERSION file
-          VERSION_FILE=$(cat VERSION | tr -d '[:space:]')
-          echo "VERSION file: $VERSION_FILE"
-
-          # Read version from meta.yaml
-          # Try Jinja2 format first: {% set version = "x.y.z" %}
-          # Then fall back to direct YAML format: version: x.y.z
-          META_VERSION=$(grep -oP '{%\s*set\s+version\s*=\s*"\K[^"]+' packaging/recipe/meta.yaml 2>/dev/null || \
-                         grep -oP '^\s*version:\s*\K[0-9]+\.[0-9]+\.[0-9]+' packaging/recipe/meta.yaml | head -1)
-          echo "meta.yaml version: $META_VERSION"
-
-          # Check VERSION matches meta.yaml
-          if [ "$VERSION_FILE" != "$META_VERSION" ]; then
-            echo "::error::Version mismatch: VERSION file ($VERSION_FILE) != meta.yaml ($META_VERSION)"
-            exit 1
-          fi
-
-          # Get the latest git tag (if any exist)
-          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-
-          if [ -z "$LATEST_TAG" ]; then
-            echo "No git tags found - skipping tag check"
-          else
-            # Strip leading 'v' if present
-            TAG_VERSION="${LATEST_TAG#v}"
-            echo "Latest git tag: $LATEST_TAG (version: $TAG_VERSION)"
-
-            if [ "$VERSION_FILE" != "$TAG_VERSION" ]; then
-              echo "::error::Version mismatch: VERSION file ($VERSION_FILE) != git tag ($TAG_VERSION)"
-              exit 1
-            fi
-          fi
-
-          echo "All versions are consistent"
+    uses: ./.github/workflows/version-check.yml
 
   build-macos:
     needs: version-check
@@ -147,59 +102,6 @@ jobs:
           reporter: java-junit
           fail-on-error: false
 
-  conda-build:
-    needs: build-macos
-    runs-on: macos-14
-    name: Conda Build
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Set up Miniconda
-        uses: conda-incubator/setup-miniconda@v3
-        with:
-          auto-update-conda: true
-          conda-solver: libmamba
-          channels: conda-forge
-
-      - name: Install conda-build
-        shell: bash -el {0}
-        run: conda install -y conda-build
-
-      - name: Build conda package
-        shell: bash -el {0}
-        run: conda build packaging/recipe/ --output-folder conda-output
-
-      - name: Upload conda package artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: conda-package-macos
-          path: conda-output/
-          retention-days: 1
-
-  conda-test:
-    needs: conda-build
-    runs-on: macos-14
-    name: Conda Package Test
-
-    steps:
-      - name: Checkout code (for test files only)
-        uses: actions/checkout@v4
-        with:
-          sparse-checkout: |
-            tests/packaging
-            .github/actions/conda-test
-          sparse-checkout-cone-mode: false
-
-      - name: Run conda package test
-        uses: ./.github/actions/conda-test
-        with:
-          platform: macos
-          artifact-name: conda-package-macos
-
   # Gate job that depends on all other jobs - use this for branch protection
   macos-ci:
     name: macOS CI
@@ -207,8 +109,6 @@ jobs:
     needs:
       - version-check
       - build-macos
-      - conda-build
-      - conda-test
       - test
     runs-on: ubuntu-22.04
     steps:
