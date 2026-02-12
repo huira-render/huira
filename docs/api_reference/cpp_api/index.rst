@@ -11,7 +11,6 @@ The Huira C++ API is organized into four main modules. Select a module below to 
         :link-type: doc
 
         Fundamental types, math utilities, spectral bins, and unit systems. 
-        *Start here if you are new to the codebase.*
 
     .. grid-item-card:: Handles API
         :link: handles/index
