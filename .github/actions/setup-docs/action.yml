@@ -75,16 +75,14 @@ runs:
         source $HOME/miniforge3/bin/activate
         conda init bash
 
-    # Cache conda environment
-    - name: Cache conda environment
+    # Cache conda package tarballs (not the environment itself)
+    - name: Cache conda packages
       uses: actions/cache@v4
       with:
-        path: |
-          ${{ env.CONDA }}/envs/huira_env
-          ~/.conda/pkgs
-        key: conda-env-v2-${{ runner.os }}-${{ inputs.platform }}-${{ hashFiles('packaging/environment.yml', 'docs/docs-dependencies.yml') }}
+        path: ~/.conda/pkgs
+        key: conda-pkgs-${{ runner.os }}-${{ hashFiles('packaging/environment.yml', 'docs/docs-dependencies.yml') }}
         restore-keys: |
-          conda-env-v2-${{ runner.os }}-${{ inputs.platform }}-
+          conda-pkgs-${{ runner.os }}-
 
     # Install main project dependencies
     - name: Install main project dependencies

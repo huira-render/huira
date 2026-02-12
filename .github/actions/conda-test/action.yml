@@ -24,8 +24,9 @@ runs:
         auto-update-conda: true
         conda-solver: libmamba
         channels: conda-forge
+        conda-remove-defaults: true
         activate-environment: test-env
-        auto-activate-base: false
+        auto-activate: false
 
     - name: Install dependencies and local package (Linux/macOS)
       if: inputs.platform != 'windows'
