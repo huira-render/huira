@@ -17,6 +17,7 @@ runs:
           -DCMAKE_TOOLCHAIN_FILE="${GITHUB_WORKSPACE}/cmake/conda-toolchain.cmake" \
           -DCMAKE_BUILD_TYPE=Release \
           -DHUIRA_PYTHON=ON \
+          -DHUIRA_APPS=ON \
           -G Ninja
 
     - name: Configure CMake (macOS)
@@ -30,6 +31,7 @@ runs:
             -DCMAKE_TOOLCHAIN_FILE="${GITHUB_WORKSPACE}/cmake/conda-toolchain.cmake" \
             -DCMAKE_BUILD_TYPE=Release \
             -DHUIRA_PYTHON=ON \
+            -DHUIRA_APPS=ON \
             -G Ninja
         else
           # x86_64: explicitly specify system ninja path to avoid conda ninja
@@ -40,6 +42,7 @@ runs:
             -DCMAKE_TOOLCHAIN_FILE="${GITHUB_WORKSPACE}/cmake/conda-toolchain.cmake" \
             -DCMAKE_BUILD_TYPE=Release \
             -DHUIRA_PYTHON=ON \
+            -DHUIRA_APPS=ON \
             -DCMAKE_MAKE_PROGRAM="$SYSTEM_NINJA" \
             -G Ninja
         fi
@@ -54,5 +57,6 @@ runs:
           -DCMAKE_TOOLCHAIN_FILE="${GITHUB_WORKSPACE}/cmake/conda-toolchain.cmake" \
           -DCMAKE_BUILD_TYPE=Release \
           -DHUIRA_PYTHON=ON \
+          -DHUIRA_APPS=ON \
           -G "Visual Studio 17 2022" \
           -A x64
