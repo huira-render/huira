@@ -23,5 +23,5 @@ runs:
       run: |
         echo Building project for Windows...
         call conda activate huira_env
-        cmake --build build --config Debug --parallel
+        cmake --build build --config Release --parallel
         echo Build completed successfully!
