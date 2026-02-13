@@ -4,7 +4,7 @@
 
 int main() {
     // Create the scene:
-    huira::Scene<TSpectral> scene;
+    huira::Scene<huira::RGB> scene;
 
     // Configure a camera model:
     auto camera_model = scene.new_camera_model();

@@ -8,7 +8,8 @@ cmake -B build \
     -DCMAKE_INSTALL_PREFIX="${PREFIX}" \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_PREFIX_PATH="${PREFIX}" \
-    -DHUIRA_APPS=ON
+    -DHUIRA_APPS=ON \
+    -DHUIRA_NATIVE_ARCH=OFF
 
 cmake --build build --parallel ${CPU_COUNT}
 
