@@ -75,7 +75,7 @@ jobs:
         run: |
           echo "Running tests..."
           cd build
-          ctest -C Debug --output-on-failure
+          ctest -C Release --output-on-failure
           echo "Tests completed!"
 
       - name: Check for test results
