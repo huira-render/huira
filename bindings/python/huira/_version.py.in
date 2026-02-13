@@ -1,3 +1,0 @@
-"""Version information for huira."""
-
-__version__ = "@PROJECT_VERSION@"
