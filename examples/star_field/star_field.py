@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 
 import huira
+from huira.rgb import Scene
 
 def parse_input_paths():
     if len(sys.argv) != 3:
@@ -25,8 +26,9 @@ def main():
     huira.spice.furnsh(kernel_path / "spk/orx_160909_171201_170830_od023_v1.bsp")
     huira.spice.furnsh(kernel_path / "spk/de424.bsp")
 
-    ## Create the scene
-    #scene = huira.rgb.Scene()
+    # Create the scene
+    scene = Scene()
+
     #
     ## Configure a camera model
     #camera_model = scene.new_camera_model()
@@ -41,10 +43,11 @@ def main():
     ## Set the observation time
     time = huira.Time("2016-09-19T16:22:05.728")
     exposure_time = 9.984285275
-    #
-    ## Load stars
-    #scene.load_stars(star_catalog_path, time)
-    #
+    
+    # Load stars
+    scene.load_stars(star_catalog_path, time)
+    scene.print_contents()
+    
     ## Create an instance of the camera using SPICE configuration
     #mapcam = scene.root.new_instance(camera_model)
     #mapcam.set_spice("ORX_OCAMS_MAPCAM", "ORX_OCAMS_MAPCAM")
