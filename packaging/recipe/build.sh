@@ -7,7 +7,8 @@ cmake -B build \
     -G Ninja \
     -DCMAKE_INSTALL_PREFIX="${PREFIX}" \
     -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_PREFIX_PATH="${PREFIX}"
+    -DCMAKE_PREFIX_PATH="${PREFIX}" \
+    -DHUIRA_APPS=ON
 
 cmake --build build --parallel ${CPU_COUNT}
 
