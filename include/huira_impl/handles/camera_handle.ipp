@@ -33,6 +33,24 @@ namespace huira {
     }
 
     template <IsSpectral TSpectral>
+    void CameraModelHandle<TSpectral>::set_brown_conrady_distortion(BrownCoefficients coeffs) const
+    {
+        this->get_()->set_brown_conrady_distortion(coeffs);
+    }
+
+    template <IsSpectral TSpectral>
+    void CameraModelHandle<TSpectral>::set_opencv_distortion(OpenCVCoefficients coeffs) const
+    {
+        this->get_()->set_opencv_distortion(coeffs);
+    }
+
+    template <IsSpectral TSpectral>
+    void CameraModelHandle<TSpectral>::set_owen_distortion(OwenCoefficients coeffs) const
+    {
+        this->get_()->set_owen_distortion(coeffs);
+    }
+
+    template <IsSpectral TSpectral>
     void CameraModelHandle<TSpectral>::delete_distortion() const
     {
         this->get_()->delete_distortion();
