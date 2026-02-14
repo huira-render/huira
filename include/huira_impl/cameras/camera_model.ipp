@@ -32,6 +32,24 @@ namespace huira {
     }
 
     template <IsSpectral TSpectral>
+    void CameraModel<TSpectral>::set_brown_conrady_distortion(BrownCoefficients coeffs)
+    {
+        this->set_distortion<BrownDistortion<TSpectral>>(coeffs);
+    }
+
+    template <IsSpectral TSpectral>
+    void CameraModel<TSpectral>::set_opencv_distortion(OpenCVCoefficients coeffs)
+    {
+        this->set_distortion<OpenCVDistortion<TSpectral>>(coeffs);
+    }
+
+    template <IsSpectral TSpectral>
+    void CameraModel<TSpectral>::set_owen_distortion(OwenCoefficients coeffs)
+    {
+        this->set_distortion<OwenDistortion<TSpectral>>(coeffs);
+    }
+
+    template <IsSpectral TSpectral>
     template <IsSensor TSensor, typename... Args>
     void CameraModel<TSpectral>::set_sensor(Args&&... args) {
         sensor_ = std::make_unique<TSensor>(std::forward<Args>(args)...);

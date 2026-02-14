@@ -4,6 +4,10 @@
 #include "huira/cameras/camera_model.hpp"
 #include "huira/handles/handle.hpp"
 
+#include "huira/cameras/distortion/brown_distortion.hpp"
+#include "huira/cameras/distortion/opencv_distortion.hpp"
+#include "huira/cameras/distortion/owen_distortion.hpp"
+
 #include "huira/core/units/units.hpp"
 
 namespace huira {
@@ -31,6 +35,10 @@ namespace huira {
 
         template <IsDistortion TDistortion, typename... Args>
         void set_distortion(Args&&... args) const;
+
+        void set_brown_conrady_distortion(BrownCoefficients coeffs) const;
+        void set_opencv_distortion(OpenCVCoefficients coeffs) const;
+        void set_owen_distortion(OwenCoefficients coeffs) const;
 
         void delete_distortion() const;
 

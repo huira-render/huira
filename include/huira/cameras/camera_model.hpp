@@ -10,6 +10,10 @@
 #include "huira/core/concepts/spectral_concepts.hpp"
 
 #include "huira/cameras/distortion/distortion.hpp"
+#include "huira/cameras/distortion/brown_distortion.hpp"
+#include "huira/cameras/distortion/opencv_distortion.hpp"
+#include "huira/cameras/distortion/owen_distortion.hpp"
+
 #include "huira/cameras/aperture/aperture.hpp"
 #include "huira/scene/node.hpp"
 #include "huira/render/frame_buffer.hpp"
@@ -37,6 +41,10 @@ namespace huira {
 
         template <IsDistortion TDistortion, typename... Args>
         void set_distortion(Args&&... args);
+
+        void set_brown_conrady_distortion(BrownCoefficients coeffs);
+        void set_opencv_distortion(OpenCVCoefficients coeffs);
+        void set_owen_distortion(OwenCoefficients coeffs);
 
         void delete_distortion() { distortion_ = nullptr; }
 
