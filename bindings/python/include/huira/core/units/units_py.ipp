@@ -121,10 +121,10 @@ namespace huira {
         bind_unit_type<huira::units::Hour>(m, "Hour");
         bind_unit_type<huira::units::Minute>(m, "Minute");
         bind_unit_type<huira::units::Second>(m, "Second");
-        bind_unit_type<huira::units::MilliSecond>(m, "Millisecond");
-        bind_unit_type<huira::units::MicroSecond>(m, "Microsecond");
-        bind_unit_type<huira::units::NanoSecond>(m, "Nanosecond");
-        bind_unit_type<huira::units::FemtoSecond>(m, "Femtosecond");
+        bind_unit_type<huira::units::Millisecond>(m, "Millisecond");
+        bind_unit_type<huira::units::Microsecond>(m, "Microsecond");
+        bind_unit_type<huira::units::Nanosecond>(m, "Nanosecond");
+        bind_unit_type<huira::units::Femtosecond>(m, "Femtosecond");
 
         // Current Units
         bind_unit_type<huira::units::Ampere>(m, "Ampere");
@@ -143,8 +143,8 @@ namespace huira {
         // Angular Units
         bind_unit_type<huira::units::Radian>(m, "Radian");
         bind_unit_type<huira::units::Degree>(m, "Degree");
-        bind_unit_type<huira::units::ArcMinute>(m, "ArcMinute");
-        bind_unit_type<huira::units::ArcSecond>(m, "ArcSecond");
+        bind_unit_type<huira::units::Arcminute>(m, "Arcminute");
+        bind_unit_type<huira::units::Arcsecond>(m, "Arcsecond");
 
         // Solid Angle Units
         bind_unit_type<huira::units::Steradian>(m, "Steradian");
@@ -152,14 +152,14 @@ namespace huira {
 
         // Frequency Units
         bind_unit_type<huira::units::Hertz>(m, "Hertz");
-        bind_unit_type<huira::units::KiloHertz>(m, "KiloHertz");
-        bind_unit_type<huira::units::MegaHertz>(m, "MegaHertz");
-        bind_unit_type<huira::units::GigaHertz>(m, "GigaHertz");
-        bind_unit_type<huira::units::TeraHertz>(m, "TeraHertz");
+        bind_unit_type<huira::units::Kilohertz>(m, "Kilohertz");
+        bind_unit_type<huira::units::Megahertz>(m, "Megahertz");
+        bind_unit_type<huira::units::Gigahertz>(m, "Gigahertz");
+        bind_unit_type<huira::units::Terahertz>(m, "Terahertz");
 
         // Force Units
         bind_unit_type<huira::units::Newton>(m, "Newton");
-        bind_unit_type<huira::units::KiloNewton>(m, "KiloNewton");
+        bind_unit_type<huira::units::Kilonewton>(m, "Kilonewton");
 
         // Pressure Units
         bind_unit_type<huira::units::Pascal>(m, "Pascal");
@@ -206,8 +206,8 @@ namespace huira {
 
         // Time -> Second
         register_unit_conversions<huira::units::Second,
-            huira::units::FemtoSecond, huira::units::NanoSecond, huira::units::MicroSecond,
-            huira::units::MilliSecond, huira::units::Minute, huira::units::Hour,
+            huira::units::Femtosecond, huira::units::Nanosecond, huira::units::Microsecond,
+            huira::units::Millisecond, huira::units::Minute, huira::units::Hour,
             huira::units::Day, huira::units::SiderealDay>(m);
 
         // Temperature -> Kelvin
@@ -216,7 +216,7 @@ namespace huira {
 
         // Angle -> Radian
         register_unit_conversions<huira::units::Radian,
-            huira::units::Degree, huira::units::ArcMinute, huira::units::ArcSecond>(m);
+            huira::units::Degree, huira::units::Arcminute, huira::units::Arcsecond>(m);
 
         // Solid Angle -> Steradian
         register_unit_conversions<huira::units::Steradian,
@@ -224,12 +224,12 @@ namespace huira {
 
         // Frequency -> Hertz
         register_unit_conversions<huira::units::Hertz,
-            huira::units::KiloHertz, huira::units::MegaHertz,
-            huira::units::GigaHertz, huira::units::TeraHertz>(m);
+            huira::units::Kilohertz, huira::units::Megahertz,
+            huira::units::Gigahertz, huira::units::Terahertz>(m);
 
         // Force -> Newton
         register_unit_conversions<huira::units::Newton,
-            huira::units::KiloNewton>(m);
+            huira::units::Kilonewton>(m);
 
         // Pressure -> Pascal
         register_unit_conversions<huira::units::Pascal,

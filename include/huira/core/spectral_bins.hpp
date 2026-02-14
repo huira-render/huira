@@ -159,6 +159,8 @@ namespace huira {
 
     // Helpful types:
     using RGB = SpectralBins<3, 600, 750, 500, 600, 380, 500>;
+
+    using Visible8 = UniformSpectralBins<8, 380, 750>;
 }
 
 #include "huira_impl/core/spectral_bins.ipp"

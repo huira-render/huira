@@ -28,7 +28,7 @@
  * auto radiance = power / (area * solid_angle);
  *
  * // Perform conversions:
- * huira::Joule energy = power * huira::MilliSecond(20);
+ * huira::Joule energy = power * huira::Millisecond(20);
  *
  * // Convert between units:
  * huira::Meter m(1000);
@@ -72,10 +72,10 @@ namespace huira::units {
     using Hour = Quantity<Time, std::ratio<3600, 1>>;
     using Minute = Quantity<Time, std::ratio<60, 1>>;
     using Second = Quantity<Time, std::ratio<1, 1>>;
-    using MilliSecond = Quantity<Time, std::milli>;
-    using MicroSecond = Quantity<Time, std::micro>;
-    using NanoSecond = Quantity<Time, std::nano>;
-    using FemtoSecond = Quantity<Time, std::femto>;
+    using Millisecond = Quantity<Time, std::milli>;
+    using Microsecond = Quantity<Time, std::micro>;
+    using Nanosecond = Quantity<Time, std::nano>;
+    using Femtosecond = Quantity<Time, std::femto>;
     /// @}
 
 
@@ -109,8 +109,8 @@ namespace huira::units {
     /// @{
     using Radian = Quantity<Angle, std::ratio<1, 1>>;
     using Degree = Quantity<Angle, DegreeTag>;
-    using ArcMinute = Quantity<Angle, ArcMinuteTag>;
-    using ArcSecond = Quantity<Angle, ArcSecondTag>;
+    using Arcminute = Quantity<Angle, ArcMinuteTag>;
+    using Arcsecond = Quantity<Angle, ArcSecondTag>;
     /// @}
 
 
@@ -127,17 +127,17 @@ namespace huira::units {
     /// @defgroup frequency_units Frequency Units
     /// @{
     using Hertz = Quantity<Frequency, std::ratio<1, 1>>;
-    using KiloHertz = Quantity<Frequency, std::kilo>;
-    using MegaHertz = Quantity<Frequency, std::mega>;
-    using GigaHertz = Quantity<Frequency, std::giga>;
-    using TeraHertz = Quantity<Frequency, std::tera>;
+    using Kilohertz = Quantity<Frequency, std::kilo>;
+    using Megahertz = Quantity<Frequency, std::mega>;
+    using Gigahertz = Quantity<Frequency, std::giga>;
+    using Terahertz = Quantity<Frequency, std::tera>;
     /// @}
 
 
     /// @defgroup force_units Force Units
     /// @{
     using Newton = Quantity<Force, std::ratio<1, 1>>;
-    using KiloNewton = Quantity<Force, std::kilo>;
+    using Kilonewton = Quantity<Force, std::kilo>;
     /// @}
 
 
@@ -241,12 +241,12 @@ namespace huira::units {
         constexpr Minute operator""_min(long double value) { return Minute(static_cast<double>(value)); }
         constexpr Second operator""_s(unsigned long long value) { return Second(static_cast<double>(value)); }
         constexpr Second operator""_s(long double value) { return Second(static_cast<double>(value)); }
-        constexpr MilliSecond operator""_ms(unsigned long long value) { return MilliSecond(static_cast<double>(value)); }
-        constexpr MilliSecond operator""_ms(long double value) { return MilliSecond(static_cast<double>(value)); }
-        constexpr MicroSecond operator""_us(unsigned long long value) { return MicroSecond(static_cast<double>(value)); }
-        constexpr MicroSecond operator""_us(long double value) { return MicroSecond(static_cast<double>(value)); }
-        constexpr NanoSecond operator""_ns(unsigned long long value) { return NanoSecond(static_cast<double>(value)); }
-        constexpr NanoSecond operator""_ns(long double value) { return NanoSecond(static_cast<double>(value)); }
+        constexpr Millisecond operator""_ms(unsigned long long value) { return Millisecond(static_cast<double>(value)); }
+        constexpr Millisecond operator""_ms(long double value) { return Millisecond(static_cast<double>(value)); }
+        constexpr Microsecond operator""_us(unsigned long long value) { return Microsecond(static_cast<double>(value)); }
+        constexpr Microsecond operator""_us(long double value) { return Microsecond(static_cast<double>(value)); }
+        constexpr Nanosecond operator""_ns(unsigned long long value) { return Nanosecond(static_cast<double>(value)); }
+        constexpr Nanosecond operator""_ns(long double value) { return Nanosecond(static_cast<double>(value)); }
 
         // Angle literals
         constexpr Radian operator""_rad(unsigned long long value) { return Radian(static_cast<double>(value)); }
@@ -281,11 +281,11 @@ namespace huira::units {
         // Frequency literals
         constexpr Hertz operator""_Hz(unsigned long long value) { return Hertz(static_cast<double>(value)); }
         constexpr Hertz operator""_Hz(long double value) { return Hertz(static_cast<double>(value)); }
-        constexpr KiloHertz operator""_kHz(unsigned long long value) { return KiloHertz(static_cast<double>(value)); }
-        constexpr KiloHertz operator""_kHz(long double value) { return KiloHertz(static_cast<double>(value)); }
-        constexpr MegaHertz operator""_MHz(unsigned long long value) { return MegaHertz(static_cast<double>(value)); }
-        constexpr MegaHertz operator""_MHz(long double value) { return MegaHertz(static_cast<double>(value)); }
-        constexpr GigaHertz operator""_GHz(unsigned long long value) { return GigaHertz(static_cast<double>(value)); }
-        constexpr GigaHertz operator""_GHz(long double value) { return GigaHertz(static_cast<double>(value)); }
+        constexpr Kilohertz operator""_kHz(unsigned long long value) { return Kilohertz(static_cast<double>(value)); }
+        constexpr Kilohertz operator""_kHz(long double value) { return Kilohertz(static_cast<double>(value)); }
+        constexpr Megahertz operator""_MHz(unsigned long long value) { return Megahertz(static_cast<double>(value)); }
+        constexpr Megahertz operator""_MHz(long double value) { return Megahertz(static_cast<double>(value)); }
+        constexpr Gigahertz operator""_GHz(unsigned long long value) { return Gigahertz(static_cast<double>(value)); }
+        constexpr Gigahertz operator""_GHz(long double value) { return Gigahertz(static_cast<double>(value)); }
     }
 }
