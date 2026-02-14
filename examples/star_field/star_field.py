@@ -5,6 +5,10 @@ from pathlib import Path
 import huira
 from huira.rgb import Scene
 
+from huira.units import Millimeter as mm
+from huira.units import Micrometer as um
+from huira.units import Degree as deg
+
 def parse_input_paths():
     if len(sys.argv) != 3:
         print("Usage: star_field.py <tycho2.hrsc_path> <kernel_path>")
@@ -29,17 +33,16 @@ def main():
     # Create the scene
     scene = Scene()
 
-    #
-    ## Configure a camera model
-    #camera_model = scene.new_camera_model()
-    #camera_model.set_focal_length(0.125)
-    #camera_model.set_fstop(3.30)
-    #camera_model.set_sensor_rotation(huira.units.deg(90))
-    #camera_model.set_sensor_pixel_pitch(8.5e-6, 8.5e-6)
-    #camera_model.set_sensor_resolution(1024, 1024)
-    #camera_model.use_aperture_psf(32, 16)
-    #camera_model.set_sensor_bit_depth(14)
-    #
+    # Configure a camera model
+    camera_model = scene.new_camera_model()
+    camera_model.set_focal_length(mm(125))
+    camera_model.set_fstop(3.30)
+    camera_model.set_sensor_rotation(deg(90))
+    camera_model.set_sensor_pixel_pitch(um(8.5), um(8.5))
+    camera_model.set_sensor_resolution(1024, 1024)
+    camera_model.use_aperture_psf(32, 16)
+    camera_model.set_sensor_bit_depth(14)
+    
     ## Set the observation time
     time = huira.Time("2016-09-19T16:22:05.728")
     exposure_time = 9.984285275

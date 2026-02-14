@@ -26,7 +26,9 @@ endforeach()
 # and by cmake --install for manual installations
 install(TARGETS _huira LIBRARY DESTINATION huira)
 install(FILES huira/__init__.py DESTINATION huira)
+install(FILES huira/units.py DESTINATION huira)
 install(FILES huira/rgb.py DESTINATION huira)
+install(FILES huira/visible8.py DESTINATION huira)
 install(DIRECTORY "${CMAKE_SOURCE_DIR}/data/"
     DESTINATION huira/data
 )

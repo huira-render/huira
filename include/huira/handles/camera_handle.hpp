@@ -4,6 +4,8 @@
 #include "huira/cameras/camera_model.hpp"
 #include "huira/handles/handle.hpp"
 
+#include "huira/core/units/units.hpp"
+
 namespace huira {
     template <IsSpectral TSpectral>
     class Scene;
@@ -21,7 +23,7 @@ namespace huira {
         CameraModelHandle() = delete;
         using Handle<CameraModel<TSpectral>>::Handle;
 
-        void set_focal_length(float focal_length) const;
+        void set_focal_length(units::Millimeter focal_length) const;
         float focal_length() const;
 
         void set_fstop(float fstop) const;
@@ -38,13 +40,11 @@ namespace huira {
         void set_sensor_resolution(Resolution resolution) const;
         void set_sensor_resolution(int width, int height) const;
 
-        void set_sensor_pixel_pitch(Vec2<float> pixel_pitch) const;
-        void set_sensor_pixel_pitch(float pixel_pitch_x, float pixel_pitch_y) const;
-        void set_sensor_pixel_pitch(float pixel_pitch) const;
+        void set_sensor_pixel_pitch(units::Millimeter pixel_pitch_x, units::Millimeter pixel_pitch_y) const;
+        void set_sensor_pixel_pitch(units::Millimeter pixel_pitch) const;
 
-        void set_sensor_size(Vec2<float> size) const;
-        void set_sensor_size(float width, float height) const;
-        void set_sensor_size(float width) const;
+        void set_sensor_size(units::Millimeter width, units::Millimeter height) const;
+        void set_sensor_size(units::Millimeter width) const;
 
         void set_sensor_quantum_efficiency(TSpectral qe) const;
         void set_sensor_full_well_capacity(float fwc) const;
