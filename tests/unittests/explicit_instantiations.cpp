@@ -13,8 +13,7 @@
 #include "huira/cameras/distortion/owen_distortion.hpp"
 
 #include "huira/cameras/sensors/sensor_model.hpp"
-#include "huira/cameras/sensors/simple_rgb_sensor.hpp"
-#include "huira/cameras/sensors//simple_sensor.hpp"
+#include "huira/cameras/sensors/simple_sensor.hpp"
 
 #include "huira/cameras/camera_model.hpp"
 

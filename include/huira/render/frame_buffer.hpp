@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <limits>
+#include <type_traits>
 
 #include "huira/images/image.hpp"
 
@@ -12,6 +13,8 @@ namespace huira {
     template <IsSpectral TSpectral>
     class FrameBuffer {
     public:
+        using SensorT = std::conditional_t<std::is_same_v<TSpectral, RGB>, Vec3<float>, float>;
+
         FrameBuffer() = delete;
 
         Resolution resolution() const { return resolution_; }
@@ -38,24 +41,16 @@ namespace huira {
         bool has_world_normals() const { return has_(world_normals_); }
 
 
-
         void enable_received_power(bool enable = true) { enable_(received_power_, TSpectral{ 0 }, enable); }
         Image<TSpectral>& received_power() { return received_power_; }
         bool has_received_power() const { return has_(received_power_); }
 
         void enable_sensor_response(bool enable = true) {
             enable_(received_power_, TSpectral{ 0 }, enable); // Sensor response requires received power
-            enable_(sensor_response_, 0.f, enable);
+            enable_(sensor_response_, SensorT{}, enable);
         }
-        Image<float>& sensor_response() { return sensor_response_; }
+        Image<SensorT>& sensor_response() { return sensor_response_; }
         bool has_sensor_response() const { return has_(sensor_response_); }
-
-        void enable_sensor_response_rgb(bool enable = true) {
-            enable_(received_power_, TSpectral{ 0 }, enable); // Sensor response requires received power
-            enable_(sensor_response_rgb_, Vec3<float>{0, 0, 0}, enable);
-        }
-        Image<Vec3<float>>& sensor_response_rgb() { return sensor_response_rgb_; }
-        bool has_sensor_response_rgb() const { return has_(sensor_response_rgb_); }
 
 
         void clear() {
@@ -75,16 +70,14 @@ namespace huira {
                 received_power_.fill(TSpectral{ 0 });
             }
             if (has_sensor_response()) {
-                sensor_response_.fill(0.f);
-            }
-            if (has_sensor_response_rgb()) {
-                sensor_response_rgb_.fill(Vec3<float>{0, 0, 0});
+                sensor_response_.fill(SensorT{});
             }
         }
 
     private:
         FrameBuffer(Resolution resolution)
-            : resolution_{ resolution } {}
+            : resolution_{ resolution } {
+        }
 
         Resolution resolution_;
 
@@ -94,8 +87,7 @@ namespace huira {
         Image<Vec3<float>> world_normals_;
 
         Image<TSpectral> received_power_;
-        Image<float> sensor_response_;
-        Image<Vec3<float>> sensor_response_rgb_;
+        Image<SensorT> sensor_response_;
 
 
         template <IsImagePixel T>

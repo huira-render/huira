@@ -48,7 +48,7 @@ Select your operating system below to view specific build steps.
        :link: python-bindings
        :link-type: doc
 
-        Installing the python bindings
+       Installing the python bindings
 
 .. toctree::
    :hidden:

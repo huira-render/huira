@@ -44,6 +44,14 @@ runs:
         CHANNEL_PATH=$(cygpath -m "$PWD/conda-package")
         conda install -y -c "file:///$CHANNEL_PATH" huira
 
+    - name: Smoke-test CLI apps (Linux/macOS)
+      if: inputs.platform != 'windows'
+      shell: bash -el {0}
+      run: |
+        huira --help
+        huira fetch-tycho2 --help
+        huira process-tycho2 --help
+
     - name: Build and run packaging test (Linux/macOS)
       if: inputs.platform != 'windows'
       shell: bash -el {0}
@@ -53,6 +61,14 @@ runs:
         cmake .. -DCMAKE_PREFIX_PATH=$CONDA_PREFIX
         cmake --build .
         ctest --output-on-failure
+
+    - name: Smoke-test CLI apps (Windows)
+      if: inputs.platform == 'windows'
+      shell: bash -el {0}
+      run: |
+        huira --help
+        huira fetch-tycho2 --help
+        huira process-tycho2 --help
 
     - name: Build and run packaging test (Windows)
       if: inputs.platform == 'windows'

@@ -9,7 +9,9 @@
 
 #include "huira_cli/cli.hpp"
 #include "huira_cli/progress_bar.hpp"
+#include "huira_cli/compact_output.hpp"
 #include "huira_cli/commands/tycho2.hpp"
+
 #include "huira/util/paths.hpp"
 
 namespace fs = std::filesystem;
@@ -166,7 +168,7 @@ namespace huira::cli::tycho2 {
 
     static int run_fetch(const Context& ctx, int argc, char** argv) {
         try {
-            TCLAP::CmdLine cmd("Download Tycho-2 catalog from CDS Strasbourg", ' ', "", false);
+            TCLAP::CmdLine cmd("Download Tycho-2 catalog from CDS Strasbourg", ' ', "");
 
             TCLAP::SwitchArg force_arg("f", "force", 
                 "Overwrite existing files instead of skipping", cmd, false);
@@ -179,6 +181,9 @@ namespace huira::cli::tycho2 {
 
             TCLAP::UnlabeledValueArg<std::string> output_arg("output", 
                 "Output directory for downloaded files", true, "", "output_directory", cmd);
+
+            CompactOutput compact;
+            cmd.setOutput(&compact);
 
             cmd.parse(argc, argv);
 

@@ -9,6 +9,7 @@ option(HUIRA_DOCS "Build Documentation" OFF)
 option(HUIRA_PYTHON "Build Python Bindings" OFF)
 option(HUIRA_LOCAL_DEV "Build Local Development Directory" OFF)
 option(HUIRA_APPS "Build huira command line applications" ON)
+option(HUIRA_NATIVE_ARCH "Optimize for the build machine's CPU architecture" ON)
 
 if(DEFINED ENV{CONDA_PREFIX} AND NOT DEFINED CMAKE_TOOLCHAIN_FILE)
     set(CMAKE_TOOLCHAIN_FILE "${CMAKE_CURRENT_SOURCE_DIR}/cmake/conda-toolchain.cmake" CACHE FILEPATH "CMake toolchain file")

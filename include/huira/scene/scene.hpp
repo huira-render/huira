@@ -69,7 +69,6 @@ namespace huira {
         void delete_unresolved_object(const UnresolvedObjectHandle<TSpectral>& unresolved_object_handle);
 
         CameraModelHandle<TSpectral> new_camera_model(std::string name = "");
-        CameraModelHandle<RGB> new_rgb_camera_model(std::string name = "") requires std::is_same_v<TSpectral, RGB>;
         void set_name(const CameraModelHandle<TSpectral>& camera_model_handle, const std::string& name);
         CameraModelHandle<TSpectral> get_camera_model(const std::string& name);
         void delete_camera_model(const CameraModelHandle<TSpectral>& camera_model_handle);

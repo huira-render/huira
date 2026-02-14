@@ -57,6 +57,10 @@ test:
     # Check kernel data is installed
     - test -f $PREFIX/share/huira/data/kernels/lsk/naif0012.tls  # [unix]
     - if not exist %LIBRARY_PREFIX%\\share\\huira\\data\\kernels\\lsk\\naif0012.tls exit 1  # [win]
+    # Smoke-test CLI apps
+    - huira --help
+    - huira fetch-tycho2 --help
+    - huira process-tycho2 --help
 
 about:
   home: https://www.huira.space

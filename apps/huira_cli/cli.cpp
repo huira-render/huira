@@ -14,68 +14,53 @@ namespace huira::cli {
     }
 
     int Registry::dispatch(int argc, char** argv) {
-        // Show help if no arguments provided
         if (argc < 2) {
             print_help(std::cout);
             return 1;
         }
 
-        try {
-            // Build the list of allowed subcommands for the help message
-            std::vector<std::string> allowed_cmds;
-            for (const auto& [name, _] : commands_) {
-                allowed_cmds.push_back(name);
+        Context ctx{};
+        int sub_start = 1; // index of the subcommand in argv
+
+        // Manually scan for global flags before the subcommand
+        for (int i = 1; i < argc; ++i) {
+            std::string arg = argv[i];
+            if (arg == "-v" || arg == "--verbose") {
+                ctx.verbose = true;
+                ++sub_start;
             }
-
-            TCLAP::CmdLine cmd("huira - CLI tool", ' ', HUIRA_VERSION);
-
-            // Global options
-            TCLAP::SwitchArg verbose_arg("v", "verbose", "Enable verbose output", cmd, false);
-
-            // Unlabeled argument for the subcommand
-            TCLAP::UnlabeledValueArg<std::string> subcommand_arg("command", "Subcommand to run", true, "", "command", cmd);
-
-            // Unlabeled multi-arg to capture remaining arguments for the subcommand
-            TCLAP::UnlabeledMultiArg<std::string> remaining_args("args", "Arguments for the subcommand", false, "args", cmd);
-
-            // Parse up to but not including subcommand args
-            // We need to use ignoreRest to allow subcommands to have their own parsing
-            cmd.setExceptionHandling(false);
-            cmd.parse(argc, argv);
-
-            // Build context from parsed global flags
-            Context ctx{};
-            ctx.verbose = verbose_arg.getValue();
-
-            // Find and dispatch to subcommand
-            std::string cmd_name = subcommand_arg.getValue();
-            auto it = commands_.find(cmd_name);
-            if (it == commands_.end()) {
-                std::cerr << "Unknown command: " << cmd_name << "\n\n";
-                print_help(std::cerr);
-                return 1;
+            else if (arg == "--version") {
+                std::cout << "huira " << HUIRA_VERSION << "\n";
+                return 0;
             }
-
-            // Reconstruct argv for subcommand: [subcommand, remaining_args...]
-            std::vector<char*> sub_argv;
-            std::string cmd_name_copy = cmd_name;
-            sub_argv.push_back(cmd_name_copy.data());
-
-            std::vector<std::string> remaining = remaining_args.getValue();
-            for (auto& arg : remaining) {
-                sub_argv.push_back(arg.data());
+            else if (arg == "-h" || arg == "--help") {
+                print_help(std::cout);
+                return 0;
             }
-
-            return it->second.run(ctx, static_cast<int>(sub_argv.size()), sub_argv.data());
-
-        } catch (TCLAP::ArgException& e) {
-            std::cerr << "Error: " << e.error() << " for arg " << e.argId() << "\n";
-            return 1;
-            
-        } catch (TCLAP::ExitException& e) {
-            // TCLAP throws this for --help and --version
-            return e.getExitStatus();
+            else {
+                // First non-flag argument is the subcommand
+                break;
+            }
         }
+
+        if (sub_start >= argc) {
+            print_help(std::cout);
+            return 1;
+        }
+
+        std::string cmd_name = argv[sub_start];
+        auto it = commands_.find(cmd_name);
+        if (it == commands_.end()) {
+            std::cerr << "Unknown command: " << cmd_name << "\n\n";
+            print_help(std::cerr);
+            return 1;
+        }
+
+        // Forward everything from the subcommand name onward
+        int sub_argc = argc - sub_start;
+        char** sub_argv = argv + sub_start;
+
+        return it->second.run(ctx, sub_argc, sub_argv);
     }
 
     void Registry::print_help(std::ostream& os) const {

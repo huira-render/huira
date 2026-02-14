@@ -8,6 +8,7 @@
 
 #include "huira_cli/cli.hpp"
 #include "huira_cli/progress_bar.hpp"
+#include "huira_cli/compact_output.hpp"
 #include "huira_cli/commands/tycho2.hpp"
 
 #include "huira/stars/io/star_data.hpp"
@@ -114,14 +115,17 @@ namespace huira::cli::tycho2 {
     
     static int run_process(const Context& ctx, int argc, char** argv) {
         try {
-            TCLAP::CmdLine cmd("Convert Tycho-2 catalog to Huira Star Catalog (.hrsc) format", ' ', "", false);
+            TCLAP::CmdLine cmd("Convert Tycho-2 catalog to Huira Star Catalog (.hrsc) format", ' ', "");
     
             TCLAP::UnlabeledValueArg<std::string> input_arg("input",
                 "Input directory with tyc2.dat files", true, "", "input_directory", cmd);
     
             TCLAP::ValueArg<std::string> output_arg("o", "output",
                 "Output directory for tycho2.hrsc", false, "", "output_directory", cmd);
-    
+
+            CompactOutput compact;
+            cmd.setOutput(&compact);
+
             cmd.parse(argc, argv);
     
             fs::path input_dir = fs::path(input_arg.getValue());
