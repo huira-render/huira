@@ -12,6 +12,16 @@
 #include "huira/util/validate.hpp"
 
 namespace huira::units {
+    /**
+     * @brief Primary template for representing physical quantities with dimensions and scale
+     *
+     * @tparam Dim The dimensionality of the quantity (e.g., Length, Time, Mass)
+     * @tparam Scale The scale/ratio for unit conversion (e.g., std::kilo, std::milli) or a unit tag
+     *
+     * This class template provides type-safe representation of physical quantities with
+     * automatic unit conversion, dimensional analysis, and arithmetic operations.
+     * It stores values internally and provides conversion to SI units through the scale parameter.
+     */
     template<IsDimensionality Dim, IsRatioOrTag Scale>
     class Quantity {
     public:
@@ -50,18 +60,11 @@ namespace huira::units {
             return get_si_value();
         }
 
-        double get_si_value() const
-        {
-            return this->to_si(value_);
-        }
+        double get_si_value() const;
 
-        double value() const {
-            return value_;
-        }
+        double value() const;
 
-        double raw_value() const {
-            return value_;
-        }
+        double raw_value() const;
 
         template<IsRatioOrTag NewScale>
         Quantity<Dim, NewScale> as() const {
@@ -75,12 +78,7 @@ namespace huira::units {
             return Quantity<Dim, NewScale>(*this);
         }
 
-        std::string to_string() const
-        {
-            std::string output = std::to_string(get_si_value());
-            output += " " + Dim::to_si_string();
-            return output;
-        }
+        std::string to_string() const;
 
         // Addition (same dimension and scale)
         constexpr Quantity operator+(const Quantity& other) const {
@@ -179,6 +177,12 @@ namespace huira::units {
         }
     };
 
+    /**
+     * @brief Helper struct for multiplying two ratio types
+     *
+     * @tparam R1 First ratio type
+     * @tparam R2 Second ratio type
+     */
     template<typename R1, typename R2>
     struct ratio_multiply_impl {
         using type = std::ratio_multiply<R1, R2>;
@@ -187,6 +191,12 @@ namespace huira::units {
     template<typename R1, typename R2>
     using ratio_multiply = typename ratio_multiply_impl<R1, R2>::type;
 
+    /**
+     * @brief Helper struct for dividing two ratio types
+     *
+     * @tparam R1 Numerator ratio type
+     * @tparam R2 Denominator ratio type
+     */
     template<typename R1, typename R2>
     struct ratio_divide_impl {
         using type = std::ratio_divide<R1, R2>;
@@ -258,13 +268,8 @@ namespace huira::units {
     }
 
     template<IsDimensionality Dim, IsRatioOrTag Scale>
-    constexpr Quantity<Dim, Scale> operator*(double scalar, const Quantity<Dim, Scale>& quantity) {
-        return quantity * scalar;
-    }
-
-    template<IsDimensionality Dim, IsRatioOrTag Scale>
-    constexpr auto operator/(double scalar, const Quantity<Dim, Scale>& quantity) {
-        return Quantity<Dimensionless, std::ratio<1, 1>>(scalar) / quantity;
+    constexpr auto operator*(double scalar, const Quantity<Dim, Scale>& quantity) {
+        return Quantity<Dim, Scale>(quantity.raw_value() * scalar);
     }
 
     template<IsDimensionality Dim, IsRatioOrTag Scale1, IsRatioOrTag Scale2>
@@ -311,6 +316,7 @@ namespace huira::units {
         return lhs.get_si_value() >= rhs.get_si_value();
     }
 
+    // Unit tag declarations and specializations
     struct SiderealDayTag {};
     template<> struct is_unit_tag<SiderealDayTag> : std::true_type {};
     template<>
@@ -367,6 +373,14 @@ namespace huira::units {
     template <>
     constexpr double Quantity<Energy, ElectronVoltTag>::get_ratio() const { return 1.602176634e-19; }
 
+    /**
+     * @brief Partial specialization of Quantity for dimensionless quantities
+     *
+     * @tparam Scale The scale/ratio for the dimensionless quantity
+     *
+     * This specialization handles dimensionless quantities (ratios, percentages, etc.)
+     * and provides implicit conversion to double for convenience.
+     */
     template<IsRatioOrTag Scale>
     class Quantity<Dimensionless, Scale> {
     public:
@@ -399,17 +413,11 @@ namespace huira::units {
             return get_si_value();
         }
 
-        double get_si_value() const {
-            return this->to_si(value_);
-        }
+        double get_si_value() const;
 
-        double value() const {
-            return value_;
-        }
+        double value() const;
 
-        double raw_value() const {
-            return value_;
-        }
+        double raw_value() const;
 
         template<IsRatioOrTag NewScale>
         Quantity<Dimensionless, NewScale> as() const {
@@ -423,9 +431,7 @@ namespace huira::units {
             return Quantity<Dimensionless, NewScale>(*this);
         }
 
-        std::string to_string() const {
-            return std::to_string(get_si_value());
-        }
+        std::string to_string() const;
 
         constexpr Quantity operator+(const Quantity& other) const {
             return Quantity(value_ + other.value_);
@@ -508,3 +514,5 @@ namespace huira::units {
         }
     };
 }
+
+#include "huira_impl/core/units/quantity.ipp"

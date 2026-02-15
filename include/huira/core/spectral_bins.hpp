@@ -36,23 +36,13 @@ namespace huira {
         using const_iterator = typename std::array<float, N>::const_iterator;
 
         // Constructors
-        constexpr SpectralBins() { data_.fill(0.0f); }
-
-        explicit constexpr SpectralBins(const float& value) { data_.fill(value); }
-
-        constexpr SpectralBins(std::initializer_list<float> init) {
-            if (init.size() == 1) {
-                data_.fill(*init.begin());
-            } else {
-                std::copy(init.begin(),
-                    std::next(init.begin(), static_cast<std::ptrdiff_t>(std::min(init.size(), N))),
-                    data_.begin());
-            }
-        }
+        constexpr SpectralBins();
+        explicit constexpr SpectralBins(const float& value);
+        constexpr SpectralBins(std::initializer_list<float> init);
 
         template <typename... Args2>
             requires (sizeof...(Args2) == N && (std::convertible_to<Args2, float> && ...))
-        constexpr SpectralBins(Args2&&... args) : data_{ static_cast<float>(args)... } {}
+        constexpr SpectralBins(Args2&&... args);
 
         // Copy and move constructors
         constexpr SpectralBins(const SpectralBins&) = default;
@@ -61,6 +51,8 @@ namespace huira {
         // Assignment operators
         constexpr SpectralBins& operator=(const SpectralBins&) = default;
         constexpr SpectralBins& operator=(SpectralBins&&) = default;
+
+        bool valid() const;
 
         // Element access
         constexpr reference operator[](size_type pos) { return data_[pos]; }
