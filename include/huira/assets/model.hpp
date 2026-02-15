@@ -1,14 +1,14 @@
 #pragma once
 
+#include <cstdint>
 #include <filesystem>
 #include <memory>
 #include <string>
 #include <vector>
-#include <cstdint>
 
+#include "huira/assets/mesh.hpp"
 #include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/scene/frame_node.hpp"
-#include "huira/assets/mesh.hpp"
 #include "huira/scene/scene_object.hpp"
 
 namespace fs = std::filesystem;
@@ -22,19 +22,14 @@ namespace huira {
     class ModelLoader;
 
     /**
-     * @brief Represents a loaded 3D model with its own isolated scene graph.
+     * @brief Represents a loaded 3D model with its own isolated detached graph.
      *
-     * Model contains:
-     * - A root FrameNode representing the model's local coordinate system
-     * - A collection of Meshes owned by this model
-     * - The original file path for reference
-     *
-     * The Model's scene graph is disconnected from the main Scene graph.
-     * To place a Model into the Scene, use Instance<TSpectral> with a Model* reference.
-     *
-     * Usage:
-     *   auto model_handle = scene.load_model("path/to/model.obj");
-     *   auto instance = some_frame_handle.new_instance(model_handle.get());
+     * Model contains a root FrameNode representing the model's local coordinate system,
+     * a collection of Meshes owned by this model, and the original file path for reference.
+     * The Model's scene graph is disconnected from the main Scene graph. To place a Model
+     * into the Scene, use Instance with a Model reference.
+     * 
+     * @tparam TSpectral The spectral representation type.
      */
     template <IsSpectral TSpectral>
     class Model : public SceneObject<Model<TSpectral>, TSpectral> {
@@ -63,8 +58,7 @@ namespace huira {
         std::shared_ptr<FrameNode<TSpectral>> root_node_;
 
         void print_node_(const Node<TSpectral>* node, const std::string& prefix, bool is_last) const;
-
-        // ModelLoader needs access to populate the model
+        
         friend class ModelLoader<TSpectral>;
         friend class SceneView<TSpectral>;
     };
