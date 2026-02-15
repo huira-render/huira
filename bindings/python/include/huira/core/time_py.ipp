@@ -80,7 +80,7 @@ namespace huira {
 
             // Time + Second (and any unit that converts to Second)
             .def("__add__", [](const Time& self, const py::object& delta) -> Time {
-            double seconds = delta.attr("get_si_value")().cast<double>();
+            double seconds = delta.attr("to_si")().cast<double>();
             return self + units::Second(seconds);
                 }, py::arg("delta"),
                     "Add a time duration (Second, Minute, Hour, Day, etc.) to this Time")
@@ -93,7 +93,7 @@ namespace huira {
 
             // Time - Second -> Time
             .def("__sub__", [](const Time& self, const py::object& delta) -> Time {
-            double seconds = delta.attr("get_si_value")().cast<double>();
+            double seconds = delta.attr("to_si")().cast<double>();
             return self + units::Second(-seconds);
                 }, py::arg("delta"),
                     "Subtract a time duration from this Time")

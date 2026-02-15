@@ -26,6 +26,8 @@ namespace huira {
             const InstanceHandle<TSpectral>& camera_instance,
             ObservationMode obs_mode);
 
+        Time get_time() const { return time_; }
+
     private:
         void traverse_and_collect_(const std::shared_ptr<Node<TSpectral>>& node,
             const Time& t_obs, const Transform<double> obs_ssb, ObservationMode obs_mode);
@@ -51,6 +53,8 @@ namespace huira {
         std::vector<UnresolvedInstance<TSpectral>> unresolved_objects_;
 
         std::vector<Star<TSpectral>> stars_;
+
+        Time time_;
 
         friend class Renderer<TSpectral>;
     };

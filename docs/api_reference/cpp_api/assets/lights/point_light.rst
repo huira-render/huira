@@ -1,5 +1,5 @@
-PointLight
-==========
+Point Light
+===========
 
 .. doxygenclass:: huira::PointLight
    :members:

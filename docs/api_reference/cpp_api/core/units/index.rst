@@ -7,3 +7,4 @@ Units
    units
    dimensionality
    quantity
+   spectral_quantity

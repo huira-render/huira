@@ -176,7 +176,7 @@ namespace huira {
     /**
      * @brief Sets the scale using a Vec3.
      *
-     * @param s The 3D scale vector to set
+     * @param scale The 3D scale vector to set
      */
     template <IsSpectral TSpectral, typename TNode>
     void NodeHandle<TSpectral, TNode>::set_scale(const Vec3<double>& scale) const {
@@ -231,7 +231,7 @@ namespace huira {
     /**
      * @brief Sets the SPICE frame identifier.
      *
-     * @param spice_origin The SPICE frame string identifier
+     * @param spice_frame The SPICE frame string identifier
      */
     template <IsSpectral TSpectral, typename TNode>
     void NodeHandle<TSpectral, TNode>::set_spice_frame(const std::string& spice_frame) const
@@ -241,9 +241,10 @@ namespace huira {
 
 
     /**
-     * @brief Sets the SPICE frame identifier.
+     * @brief Sets the SPICE origin and frame identifiers.
      *
-     * @param spice_origin The SPICE frame string identifier
+     * @param spice_origin The SPICE origin string identifier
+     * @param spice_frame The SPICE frame string identifier
      */
     template <IsSpectral TSpectral, typename TNode>
     void NodeHandle<TSpectral, TNode>::set_spice(const std::string& spice_origin, const std::string& spice_frame) const {

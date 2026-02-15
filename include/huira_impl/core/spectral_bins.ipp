@@ -173,7 +173,7 @@ namespace huira {
     float SpectralBins<N, Args...>::integrate() const {
         float integral = 0.0f;
         for (std::size_t i = 0; i < N; ++i) {
-            float bin_width = (bins_[i].max_wavelength - bins_[i].min_wavelength);
+            float bin_width = static_cast<float>(bins_[i].max_wavelength - bins_[i].min_wavelength);
             integral += data_[i] * bin_width;
         }
         return integral;
@@ -206,12 +206,36 @@ namespace huira {
         return true;
     }
 
+    /**
+     * @brief Checks if all spectral values are valid albedo values.
+     *
+     * Validates that all values are between 0 and 1, not NaN, and not infinite.
+     *
+     * @return True if all values are valid abledo values.
+     */
+    template <std::size_t N, auto... Args>
+    bool SpectralBins<N, Args...>::valid_albedo() const
+    {
+        for (std::size_t i = 0; i < N; ++i) {
+            if (data_[i] < 0.f || data_[i] > 1.f) {
+                return false;
+            }
+            if (std::isnan(data_[i])) {
+                return false;
+            }
+            if (std::isinf(data_[i])) {
+                return false;
+            }
+        }
+        return true;
+    }
+
 
     // ========================================= //
     // === Array-Array Arithmetic Operations === //
     // ========================================= //
     template <std::size_t N, auto... Args>
-    constexpr SpectralBins<N, Args...>& SpectralBins<N, Args...>::operator+=(const SpectralBins<N, Args...>& other) {
+    constexpr SpectralBins<N, Args...>& SpectralBins<N, Args...>::operator+=(const SpectralBins& other) {
         for (std::size_t i = 0; i < N; ++i) {
             data_[i] += other.data_[i];
         }
@@ -219,7 +243,7 @@ namespace huira {
     }
 
     template <std::size_t N, auto... Args>
-    constexpr SpectralBins<N, Args...>& SpectralBins<N, Args...>::operator-=(const SpectralBins<N, Args...>& other) {
+    constexpr SpectralBins<N, Args...>& SpectralBins<N, Args...>::operator-=(const SpectralBins& other) {
         for (std::size_t i = 0; i < N; ++i) {
             data_[i] -= other.data_[i];
         }
@@ -227,7 +251,7 @@ namespace huira {
     }
 
     template <std::size_t N, auto... Args>
-    constexpr SpectralBins<N, Args...>& SpectralBins<N, Args...>::operator*=(const SpectralBins<N, Args...>& other) {
+    constexpr SpectralBins<N, Args...>& SpectralBins<N, Args...>::operator*=(const SpectralBins& other) {
         for (std::size_t i = 0; i < N; ++i) {
             data_[i] *= other.data_[i];
         }
@@ -235,7 +259,7 @@ namespace huira {
     }
 
     template <std::size_t N, auto... Args>
-    constexpr SpectralBins<N, Args...>& SpectralBins<N, Args...>::operator/=(const SpectralBins<N, Args...>& other) {
+    constexpr SpectralBins<N, Args...>& SpectralBins<N, Args...>::operator/=(const SpectralBins& other) {
         for (std::size_t i = 0; i < N; ++i) {
             data_[i] /= other.data_[i];
         }

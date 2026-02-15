@@ -23,6 +23,8 @@ namespace py = pybind11;
 
 template <huira::IsSpectral TSpectral>
 inline void bind_spectral(py::module_& m) {
+    huira::bind_spectral_units_for_type<TSpectral>(m);
+
     huira::bind_spectral_bins<TSpectral>(m);
 
     huira::bind_camera_model_handle<TSpectral>(m);
