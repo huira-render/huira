@@ -3,6 +3,7 @@
 #include <ratio>
 
 #include "huira/core/units/quantity.hpp"
+#include "huira/core/units/spectral_quantity.hpp"
 
 /**
  * @file units.hpp
@@ -163,6 +164,11 @@ namespace huira::units {
     using Kilowatt = Quantity<Power, std::kilo>;
     using Megawatt = Quantity<Power, std::mega>;
     using Gigawatt = Quantity<Power, std::giga>;
+
+    template <IsSpectral T> using SpectralWatts = SpectralQuantity<Power, std::ratio<1, 1>, T>;
+    template <IsSpectral T> using SpectralKilowatts = SpectralQuantity<Power, std::kilo, T>;
+    template <IsSpectral T> using SpectralMegawatts = SpectralQuantity<Power, std::mega, T>;
+    template <IsSpectral T> using SpectralGigawatts = SpectralQuantity<Power, std::giga, T>;
     /// @}
 
 
@@ -177,6 +183,8 @@ namespace huira::units {
     using WattsPerMeterSquaredSteradian = Quantity<Radiance, std::ratio<1, 1>>;
     using WattsPerMeterSquared = Quantity<Irradiance, std::ratio<1, 1>>;
     using WattsPerSteradian = Quantity<RadiantIntensity, std::ratio<1, 1>>;
+
+    template <IsSpectral T> using SpectralWattsPerMeterSquared = SpectralQuantity<Irradiance, std::ratio<1, 1>, T>;
     /// @}
 
 

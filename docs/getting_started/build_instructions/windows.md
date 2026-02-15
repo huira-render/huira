@@ -44,9 +44,10 @@ conda activate huira_env
 ### Step 3: Compilation Process
 ```powershell
 mkdir build && cd build
-cmake -DCMAKE_TOOLCHAIN_FILE="../cmake/conda-toolchain.cmake" ../
+cmake -D CMAKE_TOOLCHAIN_FILE="../cmake/conda-toolchain.cmake" ../
 cmake --build . --config Release -j
 ```
+NOTE: If you are using bash shell, you may not need the space between `-D` and `CMAKE_TOOLCHAIN_FILE`.
 
 ### Step 4: Environment Installation (Optional)
 After successful compilation, integrate *Huira* into your conda environment:
@@ -72,9 +73,11 @@ cd C:\vcpkg
 ### Compilation Steps:
 ```powershell
 mkdir build && cd build
-cmake -DCMAKE_TOOLCHAIN_FILE="C:/vcpkg/scripts/buildsystems/vcpkg.cmake" ../
+cmake -D CMAKE_TOOLCHAIN_FILE="C:/vcpkg/scripts/buildsystems/vcpkg.cmake" ../
 cmake --build . --config Release -j
 ```
+
+NOTE: If you are using bash shell, you may not need the space between `-D` and `CMAKE_TOOLCHAIN_FILE`.
 
 ***
 

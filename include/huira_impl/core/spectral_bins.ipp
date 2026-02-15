@@ -5,9 +5,65 @@
 #include "huira/core/physics.hpp"
 
 namespace huira {
-    // ======================== //
+    // ==================== //
+    // === Constructors === //
+    // ==================== //
+    template <std::size_t N, auto... Args>
+    constexpr SpectralBins<N, Args...>::SpectralBins()
+    {
+        data_.fill(0.0f);
+    }
+
+    template <std::size_t N, auto... Args>
+    constexpr SpectralBins<N, Args...>::SpectralBins(const float& value)
+    {
+        data_.fill(value);
+    }
+
+    template <std::size_t N, auto... Args>
+    constexpr SpectralBins<N, Args...>::SpectralBins(std::initializer_list<float> init)
+    {
+        if (init.size() == 1) {
+            data_.fill(*init.begin());
+        }
+        else {
+            std::copy(init.begin(),
+                std::next(init.begin(), static_cast<std::ptrdiff_t>(std::min(init.size(), N))),
+                data_.begin());
+        }
+    }
+
+    template <std::size_t N, auto... Args>
+    template <typename... Args2>
+        requires (sizeof...(Args2) == N && (std::convertible_to<Args2, float> && ...))
+    constexpr SpectralBins<N, Args...>::SpectralBins(Args2&&... args)
+        : data_{ static_cast<float>(args)... }
+    {
+        
+    }
+
+    template <std::size_t N, auto... Args>
+    bool SpectralBins<N, Args...>::valid() const
+    {
+        for (std::size_t i = 0; i < N; ++i) {
+            if (data_[i] < 0.f) {
+                return false;
+            }
+
+            if (std::isnan(data_[i])) {
+                return false;
+            }
+
+            if (std::isinf(data_[i])) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    // ========================= //
     // === Static Definition === //
-    // ======================== //
+    // ========================= //
     template <std::size_t N, auto... Args>
     std::array<Bin, N> SpectralBins<N, Args...>::bins_ = SpectralBins<N, Args...>::initialize_bins_static_();
 
