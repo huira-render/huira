@@ -39,7 +39,7 @@ namespace huira::units {
         template<IsRatioOrTag OtherScale>
         constexpr Quantity(const Quantity<Dim, OtherScale>& other)
         {
-            value_ = this->from_si(other.get_si_value());
+            value_ = this->from_si(other.to_si());
         }
 
         // Default constructor
@@ -57,10 +57,10 @@ namespace huira::units {
         constexpr operator double() const
             requires std::is_same_v<Dim, Dimensionless>
         {
-            return get_si_value();
+            return to_si();
         }
 
-        double get_si_value() const;
+        double to_si() const;
 
         double value() const;
 
@@ -247,7 +247,7 @@ namespace huira::units {
     constexpr auto operator*(const Quantity<Dim1, Scale1>& lhs, const Quantity<Dim2, Scale2>& rhs) {
         using ResultDim = decltype(Dim1{}* Dim2{});
         if constexpr (involves_tag_v<Scale1, Scale2>) {
-            return Quantity<ResultDim, std::ratio<1, 1>>(lhs.get_si_value() * rhs.get_si_value());
+            return Quantity<ResultDim, std::ratio<1, 1>>(lhs.to_si() * rhs.to_si());
         }
         else {
             using ResultScale = ratio_multiply<Scale1, Scale2>;
@@ -259,7 +259,7 @@ namespace huira::units {
     constexpr auto operator/(const Quantity<Dim1, Scale1>& lhs, const Quantity<Dim2, Scale2>& rhs) {
         using ResultDim = decltype(Dim1{} / Dim2{});
         if constexpr (involves_tag_v<Scale1, Scale2>) {
-            return Quantity<ResultDim, std::ratio<1, 1>>(lhs.get_si_value() / rhs.get_si_value());
+            return Quantity<ResultDim, std::ratio<1, 1>>(lhs.to_si() / rhs.to_si());
         }
         else {
             using ResultScale = ratio_divide<Scale1, Scale2>;
@@ -288,32 +288,32 @@ namespace huira::units {
 
     template<IsDimensionality Dim, IsRatioOrTag Scale1, IsRatioOrTag Scale2>
     constexpr bool operator==(const Quantity<Dim, Scale1>& lhs, const Quantity<Dim, Scale2>& rhs) {
-        return lhs.get_si_value() == rhs.get_si_value();
+        return lhs.to_si() == rhs.to_si();
     }
 
     template<IsDimensionality Dim, IsRatioOrTag Scale1, IsRatioOrTag Scale2>
     constexpr bool operator!=(const Quantity<Dim, Scale1>& lhs, const Quantity<Dim, Scale2>& rhs) {
-        return lhs.get_si_value() != rhs.get_si_value();
+        return lhs.to_si() != rhs.to_si();
     }
 
     template<IsDimensionality Dim, IsRatioOrTag Scale1, IsRatioOrTag Scale2>
     constexpr bool operator<(const Quantity<Dim, Scale1>& lhs, const Quantity<Dim, Scale2>& rhs) {
-        return lhs.get_si_value() < rhs.get_si_value();
+        return lhs.to_si() < rhs.to_si();
     }
 
     template<IsDimensionality Dim, IsRatioOrTag Scale1, IsRatioOrTag Scale2>
     constexpr bool operator>(const Quantity<Dim, Scale1>& lhs, const Quantity<Dim, Scale2>& rhs) {
-        return lhs.get_si_value() > rhs.get_si_value();
+        return lhs.to_si() > rhs.to_si();
     }
 
     template<IsDimensionality Dim, IsRatioOrTag Scale1, IsRatioOrTag Scale2>
     constexpr bool operator<=(const Quantity<Dim, Scale1>& lhs, const Quantity<Dim, Scale2>& rhs) {
-        return lhs.get_si_value() <= rhs.get_si_value();
+        return lhs.to_si() <= rhs.to_si();
     }
 
     template<IsDimensionality Dim, IsRatioOrTag Scale1, IsRatioOrTag Scale2>
     constexpr bool operator>=(const Quantity<Dim, Scale1>& lhs, const Quantity<Dim, Scale2>& rhs) {
-        return lhs.get_si_value() >= rhs.get_si_value();
+        return lhs.to_si() >= rhs.to_si();
     }
 
     // Unit tag declarations and specializations
@@ -398,7 +398,7 @@ namespace huira::units {
         template<IsRatioOrTag OtherScale>
         constexpr Quantity(const Quantity<Dimensionless, OtherScale>& other)
         {
-            value_ = this->from_si(other.get_si_value());
+            value_ = this->from_si(other.to_si());
         }
 
         constexpr Quantity() : value_(0.0) {}
@@ -410,10 +410,10 @@ namespace huira::units {
         }
 
         constexpr operator double() const {
-            return get_si_value();
+            return to_si();
         }
 
-        double get_si_value() const;
+        double to_si() const;
 
         double value() const;
 

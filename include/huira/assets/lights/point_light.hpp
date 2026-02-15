@@ -2,16 +2,26 @@
 
 #include <optional>
 
-#include "huira/core/types.hpp"
-#include "huira/core/constants.hpp"
-#include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/assets/lights/light.hpp"
+#include "huira/core/concepts/spectral_concepts.hpp"
+#include "huira/core/constants.hpp"
+#include "huira/core/types.hpp"
+#include "huira/core/units/units.hpp"
 
 namespace huira {
+    /**
+     * @brief A point light source that emits light uniformly in all directions.
+     * 
+     * Point lights are infinitesimally small light sources located at a single point
+     * in space. The irradiance falls off with the inverse square of the distance.
+     * 
+     * @tparam TSpectral The spectral representation type.
+     */
     template <IsSpectral TSpectral>
     class PointLight : public Light<TSpectral> {
     public:
-        PointLight(const TSpectral& spectral_power) : intensity_{ spectral_power / (4.f * PI<float>())} {}
+        PointLight(const units::SpectralWatts<TSpectral>& spectral_power);
+        PointLight(const units::Watt& total_power);
 
         PointLight(const PointLight&) = delete;
         PointLight& operator=(const PointLight&) = delete;
@@ -35,12 +45,12 @@ namespace huira {
 
         LightType get_type() const override { return LightType::Point; }
         std::string type() const override { return "PointLight"; }
-        
-        void set_intensity(const TSpectral& intensity) { intensity_ = intensity; }
 
+        void set_spectral_power(const units::SpectralWatts<TSpectral>& spectral_power);
+        void set_spectral_power(const units::Watt& total_power);
 
     private:
-        TSpectral intensity_{ 0 };
+        TSpectral irradiance_{ 0 };
     };
 }
 

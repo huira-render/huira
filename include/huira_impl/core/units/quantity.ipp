@@ -10,7 +10,7 @@ namespace huira::units {
      * by applying the appropriate scale conversion.
      */
     template<IsDimensionality Dim, IsRatioOrTag Scale>
-    double Quantity<Dim, Scale>::get_si_value() const
+    double Quantity<Dim, Scale>::to_si() const
     {
         return this->to_si(value_);
     }
@@ -59,7 +59,7 @@ namespace huira::units {
     template<IsDimensionality Dim, IsRatioOrTag Scale>
     std::string Quantity<Dim, Scale>::to_string() const
     {
-        std::string output = std::to_string(get_si_value());
+        std::string output = std::to_string(to_si());
         output += " " + Dim::to_si_string();
         return output;
     }
@@ -78,7 +78,7 @@ namespace huira::units {
      * the scale factor.
      */
     template<IsRatioOrTag Scale>
-    double Quantity<Dimensionless, Scale>::get_si_value() const
+    double Quantity<Dimensionless, Scale>::to_si() const
     {
         return this->to_si(value_);
     }
@@ -124,7 +124,7 @@ namespace huira::units {
     template<IsRatioOrTag Scale>
     std::string Quantity<Dimensionless, Scale>::to_string() const
     {
-        return std::to_string(get_si_value());
+        return std::to_string(to_si());
     }
 
 }

@@ -29,7 +29,7 @@ namespace huira {
             "Implicit conversion to SI base unit when passed to functions.\n\n"
             "Example:\n"
             "    >>> x = huira." + name + "(1.0)\n"
-            "    >>> x.get_si_value()\n";
+            "    >>> x.to_si()\n";
 
         py::class_<UnitType>(m, name.c_str(), class_doc.c_str())
             .def(py::init<>(), "Default constructor (value = 0).")
@@ -50,7 +50,7 @@ namespace huira {
             // Cross-unit addition
             .def("__add__", [](const UnitType& self, const py::object& other) -> UnitType {
                 double other_si = other.attr("get_si_value")().cast<double>();
-                double result_si = self.get_si_value() + other_si;
+                double result_si = self.to_si() + other_si;
                 using SIUnit = huira::units::Quantity<Dim, std::ratio<1,1>>;
                 SIUnit si_result(result_si);
                 return UnitType(si_result);
@@ -58,7 +58,7 @@ namespace huira {
             "Add another unit of the same dimension. Result is in this unit's scale.")
             .def("__sub__", [](const UnitType& self, const py::object& other) -> UnitType {
                 double other_si = other.attr("get_si_value")().cast<double>();
-                double result_si = self.get_si_value() - other_si;
+                double result_si = self.to_si() - other_si;
                 using SIUnit = huira::units::Quantity<Dim, std::ratio<1,1>>;
                 SIUnit si_result(result_si);
                 return UnitType(si_result);
@@ -74,19 +74,19 @@ namespace huira {
             .def(double() * py::self, "Multiply a scalar by this unit.")
             // Cross-unit comparison via SI values
             .def("__eq__", [](const UnitType& self, const py::object& other) {
-                return self.get_si_value() == other.attr("get_si_value")().cast<double>();
+                return self.to_si() == other.attr("get_si_value")().cast<double>();
             }, py::arg("other"), "Equal comparison via SI values.")
             .def("__lt__", [](const UnitType& self, const py::object& other) {
-                return self.get_si_value() < other.attr("get_si_value")().cast<double>();
+                return self.to_si() < other.attr("get_si_value")().cast<double>();
             }, py::arg("other"), "Less-than comparison via SI values.")
             .def("__le__", [](const UnitType& self, const py::object& other) {
-                return self.get_si_value() <= other.attr("get_si_value")().cast<double>();
+                return self.to_si() <= other.attr("get_si_value")().cast<double>();
             }, py::arg("other"), "Less-or-equal comparison via SI values.")
             .def("__gt__", [](const UnitType& self, const py::object& other) {
-                return self.get_si_value() > other.attr("get_si_value")().cast<double>();
+                return self.to_si() > other.attr("get_si_value")().cast<double>();
             }, py::arg("other"), "Greater-than comparison via SI values.")
             .def("__ge__", [](const UnitType& self, const py::object& other) {
-                return self.get_si_value() >= other.attr("get_si_value")().cast<double>();
+                return self.to_si() >= other.attr("get_si_value")().cast<double>();
             }, py::arg("other"), "Greater-or-equal comparison via SI values.");
     }
 

@@ -1,22 +1,26 @@
+
 #include <cmath>
-#include <iostream>
-#include <tuple>
+#include <string>
 
-#include <assimp/Importer.hpp>
-#include <assimp/scene.h>
-#include <assimp/postprocess.h>
+#include "assimp/Importer.hpp"
+#include "assimp/postprocess.h"
+#include "assimp/scene.h"
 
-#include "huira/core/types.hpp"
 #include "huira/core/rotation.hpp"
+#include "huira/core/types.hpp"
 #include "huira/util/logger.hpp"
 
 namespace huira {
     /**
-     * @brief Load a 3D model from file.
+     * @brief Load a 3D model from file and add it to the scene.
      *
+     * Loads the model using ASSIMP, converts meshes and node hierarchy, and attaches the model to the scene.
+     *
+     * @param scene Reference to the scene to add the model to
      * @param file_path Path to the model file
+     * @param name Name for the model (optional)
      * @param post_process_flags ASSIMP post-processing flags (optional)
-     * @return A unique_ptr to the loaded Model
+     * @return Shared pointer to the loaded Model
      * @throws ModelLoadException if loading fails
      */
     template <IsSpectral TSpectral>
@@ -28,7 +32,7 @@ namespace huira {
     ) {
         // Validate file exists
         if (!fs::exists(file_path)) {
-            HUIRA_THROW_ERROR("ModelLoader: File not found: " + file_path.string());
+            HUIRA_THROW_ERROR("ModelLoader::load - File not found: " + file_path.string());
         }
 
         // Create ASSIMP importer
@@ -43,12 +47,12 @@ namespace huira {
         // Check for errors
         if (!ai_scene || ai_scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !ai_scene->mRootNode) {
             HUIRA_THROW_ERROR(
-                "ASSIMP error loading '" + file_path.string() + "': " +
+                "ModelLoader::load - ASSIMP error loading '" + file_path.string() + "': " +
                 std::string(importer.GetErrorString())
             );
         }
 
-        HUIRA_LOG_INFO("Loading model: " + file_path.string());
+        HUIRA_LOG_INFO("ModelLoader::load - Loading " + file_path.string());
         HUIRA_LOG_INFO("  - Meshes: " + std::to_string(ai_scene->mNumMeshes));
         HUIRA_LOG_INFO("  - Materials: " + std::to_string(ai_scene->mNumMaterials));
         HUIRA_LOG_INFO("  - Textures: " + std::to_string(ai_scene->mNumTextures));
@@ -112,17 +116,21 @@ namespace huira {
                 MeshHandle<TSpectral> mesh_handle = it->second;
                 shared_model->root_node_->new_instance(mesh_handle.get_shared().get());
             } else {
-                HUIRA_LOG_ERROR("Mesh index " + std::to_string(mesh_index) + " not found in mesh map");
+                HUIRA_LOG_ERROR("ModelLoader::load - Mesh index " + std::to_string(mesh_index) + " not found in mesh map");
             }
         }
 
-        HUIRA_LOG_INFO("Model loaded successfully: " + shared_model->get_info());
+        HUIRA_LOG_INFO("ModelLoader::load - Model loaded successfully: " + shared_model->get_info());
 
         return shared_model;
     }
 
     /**
      * @brief Process all meshes in the ASSIMP scene and create huira Mesh objects.
+     *
+     * Iterates through all meshes in the ASSIMP scene, converts them, and stores them in the loading context.
+     *
+     * @param ctx Loading context
      */
     template <IsSpectral TSpectral>
     void ModelLoader<TSpectral>::process_meshes_(LoadContext& ctx) {
@@ -132,7 +140,7 @@ namespace huira {
             auto mesh_handle = convert_mesh_(ai_mesh, ctx);
             ctx.mesh_map.emplace(i, mesh_handle);
 
-            HUIRA_LOG_DEBUG("ModelLoader - Processed mesh " + std::to_string(i) + ": " +
+            HUIRA_LOG_DEBUG("ModelLoader::process_meshes_ - Processed mesh " + std::to_string(i) + ": " +
                            std::string(ai_mesh->mName.C_Str()) +
                            " (" + std::to_string(ai_mesh->mNumVertices) + " vertices, " +
                            std::to_string(ai_mesh->mNumFaces) + " faces)");
@@ -141,6 +149,12 @@ namespace huira {
 
     /**
      * @brief Convert a single ASSIMP mesh to a huira Mesh.
+     *
+     * Converts the given ASSIMP mesh to a huira Mesh, including vertex and index buffers.
+     *
+     * @param ai_mesh ASSIMP mesh pointer
+     * @param ctx Loading context
+     * @return Mesh handle for the converted mesh
      */
     template <IsSpectral TSpectral>
     MeshHandle<TSpectral> ModelLoader<TSpectral>::convert_mesh_(
@@ -220,8 +234,10 @@ namespace huira {
     /**
      * @brief Recursively process ASSIMP nodes and build the scene graph.
      *
-     * @param ai_node The current ASSIMP node
-     * @param parent_frame The parent FrameNode in our scene graph
+     * Creates FrameNodes for each ASSIMP node, applies transforms, and attaches mesh instances.
+     *
+     * @param ai_node Current ASSIMP node
+     * @param parent_frame Parent FrameNode in the scene graph
      * @param ctx Loading context
      */
     template <IsSpectral TSpectral>
@@ -235,8 +251,7 @@ namespace huira {
         auto child = child_weak.lock();
 
         if (!child) {
-            HUIRA_LOG_ERROR("Failed to create child FrameNode");
-            return;
+            HUIRA_THROW_ERROR("ModelLoader::process_node_ - Failed to create child FrameNode");
         }
 
         // Apply the node's transformation
@@ -256,10 +271,10 @@ namespace huira {
                 if (mesh_ptr) {
                     child->new_instance(mesh_ptr);
                 } else {
-                    HUIRA_LOG_ERROR("MeshHandle for mesh index " + std::to_string(mesh_index) + " is invalid");
+                    HUIRA_THROW_ERROR("ModelLoader::process_node_ - MeshHandle for mesh index " + std::to_string(mesh_index) + " is invalid");
                 }
             } else {
-                HUIRA_LOG_ERROR("Mesh index " + std::to_string(mesh_index) + " not found in mesh map");
+                HUIRA_THROW_ERROR("ModelLoader::process_node_ - Mesh index " + std::to_string(mesh_index) + " not found in mesh map");
             }
         }
 
@@ -270,7 +285,12 @@ namespace huira {
     }
 
     /**
-     * @brief Convert ASSIMP's 4x4 matrix to our Transform.
+     * @brief Convert ASSIMP's 4x4 matrix to huira Transform.
+     *
+     * Decomposes the ASSIMP matrix into position, rotation, and scale components.
+     *
+     * @param m ASSIMP 4x4 matrix
+     * @return Transform object
      */
     template <IsSpectral TSpectral>
     Transform<double> ModelLoader<TSpectral>::convert_transform_(const aiMatrix4x4& m) {
@@ -321,7 +341,12 @@ namespace huira {
     }
 
     /**
-     * @brief Convert ASSIMP's 3D vector to our Vec3.
+     * @brief Convert ASSIMP's 3D vector to huira Vec3.
+     *
+     * Converts the ASSIMP vector to a huira Vec3.
+     *
+     * @param v ASSIMP 3D vector
+     * @return Vec3 object
      */
     template <IsSpectral TSpectral>
     Vec3<double> ModelLoader<TSpectral>::convert_vec3_(const aiVector3D& v) {
