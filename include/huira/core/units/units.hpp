@@ -160,11 +160,13 @@ namespace huira::units {
 
     /// @defgroup power_units Power Units
     /// @{
+    using Milliwatt = Quantity<Power, std::milli>;
     using Watt = Quantity<Power, std::ratio<1, 1>>;
     using Kilowatt = Quantity<Power, std::kilo>;
     using Megawatt = Quantity<Power, std::mega>;
     using Gigawatt = Quantity<Power, std::giga>;
 
+    template <IsSpectral T> using SpectralMilliwatts = SpectralQuantity<Power, std::milli, T>;
     template <IsSpectral T> using SpectralWatts = SpectralQuantity<Power, std::ratio<1, 1>, T>;
     template <IsSpectral T> using SpectralKilowatts = SpectralQuantity<Power, std::kilo, T>;
     template <IsSpectral T> using SpectralMegawatts = SpectralQuantity<Power, std::mega, T>;
@@ -209,8 +211,8 @@ namespace huira::units {
      */
     namespace literals {
         // Length literals
-        constexpr Kilometer operator""_km(unsigned long long value) { return Kilometer(static_cast<double>(value)); }
-        constexpr Kilometer operator""_km(long double value) { return Kilometer(static_cast<double>(value)); }
+        constexpr Kilometer operator""_Km(unsigned long long value) { return Kilometer(static_cast<double>(value)); }
+        constexpr Kilometer operator""_Km(long double value) { return Kilometer(static_cast<double>(value)); }
         constexpr Meter operator""_m(unsigned long long value) { return Meter(static_cast<double>(value)); }
         constexpr Meter operator""_m(long double value) { return Meter(static_cast<double>(value)); }
         constexpr Centimeter operator""_cm(unsigned long long value) { return Centimeter(static_cast<double>(value)); }
@@ -233,8 +235,8 @@ namespace huira::units {
         constexpr Mile operator""_mi(long double value) { return Mile(static_cast<double>(value)); }
 
         // Mass literals
-        constexpr Kilogram operator""_kg(unsigned long long value) { return Kilogram(static_cast<double>(value)); }
-        constexpr Kilogram operator""_kg(long double value) { return Kilogram(static_cast<double>(value)); }
+        constexpr Kilogram operator""_Kg(unsigned long long value) { return Kilogram(static_cast<double>(value)); }
+        constexpr Kilogram operator""_Kg(long double value) { return Kilogram(static_cast<double>(value)); }
         constexpr Gram operator""_g(unsigned long long value) { return Gram(static_cast<double>(value)); }
         constexpr Gram operator""_g(long double value) { return Gram(static_cast<double>(value)); }
         constexpr Milligram operator""_mg(unsigned long long value) { return Milligram(static_cast<double>(value)); }
@@ -273,24 +275,26 @@ namespace huira::units {
         // Energy literals
         constexpr Joule operator""_J(unsigned long long value) { return Joule(static_cast<double>(value)); }
         constexpr Joule operator""_J(long double value) { return Joule(static_cast<double>(value)); }
-        constexpr Kilojoule operator""_kJ(unsigned long long value) { return Kilojoule(static_cast<double>(value)); }
-        constexpr Kilojoule operator""_kJ(long double value) { return Kilojoule(static_cast<double>(value)); }
+        constexpr Kilojoule operator""_KJ(unsigned long long value) { return Kilojoule(static_cast<double>(value)); }
+        constexpr Kilojoule operator""_KJ(long double value) { return Kilojoule(static_cast<double>(value)); }
         constexpr ElectronVolt operator""_eV(unsigned long long value) { return ElectronVolt(static_cast<double>(value)); }
         constexpr ElectronVolt operator""_eV(long double value) { return ElectronVolt(static_cast<double>(value)); }
 
         // Power literals
+        constexpr Milliwatt operator""_mW(unsigned long long value) { return Milliwatt(static_cast<double>(value)); }
+        constexpr Milliwatt operator""_mW(long double value) { return Milliwatt(static_cast<double>(value)); }
         constexpr Watt operator""_W(unsigned long long value) { return Watt(static_cast<double>(value)); }
         constexpr Watt operator""_W(long double value) { return Watt(static_cast<double>(value)); }
-        constexpr Kilowatt operator""_kW(unsigned long long value) { return Kilowatt(static_cast<double>(value)); }
-        constexpr Kilowatt operator""_kW(long double value) { return Kilowatt(static_cast<double>(value)); }
+        constexpr Kilowatt operator""_KW(unsigned long long value) { return Kilowatt(static_cast<double>(value)); }
+        constexpr Kilowatt operator""_KW(long double value) { return Kilowatt(static_cast<double>(value)); }
         constexpr Megawatt operator""_MW(unsigned long long value) { return Megawatt(static_cast<double>(value)); }
         constexpr Megawatt operator""_MW(long double value) { return Megawatt(static_cast<double>(value)); }
 
         // Frequency literals
         constexpr Hertz operator""_Hz(unsigned long long value) { return Hertz(static_cast<double>(value)); }
         constexpr Hertz operator""_Hz(long double value) { return Hertz(static_cast<double>(value)); }
-        constexpr Kilohertz operator""_kHz(unsigned long long value) { return Kilohertz(static_cast<double>(value)); }
-        constexpr Kilohertz operator""_kHz(long double value) { return Kilohertz(static_cast<double>(value)); }
+        constexpr Kilohertz operator""_KHz(unsigned long long value) { return Kilohertz(static_cast<double>(value)); }
+        constexpr Kilohertz operator""_KHz(long double value) { return Kilohertz(static_cast<double>(value)); }
         constexpr Megahertz operator""_MHz(unsigned long long value) { return Megahertz(static_cast<double>(value)); }
         constexpr Megahertz operator""_MHz(long double value) { return Megahertz(static_cast<double>(value)); }
         constexpr Gigahertz operator""_GHz(unsigned long long value) { return Gigahertz(static_cast<double>(value)); }

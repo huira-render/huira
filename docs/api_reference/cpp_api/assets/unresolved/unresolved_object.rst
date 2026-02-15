@@ -1,7 +1,7 @@
-Simple RGB Sensor
+Unresolved Object
 =================
 
-.. doxygenclass:: huira::SimpleRGBSensor
+.. doxygenclass:: huira::UnresolvedObject
    :members:
    :undoc-members:
    :protected-members:

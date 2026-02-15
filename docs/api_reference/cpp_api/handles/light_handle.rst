@@ -1,7 +1,7 @@
-Camera Model
+Light Handle
 ============
 
-.. doxygenclass:: huira::CameraModel
+.. doxygenclass:: huira::LightHandle
    :members:
    :undoc-members:
    :protected-members:

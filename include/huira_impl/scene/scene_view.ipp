@@ -15,6 +15,7 @@ namespace huira {
         const Time& t_obs,
         const InstanceHandle<TSpectral>& camera_instance,
         ObservationMode obs_mode)
+        : time_{ t_obs }
     {
         auto camera_node = camera_instance.get();
 

@@ -126,7 +126,14 @@ namespace huira {
     }
 
     template <IsSpectral TSpectral>
-    UnresolvedObjectHandle<TSpectral> Scene<TSpectral>::new_unresolved_object(TSpectral irradiance, std::string name)
+    UnresolvedObjectHandle<TSpectral> Scene<TSpectral>::new_unresolved_object(const units::SpectralWattsPerMeterSquared<TSpectral>& spectral_irradiance, std::string name)
+    {
+        auto unresolved_shared = std::make_shared<UnresolvedObject<TSpectral>>(spectral_irradiance);
+        return add_unresolved_object(unresolved_shared, name);
+    }
+
+    template <IsSpectral TSpectral>
+    UnresolvedObjectHandle<TSpectral> Scene<TSpectral>::new_unresolved_object(const units::WattsPerMeterSquared& irradiance, std::string name)
     {
         auto unresolved_shared = std::make_shared<UnresolvedObject<TSpectral>>(irradiance);
         return add_unresolved_object(unresolved_shared, name);
@@ -142,12 +149,20 @@ namespace huira {
     UnresolvedObjectHandle<TSpectral> Scene<TSpectral>::new_unresolved_object_from_magnitude(double visual_magnitude, TSpectral albedo, std::string name)
     {
         TSpectral irradiance = visual_magnitude_to_irradiance<TSpectral>(visual_magnitude, albedo);
-        return this->new_unresolved_object(irradiance, name);
+        units::SpectralWattsPerMeterSquared<TSpectral> irradiance_watts(irradiance);
+        return this->new_unresolved_object(irradiance_watts, name);
     }
 
 
     template <IsSpectral TSpectral>
-    UnresolvedObjectHandle<TSpectral> Scene<TSpectral>::new_unresolved_emitter(TSpectral power, std::string name)
+    UnresolvedObjectHandle<TSpectral> Scene<TSpectral>::new_unresolved_emitter(const units::SpectralWatts<TSpectral>& spectral_power, std::string name)
+    {
+        auto unresolved_shared = std::make_shared<UnresolvedEmitter<TSpectral>>(spectral_power);
+        return add_unresolved_object(unresolved_shared, name);
+    }
+
+    template <IsSpectral TSpectral>
+    UnresolvedObjectHandle<TSpectral> Scene<TSpectral>::new_unresolved_emitter(const units::Watt& power, std::string name)
     {
         auto unresolved_shared = std::make_shared<UnresolvedEmitter<TSpectral>>(power);
         return add_unresolved_object(unresolved_shared, name);

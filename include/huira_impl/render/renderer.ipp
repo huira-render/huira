@@ -138,7 +138,7 @@ namespace huira {
         }
         for (const auto& instance : scene_view.unresolved_objects_) {
             items.push_back({ instance.transform.position,
-                              instance.unresolved_object->get_irradiance(),
+                              instance.unresolved_object->get_irradiance(scene_view.get_time()),
                               full_radius });
         }
 

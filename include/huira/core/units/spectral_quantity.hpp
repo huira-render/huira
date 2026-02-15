@@ -17,7 +17,7 @@ namespace huira::units {
      * with a physical dimensionality and scale, providing compile-time unit safety
      * for spectral data.
      *
-     * @section usage_examples Usage Examples
+     * @section spectral_quantity_usage_examples Usage Examples
      *
      * @code{.cpp}
      * using TSpectral = huira::RGB;

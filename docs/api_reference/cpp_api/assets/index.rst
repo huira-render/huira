@@ -8,6 +8,8 @@ Assets
 
    lights/index
 
+   unresolved/index
+
    mesh
    model
-   unresolved_object
+   

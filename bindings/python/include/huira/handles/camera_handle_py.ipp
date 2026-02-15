@@ -4,20 +4,11 @@
 #include "pybind11/stl.h"
 
 #include "huira/handles/camera_handle.hpp"
+#include "huira/core/units/units_py.ipp"
 
 namespace py = pybind11;
 
 namespace huira {
-    namespace detail {
-        template <typename UnitType>
-        UnitType unit_from_py(const py::object& obj) {
-            double val = obj.attr("get_si_value")().cast<double>();
-            using Dim = typename UnitType::dimension_type;
-            using SIUnit = units::Quantity<Dim, std::ratio<1, 1>>;
-            return UnitType(SIUnit(val));
-        }
-    }
-
     template <typename TSpectral>
     inline void bind_camera_model_handle(py::module_& m) {
         using HandleType = CameraModelHandle<TSpectral>;

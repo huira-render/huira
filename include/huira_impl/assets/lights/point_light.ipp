@@ -32,12 +32,12 @@ namespace huira {
      * representing uniform emission over a sphere, and that irradiance is then
      * spread proportionally across all spectral bins. The input must be real and non-negative.
      *
-     * @param spectral_power The total spectral power emitted by the light source.
+     * @param power The total spectral power emitted by the light source.
      */
     template <IsSpectral TSpectral>
-    PointLight<TSpectral>::PointLight(const units::Watt& total_power)
+    PointLight<TSpectral>::PointLight(const units::Watt& power)
     {
-        this->set_spectral_power(total_power);
+        this->set_spectral_power(power);
     }
 
     /**
@@ -114,7 +114,8 @@ namespace huira {
      * @brief Computes the spectral irradiance at a given position.
      * 
      * Calculates the spectral irradiance based on the distance from the light
-     * to the position, using inverse square law falloff.
+     * to the position, using inverse square law falloff.  The value is returned
+     * in SI units: \f$W \cdot m^{-2}\f$.
      * 
      * @param position The world-space position to evaluate irradiance at.
      * @param light_to_world Transform from light's local space to world space.
@@ -165,9 +166,9 @@ namespace huira {
      * @throws std::runtime_error if the power is invalid (negative, NaN, or infinite).
      */
     template <IsSpectral TSpectral>
-    void PointLight<TSpectral>::set_spectral_power(const units::Watt& total_power)
+    void PointLight<TSpectral>::set_spectral_power(const units::Watt& power)
     {
-        float power_si = static_cast<float>(total_power.to_si());
+        float power_si = static_cast<float>(power.to_si());
         if (power_si < 0.f || std::isnan(power_si) || std::isinf(power_si)) {
             HUIRA_THROW_ERROR("PointLight::set_total_spectral_power - Invalid power: " +
                 std::to_string(power_si));

@@ -21,7 +21,7 @@ namespace huira {
     class PointLight : public Light<TSpectral> {
     public:
         PointLight(const units::SpectralWatts<TSpectral>& spectral_power);
-        PointLight(const units::Watt& total_power);
+        PointLight(const units::Watt& power);
 
         PointLight(const PointLight&) = delete;
         PointLight& operator=(const PointLight&) = delete;
@@ -38,6 +38,7 @@ namespace huira {
             const Vec3<float>& wi
         ) const override;
 
+
         TSpectral irradiance_at(
             const Vec3<float>& position,
             const Transform<float>& light_to_world
@@ -47,7 +48,7 @@ namespace huira {
         std::string type() const override { return "PointLight"; }
 
         void set_spectral_power(const units::SpectralWatts<TSpectral>& spectral_power);
-        void set_spectral_power(const units::Watt& total_power);
+        void set_spectral_power(const units::Watt& power);
 
     private:
         TSpectral irradiance_{ 0 };

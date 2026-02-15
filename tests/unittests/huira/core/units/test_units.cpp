@@ -330,7 +330,7 @@ TEST_CASE("Comparison operators", "[comparison]") {
 
 TEST_CASE("User-defined literals", "[literals]") {
     SECTION("Length literals") {
-        auto km = 5.5_km;
+        auto km = 5.5_Km;
         auto m = 100.0_m;
         auto cm = 50.0_cm;
         auto mm = 25.0_mm;
@@ -363,7 +363,7 @@ TEST_CASE("User-defined literals", "[literals]") {
 
     SECTION("Power literals") {
         auto w = 100.0_W;
-        auto kw = 1.5_kW;
+        auto kw = 1.5_KW;
         auto mw = 0.001_MW;
 
         REQUIRE(w.to_si() == 100.0);
