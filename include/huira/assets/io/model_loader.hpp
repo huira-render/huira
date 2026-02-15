@@ -3,25 +3,33 @@
 #include <filesystem>
 #include <memory>
 #include <string>
-#include <vector>
-#include <unordered_map>
 #include <tuple>
+#include <unordered_map>
+#include <vector>
 
-#include <assimp/Importer.hpp>
-#include <assimp/scene.h>
-#include <assimp/postprocess.h>
+#include "assimp/Importer.hpp"
+#include "assimp/postprocess.h"
+#include "assimp/scene.h"
 
-#include "huira/core/concepts/spectral_concepts.hpp"
-#include "huira/assets/model.hpp"
-#include "huira/scene/frame_node.hpp"
-#include "huira/scene/instance.hpp"
 #include "huira/assets/mesh.hpp"
+#include "huira/assets/model.hpp"
+#include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/core/types.hpp"
 #include "huira/handles/mesh_handle.hpp"
+#include "huira/scene/frame_node.hpp"
+#include "huira/scene/instance.hpp"
 
 namespace fs = std::filesystem;
 
 namespace huira {
+    /**
+     * @brief Loader for 3D model files using ASSIMP.
+     *
+     * Provides static methods to load models from disk and convert them into huira scene objects.
+     * Handles mesh conversion, node hierarchy, and basic transform extraction.
+     *
+     * @tparam TSpectral Spectral type (must satisfy IsSpectral concept)
+     */
     template <IsSpectral TSpectral>
     class ModelLoader {
     public:

@@ -5,21 +5,34 @@
 #include "huira/core/physics.hpp"
 
 namespace huira {
-    // ==================== //
-    // === Constructors === //
-    // ==================== //
+    /**
+     * @brief Default constructor initializing all bins to zero.
+     */
     template <std::size_t N, auto... Args>
     constexpr SpectralBins<N, Args...>::SpectralBins()
     {
         data_.fill(0.0f);
     }
 
+    /**
+     * @brief Constructs a SpectralBins with all bins set to the same value.
+     * 
+     * @param value The value to assign to all bins.
+     */
     template <std::size_t N, auto... Args>
     constexpr SpectralBins<N, Args...>::SpectralBins(const float& value)
     {
         data_.fill(value);
     }
 
+    /**
+     * @brief Constructs from an initializer list.
+     * 
+     * If the list has one element, fills all bins with that value.
+     * Otherwise, copies values from the list (up to N elements).
+     * 
+     * @param init Initializer list of float values.
+     */
     template <std::size_t N, auto... Args>
     constexpr SpectralBins<N, Args...>::SpectralBins(std::initializer_list<float> init)
     {
@@ -33,6 +46,12 @@ namespace huira {
         }
     }
 
+    /**
+     * @brief Constructs from exactly N values.
+     * 
+     * @tparam Args2 Parameter pack of convertible-to-float types.
+     * @param args Values for each bin (must be exactly N values).
+     */
     template <std::size_t N, auto... Args>
     template <typename... Args2>
         requires (sizeof...(Args2) == N && (std::convertible_to<Args2, float> && ...))
@@ -42,6 +61,132 @@ namespace huira {
         
     }
 
+
+    template <std::size_t N, auto... Args>
+    std::array<Bin, N> SpectralBins<N, Args...>::bins_ = SpectralBins<N, Args...>::initialize_bins_static_();
+
+
+    /**
+     * @brief Creates a spectral distribution from a total value.
+     * 
+     * Distributes the total value proportionally across bins based on their
+     * wavelength widths. Wider bins receive proportionally more of the total.
+     * 
+     * @param total The total value to distribute.
+     * @return A SpectralBins instance with distributed values.
+     */
+    template <std::size_t N, auto... Args>
+    constexpr SpectralBins<N, Args...> SpectralBins<N, Args...>::from_total(float total) {
+        SpectralBins result;
+
+        // Sum total wavelength coverage
+        double total_width = 0.0;
+        for (std::size_t i = 0; i < N; ++i) {
+            total_width += bins_[i].max_wavelength - bins_[i].min_wavelength;
+        }
+
+        // Distribute proportionally to each bin's width
+        for (std::size_t i = 0; i < N; ++i) {
+            double bin_width = bins_[i].max_wavelength - bins_[i].min_wavelength;
+            result[i] = static_cast<float>(static_cast<double>(total) * (bin_width / total_width));
+        }
+
+        return result;
+    }
+
+    
+    /**
+     * @brief Computes the sum of all spectral values.
+     * 
+     * @return The total sum across all bins.
+     */
+    template <std::size_t N, auto... Args>
+    float SpectralBins<N, Args...>::total() const {
+        float sum = 0.0f;
+        for (std::size_t i = 0; i < N; ++i) {
+            sum += data_[i];
+        }
+        return sum;
+    }
+
+    /**
+     * @brief Computes the Euclidean magnitude (L2 norm).
+     * 
+     * @return The square root of the sum of squared values.
+     */
+    template <std::size_t N, auto... Args>
+    float SpectralBins<N, Args...>::magnitude() const {
+        float sum_of_squares = 0.0f;
+        for (std::size_t i = 0; i < N; ++i) {
+            sum_of_squares += data_[i] * data_[i];
+        }
+        return std::sqrt(sum_of_squares);
+    }
+
+    /**
+     * @brief Finds the maximum value across all bins.
+     * 
+     * @return The maximum spectral value, or 0.0 if N is 0.
+     */
+    template <std::size_t N, auto... Args>
+    float SpectralBins<N, Args...>::max() const {
+        if constexpr (N == 0) {
+            return 0.0f;
+        }
+        float max_val = data_[0];
+        for (std::size_t i = 1; i < N; ++i) {
+            if (data_[i] > max_val) {
+                max_val = data_[i];
+            }
+        }
+        return max_val;
+    }
+
+    /**
+     * @brief Finds the minimum value across all bins.
+     * 
+     * @return The minimum spectral value, or 0.0 if N is 0.
+     */
+    template <std::size_t N, auto... Args>
+    float SpectralBins<N, Args...>::min() const {
+        if constexpr (N == 0) {
+            return 0.0f;
+        }
+        float min_val = data_[0];
+        for (std::size_t i = 1; i < N; ++i) {
+            if (data_[i] < min_val) {
+                min_val = data_[i];
+            }
+        }
+        return min_val;
+    }
+
+    /**
+     * @brief Computes the wavelength-weighted integral.
+     * 
+     * Integrates the spectral distribution by summing each bin's value
+     * multiplied by its wavelength width.
+     * 
+     * @return The integrated value over wavelength.
+     */
+    template <std::size_t N, auto... Args>
+    float SpectralBins<N, Args...>::integrate() const {
+        float integral = 0.0f;
+        for (std::size_t i = 0; i < N; ++i) {
+            float bin_width = (bins_[i].max_wavelength - bins_[i].min_wavelength);
+            integral += data_[i] * bin_width;
+        }
+        return integral;
+
+    }
+
+    /**
+     * @brief Checks if all spectral values are valid.
+     * 
+     * Validates that all values are non-negative, not NaN, and not infinite.
+     * 
+     * @return True if all values are valid.
+     */
     template <std::size_t N, auto... Args>
     bool SpectralBins<N, Args...>::valid() const
     {
@@ -59,73 +204,6 @@ namespace huira {
             }
         }
         return true;
-    }
-
-    // ========================= //
-    // === Static Definition === //
-    // ========================= //
-    template <std::size_t N, auto... Args>
-    std::array<Bin, N> SpectralBins<N, Args...>::bins_ = SpectralBins<N, Args...>::initialize_bins_static_();
-
-
-    // ========================== //
-    // === Summary Operations === //
-    // ========================== //
-    template <std::size_t N, auto... Args>
-    float SpectralBins<N, Args...>::total() const {
-        float sum = 0.0f;
-        for (std::size_t i = 0; i < N; ++i) {
-            sum += data_[i];
-        }
-        return sum;
-    }
-
-    template <std::size_t N, auto... Args>
-    float SpectralBins<N, Args...>::magnitude() const {
-        float sum_of_squares = 0.0f;
-        for (std::size_t i = 0; i < N; ++i) {
-            sum_of_squares += data_[i] * data_[i];
-        }
-        return std::sqrt(sum_of_squares);
-    }
-
-    template <std::size_t N, auto... Args>
-    float SpectralBins<N, Args...>::max() const {
-        if constexpr (N == 0) {
-            return 0.0f;
-        }
-        float max_val = data_[0];
-        for (std::size_t i = 1; i < N; ++i) {
-            if (data_[i] > max_val) {
-                max_val = data_[i];
-            }
-        }
-        return max_val;
-    }
-
-    template <std::size_t N, auto... Args>
-    float SpectralBins<N, Args...>::min() const {
-        if constexpr (N == 0) {
-            return 0.0f;
-        }
-        float min_val = data_[0];
-        for (std::size_t i = 1; i < N; ++i) {
-            if (data_[i] < min_val) {
-                min_val = data_[i];
-            }
-        }
-        return min_val;
-    }
-
-    template <std::size_t N, auto... Args>
-    float SpectralBins<N, Args...>::integrate() const {
-        float integral = 0.0f;
-        for (std::size_t i = 0; i < N; ++i) {
-            float bin_width = (bins_[i].max_wavelength - bins_[i].min_wavelength);
-            integral += data_[i] * bin_width;
-        }
-        return integral;
-
     }
 
 
@@ -249,6 +327,14 @@ namespace huira {
         return result;
     }
 
+    /**
+     * @brief Computes photon energies for each bin's center wavelength.
+     * 
+     * Calculates the energy of a photon at each bin's center wavelength
+     * using the relation E = hc/lambda.
+     * 
+     * @return A SpectralBins instance containing photon energies in Joules.
+     */
     template <std::size_t N, auto... Args>
     constexpr SpectralBins<N, Args...> SpectralBins<N, Args...>::photon_energies()
     {
@@ -259,6 +345,7 @@ namespace huira {
         }
         return result;
     }
+
 
     // ================================== //
     // === Array Arithmetic Operators === //
@@ -363,29 +450,65 @@ namespace huira {
     }
 
 
-    // ======================= //
+    // ======================== //
     // === Static Functions === //
-    // ======================= //
+    // ======================== //
+    
+    /**
+     * @brief Initializes the bin array based on template parameters.
+     * 
+     * Dispatches to the appropriate initialization method based on the number
+     * of template arguments, and validates that bins are non-overlapping.
+     * 
+     * @return Array of initialized bins.
+     * @throws Compile-time error if bins are invalid or overlap.
+     */
     template <std::size_t N, auto... Args>
     constexpr std::array<Bin, N> SpectralBins<N, Args...>::initialize_bins_static_() {
         constexpr size_t num_args = sizeof...(Args);
+        std::array<Bin, N> bins{};
         if constexpr (num_args == 2) {
             static_assert(N > 0, "Must have at least 1 bin");
-            return initialize_uniform_static_();
+            bins = initialize_uniform_static_();
         }
         else if constexpr (num_args == 2 * N) {
-            return initialize_pairs_static_();
+            bins = initialize_pairs_static_();
         }
         else if constexpr (num_args == N + 1) {
-            return initialize_edges_static_();
+            bins = initialize_edges_static_();
         }
         else {
             static_assert(num_args == 2 || num_args == 2 * N || num_args == N + 1,
                 "Must provide either 2 args (uniform), 2*N args (pairs), or N+1 args (edges)");
-            return {};
         }
+
+
+        // Check each bin has min < max
+        for (std::size_t i = 0; i < N; ++i) {
+            if (bins[i].min_wavelength >= bins[i].max_wavelength) {
+                throw "Bin has min_wavelength >= max_wavelength (inverted or zero-width bin)";
+            }
+        }
+
+        // Check no pair of bins overlaps (order-independent)
+        for (std::size_t i = 0; i < N; ++i) {
+            for (std::size_t j = i + 1; j < N; ++j) {
+                // Two intervals overlap if one starts before the other ends and vice versa
+                if (bins[i].min_wavelength < bins[j].max_wavelength &&
+                    bins[j].min_wavelength < bins[i].max_wavelength) {
+                    throw "Spectral bins overlap";
+                }
+            }
+        }
+
+        return bins;
     }
 
+    /**
+     * @brief Creates uniformly spaced bins from min to max wavelength.
+     * 
+     * @return Array of N uniformly spaced bins.
+     */
     template <std::size_t N, auto... Args>
     constexpr std::array<Bin, N> SpectralBins<N, Args...>::initialize_uniform_static_() {
         auto args_array = std::array<double, 2>{ static_cast<double>(Args)... };
@@ -402,6 +525,13 @@ namespace huira {
         return result;
     }
 
+    /**
+     * @brief Creates bins from explicit min/max pairs.
+     * 
+     * Expects 2N arguments: min1, max1, min2, max2, ..., minN, maxN (in nm).
+     * 
+     * @return Array of bins defined by the pairs.
+     */
     template <std::size_t N, auto... Args>
     constexpr std::array<Bin, N> SpectralBins<N, Args...>::initialize_pairs_static_() {
         auto args_array = std::array<double, 2 * N>{ static_cast<double>(Args)... };
@@ -412,6 +542,14 @@ namespace huira {
         return result;
     }
 
+    /**
+     * @brief Creates bins from N+1 bin edges.
+     * 
+     * Expects N+1 arguments defining bin boundaries (in nm).
+     * Bin i spans from edge[i] to edge[i+1].
+     * 
+     * @return Array of bins defined by the edges.
+     */
     template <std::size_t N, auto... Args>
     constexpr std::array<Bin, N> SpectralBins<N, Args...>::initialize_edges_static_() {
         auto args_array = std::array<double, N + 1>{ static_cast<double>(Args)... };

@@ -1,31 +1,49 @@
 #pragma once
 
-#include <string>
 #include <cstdint>
-#include <optional>
 #include <memory>
+#include <optional>
+#include <string>
 
-#include "huira/core/types.hpp"
+#include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/core/transform.hpp"
+#include "huira/core/types.hpp"
 #include "huira/render/interaction.hpp"
 #include "huira/render/sampler.hpp"
-#include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/scene/scene_object.hpp"
 
 namespace huira {
+    
+    /**
+     * @brief Specifies the type of light source.
+     */
     enum class LightType {
         Point,
         Sphere
     };
 
+    /**
+     * @brief Represents a sampled light contribution at a point.
+     * 
+     * @tparam TSpectral The spectral representation type.
+     */
     template <IsSpectral TSpectral>
     struct LightSample {
-        Vec3<float> wi;
-        TSpectral Li;
-        float distance;
-        float pdf;
+        Vec3<float> wi;      ///< Incident direction from surface to light (normalized)
+        TSpectral Li;        ///< Incident radiance from the light
+        float distance;      ///< Distance from the surface point to the light
+        float pdf;           ///< Probability density function value for this sample
     };
 
+
+    /**
+     * @brief Abstract base class for all light sources in the scene.
+     * 
+     * Provides an interface for sampling light contributions, evaluating PDFs,
+     * and computing irradiance. All lights have a unique ID for identification.
+     * 
+     * @tparam TSpectral The spectral representation type.
+     */
     template <IsSpectral TSpectral>
     class Light : public SceneObject<Light<TSpectral>, TSpectral> {
     public:

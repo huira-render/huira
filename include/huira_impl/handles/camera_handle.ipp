@@ -3,7 +3,7 @@
 namespace huira {
     template <IsSpectral TSpectral>
     void CameraModelHandle<TSpectral>::set_focal_length(units::Millimeter focal_length) const {
-        this->get_()->set_focal_length(static_cast<float>(focal_length.get_si_value()));
+        this->get_()->set_focal_length(static_cast<float>(focal_length.to_si()));
     }
 
     template <IsSpectral TSpectral>
@@ -78,25 +78,25 @@ namespace huira {
     template <IsSpectral TSpectral>
     void CameraModelHandle<TSpectral>::set_sensor_pixel_pitch(units::Millimeter pixel_pitch_x, units::Millimeter pixel_pitch_y) const
     {
-        this->get_()->set_sensor_pixel_pitch(Vec2<float>{ pixel_pitch_x.get_si_value(), pixel_pitch_y.get_si_value() });
+        this->get_()->set_sensor_pixel_pitch(Vec2<float>{ pixel_pitch_x.to_si(), pixel_pitch_y.to_si() });
     }
 
     template <IsSpectral TSpectral>
     void CameraModelHandle<TSpectral>::set_sensor_pixel_pitch(units::Millimeter pixel_pitch) const
     {
-        this->get_()->set_sensor_pixel_pitch(Vec2<float>{ pixel_pitch.get_si_value(), pixel_pitch.get_si_value() });
+        this->get_()->set_sensor_pixel_pitch(Vec2<float>{ pixel_pitch.to_si(), pixel_pitch.to_si() });
     }
 
     template <IsSpectral TSpectral>
     void CameraModelHandle<TSpectral>::set_sensor_size(units::Millimeter width, units::Millimeter height) const
     {
-        this->get_()->set_sensor_size(Vec2<float>{ width.get_si_value(), height.get_si_value() });
+        this->get_()->set_sensor_size(Vec2<float>{ width.to_si(), height.to_si() });
     }
 
     template <IsSpectral TSpectral>
     void CameraModelHandle<TSpectral>::set_sensor_size(units::Millimeter width) const
     {
-        this->get_()->set_sensor_size(static_cast<float>(width.get_si_value()));
+        this->get_()->set_sensor_size(static_cast<float>(width.to_si()));
     }
 
 

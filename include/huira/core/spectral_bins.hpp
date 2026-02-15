@@ -4,7 +4,11 @@
 #include <string>
 
 namespace huira {
-    // Bin definitions:
+    /**
+     * @brief Represents a wavelength bin with minimum, maximum, and center wavelengths.
+     * 
+     * Wavelengths are stored in meters (SI units).
+     */
     struct Bin {
         // Wavelengths are in meters:
         double min_wavelength = 0;
@@ -25,6 +29,23 @@ namespace huira {
 #pragma warning(push)
 #pragma warning(disable: 4686)  // Possible change in behavior in UDT return calling convention
 #endif
+    /**
+     * @brief A template class representing spectral data distributed across wavelength bins.
+     * 
+     * SpectralBins provides a container for spectral values (e.g., radiance, irradiance)
+     * discretized into wavelength bins. The bins can be configured with:
+     * - Uniform spacing (2 args: min, max wavelengths in nm)
+     * - Explicit pairs (2N args: min1, max1, min2, max2, ...)
+     * - Bin edges (N+1 args: edge0, edge1, ..., edgeN)
+     * 
+     * The template arguments are to be given in units of nanometers.
+     *
+     * Supports standard container operations, arithmetic operations (element-wise and scalar),
+     * and spectral analysis functions.
+     * 
+     * @tparam N The number of spectral bins.
+     * @tparam Args Variadic template parameters defining bin configuration.
+     */
     template <std::size_t N, auto... Args>
     class SpectralBins {
     public:
@@ -51,8 +72,6 @@ namespace huira {
         // Assignment operators
         constexpr SpectralBins& operator=(const SpectralBins&) = default;
         constexpr SpectralBins& operator=(SpectralBins&&) = default;
-
-        bool valid() const;
 
         // Element access
         constexpr reference operator[](size_type pos) { return data_[pos]; }
@@ -85,13 +104,15 @@ namespace huira {
 
         // Operations
         constexpr void fill(const float& value) { data_.fill(value); }
+        static constexpr SpectralBins from_total(float total);
 
         // Summary
-        float total() const;
-        float magnitude() const;
-        float max() const;
-        float min() const;
-        float integrate() const;
+        float total() const;          ///< Sum of all spectral values.
+        float magnitude() const;      ///< Euclidean magnitude (L2 norm) of the spectral vector.
+        float max() const;            ///< Maximum value across all bins.
+        float min() const;            ///< Minimum value across all bins.
+        float integrate() const;      ///< Wavelength-weighted integral over all bins.
+        bool valid() const;           ///< Checks if all spectral values are valid (non-negative, not NaN, not infinite).
 
         // Array-Array Arithmetic Operations
         constexpr SpectralBins& operator+=(const SpectralBins& other);
@@ -126,7 +147,6 @@ namespace huira {
         // Access to bin information
         static constexpr const Bin& get_bin(std::size_t index) { return bins_[index]; }
         static constexpr const std::array<Bin, N>& get_all_bins() { return bins_; }
-
         static constexpr SpectralBins photon_energies();
 
     private:
@@ -142,16 +162,29 @@ namespace huira {
 #pragma warning(pop)
 #endif
 
-    // Aliases for faster setting:
+    /**
+     * @brief Alias for creating uniformly spaced spectral bins.
+     * 
+     * @tparam N Number of bins.
+     * @tparam min Minimum wavelength in nanometers.
+     * @tparam max Maximum wavelength in nanometers.
+     */
     template <std::size_t N, int min, int max>
     using UniformSpectralBins = SpectralBins<N, min, max>;
 
+    /**
+     * @brief Alias for creating spectral bins from explicit bin edges.
+     * 
+     * @tparam N Number of bins.
+     * @tparam Args N+1 wavelength edges in nanometers.
+     */
     template <std::size_t N, auto... Args>
     using SpectralBinEdges = SpectralBins<N, Args...>;
 
-    // Helpful types:
+    /// @brief RGB representation with red (600-750nm), green (500-600nm), and blue (380-500nm) bins.
     using RGB = SpectralBins<3, 600, 750, 500, 600, 380, 500>;
 
+    /// @brief 8 uniformly spaced bins covering the visible spectrum (380-750nm).
     using Visible8 = UniformSpectralBins<8, 380, 750>;
 }
 

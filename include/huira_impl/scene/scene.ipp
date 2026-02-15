@@ -68,14 +68,19 @@ namespace huira {
 
 
 
-
+    template <IsSpectral TSpectral>
+    LightHandle<TSpectral> Scene<TSpectral>::new_point_light(const units::SpectralWatts<TSpectral>& spectral_power, std::string name)
+    {
+        auto light_shared = std::make_shared<PointLight<TSpectral>>(spectral_power);
+        return this->add_light(light_shared, name);
+    }
 
     template <IsSpectral TSpectral>
-    LightHandle<TSpectral> Scene<TSpectral>::new_point_light(TSpectral intensity, std::string name)
+    LightHandle<TSpectral> Scene<TSpectral>::new_point_light(const units::Watt& total_power, std::string name)
     {
-        auto light_shared = std::make_shared<PointLight<TSpectral>>(intensity);
+        auto light_shared = std::make_shared<PointLight<TSpectral>>(total_power);
         return this->add_light(light_shared, name);
-    };
+    }
 
     template <IsSpectral TSpectral>
     LightHandle<TSpectral> Scene<TSpectral>::new_sun_light()
@@ -88,7 +93,9 @@ namespace huira {
         constexpr float sun_area = 4.f * PI<float>() * sun_radius * sun_radius;
         TSpectral spectral_power = spectral_radiance * PI<float>() * sun_area;
 
-        return this->new_point_light(spectral_power, "Sun");
+        units::SpectralWatts<TSpectral> spectral_power_watts(spectral_power);
+
+        return this->new_point_light(spectral_power_watts, "Sun");
     }
 
     template <IsSpectral TSpectral>
