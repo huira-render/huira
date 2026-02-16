@@ -17,7 +17,6 @@
 
 #include "huira/handles/camera_handle_py.ipp"
 #include "huira/handles/frame_handle_py.ipp"
-#include "huira/handles/handle_py.ipp"
 #include "huira/handles/instance_handle_py.ipp"
 #include "huira/handles/light_handle_py.ipp"
 #include "huira/handles/node_handle_py.ipp"

@@ -1,14 +1,22 @@
 #pragma once
 
-#include <vector>
 #include <memory>
+#include <vector>
 
 #include "huira/core/concepts/spectral_concepts.hpp"
+#include "huira/render/frame_buffer.hpp"
 #include "huira/render/sampler.hpp"
 #include "huira/scene/scene_view.hpp"
-#include "huira/render/frame_buffer.hpp"
 
 namespace huira {
+    /**
+     * @brief Abstract base class for scene renderers.
+     *
+     * Renderer provides the interface and common helpers for rendering a SceneView into a FrameBuffer.
+     * Derived classes implement specific rendering algorithms (e.g., rasterization, ray tracing).
+     *
+     * @tparam TSpectral Spectral type for the rendering pipeline
+     */
     template <IsSpectral TSpectral>
     class Renderer {
     public:

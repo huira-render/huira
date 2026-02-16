@@ -21,7 +21,7 @@ namespace huira {
      * @param name Name for the model (optional)
      * @param post_process_flags ASSIMP post-processing flags (optional)
      * @return Shared pointer to the loaded Model
-     * @throws ModelLoadException if loading fails
+     * @throws std::runtime_error if loading fails
      */
     template <IsSpectral TSpectral>
     std::shared_ptr<Model<TSpectral>> ModelLoader<TSpectral>::load(

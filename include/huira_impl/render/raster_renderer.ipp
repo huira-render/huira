@@ -1,11 +1,24 @@
 #include <tuple>
 
 #include "huira/core/concepts/spectral_concepts.hpp"
-#include "huira/scene/scene_view.hpp"
 #include "huira/render/frame_buffer.hpp"
+#include "huira/scene/scene_view.hpp"
 
 namespace huira {
 
+    /**
+     * @brief Compute barycentric coordinates of a point within a triangle.
+     * 
+     * Given a triangle defined by vertices v0, v1, v2 and a point p, this function
+     * computes the barycentric coordinates (u, v, w) such that:
+     *   p = u*v0 + v*v1 + w*v2, where u + v + w = 1
+     * 
+     * @param v0 First vertex of the triangle
+     * @param v1 Second vertex of the triangle
+     * @param v2 Third vertex of the triangle
+     * @param p Point to compute barycentric coordinates for
+     * @return Vec3<float> Barycentric coordinates (u, v, w)
+     */
     static inline Vec3<float> barycentric_coordinates(
         const Pixel& v0,
         const Pixel& v1,
@@ -19,12 +32,23 @@ namespace huira {
         return Vec3<float>{ u, v, w };
     }
 
+    /**
+     * @brief Render a scene view into a frame buffer.
+     * 
+     * This method performs the complete rendering pipeline: rasterizes mesh geometry,
+     * renders unresolved objects (stars/planets), and applies camera readout with the
+     * specified exposure time.
+     * 
+     * @tparam TSpectral Spectral type for the rendering pipeline
+     * @param scene_view The scene view to render
+     * @param frame_buffer The frame buffer to render into
+     * @param exposure_time Exposure time in seconds for camera readout
+     */
     template <IsSpectral TSpectral>
     void RasterRenderer<TSpectral>::render(
         SceneView<TSpectral>& scene_view,
         FrameBuffer<TSpectral>& frame_buffer,
-        float exposure_time
-    )
+        float exposure_time)
     {
         this->rasterize_(scene_view, frame_buffer);
 
@@ -33,6 +57,22 @@ namespace huira {
         this->get_camera(scene_view)->readout(frame_buffer, exposure_time);
     }
 
+    /**
+     * @brief Rasterize mesh geometry from the scene view into the frame buffer.
+     * 
+     * This method implements a basic triangle rasterization pipeline. For each mesh instance
+     * in the scene, it projects triangles to screen space, performs per-pixel rasterization
+     * with depth testing, and computes lighting using a simple Lambertian shading model.
+     * 
+     * The method supports multiple frame buffer outputs:
+     * - Received power (radiance with Lambertian shading)
+     * - Mesh IDs (for segmentation)
+     * - Camera-space normals (for debugging/analysis)
+     * 
+     * @tparam TSpectral Spectral type for the rendering pipeline
+     * @param scene_view The scene view containing meshes and lights to render
+     * @param frame_buffer The frame buffer to rasterize into
+     */
     template <IsSpectral TSpectral>
     void RasterRenderer<TSpectral>::rasterize_(
         SceneView<TSpectral>& scene_view,

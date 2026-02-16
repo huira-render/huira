@@ -11,6 +11,12 @@ option(HUIRA_LOCAL_DEV "Build Local Development Directory" OFF)
 option(HUIRA_APPS "Build huira command line applications" ON)
 option(HUIRA_NATIVE_ARCH "Optimize for the build machine's CPU architecture" ON)
 
+# Documentation uses Sphinx autodoc which requires the Python extension module
+if(HUIRA_DOCS AND NOT HUIRA_PYTHON)
+    message(STATUS "HUIRA_DOCS=ON requires Python bindings; enabling HUIRA_PYTHON")
+    set(HUIRA_PYTHON ON CACHE BOOL "Build Python Bindings" FORCE)
+endif()
+
 if(DEFINED ENV{CONDA_PREFIX} AND NOT DEFINED CMAKE_TOOLCHAIN_FILE)
     set(CMAKE_TOOLCHAIN_FILE "${CMAKE_CURRENT_SOURCE_DIR}/cmake/conda-toolchain.cmake" CACHE FILEPATH "CMake toolchain file")
     message(STATUS "Detected Conda environment, using conda toolchain")

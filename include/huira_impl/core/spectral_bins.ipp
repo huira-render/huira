@@ -485,7 +485,7 @@ namespace huira {
      * of template arguments, and validates that bins are non-overlapping.
      * 
      * @return Array of initialized bins.
-     * @throws Compile-time error if bins are invalid or overlap.
+     * @note Produces a compile-time error if bins are invalid or overlap.
      */
     template <std::size_t N, auto... Args>
     constexpr std::array<Bin, N> SpectralBins<N, Args...>::initialize_bins_static_() {

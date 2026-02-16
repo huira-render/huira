@@ -21,7 +21,7 @@ namespace huira {
      * @brief Gets a shared_ptr to the referenced object, optionally downcasting to a derived type.
      * @tparam U Type to cast to (default: T)
      * @return std::shared_ptr<U> Shared pointer to the object
-     * @throws if the handle is invalid or the cast fails
+     * @throws std::runtime_error if the handle is invalid or the cast fails
      */
     template <IsSceneObject T>
     template <typename U>
@@ -44,7 +44,7 @@ namespace huira {
     /**
      * @brief Gets a shared_ptr to the referenced object, enforcing validity.
      * @return std::shared_ptr<T> Shared pointer to the object
-     * @throws if the handle is invalid
+     * @throws std::runtime_error if the handle is invalid
      */
     template <IsSceneObject T>
     std::shared_ptr<T> Handle<T>::get_() const {

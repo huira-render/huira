@@ -30,7 +30,7 @@ namespace huira {
      * @brief Constructs a Scene and initializes the root node.
      */
     template <IsSpectral TSpectral>
-        Scene<TSpectral>::Scene()
+    Scene<TSpectral>::Scene()
         : root_node_(std::make_shared<FrameNode<TSpectral>>(this))
         , root(root_node_)
     {
