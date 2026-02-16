@@ -235,6 +235,11 @@ namespace huira {
         bind_quantity_type<huira::units::Megajoule>(m, "Megajoule");
         bind_quantity_type<huira::units::ElectronVolt>(m, "ElectronVolt");
 
+        // Area Units
+        bind_quantity_type<huira::units::SquareMeter>(m, "SquareMeter");
+        bind_quantity_type<huira::units::SquareCentimeter>(m, "SquareCentimeter");
+        bind_quantity_type<huira::units::SquareMillimeter>(m, "SquareMillimeter");
+
         // Power Units (scalar)
         bind_quantity_type<huira::units::Milliwatt>(m, "Milliwatt");
         bind_quantity_type<huira::units::Watt>(m, "Watt");

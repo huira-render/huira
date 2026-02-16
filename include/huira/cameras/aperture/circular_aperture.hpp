@@ -1,37 +1,38 @@
 #pragma once
 
 #include <memory>
-#include <cmath>
 
-#include "huira/core/constants.hpp"
 #include "huira/cameras/aperture/aperture.hpp"
 #include "huira/core/concepts/spectral_concepts.hpp"
-#include "huira/cameras/psf/airy_disk.hpp"
+#include "huira/core/units/units.hpp"
 
 namespace huira {
+
+    /**
+     * @brief Circular optical aperture.
+     *
+     * Models a circular aperture with a specified diameter and area, supporting PSF creation.
+     *
+     * @tparam TSpectral The spectral representation type.
+     */
     template <IsSpectral TSpectral>
     class CircularAperture : public Aperture<TSpectral> {
     public:
-        CircularAperture(float diameter)
-        {
-            this->set_diameter(diameter);
-        }
+        CircularAperture(units::Meter diameter);
 
         ~CircularAperture() override = default;
 
+        void set_area(units::SquareMeter area) override;
         float get_area() const override { return area_; }
-        void set_area(float area) override { area_ = area; }
 
-        void set_diameter(float diameter) { area_ = PI<float>() * (diameter * diameter) / 4.f; }
+        void set_diameter(units::Meter diameter);
+        float get_diameter() const;
 
-        float get_diameter() const { return std::sqrt(4.f * area_ / PI<float>()); }
-
-        std::unique_ptr<PSF<TSpectral>> make_psf(float focal_length, Vec2<float> pixel_pitch, int radius, int banks) override
-        {
-            return std::make_unique<AiryDisk<TSpectral>>(focal_length, pixel_pitch, get_diameter(), radius, banks);
-        }
+        std::unique_ptr<PSF<TSpectral>> make_psf(units::Meter focal_length, units::Meter pitch_x, units::Meter pitch_y, int radius, int banks) override;
 
     private:
         float area_ = 1.f;
     };
 }
+
+#include "huira_impl/cameras/aperture/circular_aperture.ipp"

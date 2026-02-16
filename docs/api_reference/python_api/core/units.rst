@@ -49,6 +49,9 @@ Available Units
    * - Energy
      - Joule, Kilojoule, Megajoule, ElectronVolt
      - Joule
+   * - Area
+     - SquareMeter, SquareCentimeter, SquareMillimeter
+     - SquareMeter
    * - Power
      - Watt, Kilowatt, Megawatt, Gigawatt
      - Watt

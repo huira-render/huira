@@ -157,6 +157,14 @@ namespace huira::units {
     using ElectronVolt = Quantity<Energy, ElectronVoltTag>;
     /// @}
 
+    
+    /// @defgroup area_units Area Units
+    /// @{
+    using SquareMeter = Quantity<Area, std::ratio<1, 1>>;
+    using SquareCentimeter = Quantity<Area, std::ratio<1, 10000>>;
+    using SquareMillimeter = Quantity<Area, std::ratio<1, 1000000>>;
+    /// @}
+
 
     /// @defgroup power_units Power Units
     /// @{
@@ -279,6 +287,14 @@ namespace huira::units {
         constexpr Kilojoule operator""_KJ(long double value) { return Kilojoule(static_cast<double>(value)); }
         constexpr ElectronVolt operator""_eV(unsigned long long value) { return ElectronVolt(static_cast<double>(value)); }
         constexpr ElectronVolt operator""_eV(long double value) { return ElectronVolt(static_cast<double>(value)); }
+
+        // Area literals
+        constexpr SquareMeter operator""_m2(unsigned long long value) { return SquareMeter(static_cast<double>(value)); }
+        constexpr SquareMeter operator""_m2(long double value) { return SquareMeter(static_cast<double>(value)); }
+        constexpr SquareCentimeter operator""_cm2(unsigned long long value) { return SquareCentimeter(static_cast<double>(value)); }
+        constexpr SquareCentimeter operator""_cm2(long double value) { return SquareCentimeter(static_cast<double>(value)); }
+        constexpr SquareMillimeter operator""_mm2(unsigned long long value) { return SquareMillimeter(static_cast<double>(value)); }
+        constexpr SquareMillimeter operator""_mm2(long double value) { return SquareMillimeter(static_cast<double>(value)); }
 
         // Power literals
         constexpr Milliwatt operator""_mW(unsigned long long value) { return Milliwatt(static_cast<double>(value)); }
