@@ -45,3 +45,4 @@ The Huira C++ API is organized into four main modules. Select a module below to 
    scene/index
    stars/index
 
+   util/logger

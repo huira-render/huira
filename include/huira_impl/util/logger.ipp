@@ -9,15 +9,21 @@
 #include <sstream>
 #include <thread>
 
-#include "huira/util/colorful_text.hpp"
-#include "huira/platform/info.hpp"
 #include "huira/platform/get_log_path.hpp"
+#include "huira/platform/info.hpp"
 #include "huira/platform/windows_minmax.hpp"
+#include "huira/util/colorful_text.hpp"
 
 namespace huira {
 
-    // ===== LogEntry Implementation =====
-
+    /**
+     * @brief Convert log entry to a formatted string.
+     * 
+     * Formats the log entry as:
+     * HH:MM:SS.mmm [LEVEL] [Thread id] message
+     * 
+     * @return std::string Formatted log entry string
+     */
     std::string LogEntry::to_string() const {
         std::ostringstream oss;
         auto time_t = std::chrono::system_clock::to_time_t(timestamp);
@@ -39,6 +45,12 @@ namespace huira {
         return oss.str();
     }
 
+    /**
+     * @brief Convert LogLevel enum to string representation.
+     * 
+     * @param level LogLevel to convert
+     * @return const char* String representation of the log level
+     */
     const char* LogEntry::level_to_string(LogLevel level) {
         switch (level) {
             case LogLevel::Debug:   return "DEBUG";
@@ -49,10 +61,24 @@ namespace huira {
         }
     }
 
-    // ===== Logger Implementation =====
-    // Ensures only one crash report is printed per process
+    /**
+     * @brief Static flag to ensure only one crash report is printed per process.
+     * 
+     * Used by crash handlers to coordinate and prevent duplicate crash reports
+     * in multi-threaded scenarios.
+     */
     inline std::atomic<bool> Logger::crash_reported_{false};
 
+    /**
+     * @brief Initialize the logger with default settings.
+     * 
+     * Creates a logger with:
+     * - 1000-entry circular buffer
+     * - Info as minimum log level
+     * - Warning console output enabled
+     * - Debug and info console output disabled
+     * - Crash handler automatically installed
+     */
     Logger::Logger()
         : buffer_(1000)
         , write_index_(0)
@@ -66,16 +92,39 @@ namespace huira {
         enable_crash_handler(true);
     }
 
+    /**
+     * @brief Destructor for the logger.
+     */
     Logger::~Logger() = default;
 
+    /**
+     * @brief Set the minimum log level.
+     * 
+     * Messages below this level will be filtered out and not logged.
+     * 
+     * @param level Minimum severity level to log
+     */
     void Logger::set_level(LogLevel level) {
         min_level_.store(level, std::memory_order_relaxed);
     }
 
+    /**
+     * @brief Get the current minimum log level.
+     * 
+     * @return LogLevel Current minimum log level
+     */
     LogLevel Logger::get_level() const {
         return min_level_.load(std::memory_order_relaxed);
     }
 
+    /**
+     * @brief Resize the circular buffer.
+     * 
+     * Attempts to preserve existing log entries when resizing. If the new size is smaller,
+     * only the most recent entries are kept.
+     * 
+     * @param size New buffer size (minimum 1)
+     */
     void Logger::set_buffer_size(size_t size) {
         if (size == 0) size = 1;
         std::vector<LogEntry> new_buffer(size);
@@ -94,18 +143,43 @@ namespace huira {
         write_index_.store(entries_to_copy, std::memory_order_relaxed);
     }
 
+    /**
+     * @brief Get the current buffer size.
+     * 
+     * @return size_t Number of log entries that can be stored
+     */
     size_t Logger::get_buffer_size() const {
         return buffer_.size();
     }
 
+    /**
+     * @brief Set a custom output sink.
+     * 
+     * The custom sink is called for each logged message. Exceptions from the sink
+     * are caught and ignored to prevent logging from crashing the application.
+     * 
+     * @param sink Callback function to receive log entries
+     */
     void Logger::set_custom_sink(CustomSink sink) {
         custom_sink_ = std::move(sink);
     }
 
+    /**
+     * @brief Clear the custom output sink.
+     */
     void Logger::clear_custom_sink() {
         custom_sink_ = nullptr;
     }
 
+    /**
+     * @brief Log a message at the specified level.
+     * 
+     * Adds the message to the circular buffer if it meets the minimum log level.
+     * Also calls the custom sink if one is configured.
+     * 
+     * @param level Severity level of the message
+     * @param message Message to log
+     */
     void Logger::log(LogLevel level, const std::string& message) {
         if (level < min_level_.load(std::memory_order_relaxed)) {
             return;
@@ -132,6 +206,16 @@ namespace huira {
         }
     }
 
+    /**
+     * @brief Dump all buffered log entries to a file.
+     * 
+     * Writes the log buffer to a file with header information including platform
+     * and compiler details. If no filepath is specified, uses a platform-appropriate
+     * default location. Falls back to current directory if the specified path fails.
+     * 
+     * @param filepath Path to output file (empty for platform-specific default)
+     * @return std::string Actual path where log was written, or empty on failure
+     */
     std::string Logger::dump_to_file(const std::string& filepath) {
         std::filesystem::path actual_path;
 
@@ -177,6 +261,14 @@ namespace huira {
         return actual_path.string();
     }
 
+    /**
+     * @brief Enable or disable the crash handler.
+     * 
+     * When enabled, installs signal handlers and exception filters for automatic
+     * log dumping on crashes.
+     * 
+     * @param enable True to enable crash handling
+     */
     void Logger::enable_crash_handler(bool enable) {
         crash_handler_enabled_.store(enable, std::memory_order_relaxed);
         if (enable) {
@@ -184,7 +276,13 @@ namespace huira {
         }
     }
 
-    // Console output configuration with hierarchy enforcement
+    /**
+     * @brief Enable or disable debug-level console output.
+     * 
+     * Enforces log level hierarchy: enabling debug also enables info and warning.
+     * 
+     * @param enable True to enable debug console output
+     */
     void Logger::enable_console_debug(bool enable) {
         console_debug_.store(enable, std::memory_order_relaxed);
         if (enable) {
@@ -194,6 +292,14 @@ namespace huira {
         }
     }
 
+    /**
+     * @brief Enable or disable info-level console output.
+     * 
+     * Enforces log level hierarchy: enabling info also enables warning; disabling
+     * info also disables debug.
+     * 
+     * @param enable True to enable info console output
+     */
     void Logger::enable_console_info(bool enable) {
         console_info_.store(enable, std::memory_order_relaxed);
         if (enable) {
@@ -205,6 +311,13 @@ namespace huira {
         }
     }
 
+    /**
+     * @brief Enable or disable warning-level console output.
+     * 
+     * Enforces log level hierarchy: disabling warning also disables info and debug.
+     * 
+     * @param enable True to enable warning console output
+     */
     void Logger::enable_console_warning(bool enable) {
         console_warning_.store(enable, std::memory_order_relaxed);
         if (!enable) {
@@ -214,20 +327,41 @@ namespace huira {
         }
     }
 
+    /**
+     * @brief Check if debug console output is enabled.
+     * 
+     * @return bool True if debug console output is enabled
+     */
     bool Logger::is_console_debug_enabled() const {
         return console_debug_.load(std::memory_order_relaxed);
     }
 
+    /**
+     * @brief Check if info console output is enabled.
+     * 
+     * @return bool True if info console output is enabled
+     */
     bool Logger::is_console_info_enabled() const {
         return console_info_.load(std::memory_order_relaxed);
     }
 
+    /**
+     * @brief Check if warning console output is enabled.
+     * 
+     * @return bool True if warning console output is enabled
+     */
     bool Logger::is_console_warning_enabled() const {
         return console_warning_.load(std::memory_order_relaxed);
     }
 
-    // ===== Crash Handler Implementation =====
-
+    /**
+     * @brief Output a formatted crash report to stderr.
+     * 
+     * Displays the log file path and helpful instructions for bug reporting.
+     * Uses atomic flag to ensure the report is printed only once per process.
+     * 
+     * @param log_path Path to the dumped log file
+     */
     void Logger::output_crash_report(const std::string& log_path) {
         if (!log_path.empty()) {
             std::cerr << red("HUIRA UNCAUGHT EXCEPTION") << "\n";
@@ -239,6 +373,15 @@ namespace huira {
         }
     }
 
+    /**
+     * @brief Signal handler for crashes (SIGSEGV, SIGABRT, etc.).
+     * 
+     * Logs the signal, dumps the log to a file, outputs a crash report, and
+     * re-raises the signal with the default handler. Ensures only one crash
+     * report is generated per process.
+     * 
+     * @param signal Signal number that triggered the handler
+     */
     void Logger::handle_crash(int signal) {
         auto& logger = Logger::instance();
         if (!logger.crash_handler_enabled_.load(std::memory_order_relaxed)) {
@@ -262,6 +405,16 @@ namespace huira {
     }
 
 #ifdef _WIN32
+    /**
+     * @brief Windows Structured Exception Handler for unhandled exceptions.
+     * 
+     * Logs the exception code, dumps the log, and outputs a crash report.
+     * Returns EXCEPTION_CONTINUE_SEARCH to allow other handlers to process
+     * the exception.
+     * 
+     * @param exception_info Windows exception information structure
+     * @return LONG EXCEPTION_CONTINUE_SEARCH to continue exception handling
+     */
     LONG WINAPI Logger::windows_exception_handler(EXCEPTION_POINTERS* exception_info) {
         auto& logger = Logger::instance();
         if (!logger.crash_handler_enabled_.load(std::memory_order_relaxed)) {
@@ -281,6 +434,13 @@ namespace huira {
     }
 #endif
 
+    /**
+     * @brief Terminate handler for uncaught exceptions.
+     * 
+     * Attempts to extract and log exception information from std::current_exception(),
+     * dumps the log, outputs a crash report, and calls std::abort(). Ensures only
+     * one crash report is generated per process.
+     */
     [[noreturn]] void Logger::handle_terminate() {
         auto& logger = Logger::instance();
         if (!logger.crash_handler_enabled_.load(std::memory_order_relaxed)) {
@@ -312,6 +472,17 @@ namespace huira {
         std::abort();
     }
 
+    /**
+     * @brief Install signal handlers and exception filters for crash reporting.
+     * 
+     * Installs handlers for:
+     * - POSIX signals (SIGSEGV, SIGABRT, SIGFPE, SIGILL, SIGBUS on Unix)
+     * - std::terminate for uncaught exceptions
+     * - Windows Structured Exception Handling (on Windows)
+     * 
+     * Uses compiler pragmas to suppress warnings about potentially-throwing functions
+     * in extern C contexts, as the handlers are designed to catch all exceptions internally.
+     */
     void Logger::install_crash_handlers() {
         // Suppress C5039: passing potentially-throwing function to extern C function
         // Our handlers are carefully designed to catch all exceptions internally

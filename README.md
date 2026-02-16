@@ -12,13 +12,40 @@
 [![Python](https://github.com/huira-render/huira/actions/workflows/python.yml/badge.svg?branch=main)](https://github.com/huira-render/huira/actions/workflows/python.yml?query=branch%3Amain)
 
 ***
+# Features
+Initial work on Huira has been on the basic architecture as well as distribution/cross-platform compatability.  As much of that work is now completed, new features are expected to be released in relatively short order.
 
-# Key Features
-- Radiometrically accurate rendering with calibrated camera distortion models, depth-of-field, and common camera controls
+If there are features you wish to see, that you don't see listed here, please feel free to submit a [Feature Request](https://github.com/huira-render/huira/issues/new?template=feature_request.md)
+
+## Currently Stable Features (as of v0.8.0)
+- Radiometrically accurate unresolved rendering with calibrated camera distortion models and common camera controls
 - SPICE toolkit integration for spacecraft ephemeris and reference frames
-- Unresolved body rendering for distant objects
 - Star field rendering with accurate celestial coordinates
-- **Coming Soon:** 3D mesh, Digital Elevation Map, and level-of-detail support
+- Python Bindings
+- Logging and crash report generation
+- API Reference Documentation (NOTE: Some docs may appear incomplete or poorly formatted)
+
+## Features Coming Soon
+- 3D mesh and material support
+- Motion blur
+- Camera Depth-of-Field
+- Digital Elevation Maps
+- Level-of-detail support
+- Solar Radiation Pressure simulation
+- LIDAR simulation
+- TLE support
+- Improved API Reference Documentation and Quick-start guides
+
+## Long Term Plans
+- Vulkan based GPU Acceleration
+- Desktop application (GUI)
+
+***
+
+# Installing Huira
+- PyPI: *Coming soon*
+- vcpkg: *Coming soon*
+- conda: *Coming soon*
 
 # Building Huira
 Please see the platform specific quickstart guides:

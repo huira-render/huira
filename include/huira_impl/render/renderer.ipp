@@ -1,26 +1,54 @@
-#include <cmath>
 #include <algorithm>
-#include <vector>
+#include <cmath>
 #include <limits>
+#include <vector>
 
-#include "tbb/parallel_for.h"
 #include "tbb/blocked_range.h"
+#include "tbb/parallel_for.h"
 
-#include "huira/core/types.hpp"
 #include "huira/core/concepts/spectral_concepts.hpp"
+#include "huira/core/types.hpp"
 
 namespace huira {
+    /**
+     * @brief Configuration parameters for the radius lookup table.
+     * 
+     * Controls how the effective PSF radius is determined based on photon count thresholds
+     * and minimum radius constraints.
+     */
     struct RadiusLUTConfig {
         float photon_threshold = 0.1f; // photon count that counts as "visible" (0.1 photons per second)
         int min_radius = 1;            // never go below this
     };
 
+    /**
+     * @brief Entry in the radius lookup table.
+     * 
+     * Maps a PSF radius to the minimum irradiance threshold that requires that radius
+     * for accurate rendering.
+     */
     struct RadiusLUTEntry {
         int   radius;
         float min_irradiance; 
     };
 
-    // Build the radius -> irradiance LUT from the center kernel.
+    /**
+     * @brief Build a lookup table mapping PSF radius to minimum irradiance thresholds.
+     * 
+     * This function analyzes the PSF kernel to determine, for each radius from 1 to full_radius,
+     * what minimum irradiance level would produce at least photon_threshold photons per second
+     * at the highest-sensitivity pixel within that radius ring. The resulting LUT allows efficient
+     * per-star radius culling: stars with low irradiance can use smaller PSF kernels without
+     * visible quality loss.
+     * 
+     * @tparam TSpectral Spectral type for the rendering pipeline
+     * @param center_kernel The full PSF kernel centered at (0,0) offset
+     * @param full_radius_signed The maximum PSF radius in pixels
+     * @param area The projected aperture area for photon flux calculations
+     * @param photon_energies Per-channel photon energies for flux-to-photon conversion
+     * @param config Configuration parameters for LUT generation
+     * @return std::vector<RadiusLUTEntry> Lookup table sorted by increasing radius
+     */
     template <IsSpectral TSpectral>
     static std::vector<RadiusLUTEntry> build_radius_lut(
         const Image<TSpectral>& center_kernel,
@@ -88,7 +116,18 @@ namespace huira {
         return lut;
     }
 
-    // Look up the effective radius for a star with the given irradiance.
+    /**
+     * @brief Look up the effective PSF radius for a given irradiance level.
+     * 
+     * Searches the radius LUT to find the smallest radius that can accurately render
+     * a point source with the specified maximum irradiance. The effective radius is
+     * clamped to be at least min_radius.
+     * 
+     * @param lut The radius lookup table (result of build_radius_lut)
+     * @param max_irradiance The maximum irradiance of the point source across all channels
+     * @param min_radius Minimum allowed radius (typically 1)
+     * @return int The effective PSF radius to use for rendering this point source
+     */
     static int lookup_effective_radius(
         const std::vector<RadiusLUTEntry>& lut,
         float max_irradiance,
@@ -108,7 +147,14 @@ namespace huira {
         return min_radius;
     }
 
-    // Generic point to be rendered (UnresolvedObject or Star):
+    /**
+     * @brief Generic render item representing a point source (star or unresolved object).
+     * 
+     * Aggregates position, spectral irradiance, and computed effective PSF radius
+     * for unified rendering of both stars and unresolved objects.
+     * 
+     * @tparam TSpectral Spectral type for the rendering pipeline
+     */
     template <IsSpectral TSpectral>
     struct RenderItem {
         Vec3<float> point;
@@ -116,7 +162,29 @@ namespace huira {
         int         effective_radius;
     };
 
-
+    /**
+     * @brief Render unresolved point sources (stars and unresolved objects) into the frame buffer.
+     * 
+     * This method implements an optimized pipeline for rendering point sources that cannot be
+     * resolved into visible geometry. It supports both delta-function (no PSF) and spatially-
+     * distributed PSF rendering with adaptive radius culling for performance.
+     * 
+     * The rendering pipeline:
+     * 1. Collects all stars and unresolved objects into a unified list
+     * 2. Builds a radius LUT and assigns per-source effective PSF radii based on irradiance
+     * 3. Projects sources to screen space and bins them into tiles
+     * 4. Renders each tile in parallel into local buffers
+     * 5. Combines tile buffers into the final frame buffer
+     * 
+     * Performance optimizations:
+     * - Adaptive PSF radius: dim sources use smaller kernels
+     * - Tiled rendering: parallel processing with minimal synchronization
+     * - Depth occlusion testing: skip sources behind resolved geometry
+     * 
+     * @tparam TSpectral Spectral type for the rendering pipeline
+     * @param scene_view The scene view containing stars and unresolved objects
+     * @param frame_buffer The frame buffer to render into
+     */
     template <IsSpectral TSpectral>
     void Renderer<TSpectral>::render_unresolved_(
         SceneView<TSpectral>& scene_view,
