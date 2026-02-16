@@ -3,24 +3,33 @@
 
 #include "glm/glm.hpp"
 
-#include "huira/ephemeris/spice.hpp"
-#include "huira/core/time.hpp"
-#include "huira/core/types.hpp"
-#include "huira/core/transform.hpp"
-#include "huira/core/physics.hpp"
-
 #include "huira/core/concepts/spectral_concepts.hpp"
+#include "huira/ephemeris/spice.hpp"
+#include "huira/core/physics.hpp"
+#include "huira/core/time.hpp"
+#include "huira/core/transform.hpp"
+#include "huira/core/types.hpp"
 #include "huira/util/logger.hpp"
 #include "huira/util/validate.hpp"
 
+
 namespace huira {
+
+    /**
+     * @brief Construct a Node and assign a unique ID.
+     * @param scene Pointer to the owning Scene
+     */
     template <IsSpectral TSpectral>
     Node<TSpectral>::Node(Scene<TSpectral>* scene)
         : id_(next_id_++), scene_(scene)
     {
-
     }
 
+
+    /**
+     * @brief Set the node's position manually.
+     * @param position Position vector in meters
+     */
     template <IsSpectral TSpectral>
     void Node<TSpectral>::set_position(const Vec3<double>& position)
     {
@@ -34,6 +43,38 @@ namespace huira {
         this->spice_origin_ = "";
     }
 
+
+    /**
+     * @brief Set the node's position manually using unit types.
+     * @param x X position (meters)
+     * @param y Y position (meters)
+     * @param z Z position (meters)
+     */
+    template <IsSpectral TSpectral>
+    void Node<TSpectral>::set_position(units::Meter x, units::Meter y, units::Meter z)
+    {
+        if (!this->position_can_be_manual_()) {
+            HUIRA_THROW_ERROR(this->get_info() +
+                " - cannot manually set position when child has a spice_origin");
+        }
+
+        HUIRA_LOG_INFO(this->get_info() + " - set_position(" +
+            std::to_string(x.to_si()) + ", " +
+            std::to_string(y.to_si()) + ", " +
+            std::to_string(z.to_si()) + ")");
+
+        this->local_transform_.position = Vec3<double>{
+            x.to_si(), y.to_si(), z.to_si()
+        };
+        this->position_mode_ = TransformMode::MANUAL_TRANSFORM;
+        this->spice_origin_ = "";
+    }
+
+
+    /**
+     * @brief Set the node's rotation manually.
+     * @param rotation Rotation object
+     */
     template <IsSpectral TSpectral>
     void Node<TSpectral>::set_rotation(const Rotation<double>& rotation)
     {
@@ -42,11 +83,19 @@ namespace huira {
                 " - cannot manually set rotation when child has a spice_frame");
         }
 
+        HUIRA_LOG_INFO(this->get_info() + " - set_rotation(" + rotation.to_string());
+
         this->local_transform_.rotation = rotation;
         this->rotation_mode_ = TransformMode::MANUAL_TRANSFORM;
         this->spice_frame_ = "";
     }
 
+
+
+    /**
+     * @brief Set the node's scale.
+     * @param scale Scale vector
+     */
     template <IsSpectral TSpectral>
     void Node<TSpectral>::set_scale(const Vec3<double>& scale)
     {
@@ -58,6 +107,30 @@ namespace huira {
         this->local_transform_.scale = scale;
     }
 
+
+    /**
+     * @brief Set the node's scale using individual values.
+     * @param sx X scale
+     * @param sy Y scale
+     * @param sz Z scale
+     */
+    template <IsSpectral TSpectral>
+    void Node<TSpectral>::set_scale(double sx, double sy, double sz)
+    {
+        HUIRA_LOG_INFO(this->get_info() + " - set_scale(" +
+            std::to_string(sx) + ", " +
+            std::to_string(sy) + ", " +
+            std::to_string(sz) + ")");
+
+        this->local_transform_.scale = Vec3<double>{ sx, sy, sz };
+    }
+
+
+
+    /**
+     * @brief Set the node's velocity manually.
+     * @param velocity Velocity vector in m/s
+     */
     template <IsSpectral TSpectral>
     void Node<TSpectral>::set_velocity(const Vec3<double>& velocity)
     {
@@ -68,6 +141,34 @@ namespace huira {
         this->local_transform_.velocity = velocity;
     }
 
+
+    /**
+     * @brief Set the node's velocity manually using unit types.
+     * @param vx X velocity (m/s)
+     * @param vy Y velocity (m/s)
+     * @param vz Z velocity (m/s)
+     */
+    template <IsSpectral TSpectral>
+    void Node<TSpectral>::set_velocity(units::MetersPerSecond vx, units::MetersPerSecond vy, units::MetersPerSecond vz)
+    {
+        if (this->position_mode_ != TransformMode::MANUAL_TRANSFORM) {
+            HUIRA_THROW_ERROR(this->get_info() + " - cannot manually set velocity when node does not use manual position");
+        }
+
+        HUIRA_LOG_INFO(this->get_info() + " - set_velocity(" +
+            std::to_string(vx.to_si()) + ", " +
+            std::to_string(vy.to_si()) + ", " +
+            std::to_string(vz.to_si()) + ")");
+
+        this->local_transform_.velocity = Vec3<double>{ vx.to_si(), vy.to_si(), vz.to_si() };
+    }
+
+
+
+    /**
+     * @brief Set the node's angular velocity manually.
+     * @param angular_velocity Angular velocity vector in rad/s
+     */
     template <IsSpectral TSpectral>
     void Node<TSpectral>::set_angular_velocity(const Vec3<double>& angular_velocity)
     {
@@ -78,6 +179,33 @@ namespace huira {
         this->local_transform_.angular_velocity = angular_velocity;
     }
 
+
+    /**
+     * @brief Set the node's angular velocity manually using unit types.
+     * @param wx X angular velocity (rad/s)
+     * @param wy Y angular velocity (rad/s)
+     * @param wz Z angular velocity (rad/s)
+     */
+    template <IsSpectral TSpectral>
+    void Node<TSpectral>::set_angular_velocity(units::RadiansPerSecond wx, units::RadiansPerSecond wy, units::RadiansPerSecond wz)
+    {
+        if (this->rotation_mode_ != TransformMode::MANUAL_TRANSFORM) {
+            HUIRA_THROW_ERROR(this->get_info() + " - cannot manually set angular velocity when node does not use manual rotation");
+        }
+
+        HUIRA_LOG_INFO(this->get_info() + " - set_angular_velocity(" +
+            std::to_string(wx.to_si()) + ", " +
+            std::to_string(wy.to_si()) + ", " +
+            std::to_string(wz.to_si()) + ")");
+
+        this->local_transform_.angular_velocity = Vec3<double>{ wx.to_si(), wy.to_si(), wz.to_si() };
+    }
+
+
+    /**
+     * @brief Set the node's SPICE origin for ephemeris-based transforms.
+     * @param spice_origin SPICE origin string
+     */
     template <IsSpectral TSpectral>
     void Node<TSpectral>::set_spice_origin(const std::string& spice_origin)
     {
@@ -91,6 +219,11 @@ namespace huira {
         this->position_mode_ = TransformMode::SPICE_TRANSFORM;
     }
 
+
+    /**
+     * @brief Set the node's SPICE frame for rotation-based transforms.
+     * @param spice_frame SPICE frame string
+     */
     template <IsSpectral TSpectral>
     void Node<TSpectral>::set_spice_frame(const std::string& spice_frame)
     {
@@ -104,6 +237,12 @@ namespace huira {
         this->rotation_mode_ = TransformMode::SPICE_TRANSFORM;
     }
 
+
+    /**
+     * @brief Set both SPICE origin and frame for the node.
+     * @param spice_origin SPICE origin string
+     * @param spice_frame SPICE frame string
+     */
     template <IsSpectral TSpectral>
     void Node<TSpectral>::set_spice(const std::string& spice_origin, const std::string& spice_frame)
     {
@@ -124,6 +263,14 @@ namespace huira {
     }
 
 
+
+    /**
+     * @brief Get the apparent transform of the node for a given observation mode and time.
+     * @param obs_mode Observation mode (true, geometric, aberrated)
+     * @param t_obs Observation time
+     * @param observer_ssb_state Observer's SSB transform
+     * @return Transform<double> Apparent transform
+     */
     template <IsSpectral TSpectral>
     Transform<double> Node<TSpectral>::get_apparent_transform(ObservationMode obs_mode, const Time& t_obs, const Transform<double>& observer_ssb_state) const
     {
@@ -149,6 +296,15 @@ namespace huira {
         return apparent_state;
     }
 
+
+    /**
+     * @brief Get the geometric state (transform and light time) of the node.
+     * @param t_obs Observation time
+     * @param observer_ssb_state Observer's SSB transform
+     * @param iterate Whether to iterate for aberration
+     * @param tol Tolerance for iteration
+     * @return std::pair<Transform<double>, double> {transform, light time}
+     */
     template <IsSpectral TSpectral>
     std::pair<Transform<double>, double> Node<TSpectral>::get_geometric_state_(const Time& t_obs, const Transform<double>& observer_ssb_state, bool iterate, double tol) const
     {
@@ -175,6 +331,13 @@ namespace huira {
         return { full_ssb_transform, dt };
     }
 
+
+    /**
+     * @brief Get the node's transform in the Solar System Barycenter (SSB) frame.
+     * @param t_obs Observation time
+     * @param dt Light time delay
+     * @return Transform<double> SSB transform
+     */
     template <IsSpectral TSpectral>
     Transform<double> Node<TSpectral>::get_ssb_transform_(const Time& t_obs, double dt) const
     {
@@ -223,6 +386,13 @@ namespace huira {
         return ssb_state;
     }
 
+
+    /**
+     * @brief Get the node's local position transform at a given time.
+     * @param t_obs Observation time
+     * @param dt Light time delay
+     * @return Transform<double> Local position transform
+     */
     template <IsSpectral TSpectral>
     Transform<double> Node<TSpectral>::get_local_position_at_(const Time& t_obs, double dt) const
     {
@@ -238,6 +408,13 @@ namespace huira {
         return local_transform_at_time;
     }
 
+
+    /**
+     * @brief Get the node's local rotation transform at a given time.
+     * @param t_obs Observation time
+     * @param dt Light time delay
+     * @return Transform<double> Local rotation transform
+     */
     template <IsSpectral TSpectral>
     Transform<double> Node<TSpectral>::get_local_rotation_at_(const Time& t_obs, double dt) const
     {

@@ -38,9 +38,21 @@ namespace huira {
         Model<TSpectral>*
     >;
 
+    /**
+     * @brief Scene graph node representing an instantiable asset (mesh, light, unresolved object, camera model, or model).
+     *
+     * Instance nodes are leaf nodes in the scene graph and wrap a single asset pointer.
+     *
+     * @tparam TSpectral Spectral type (e.g., RGB, Spectral)
+     */
     template <IsSpectral TSpectral>
     class Instance : public Node<TSpectral> {
     public:
+        /**
+         * @brief Construct an Instance node for a given asset.
+         * @param scene Pointer to the owning Scene
+         * @param asset Asset to wrap (mesh, light, etc.)
+         */
         Instance(Scene<TSpectral>* scene, const Instantiable<TSpectral>& asset)
             : Node<TSpectral>(scene), asset_(asset) {}
 
@@ -59,7 +71,6 @@ namespace huira {
         friend class Scene<TSpectral>;
         friend class SceneView<TSpectral>;
     };
-
 }
 
 #include "huira_impl/scene/instance.ipp"

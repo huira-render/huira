@@ -3,17 +3,6 @@
 #include "huira/core/types.hpp"
 
 namespace huira {
-
-    /**
-     * @brief Sets the position using a Vec3.
-     *
-     * @param position The 3D position vector to set
-     */
-    template <IsSpectral TSpectral, typename TNode>
-    void NodeHandle<TSpectral, TNode>::set_position(const Vec3<double>& position) const {
-        this->get_()->set_position(position);
-    }
-
     /**
      * @brief Sets the position using individual coordinates.
      *
@@ -22,8 +11,8 @@ namespace huira {
      * @param z The z-coordinate
      */
     template <IsSpectral TSpectral, typename TNode>
-    void NodeHandle<TSpectral, TNode>::set_position(double x, double y, double z) const {
-        this->get_()->set_position(Vec3<double>{x, y, z});
+    void NodeHandle<TSpectral, TNode>::set_position(units::Meter x, units::Meter y, units::Meter z) const {
+        this->get_()->set_position(x, y, z);
     }
     
 
@@ -38,17 +27,6 @@ namespace huira {
     }
 
 
-
-    /**
-     * @brief Sets the velocity using a Vec3.
-     *
-     * @param velocity The 3D velocity vector to set
-     */
-    template <IsSpectral TSpectral, typename TNode>
-    void NodeHandle<TSpectral, TNode>::set_velocity(const Vec3<double>& velocity) const {
-        this->get_()->set_velocity(velocity);
-    }
-
     /**
      * @brief Sets the velocity using individual components.
      *
@@ -57,8 +35,8 @@ namespace huira {
      * @param vz The z-component of velocity
      */
     template <IsSpectral TSpectral, typename TNode>
-    void NodeHandle<TSpectral, TNode>::set_velocity(double vx, double vy, double vz) const {
-        this->get_()->set_velocity(Vec3<double>{vx, vy, vz});
+    void NodeHandle<TSpectral, TNode>::set_velocity(units::MetersPerSecond vx, units::MetersPerSecond vy, units::MetersPerSecond vz) const {
+        this->get_()->set_velocity(vx, vy, vz);
     }
     
 
@@ -139,17 +117,6 @@ namespace huira {
         return this->get_()->get_static_rotation();
     }
 
-
-    /**
-     * @brief Sets the angular velocity using a Vec3.
-     *
-     * @param angular_velocity The 3D angular velocity vector to set
-     */
-    template <IsSpectral TSpectral, typename TNode>
-    void NodeHandle<TSpectral, TNode>::set_angular_velocity(const Vec3<double>& angular_velocity) const {
-        this->get_()->set_angular_velocity(angular_velocity);
-    }
-
     /**
      * @brief Sets the angular velocity using individual components.
      *
@@ -158,8 +125,8 @@ namespace huira {
      * @param wz The z-component of angular velocity
      */
     template <IsSpectral TSpectral, typename TNode>
-    void NodeHandle<TSpectral, TNode>::set_angular_velocity(double wx, double wy, double wz) const {
-        this->get_()->set_angular_velocity(Vec3<double>{wx, wy, wz});
+    void NodeHandle<TSpectral, TNode>::set_angular_velocity(units::RadiansPerSecond wx, units::RadiansPerSecond wy, units::RadiansPerSecond wz) const {
+        this->get_()->set_angular_velocity(wx, wy, wz);
     }
 
     /**
@@ -174,16 +141,6 @@ namespace huira {
 
 
     /**
-     * @brief Sets the scale using a Vec3.
-     *
-     * @param scale The 3D scale vector to set
-     */
-    template <IsSpectral TSpectral, typename TNode>
-    void NodeHandle<TSpectral, TNode>::set_scale(const Vec3<double>& scale) const {
-        this->get_()->set_scale(scale);
-    }
-
-    /**
      * @brief Sets the scale using individual components.
      *
      * @param sx The x-component of the scale
@@ -192,7 +149,7 @@ namespace huira {
      */
     template <IsSpectral TSpectral, typename TNode>
     void NodeHandle<TSpectral, TNode>::set_scale(double sx, double sy, double sz) const {
-        this->get_()->set_scale(Vec3<double>{sx, sy, sz});
+        this->get_()->set_scale(sx, sy, sz);
     }
 
     /**
@@ -202,7 +159,7 @@ namespace huira {
      */
     template <IsSpectral TSpectral, typename TNode>
     void NodeHandle<TSpectral, TNode>::set_scale(double s) const {
-        this->get_()->set_scale(Vec3<double>{s, s, s});
+        this->get_()->set_scale(s, s, s);
     }
 
 

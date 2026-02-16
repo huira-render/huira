@@ -214,6 +214,16 @@ namespace huira {
         bind_quantity_type<huira::units::Steradian>(m, "Steradian");
         bind_quantity_type<huira::units::SquareDegree>(m, "SquareDegree");
 
+        // Speed Units
+        bind_unit_type<huira::units::MetersPerSecond>(m, "MetersPerSecond");
+        bind_unit_type<huira::units::KilometersPerSecond>(m, "KilometersPerSecond");
+        bind_unit_type<huira::units::MilesPerHour>(m, "MilesPerHour");
+        bind_unit_type<huira::units::KilometersPerHour>(m, "KilometersPerHour");
+
+        // Angular Rate Units
+        bind_unit_type<huira::units::RadiansPerSecond>(m, "RadiansPerSecond");
+        bind_unit_type<huira::units::DegreesPerSecond>(m, "DegreesPerSecond");
+
         // Frequency Units
         bind_quantity_type<huira::units::Hertz>(m, "Hertz");
         bind_quantity_type<huira::units::Kilohertz>(m, "Kilohertz");
@@ -291,6 +301,11 @@ namespace huira {
         // Solid Angle -> Steradian
         register_unit_conversions<huira::units::Steradian,
             huira::units::SquareDegree>(m);
+
+        // Speed -> MetersPerSecond
+        register_unit_conversions<huira::units::MetersPerSecond,
+            huira::units::KilometersPerSecond, huira::units::MilesPerHour,
+            huira::units::KilometersPerHour>(m);
 
         // Frequency -> Hertz
         register_unit_conversions<huira::units::Hertz,
