@@ -327,6 +327,9 @@ namespace huira::units {
     template<>
     constexpr double Quantity<Angle, DegreeTag>::get_ratio() const { return PI<double>() / 180.0; }
 
+    template<>
+    constexpr double Quantity<AngularVelocity, DegreeTag>::get_ratio() const { return PI<double>() / 180.0; }
+
     struct ArcMinuteTag {};
     template<> struct is_unit_tag<ArcMinuteTag> : std::true_type {};
     template<>

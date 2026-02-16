@@ -51,27 +51,28 @@ def main():
     scene.load_stars(star_catalog_path, time)
     scene.print_contents()
     
-    ## Create an instance of the camera using SPICE configuration
-    #mapcam = scene.root.new_instance(camera_model)
-    #mapcam.set_spice("ORX_OCAMS_MAPCAM", "ORX_OCAMS_MAPCAM")
-    #
+    # Create an instance of the camera using SPICE configuration
+    mapcam = scene.root.new_instance(camera_model)
+    mapcam.set_spice("ORX_OCAMS_MAPCAM", "ORX_OCAMS_MAPCAM")
+    
     ## Configure the render buffers
     #frame_buffer = camera_model.make_frame_buffer()
     #frame_buffer.enable_received_power()
     #frame_buffer.enable_sensor_response()
-    #
+    
     ## Create the renderer
     #renderer = huira.RasterRenderer(huira.RGB)
-    #
+    
     ## Create a scene view at the observation time
     #scene_view = huira.SceneView(scene, time, mapcam, huira.ObservationMode.ABERRATED_STATE)
-    #
+    
     ## Render the current scene view
     #renderer.render(scene_view, frame_buffer, exposure_time)
-    #
+    
     ## Save the results
-    #os.makedirs("output", exist_ok=True)
     #huira.write_image_png("output/starfield.png", frame_buffer.sensor_response(), 8)
+
+    print("DONE")
 
 if __name__ == "__main__":
     main()

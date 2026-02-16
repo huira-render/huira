@@ -61,18 +61,31 @@ namespace huira {
         this->get_()->set_rotation(rotation);
     }
 
+    /**
+     * @brief Sets the local-to-parent rotation using a rotation matrix.
+     * @param matrix 3x3 rotation matrix
+     */
     template <IsSpectral TSpectral, typename TNode>
     void NodeHandle<TSpectral, TNode>::set_rotation_local_to_parent(const Mat3<double>& matrix) const
     {
         this->get_()->set_rotation(Rotation<double>::from_local_to_parent(matrix));
     }
 
+    /**
+     * @brief Sets the local-to-parent rotation using a quaternion.
+     * @param quaternion Quaternion representing the rotation
+     */
     template <IsSpectral TSpectral, typename TNode>
     void NodeHandle<TSpectral, TNode>::set_rotation_local_to_parent(const Quaternion<double>& quaternion) const
     {
         this->get_()->set_rotation(Rotation<double>::from_local_to_parent(quaternion));
     }
 
+    /**
+     * @brief Sets the local-to-parent rotation using an axis and angle.
+     * @param axis Axis of rotation
+     * @param angle Angle in degrees
+     */
     template <IsSpectral TSpectral, typename TNode>
     void NodeHandle<TSpectral, TNode>::set_rotation_local_to_parent(const Vec3<double>& axis, units::Degree angle) const
     {
@@ -80,18 +93,31 @@ namespace huira {
     }
 
 
+    /**
+     * @brief Sets the parent-to-local rotation using a rotation matrix.
+     * @param matrix 3x3 rotation matrix
+     */
     template <IsSpectral TSpectral, typename TNode>
     void NodeHandle<TSpectral, TNode>::set_rotation_parent_to_local(const Mat3<double>& matrix) const
     {
         this->get_()->set_rotation(Rotation<double>::from_parent_to_local(matrix));
     }
 
+    /**
+     * @brief Sets the parent-to-local rotation using a quaternion.
+     * @param quaternion Quaternion representing the rotation
+     */
     template <IsSpectral TSpectral, typename TNode>
     void NodeHandle<TSpectral, TNode>::set_rotation_parent_to_local(const Quaternion<double>& quaternion) const
     {
         this->get_()->set_rotation(Rotation<double>::from_parent_to_local(quaternion));
     }
 
+    /**
+     * @brief Sets the parent-to-local rotation using an axis and angle.
+     * @param axis Axis of rotation
+     * @param angle Angle in degrees
+     */
     template <IsSpectral TSpectral, typename TNode>
     void NodeHandle<TSpectral, TNode>::set_rotation_parent_to_local(const Vec3<double>& axis, units::Degree angle) const
     {
@@ -100,6 +126,13 @@ namespace huira {
 
 
 
+    /**
+     * @brief Sets the rotation using extrinsic Euler angles and a rotation sequence.
+     * @param x First Euler angle (radians)
+     * @param y Second Euler angle (radians)
+     * @param z Third Euler angle (radians)
+     * @param sequence Rotation order (e.g., "XYZ")
+     */
     template <IsSpectral TSpectral, typename TNode>
     void NodeHandle<TSpectral, TNode>::set_euler_angles(units::Radian x, units::Radian y, units::Radian z, std::string sequence) const
     {

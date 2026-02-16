@@ -20,6 +20,9 @@ namespace huira {
         py::class_<SceneType>(m, "Scene")
             .def(py::init<>())
 
+            // Root frame access
+            .def_readonly("root", &SceneType::root)
+
             // Camera models
             .def("new_camera_model", &SceneType::new_camera_model,
                 py::arg("name") = "",

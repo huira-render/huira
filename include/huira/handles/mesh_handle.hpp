@@ -18,6 +18,15 @@ namespace huira {
     class ModelLoader;
 
 
+    /**
+     * @brief Handle for referencing a Mesh asset in the scene.
+     *
+     * MeshHandle provides safe, type-checked access to Mesh assets, allowing
+     * manipulation and querying of mesh data within the scene. Used by Scene,
+     * FrameHandle, and ModelLoader for mesh management.
+     *
+     * @tparam TSpectral Spectral type for the scene
+     */
     template <IsSpectral TSpectral>
     class MeshHandle : public Handle<Mesh<TSpectral>> {
     public:
