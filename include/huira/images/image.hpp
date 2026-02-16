@@ -1,39 +1,69 @@
 #pragma once
 
-#include <vector>
 #include <cstddef>
+#include <vector>
 
-#include "huira/core/spectral_bins.hpp"
-#include "huira/core/types.hpp"
 #include "huira/core/concepts/numeric_concepts.hpp"
 #include "huira/core/concepts/pixel_concepts.hpp"
+#include "huira/core/spectral_bins.hpp"
+#include "huira/core/types.hpp"
 
 namespace huira {
-    // Scalar type and channel count for a given pixel type
+    /**
+     * @brief Type traits for image pixel types.
+     * 
+     * Provides compile-time information about pixel types including the underlying
+     * scalar type and the number of channels.
+     * 
+     * @tparam T The pixel type (must satisfy IsImagePixel concept)
+     */
     template<IsImagePixel T>
     struct ImagePixelTraits {
         using Scalar = T;
         static constexpr int channels = 1;
     };
 
+    /**
+     * @brief Specialization for Vec3 pixel types.
+     */
     template<IsFloatingPoint T>
     struct ImagePixelTraits<Vec3<T>> {
         using Scalar = T;
         static constexpr int channels = 3;
     };
 
-template<std::size_t N, auto... Args>
-struct ImagePixelTraits<SpectralBins<N, Args...>> {
-    using Scalar = float;
-    static constexpr std::size_t channels = N;
-};
-
-    enum class WrapMode {
-        Clamp,
-        Repeat,
-        Mirror
+    /**
+     * @brief Specialization for SpectralBins pixel types.
+     */
+    template<std::size_t N, auto... Args>
+    struct ImagePixelTraits<SpectralBins<N, Args...>> {
+        using Scalar = float;
+        static constexpr std::size_t channels = N;
     };
 
+    /**
+     * @brief Specifies how texture coordinates outside [0,1] are handled during sampling.
+     */
+    enum class WrapMode {
+        Clamp,   ///< Clamp coordinates to [0,1]
+        Repeat,  ///< Repeat texture by wrapping coordinates
+        Mirror   ///< Mirror texture at boundaries
+    };
+
+    /**
+     * @brief A 2D image container with templated pixel types.
+     * 
+     * The Image class provides a flexible container for 2D image data with support
+     * for various pixel types including scalar values, Vec3 for RGB/color data, and
+     * SpectralBins for spectral imaging. It offers both checked and unchecked access
+     * methods, as well as sampling operations with different wrap modes.
+     * 
+     * Memory is stored in row-major order, with the origin at the top-left corner.
+     * Pixel coordinates (x, y) map to image space where x increases to the right
+     * and y increases downward.
+     * 
+     * @tparam PixelT The type of pixel stored (must satisfy IsImagePixel concept)
+     */
     template<IsImagePixel PixelT>
     class Image {
     public:
@@ -111,6 +141,6 @@ struct ImagePixelTraits<SpectralBins<N, Args...>> {
         [[nodiscard]] float wrap_coordinate(float coord, float max) const noexcept;
     };
 
-} // namespace huira
+}
 
 #include "huira_impl/images/image.ipp"

@@ -43,7 +43,7 @@ def main():
     camera_model.use_aperture_psf(32, 16)
     camera_model.set_sensor_bit_depth(14)
     
-    ## Set the observation time
+    # Set the observation time
     time = huira.Time("2016-09-19T16:22:05.728")
     exposure_time = 9.984285275
     
