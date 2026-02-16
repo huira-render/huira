@@ -57,9 +57,44 @@ namespace huira {
             HUIRA_THROW_ERROR("UnresolvedLambertianSphere::UnresolvedLambertianSphere - Radius must be a positive finite value");
         }
 
-        if (!albedo.valid_ratio()) {
+        if (!albedo_.valid_ratio()) {
             HUIRA_THROW_ERROR("UnresolvedLambertianSphere::UnresolvedLambertianSphere - Invalid spectral albedo: " + 
-                albedo.to_string());
+                albedo_.to_string());
+        }
+    }
+
+    /**
+     * @brief Constructs an UnresolvedLambertianSphere with specified properties.
+     *
+     * Initializes a Lambertian sphere with a given radius, illuminating light source,
+     * and spectral albedo. The constructor validates that the provided light instance
+     * actually contains a Light object.
+     *
+     * @param radius Physical radius of the sphere in meters.
+     * @param light_instance Handle to the Instance containing the illuminating light source.
+     * @param albedo Constant spectral albedo of the sphere
+     * @throws std::runtime_error if the light_instance does not contain a Light.
+     */
+    template <IsSpectral TSpectral>
+    UnresolvedLambertianSphere<TSpectral>::UnresolvedLambertianSphere(units::Meter radius, InstanceHandle<TSpectral> light_instance, float albedo) :
+        radius_{ static_cast<float>(radius.to_si()) },
+        light_instance_{ light_instance.get() },
+        albedo_{ TSpectral{ albedo } }
+    {
+        const Instantiable<TSpectral>& asset = light_instance_->asset();
+        auto* light_ptr = std::get_if<Light<TSpectral>*>(&asset);
+        if (!light_ptr) {
+            HUIRA_THROW_ERROR("UnresolvedLambertianSphere::UnresolvedLambertianSphere - Requires an Instance containing a Light");
+        }
+        light_ = *light_ptr;
+
+        if (radius_ <= 0.f || std::isnan(radius_) || std::isinf(radius_)) {
+            HUIRA_THROW_ERROR("UnresolvedLambertianSphere::UnresolvedLambertianSphere - Radius must be a positive finite value");
+        }
+
+        if (!albedo_.valid_ratio()) {
+            HUIRA_THROW_ERROR("UnresolvedLambertianSphere::UnresolvedLambertianSphere - Invalid albedo: " +
+                std::to_string(albedo));
         }
     }
 

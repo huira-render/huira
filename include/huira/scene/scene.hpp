@@ -73,8 +73,10 @@ namespace huira {
         UnresolvedObjectHandle<TSpectral> new_unresolved_emitter(const units::Watt& power, std::string name = "");
         UnresolvedObjectHandle<TSpectral> new_unresolved_sphere(units::Meter radius, InstanceHandle<TSpectral> sun, std::string name = "");
         UnresolvedObjectHandle<TSpectral> new_unresolved_sphere(units::Meter radius, InstanceHandle<TSpectral> sun, TSpectral albedo, std::string name = "");
+        UnresolvedObjectHandle<TSpectral> new_unresolved_sphere(units::Meter radius, InstanceHandle<TSpectral> sun, float albedo, std::string name = "");
         UnresolvedObjectHandle<TSpectral> new_unresolved_asteroid(double H, double G, InstanceHandle<TSpectral> sun, std::string name = "");
         UnresolvedObjectHandle<TSpectral> new_unresolved_asteroid(double H, double G, InstanceHandle<TSpectral> sun, TSpectral albedo, std::string name = "");
+        UnresolvedObjectHandle<TSpectral> new_unresolved_asteroid(double H, double G, InstanceHandle<TSpectral> sun, float albedo, std::string name = "");
         UnresolvedObjectHandle<TSpectral> add_unresolved_object(std::shared_ptr<UnresolvedObject<TSpectral>> unresolved_object, std::string name = "");
 
         void set_name(const UnresolvedObjectHandle<TSpectral>& unresolved_object_handle, const std::string& name);

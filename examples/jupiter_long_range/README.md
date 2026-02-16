@@ -2,6 +2,7 @@
 
 This example shows you how to render a star field with Jupiter and it's moons.
 
+## Get the Tycho2 Star Catalog and SPICE Kernels:
 
 1. Fetch the Tycho-2 Star Catalog Data
 
@@ -32,7 +33,8 @@ Inside of the provided `kernels/` it will download the following:
     └── jup365.bsp
 ```
 
-3. Build the example:
+
+## C++ Example Code
 Simply build the project using the cmake option `HUIRA_EXAMPLES=ON`.  This will build all the examples, including this one.  For example, if you are on linux/macos using a conda environment:
 ```bash
 mkdir build
@@ -41,8 +43,15 @@ cmake -DCMAKE_TOOLCHAIN_FILE=../cmake/conda-toolchain.cmake -CMAKE_BUILD_TYPE=Re
 cmake --build . -j
 ```
 
-4. Run the example:
 The example code allows you to pass in the location of the Tycho-2 star catalog file and the SPICE kernels via command line arguments.  For example:
 ```bash
-./jupiter_range_example --tycho2 /your/output/path/tycho2.hrsc --spice /path/to/your/kernels/
+./jupiter_range_example /your/output/path/tycho2.hrsc /path/to/your/kernels/
+```
+
+## Python Example
+Make sure you've installed the `huira` python package.  If you are installing from source, simply navigate to the `bindings/python/` and run `pip install .`
+
+Once you have `huira` installed, you can run the python example as follows:
+```bash
+python jupiter_long_range.py /your/output/path/tycho2.hrsc /path/to/your/kernels/
 ```

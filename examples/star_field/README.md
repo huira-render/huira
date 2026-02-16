@@ -53,7 +53,7 @@ cmake --build . -j
 
 The example code allows you to pass in the location of the Tycho-2 star catalog file and the SPICE kernels via command line arguments.  For example:
 ```bash
-./star_field_example --tycho2 /your/output/path/tycho2.hrsc --spice /path/to/your/kernels/
+./star_field_example /your/output/path/tycho2.hrsc /path/to/your/kernels/
 ```
 
 ## Python Example
@@ -61,5 +61,5 @@ Make sure you've installed the `huira` python package.  If you are installing fr
 
 Once you have `huira` installed, you can run the python example as follows:
 ```bash
-python star_field_example.py --tycho2 /your/output/path/tycho2.hrsc --spice /path/to/your/kernels/
+python star_field_example.py /your/output/path/tycho2.hrsc /path/to/your/kernels/
 ```
