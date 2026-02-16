@@ -1,3 +1,4 @@
+
 #pragma once
 
 #include <vector>
@@ -6,6 +7,14 @@
 #include "huira/images/image.hpp"
 
 namespace huira {
+
+    /**
+     * @brief Abstract base class for point spread functions (PSF).
+     *
+     * Defines the interface and cache management for all PSF types, supporting polyphase kernel generation.
+     *
+     * @tparam TSpectral The spectral representation type.
+     */
     template <IsSpectral TSpectral>
     class PSF {
     public:
