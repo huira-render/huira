@@ -8,7 +8,7 @@ namespace huira {
     template <IsSpectral TSpectral>
     class AiryDisk : public PSF<TSpectral> {
     public:
-        AiryDisk(float focal_length, Vec2<float> pixel_pitch, float aperture_diameter, int radius, int banks);
+        AiryDisk(units::Meter focal_length, units::Meter pitch_x, units::Meter pitch_y, units::Meter aperture_diameter, int radius, int banks);
         ~AiryDisk() override = default;
 
         TSpectral evaluate(float x, float y) override;

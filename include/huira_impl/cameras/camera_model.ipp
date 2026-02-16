@@ -7,8 +7,10 @@ namespace huira {
     template <IsSpectral TSpectral>
     CameraModel<TSpectral>::CameraModel() : id_(next_id_++)
     {
+        units::Meter diameter(this->focal_length_ / 2.8f);
+
         this->sensor_ = std::make_unique<SimpleSensor<TSpectral>>();
-        this->aperture_ = std::make_unique<CircularAperture<TSpectral>>(.025f);
+        this->aperture_ = std::make_unique<CircularAperture<TSpectral>>(diameter);
 
         compute_intrinsics_();
     }
@@ -20,7 +22,10 @@ namespace huira {
         compute_intrinsics_();
 
         if (use_aperture_psf_) {
-            psf_ = aperture_->make_psf(focal_length_, sensor_->pixel_pitch(), psf_->get_radius(), psf_->get_banks());
+            units::Meter f(focal_length_);
+            units::Meter px(sensor_->pixel_pitch().x);
+            units::Meter py(sensor_->pixel_pitch().y);
+            psf_ = aperture_->make_psf(f, px, py, psf_->get_radius(), psf_->get_banks());
         }
     }
 
@@ -134,7 +139,11 @@ namespace huira {
     template <IsSpectral TSpectral>
     void CameraModel<TSpectral>::use_aperture_psf(int radius, int banks) {
         use_aperture_psf_ = true;
-        psf_ = aperture_->make_psf(focal_length_, sensor_->pixel_pitch(), radius, banks);
+
+        units::Meter f(focal_length_);
+        units::Meter px(sensor_->pixel_pitch().x);
+        units::Meter py(sensor_->pixel_pitch().y);
+        psf_ = aperture_->make_psf(f, px, py, radius, banks);
     }
 
     template <IsSpectral TSpectral>
@@ -198,12 +207,16 @@ namespace huira {
     template <IsSpectral TSpectral>
     void CameraModel<TSpectral>::set_fstop(float fstop)
     {
-        float aperture_diameter = focal_length_ / fstop;
-        float aperture_area = PI<float>() * (aperture_diameter * aperture_diameter) / 4.f;
+        units::Meter aperture_diameter(focal_length_ / fstop);
+        units::SquareMeter aperture_area = PI<float>() * (aperture_diameter * aperture_diameter) / 4.f;
+
         this->aperture_->set_area(aperture_area);
 
         if (use_aperture_psf_) {
-            psf_ = aperture_->make_psf(focal_length_, sensor_->pixel_pitch(), psf_->get_radius(), psf_->get_banks());
+            units::Meter f(focal_length_);
+            units::Meter px(sensor_->pixel_pitch().x);
+            units::Meter py(sensor_->pixel_pitch().y);
+            psf_ = aperture_->make_psf(f, px, py, psf_->get_radius(), psf_->get_banks());
         }
     }
 
