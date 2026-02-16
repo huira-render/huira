@@ -94,6 +94,9 @@ namespace huira {
                 py::arg("coeffs"))
             .def("delete_distortion", &HandleType::delete_distortion)
 
+            // Make the FrameBuffer
+            .def("make_frame_buffer", &HandleType::make_frame_buffer)
+
             // Blender convention
             .def("use_blender_convention", &HandleType::use_blender_convention,
                 py::arg("value") = true)

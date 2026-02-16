@@ -27,6 +27,8 @@
 #include "huira/images/fits_metadata_py.ipp"
 #include "huira/images/image_py.ipp"
 
+#include "huira/render/frame_buffer_py.ipp"
+
 #include "huira/scene/scene_py.ipp"
 
 #include "huira/util/paths_py.ipp"
@@ -45,6 +47,8 @@ inline void bind_spectral(py::module_& m) {
     huira::bind_instance_handle<TSpectral>(m);
     huira::bind_frame_handle<TSpectral>(m);
     huira::bind_root_frame_handle<TSpectral>(m);
+
+    huira::bind_frame_buffer<TSpectral>(m);
 
     huira::bind_scene<TSpectral>(m);
 }
