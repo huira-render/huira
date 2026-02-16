@@ -266,6 +266,7 @@ namespace huira {
         bind_image<uint8_t>(m, "Image_u8");
         bind_image<uint16_t>(m, "Image_u16");
         bind_image<uint32_t>(m, "Image_u32");
+        bind_image<uint64_t>(m, "Image_u64");
 
         // Vec3 (RGB) images
         bind_image<Vec3<float>>(m, "Image_rgb_f32");
