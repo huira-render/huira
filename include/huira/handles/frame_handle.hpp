@@ -12,21 +12,27 @@
 #include "huira/scene/frame_node.hpp"
 
 namespace huira {
+    /**
+     * @brief Handle for manipulating frame nodes in the scene graph.
+     *
+     * FrameHandle provides methods to create and delete subframes, manage SPICE subframes,
+     * and instantiate or delete asset instances within a frame node. It is a strongly-typed
+     * handle that ensures safe access and modification of the scene graph hierarchy.
+     *
+     * @tparam TSpectral Spectral type for the scene
+     */
     template <IsSpectral TSpectral>
     class FrameHandle : public NodeHandle<TSpectral, FrameNode<TSpectral>> {
     public:
         FrameHandle() = delete;
         using NodeHandle<TSpectral, FrameNode<TSpectral>>::NodeHandle;
 
-       
-
-        // New Subframe
+        
         FrameHandle<TSpectral> new_subframe() const;
         FrameHandle<TSpectral> new_spice_subframe(const std::string& spice_origin, const std::string& spice_frame) const;
         void delete_subframe(FrameHandle<TSpectral> subframe) const;
 
-
-        // New Instance
+        
         template <typename THandle>
             requires std::is_constructible_v<Instantiable<TSpectral>, decltype(std::declval<THandle>().get().get())>
         InstanceHandle<TSpectral> new_instance(const THandle& asset_handle) const;

@@ -16,6 +16,13 @@
 #include "huira/ephemeris/spice_py.ipp"
 
 #include "huira/handles/camera_handle_py.ipp"
+#include "huira/handles/frame_handle_py.ipp"
+#include "huira/handles/handle_py.ipp"
+#include "huira/handles/instance_handle_py.ipp"
+#include "huira/handles/light_handle_py.ipp"
+#include "huira/handles/node_handle_py.ipp"
+#include "huira/handles/root_frame_handle_py.ipp"
+#include "huira/handles/unresolved_handle_py.ipp"
 
 #include "huira/scene/scene_py.ipp"
 
@@ -26,10 +33,15 @@ namespace py = pybind11;
 template <huira::IsSpectral TSpectral>
 inline void bind_spectral(py::module_& m) {
     huira::bind_spectral_units_for_type<TSpectral>(m);
-
     huira::bind_spectral_bins<TSpectral>(m);
-
+    
     huira::bind_camera_model_handle<TSpectral>(m);
+    huira::bind_light_handle<TSpectral>(m);
+    huira::bind_unresolved_object_handle<TSpectral>(m);
+
+    huira::bind_instance_handle<TSpectral>(m);
+    huira::bind_frame_handle<TSpectral>(m);
+    huira::bind_root_frame_handle<TSpectral>(m);
 
     huira::bind_scene<TSpectral>(m);
 }

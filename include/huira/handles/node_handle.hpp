@@ -6,6 +6,16 @@
 #include "huira/scene/node.hpp"
 
 namespace huira {
+    /**
+     * @brief Handle for referencing and manipulating nodes in the scene graph.
+     *
+     * NodeHandle provides safe, type-checked access to scene graph nodes, allowing
+     * manipulation of position, velocity, rotation, scale, SPICE parameters, and parent access.
+     * It is used for both base Node and derived node types (e.g., FrameNode, Instance).
+     *
+     * @tparam TSpectral Spectral type for the scene
+     * @tparam TNode Node type (must derive from Node<TSpectral>)
+     */
     template <IsSpectral TSpectral, typename TNode>
     class NodeHandle : public Handle<TNode> {
     public:

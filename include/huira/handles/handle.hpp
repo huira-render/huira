@@ -3,7 +3,6 @@
 #include <memory>
 #include <concepts>
 
-#include "huira/util/logger.hpp"
 #include "huira/core/concepts/spectral_concepts.hpp"
 
 namespace huira {
@@ -12,50 +11,32 @@ namespace huira {
         { t.is_scene_owned() } -> std::convertible_to<bool>;
     };
 
+    /**
+     * @brief Strongly-typed handle for scene objects.
+     *
+     * Handle provides safe, type-checked access to scene objects managed by shared pointers.
+     * It ensures that the referenced object is still valid and owned by the scene, and allows
+     * for type-safe downcasting to derived types. Handles are used throughout the scene graph
+     * and asset management system to avoid raw pointer usage and to enforce object lifetime.
+     *
+     * @tparam T Scene object type
+     */
     template <IsSceneObject T>
     class Handle {
     public:
         Handle(std::weak_ptr<T> ptr) : ptr_(ptr) {}
 
-        bool valid() const {
-            std::shared_ptr<T> p = ptr_.lock();
-            if (!p) {
-                return false;
-            }
-            if (!p->is_scene_owned()) {
-                return false;
-            }
-            return true;
-        }
+        bool valid() const;
 
         template <typename U = T>
             requires std::derived_from<U, T> || std::same_as<U, T>
-        std::shared_ptr<U> get() const {
-            std::shared_ptr<T> p = get_();
-            
-            if constexpr (std::same_as<U, T>) {
-                return p;
-            } else {
-                std::shared_ptr<U> derived = std::dynamic_pointer_cast<U>(p);
-                if (!derived) {
-                    HUIRA_THROW_ERROR("Handle does not point to the requested type");
-                }
-                return derived;
-            }
-        }
+        std::shared_ptr<U> get() const;
 
     protected:
-        std::shared_ptr<T> get_() const {
-            std::shared_ptr<T> p = ptr_.lock();
-            if (!p) {
-                HUIRA_THROW_ERROR("Attempted to access an invalid handle");
-            }
-            if (!p->is_scene_owned()) {
-                HUIRA_THROW_ERROR("Attempted to access an invalid handle");
-            }
-            return p;
-        }
+        std::shared_ptr<T> get_() const;
 
         std::weak_ptr<T> ptr_;
     };
 }
+
+#include "huira_impl/handles/handle.ipp"

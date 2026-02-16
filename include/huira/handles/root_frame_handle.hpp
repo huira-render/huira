@@ -7,6 +7,15 @@
 #include "huira/handles/frame_handle.hpp"
 
 namespace huira {
+    /**
+     * @brief Handle for referencing the root frame node in the scene graph.
+     *
+     * RootFrameHandle is a specialized FrameHandle that represents the root of the scene graph.
+     * It disables all transform modification methods to ensure the root frame remains fixed.
+     * Copy and assignment are also disabled to enforce unique ownership semantics.
+     *
+     * @tparam TSpectral Spectral type for the scene
+     */
     template <IsSpectral TSpectral>
     class RootFrameHandle : public FrameHandle<TSpectral> {
     public:

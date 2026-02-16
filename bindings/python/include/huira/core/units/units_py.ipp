@@ -215,14 +215,14 @@ namespace huira {
         bind_quantity_type<huira::units::SquareDegree>(m, "SquareDegree");
 
         // Speed Units
-        bind_unit_type<huira::units::MetersPerSecond>(m, "MetersPerSecond");
-        bind_unit_type<huira::units::KilometersPerSecond>(m, "KilometersPerSecond");
-        bind_unit_type<huira::units::MilesPerHour>(m, "MilesPerHour");
-        bind_unit_type<huira::units::KilometersPerHour>(m, "KilometersPerHour");
+        bind_quantity_type<huira::units::MetersPerSecond>(m, "MetersPerSecond");
+        bind_quantity_type<huira::units::KilometersPerSecond>(m, "KilometersPerSecond");
+        bind_quantity_type<huira::units::MilesPerHour>(m, "MilesPerHour");
+        bind_quantity_type<huira::units::KilometersPerHour>(m, "KilometersPerHour");
 
         // Angular Rate Units
-        bind_unit_type<huira::units::RadiansPerSecond>(m, "RadiansPerSecond");
-        bind_unit_type<huira::units::DegreesPerSecond>(m, "DegreesPerSecond");
+        bind_quantity_type<huira::units::RadiansPerSecond>(m, "RadiansPerSecond");
+        bind_quantity_type<huira::units::DegreesPerSecond>(m, "DegreesPerSecond");
 
         // Frequency Units
         bind_quantity_type<huira::units::Hertz>(m, "Hertz");
