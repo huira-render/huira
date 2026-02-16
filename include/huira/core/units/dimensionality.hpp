@@ -75,8 +75,8 @@ namespace huira::units {
     // Unnamed but Common SI Derived Unit Types:
     using Area = decltype(Length{} *Length{});
     using Volume = decltype(Length{} *Length{} *Length{});
-    using Speed = decltype(Length{} / Time{});
-    using Acceleration = decltype(Speed{} / Time{});
+    using Velocity = decltype(Length{} / Time{});
+    using Acceleration = decltype(Velocity{} / Time{});
 
     // Named SI Derived Unit Types:
     using Frequency = decltype(Dimensionless{} / Time{});

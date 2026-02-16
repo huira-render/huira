@@ -125,6 +125,20 @@ namespace huira::units {
     // ===================== //
     // === Derived Units === //
     // ===================== //
+    /// @defroup velocity_units Velocity Units
+    /// @{
+    using MetersPerSecond = Quantity<Velocity, std::ratio<1, 1>>;
+    using KilometersPerSecond = Quantity<Velocity, std::kilo>;
+    using MilesPerHour = Quantity<Velocity, std::ratio<44704, 100000>>;
+    using KilometersPerHour = Quantity<Velocity, std::ratio<1000, 3600>>;
+    /// @}
+
+    /// @defgroup angular_rate_units Angular Rate Units
+    /// @{
+    using RadiansPerSecond = Quantity<AngularVelocity, std::ratio<1, 1>>;
+    using DegreesPerSecond = Quantity<AngularVelocity, DegreeTag>;
+    /// @}
+
     /// @defgroup frequency_units Frequency Units
     /// @{
     using Hertz = Quantity<Frequency, std::ratio<1, 1>>;
@@ -305,6 +319,22 @@ namespace huira::units {
         constexpr Kilowatt operator""_KW(long double value) { return Kilowatt(static_cast<double>(value)); }
         constexpr Megawatt operator""_MW(unsigned long long value) { return Megawatt(static_cast<double>(value)); }
         constexpr Megawatt operator""_MW(long double value) { return Megawatt(static_cast<double>(value)); }
+
+        // Velocity literals
+        constexpr MetersPerSecond operator""_mps(unsigned long long value) { return MetersPerSecond(static_cast<double>(value)); }
+        constexpr MetersPerSecond operator""_mps(long double value) { return MetersPerSecond(static_cast<double>(value)); }
+        constexpr KilometersPerSecond operator""_Kmps(unsigned long long value) { return KilometersPerSecond(static_cast<double>(value)); }
+        constexpr KilometersPerSecond operator""_Kmps(long double value) { return KilometersPerSecond(static_cast<double>(value)); }
+        constexpr MilesPerHour operator""_Miph(unsigned long long value) { return MilesPerHour(static_cast<double>(value)); }
+        constexpr MilesPerHour operator""_Miph(long double value) { return MilesPerHour(static_cast<double>(value)); }
+        constexpr KilometersPerHour operator""_Kmph(unsigned long long value) { return KilometersPerHour(static_cast<double>(value)); }
+        constexpr KilometersPerHour operator""_Kmph(long double value) { return KilometersPerHour(static_cast<double>(value)); }
+
+        // Angular Velocity literals
+        constexpr RadiansPerSecond operator""_radps(unsigned long long value) { return RadiansPerSecond(static_cast<double>(value)); }
+        constexpr RadiansPerSecond operator""_radps(long double value) { return RadiansPerSecond(static_cast<double>(value)); }
+        constexpr DegreesPerSecond operator""_degps(unsigned long long value) { return DegreesPerSecond(static_cast<double>(value)); }
+        constexpr DegreesPerSecond operator""_degps(long double value) { return DegreesPerSecond(static_cast<double>(value)); }
 
         // Frequency literals
         constexpr Hertz operator""_Hz(unsigned long long value) { return Hertz(static_cast<double>(value)); }

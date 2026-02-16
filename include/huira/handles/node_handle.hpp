@@ -13,14 +13,12 @@ namespace huira {
         using Handle<TNode>::Handle;
 
         // Position
-        void set_position(const Vec3<double>& position) const;
-        void set_position(double x, double y, double z) const;
+        void set_position(units::Meter x, units::Meter y, units::Meter z) const;
         Vec3<double> get_static_position() const;
 
 
         // Velocity
-        void set_velocity(const Vec3<double>& velocity) const;
-        void set_velocity(double vx, double vy, double vz) const;
+        void set_velocity(units::MetersPerSecond vx, units::MetersPerSecond vy, units::MetersPerSecond vz) const;
         Vec3<double> get_static_velocity() const;
 
 
@@ -40,14 +38,12 @@ namespace huira {
 
 
         // Angular velocity
-        void set_angular_velocity(const Vec3<double>& angular_velocity) const;
-        void set_angular_velocity(double wx, double wy, double wz) const;
+        void set_angular_velocity(units::RadiansPerSecond wx, units::RadiansPerSecond wy, units::RadiansPerSecond wz) const;
         Vec3<double> get_static_angular_velocity() const;
 
 
 
         // Scale
-        void set_scale(const Vec3<double>& scale) const;
         void set_scale(double sx, double sy, double sz) const;
         void set_scale(double s) const;
         Vec3<double> get_static_scale() const;

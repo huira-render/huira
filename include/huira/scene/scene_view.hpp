@@ -1,23 +1,32 @@
 #pragma once
 
-#include <memory>
-#include <vector>
 #include <cstddef>
+#include <memory>
 #include <unordered_map>
+#include <vector>
 
-#include "huira/assets/mesh.hpp"
 #include "huira/assets/lights/light.hpp"
+#include "huira/assets/mesh.hpp"
 #include "huira/assets/unresolved/unresolved_object.hpp"
-#include "huira/scene/scene.hpp"
+
 #include "huira/core/time.hpp"
 #include "huira/core/transform.hpp"
 #include "huira/handles/camera_handle.hpp"
+#include "huira/scene/scene.hpp"
 #include "huira/scene/scene_view_types.hpp"
+
 
 namespace huira {
     template <IsSpectral TSpectral>
     class Renderer;
 
+    /**
+     * @brief View of a scene at a specific time and camera instance.
+     *
+     * SceneView collects geometry, lights, unresolved objects, and stars for rendering.
+     *
+     * @tparam TSpectral Spectral type (e.g., RGB, Spectral)
+     */
     template <IsSpectral TSpectral>
     class SceneView {
     public:
@@ -41,6 +50,7 @@ namespace huira {
         void add_mesh_instance_(std::shared_ptr<Mesh<TSpectral>> mesh, const Transform<float>& render_transform);
         void add_light_instance_(std::shared_ptr<Light<TSpectral>> light, const Transform<float>& render_transform);
         void add_unresolved_instance_(std::shared_ptr<UnresolvedObject<TSpectral>> unresolved_object, const Transform<float>& render_transform);
+
         void traverse_model_graph_(const std::shared_ptr<Node<TSpectral>> node, const Transform<float>& parent_tf);
 
         std::shared_ptr<CameraModel<TSpectral>> camera_model_;

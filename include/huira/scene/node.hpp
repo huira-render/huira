@@ -1,17 +1,18 @@
 #pragma once
 
-#include <memory>
-#include <string>
-#include <stdexcept>
 #include <cstdint>
+#include <memory>
 #include <span>
-
-#include "huira/core/transform.hpp"
-#include "huira/core/time.hpp"
-#include "huira/scene/scene_object.hpp"
+#include <stdexcept>
+#include <string>
 
 #include "huira/core/concepts/numeric_concepts.hpp"
 #include "huira/core/concepts/spectral_concepts.hpp"
+
+#include "huira/core/time.hpp"
+#include "huira/core/transform.hpp"
+#include "huira/scene/scene_object.hpp"
+
 
 namespace huira {
     // Forward declare:
@@ -48,6 +49,8 @@ namespace huira {
      *
      * Node itself cannot have children - use FrameNode for nodes that need children.
      * Leaf nodes (lights, unresolved objects, etc.) should derive from Node directly.
+     *
+     * @tparam TSpectral Spectral type (e.g., RGB, Spectral)
      */
     template <IsSpectral TSpectral>
     class Node : public SceneObject<Node<TSpectral>, TSpectral> {
@@ -59,11 +62,18 @@ namespace huira {
         Node& operator=(const Node&) = delete;
 
         void set_position(const Vec3<double>& position);
-        void set_rotation(const Rotation<double>& rotation);
-        void set_scale(const Vec3<double>& scale);
+        void set_position(units::Meter x, units::Meter y, units::Meter z);
 
-        void set_velocity(const Vec3<double>& velocity);
+        void set_rotation(const Rotation<double>& rotation);
+
+        void set_scale(const Vec3<double>& scale);
+        void set_scale(double sx, double sy, double sz);
+
+        void set_velocity (const Vec3<double>& velocity);
+        void set_velocity(units::MetersPerSecond vx, units::MetersPerSecond vy, units::MetersPerSecond vz);
+
         void set_angular_velocity(const Vec3<double>& angular_velocity);
+        void set_angular_velocity(units::RadiansPerSecond wx, units::RadiansPerSecond wy, units::RadiansPerSecond wz);
 
         void set_spice_origin(const std::string& spice_origin);
         void set_spice_frame(const std::string& spice_frame);

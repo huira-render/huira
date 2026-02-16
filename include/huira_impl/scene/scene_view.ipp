@@ -1,15 +1,28 @@
 #include <memory>
 #include <vector>
 
-#include "huira/assets/mesh.hpp"
 #include "huira/assets/lights/light.hpp"
-#include "huira/scene/scene.hpp"
+#include "huira/assets/mesh.hpp"
+
+#include "huira/core/physics.hpp"
 #include "huira/core/time.hpp"
 #include "huira/core/transform.hpp"
 #include "huira/handles/camera_handle.hpp"
-#include "huira/core/physics.hpp"
+#include "huira/scene/scene.hpp"
+
 
 namespace huira {
+
+    /**
+     * @brief Construct a SceneView for a given scene, time, camera, and observation mode.
+     *
+     * Collects geometry, lights, unresolved objects, and stars for rendering.
+     *
+     * @param scene Scene to view
+     * @param t_obs Observation time
+     * @param camera_instance Camera instance handle
+     * @param obs_mode Observation mode
+     */
     template <IsSpectral TSpectral>
     SceneView<TSpectral>::SceneView(const Scene<TSpectral>& scene,
         const Time& t_obs,
@@ -98,6 +111,17 @@ namespace huira {
         }
     }
 
+
+    /**
+     * @brief Traverse the scene graph and collect renderable objects.
+     *
+     * Recursively visits nodes and collects mesh, light, unresolved, and model instances.
+     *
+     * @param node Node to traverse
+     * @param t_obs Observation time
+     * @param obs_ssb Observer SSB transform
+     * @param obs_mode Observation mode
+     */
     template <IsSpectral TSpectral>
     void SceneView<TSpectral>::traverse_and_collect_(const std::shared_ptr<Node<TSpectral>>& node,
         const Time& t_obs, const Transform<double> obs_ssb, ObservationMode obs_mode)
@@ -121,18 +145,36 @@ namespace huira {
         }
     }
 
+
+    /**
+     * @brief Handle mesh asset pointer and add to geometry batch.
+     * @param mesh Mesh pointer
+     * @param xf Render transform
+     */
     template <IsSpectral TSpectral>
     void SceneView<TSpectral>::handle_asset_ptr_(Mesh<TSpectral>* mesh, const Transform<float>& xf)
     {
         add_mesh_instance_(mesh->shared_from_this(), xf);
     }
 
+
+    /**
+     * @brief Handle light asset pointer and add to lights vector.
+     * @param light Light pointer
+     * @param xf Render transform
+     */
     template <IsSpectral TSpectral>
     void SceneView<TSpectral>::handle_asset_ptr_(Light<TSpectral>* light, const Transform<float>& xf)
     {
         add_light_instance_(light->shared_from_this(), xf);
     }
 
+
+    /**
+     * @brief Handle camera model asset pointer (no-op).
+     * @param camera CameraModel pointer
+     * @param xf Render transform
+     */
     template <IsSpectral TSpectral>
     void SceneView<TSpectral>::handle_asset_ptr_(CameraModel<TSpectral>* camera, const Transform<float>& xf)
     {
@@ -140,12 +182,24 @@ namespace huira {
         (void)xf;
     }
 
+
+    /**
+     * @brief Handle unresolved object asset pointer and add to unresolved vector.
+     * @param light UnresolvedObject pointer
+     * @param xf Render transform
+     */
     template <IsSpectral TSpectral>
     void SceneView<TSpectral>::handle_asset_ptr_(UnresolvedObject<TSpectral>* light, const Transform<float>& xf)
     {
         add_unresolved_instance_(light->shared_from_this(), xf);
     }
 
+
+    /**
+     * @brief Handle model asset pointer and traverse its scene graph.
+     * @param model Model pointer
+     * @param instance_apparent_xf Render transform
+     */
     template <IsSpectral TSpectral>
     void SceneView<TSpectral>::handle_asset_ptr_(Model<TSpectral>* model, const Transform<float>& instance_apparent_xf)
     {
@@ -156,6 +210,12 @@ namespace huira {
         traverse_model_graph_(model_graph_ptr, instance_apparent_xf);
     }
 
+
+    /**
+     * @brief Add a mesh instance to the geometry batch.
+     * @param mesh Mesh pointer
+     * @param render_transform Render transform
+     */
     template <IsSpectral TSpectral>
     void SceneView<TSpectral>::add_mesh_instance_(std::shared_ptr<Mesh<TSpectral>> mesh, const Transform<float>& render_transform)
     {
@@ -177,6 +237,12 @@ namespace huira {
         }
     }
 
+
+    /**
+     * @brief Add a light instance to the lights vector.
+     * @param light Light pointer
+     * @param render_transform Render transform
+     */
     template <IsSpectral TSpectral>
     void SceneView<TSpectral>::add_light_instance_(std::shared_ptr<Light<TSpectral>> light, const Transform<float>& render_transform)
     {
@@ -187,6 +253,12 @@ namespace huira {
         lights_.push_back(std::move(instance));
     }
 
+
+    /**
+     * @brief Add an unresolved object instance to the unresolved vector.
+     * @param unresolved_object UnresolvedObject pointer
+     * @param render_transform Render transform
+     */
     template <IsSpectral TSpectral>
     void SceneView<TSpectral>::add_unresolved_instance_(std::shared_ptr<UnresolvedObject<TSpectral>> unresolved_object, const Transform<float>& render_transform)
     {
@@ -197,6 +269,12 @@ namespace huira {
         unresolved_objects_.push_back(std::move(instance));
     }
 
+
+    /**
+     * @brief Traverse a model's scene graph and collect instances.
+     * @param node Node to traverse
+     * @param parent_tf Parent transform
+     */
     template <IsSpectral TSpectral>
     void SceneView<TSpectral>::traverse_model_graph_(const std::shared_ptr<Node<TSpectral>> node, const Transform<float>& parent_tf)
     {

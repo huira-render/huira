@@ -1,16 +1,15 @@
 #pragma once
 
-#include <vector>
 #include <memory>
-#include <string>
-#include <algorithm>
 #include <span>
+#include <string>
+#include <vector>
 
-#include "huira/scene/node.hpp"
-#include "huira/scene/instance.hpp"
-
-#include "huira/core/concepts/numeric_concepts.hpp"
 #include "huira/core/concepts/spectral_concepts.hpp"
+
+#include "huira/scene/instance.hpp"
+#include "huira/scene/node.hpp"
+
 
 namespace huira {
     // Forward declare:
@@ -29,6 +28,14 @@ namespace huira {
     template <IsSpectral TSpectral>
     class Camera;
 
+    /**
+     * @brief Scene graph node that can have children.
+     *
+     * FrameNode represents a node in the scene graph that can have child nodes and leaf objects.
+     * Provides child management and factory methods for leaf node creation.
+     *
+     * @tparam TSpectral Spectral type (e.g., RGB, Spectral)
+     */
     template <IsSpectral TSpectral>
     class FrameNode : public Node<TSpectral> {
     public:
@@ -38,9 +45,8 @@ namespace huira {
         FrameNode(const FrameNode&) = delete;
         FrameNode& operator=(const FrameNode&) = delete;
 
-
-        // Child management:
         std::weak_ptr<FrameNode<TSpectral>> new_child();
+
         void delete_child(std::weak_ptr<Node<TSpectral>> child);
 
         // Factory methods for leaf nodes:
@@ -51,9 +57,9 @@ namespace huira {
         std::weak_ptr<Instance<TSpectral>> new_instance(CameraModel<TSpectral>* camera_model);
         std::weak_ptr<Instance<TSpectral>> new_instance(Model<TSpectral>* model);
 
+
         std::string type() const override { return "FrameNode"; }
 
-        // Override to check children for SPICE constraints
         std::span<const std::shared_ptr<Node<TSpectral>>> get_children() const override { return children_; }
 
     protected:
