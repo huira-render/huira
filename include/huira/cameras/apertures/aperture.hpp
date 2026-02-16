@@ -3,7 +3,7 @@
 
 #include <memory>
 
-#include "huira/cameras/psf/psf.hpp"
+#include "huira/cameras/psfs/psf.hpp"
 #include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/core/units/units.hpp"
 

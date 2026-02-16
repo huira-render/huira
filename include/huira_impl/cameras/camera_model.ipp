@@ -2,7 +2,7 @@
 #include <limits>
 #include <memory>
 
-#include "huira/cameras/aperture/circular_aperture.hpp"
+#include "huira/cameras/apertures/circular_aperture.hpp"
 #include "huira/cameras/sensors/simple_sensor.hpp"
 
 namespace huira {

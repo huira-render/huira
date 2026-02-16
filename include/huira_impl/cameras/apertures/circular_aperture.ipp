@@ -2,8 +2,8 @@
 #include <cmath>
 #include <memory>
 
-#include "huira/cameras/aperture/aperture.hpp"
-#include "huira/cameras/psf/airy_disk.hpp"
+#include "huira/cameras/apertures/aperture.hpp"
+#include "huira/cameras/psfs/airy_disk.hpp"
 #include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/core/constants.hpp"
 #include "huira/core/units/units.hpp"
