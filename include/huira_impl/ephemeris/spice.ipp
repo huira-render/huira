@@ -273,15 +273,6 @@ namespace huira::spice {
     /**
      * @brief returns the state (position and velocity) of a target body relative to an observer.
      *
-     * ## Coordinate System Contract
-     * - **Frame:** The returned Position and Velocity vectors are expressed in the coordinate system specified by the `FRAME` argument (e.g., "J2000").
-     * - **Reference:** These vectors represent the state of the TARGET *relative* to the OBSERVER.
-     * - **Consistency:** Since `spkezr` returns vectors already expressed in the `FRAME`, no additional rotation is required to use them in a `Transform` node (provided `FRAME` matches the node's Parent Frame).
-     *
-     * ## Comparison with sxform
-     * - Unlike `sxform` (which returns angular velocity in the Body/Local frame), `spkezr` returns linear velocity in the Reference/Parent frame.
-     * - Therefore, these vectors can be assigned directly to `Transform::position` and `Transform::velocity`.
-     *
      * @param TARGET The name of the target body.
      * @param time The time of observation.
      * @param FRAME The reference frame relative to which the output vectors are expressed.

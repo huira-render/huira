@@ -2,7 +2,7 @@
 
 #include <memory>
 
-#include "huira/cameras/aperture/aperture.hpp"
+#include "huira/cameras/apertures/aperture.hpp"
 #include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/core/units/units.hpp"
 
@@ -35,4 +35,4 @@ namespace huira {
     };
 }
 
-#include "huira_impl/cameras/aperture/circular_aperture.ipp"
+#include "huira_impl/cameras/apertures/circular_aperture.ipp"

@@ -1,7 +1,7 @@
 
 #pragma once
 
-#include "huira/cameras/psf/psf.hpp"
+#include "huira/cameras/psfs/psf.hpp"
 #include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/core/types.hpp"
 
@@ -30,4 +30,4 @@ namespace huira {
     };
 }
 
-#include "huira_impl/cameras/psf/airy_disk.ipp"
+#include "huira_impl/cameras/psfs/airy_disk.ipp"

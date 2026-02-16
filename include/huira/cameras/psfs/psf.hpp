@@ -55,4 +55,4 @@ namespace huira {
     concept IsPSF = is_psf<T>::value;
 }
 
-#include "huira_impl/cameras/psf/psf.ipp"
+#include "huira_impl/cameras/psfs/psf.ipp"
