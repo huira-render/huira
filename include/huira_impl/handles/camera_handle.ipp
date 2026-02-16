@@ -1,15 +1,14 @@
-
 #include "huira/core/concepts/spectral_concepts.hpp"
+#include "huira/core/units/units.hpp"
 
 namespace huira {
-    template <IsSpectral TSpectral>
-
     /**
      * @brief Set the focal length of the camera (in millimeters).
      * @param focal_length Focal length in millimeters
      */
     template <IsSpectral TSpectral>
-    void CameraModelHandle<TSpectral>::set_focal_length(units::Millimeter focal_length) const {
+    void CameraModelHandle<TSpectral>::set_focal_length(units::Millimeter focal_length) const
+    {
         this->get_()->set_focal_length(focal_length);
     }
 

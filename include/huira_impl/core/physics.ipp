@@ -8,12 +8,25 @@
 #include "huira/core/concepts/numeric_concepts.hpp"
 #include "huira/core/concepts/spectral_concepts.hpp"
 
+
 namespace huira {
+    /**
+     * @brief Compute the energy of a photon for a given wavelength (in meters).
+     * @param lambda_meters Wavelength in meters
+     * @return double Photon energy in joules
+     */
     inline double photon_energy(double lambda_meters) {
         // E = hc / lambda
         return (H_PLANCK<double>() * SPEED_OF_LIGHT<double>()) / lambda_meters;
     }
 
+
+    /**
+     * @brief Compute spectral radiance using Planck's law for a given temperature and wavelengths.
+     * @param temp Temperature in Kelvin
+     * @param lambda Vector of wavelengths (meters)
+     * @return std::vector<double> Spectral radiance at each wavelength
+     */
     inline std::vector<double> plancks_law(double temp, const std::vector<double>& lambda) {
         std::vector<double> radiance(lambda.size());
 
@@ -30,6 +43,15 @@ namespace huira {
         return radiance;
     }
 
+
+    /**
+     * @brief Generate N linearly spaced values between min and max (inclusive).
+     * @tparam T Floating point type
+     * @param min Minimum value
+     * @param max Maximum value
+     * @param N Number of samples
+     * @return std::vector<T> Linearly spaced values
+     */
     template <IsFloatingPoint T>
     std::vector<T> linspace(T min, T max, size_t N)
     {
@@ -41,6 +63,14 @@ namespace huira {
         return output;
     }
 
+
+    /**
+     * @brief Compute the black-body spectral radiance for a given temperature.
+     * @tparam TSpectral Spectral type
+     * @param temperature Temperature in Kelvin
+     * @param steps Number of integration steps per bin
+     * @return TSpectral Black-body radiance in each spectral bin
+     */
     template <IsSpectral TSpectral>
     TSpectral black_body(double temperature, std::size_t steps)
     {
@@ -62,6 +92,13 @@ namespace huira {
     // 
     // Center (mu) = 551nm (Standard Johnson V effective wavelength)
     // FWHM ~ 88nm -> Sigma ~ 37-38nm
+
+    /**
+     * @brief Approximate the Johnson V-band filter response as a Gaussian.
+     * @param N Number of wavelength samples
+     * @param lambda Output vector of wavelengths (meters)
+     * @return std::vector<double> Filter efficiency at each wavelength
+     */
     inline std::vector<double> johnson_vband_approximation(std::size_t N, std::vector<double>& lambda) {
         std::vector<double> efficiency(N);
         lambda.resize(N);
@@ -90,6 +127,12 @@ namespace huira {
     // Cohen, M., Walker, R. G., Barlow, M. J., & Deacon, J. R. (1992).
     // Spectral irradiance calibration in the infrared. I - Ground-based and IRAS broadband calibrations.
     // The Astronomical Journal, 104, 1650.
+
+    /**
+     * @brief Compute V-band photon irradiance for a given visual magnitude.
+     * @param visual_magnitude Visual magnitude (V)
+     * @return double Photon flux (photons/s/m^2)
+     */
     inline double v_band_irradiance(double visual_magnitude) {
         // Reference Zero Point (Vega, V=0).
         // The spectral flux density of Vega at 555nm is approx 3.63e-11 W/m^2/nm.
@@ -107,6 +150,14 @@ namespace huira {
 
 
 
+
+    /**
+     * @brief Convert visual magnitude to spectral irradiance, assuming a solar spectrum.
+     * @tparam TSpectral Spectral type
+     * @param visual_magnitude Visual magnitude (V)
+     * @param albedo Optional albedo scaling (default 1)
+     * @return TSpectral Spectral irradiance
+     */
     template <IsSpectral TSpectral>
     TSpectral visual_magnitude_to_irradiance(double visual_magnitude, TSpectral albedo)
     {
@@ -154,6 +205,13 @@ namespace huira {
     }
 
 
+
+    /**
+     * @brief Numerically integrate y(x) using the trapezoidal rule.
+     * @param x X values
+     * @param y Y values
+     * @return double Integral
+     */
     inline double integrate(const std::vector<double>& x, const std::vector<double>& y) {
         double sum = 0.0;
         for (size_t i = 0; i < x.size() - 1; ++i) {
@@ -164,6 +222,13 @@ namespace huira {
         return sum;
     }
 
+
+    /**
+     * @brief Compute relativistic aberration of a direction vector for a moving observer.
+     * @param direction Incoming direction (unit vector)
+     * @param v_obs Observer velocity (m/s)
+     * @return Vec3<double> Aberrated direction
+     */
     inline Vec3<double> compute_aberrated_direction(Vec3<double> direction, Vec3<double> v_obs)
     {
         // Calculate Relativistic Beta and Gamma
