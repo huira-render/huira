@@ -6,6 +6,20 @@
 #include "huira/images/image.hpp"
 
 namespace huira {
+
+    /**
+     * @brief Simulates noise and ADC quantization for a sensor pixel.
+     *
+     * Adds shot noise, clamps to full well, applies read noise, and quantizes to digital number (DN).
+     *
+     * @param signal_e Signal electrons.
+     * @param dark_e Dark current electrons.
+     * @param config Sensor configuration.
+     * @param max_dn Maximum digital number (saturation level).
+     * @param rng Random number generator.
+     * @param read_noise_dist Normal distribution for read noise.
+     * @return Normalized intensity in [0, 1].
+     */
     template <IsSpectral TSpectral>
     inline float noise_and_adc(float signal_e, float dark_e,
         const SensorConfig<TSpectral>& config,
@@ -28,6 +42,15 @@ namespace huira {
         return intensity;
     }
 
+
+    /**
+     * @brief Simulates the sensor readout process, including noise and quantization.
+     *
+     * Converts received power to electrons, applies quantum efficiency, adds noise, and quantizes the result.
+     *
+     * @param fb The frame buffer containing received power and where the sensor response will be written.
+     * @param exposure_time The exposure time in seconds.
+     */
     template <IsSpectral TSpectral>
     void SimpleSensor<TSpectral>::readout(FrameBuffer<TSpectral>& fb, float exposure_time) const
     {

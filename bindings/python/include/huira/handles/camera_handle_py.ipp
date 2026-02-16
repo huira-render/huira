@@ -86,6 +86,12 @@ namespace huira {
             .def("delete_psf", &HandleType::delete_psf)
 
             // Distortion
+            .def("set_brown_conrady_distortion", &HandleType::set_brown_conrady_distortion,
+                py::arg("coeffs"))
+            .def("set_opencv_distortion", &HandleType::set_opencv_distortion,
+                py::arg("coeffs"))
+            .def("set_owen_distortion", &HandleType::set_owen_distortion,
+                py::arg("coeffs"))
             .def("delete_distortion", &HandleType::delete_distortion)
 
             // Blender convention
