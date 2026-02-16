@@ -57,7 +57,7 @@ namespace huira {
             HUIRA_THROW_ERROR("UnresolvedLambertianSphere::UnresolvedLambertianSphere - Radius must be a positive finite value");
         }
 
-        if (!albedo.valid_albedo()) {
+        if (!albedo.valid_ratio()) {
             HUIRA_THROW_ERROR("UnresolvedLambertianSphere::UnresolvedLambertianSphere - Invalid spectral albedo: " + 
                 albedo.to_string());
         }

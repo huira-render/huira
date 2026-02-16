@@ -81,7 +81,7 @@ namespace huira {
             HUIRA_THROW_ERROR("UnresolvedAsteroid::UnresolvedAsteroid - G must be real and finite");
         }
 
-        if (!albedo.valid_albedo()) {
+        if (!albedo.valid_ratio()) {
             HUIRA_THROW_ERROR("UnresolvedAsteroid::UnresolvedAsteroid - Invalid spectral albedo: " +
                 albedo.to_string());
         }

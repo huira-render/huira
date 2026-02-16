@@ -1,39 +1,50 @@
+
 #pragma once
 
-#include <string>
-#include <memory>
 #include <cstdint>
+#include <memory>
+#include <string>
 
-#include "huira/core/types.hpp"
-#include "huira/render/sampler.hpp"
 #include "huira/core/concepts/numeric_concepts.hpp"
 #include "huira/core/concepts/spectral_concepts.hpp"
-
-#include "huira/cameras/distortion/distortion.hpp"
-#include "huira/cameras/distortion/brown_distortion.hpp"
-#include "huira/cameras/distortion/opencv_distortion.hpp"
-#include "huira/cameras/distortion/owen_distortion.hpp"
+#include "huira/core/types.hpp"
+#include "huira/render/sampler.hpp"
 
 #include "huira/cameras/aperture/aperture.hpp"
-#include "huira/scene/node.hpp"
-#include "huira/render/frame_buffer.hpp"
-#include "huira/cameras/sensors/sensor_model.hpp"
-#include "huira/scene/scene_object.hpp"
+#include "huira/cameras/distortion/brown_distortion.hpp"
+#include "huira/cameras/distortion/distortion.hpp"
+#include "huira/cameras/distortion/opencv_distortion.hpp"
+#include "huira/cameras/distortion/owen_distortion.hpp"
 #include "huira/cameras/psf/psf.hpp"
+#include "huira/cameras/sensors/sensor_model.hpp"
+#include "huira/render/frame_buffer.hpp"
+#include "huira/scene/node.hpp"
+#include "huira/scene/scene_object.hpp"
+
 
 namespace huira {
     template <IsSpectral TSpectral>
     class CameraModelHandle;
 
+    /**
+     * @brief CameraModel represents a pinhole or thin-lens camera with configurable sensor, aperture, and distortion models.
+     *
+     * This class provides a flexible camera abstraction for rendering and simulation, supporting various sensor types,
+     * aperture shapes, and lens distortion models. It allows configuration of focal length, f-stop, sensor resolution,
+     * pixel pitch, and more. The camera can project 3D points to the image plane, compute projected aperture area, and
+     * supports both analytic and PSF-based point spread functions. All units are SI unless otherwise noted.
+     *
+     * @tparam TSpectral The spectral type (e.g., float, Vec3f, etc.)
+     */
     template <IsSpectral TSpectral>
     class CameraModel : public SceneObject<CameraModel<TSpectral>, TSpectral> {
     public:
         CameraModel();
-        
+
         CameraModel(const CameraModel&) = delete;
         CameraModel& operator=(const CameraModel&) = delete;
 
-        void set_focal_length(float focal_length);
+        void set_focal_length(units::Millimeter focal_length);
         float focal_length() const { return focal_length_; }
 
         void set_fstop(float fstop);
@@ -54,13 +65,11 @@ namespace huira {
         void set_sensor_resolution(Resolution resolution);
         void set_sensor_resolution(int width, int height);
 
-        void set_sensor_pixel_pitch(Vec2<float> pixel_pitch);
-        void set_sensor_pixel_pitch(float pixel_pitch_x, float pixel_pitch_y);
-        void set_sensor_pixel_pitch(float pixel_pitch);
+        void set_sensor_pixel_pitch(units::Micrometer pitch_x, units::Micrometer pitch_y);
+        void set_sensor_pixel_pitch(units::Micrometer pitch);
 
-        void set_sensor_size(Vec2<float> size);
-        void set_sensor_size(float width, float height);
-        void set_sensor_size(float width);
+        void set_sensor_size(units::Millimeter width, units::Millimeter height);
+        void set_sensor_size(units::Millimeter width);
 
         Rotation<double> sensor_rotation() const;
 

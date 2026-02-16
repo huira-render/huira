@@ -214,7 +214,7 @@ namespace huira {
      * @return True if all values are valid abledo values.
      */
     template <std::size_t N, auto... Args>
-    bool SpectralBins<N, Args...>::valid_albedo() const
+    bool SpectralBins<N, Args...>::valid_ratio() const
     {
         for (std::size_t i = 0; i < N; ++i) {
             if (data_[i] < 0.f || data_[i] > 1.f) {

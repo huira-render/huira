@@ -1,14 +1,15 @@
+
 #pragma once
 
 #include "huira/core/concepts/spectral_concepts.hpp"
-#include "huira/cameras/camera_model.hpp"
-#include "huira/handles/handle.hpp"
+#include "huira/core/units/units.hpp"
 
+#include "huira/cameras/camera_model.hpp"
 #include "huira/cameras/distortion/brown_distortion.hpp"
 #include "huira/cameras/distortion/opencv_distortion.hpp"
 #include "huira/cameras/distortion/owen_distortion.hpp"
+#include "huira/handles/handle.hpp"
 
-#include "huira/core/units/units.hpp"
 
 namespace huira {
     template <IsSpectral TSpectral>
@@ -21,6 +22,14 @@ namespace huira {
     class FrameHandle;
 
 
+    /**
+     * @brief Handle for manipulating a CameraModel in a scene.
+     *
+     * Provides a safe, reference-like interface for configuring and querying a CameraModel instance
+     * within a scene graph. All operations are forwarded to the underlying CameraModel.
+     *
+     * @tparam TSpectral The spectral type (e.g., float, Vec3f, etc.)
+     */
     template <IsSpectral TSpectral>
     class CameraModelHandle : public Handle<CameraModel<TSpectral>> {
     public:
@@ -48,8 +57,8 @@ namespace huira {
         void set_sensor_resolution(Resolution resolution) const;
         void set_sensor_resolution(int width, int height) const;
 
-        void set_sensor_pixel_pitch(units::Millimeter pixel_pitch_x, units::Millimeter pixel_pitch_y) const;
-        void set_sensor_pixel_pitch(units::Millimeter pixel_pitch) const;
+        void set_sensor_pixel_pitch(units::Millimeter pitch_x, units::Millimeter pitch_y) const;
+        void set_sensor_pixel_pitch(units::Millimeter pitch) const;
 
         void set_sensor_size(units::Millimeter width, units::Millimeter height) const;
         void set_sensor_size(units::Millimeter width) const;
@@ -74,7 +83,7 @@ namespace huira {
 
         void use_aperture_psf(int radius, int banks) const;
         void delete_psf() const;
-        
+
         Pixel project_point(const Vec3<float>& point_camera_coords) const;
 
         FrameBuffer<TSpectral> make_frame_buffer() const;

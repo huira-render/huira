@@ -46,7 +46,6 @@ PYBIND11_MODULE(_huira, m) {
 
     huira::spice::bind_spice(m);
 
-    // Bind distortion coefficients (shared across all spectral types):
     huira::bind_distortion_coefficients(m);
 
     // Bind RGB spectral specializations:

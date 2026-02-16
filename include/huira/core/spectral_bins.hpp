@@ -113,7 +113,7 @@ namespace huira {
         float min() const;            ///< Minimum value across all bins.
         float integrate() const;      ///< Wavelength-weighted integral over all bins.
         bool valid() const;           ///< Checks if all spectral values are valid (non-negative, not NaN, not infinite).
-        bool valid_albedo() const;    ///< Checks if all spectral values are valid albedo (between 0 and 1, not NaN, not infinite).
+        bool valid_ratio() const;     ///< Checks if all spectral values are valid ratios (between 0 and 1, not NaN, not infinite).
 
         // Array-Array Arithmetic Operations
         constexpr SpectralBins& operator+=(const SpectralBins& other);
