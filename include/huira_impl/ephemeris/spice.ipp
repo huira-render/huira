@@ -80,11 +80,21 @@ namespace huira::spice {
     // =============================== //
     // === SPICE furnsh interfaces === //
     // =============================== //
+
+    /**
+     * @brief Load a SPICE kernel file.
+     * @param file_path Path to kernel file
+     */
     inline void furnsh(const fs::path& file_path) {
         HUIRA_LOG_INFO("SPCIE Furnsh: " + file_path.string());
         call_spice(furnsh_c, file_path.string().c_str());
     }
 
+
+    /**
+     * @brief Load a SPICE kernel file, resolving relative to its parent directory.
+     * @param kernel_path Path to kernel file
+     */
     inline void furnsh_relative_to_file(const fs::path& kernel_path) {
         if (!kernel_path.has_parent_path()) {
             furnsh(kernel_path);
@@ -108,11 +118,20 @@ namespace huira::spice {
     // ======================================= //
     // === Default SPICE kernel management === //
     // ======================================= //
+
+    /**
+     * @brief Get the default LSK (leap seconds kernel) path.
+     * @return fs::path Path to default LSK
+     */
     inline fs::path get_default_lsk_path() {
         fs::path data_directory = huira::data_dir();
         return data_directory / "kernels" / "lsk" / "naif0012.tls";
     }
 
+
+    /**
+     * @brief Ensure the default LSK is loaded.
+     */
     inline void ensure_lsk_loaded() {
         if (lsk_loaded.load(std::memory_order_acquire)) {
             return;
@@ -155,11 +174,20 @@ namespace huira::spice {
             });
     }
 
+
+    /**
+     * @brief Get the default PCK (planetary constants kernel) path.
+     * @return fs::path Path to default PCK
+     */
     inline fs::path get_default_pck_path() {
         fs::path data_directory = huira::data_dir();
         return data_directory / "kernels" / "pck" / "pck00011.tpc";
     }
 
+
+    /**
+     * @brief Load the default PCK.
+     */
     inline void load_default_pck() {
         HUIRA_LOG_INFO("Default PCK loaded from: " + get_default_pck_path().string());
         furnsh(get_default_pck_path());
@@ -169,6 +197,12 @@ namespace huira::spice {
     // ============================= //
     // === SPICE time interfaces === //
     // ============================= //
+
+    /**
+     * @brief Convert a time string to ephemeris time (ET, seconds past J2000).
+     * @param time_string Time string (e.g., "2000-001T12:00:00")
+     * @return double Ephemeris time (seconds past J2000)
+     */
     inline double str2et(const std::string& time_string)
     {
         ensure_lsk_loaded();
@@ -177,6 +211,13 @@ namespace huira::spice {
         return static_cast<double>(et);
     }
 
+
+    /**
+     * @brief Compute delta ET for a given epoch and type.
+     * @param epoch Epoch (seconds past J2000)
+     * @param eptype Type of delta (e.g., "DELTET")
+     * @return double Delta ET
+     */
     inline double deltet(double epoch, const std::string& eptype)
     {
         ensure_lsk_loaded();
@@ -185,6 +226,14 @@ namespace huira::spice {
         return static_cast<double>(delta);
     }
 
+
+    /**
+     * @brief Convert an epoch from one time system to another.
+     * @param epoch Epoch (seconds)
+     * @param insys Input time system
+     * @param outsys Output time system
+     * @return double Converted epoch
+     */
     inline double unitim(double epoch, const std::string& insys, const std::string& outsys)
     {
         ensure_lsk_loaded();
@@ -194,6 +243,14 @@ namespace huira::spice {
             outsys.c_str()));
     }
 
+
+    /**
+     * @brief Format ephemeris time as a string.
+     * @param et Ephemeris time (seconds past J2000)
+     * @param pictur Output format string
+     * @param lenout Output string length
+     * @return std::string Formatted time string
+     */
     inline std::string timout(double et, const std::string& pictur, int lenout)
     {
         ensure_lsk_loaded();
@@ -258,6 +315,15 @@ namespace huira::spice {
         return { position, velocity, static_cast<double>(lt) };
     }
 
+
+    /**
+     * @brief Get the rotation from one frame to another at a given time.
+     * @tparam T Floating point type
+     * @param FROM Source frame
+     * @param TO Destination frame
+     * @param time Observation time
+     * @return huira::Rotation<T> Rotation object
+     */
     template <huira::IsFloatingPoint T>
     inline huira::Rotation<T> pxform(
         const std::string& FROM,
@@ -280,6 +346,15 @@ namespace huira::spice {
         return huira::Rotation<T>::from_parent_to_local(rotation);
     }
 
+
+    /**
+     * @brief Get the rotation and angular velocity from one frame to another at a given time.
+     * @tparam T Floating point type
+     * @param FROM Source frame
+     * @param TO Destination frame
+     * @param time Observation time
+     * @return std::pair<huira::Rotation<T>, huira::Vec3<T>> {rotation, angular velocity}
+     */
     template <huira::IsFloatingPoint T>
     inline std::pair<huira::Rotation<T>, huira::Vec3<T>> sxform(
         const std::string& FROM,

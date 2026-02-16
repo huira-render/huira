@@ -1,6 +1,12 @@
 #include "huira/core/concepts/numeric_concepts.hpp"
 
 namespace huira {
+
+    /**
+     * @brief Convert this Transform to another floating point type.
+     * @tparam U Target floating point type
+     * @return Transform<U> Converted transform
+     */
     template <IsFloatingPoint T>
     template <IsFloatingPoint U>
     Transform<T>::operator Transform<U>() const
@@ -14,6 +20,11 @@ namespace huira {
         return result;
     }
 
+
+    /**
+     * @brief Convert the transform to a 4x4 matrix (T * R * S).
+     * @return Mat4<T> Transformation matrix
+     */
     template <IsFloatingPoint T>
     Mat4<T> Transform<T>::to_matrix() const
     {
@@ -39,6 +50,11 @@ namespace huira {
         return result;
     }
 
+
+    /**
+     * @brief Compute the inverse of the transform.
+     * @return Transform<T> Inverse transform
+     */
     template <IsFloatingPoint T>
     Transform<T> Transform<T>::inverse() const
     {
@@ -62,6 +78,12 @@ namespace huira {
         return result;
     }
 
+
+    /**
+     * @brief Compose this transform with another.
+     * @param b Other transform
+     * @return Transform<T> Composed transform
+     */
     template <IsFloatingPoint T>
     Transform<T> Transform<T>::operator* (const Transform<T>& b) const
     {
@@ -88,6 +110,12 @@ namespace huira {
         return result;
     }
 
+
+    /**
+     * @brief Apply the transform to a point (scale, rotate, translate).
+     * @param point Point to transform
+     * @return Vec3<T> Transformed point
+     */
     template <IsFloatingPoint T>
     Vec3<T> Transform<T>::apply_to_point(const Vec3<T>& point) const
     {
@@ -103,6 +131,12 @@ namespace huira {
         return transformed_point;
     }
 
+
+    /**
+     * @brief Apply the transform to a direction (scale, rotate).
+     * @param dir Direction to transform
+     * @return Vec3<T> Transformed direction
+     */
     template <IsFloatingPoint T>
     Vec3<T> Transform<T>::apply_to_direction(const Vec3<T>& dir) const
     {
@@ -117,6 +151,12 @@ namespace huira {
         return rotated_dir;
     }
 
+
+    /**
+     * @brief Apply the transform to a velocity (scale, rotate, add velocity).
+     * @param vel Velocity to transform
+     * @return Vec3<T> Transformed velocity
+     */
     template <IsFloatingPoint T>
     Vec3<T> Transform<T>::apply_to_velocity(const Vec3<T>& vel) const
     {
@@ -132,6 +172,12 @@ namespace huira {
         return transformed_vel;
     }
 
+
+    /**
+     * @brief Apply the transform to an angular velocity (rotate, add angular velocity).
+     * @param ang_vel Angular velocity to transform
+     * @return Vec3<T> Transformed angular velocity
+     */
     template <IsFloatingPoint T>
     Vec3<T> Transform<T>::apply_to_angular_velocity(const Vec3<T>& ang_vel) const
     {
@@ -141,6 +187,12 @@ namespace huira {
     }
 
 
+
+    /**
+     * @brief Compute the velocity of a point rigidly attached to this frame.
+     * @param point Point in world coordinates
+     * @return Vec3<T> Velocity of the point
+     */
     template <IsFloatingPoint T>
     Vec3<T> Transform<T>::velocity_of_point(const Vec3<T>& point) const
     {
@@ -152,6 +204,12 @@ namespace huira {
         return velocity + v_from_rotation;
     }
 
+
+    /**
+     * @brief Compute the velocity of a point specified in local coordinates.
+     * @param local_point Point in local coordinates
+     * @return Vec3<T> Velocity of the point
+     */
     template <IsFloatingPoint T>
     Vec3<T> Transform<T>::velocity_of_local_point(const Vec3<T>& local_point) const
     {
