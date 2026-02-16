@@ -1,41 +1,57 @@
+#include <array>
+#include <csetjmp>
 #include <cstddef>
 #include <cstdio>
-#include <csetjmp>
 #include <cstring>
 #include <filesystem>
-#include <utility>
 #include <limits>
+#include <utility>
 #include <vector>
-#include <array>
 
 #include <png.h>
 
 #include "huira/core/concepts/numeric_concepts.hpp"
 #include "huira/core/concepts/pixel_concepts.hpp"
+#include "huira/images/image.hpp"
+#include "huira/images/io/color_space.hpp"
+#include "huira/images/io/convert_pixel.hpp"
 #include "huira/util/logger.hpp"
 #include "huira/util/paths.hpp"
-#include "huira/images/image.hpp"
-#include "huira/images/io/convert_pixel.hpp"
-#include "huira/images/io/color_space.hpp"
 
 namespace fs = std::filesystem;
 
 namespace huira {
-
+    /**
+     * @brief Specifies the color space encoding used in a PNG file.
+     */
     enum class PngColorSpace {
-        SRGB,        // sRGB chunk present, or assumed default
-        LINEAR,      // gAMA = 1.0
-        GAMMA,       // gAMA chunk with custom gamma
-        ICC_PROFILE, // iCCP chunk present
-        UNKNOWN      // Unknown or unsupported
+        SRGB,        ///< sRGB chunk present, or assumed default
+        LINEAR,      ///< gAMA = 1.0
+        GAMMA,       ///< gAMA chunk with custom gamma
+        ICC_PROFILE, ///< iCCP chunk present
+        UNKNOWN      ///< Unknown or unsupported
     };
-
+    
+    /**
+     * @brief Contains color space information extracted from a PNG file.
+     */
     struct PngColorInfo {
-        PngColorSpace space = PngColorSpace::SRGB;
-        double gamma = 2.2;  // Only used if space == GAMMA
+        PngColorSpace space = PngColorSpace::SRGB; ///< The detected color space
+        double gamma = 2.2;  ///< Gamma value (only used if space == GAMMA)
         // TODO add ICC profile data
     };
 
+    /**
+     * @brief Detects the color space of a PNG file from its metadata chunks.
+     * 
+     * Checks for iCCP (ICC profile), sRGB, and gAMA chunks to determine the
+     * color space encoding used in the PNG file. If no explicit color space
+     * information is found, sRGB is assumed as the default.
+     * 
+     * @param png_ptr PNG read structure
+     * @param info_ptr PNG info structure
+     * @return Color space information including the space type and gamma value
+     */
     inline PngColorInfo detect_png_color_space_(png_structp png_ptr, png_infop info_ptr)
     {
         PngColorInfo info;
@@ -77,6 +93,18 @@ namespace huira {
         return info;
     }
 
+    /**
+     * @brief Converts an integer-encoded pixel value to linear floating-point.
+     * 
+     * Applies the appropriate transfer function based on the detected color space
+     * (sRGB, linear, gamma, or ICC profile) to convert from encoded values to
+     * linear light values.
+     * 
+     * @tparam T Integer type of the encoded pixel (uint8_t or uint16_t)
+     * @param encoded The encoded pixel value
+     * @param color_info Color space information from the PNG file
+     * @return Linear floating-point value in the range [0, 1]
+     */
     template <IsInteger T>
     float linearize_png_pixel_(T encoded, const PngColorInfo& color_info)
     {
@@ -103,6 +131,19 @@ namespace huira {
         }
     }
 
+    /**
+     * @brief Converts three integer-encoded color channels to linear Vec3.
+     * 
+     * Applies the appropriate transfer function based on the detected color space
+     * to convert encoded RGB values to linear light values.
+     * 
+     * @tparam T Integer type of the encoded pixels (uint8_t or uint16_t)
+     * @param encoded1 The first channel (red)
+     * @param encoded2 The second channel (green)
+     * @param encoded3 The third channel (blue)
+     * @param color_info Color space information from the PNG file
+     * @return Linear RGB values as a Vec3<float>
+     */
     template <IsInteger T>
     Vec3<float> linearize_png_pixel_(T encoded1, T encoded2, T encoded3, const PngColorInfo& color_info)
     {
@@ -117,6 +158,22 @@ namespace huira {
 
 
 
+    /**
+     * @brief Reads a PNG image file and converts it to linear color space.
+     * 
+     * Loads a PNG image from disk, automatically detecting and converting from the
+     * source color space (sRGB, linear, gamma, or ICC profile) to linear light.
+     * Supports 8-bit and 16-bit images, grayscale and RGB color types, and optional
+     * alpha channels. The function handles PNG transformations such as palette
+     * expansion and low bit-depth expansion automatically.
+     * 
+     * @tparam T The pixel type for the output image (must satisfy IsNonSpectralPixel)
+     * @param filepath Path to the PNG file to read
+     * @return A pair containing the main image and an optional alpha channel image.
+     *         If the PNG has no alpha channel, the second image will be empty (0x0).
+     * @throws std::runtime_error if the file cannot be opened, is not a valid PNG,
+     *         or if any error occurs during reading
+     */
     template <IsNonSpectralPixel T>
     std::pair<Image<T>, Image<float>> read_image_png(const fs::path& filepath)
     {
@@ -302,6 +359,19 @@ namespace huira {
     }
 
 
+    /**
+     * @brief Writes an image to a PNG file without an alpha channel.
+     * 
+     * Converts the image from linear color space to sRGB and writes it to a PNG file.
+     * This is a convenience overload that calls the full version with an empty alpha image.
+     * 
+     * @tparam T The pixel type of the input image (must satisfy IsNonSpectralPixel)
+     * @param filepath Path where the PNG file will be written
+     * @param image The image to write
+     * @param bit_depth Bit depth of the output PNG (8 or 16)
+     * @throws std::runtime_error if the file cannot be created, the image is empty,
+     *         or if any error occurs during writing
+     */
     template <IsNonSpectralPixel T>
     void write_image_png(const fs::path& filepath, const Image<T>& image, int bit_depth)
     {
@@ -309,6 +379,22 @@ namespace huira {
         write_image_png<T>(filepath, image, albedo, bit_depth);
     }
 
+    /**
+     * @brief Writes an image to a PNG file with an optional alpha channel.
+     * 
+     * Converts the image from linear color space to sRGB and writes it to a PNG file.
+     * The function automatically creates necessary directories, handles both grayscale
+     * and RGB images, and supports 8-bit or 16-bit output. An sRGB color profile is
+     * embedded in the PNG metadata.
+     * 
+     * @tparam T The pixel type of the input image (must satisfy IsNonSpectralPixel)
+     * @param filepath Path where the PNG file will be written
+     * @param image The image to write
+     * @param alpha Optional alpha channel image (must match dimensions of image, or be empty)
+     * @param bit_depth Bit depth of the output PNG (must be 8 or 16)
+     * @throws std::runtime_error if the file cannot be created, the image is empty,
+     *         bit_depth is invalid, or if any error occurs during writing
+     */
     template <IsNonSpectralPixel T>
     void write_image_png(const fs::path& filepath, const Image<T>& image, const Image<float>& alpha, int bit_depth)
     {

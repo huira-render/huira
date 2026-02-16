@@ -24,6 +24,9 @@
 #include "huira/handles/root_frame_handle_py.ipp"
 #include "huira/handles/unresolved_handle_py.ipp"
 
+#include "huira/images/fits_metadata_py.ipp"
+#include "huira/images/image_py.ipp"
+
 #include "huira/scene/scene_py.ipp"
 
 #include "huira/util/paths_py.ipp"
@@ -59,6 +62,9 @@ PYBIND11_MODULE(_huira, m) {
     huira::spice::bind_spice(m);
 
     huira::bind_distortion_coefficients(m);
+
+    huira::bind_fits_metadata(m);
+    huira::bind_all_images(m);
 
     // Bind RGB spectral specializations:
     auto rgb = m.def_submodule("rgb", "RGB (3-bin) spectral specialization");
