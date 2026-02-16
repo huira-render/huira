@@ -1,12 +1,19 @@
+
 #pragma once
 
-#include "huira/core/types.hpp"
+#include "huira/cameras/distortion/distortion.hpp"
 #include "huira/core/concepts/numeric_concepts.hpp"
 #include "huira/core/concepts/spectral_concepts.hpp"
-#include "huira/cameras/distortion/distortion.hpp"
+#include "huira/core/types.hpp"
 
 namespace huira {
 
+
+    /**
+     * @brief Coefficients for OpenCV lens distortion model.
+     *
+     * Holds the radial, tangential, and thin prism distortion coefficients for the OpenCV model.
+     */
     struct OpenCVCoefficients : public DistortionCoefficients {
         // Radial distortion coefficients
         double k1 = 0;
@@ -38,6 +45,14 @@ namespace huira {
         }
     };
 
+
+    /**
+     * @brief OpenCV lens distortion model.
+     *
+     * Implements the OpenCV distortion model with rational radial, tangential, and thin prism coefficients.
+     *
+     * @tparam TSpectral The spectral representation type.
+     */
     template <IsSpectral TSpectral>
     class OpenCVDistortion : public Distortion<TSpectral> {
     public:
