@@ -1,15 +1,31 @@
+
 #include <cmath>
 
-#include "huira/core/types.hpp"
 #include "huira/core/concepts/numeric_concepts.hpp"
 #include "huira/core/concepts/spectral_concepts.hpp"
+#include "huira/core/types.hpp"
 
 namespace huira {
+
+    /**
+     * @brief Constructs a BrownDistortion with the given coefficients.
+     *
+     * @param coefficients The Brown distortion coefficients (radial and tangential).
+     */
     template <IsSpectral TSpectral>
     BrownDistortion<TSpectral>::BrownDistortion(BrownCoefficients coefficients)
         : coefficients_(coefficients) {
     }
 
+    /**
+     * @brief Computes the Brown distortion delta for a given coordinate.
+     *
+     * Calculates the radial and tangential distortion for the provided homogeneous coordinates.
+     *
+     * @tparam TFloat Floating point type for computation.
+     * @param homogeneous_coords The input pixel coordinates (homogeneous).
+     * @return The distortion delta to be applied.
+     */
     template <IsSpectral TSpectral>
     template <IsFloatingPoint TFloat>
     BasePixel<TFloat> BrownDistortion<TSpectral>::compute_delta_(BasePixel<TFloat> homogeneous_coords) const {
@@ -40,11 +56,29 @@ namespace huira {
         return radial_distortion + tangential_distortion;
     }
 
+
+    /**
+     * @brief Applies Brown distortion to the given pixel coordinates.
+     *
+     * Computes the distorted coordinates by adding the Brown distortion delta.
+     *
+     * @param homogeneous_coords The input pixel coordinates (homogeneous).
+     * @return The distorted pixel coordinates.
+     */
     template <IsSpectral TSpectral>
     Pixel BrownDistortion<TSpectral>::distort(Pixel homogeneous_coords) const {
         return homogeneous_coords + compute_delta_<float>(homogeneous_coords);
     }
 
+
+    /**
+     * @brief Removes Brown distortion from the given pixel coordinates.
+     *
+     * Iteratively computes the undistorted coordinates using the Brown model.
+     *
+     * @param homogeneous_coords The distorted pixel coordinates (homogeneous).
+     * @return The undistorted pixel coordinates.
+     */
     template <IsSpectral TSpectral>
     Pixel BrownDistortion<TSpectral>::undistort(Pixel homogeneous_coords) const {
         // TODO Consider using Newton-Raphson instead:

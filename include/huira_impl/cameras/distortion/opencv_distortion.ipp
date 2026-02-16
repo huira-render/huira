@@ -1,17 +1,33 @@
+
 #include <algorithm>
 #include <cmath>
 
-#include "huira/core/types.hpp"
 #include "huira/core/concepts/numeric_concepts.hpp"
 #include "huira/core/concepts/spectral_concepts.hpp"
+#include "huira/core/types.hpp"
 
 namespace huira {
 
+
+    /**
+     * @brief Constructs an OpenCVDistortion with the given coefficients.
+     *
+     * @param coefficients The OpenCV distortion coefficients (radial, tangential, thin prism).
+     */
     template <IsSpectral TSpectral>
     OpenCVDistortion<TSpectral>::OpenCVDistortion(OpenCVCoefficients coefficients)
         : coefficients_(coefficients) {
     }
     
+    /**
+     * @brief Computes the OpenCV distortion delta for a given coordinate.
+     *
+     * Calculates the rational radial, tangential, and thin prism distortion for the provided homogeneous coordinates.
+     *
+     * @tparam TFloat Floating point type for computation.
+     * @param homogeneous_coords The input pixel coordinates (homogeneous).
+     * @return The distortion delta to be applied.
+     */
     template <IsSpectral TSpectral>
     template <IsFloatingPoint TFloat>
     BasePixel<TFloat> OpenCVDistortion<TSpectral>::compute_delta_(BasePixel<TFloat> homogeneous_coords) const {
@@ -58,11 +74,29 @@ namespace huira {
         return radial_factor * homogeneous_coords_tf + tangential_and_prism;
     }
 
+
+    /**
+     * @brief Applies OpenCV distortion to the given pixel coordinates.
+     *
+     * Computes the distorted coordinates by adding the OpenCV distortion delta.
+     *
+     * @param homogeneous_coords The input pixel coordinates (homogeneous).
+     * @return The distorted pixel coordinates.
+     */
     template <IsSpectral TSpectral>
     Pixel OpenCVDistortion<TSpectral>::distort(Pixel homogeneous_coords) const {
         return homogeneous_coords + compute_delta_<float>(homogeneous_coords);
     }
 
+
+    /**
+     * @brief Removes OpenCV distortion from the given pixel coordinates.
+     *
+     * Iteratively computes the undistorted coordinates using the OpenCV model.
+     *
+     * @param homogeneous_coords The distorted pixel coordinates (homogeneous).
+     * @return The undistorted pixel coordinates.
+     */
     template <IsSpectral TSpectral>
     Pixel OpenCVDistortion<TSpectral>::undistort(Pixel homogeneous_coords) const {
         BasePixel<double> homogeneous_coords_d{

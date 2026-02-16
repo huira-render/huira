@@ -1,12 +1,19 @@
+
 #pragma once
 
-#include "huira/core/types.hpp"
+#include "huira/cameras/distortion/distortion.hpp"
 #include "huira/core/concepts/numeric_concepts.hpp"
 #include "huira/core/concepts/spectral_concepts.hpp"
-#include "huira/cameras/distortion/distortion.hpp"
+#include "huira/core/types.hpp"
 
 namespace huira {
 
+
+    /**
+     * @brief Coefficients for Owen lens distortion model.
+     *
+     * Holds the coefficients for the Owen distortion model, including both coordinate-aligned and rotated terms.
+     */
     struct OwenCoefficients : public DistortionCoefficients {
         double e1 = 0;
         double e2 = 0;
@@ -24,6 +31,14 @@ namespace huira {
     };
 
     
+
+    /**
+     * @brief Owen lens distortion model.
+     *
+     * Implements the Owen distortion model with both coordinate-aligned and rotated terms.
+     *
+     * @tparam TSpectral The spectral representation type.
+     */
     template <IsSpectral TSpectral>
     class OwenDistortion : public Distortion<TSpectral> {
     public:

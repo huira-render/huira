@@ -1,15 +1,21 @@
+
 #pragma once
 
 #include <cstddef>
-#include <string>
-#include <variant>
 #include <concepts>
+#include <string>
 #include <type_traits>
+#include <variant>
 
-#include "huira/core/types.hpp"
 #include "huira/core/concepts/spectral_concepts.hpp"
+#include "huira/core/types.hpp"
 
 namespace huira {
+    /**
+     * @brief Base class for distortion coefficient sets.
+     *
+     * Provides a polymorphic interface for all distortion coefficient types.
+     */
     struct DistortionCoefficients {
         DistortionCoefficients() = default;
         DistortionCoefficients(const DistortionCoefficients&) = default;
@@ -17,12 +23,20 @@ namespace huira {
         virtual ~DistortionCoefficients() = default;
     };
     
+
+    /**
+     * @brief Abstract base class for lens distortion models.
+     *
+     * Defines the interface for all distortion models, including distortion/undistortion and coefficient access.
+     *
+     * @tparam TSpectral The spectral representation type.
+     */
     template <IsSpectral TSpectral>
     class Distortion {
     public:
         Distortion() = default;
         virtual ~Distortion() = default;
-        
+
         [[nodiscard]] virtual Pixel distort(Pixel homogeneous_coords) const = 0;
         [[nodiscard]] virtual Pixel undistort(Pixel homogeneous_coords) const = 0;
 

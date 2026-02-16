@@ -6,6 +6,8 @@
 
 #include "huira/core/concepts/spectral_concepts.hpp"
 
+#include "huira/cameras/distortion_coeffs_py.ipp"
+
 #include "huira/core/units/units_py.ipp"
 #include "huira/core/spectral_bin_py.ipp"
 #include "huira/core/spectral_bins_py.ipp"
@@ -43,6 +45,9 @@ PYBIND11_MODULE(_huira, m) {
     huira::bind_paths(m);
 
     huira::spice::bind_spice(m);
+
+    // Bind distortion coefficients (shared across all spectral types):
+    huira::bind_distortion_coefficients(m);
 
     // Bind RGB spectral specializations:
     auto rgb = m.def_submodule("rgb", "RGB (3-bin) spectral specialization");

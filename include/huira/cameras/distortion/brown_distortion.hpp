@@ -1,11 +1,18 @@
+
 #pragma once
 
-#include "huira/core/types.hpp"
+#include "huira/cameras/distortion/distortion.hpp"
 #include "huira/core/concepts/numeric_concepts.hpp"
 #include "huira/core/concepts/spectral_concepts.hpp"
-#include "huira/cameras/distortion/distortion.hpp"
+#include "huira/core/types.hpp"
 
 namespace huira {
+
+    /**
+     * @brief Coefficients for Brown lens distortion model.
+     *
+     * Holds the radial (k1, k2, k3) and tangential (p1, p2) distortion coefficients.
+     */
     struct BrownCoefficients : public DistortionCoefficients {
         double k1 = 0;
         double k2 = 0;
@@ -21,6 +28,14 @@ namespace huira {
         }
     };
 
+
+    /**
+     * @brief Brown lens distortion model.
+     *
+     * Implements the Brown-Conrady distortion model with radial and tangential coefficients.
+     *
+     * @tparam TSpectral The spectral representation type.
+     */
     template <IsSpectral TSpectral>
     class BrownDistortion : public Distortion<TSpectral> {
     public:

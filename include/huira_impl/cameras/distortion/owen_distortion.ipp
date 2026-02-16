@@ -1,16 +1,32 @@
+
 #include <cmath>
 
-#include "huira/core/types.hpp"
 #include "huira/core/concepts/numeric_concepts.hpp"
 #include "huira/core/concepts/spectral_concepts.hpp"
+#include "huira/core/types.hpp"
 
 namespace huira {
 
+
+    /**
+     * @brief Constructs an OwenDistortion with the given coefficients.
+     *
+     * @param coefficients The Owen distortion coefficients.
+     */
     template <IsSpectral TSpectral>
     OwenDistortion<TSpectral>::OwenDistortion(OwenCoefficients coefficients)
         : coefficients_(coefficients) {
     }
 
+    /**
+     * @brief Computes the Owen distortion delta for a given coordinate.
+     *
+     * Calculates the distortion for the provided homogeneous coordinates using the Owen model.
+     *
+     * @tparam TFloat Floating point type for computation.
+     * @param homogeneous_coords The input pixel coordinates (homogeneous).
+     * @return The distortion delta to be applied.
+     */
     template <IsSpectral TSpectral>
     template <IsFloatingPoint TFloat>
     BasePixel<TFloat> OwenDistortion<TSpectral>::compute_delta_(BasePixel<TFloat> homogeneous_coords) const {
@@ -42,11 +58,29 @@ namespace huira {
         return radial_factor * homogeneous_coords_tf + rotated_factor * rotated_coords;
     }
 
+
+    /**
+     * @brief Applies Owen distortion to the given pixel coordinates.
+     *
+     * Computes the distorted coordinates by adding the Owen distortion delta.
+     *
+     * @param homogeneous_coords The input pixel coordinates (homogeneous).
+     * @return The distorted pixel coordinates.
+     */
     template <IsSpectral TSpectral>
     Pixel OwenDistortion<TSpectral>::distort(Pixel homogeneous_coords) const {
         return homogeneous_coords + compute_delta_<float>(homogeneous_coords);
     }
 
+
+    /**
+     * @brief Removes Owen distortion from the given pixel coordinates.
+     *
+     * Iteratively computes the undistorted coordinates using the Owen model.
+     *
+     * @param homogeneous_coords The distorted pixel coordinates (homogeneous).
+     * @return The undistorted pixel coordinates.
+     */
     template <IsSpectral TSpectral>
     Pixel OwenDistortion<TSpectral>::undistort(Pixel homogeneous_coords) const {
         BasePixel<double> homogeneous_coords_d{
