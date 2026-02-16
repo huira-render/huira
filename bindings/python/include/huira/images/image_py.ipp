@@ -124,7 +124,7 @@ namespace huira {
                     static_cast<py::ssize_t>(img.height()),
                         static_cast<py::ssize_t>(img.width()) });
                 std::memcpy(arr.mutable_data(), img.data(),
-                    static_cast<std::size_t>(img.width()) * img.height()
+                    static_cast<std::size_t>(img.width()) * static_cast<std::size_t>(img.height())
                     * sizeof(Scalar));
                 return arr;
             }
@@ -134,7 +134,7 @@ namespace huira {
                         static_cast<py::ssize_t>(img.width()),
                         static_cast<py::ssize_t>(C) });
                 std::memcpy(arr.mutable_data(), img.data(),
-                    static_cast<std::size_t>(img.width()) * img.height()
+                    static_cast<std::size_t>(img.width()) * static_cast<std::size_t>(img.height())
                     * C * sizeof(Scalar));
                 return arr;
             }

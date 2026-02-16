@@ -28,8 +28,10 @@
 #include "huira/images/image_py.ipp"
 
 #include "huira/render/frame_buffer_py.ipp"
+#include "huira/render/raster_renderer_py.ipp"
 
 #include "huira/scene/scene_py.ipp"
+#include "huira/scene/scene_view_py.ipp"
 
 #include "huira/util/paths_py.ipp"
 
@@ -51,6 +53,9 @@ inline void bind_spectral(py::module_& m) {
     huira::bind_frame_buffer<TSpectral>(m);
 
     huira::bind_scene<TSpectral>(m);
+
+    huira::bind_scene_view<TSpectral>(m);
+    huira::bind_raster_renderer<TSpectral>(m);
 }
 
 PYBIND11_MODULE(_huira, m) {
@@ -69,6 +74,13 @@ PYBIND11_MODULE(_huira, m) {
 
     huira::bind_fits_metadata(m);
     huira::bind_all_images(m);
+
+    // Observation Mode Enum:
+    py::enum_<huira::ObservationMode>(m, "ObservationMode", py::arithmetic())
+        .value("TRUE_STATE", huira::ObservationMode::TRUE_STATE)
+        .value("GEOMETRIC_STATE", huira::ObservationMode::GEOMETRIC_STATE)
+        .value("ABERRATED_STATE", huira::ObservationMode::ABERRATED_STATE)
+        ;
 
     // Bind RGB spectral specializations:
     auto rgb = m.def_submodule("rgb", "RGB (3-bin) spectral specialization");
