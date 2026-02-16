@@ -31,3 +31,61 @@ regex = "(?P<value>\\d+\\.\\d+\\.\\d+)"
 [[tool.scikit-build.overrides]]
 if.platform-system = "win32"
 cmake.args = ["-DHUIRA_PYTHON=ON", "-A", "x64"]
+
+# ---------------------------------------------------------------------------
+# cibuildwheel configuration
+# ---------------------------------------------------------------------------
+[tool.cibuildwheel]
+build = "cp39-* cp310-* cp311-* cp312-* cp313-*"
+skip = "*-musllinux*"
+build-verbosity = 1
+
+# scikit-build-core needs to find the conda-installed deps via CMAKE_PREFIX_PATH.
+# The before-all scripts (per-platform below) install Miniforge to /opt/conda
+# (Linux/macOS) or C:\Miniconda (Windows) and populate it with all C/C++ deps.
+#
+# IMPORTANT: `before-all` runs once per build image/platform. The deps are
+# installed once and then reused across all Python version builds on that
+# platform, which is exactly what we want since these are C/C++ libraries
+# that are Python-version-independent.
+
+[tool.cibuildwheel.linux]
+before-all = [
+    # Install Miniforge inside the manylinux container
+    "curl -fsSL https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-$(uname -m).sh -o /tmp/miniforge.sh",
+    "bash /tmp/miniforge.sh -b -p /opt/conda",
+    "rm /tmp/miniforge.sh",
+    # Install all C/C++ dependencies (no version pins here — conda will resolve)
+    "/opt/conda/bin/conda install -y -c conda-forge assimp cfitsio cspice embree3 fftw gdal glm indicators libcurl libtiff libpng libjpeg-turbo tbb-devel",
+]
+environment = { CMAKE_PREFIX_PATH = "/opt/conda", PKG_CONFIG_PATH = "/opt/conda/lib/pkgconfig" }
+
+# auditwheel (runs by default on Linux) will scan the built .so, find all
+# non-system shared libraries linked from /opt/conda/lib, and vendor them
+# into the wheel automatically. The default repair command is sufficient.
+
+[tool.cibuildwheel.macos]
+before-all = [
+    "curl -fsSL https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-MacOSX-$(uname -m).sh -o /tmp/miniforge.sh",
+    "bash /tmp/miniforge.sh -b -p /opt/conda",
+    "rm /tmp/miniforge.sh",
+    "/opt/conda/bin/conda install -y -c conda-forge assimp cfitsio cspice embree3 fftw gdal glm indicators libcurl libtiff libpng libjpeg-turbo tbb-devel",
+]
+environment = { CMAKE_PREFIX_PATH = "/opt/conda", PKG_CONFIG_PATH = "/opt/conda/lib/pkgconfig", REPAIR_LIBRARY_PATH = "/opt/conda/lib" }
+
+# macOS SIP strips DYLD_LIBRARY_PATH from child processes, so we use the
+# REPAIR_LIBRARY_PATH workaround recommended by cibuildwheel docs.
+repair-wheel-command = """\
+    DYLD_LIBRARY_PATH=$REPAIR_LIBRARY_PATH delocate-wheel \
+    --require-archs {delocate_archs} -w {dest_dir} -v {wheel}\
+"""
+
+[tool.cibuildwheel.windows]
+before-all = [
+    "choco install miniconda3 --params '/InstallationType:JustMe /AddToPath:0 /D:C:\\Miniconda' -y",
+    "C:\\Miniconda\\condabin\\conda.bat install -y -c conda-forge assimp cfitsio cspice embree3 fftw gdal glm indicators libcurl libtiff libpng libjpeg-turbo tbb-devel",
+]
+environment = { CMAKE_PREFIX_PATH = "C:\\Miniconda;C:\\Miniconda\\Library", PKG_CONFIG_PATH = "C:\\Miniconda\\Library\\lib\\pkgconfig" }
+
+before-build = "pip install delvewheel"
+repair-wheel-command = "delvewheel repair --add-path C:\\Miniconda\\Library\\bin -w {dest_dir} {wheel}"

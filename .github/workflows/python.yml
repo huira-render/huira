@@ -7,11 +7,16 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      cibw_build:
+        description: 'Override CIBW_BUILD (e.g. "cp312-*" for faster debugging)'
+        required: false
+        default: ''
 
 permissions:
   contents: read
   actions: read
-  id-token: write  # Required for trusted PyPI publishing
+  id-token: write
 
 jobs:
   version-check:
@@ -47,126 +52,86 @@ jobs:
       - name: Install Python bindings
         shell: bash -el {0}
         run: |
-          echo "Installing huira Python bindings via pip..."
           cd bindings/python
           pip install . -v
-          echo "Installation completed successfully!"
 
       - name: Verify import
         shell: bash -el {0}
         run: |
-          echo "Verifying huira can be imported..."
           python -c "import huira; print(f'huira version: {huira.__version__}')"
-          echo "Import verification passed!"
 
-  # TODO: Uncomment and expand when Python tests are ready
-  #
-  # test-python:
-  #   needs: build-python
-  #   strategy:
-  #     fail-fast: false
-  #     matrix:
-  #       include:
-  #         - platform: linux
-  #           os: ubuntu-22.04
-  #         - platform: macos
-  #           os: macos-14
-  #         - platform: windows
-  #           os: windows-2022
-  #   runs-on: ${{ matrix.os }}
-  #   name: Test (${{ matrix.platform }})
-  #
-  #   steps:
-  #     - name: Checkout code
-  #       uses: actions/checkout@v4
-  #       with:
-  #         submodules: recursive
-  #
-  #     - name: Set up build environment
-  #       uses: ./.github/actions/setup
-  #       with:
-  #         platform: ${{ matrix.platform }}
-  #
-  #     - name: Install Python bindings
-  #       shell: bash -el {0}
-  #       run: |
-  #         cd bindings/python
-  #         pip install . -v
-  #
-  #     - name: Run Python tests
-  #       shell: bash -el {0}
-  #       run: |
-  #         pip install pytest
-  #         pytest tests/python/ -v
+  build-wheels:
+    needs: version-check
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+          - os: macos-14
+          - os: windows-2022
+    runs-on: ${{ matrix.os }}
+    name: Build Wheels (${{ matrix.os }})
 
-  # TODO: Uncomment when ready to publish to PyPI
-  # This would use cibuildwheel to produce portable wheels with bundled
-  # dependencies, then publish them. See:
-  # https://cibuildwheel.pypa.io/en/stable/
-  #
-  # build-wheels:
-  #   needs: version-check
-  #   strategy:
-  #     fail-fast: false
-  #     matrix:
-  #       os: [ubuntu-22.04, macos-14, windows-2022]
-  #   runs-on: ${{ matrix.os }}
-  #   name: Build Wheels (${{ matrix.os }})
-  #
-  #   steps:
-  #     - name: Checkout code
-  #       uses: actions/checkout@v4
-  #       with:
-  #         submodules: recursive
-  #
-  #     - name: Build wheels
-  #       uses: pypa/cibuildwheel@v2
-  #       with:
-  #         package-dir: bindings/python
-  #       env:
-  #         CIBW_BUILD: cp39-* cp310-* cp311-* cp312-* cp313-*
-  #         CIBW_SKIP: "*-musllinux*"
-  #
-  #     - name: Upload wheels
-  #       uses: actions/upload-artifact@v4
-  #       with:
-  #         name: wheels-${{ matrix.os }}
-  #         path: wheelhouse/*.whl
-  #
-  # publish-pypi:
-  #   name: Publish to PyPI
-  #   needs: build-wheels
-  #   if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-  #   runs-on: ubuntu-22.04
-  #   environment:
-  #     name: pypi
-  #     url: https://pypi.org/project/huira/
-  #
-  #   steps:
-  #     - name: Download all wheels
-  #       uses: actions/download-artifact@v4
-  #       with:
-  #         pattern: wheels-*
-  #         path: dist/
-  #         merge-multiple: true
-  #
-  #     # Uses trusted publishing (OIDC) - no token needed
-  #     # Configure at: https://pypi.org/manage/project/huira/settings/publishing/
-  #     - name: Publish to PyPI
-  #       uses: pypa/gh-action-pypi-publish@release/v1
-  #       with:
-  #         packages-dir: dist/
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
-  # Gate job that depends on all other jobs - use this for branch protection
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v2
+        with:
+          package-dir: bindings/python
+          config-file: bindings/python/pyproject.toml
+        env:
+          CIBW_BUILD: ${{ github.event.inputs.cibw_build || '' }}
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.os }}
+          path: wheelhouse/*.whl
+
+  # ---------------------------------------------------------------------------
+  # Publish to PyPI — only on tag pushes (v*)
+  # ---------------------------------------------------------------------------
+  # Uses trusted publishing (OIDC), so no API token is needed in secrets.
+  # You must configure this once at:
+  #   https://pypi.org/manage/project/huira/settings/publishing/
+  # Add a "GitHub Actions" publisher with:
+  #   Owner:      https://github.com/huira-render
+  #   Repository: https://github.com/huira-render/huira
+  #   Workflow:   python.yml
+  #   Environment: pypi
+  publish-pypi:
+    name: Publish to PyPI
+    needs: build-wheels
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-22.04
+    environment:
+      name: pypi
+      url: https://pypi.org/project/huira/
+
+    steps:
+      - name: Download all wheels
+        uses: actions/download-artifact@v4
+        with:
+          pattern: wheels-*
+          path: dist/
+          merge-multiple: true
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+
   python-ci:
     name: Python CI
     if: always()
     needs:
       - version-check
       - build-python
-      # - test-python    # Add when tests exist
-      # - build-wheels   # Add when publishing
-      # - publish-pypi   # Add when publishing
+      - build-wheels
     runs-on: ubuntu-22.04
     steps:
       - name: Check all jobs passed
