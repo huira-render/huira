@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 
 import huira
-from huira.rgb import Scene
+from huira.rgb import Scene, SceneView, RasterRenderer
 
 from huira.units import Millimeter as mm
 from huira.units import Micrometer as um
@@ -60,14 +60,14 @@ def main():
     frame_buffer.enable_received_power()
     frame_buffer.enable_sensor_response()
     
-    ## Create the renderer
-    #renderer = huira.RasterRenderer(huira.RGB)
+    # Create the renderer
+    renderer = RasterRenderer()
     
-    ## Create a scene view at the observation time
-    #scene_view = huira.SceneView(scene, time, mapcam, huira.ObservationMode.ABERRATED_STATE)
+    # Create a scene view at the observation time
+    scene_view = SceneView(scene, time, mapcam, huira.ObservationMode.ABERRATED_STATE)
     
-    ## Render the current scene view
-    #renderer.render(scene_view, frame_buffer, exposure_time)
+    # Render the current scene view
+    renderer.render(scene_view, frame_buffer, exposure_time)
     
     # Save the results
     huira.write_png("output/starfield.png", frame_buffer.sensor_response, 8)
