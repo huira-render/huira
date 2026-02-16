@@ -19,10 +19,11 @@ namespace huira {
     template <typename TSpectral, typename TNode, typename PyClass>
     inline void bind_node_handle_methods(PyClass& cls) {
         using HandleType = NodeHandle<TSpectral, TNode>;
+        using BoundType = typename PyClass::type;
 
         cls
             // Position
-            .def("set_position", [](const HandleType& self,
+            .def("set_position", [](const BoundType& self,
                     const py::object& x, const py::object& y, const py::object& z) {
                 self.set_position(
                     detail::unit_from_py<units::Meter>(x),
@@ -33,7 +34,7 @@ namespace huira {
             .def("get_static_position", &HandleType::get_static_position)
 
             // Velocity
-            .def("set_velocity", [](const HandleType& self,
+            .def("set_velocity", [](const BoundType& self,
                     const py::object& vx, const py::object& vy, const py::object& vz) {
                 self.set_velocity(
                     detail::unit_from_py<units::MetersPerSecond>(vx),
@@ -55,7 +56,7 @@ namespace huira {
                     &HandleType::set_rotation_local_to_parent, py::const_),
                 py::arg("quaternion"))
             .def("set_rotation_local_to_parent",
-                [](const HandleType& self, const Vec3<double>& axis, const py::object& angle) {
+                [](const BoundType& self, const Vec3<double>& axis, const py::object& angle) {
                     self.set_rotation_local_to_parent(axis, detail::unit_from_py<units::Degree>(angle));
                 }, py::arg("axis"), py::arg("angle"))
 
@@ -68,12 +69,12 @@ namespace huira {
                     &HandleType::set_rotation_parent_to_local, py::const_),
                 py::arg("quaternion"))
             .def("set_rotation_parent_to_local",
-                [](const HandleType& self, const Vec3<double>& axis, const py::object& angle) {
+                [](const BoundType& self, const Vec3<double>& axis, const py::object& angle) {
                     self.set_rotation_parent_to_local(axis, detail::unit_from_py<units::Degree>(angle));
                 }, py::arg("axis"), py::arg("angle"))
 
             .def("set_euler_angles",
-                [](const HandleType& self,
+                [](const BoundType& self,
                     const py::object& x, const py::object& y, const py::object& z,
                     const std::string& sequence) {
                     self.set_euler_angles(
@@ -86,7 +87,7 @@ namespace huira {
             .def("get_static_rotation", &HandleType::get_static_rotation)
 
             // Angular velocity
-            .def("set_angular_velocity", [](const HandleType& self,
+            .def("set_angular_velocity", [](const BoundType& self,
                     const py::object& wx, const py::object& wy, const py::object& wz) {
                 self.set_angular_velocity(
                     detail::unit_from_py<units::RadiansPerSecond>(wx),

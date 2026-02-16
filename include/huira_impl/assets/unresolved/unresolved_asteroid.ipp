@@ -88,6 +88,46 @@ namespace huira {
     }
 
     /**
+     * @brief Constructs an UnresolvedAsteroid with H-G magnitude parameters.
+     *
+     * Initializes an asteroid object using the H-G photometric system. The constructor
+     * validates that the provided light instance actually contains a Light object.
+     *
+     * @param H Absolute magnitude (H) - the asteroid's brightness at 1 AU from both
+     *          the Sun and observer with zero phase angle.
+     * @param G Slope parameter (G) - controls the shape of the phase function,
+     *          typically ranging from 0 to 1.
+     * @param light_instance Handle to the Instance containing the illuminating light source.
+     * @param albedo Constant spectral albedo of the asteroid.
+     * @throws std::runtime_error if the light_instance does not contain a Light.
+     */
+    template <IsSpectral TSpectral>
+    UnresolvedAsteroid<TSpectral>::UnresolvedAsteroid(double H, double G, InstanceHandle<TSpectral> light_instance, float albedo) :
+        H_{ H }, G_{ G },
+        light_instance_{ light_instance.get() },
+        albedo_{ TSpectral{ albedo } }
+    {
+        const Instantiable<TSpectral>& asset = light_instance_->asset();
+        auto* light_ptr = std::get_if<Light<TSpectral>*>(&asset);
+        if (!light_ptr) {
+            HUIRA_THROW_ERROR("UnresolvedAsteroid::UnresolvedAsteroid - Requires an Instance containing a Light");
+        }
+        light_ = *light_ptr;
+
+        if (std::isnan(H) || std::isinf(H)) {
+            HUIRA_THROW_ERROR("UnresolvedAsteroid::UnresolvedAsteroid - H must be real and finite");
+        }
+        if (std::isnan(G) || std::isinf(G)) {
+            HUIRA_THROW_ERROR("UnresolvedAsteroid::UnresolvedAsteroid - G must be real and finite");
+        }
+
+        if (!albedo_.valid_ratio()) {
+            HUIRA_THROW_ERROR("UnresolvedAsteroid::UnresolvedAsteroid - Invalid albedo: " +
+                std::to_string(albedo));
+        }
+    }
+
+    /**
      * @brief Resolves the spectral irradiance based on asteroid photometry.
      *
      * Computes the asteroid's apparent brightness using the H-G magnitude system,

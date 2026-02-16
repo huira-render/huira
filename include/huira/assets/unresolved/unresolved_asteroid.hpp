@@ -24,6 +24,7 @@ namespace huira {
     class UnresolvedAsteroid: public UnresolvedObject<TSpectral> {
     public:
         UnresolvedAsteroid(double H, double G, InstanceHandle<TSpectral> light_instance, TSpectral albedo = TSpectral{ 1.f });
+        UnresolvedAsteroid(double H, double G, InstanceHandle<TSpectral> light_instance, float albedo);
 
         void resolve_irradiance(
             const Transform<float>& self_transform,

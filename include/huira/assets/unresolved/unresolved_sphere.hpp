@@ -23,6 +23,7 @@ namespace huira {
     class UnresolvedLambertianSphere : public UnresolvedObject<TSpectral> {
     public:
         UnresolvedLambertianSphere(units::Meter radius, InstanceHandle<TSpectral> light_instance, TSpectral albedo = TSpectral{ 1.f });
+        UnresolvedLambertianSphere(units::Meter radius, InstanceHandle<TSpectral> light_instance, float albedo);
 
         void resolve_irradiance(
             const Transform<float>& self_transform,
