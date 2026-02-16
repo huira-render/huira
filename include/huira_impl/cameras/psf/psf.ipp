@@ -1,15 +1,24 @@
-#include <cstddef>
-#include <algorithm>
 
-#include "tbb/parallel_for.h"
+#include <algorithm>
+#include <cstddef>
+
 #include "tbb/blocked_range2d.h"
+#include "tbb/parallel_for.h"
 
 #include "huira/images/image.hpp"
+#include "huira/images/io/png_io.hpp"
 #include "huira/util/logger.hpp"
 
-#include "huira/images/io/png_io.hpp"
-
 namespace huira {
+
+    /**
+     * @brief Builds the polyphase kernel cache for the PSF.
+     *
+     * Allocates and fills the cache with polyphase kernels for efficient PSF evaluation.
+     *
+     * @param radius The kernel radius in pixels.
+     * @param banks The number of polyphase banks.
+     */
     template <IsSpectral TSpectral>
     void PSF<TSpectral>::build_polyphase_cache(int radius, int banks) {
         cache_.radius = radius;
@@ -26,13 +35,21 @@ namespace huira {
         generate_polyphase_data_();
     }
 
+
+    /**
+     * @brief Retrieves the polyphase kernel for the given normalized coordinates.
+     *
+     * Returns the cached kernel corresponding to the specified subpixel position.
+     *
+     * @param u Normalized horizontal coordinate in [0, 1].
+     * @param v Normalized vertical coordinate in [0, 1].
+     * @return Reference to the corresponding kernel image.
+     */
     template <IsSpectral TSpectral>
     const Image<TSpectral>& PSF<TSpectral>::get_kernel(float u, float v) const {
         if (cache_.kernels.empty()) {
             HUIRA_THROW_ERROR("PSF::get_kernel() - Polyphase cache is empty.");
         }
-
-
 
         // Convert 0.0-1.0 fraction to 0-(banks-1) integer index
         // Clamp avoids floating point epsilon errors
@@ -42,6 +59,11 @@ namespace huira {
         return cache_.kernels[static_cast<std::size_t>(by * cache_.banks + bx)];
     }
 
+    /**
+     * @brief Generates the polyphase kernel data for the PSF.
+     *
+     * Fills the polyphase cache by evaluating the PSF at subpixel positions and integrating over each pixel.
+     */
     template <IsSpectral TSpectral>
     void PSF<TSpectral>::generate_polyphase_data_() {
         // Dynamic Resolution Calculation
@@ -164,6 +186,14 @@ namespace huira {
             });
     }
 
+    /**
+     * @brief Normalizes a kernel image so its total energy is unity.
+     *
+     * Scales the kernel so that the sum of all elements matches unity for each spectral channel.
+     *
+     * @param kernel The kernel image to normalize.
+     * @param total_energy The total energy to normalize by.
+     */
     template <IsSpectral TSpectral>
     void PSF<TSpectral>::normalize_kernel_(Image<TSpectral>& kernel, const TSpectral& total_energy) {
         // Pre-compute inverse to avoid division in the loop

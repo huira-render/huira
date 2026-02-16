@@ -1,10 +1,19 @@
+
 #pragma once
 
-#include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/cameras/psf/psf.hpp"
+#include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/core/types.hpp"
 
 namespace huira {
+
+    /**
+     * @brief Airy disk point spread function (PSF).
+     *
+     * Models the PSF of a circular aperture using the Airy disk formula for diffraction-limited optics.
+     *
+     * @tparam TSpectral The spectral representation type.
+     */
     template <IsSpectral TSpectral>
     class AiryDisk : public PSF<TSpectral> {
     public:

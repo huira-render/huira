@@ -1,10 +1,22 @@
+
 #include <cmath>
 
+#include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/core/constants.hpp"
 #include "huira/core/types.hpp"
-#include "huira/core/concepts/spectral_concepts.hpp"
 
 namespace huira {
+
+    /**
+     * @brief Constructs an AiryDisk PSF with the given optical parameters.
+     *
+     * @param focal_length The focal length of the optical system in meters.
+     * @param pitch_x The pixel pitch in the x direction in meters.
+     * @param pitch_y The pixel pitch in the y direction in meters.
+     * @param aperture_diameter The diameter of the circular aperture in meters.
+     * @param radius The kernel radius in pixels.
+     * @param banks The number of polyphase banks.
+     */
     template <IsSpectral TSpectral>
     AiryDisk<TSpectral>::AiryDisk(units::Meter focal_length, units::Meter pitch_x, units::Meter pitch_y, units::Meter aperture_diameter, int radius, int banks)
         : f_number_(focal_length.to_si() / aperture_diameter.to_si())
@@ -13,6 +25,16 @@ namespace huira {
         this->build_polyphase_cache(radius, banks);
     }
 
+
+    /**
+     * @brief Evaluates the Airy disk PSF at the given pixel offset.
+     *
+     * Computes the intensity at the specified (x, y) offset from the center, using the Airy disk formula.
+     *
+     * @param x Horizontal offset from the center in pixel coordinates.
+     * @param y Vertical offset from the center in pixel coordinates.
+     * @return The PSF intensity for each spectral channel.
+     */
     template <IsSpectral TSpectral>
     TSpectral AiryDisk<TSpectral>::evaluate(float x, float y)
     {
@@ -43,6 +65,15 @@ namespace huira {
         return airy_values;
     }
 
+
+    /**
+     * @brief Computes the Bessel function of the first kind, order one (J1).
+     *
+     * Used for evaluating the Airy disk intensity profile.
+     *
+     * @param x The argument to the Bessel function.
+     * @return The value of J1(x).
+     */
     template <IsSpectral TSpectral>
     double AiryDisk<TSpectral>::bessel_j1(double x)
     {
