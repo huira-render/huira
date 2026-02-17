@@ -24,6 +24,7 @@ requirements:
     - ninja
     - pkg-config
   host:
+    - python
     - assimp
     - cfitsio
     - cspice
@@ -37,9 +38,14 @@ requirements:
     - libpng
     - libjpeg-turbo
     - tbb-devel
+  run:
+    - python
 
 test:
+  imports:
+    - huira
   commands:
+    - python -c "from huira.rgb import Scene; print('Python bindings OK')"
     - huira --help
     - huira fetch-tycho2 --help
     - huira process-tycho2 --help
