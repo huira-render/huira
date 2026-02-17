@@ -7,8 +7,11 @@ cmake -B build ^
     -DCMAKE_INSTALL_PREFIX="%LIBRARY_PREFIX%" ^
     -DCMAKE_BUILD_TYPE=Release ^
     -DCMAKE_PREFIX_PATH="%LIBRARY_PREFIX%" ^
+    -DCMAKE_CXX_SCAN_FOR_MODULES=OFF ^
     -DHUIRA_APPS=ON ^
-    -DHUIRA_PYTHON=ON
+    -DHUIRA_PYTHON=ON ^
+    -DPython_EXECUTABLE="%PYTHON%" ^
+    -DPython_ROOT_DIR="%LIBRARY_PREFIX%"
 if errorlevel 1 exit 1
 
 cmake --build build --parallel %CPU_COUNT%

@@ -22,13 +22,30 @@ foreach(config ${CMAKE_CONFIGURATION_TYPES})
     )
 endforeach()
 
+# Determine the Python install destination.
+# scikit-build-core sets the install prefix so relative paths work for wheels.
+# For conda-build (or plain cmake --install), we need the full site-packages path.
+if(DEFINED SKBUILD)
+    set(HUIRA_PYTHON_INSTALL_DIR "huira")
+else()
+    execute_process(
+        COMMAND "${Python_EXECUTABLE}" -c
+            "import sysconfig; print(sysconfig.get_path('purelib'))"
+        OUTPUT_VARIABLE _python_site_packages
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+    # Make it relative to CMAKE_INSTALL_PREFIX
+    file(RELATIVE_PATH _rel_site "${CMAKE_INSTALL_PREFIX}" "${_python_site_packages}")
+    set(HUIRA_PYTHON_INSTALL_DIR "${_rel_site}/huira")
+endif()
+
 # Install rules — used by scikit-build-core to populate the wheel,
 # and by cmake --install for manual installations
-install(TARGETS _huira LIBRARY DESTINATION huira)
-install(FILES huira/__init__.py DESTINATION huira)
-install(FILES huira/units.py DESTINATION huira)
-install(FILES huira/rgb.py DESTINATION huira)
-install(FILES huira/visible8.py DESTINATION huira)
+install(TARGETS _huira LIBRARY DESTINATION ${HUIRA_PYTHON_INSTALL_DIR})
+install(FILES huira/__init__.py DESTINATION ${HUIRA_PYTHON_INSTALL_DIR})
+install(FILES huira/units.py DESTINATION ${HUIRA_PYTHON_INSTALL_DIR})
+install(FILES huira/rgb.py DESTINATION ${HUIRA_PYTHON_INSTALL_DIR})
+install(FILES huira/visible8.py DESTINATION ${HUIRA_PYTHON_INSTALL_DIR})
 install(DIRECTORY "${CMAKE_SOURCE_DIR}/data/"
-    DESTINATION huira/data
+    DESTINATION ${HUIRA_PYTHON_INSTALL_DIR}/data
 )
