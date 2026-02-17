@@ -107,7 +107,7 @@ jobs:
           CIBW_ENVIRONMENT_LINUX: >-
             CMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake
             VCPKG_INSTALLED_DIR=/opt/vcpkg_installed
-            VCPKG_BINARY_SOURCES="clear;x-gha,readwrite"
+            VCPKG_MANIFEST_INSTALL=OFF
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4
