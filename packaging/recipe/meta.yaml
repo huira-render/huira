@@ -19,7 +19,7 @@ build:
 requirements:
   build:
     - {{ compiler('cxx') }}
-    - {{ stdlib('c') }}
+    #- {{ stdlib('c') }} # Needed for conda-forge recipe
     - cmake
     - ninja
     - pkg-config
