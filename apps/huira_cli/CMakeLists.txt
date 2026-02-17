@@ -33,3 +33,25 @@ include(GNUInstallDirs)
 install(TARGETS huira_cli
     DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
+
+if(HUIRA_PYTHON)
+    install(TARGETS huira_cli
+        DESTINATION "${SKBUILD_SCRIPTS_DIR}"
+        COMPONENT python
+    )
+    
+    # Set RPATH so the CLI can find shared libraries at runtime
+    if(APPLE)
+        set_target_properties(huira_cli PROPERTIES
+            INSTALL_RPATH "@loader_path/../lib"
+            BUILD_WITH_INSTALL_RPATH OFF
+            BUILD_RPATH "${CMAKE_BINARY_DIR}"
+        )
+    elseif(UNIX)
+        set_target_properties(huira_cli PROPERTIES
+            INSTALL_RPATH "$ORIGIN/../lib"
+            BUILD_WITH_INSTALL_RPATH OFF
+            BUILD_RPATH "${CMAKE_BINARY_DIR}"
+        )
+    endif()
+endif()
