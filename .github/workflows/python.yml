@@ -9,14 +9,14 @@ on:
   workflow_dispatch:
     inputs:
       cibw_build:
-        description: 'Override CIBW_BUILD (e.g. "cp312-*" for faster debugging)'
+        description: 'cibuildwheel build selector (e.g. "cp312-*" for quick testing)'
         required: false
         default: ''
 
 permissions:
   contents: read
   actions: read
-  id-token: write
+  id-token: write  # Required for trusted PyPI publishing
 
 jobs:
   version-check:
@@ -52,13 +52,17 @@ jobs:
       - name: Install Python bindings
         shell: bash -el {0}
         run: |
+          echo "Installing huira Python bindings via pip..."
           cd bindings/python
           pip install . -v
+          echo "Installation completed successfully!"
 
       - name: Verify import
         shell: bash -el {0}
         run: |
+          echo "Verifying huira can be imported..."
           python -c "import huira; print(f'huira version: {huira.__version__}')"
+          echo "Import verification passed!"
 
   build-wheels:
     needs: version-check
@@ -67,10 +71,13 @@ jobs:
       matrix:
         include:
           - os: ubuntu-22.04
+            platform: linux
           - os: macos-14
+            platform: macos
           - os: windows-2022
+            platform: windows
     runs-on: ${{ matrix.os }}
-    name: Build Wheels (${{ matrix.os }})
+    name: Wheels (${{ matrix.platform }})
 
     steps:
       - name: Checkout code
@@ -78,31 +85,36 @@ jobs:
         with:
           submodules: recursive
 
+      # Expose GitHub Actions cache URL and token for vcpkg binary caching
+      # inside the manylinux Docker container (Linux only)
+      - name: Expose GitHub Actions cache env vars
+        if: matrix.platform == 'linux'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+
       - name: Build wheels
-        uses: pypa/cibuildwheel@v2
+        uses: pypa/cibuildwheel@v3.3.1
         with:
           package-dir: bindings/python
-          config-file: bindings/python/pyproject.toml
         env:
+          # Override build selector for quick testing via workflow_dispatch
           CIBW_BUILD: ${{ github.event.inputs.cibw_build || '' }}
+          # Pass cache env vars into the Linux container for vcpkg binary caching
+          CIBW_ENVIRONMENT_PASS_LINUX: ACTIONS_CACHE_URL ACTIONS_RUNTIME_TOKEN
+          CIBW_ENVIRONMENT_LINUX: >-
+            CMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake
+            VCPKG_INSTALLED_DIR=/opt/vcpkg_installed
+            VCPKG_BINARY_SOURCES="clear;x-gha,readwrite"
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
-          name: wheels-${{ matrix.os }}
+          name: wheels-${{ matrix.platform }}
           path: wheelhouse/*.whl
 
-  # ---------------------------------------------------------------------------
-  # Publish to PyPI — only on tag pushes (v*)
-  # ---------------------------------------------------------------------------
-  # Uses trusted publishing (OIDC), so no API token is needed in secrets.
-  # You must configure this once at:
-  #   https://pypi.org/manage/project/huira/settings/publishing/
-  # Add a "GitHub Actions" publisher with:
-  #   Owner:      https://github.com/huira-render
-  #   Repository: https://github.com/huira-render/huira
-  #   Workflow:   python.yml
-  #   Environment: pypi
   publish-pypi:
     name: Publish to PyPI
     needs: build-wheels
@@ -120,11 +132,14 @@ jobs:
           path: dist/
           merge-multiple: true
 
+      # Uses trusted publishing (OIDC) - no token needed
+      # Configure at: https://pypi.org/manage/project/huira/settings/publishing/
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/
 
+  # Gate job that depends on all other jobs - use this for branch protection
   python-ci:
     name: Python CI
     if: always()
