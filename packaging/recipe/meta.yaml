@@ -1,8 +1,15 @@
+{% set version = "0.8.0" %}
+
 package:
   name: huira
-  version: 0.8.0
+  version: {{ version }}
 
 source:
+  # For conda-forge submission, replace git_url/git_rev with the tarball:
+  # Generate the hash with:
+  #   curl -sL https://github.com/huira-render/huira/archive/v{{ version }}.tar.gz | openssl sha256
+  # url: https://github.com/huira-render/huira/archive/v{{ version }}.tar.gz
+  # sha256: <HASH>
   git_url: ../..
   git_rev: HEAD
 
@@ -11,61 +18,48 @@ build:
 
 requirements:
   build:
-    # Compiler and build tools - conda-build resolves these per-platform
     - {{ compiler('cxx') }}
+    - {{ stdlib('c') }}
     - cmake
     - ninja
+    - pkg-config
   host:
-    - assimp=5.4.3         # Asset Importer (3d models)
-    - catch2=3.8.0         # Testing Framework
-    - cfitsio=4.6.2        # FITS I/O
-    - cspice=67            # NASA SPICE 
-    - embree3=3.13.5       # Ray tracing Acceleration
-    - fftw=3.3.10          # Fast Fourier Transform
-    - gdal=3.10.0          # Geospatial Abstraction Library
-    - glm=1.0.1            # Linear Algebra for Graphics
-    - indicators=2.3       # Progress bars
-    - libcurl=8.18.0.      # URL Transfer Library
-    - libtiff=4.7.0        # TIFF I/O
-    - libpng=1.6.54        # PNG I/O
-    - libjpeg-turbo=3.1.2  # JPEG I/O
-    - tbb-devel=2021.12.0  # Intel TBB
-  run:
-    # For a header-only library, users need dev packages to compile against huira
-    - assimp=5.4.3         # Asset Importer (3d models)
-    - cfitsio=4.6.2        # FITS I/O
-    - cspice=67            # NASA SPICE 
-    - embree3=3.13.5       # Ray tracing Acceleration
-    - fftw=3.3.10          # Fast Fourier Transform
-    - gdal=3.10.0          # Geospatial Abstraction Library
-    - glm=1.0.1            # Linear Algebra for Graphics
-    - libtiff=4.7.0        # TIFF I/O
-    - libpng=1.6.54        # PNG I/O
-    - libjpeg-turbo=3.1.2  # JPEG I/O
-    - tbb-devel=2021.12.0  # Intel TBB
+    - assimp
+    - cfitsio
+    - cspice
+    - embree3
+    - fftw
+    - gdal
+    - glm
+    - indicators
+    - libcurl
+    - libtiff
+    - libpng
+    - libjpeg-turbo
+    - tbb-devel
 
 test:
   commands:
-    # Check headers are installed
-    - test -f $PREFIX/include/huira/huira.hpp  # [unix]
-    - if not exist %LIBRARY_INC%\\huira\\huira.hpp exit 1  # [win]
-    # Check CMake config files are installed
-    - test -f $PREFIX/lib/cmake/huira/huiraConfig.cmake  # [unix]
-    - test -f $PREFIX/lib/cmake/huira/huiraTargets.cmake  # [unix]
-    - if not exist %LIBRARY_LIB%\\cmake\\huira\\huiraConfig.cmake exit 1  # [win]
-    - if not exist %LIBRARY_LIB%\\cmake\\huira\\huiraTargets.cmake exit 1  # [win]
-    # Check kernel data is installed
-    - test -f $PREFIX/share/huira/data/kernels/lsk/naif0012.tls  # [unix]
-    - if not exist %LIBRARY_PREFIX%\\share\\huira\\data\\kernels\\lsk\\naif0012.tls exit 1  # [win]
-    # Smoke-test CLI apps
     - huira --help
     - huira fetch-tycho2 --help
     - huira process-tycho2 --help
+    - test -f $PREFIX/include/huira/huira.hpp                                    # [unix]
+    - if not exist %LIBRARY_INC%\\huira\\huira.hpp exit 1                        # [win]
+    - test -f $PREFIX/lib/cmake/huira/huiraConfig.cmake                          # [unix]
+    - test -f $PREFIX/lib/cmake/huira/huiraTargets.cmake                         # [unix]
+    - if not exist %LIBRARY_LIB%\\cmake\\huira\\huiraConfig.cmake exit 1         # [win]
+    - if not exist %LIBRARY_LIB%\\cmake\\huira\\huiraTargets.cmake exit 1        # [win]
+    - test -f $PREFIX/share/huira/data/kernels/lsk/naif0012.tls                  # [unix]
+    - if not exist %LIBRARY_PREFIX%\\share\\huira\\data\\kernels\\lsk\\naif0012.tls exit 1  # [win]
 
 about:
   home: https://www.huira.space
   license: MIT
-  license_file: LICENSE
+  license_file: ../../LICENSE # Change for conda-forge submission to point to the LICENSE file in the tarball
   summary: Spectral renderer for space applications
   description: |
     Huira is a C++ library for ray tracing in space applications.
+
+extra:
+  recipe-maintainers:
+    - crgnam
