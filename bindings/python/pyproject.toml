@@ -46,16 +46,13 @@ build-verbosity = 1
 [tool.cibuildwheel.linux]
 manylinux-x86_64-image = "manylinux_2_28"
 before-all = [
-    # Install system tools needed by vcpkg and builds
     "dnf install -y git curl zip unzip tar pkgconfig perl-IPC-Cmd cmake ninja-build",
-    # Clone vcpkg and bootstrap it
     "git clone https://github.com/microsoft/vcpkg.git /opt/vcpkg",
     "/opt/vcpkg/bootstrap-vcpkg.sh -disableMetrics",
-    # Install dependencies via vcpkg using the project's manifest
-    # VCPKG_BINARY_SOURCES is set in the workflow for caching
-    "/opt/vcpkg/vcpkg install --x-manifest-root=/project/packaging --x-install-root=/opt/vcpkg_installed --triplet=x64-linux",
+    "echo 'set(VCPKG_BUILD_TYPE release)' >> /opt/vcpkg/triplets/x64-linux.cmake",
+    "/opt/vcpkg/vcpkg install --x-manifest-root=/project/packaging --x-install-root=/opt/vcpkg_installed --triplet=x64-linux --x-feature=apps",
 ]
-environment = { CMAKE_TOOLCHAIN_FILE = "/opt/vcpkg/scripts/buildsystems/vcpkg.cmake", VCPKG_INSTALLED_DIR = "/opt/vcpkg_installed" }
+environment = { CMAKE_TOOLCHAIN_FILE = "/opt/vcpkg/scripts/buildsystems/vcpkg.cmake", VCPKG_INSTALLED_DIR = "/opt/vcpkg_installed", VCPKG_MANIFEST_INSTALL = "OFF" }
 
 # auditwheel: let it auto-detect the appropriate manylinux tag
 repair-wheel-command = "auditwheel repair -w {dest_dir} {wheel}"
