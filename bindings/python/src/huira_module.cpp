@@ -59,6 +59,7 @@ inline void bind_spectral(py::module_& m) {
 
 PYBIND11_MODULE(_huira, m) {
     m.doc() = "Python bindings for the Huira C++ library";
+    m.attr("__version__") = HUIRA_VERSION;
 
     // Bind core types and utilities:
     huira::bind_units(m);
