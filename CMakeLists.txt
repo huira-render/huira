@@ -42,6 +42,11 @@ list(APPEND CMAKE_MODULE_PATH
     "${CMAKE_CURRENT_SOURCE_DIR}/cmake/find"
     "${CMAKE_CURRENT_SOURCE_DIR}/cmake/setup"
 )
+
+if(DEFINED ENV{CONDA_BUILD})
+    list(APPEND CMAKE_FIND_ROOT_PATH "${CMAKE_SOURCE_DIR}")
+endif()
+
 include(CustomVcpkgSetup)
 
 #############################
