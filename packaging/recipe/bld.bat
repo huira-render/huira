@@ -4,14 +4,11 @@ echo Building %PKG_NAME% version %PKG_VERSION%
 
 cmake -B build ^
     -G Ninja ^
-    -DCMAKE_INSTALL_PREFIX="%LIBRARY_PREFIX%" ^
-    -DCMAKE_BUILD_TYPE=Release ^
-    -DCMAKE_PREFIX_PATH="%LIBRARY_PREFIX%" ^
+    %CMAKE_ARGS% ^
     -DCMAKE_CXX_SCAN_FOR_MODULES=OFF ^
     -DHUIRA_APPS=ON ^
     -DHUIRA_PYTHON=ON ^
-    -DPython_EXECUTABLE="%PYTHON%" ^
-    -DPython_ROOT_DIR="%LIBRARY_PREFIX%"
+    -DPython_EXECUTABLE="%PYTHON%"
 if errorlevel 1 exit 1
 
 cmake --build build --parallel %CPU_COUNT%

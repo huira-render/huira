@@ -1,6 +1,8 @@
 include(FetchPybind)
 
 pybind11_add_module(_huira src/huira_module.cpp)
+set_target_properties(_huira PROPERTIES CXX_SCAN_FOR_MODULES OFF)
+
 target_link_libraries(_huira PRIVATE huira::huira)
 target_include_directories(_huira PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_compile_definitions(_huira PRIVATE PYBIND11_DETAILED_ERROR_MESSAGES)

@@ -17,7 +17,7 @@ if(HUIRA_DOCS AND NOT HUIRA_PYTHON)
     set(HUIRA_PYTHON ON CACHE BOOL "Build Python Bindings" FORCE)
 endif()
 
-if(DEFINED ENV{CONDA_PREFIX} AND NOT DEFINED CMAKE_TOOLCHAIN_FILE)
+if(DEFINED ENV{CONDA_PREFIX} AND NOT DEFINED CMAKE_TOOLCHAIN_FILE AND NOT DEFINED ENV{CONDA_BUILD})
     set(CMAKE_TOOLCHAIN_FILE "${CMAKE_CURRENT_SOURCE_DIR}/cmake/conda-toolchain.cmake" CACHE FILEPATH "CMake toolchain file")
     message(STATUS "Detected Conda environment, using conda toolchain")
 endif()

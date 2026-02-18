@@ -4,7 +4,6 @@ add_executable(huira_cli
 
     commands/fetch_tycho2.cpp
     commands/process_tycho2.cpp
-    
 )
 
 find_package(TCLAP REQUIRED)
@@ -24,9 +23,8 @@ target_include_directories(huira_cli PRIVATE
 
 target_compile_features(huira_cli PRIVATE cxx_std_20)
 
-set_target_properties(huira_cli PROPERTIES
-    OUTPUT_NAME huira
-)
+set_target_properties(huira_cli PROPERTIES CXX_SCAN_FOR_MODULES OFF)
+set_target_properties(huira_cli PROPERTIES OUTPUT_NAME huira)
 
 # Install CLI
 include(GNUInstallDirs)

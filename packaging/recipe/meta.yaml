@@ -40,6 +40,17 @@ requirements:
     - tbb-devel
   run:
     - python
+    - cspice
+    - glm
+    - assimp
+    - cfitsio
+    - embree3
+    - fftw
+    - gdal
+    - libtiff
+    - libpng
+    - libjpeg-turbo
+    - tbb-devel
 
 test:
   imports:
