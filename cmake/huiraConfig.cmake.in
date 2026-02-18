@@ -22,6 +22,15 @@ find_dependency(TBB CONFIG)
 find_dependency(JPEG)
 find_dependency(PNG)
 find_package(CFITSIO REQUIRED)
+# Conda-forge's cfitsio includes 'm' in its link interface, which doesn't
+# exist on Windows (math functions are in the CRT). Remove it.
+if(WIN32 AND TARGET CFITSIO::CFITSIO)
+    get_target_property(_cfitsio_libs CFITSIO::CFITSIO INTERFACE_LINK_LIBRARIES)
+    if(_cfitsio_libs)
+        list(REMOVE_ITEM _cfitsio_libs "m")
+        set_target_properties(CFITSIO::CFITSIO PROPERTIES INTERFACE_LINK_LIBRARIES "${_cfitsio_libs}")
+    endif()
+endif()
 
 include("${CMAKE_CURRENT_LIST_DIR}/huiraTargets.cmake")
 check_required_components(huira)

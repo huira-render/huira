@@ -37,6 +37,15 @@ find_package(TBB CONFIG REQUIRED)
 find_package(JPEG REQUIRED)
 find_package(PNG REQUIRED)
 find_package(CFITSIO REQUIRED)
+# Conda-forge's cfitsio includes 'm' in its link interface, which doesn't
+# exist on Windows (math functions are in the CRT). Remove it.
+if(WIN32 AND TARGET CFITSIO::CFITSIO)
+    get_target_property(_cfitsio_libs CFITSIO::CFITSIO INTERFACE_LINK_LIBRARIES)
+    if(_cfitsio_libs)
+        list(REMOVE_ITEM _cfitsio_libs "m")
+        set_target_properties(CFITSIO::CFITSIO PROPERTIES INTERFACE_LINK_LIBRARIES "${_cfitsio_libs}")
+    endif()
+endif()
 
 target_link_libraries(huira INTERFACE
     glm::glm
