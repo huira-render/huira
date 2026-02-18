@@ -9,6 +9,9 @@ if(CMAKE_TOOLCHAIN_FILE MATCHES "conda")
 elseif(CMAKE_TOOLCHAIN_FILE MATCHES "conan")
     set(USING_ALTERNATIVE_PKG_MGR TRUE)
     message(STATUS "Conan toolchain detected - disabling vcpkg integration")
+elseif(DEFINED ENV{CONDA_BUILD})
+    set(USING_ALTERNATIVE_PKG_MGR TRUE)
+    message(STATUS "conda-build detected - disabling vcpkg integration")
 endif()
 
 # Disable vcpkg only if using alternative toolchain
