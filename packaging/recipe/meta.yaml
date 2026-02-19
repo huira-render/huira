@@ -28,7 +28,7 @@ requirements:
     - assimp
     - cfitsio
     - cspice
-    - embree3
+    - embree
     - fftw
     - gdal
     - glm
@@ -44,7 +44,7 @@ requirements:
     - glm
     - assimp
     - cfitsio
-    - embree3
+    - embree
     - fftw
     - gdal
     - libtiff

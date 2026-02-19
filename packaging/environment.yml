@@ -6,7 +6,7 @@ dependencies:
   - catch2=3.8.0         # Testing Framework
   - cfitsio=4.6.2        # FITS I/O
   - cspice=67            # NASA SPICE 
-  - embree3=3.13.5       # Ray tracing Acceleration
+  - embree=4.4.0         # Ray tracing Acceleration
   - fftw=3.3.10          # Fast Fourier Transform
   - gdal=3.10.0          # Geospatial Abstraction Library
   - glm=1.0.1            # Linear Algebra for Graphics
@@ -15,4 +15,4 @@ dependencies:
   - libtiff=4.7.0        # TIFF I/O
   - libpng=1.6.54        # PNG I/O
   - libjpeg-turbo=3.1.2  # JPEG I/O
-  - tbb-devel=2021.12.0  # Intel TBB
+  - tbb-devel            # Intel TBB
