@@ -27,7 +27,7 @@ set_target_properties(huira_cli PROPERTIES CXX_SCAN_FOR_MODULES OFF)
 
 include(GNUInstallDirs)
 
-if(HUIRA_PYTHON)
+if(DEFINED SKBUILD)
     set_target_properties(huira_cli PROPERTIES OUTPUT_NAME huira_bin)
     install(TARGETS huira_cli
         DESTINATION "${HUIRA_PYTHON_INSTALL_DIR}"
