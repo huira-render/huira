@@ -41,7 +41,7 @@ if(HUIRA_PYTHON)
     # Set RPATH so the CLI can find shared libraries at runtime
     if(APPLE)
         set_target_properties(huira_cli PROPERTIES
-            INSTALL_RPATH "@loader_path/../lib"
+            INSTALL_RPATH "@loader_path/../lib;@loader_path/../huira/.dylibs"
             BUILD_WITH_INSTALL_RPATH OFF
             BUILD_RPATH "${CMAKE_BINARY_DIR}"
         )
