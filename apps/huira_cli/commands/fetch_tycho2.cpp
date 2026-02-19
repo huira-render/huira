@@ -32,6 +32,7 @@ namespace huira::cli::tycho2 {
     }
 
     // Download a single file. Returns true on success.
+    // Download a single file. Returns true on success.
     static bool download_file(const std::string& url, const fs::path& dest, const Context& ctx) {
         if (ctx.verbose) {
             std::cout << "  " << url << "\n";
@@ -44,6 +45,34 @@ namespace huira::cli::tycho2 {
             return false;
         }
 
+#ifdef _WIN32
+        curl_easy_setopt(curl, CURLOPT_SSL_OPTIONS, CURLSSLOPT_NATIVE_CA);
+#else
+        // Search for CA bundle — handles manylinux, conda, and most Linux distros
+        for (const char* var : { "SSL_CERT_FILE", "CURL_CA_BUNDLE" }) {
+            if (const char* val = std::getenv(var)) {
+                if (fs::exists(val)) {
+                    curl_easy_setopt(curl, CURLOPT_CAINFO, val);
+                    break;
+                }
+            }
+        }
+        static const char* known_ca_paths[] = {
+            "/etc/ssl/certs/ca-certificates.crt",   // Debian/Ubuntu/Arch
+            "/etc/pki/tls/certs/ca-bundle.crt",     // RHEL/Fedora/CentOS
+            "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem",
+            "/etc/ssl/ca-bundle.pem",               // openSUSE
+            "/etc/ssl/cert.pem",                    // Alpine/macOS
+            "/usr/local/share/certs/ca-root-nss.crt", // FreeBSD
+        };
+        for (const char* path : known_ca_paths) {
+            if (fs::exists(path)) {
+                curl_easy_setopt(curl, CURLOPT_CAINFO, path);
+                break;
+            }
+        }
+#endif
+
         std::ofstream out(dest, std::ios::binary);
         if (!out) {
             std::cerr << "Failed to open output file: " << dest << "\n";
@@ -55,8 +84,8 @@ namespace huira::cli::tycho2 {
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, &out);
         curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-        curl_easy_setopt(curl, CURLOPT_ACCEPT_ENCODING, "");  // Accept any encoding, auto-decompress
-        curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1L);      // Fail on HTTP errors (4xx, 5xx)
+        curl_easy_setopt(curl, CURLOPT_ACCEPT_ENCODING, "");
+        curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1L);
 
         CURLcode res = curl_easy_perform(curl);
         curl_easy_cleanup(curl);
@@ -64,7 +93,7 @@ namespace huira::cli::tycho2 {
 
         if (res != CURLE_OK) {
             std::cerr << "Download failed: " << curl_easy_strerror(res) << "\n";
-            fs::remove(dest);  // Clean up partial file
+            fs::remove(dest);
             return false;
         }
 
