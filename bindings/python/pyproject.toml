@@ -32,6 +32,9 @@ regex = "(?P<value>\\d+\\.\\d+\\.\\d+)"
 if.platform-system = "win32"
 cmake.args = ["-DHUIRA_PYTHON=ON", "-DHUIRA_APPS=ON", "-DHUIRA_NATIVE_ARCH=OFF", "-A", "x64"]
 
+[project.scripts]
+huira = "huira.cli:main"
+
 # ---------------------------------------------------------------------------
 # cibuildwheel configuration
 # ---------------------------------------------------------------------------
@@ -71,9 +74,7 @@ before-all = [
 environment = { CONDA_PREFIX = "$HOME/conda", REPAIR_LIBRARY_PATH = "$HOME/conda/lib", MACOSX_DEPLOYMENT_TARGET = "11.0" }
 repair-wheel-command = """\
     DYLD_LIBRARY_PATH=$REPAIR_LIBRARY_PATH delocate-wheel \
-    --require-archs {delocate_archs} -w {dest_dir} -v {wheel} && \
-    DYLD_LIBRARY_PATH=$REPAIR_LIBRARY_PATH delocate-path \
-    --lib-path $HOME/conda/lib {dest_dir}/huira-*.whl\
+    --require-archs {delocate_archs} -w {dest_dir} -v {wheel}\
 """
 
 # ---------------------------------------------------------------------------
