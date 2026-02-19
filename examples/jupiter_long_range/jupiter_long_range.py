@@ -3,8 +3,9 @@ import os
 from pathlib import Path
 
 import huira
-from huira.rgb import Scene, SceneView, RasterRenderer
+from huira.visible8 import Scene, SceneView, RasterRenderer
 
+from huira.units import Kilometer as km
 from huira.units import Millimeter as mm
 from huira.units import Micrometer as um
 from huira.units import Degree as deg
@@ -76,10 +77,15 @@ def main():
     callisto.set_spice_origin("CALLISTO");
 
     
-    # Create an instance of the camera
-    navcam = scene.root.new_instance(camera_model)
-    navcam.set_spice_origin("EARTH_BARYCENTER")
-    navcam.set_euler_angles(deg(90), deg(0), deg(272))
+    # Create the ECI J2000 Reference Frame:
+    eci = scene.root.new_spice_subframe("EARTH_BARYCENTER", "J2000")
+
+    # Create a camera instance in the ECI frame and set it's position and orientation
+    navcam = eci.new_instance(camera_model)
+    navcam.set_position(km(7000), km(0), km(0))
+
+    quat = huira.Quaternion(w=0.50865, x=-0.50865, y=0.491198, z=0.491198)
+    navcam.set_rotation(huira.Rotation.from_parent_to_local(quat))
     
     # Configure the render buffers
     frame_buffer = camera_model.make_frame_buffer()
@@ -96,9 +102,7 @@ def main():
     renderer.render(scene_view, frame_buffer, exposure_time)
     
     # Save the results
-    huira.write_png("output/jupiter_long_range.png", frame_buffer.sensor_response, 8)
-
-    print("DONE")
+    huira.write_png("jupiter_long_range.png", frame_buffer.sensor_response, 8)
 
 if __name__ == "__main__":
     main()

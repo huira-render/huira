@@ -9,9 +9,11 @@
 #include "huira/cameras/distortion_coeffs_py.ipp"
 
 #include "huira/core/units/units_py.ipp"
+#include "huira/core/rotation_py.ipp"
 #include "huira/core/spectral_bin_py.ipp"
 #include "huira/core/spectral_bins_py.ipp"
 #include "huira/core/time_py.ipp"
+#include "huira/core/types_py.ipp"
 
 #include "huira/ephemeris/spice_py.ipp"
 
@@ -65,6 +67,9 @@ PYBIND11_MODULE(_huira, m) {
     huira::bind_units(m);
     huira::bind_time(m);
     huira::bind_bin(m);
+
+    huira::bind_types(m);
+    huira::bind_rotation(m);
 
     huira::bind_paths(m);
 
