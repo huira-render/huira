@@ -1,48 +1,115 @@
-if(MSVC)
-    message("Windows Detected")
+########################################
+### Architecture / Optimization Flags ###
+########################################
 
-    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_Release ON)
-    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_Debug OFF)
+# Detect native arch flags (used for both this project and vcpkg triplet overlay)
+set(HUIRA_ARCH_C_FLAGS "")
+set(HUIRA_ARCH_CXX_FLAGS "")
+
+if(HUIRA_NATIVE_ARCH)
+    if(MSVC AND NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+        # MSVC: /arch:AVX2 or /arch:AVX512 — detect what's available
+        include(CheckCXXCompilerFlag)
+        check_cxx_compiler_flag("/arch:AVX512" MSVC_HAS_AVX512)
+        check_cxx_compiler_flag("/arch:AVX2" MSVC_HAS_AVX2)
+
+        if(MSVC_HAS_AVX512)
+            set(HUIRA_ARCH_C_FLAGS "/arch:AVX512")
+            set(HUIRA_ARCH_CXX_FLAGS "/arch:AVX512")
+            message(STATUS "Native arch: AVX-512 (MSVC)")
+        elseif(MSVC_HAS_AVX2)
+            set(HUIRA_ARCH_C_FLAGS "/arch:AVX2")
+            set(HUIRA_ARCH_CXX_FLAGS "/arch:AVX2")
+            message(STATUS "Native arch: AVX2 (MSVC)")
+        else()
+            message(STATUS "Native arch: baseline (MSVC, no AVX2/AVX512 detected)")
+        endif()
+
+    elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+        # GCC/Clang: -march=native works on both Linux and macOS
+        include(CheckCXXCompilerFlag)
+        check_cxx_compiler_flag("-march=native" HAS_MARCH_NATIVE)
+
+        if(HAS_MARCH_NATIVE)
+            set(HUIRA_ARCH_C_FLAGS "-march=native -mtune=native")
+            set(HUIRA_ARCH_CXX_FLAGS "-march=native -mtune=native")
+            message(STATUS "Native arch: -march=native -mtune=native")
+        else()
+            message(STATUS "Native arch: -march=native not supported by compiler")
+        endif()
+    endif()
+
+    # Apply to this project's targets
+    if(HUIRA_ARCH_CXX_FLAGS)
+        add_compile_options(
+            $<$<COMPILE_LANGUAGE:C>:${HUIRA_ARCH_C_FLAGS}>
+            $<$<COMPILE_LANGUAGE:CXX>:${HUIRA_ARCH_CXX_FLAGS}>
+        )
+    endif()
+else()
+    message(STATUS "Native arch optimizations disabled (HUIRA_NATIVE_ARCH=OFF)")
+endif()
+
+
+#####################################
+### Platform / Build Type Config  ###
+#####################################
+if(MSVC)
+    message(STATUS "Platform: Windows (MSVC)")
+    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
+    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_DEBUG OFF)
 
 elseif(UNIX AND NOT APPLE)
-    message("Linux Detected")
+    message(STATUS "Platform: Linux")
 
-    # Check for the build type:
-    if (NOT (CMAKE_BUILD_TYPE STREQUAL "Release"))
-        set(CMAKE_BUILD_TYPE "Debug")
+    if(NOT CMAKE_BUILD_TYPE)
+        set(CMAKE_BUILD_TYPE "Debug" CACHE STRING "Build type" FORCE)
     endif()
-    
-	if (CMAKE_BUILD_TYPE STREQUAL "Debug")
-		set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -O0")
 
-	elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
+    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+        set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -O0")
+
+    elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
         set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
-    	if(HUIRA_NATIVE_ARCH)
-            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -mtune=native -march=native")
-        else()
-            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
-        endif()
-		set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 -fno-math-errno -fno-signed-zeros -fno-trapping-math -freciprocal-math -fno-rounding-math -fno-signaling-nans -fexcess-precision=fast -flto=auto")
-	endif()
 
+        # Fast-math subset: relaxed FP without full -ffast-math 
+        # (avoids -ffinite-math-only which can miscompile NaN checks)
+        set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 \
+-fno-math-errno -fno-signed-zeros -fno-trapping-math \
+-freciprocal-math -fno-rounding-math -fno-signaling-nans \
+-fexcess-precision=fast")
+        # Note: LTO is handled by CMAKE_INTERPROCEDURAL_OPTIMIZATION above.
+        # No need for explicit -flto=auto in flags.
+    endif()
+
+    # WSL detection
     execute_process(
         COMMAND grep -i microsoft /proc/version
         RESULT_VARIABLE IS_WSL
-        OUTPUT_QUIET
-        ERROR_QUIET
+        OUTPUT_QUIET ERROR_QUIET
     )
     if(IS_WSL EQUAL 0)
-        message("WSL Detected")
+        message(STATUS "WSL Detected")
         add_definitions(-D__WSL__)
     endif()
 
 elseif(APPLE)
-    message("Apple Detected")
+    message(STATUS "Platform: Apple")
 
-    # Check if the linker supports -no_warn_duplicate_libraries
+    if(NOT CMAKE_BUILD_TYPE)
+        set(CMAKE_BUILD_TYPE "Debug" CACHE STRING "Build type" FORCE)
+    endif()
+
+    if(CMAKE_BUILD_TYPE STREQUAL "Release")
+        set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
+        set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 \
+-fno-math-errno -fno-signed-zeros -fno-trapping-math \
+-freciprocal-math -fno-rounding-math -fno-signaling-nans \
+-fexcess-precision=fast")
+    endif()
+
     include(CheckLinkerFlag)
     check_linker_flag(CXX "-Wl,-no_warn_duplicate_libraries" LINKER_SUPPORTS_NO_WARN_DUPLICATE_LIBRARIES)
-    
     if(LINKER_SUPPORTS_NO_WARN_DUPLICATE_LIBRARIES)
         set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-no_warn_duplicate_libraries")
     endif()
@@ -75,13 +142,11 @@ if(MSVC AND NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
         /w14906 # String literal cast to LPWSTR
         /w14928 # Illegal copy-initialization
     )
-    
+
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    # Clang comprehensive warnings - nearly everything
-    add_compile_options(-Weverything)  # Enable ALL warnings, then disable specific ones
-    
+    add_compile_options(-Weverything)
+
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    # GCC comprehensive warnings - maximum practical level
     add_compile_options(
         -Wall -Wextra -Wpedantic
         -Wcast-align -Wcast-qual
@@ -114,24 +179,18 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
         -Wsuggest-override
         -Wsuggest-final-types
         -Wsuggest-final-methods
-        # Add extra semicolon detection
         -Wextra-semi
     )
-    
-    # Check for GCC version-specific warnings
+
     if(CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL "7.0")
-        add_compile_options(
-            -Walloc-zero
-            -Walloca
-        )
+        add_compile_options(-Walloc-zero -Walloca)
     endif()
-    
+
     if(CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL "8.0")
         add_compile_options(-Wcast-align=strict)
     endif()
-    
+
 else()
-    # Fallback for other compilers
     add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
@@ -141,98 +200,49 @@ endif()
 #################################
 if(MSVC AND NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     add_compile_options(
-        # Style/layout warnings that don't affect correctness
-        /wd4514 # Unreferenced inline function has been removed
-        /wd4710 # Function not inlined
-        /wd4711 # Function selected for automatic inline expansion
-        /wd4820 # Bytes padding added after data member
-        /wd5045 # Compiler will insert Spectre mitigation
-        /wd4371 # Layout of class may have changed from previous compiler version
-        /wd5246 # The initialization of a subobject should be wrapped in braces
-        /wd4868 # Left-to-right evaluation order of braced initializer list
-        
-        # Compatibility warnings
-        /wd4996 # Function or variable may be unsafe (deprecation warnings)
+        /wd4514 /wd4710 /wd4711 /wd4820 /wd5045 /wd4371 /wd5246 /wd4868
+        /wd4996
     )
-    
-elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    # Disable style/pedantic warnings that don't affect correctness
-    add_compile_options(
-        # C++ compatibility warnings
-        -Wno-c++98-compat
-        -Wno-c++98-compat-pedantic
-        -Wno-c++11-compat
-        -Wno-c++14-compat
-        -Wno-c++17-compat
-        -Wno-c++20-compat
-        
-        # Style warnings
-        -Wno-padded
-        -Wno-weak-vtables
-        -Wno-exit-time-destructors
-        -Wno-global-constructors
-        -Wno-switch-enum
-        -Wno-covered-switch-default
-        -Wno-documentation
-        -Wno-documentation-unknown-command
-        -Wno-missing-prototypes
-        -Wno-newline-eof
-        -Wno-reserved-id-macro
-        -Wno-disabled-macro-expansion
-        -Wno-unsafe-buffer-usage
-        
-        # Floating point warnings that are often false positives
-        -Wno-double-promotion
-        -Wno-float-equal
-        
-        # GNU extension warnings
-        -Wno-gnu-zero-variadic-macro-arguments
-        -Wno-zero-length-array
-        -Wno-gnu-statement-expression
-        -Wno-gnu-conditional-omitted-operand
-        -Wno-gnu-empty-initializer
 
-        # Cross-compilation false positive from system compiler defaults
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    add_compile_options(
+        -Wno-c++98-compat -Wno-c++98-compat-pedantic
+        -Wno-c++11-compat -Wno-c++14-compat
+        -Wno-c++17-compat -Wno-c++20-compat
+        -Wno-padded -Wno-weak-vtables
+        -Wno-exit-time-destructors -Wno-global-constructors
+        -Wno-switch-enum -Wno-covered-switch-default
+        -Wno-documentation -Wno-documentation-unknown-command
+        -Wno-missing-prototypes -Wno-newline-eof
+        -Wno-reserved-id-macro -Wno-disabled-macro-expansion
+        -Wno-unsafe-buffer-usage
+        -Wno-double-promotion -Wno-float-equal
+        -Wno-gnu-zero-variadic-macro-arguments
+        -Wno-zero-length-array -Wno-gnu-statement-expression
+        -Wno-gnu-conditional-omitted-operand -Wno-gnu-empty-initializer
         -Wno-poison-system-directories
     )
-    
+
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     add_compile_options(
-        # Disable warnings that are often false positives or too pedantic
-        -Wno-double-promotion
-        -Wno-float-equal
-        -Wno-inline  # Disable inline warnings
-        -Wno-system-headers  # Don't warn about system headers
-        -Wno-noexcept
-        
-        # Compatibility warnings for modern C++
-        -Wno-c++11-compat
-        -Wno-c++14-compat
-        -Wno-c++17-compat
-        -Wno-c++20-compat
+        -Wno-double-promotion -Wno-float-equal
+        -Wno-inline -Wno-system-headers -Wno-noexcept
+        -Wno-c++11-compat -Wno-c++14-compat
+        -Wno-c++17-compat -Wno-c++20-compat
     )
-    
-    # Conditionally disable warnings that may not exist in older GCC versions
+
     include(CheckCXXCompilerFlag)
-    
-    set(OPTIONAL_DISABLE_WARNINGS
-        "suggest-final-types"
-        "suggest-final-methods"
-    )
-    
+    set(OPTIONAL_DISABLE_WARNINGS "suggest-final-types" "suggest-final-methods")
     foreach(WARNING ${OPTIONAL_DISABLE_WARNINGS})
         check_cxx_compiler_flag("-W${WARNING}" HAS_WARNING_${WARNING})
-        if(HAS_WARNING_${WARNING})
-            # Only disable if you don't want these suggestions
-            # add_compile_options("-Wno-${WARNING}")
-        endif()
     endforeach()
 endif()
 
-# Function to add target-specific warning suppressions
+
+##########################################
+### Per-target warning suppression     ###
+##########################################
 function(suppress_warnings_for_target target)
-    # Usage: suppress_warnings_for_target(my_target)
-    # This can be used to suppress warnings for specific third-party libraries
     if(MSVC AND NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
         target_compile_options(${target} PRIVATE /W1)
     else()

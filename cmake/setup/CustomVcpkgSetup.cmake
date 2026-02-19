@@ -25,12 +25,35 @@ endif()
 
 # If using vcpkg, apply settings
 if(DEFINED ENV{VCPKG_ROOT} OR CMAKE_TOOLCHAIN_FILE MATCHES "vcpkg")
-    # Suppress developer warnings when using vcpkg
     set(CMAKE_SUPPRESS_DEVELOPER_WARNINGS ON CACHE BOOL "" FORCE)
 
-    if (HUIRA_TESTS)
+    # Auto-select native arch triplet when HUIRA_NATIVE_ARCH is ON
+    # and the user hasn't already specified a custom triplet.
+    if(HUIRA_NATIVE_ARCH AND NOT VCPKG_TARGET_TRIPLET)
+        set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_SOURCE_DIR}/cmake/triplets"
+            CACHE STRING "vcpkg triplet overlay directory" FORCE)
+
+        if(WIN32)
+            set(VCPKG_TARGET_TRIPLET "x64-windows-native" CACHE STRING "" FORCE)
+        elseif(APPLE)
+            # Apple Silicon uses NEON by default; Intel Macs can use a custom triplet
+            # For now, fall through to default triplet on Apple
+        elseif(UNIX)
+            set(VCPKG_TARGET_TRIPLET "x64-linux-native" CACHE STRING "" FORCE)
+        endif()
+
+        if(VCPKG_TARGET_TRIPLET)
+            message(STATUS "vcpkg: using native-arch triplet '${VCPKG_TARGET_TRIPLET}'")
+        endif()
+    endif()
+
+    if(HUIRA_TESTS)
         list(APPEND VCPKG_MANIFEST_FEATURES "tests")
     endif()
-    
-    message(STATUS "Using vcpkg For Dependencies")
+
+    if(HUIRA_APPS)
+        list(APPEND VCPKG_MANIFEST_FEATURES "apps")
+    endif()
+
+    message(STATUS "Using vcpkg for dependencies")
 endif()
