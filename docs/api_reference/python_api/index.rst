@@ -7,7 +7,6 @@ Python API Reference
 
    cameras/index
    core/index
-   ephemeris/index
    handles/index
    images/index
    render/index

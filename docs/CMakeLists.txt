@@ -7,6 +7,8 @@ set(DOXYGEN_INDEX_FILE ${DOXYGEN_OUTPUT_DIR}/xml/index.xml)
 set(DOXYFILE_IN ${CMAKE_CURRENT_SOURCE_DIR}/Doxyfile.in)
 set(DOXYFILE_OUT ${CMAKE_BINARY_DIR}/Doxyfile)
 
+set(PYTHON_BINDINGS_OUTPUT "${CMAKE_BINARY_DIR}/bindings/python")
+
 configure_file(${DOXYFILE_IN} ${DOXYFILE_OUT} @ONLY)
 configure_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/conf.py.in"

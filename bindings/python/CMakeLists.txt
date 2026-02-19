@@ -15,6 +15,23 @@ set_target_properties(_huira PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/huira"
 )
 
+# Copy Python source files into the build tree so the package is importable
+# during the build (e.g. for Sphinx autodoc) without needing pip install.
+set(_huira_py_sources
+    huira/__init__.py
+    huira/units.py
+    huira/rgb.py
+    huira/visible8.py
+)
+
+foreach(_src ${_huira_py_sources})
+    configure_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/${_src}"
+        "${CMAKE_CURRENT_BINARY_DIR}/${_src}"
+        COPYONLY
+    )
+endforeach()
+
 # Handle multi-config generators (Visual Studio, Xcode)
 foreach(config ${CMAKE_CONFIGURATION_TYPES})
     string(TOUPPER ${config} CONFIG_UPPER)

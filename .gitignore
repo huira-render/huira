@@ -7,6 +7,8 @@
 bindings/python/build/
 bindings/python/*.egg-info/
 
+docs/conf.py
+
 /local/*
 !/local/README.md
 
