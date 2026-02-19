@@ -10,3 +10,5 @@ The Core module contains the fundamental building blocks of the engine.
    spectral_bins
    time
    units
+   rotation
+   types
