@@ -7,7 +7,14 @@ name = "huira"
 dynamic = ["version"]
 description = "Python bindings for the Huira library"
 requires-python = ">=3.9"
-# license = "MIT"  # adjust to your license
+license = "MIT"
+readme = "README.md"
+
+[project.urls]
+Homepage = "https://huira.space"
+Documentation = "https://docs.huira.space"
+Source = "https://github.com/huira-render/huira"
+Issues = "https://github.com/huira-render/huira/issues"
 
 [tool.scikit-build]
 cmake.source-dir = "../.."
