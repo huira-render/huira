@@ -46,6 +46,7 @@ endforeach()
 # For conda-build (or plain cmake --install), we need the full site-packages path.
 if(DEFINED SKBUILD)
     set(HUIRA_PYTHON_INSTALL_DIR "huira")
+    set(HUIRA_PYTHON_INSTALL_DIR "huira" PARENT_SCOPE)
 else()
     execute_process(
         COMMAND "${Python_EXECUTABLE}" -c
@@ -56,6 +57,7 @@ else()
     # Make it relative to CMAKE_INSTALL_PREFIX
     file(RELATIVE_PATH _rel_site "${CMAKE_INSTALL_PREFIX}" "${_python_site_packages}")
     set(HUIRA_PYTHON_INSTALL_DIR "${_rel_site}/huira")
+    set(HUIRA_PYTHON_INSTALL_DIR "${_rel_site}/huira" PARENT_SCOPE)
 endif()
 
 # Install rules — used by scikit-build-core to populate the wheel,
