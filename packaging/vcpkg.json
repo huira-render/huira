@@ -7,7 +7,7 @@
     "cfitsio",
     "cspice",
     {
-      "name": "embree3",
+      "name": "embree",
       "default-features": false,
       "features": [
         "geometry-instance",
@@ -63,8 +63,8 @@
       "version": "67#3"
     },
     {
-      "name": "embree3",
-      "version": "3.13.5#4"
+      "name": "embree",
+      "version": "4.4.0#0"
     },
     {
       "name": "fftw3",
