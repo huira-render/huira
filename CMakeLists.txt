@@ -88,14 +88,14 @@ if(HUIRA_TESTS)
     add_subdirectory(tests)
 endif()
 
-if(HUIRA_DOCS)
-    message(STATUS "Building Documentation")
-    add_subdirectory(docs)
-endif()
-
 if(HUIRA_PYTHON)
     message(STATUS "Building Python Bindings")
     add_subdirectory(bindings/python)
+endif()
+
+if(HUIRA_DOCS)
+    message(STATUS "Building Documentation")
+    add_subdirectory(docs)
 endif()
 
 if(HUIRA_LOCAL_DEV)

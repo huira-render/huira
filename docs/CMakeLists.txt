@@ -49,6 +49,4 @@ add_custom_target(Sphinx ALL DEPENDS ${SPHINX_INDEX_FILE})
 
 # Sphinx autodoc needs to import the Python extension module, so the docs
 # target must wait until it is fully built.
-if(TARGET _huira)
-    add_dependencies(Sphinx _huira)
-endif()
+add_dependencies(Sphinx _huira)
