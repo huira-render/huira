@@ -1,10 +1,9 @@
-# macOS Quickstart Guide
+# macOS C++ Build Guide
 
 ## Table of Contents
 - [System Requirements](#system-requirements)
 - [Method 1: conda Environment Setup (Preferred)](#method-1-conda-environment-setup-preferred)
 - [Method 2: vcpkg Package Manager](#method-2-vcpkg-package-manager)
-- [Method 3: Manual Dependency Management (Advanced Users)](#method-3-manual-dependency-management-advanced-users)
 
 ***
 
@@ -46,7 +45,6 @@ This approach leverages [conda](https://github.com/conda-forge/miniforge) for st
 ### Step 1: conda Installation
 If conda isn't already available:
 
-**For Apple Silicon:**
 ```bash
 cd ~
 curl -L -O "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-MacOSX-arm64.sh"
@@ -55,14 +53,7 @@ chmod +x Miniforge3-MacOSX-arm64.sh
 ./Miniforge3-MacOSX-arm64.sh
 ```
 
-**For Intel (x86):**
-```bash
-cd ~
-curl -L -O "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-MacOSX-x86_64.sh"
-
-chmod +x Miniforge3-MacOSX-x86_64.sh
-./Miniforge3-MacOSX-x86_64.sh
-```
+*NOTE: x86 (Intel) based macs are not officially supported, but likely will still work with the `Miniforge3-MacOSX-x86_64.sh` installer.  If you have an Intel-based mac, please try installing with the x86 installer and let us know if you encounter any issues.*
 
 Complete the installation prompts and verify conda activation by checking for `(base)` in your terminal prompt.  If it is not activated, you may need to run `source ~/miniforge3/bin/activate`.
 
@@ -79,11 +70,11 @@ cmake -DCMAKE_TOOLCHAIN_FILE=../cmake/conda-toolchain.cmake -DCMAKE_BUILD_TYPE=R
 cmake --build . -j
 ```
 
-### Step 4: Environment Installation (Optional)
+### Step 4: Environment Installation
 After successful compilation, integrate *Huira* into your conda environment:
 
 ```bash
-cmake --install .
+cmake --install . --prefix "$CONDA_PREFIX"
 ```
 
 ***
@@ -103,37 +94,5 @@ git clone https://github.com/microsoft/vcpkg.git ~/vcpkg
 ```bash
 mkdir build && cd build
 cmake -DCMAKE_TOOLCHAIN_FILE=~/vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release ../
-cmake --build . -j
-```
-
-***
-
-## Method 3: Manual Dependency Management (Advanced Users)
-
-This approach requires manual installation of all dependencies through system package managers or source compilation. **Warning:** This method is unsupported and may encounter compatibility issues with system-available library versions.
-
-### Required Dependencies
-
-| Package | Version Requirement | Purpose |
-|---------|:-------------------:|---------|
-| assimp | >=5.2,<6.0 | 3D asset importing |
-| catch2 | >=3.8.0 | Unit testing suite (when `HUIRA_TESTS=ON`) |
-| cfitsio | >=3.49 | FITS file handling |
-| cspice | =67 | NASA SPICE toolkit |
-| embree3 | >=3.13,<4.0 | Ray intersection kernels |
-| fftw | >=3.3.10,<4.0 | Fourier transform operations |
-| gdal | >=3.10,<4.0 | Geographic data processing |
-| glm | >=1.0.1 | Mathematical operations |
-| libtiff | >=4.7.0 | TIFF image processing |
-| tbb-devel | >=2021.0 | Threading Building Blocks |
-
-### Build Process
-
-Once dependencies are satisfied, execute from the repository root:
-
-```bash
-mkdir build
-cd build
-cmake ../ -DCMAKE_BUILD_TYPE=Release
 cmake --build . -j
 ```

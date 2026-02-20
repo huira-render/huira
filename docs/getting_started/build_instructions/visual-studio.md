@@ -1,4 +1,4 @@
-# Windows (Visual Studio) Quickstart Guide
+# Windows (Visual Studio) C++ Build Guide
 
 ## Table of Contents
 - [Installing Visual Studio](#installing-visual-studio)

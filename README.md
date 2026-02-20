@@ -13,7 +13,7 @@
 
 ***
 # Features
-Initial work on Huira has been on the basic architecture as well as distribution/cross-platform compatability.  As much of that work is now completed, new features are expected to be released in relatively short order.
+Initial work on Huira has been on the basic architecture as well as distribution/cross-platform compatibility.  As much of that work is now completed, new features are expected to be released in relatively short order.
 
 If there are features you wish to see, that you don't see listed here, please feel free to submit a [Feature Request](https://github.com/huira-render/huira/issues/new?template=feature_request.md)
 
@@ -43,27 +43,30 @@ If there are features you wish to see, that you don't see listed here, please fe
 ***
 
 # Installing Huira
-- PyPI: *Coming soon*
-- vcpkg: *Coming soon*
-- conda: *Coming soon*
 
-# Building Huira
-Please see the platform specific quickstart guides:
+## Python
+Huira's python bindings are available on [PyPI](https://pypi.org/project/huira/), and can be installed with:
+
+```bash
+pip install huira
+```
+
+For building from source or more details, see the **[Python Bindings](docs/getting_started/build_instructions/python-bindings.md)** guide.
+
+## C++ (Building From Source)
+Please see the platform specific build guides:
 - **[Linux](docs/getting_started/build_instructions/linux.md)**
 - **[macOS](docs/getting_started/build_instructions/macos.md)**
-- **[Windows (Powershell)](docs/getting_started/build_instructions/windows.md)**
+- **[Windows (PowerShell)](docs/getting_started/build_instructions/windows.md)**
 - **[Windows (Visual Studio)](docs/getting_started/build_instructions/visual-studio.md)**
+- **[Build Options](docs/getting_started/build_instructions/options.md)**
 
-To see additional optionals for building *Huira*, please refer to:
-- **[Huira Build Options](docs/getting_started/build_instructions/options.md)**
-
-## Python Bindings
-Python bindings are available for *Huira* and can be installed via pip or conda.
-- **[Python Bindings](docs/getting_started/build_instructions/python-bindings.md)**
+***
 
 # Examples
 Example programs demonstrating common usage patterns are available in the [`examples/`](examples/) directory.
 
+*** 
 
 # Background
 Huira is a complete rewrite providing similar functionality to the [vira](https://github.com/nasa/vira) project originally developed by the same author while at NASA's Goddard Space Flight Center. While inspired by vira, huira is built from scratch with new code and is released under the MIT license.

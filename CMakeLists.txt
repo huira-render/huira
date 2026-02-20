@@ -3,12 +3,12 @@ cmake_minimum_required(VERSION 3.16)
 #########################################
 ### Define Options and Initial Values ###
 #########################################
+option(HUIRA_TOOLS "Build huira command line tools" ON)
 option(HUIRA_EXAMPLES "Build Examples" OFF)
 option(HUIRA_TESTS "Build Tests" OFF)
 option(HUIRA_DOCS "Build Documentation" OFF)
 option(HUIRA_PYTHON "Build Python Bindings" OFF)
-option(HUIRA_LOCAL_DEV "Build Local Development Directory" OFF)
-option(HUIRA_APPS "Build huira command line applications" ON)
+option(HUIRA_LOCAL_DEV "Build Local Development Directory" ON)
 option(HUIRA_NATIVE_ARCH "Optimize for the build machine's CPU architecture" ON)
 
 # Documentation uses Sphinx autodoc which requires the Python extension module
@@ -30,7 +30,7 @@ if(DEFINED CMAKE_TOOLCHAIN_FILE AND CMAKE_TOOLCHAIN_FILE MATCHES "vcpkg")
         list(APPEND VCPKG_MANIFEST_FEATURES "tests")
     endif()
     
-    if(HUIRA_APPS)
+    if(HUIRA_TOOLS)
         list(APPEND VCPKG_MANIFEST_FEATURES "tools")
     endif()
 endif()
@@ -114,7 +114,7 @@ if(HUIRA_LOCAL_DEV)
     endforeach()
 endif()
 
-if(HUIRA_APPS)
+if(HUIRA_TOOLS)
     message(STATUS "Building huira command line applications")
     add_subdirectory(apps)
 endif()

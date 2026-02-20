@@ -80,11 +80,11 @@ For the C++ examples, we'll need to build the project from source.  Please refer
 - **[Windows (Powershell)](../../docs/getting_started/build_instructions/windows.md)**
 - **[Windows (Visual Studio)](../../docs/getting_started/build_instructions/visual-studio.md)**
 
-for detailed steps on how to do this.  The important thing is to enable `HUIRA_EXAMPLES=ON` and `HUIRA_APPS=ON` when configuring cmake so that the example binaries will be built.  For example, on linux/macos using a conda environment:
+for detailed steps on how to do this.  The important thing is to enable `HUIRA_EXAMPLES=ON` and `HUIRA_TOOLS=ON` when configuring cmake so that the example binaries will be built.  For example, on linux/macos using a conda environment:
 ```bash
 mkdir build
 cd build
-cmake -DCMAKE_TOOLCHAIN_FILE=../cmake/conda-toolchain.cmake -CMAKE_BUILD_TYPE=Release -DHUIRA_EXAMPLES=ON -DHUIRA_APPS=ON ..
+cmake -DCMAKE_TOOLCHAIN_FILE=../cmake/conda-toolchain.cmake -CMAKE_BUILD_TYPE=Release -DHUIRA_EXAMPLES=ON -DHUIRA_TOOLS=ON ..
 cmake --build . -j
 ```
 
@@ -93,7 +93,7 @@ while on windows you'll need to specify the release configuration when building:
 ```bash
 mkdir build
 cd build
-cmake -DCMAKE_TOOLCHAIN_FILE=../cmake/conda-toolchain.cmake -CMAKE_BUILD_TYPE=Release -DHUIRA_EXAMPLES=ON -DHUIRA_APPS=ON ..
+cmake -DCMAKE_TOOLCHAIN_FILE=../cmake/conda-toolchain.cmake -CMAKE_BUILD_TYPE=Release -DHUIRA_EXAMPLES=ON -DHUIRA_TOOLS=ON ..
 cmake --build . --config Release -j
 ```
 
