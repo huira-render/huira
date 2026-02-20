@@ -31,7 +31,7 @@ if(DEFINED CMAKE_TOOLCHAIN_FILE AND CMAKE_TOOLCHAIN_FILE MATCHES "vcpkg")
     endif()
     
     if(HUIRA_APPS)
-        list(APPEND VCPKG_MANIFEST_FEATURES "apps")
+        list(APPEND VCPKG_MANIFEST_FEATURES "tools")
     endif()
 endif()
 

@@ -33,7 +33,7 @@
         "catch2"
       ]
     },
-    "apps":{
+    "tools":{
         "description": "Build huira applications",
         "dependencies": [
           "curl",
