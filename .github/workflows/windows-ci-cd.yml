@@ -7,6 +7,10 @@ on:
     branches: [main]
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
   actions: read
@@ -114,8 +118,8 @@ jobs:
     steps:
       - name: Check all jobs passed
         run: |
-          if [[ "${{ contains(needs.*.result, 'failure') }}" == "true" || "${{ contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
-            echo "One or more jobs failed or were cancelled"
+          if [[ "${{ contains(needs.*.result, 'failure') }}" == "true" ]]; then
+            echo "One or more jobs failed"
             exit 1
           fi
-          echo "All jobs passed successfully"
+          echo "All jobs passed or were skipped successfully"
