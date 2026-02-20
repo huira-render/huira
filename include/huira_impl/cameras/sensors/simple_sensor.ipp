@@ -79,11 +79,11 @@ namespace huira {
 
                 // Compute Noise and ADC:
                 if constexpr (std::is_same_v<TSpectral, RGB>) {
-                    Vec3<float> signal_e{ electrons[0], electrons[1], electrons[2] };
+                    RGB signal_e{ electrons[0], electrons[1], electrons[2] };
                     float dark_e = this->config_.dark_current * exposure_time;
 
-                    Vec3<float> pixel_value;
-                    for (int i = 0; i < 3; ++i) {
+                    RGB pixel_value;
+                    for (std::size_t i = 0; i < 3; ++i) {
                         pixel_value[i] = noise_and_adc(signal_e[i], dark_e, this->config_, max_dn, rng, read_noise_dist);
                     }
 

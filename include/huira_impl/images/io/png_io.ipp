@@ -7,11 +7,11 @@
 #include <limits>
 #include <utility>
 #include <vector>
+#include <tuple>
 
 #include <png.h>
 
-#include "huira/core/concepts/numeric_concepts.hpp"
-#include "huira/core/concepts/pixel_concepts.hpp"
+#include "huira/core/spectral_bins.hpp"
 #include "huira/images/image.hpp"
 #include "huira/images/io/color_space.hpp"
 #include "huira/images/io/convert_pixel.hpp"
@@ -31,7 +31,7 @@ namespace huira {
         ICC_PROFILE, ///< iCCP chunk present
         UNKNOWN      ///< Unknown or unsupported
     };
-    
+
     /**
      * @brief Contains color space information extracted from a PNG file.
      */
@@ -43,11 +43,11 @@ namespace huira {
 
     /**
      * @brief Detects the color space of a PNG file from its metadata chunks.
-     * 
+     *
      * Checks for iCCP (ICC profile), sRGB, and gAMA chunks to determine the
      * color space encoding used in the PNG file. If no explicit color space
      * information is found, sRGB is assumed as the default.
-     * 
+     *
      * @param png_ptr PNG read structure
      * @param info_ptr PNG info structure
      * @return Color space information including the space type and gamma value
@@ -95,11 +95,11 @@ namespace huira {
 
     /**
      * @brief Converts an integer-encoded pixel value to linear floating-point.
-     * 
+     *
      * Applies the appropriate transfer function based on the detected color space
      * (sRGB, linear, gamma, or ICC profile) to convert from encoded values to
      * linear light values.
-     * 
+     *
      * @tparam T Integer type of the encoded pixel (uint8_t or uint16_t)
      * @param encoded The encoded pixel value
      * @param color_info Color space information from the PNG file
@@ -131,64 +131,37 @@ namespace huira {
         }
     }
 
-    /**
-     * @brief Converts three integer-encoded color channels to linear Vec3.
-     * 
-     * Applies the appropriate transfer function based on the detected color space
-     * to convert encoded RGB values to linear light values.
-     * 
-     * @tparam T Integer type of the encoded pixels (uint8_t or uint16_t)
-     * @param encoded1 The first channel (red)
-     * @param encoded2 The second channel (green)
-     * @param encoded3 The third channel (blue)
-     * @param color_info Color space information from the PNG file
-     * @return Linear RGB values as a Vec3<float>
-     */
-    template <IsInteger T>
-    Vec3<float> linearize_png_pixel_(T encoded1, T encoded2, T encoded3, const PngColorInfo& color_info)
+    struct PNGData {
+        Resolution resolution{ 0,0 };
+        png_uint_32 height;
+        png_uint_32 width;
+        unsigned int channels;
+        
+        std::vector<png_byte> raw_data;
+        std::size_t row_bytes;
+        PngColorInfo color_info;
+
+        png_byte final_bit_depth = 8;
+
+        bool has_alpha = false;
+        bool is_gray = false;
+    };
+
+    inline PNGData read_png_raw_(const fs::path& filepath)
     {
-        return Vec3<float>{
-            linearize_png_pixel_<T>(encoded1, color_info),
-                linearize_png_pixel_<T>(encoded2, color_info),
-                linearize_png_pixel_<T>(encoded3, color_info)
-        };
-    }
+        HUIRA_LOG_INFO("read_png_raw_ - Reading image from: " + filepath.string());
 
-
-
-
-
-    /**
-     * @brief Reads a PNG image file and converts it to linear color space.
-     * 
-     * Loads a PNG image from disk, automatically detecting and converting from the
-     * source color space (sRGB, linear, gamma, or ICC profile) to linear light.
-     * Supports 8-bit and 16-bit images, grayscale and RGB color types, and optional
-     * alpha channels. The function handles PNG transformations such as palette
-     * expansion and low bit-depth expansion automatically.
-     * 
-     * @tparam T The pixel type for the output image (must satisfy IsNonSpectralPixel)
-     * @param filepath Path to the PNG file to read
-     * @return A pair containing the main image and an optional alpha channel image.
-     *         If the PNG has no alpha channel, the second image will be empty (0x0).
-     * @throws std::runtime_error if the file cannot be opened, is not a valid PNG,
-     *         or if any error occurs during reading
-     */
-    template <IsNonSpectralPixel T>
-    std::pair<Image<T>, Image<float>> read_image_png(const fs::path& filepath)
-    {
-        HUIRA_LOG_INFO("read_image_png - Reading image from: " + filepath.string());
         // Cross-platform file opening
 #ifdef _MSC_VER
         FILE* fp = nullptr;
         errno_t err = fopen_s(&fp, filepath.string().c_str(), "rb");
         if (err != 0 || !fp) {
-            HUIRA_THROW_ERROR("Failed to open PNG file: " + filepath.string());
+            HUIRA_THROW_ERROR("read_png_raw_ - Failed to open PNG file: " + filepath.string());
         }
 #else
         FILE* fp = fopen(filepath.string().c_str(), "rb");
         if (!fp) {
-            HUIRA_THROW_ERROR("Failed to open PNG file: " + filepath.string());
+            HUIRA_THROW_ERROR("read_png_raw_ - Failed to open PNG file: " + filepath.string());
         }
 #endif
 
@@ -197,21 +170,21 @@ namespace huira {
         if (fread(sig.data(), 1, 8, fp) != 8 ||
             png_sig_cmp(sig.data(), 0, 8) != 0) {
             fclose(fp);
-            HUIRA_THROW_ERROR("File is not a valid PNG: " + filepath.string());
+            HUIRA_THROW_ERROR("read_png_raw_ - File is not a valid PNG: " + filepath.string());
         }
 
         png_structp png_ptr = png_create_read_struct(
             PNG_LIBPNG_VER_STRING, nullptr, nullptr, nullptr);
         if (!png_ptr) {
             fclose(fp);
-            HUIRA_THROW_ERROR("Failed to create PNG read struct");
+            HUIRA_THROW_ERROR("read_png_raw_ - Failed to create PNG read struct");
         }
 
         png_infop info_ptr = png_create_info_struct(png_ptr);
         if (!info_ptr) {
             png_destroy_read_struct(&png_ptr, nullptr, nullptr);
             fclose(fp);
-            HUIRA_THROW_ERROR("Failed to create PNG info struct");
+            HUIRA_THROW_ERROR("read_png_raw_ - Failed to create PNG info struct");
         }
 
         // libpng error handling via setjmp (required for C library)
@@ -224,7 +197,7 @@ namespace huira {
         if (setjmp(png_jmpbuf(png_ptr))) {
             png_destroy_read_struct(&png_ptr, &info_ptr, nullptr);
             fclose(fp);
-            HUIRA_THROW_ERROR("Error during PNG read: " + filepath.string());
+            HUIRA_THROW_ERROR("read_png_raw_ - Error during PNG read: " + filepath.string());
         }
 #ifdef _MSC_VER
 #pragma warning(pop)
@@ -293,22 +266,54 @@ namespace huira {
         png_destroy_read_struct(&png_ptr, &info_ptr, nullptr);
         fclose(fp);
 
+        PNGData png_data{};
+        png_data.resolution = resolution;
+        png_data.height = height;
+        png_data.width = width;
+        png_data.channels = channels;
+        png_data.raw_data = std::move(raw_data);
+        png_data.row_bytes = row_bytes;
+        png_data.color_info = color_info;
+        png_data.final_bit_depth = final_bit_depth;
+        png_data.has_alpha = has_alpha;
+        png_data.is_gray = is_gray;
+
+        return png_data;
+    }
+
+    /**
+     * @brief Reads a PNG image file and returns linear RGB + alpha data.
+     *
+     * Loads a PNG image from disk, automatically detecting and converting from the
+     * source color space (sRGB, linear, gamma, or ICC profile) to linear light.
+     * Supports 8-bit and 16-bit images, grayscale and RGB color types, and optional
+     * alpha channels. Grayscale values are promoted to RGB with equal channel values.
+     *
+     * @param filepath Path to the PNG file to read
+     * @return A pair containing the linear RGB image and an optional alpha channel image.
+     *         If the PNG has no alpha channel, the second image will be empty (0x0).
+     * @throws std::runtime_error if the file cannot be opened, is not a valid PNG,
+     *         or if any error occurs during reading
+     */
+    inline std::pair<Image<RGB>, Image<float>> read_image_png(const fs::path& filepath)
+    {
+        auto png_data = read_png_raw_(filepath);
+
         // Create output images
-        Image<T> image(resolution);
+        Image<RGB> image(png_data.resolution);
         Image<float> alpha_image(0, 0);
 
-        if (has_alpha) {
-            alpha_image = Image<float>(resolution, 1.0f);
+        if (png_data.has_alpha) {
+            alpha_image = Image<float>(png_data.resolution, 1.0f);
         }
 
-        for (int y = 0; y < static_cast<int>(height); ++y) {
-            for (int x = 0; x < static_cast<int>(width); ++x) {
+        for (int y = 0; y < static_cast<int>(png_data.height); ++y) {
+            for (int x = 0; x < static_cast<int>(png_data.width); ++x) {
                 std::size_t x_u = static_cast<std::size_t>(x);
                 std::size_t y_u = static_cast<std::size_t>(y);
 
-                if (final_bit_depth == 16) {
-                    // Safe 16-bit extraction without alignment issues
-                    const png_byte* byte_ptr = raw_data.data() + y_u * row_bytes + x_u * channels * 2;
+                if (png_data.final_bit_depth == 16) {
+                    const png_byte* byte_ptr = png_data.raw_data.data() + y_u * png_data.row_bytes + x_u * png_data.channels * 2;
 
                     auto read_u16 = [](const png_byte* p) -> uint16_t {
                         uint16_t val;
@@ -316,39 +321,39 @@ namespace huira {
                         return val;
                         };
 
-                    if (is_gray) {
-                        uint16_t gray = read_u16(byte_ptr);
-                        float mono = linearize_png_pixel_<uint16_t>(gray, color_info);
-                        image(x, y) = convert_float_to_pixel<T>(mono);
+                    if (png_data.is_gray) {
+                        float mono = linearize_png_pixel_<uint16_t>(read_u16(byte_ptr), png_data.color_info);
+                        image(x, y) = RGB{ mono, mono, mono };
                     }
                     else {
-                        uint16_t r = read_u16(byte_ptr);
-                        uint16_t g = read_u16(byte_ptr + 2);
-                        uint16_t b = read_u16(byte_ptr + 4);
-                        Vec3<float> rgb = linearize_png_pixel_<uint16_t>(r, g, b, color_info);
-                        image(x, y) = convert_vec3_to_pixel<T>(rgb);
+                        float r = linearize_png_pixel_<uint16_t>(read_u16(byte_ptr), png_data.color_info);
+                        float g = linearize_png_pixel_<uint16_t>(read_u16(byte_ptr + 2), png_data.color_info);
+                        float b = linearize_png_pixel_<uint16_t>(read_u16(byte_ptr + 4), png_data.color_info);
+                        image(x, y) = RGB{ r, g, b };
                     }
 
-                    if (has_alpha) {
-                        std::size_t alpha_byte_offset = static_cast<std::size_t>(is_gray ? 2 : 6);
+                    if (png_data.has_alpha) {
+                        std::size_t alpha_byte_offset = static_cast<std::size_t>(png_data.is_gray ? 2 : 6);
                         alpha_image(x, y) = static_cast<float>(read_u16(byte_ptr + alpha_byte_offset)) / 65535.0f;
                     }
                 }
                 else {
                     // 8-bit
-                    const png_byte* ptr = raw_data.data() + y_u * row_bytes + x_u * channels;
+                    const png_byte* ptr = png_data.raw_data.data() + y_u * png_data.row_bytes + x_u * png_data.channels;
 
-                    if (is_gray) {
-                        float mono = linearize_png_pixel_<uint8_t>(ptr[0], color_info);
-                        image(x, y) = convert_float_to_pixel<T>(mono);
+                    if (png_data.is_gray) {
+                        float mono = linearize_png_pixel_<uint8_t>(ptr[0], png_data.color_info);
+                        image(x, y) = RGB{ mono, mono, mono };
                     }
                     else {
-                        Vec3<float> rgb = linearize_png_pixel_<uint8_t>(ptr[0], ptr[1], ptr[2], color_info);
-                        image(x, y) = convert_vec3_to_pixel<T>(rgb);
+                        float r = linearize_png_pixel_<uint8_t>(ptr[0], png_data.color_info);
+                        float g = linearize_png_pixel_<uint8_t>(ptr[1], png_data.color_info);
+                        float b = linearize_png_pixel_<uint8_t>(ptr[2], png_data.color_info);
+                        image(x, y) = RGB{ r, g, b };
                     }
 
-                    if (has_alpha) {
-                        std::size_t alpha_idx = static_cast<std::size_t>(is_gray ? 1 : 3);
+                    if (png_data.has_alpha) {
+                        std::size_t alpha_idx = static_cast<std::size_t>(png_data.is_gray ? 1 : 3);
                         alpha_image(x, y) = static_cast<float>(ptr[alpha_idx]) / 255.0f;
                     }
                 }
@@ -358,45 +363,149 @@ namespace huira {
         return { std::move(image), std::move(alpha_image) };
     }
 
-
-    /**
-     * @brief Writes an image to a PNG file without an alpha channel.
-     * 
-     * Converts the image from linear color space to sRGB and writes it to a PNG file.
-     * This is a convenience overload that calls the full version with an empty alpha image.
-     * 
-     * @tparam T The pixel type of the input image (must satisfy IsNonSpectralPixel)
-     * @param filepath Path where the PNG file will be written
-     * @param image The image to write
-     * @param bit_depth Bit depth of the output PNG (8 or 16)
-     * @throws std::runtime_error if the file cannot be created, the image is empty,
-     *         or if any error occurs during writing
-     */
-    template <IsNonSpectralPixel T>
-    void write_image_png(const fs::path& filepath, const Image<T>& image, int bit_depth)
+    std::pair<Image<float>, Image<float>> read_image_png_mono(const fs::path& filepath)
     {
-        Image<float> albedo(0, 0);
-        write_image_png<T>(filepath, image, albedo, bit_depth);
+        auto png_data = read_png_raw_(filepath);
+
+        // Create output images
+        Image<float> image(png_data.resolution);
+        Image<float> alpha_image(0, 0);
+
+        if (png_data.has_alpha) {
+            alpha_image = Image<float>(png_data.resolution, 1.0f);
+        }
+
+        for (int y = 0; y < static_cast<int>(png_data.height); ++y) {
+            for (int x = 0; x < static_cast<int>(png_data.width); ++x) {
+                std::size_t x_u = static_cast<std::size_t>(x);
+                std::size_t y_u = static_cast<std::size_t>(y);
+
+                if (png_data.final_bit_depth == 16) {
+                    const png_byte* byte_ptr = png_data.raw_data.data() + y_u * png_data.row_bytes + x_u * png_data.channels * 2;
+
+                    auto read_u16 = [](const png_byte* p) -> uint16_t {
+                        uint16_t val;
+                        std::memcpy(&val, p, sizeof(uint16_t));
+                        return val;
+                        };
+
+                    if (png_data.is_gray) {
+                        float mono = linearize_png_pixel_<uint16_t>(read_u16(byte_ptr), png_data.color_info);
+                        image(x, y) = mono;
+                    }
+                    else {
+                        float r = linearize_png_pixel_<uint16_t>(read_u16(byte_ptr), png_data.color_info);
+                        float g = linearize_png_pixel_<uint16_t>(read_u16(byte_ptr + 2), png_data.color_info);
+                        float b = linearize_png_pixel_<uint16_t>(read_u16(byte_ptr + 4), png_data.color_info);
+                        image(x, y) = (r + g + b) / 3.f;
+                    }
+
+                    if (png_data.has_alpha) {
+                        std::size_t alpha_byte_offset = static_cast<std::size_t>(png_data.is_gray ? 2 : 6);
+                        alpha_image(x, y) = static_cast<float>(read_u16(byte_ptr + alpha_byte_offset)) / 65535.0f;
+                    }
+                }
+                else {
+                    // 8-bit
+                    const png_byte* ptr = png_data.raw_data.data() + y_u * png_data.row_bytes + x_u * png_data.channels;
+
+                    if (png_data.is_gray) {
+                        float mono = linearize_png_pixel_<uint8_t>(ptr[0], png_data.color_info);
+                        image(x, y) = mono;
+                    }
+                    else {
+                        float r = linearize_png_pixel_<uint8_t>(ptr[0], png_data.color_info);
+                        float g = linearize_png_pixel_<uint8_t>(ptr[1], png_data.color_info);
+                        float b = linearize_png_pixel_<uint8_t>(ptr[2], png_data.color_info);
+                        image(x, y) = (r + g + b) / 3.f;
+                    }
+
+                    if (png_data.has_alpha) {
+                        std::size_t alpha_idx = static_cast<std::size_t>(png_data.is_gray ? 1 : 3);
+                        alpha_image(x, y) = static_cast<float>(ptr[alpha_idx]) / 255.0f;
+                    }
+                }
+            }
+        }
+
+        return { std::move(image), std::move(alpha_image) };
     }
 
     /**
-     * @brief Writes an image to a PNG file with an optional alpha channel.
+     * @brief Writes a linear RGB image to a PNG file without an alpha channel.
+     *
+     * Convenience overload that writes an RGB image without an alpha channel.
      * 
-     * Converts the image from linear color space to sRGB and writes it to a PNG file.
-     * The function automatically creates necessary directories, handles both grayscale
-     * and RGB images, and supports 8-bit or 16-bit output. An sRGB color profile is
-     * embedded in the PNG metadata.
-     * 
-     * @tparam T The pixel type of the input image (must satisfy IsNonSpectralPixel)
      * @param filepath Path where the PNG file will be written
-     * @param image The image to write
+     * @param image The linear RGB image to write
+     * @param bit_depth Bit depth of the output PNG (8 or 16)
+     */
+    inline void write_image_png(const fs::path& filepath, const Image<RGB>& image, int bit_depth)
+    {
+        Image<float> alpha(0, 0);
+        write_image_png(filepath, image, alpha, bit_depth);
+    }
+
+    /**
+     * @brief Writes a linear Mono image to a PNG file without an alpha channel.
+     *
+     * Convenience overload that promotes a Mono image to RGB and writes it without an alpha channel.
+     * 
+     * @param filepath Path where the PNG file will be written
+     * @param image The linear Mono image to write
+     * @param bit_depth Bit depth of the output PNG (8 or 16)
+     */
+    inline void write_image_png(const fs::path& filepath, const Image<float>& image, int bit_depth)
+    {
+        Image<float> alpha(0, 0);
+
+        Image<RGB> image_rgb(image.width(), image.height());
+        for (std::size_t i = 0; i < image.size(); ++i) {
+            image_rgb[i] = RGB{ image[i], image[i], image[i] };
+        }
+
+        write_image_png(filepath, image_rgb, alpha, bit_depth);
+    }
+
+
+    /**
+     * @brief Writes a linear Mono image to a PNG file with an alpha channel.
+     *
+     * Convenience overload that promotes a Mono image to RGB and writes it with an alpha channel.
+     *
+     * @param filepath Path where the PNG file will be written
+     * @param image The linear Mono image to write
+     * @param alpha The alpha channel image (must match dimensions of image)
+     * @param bit_depth Bit depth of the output PNG (8 or 16)
+     */
+    inline void write_image_png(const fs::path& filepath, const Image<float>& image,
+        const Image<float>& alpha, int bit_depth)
+    {
+
+        Image<RGB> image_rgb(image.width(), image.height());
+        for (std::size_t i = 0; i < image.size(); ++i) {
+            image_rgb[i] = RGB{ image[i], image[i], image[i] };
+        }
+
+        write_image_png(filepath, image_rgb, alpha, bit_depth);
+    }
+
+    /**
+     * @brief Writes a linear RGB image with optional alpha to a PNG file (sRGB encoded).
+     *
+     * Converts the image from linear color space to sRGB and writes it to a PNG file.
+     * The function automatically creates necessary directories and supports 8-bit or
+     * 16-bit output. An sRGB color profile is embedded in the PNG metadata.
+     *
+     * @param filepath Path where the PNG file will be written
+     * @param image The linear RGB image to write
      * @param alpha Optional alpha channel image (must match dimensions of image, or be empty)
      * @param bit_depth Bit depth of the output PNG (must be 8 or 16)
      * @throws std::runtime_error if the file cannot be created, the image is empty,
      *         bit_depth is invalid, or if any error occurs during writing
      */
-    template <IsNonSpectralPixel T>
-    void write_image_png(const fs::path& filepath, const Image<T>& image, const Image<float>& alpha, int bit_depth)
+    inline void write_image_png(const fs::path& filepath, const Image<RGB>& image,
+        const Image<float>& alpha, int bit_depth)
     {
         HUIRA_LOG_INFO("write_image_png - Writing to: " + filepath.string());
         if (image.width() == 0 || image.height() == 0) {
@@ -419,19 +528,8 @@ namespace huira {
 
         make_path(filepath);
 
-        // Determine if source pixel type is grayscale or RGB
-        constexpr bool is_gray = IsNumeric<T>;
-
-        int color_type;
-        unsigned int channels;
-        if constexpr (is_gray) {
-            color_type = has_alpha ? PNG_COLOR_TYPE_GRAY_ALPHA : PNG_COLOR_TYPE_GRAY;
-            channels = has_alpha ? 2 : 1;
-        }
-        else {
-            color_type = has_alpha ? PNG_COLOR_TYPE_RGB_ALPHA : PNG_COLOR_TYPE_RGB;
-            channels = has_alpha ? 4 : 3;
-        }
+        int color_type = has_alpha ? PNG_COLOR_TYPE_RGB_ALPHA : PNG_COLOR_TYPE_RGB;
+        unsigned int channels = has_alpha ? 4 : 3;
 
         int width = image.width();
         int height = image.height();
@@ -506,27 +604,14 @@ namespace huira {
             for (int y = 0; y < height; ++y) {
                 for (int x = 0; x < width; ++x) {
                     std::size_t x_u = static_cast<std::size_t>(x);
-                    const T& pixel = image(x, y);
+                    const RGB& pixel = image(x, y);
 
-                    if constexpr (is_gray) {
-                        float linear = convert_pixel_to_float<T>(pixel);
-                        float srgb = linear_to_srgb(linear);
-                        row_data[x_u * channels] = float_to_integer<uint16_t>(srgb);
+                    row_data[x_u * channels + 0] = float_to_integer<uint16_t>(linear_to_srgb(pixel[0]));
+                    row_data[x_u * channels + 1] = float_to_integer<uint16_t>(linear_to_srgb(pixel[1]));
+                    row_data[x_u * channels + 2] = float_to_integer<uint16_t>(linear_to_srgb(pixel[2]));
 
-                        if (has_alpha) {
-                            row_data[x_u * channels + 1] = float_to_integer<uint16_t>(alpha(x, y));
-                        }
-                    }
-                    else {
-                        Vec3<float> linear = convert_pixel_to_vec3<T>(pixel);
-
-                        row_data[x_u * channels + 0] = float_to_integer<uint16_t>(linear_to_srgb(linear.x));
-                        row_data[x_u * channels + 1] = float_to_integer<uint16_t>(linear_to_srgb(linear.y));
-                        row_data[x_u * channels + 2] = float_to_integer<uint16_t>(linear_to_srgb(linear.z));
-
-                        if (has_alpha) {
-                            row_data[x_u * channels + 3] = float_to_integer<uint16_t>(alpha(x, y));
-                        }
+                    if (has_alpha) {
+                        row_data[x_u * channels + 3] = float_to_integer<uint16_t>(alpha(x, y));
                     }
                 }
 
@@ -541,27 +626,14 @@ namespace huira {
             for (int y = 0; y < height; ++y) {
                 for (int x = 0; x < width; ++x) {
                     std::size_t x_u = static_cast<std::size_t>(x);
-                    const T& pixel = image(x, y);
+                    const RGB& pixel = image(x, y);
 
-                    if constexpr (is_gray) {
-                        float linear = convert_pixel_to_float<T>(pixel);
-                        float srgb = linear_to_srgb(linear);
-                        row_data[x_u * channels] = float_to_integer<uint8_t>(srgb);
+                    row_data[x_u * channels + 0] = float_to_integer<uint8_t>(linear_to_srgb(pixel[0]));
+                    row_data[x_u * channels + 1] = float_to_integer<uint8_t>(linear_to_srgb(pixel[1]));
+                    row_data[x_u * channels + 2] = float_to_integer<uint8_t>(linear_to_srgb(pixel[2]));
 
-                        if (has_alpha) {
-                            row_data[x_u * channels + 1] = float_to_integer<uint8_t>(alpha(x, y));
-                        }
-                    }
-                    else {
-                        Vec3<float> linear = convert_pixel_to_vec3<T>(pixel);
-
-                        row_data[x_u * channels + 0] = float_to_integer<uint8_t>(linear_to_srgb(linear.x));
-                        row_data[x_u * channels + 1] = float_to_integer<uint8_t>(linear_to_srgb(linear.y));
-                        row_data[x_u * channels + 2] = float_to_integer<uint8_t>(linear_to_srgb(linear.z));
-
-                        if (has_alpha) {
-                            row_data[x_u * channels + 3] = float_to_integer<uint8_t>(alpha(x, y));
-                        }
+                    if (has_alpha) {
+                        row_data[x_u * channels + 3] = float_to_integer<uint8_t>(alpha(x, y));
                     }
                 }
 
