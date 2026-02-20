@@ -13,7 +13,7 @@ namespace huira {
     template <IsSpectral TSpectral>
     class FrameBuffer {
     public:
-        using SensorT = std::conditional_t<std::is_same_v<TSpectral, RGB>, Vec3<float>, float>;
+        using SensorT = std::conditional_t<std::is_same_v<TSpectral, RGB>, RGB, float>;
 
         FrameBuffer() = delete;
 
