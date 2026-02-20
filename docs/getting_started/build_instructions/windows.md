@@ -1,10 +1,9 @@
-# Windows (Powershell) Quickstart Guide
+# Windows (Powershell) C++ Build Guide
 
 ## Table of Contents
 - [System Requirements](#system-requirements)
 - [Method 1: conda Environment Setup (Preferred)](#method-1-conda-environment-setup-preferred)
 - [Method 2: vcpkg Package Manager](#method-2-vcpkg-package-manager)
-- [Method 3: Manual Dependency Management (Advanced Users)](#method-3-manual-dependency-management-advanced-users)
 
 ***
 
@@ -49,11 +48,17 @@ cmake --build . --config Release -j
 ```
 NOTE: If you are using bash shell, you may not need the space between `-D` and `CMAKE_TOOLCHAIN_FILE`.
 
-### Step 4: Environment Installation (Optional)
+### Step 4: Environment Installation
 After successful compilation, integrate *Huira* into your conda environment:
 
+If you're in `powershell`:
 ```powershell
-cmake --install . --config Release
+cmake --install . --config Release --prefix "$env:CONDA_PREFIX"
+```
+
+If you're in cmd prompt or miniforge prompt:
+```cmd
+cmake --install . --config Release --prefix "%CONDA_PREFIX%"
 ```
 
 ***
@@ -78,35 +83,3 @@ cmake --build . --config Release -j
 ```
 
 NOTE: If you are using bash shell, you may not need the space between `-D` and `CMAKE_TOOLCHAIN_FILE`.
-
-***
-
-## Method 3: Manual Dependency Management (Advanced Users)
-
-This approach requires manual installation of all dependencies through system package managers or source compilation. **Warning:** This method is unsupported and may encounter compatibility issues with system-available library versions.
-
-### Required Dependencies
-
-| Package | Version Requirement | Purpose |
-|---------|:-------------------:|---------|
-| assimp | >=5.2,<6.0 | 3D asset importing |
-| catch2 | >=3.8.0 | Unit testing suite (when `HUIRA_TESTS=ON`) |
-| cfitsio | >=3.49 | FITS file handling |
-| cspice | =67 | NASA SPICE toolkit |
-| embree3 | >=3.13,<4.0 | Ray intersection kernels |
-| fftw | >=3.3.10,<4.0 | Fourier transform operations |
-| gdal | >=3.10,<4.0 | Geographic data processing |
-| glm | >=1.0.1 | Mathematical operations |
-| libtiff | >=4.7.0 | TIFF image processing |
-| tbb-devel | >=2021.0 | Threading Building Blocks |
-
-### Build Process
-
-Once dependencies are satisfied, execute from the repository root:
-
-```bash
-mkdir build
-cd build
-cmake ../
-cmake --build . --config Release -j
-```

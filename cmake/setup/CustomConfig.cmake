@@ -1,3 +1,10 @@
+if(CMAKE_CXX_COMPILER MATCHES "Strawberry")
+  message(FATAL_ERROR 
+    "Detected Strawberry Perl's GCC (${CMAKE_CXX_COMPILER}). "
+    "This compiler has known C++20 threading incompatibilities. "
+    "Please remove it from PATH or set CMAKE_CXX_COMPILER explicitly.")
+endif()
+
 if(MSVC)
     message("Windows Detected")
 
