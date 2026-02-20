@@ -18,7 +18,7 @@ Issues = "https://github.com/huira-render/huira/issues"
 
 [tool.scikit-build]
 cmake.source-dir = "../.."
-cmake.args = ["-DHUIRA_PYTHON=ON", "-DHUIRA_APPS=ON", "-DHUIRA_NATIVE_ARCH=OFF"]
+cmake.args = ["-DHUIRA_PYTHON=ON", "-DHUIRA_TOOLS=ON", "-DHUIRA_NATIVE_ARCH=OFF"]
 cmake.build-type = "Release"
 cmake.define = {}
 
@@ -37,7 +37,7 @@ regex = "(?P<value>\\d+\\.\\d+\\.\\d+)"
 
 [[tool.scikit-build.overrides]]
 if.platform-system = "win32"
-cmake.args = ["-DHUIRA_PYTHON=ON", "-DHUIRA_APPS=ON", "-DHUIRA_NATIVE_ARCH=OFF", "-A", "x64"]
+cmake.args = ["-DHUIRA_PYTHON=ON", "-DHUIRA_TOOLS=ON", "-DHUIRA_NATIVE_ARCH=OFF", "-A", "x64"]
 
 [project.scripts]
 huira = "huira.cli:main"

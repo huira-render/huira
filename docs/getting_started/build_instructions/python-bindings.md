@@ -1,35 +1,24 @@
 # Python Bindings
 
-## Table of Contents
-- [System Requirements](#system-requirements)
-- [Building and Installing Python Bindings](#building-and-installing-python-bindings)
-
-***
-
-## System Requirements
-
-- **C++ Compiler:** C++20 compatible
-  - GCC 10+, Clang 10+, or MSVC 2019+
-- **Build System:** CMake 3.16+
-- **Configuration Tool:** pkg-config (if on Linux/macOS)
-
-## Building and Installing Python Bindings
-Make sure you have `conda` (miniforge) installed and setup on your system.  Please refer to the [Windows](windows.md) [Linux/macOS](linux.md) quickstart guides for getting `conda Installation` before proceeding with the instructions below.
-
-Once you have `conda` available, building and installing the python bindings is trivial.  From within the root directory of the project, simply run:
-
-```
-conda env create -f packaging/environment.yml
-conda activate huira_env
-cd bindings/python
-pip install .
+## Installing from PyPI
+This is recommended unless you want to make modifications to the source code.  The PyPI package is built from the latest stable release, so it may not include the most recent commits.  If you want to use the latest code, please build from source using the instructions below.
+```bash
+pip install huira
 ```
 
-This creates the `huira_env` conda environment, activates it, and then installs the python bindings into that environment.  You can verify the installation by running:
+## Building from Source
 
+If you want to build the python bindings from source, please make sure that you have the necessary dependencies installed.  Check the C++ build instructions for your specific platform for more details on how to install the dependencies.
+
+Once you have confirmed you have the necessary requirements, you can build and install the python bindings with:
+
+```bash
+pip install bindings/python/
 ```
-cd ~
+
+You can verify the installation with:
+```bash
 python -c "import huira; print(huira.__version__)"
 ```
 
-NOTE: Do not try to run `import huira` while inside of `bindings/python` as this will cause an import error.
+NOTE: Do not run `import huira` from within the `bindings/python/` directory.  This will cause an import error as it will try to import the unbuilt source files rather than the installed version.

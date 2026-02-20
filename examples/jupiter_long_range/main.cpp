@@ -9,7 +9,7 @@ using namespace std::chrono;
 
 using namespace huira::units::literals;
 
-using TSpectral = huira::RGB;
+using TSpectral = huira::Visible8;
 
 namespace fs = std::filesystem;
 
