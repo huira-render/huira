@@ -34,7 +34,7 @@ find_package(assimp CONFIG REQUIRED)
 
 find_package(TBB CONFIG REQUIRED)
 
-find_package(JPEG REQUIRED)
+find_package(libjpeg-turbo CONFIG REQUIRED)
 find_package(PNG REQUIRED)
 find_package(CFITSIO REQUIRED)
 # Conda-forge's cfitsio includes 'm' in its link interface, which doesn't
@@ -54,6 +54,6 @@ target_link_libraries(huira INTERFACE
     TBB::tbb
     TBB::tbbmalloc
     CFITSIO::CFITSIO
-    JPEG::JPEG
+    libjpeg-turbo::turbojpeg
     PNG::PNG
 )

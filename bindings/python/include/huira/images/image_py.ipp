@@ -11,6 +11,7 @@
 
 #include "huira/images/image.hpp"
 #include "huira/images/io/png_io.hpp"
+#include "huira/images/io/jpeg_io.hpp"
 #include "huira/images/io/fits_io.hpp"
 
 namespace py = pybind11;
@@ -181,79 +182,73 @@ namespace huira {
     // bind_image_io  --  free-standing read / write functions
     // ---------------------------------------------------------------------------
     inline void bind_image_io(py::module_& m) {
-
-        // -- PNG read ----------------------------------------------------------
-
-        m.def("read_png_f32", [](const std::string& path) {
-            auto [img, alpha] = read_image_png<float>(fs::path(path));
+        // =============== //
+        // === PNG I/O === //
+        // =============== //
+        m.def("read_png", [](const std::string& path) {
+            auto [img, alpha] = read_image_png(fs::path(path));
             return py::make_tuple(std::move(img), std::move(alpha));
-            }, py::arg("filepath"),
-                "Read a PNG into (Image_f32, Image_f32 alpha).");
+            }, py::arg("filepath"), "Read a PNG as an RGB image");
 
-        m.def("read_png_u8", [](const std::string& path) {
-            auto [img, alpha] = read_image_png<uint8_t>(fs::path(path));
+        m.def("read_png_mono", [](const std::string& path) {
+            auto [img, alpha] = read_image_png_mono(fs::path(path));
             return py::make_tuple(std::move(img), std::move(alpha));
-            }, py::arg("filepath"),
-                "Read a PNG into (Image_u8, Image_f32 alpha).");
-
-        m.def("read_png_u16", [](const std::string& path) {
-            auto [img, alpha] = read_image_png<uint16_t>(fs::path(path));
-            return py::make_tuple(std::move(img), std::move(alpha));
-            }, py::arg("filepath"),
-                "Read a PNG into (Image_u16, Image_f32 alpha).");
-
-        // -- PNG write (no alpha) ----------------------------------------------
+            }, py::arg("filepath"), "Read a PNG as a mono image");
 
         m.def("write_png",
             [](const std::string& p, const Image<float>& img, int bd) {
-                write_image_png<float>(fs::path(p), img, bd);
+                write_image_png(fs::path(p), img, bd);
             },
             py::arg("filepath"), py::arg("image"), py::arg("bit_depth") = 8);
 
         m.def("write_png",
-            [](const std::string& p, const Image<uint8_t>& img, int bd) {
-                write_image_png<uint8_t>(fs::path(p), img, bd);
+            [](const std::string& p, const Image<RGB>& img, int bd) {
+                write_image_png(fs::path(p), img, bd);
             },
             py::arg("filepath"), py::arg("image"), py::arg("bit_depth") = 8);
-
-        m.def("write_png",
-            [](const std::string& p, const Image<uint16_t>& img, int bd) {
-                write_image_png<uint16_t>(fs::path(p), img, bd);
-            },
-            py::arg("filepath"), py::arg("image"), py::arg("bit_depth") = 16);
-
-        m.def("write_png",
-            [](const std::string& p, const Image<Vec3<float>>& img, int bd) {
-                write_image_png<Vec3<float>>(fs::path(p), img, bd);
-            },
-            py::arg("filepath"), py::arg("image"), py::arg("bit_depth") = 8);
-
-        // -- PNG write (with alpha) --------------------------------------------
 
         m.def("write_png",
             [](const std::string& p, const Image<float>& img,
                 const Image<float>& alpha, int bd) {
-                    write_image_png<float>(fs::path(p), img, alpha, bd);
+                    write_image_png(fs::path(p), img, alpha, bd);
             },
             py::arg("filepath"), py::arg("image"),
             py::arg("alpha"), py::arg("bit_depth") = 8);
 
-        // -- FITS --------------------------------------------------------------
-
-        m.def("read_fits", [](const std::string& path) {
-            auto [img, meta] = read_image_fits(fs::path(path));
-            return py::make_tuple(std::move(img), std::move(meta));
-            }, py::arg("filepath"),
-                "Read a FITS file into (Image_f32, FitsMetadata).");
-
-        m.def("write_fits",
-            [](const std::string& p, const Image<float>& img,
-                int bit_depth, const FitsMetadata& meta) {
-                    write_image_fits(fs::path(p), img, bit_depth, meta);
+        m.def("write_png",
+            [](const std::string& p, const Image<RGB>& img,
+                const Image<float>& alpha, int bd) {
+                    write_image_png(fs::path(p), img, alpha, bd);
             },
             py::arg("filepath"), py::arg("image"),
-            py::arg("bit_depth") = -32, py::arg("metadata") = FitsMetadata{},
-            "Write an Image_f32 to a FITS file.");
+            py::arg("alpha"), py::arg("bit_depth") = 8);
+
+
+        // ================ //
+        // === JPEG I/O === //
+        // ================ //
+        m.def("read_jpeg", [](const std::string& path) {
+            auto img = read_image_jpeg(fs::path(path));
+            return img;
+            }, py::arg("filepath"), "Read a JPEG as an RGB image");
+
+        m.def("read_jpeg_mono", [](const std::string& path) {
+            auto img = read_image_jpeg_mono(fs::path(path));
+            return img;
+            }, py::arg("filepath"), "Read a JPEG as a mono image");
+
+        m.def("write_jpeg",
+            [](const std::string& p, const Image<float>& img, int q) {
+                write_image_jpeg(fs::path(p), img, q);
+            },
+            py::arg("filepath"), py::arg("image"), py::arg("quality") = 95);
+
+        m.def("write_jpeg",
+            [](const std::string& p, const Image<RGB>& img, int q) {
+                write_image_jpeg(fs::path(p), img, q);
+            },
+            py::arg("filepath"), py::arg("image"), py::arg("quality") = 95);
+        
     }
 
     // ---------------------------------------------------------------------------
@@ -269,8 +264,7 @@ namespace huira {
         bind_image<uint64_t>(m, "Image_u64");
 
         // Vec3 (RGB) images
-        bind_image<Vec3<float>>(m, "Image_rgb_f32");
-        bind_image<Vec3<double>>(m, "Image_rgb_f64");
+        bind_image<RGB>(m, "Image_rgb_f32");
 
         // IO functions
         bind_image_io(m);

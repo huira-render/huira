@@ -6,9 +6,9 @@ Huira
 .. toctree::
     :hidden:
     :maxdepth: 2
-    :caption: Design Overview
+    :caption: Getting Started
 
-    design_overview/index
+    getting_started/build_instructions/index
 
 .. toctree::
     :hidden:
@@ -21,9 +21,10 @@ Huira
 .. toctree::
     :hidden:
     :maxdepth: 2
-    :caption: Getting Started
+    :caption: Design Overview
 
-    getting_started/build_instructions/index
+    design_overview/index
+
 
 * :ref:`genindex`
 * :ref:`modindex`
