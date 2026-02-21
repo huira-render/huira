@@ -1,43 +1,56 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <cstdio>
 #include <cstring>
 #include <filesystem>
+#include <sstream>
 #include <string>
 #include <vector>
 
 #include "huira/core/spectral_bins.hpp"
 #include "huira/images/image.hpp"
+#include "huira/images/io/io_util.hpp"
 #include "huira/util/logger.hpp"
 
 namespace fs = std::filesystem;
 
 namespace huira {
 
-    /**
-     * @brief Raw decoded HDR data before pixel interpretation.
-     */
     struct HDRData {
         Resolution resolution{ 0, 0 };
         int width = 0;
         int height = 0;
 
-        std::vector<float> raw_data;  ///< Decoded pixel data (RGB float, 3 floats per pixel)
+        std::vector<float> raw_data;
     };
 
     /**
-     * @brief Converts an RGBE (Radiance) pixel to linear RGB floats.
+     * @brief Simple cursor for reading sequentially from a memory buffer.
      *
-     * RGBE stores RGB values with a shared exponent: the first three bytes are
-     * the mantissas for R, G, B, and the fourth byte is a shared exponent.
-     * The formula is: channel = (mantissa + 0.5) / 256.0 * 2^(exponent - 128)
-     *
-     * @param rgbe Pointer to 4 bytes of RGBE data
-     * @param r Output red channel
-     * @param g Output green channel
-     * @param b Output blue channel
+     * Replaces FILE* operations (fread, fgetc) with equivalent buffer-based reads.
      */
+    struct MemCursor_ {
+        const unsigned char* data;
+        std::size_t size;
+        std::size_t pos = 0;
+
+        bool has_remaining(std::size_t n) const { return pos + n <= size; }
+
+        bool read(unsigned char* dst, std::size_t n)
+        {
+            if (!has_remaining(n)) return false;
+            std::memcpy(dst, data + pos, n);
+            pos += n;
+            return true;
+        }
+
+        int getc()
+        {
+            if (pos >= size) return -1;
+            return static_cast<int>(data[pos++]);
+        }
+    };
+
     inline void rgbe_to_float_(const unsigned char* rgbe, float& r, float& g, float& b)
     {
         if (rgbe[3] == 0) {
@@ -52,23 +65,22 @@ namespace huira {
     }
 
     /**
-     * @brief Reads a single line of text from a FILE, handling \\n and \\r\\n.
+     * @brief Reads a single line of text from a memory cursor, handling \\n and \\r\\n.
      *
-     * @param fp File pointer
+     * @param cur Memory cursor
      * @param line Output string (without line terminator)
-     * @return true if a line was read, false on EOF
+     * @return true if a line was read, false on end of buffer
      */
-    inline bool read_hdr_line_(FILE* fp, std::string& line)
+    inline bool read_hdr_line_(MemCursor_& cur, std::string& line)
     {
         line.clear();
         int c;
-        while ((c = fgetc(fp)) != EOF) {
+        while ((c = cur.getc()) != -1) {
             if (c == '\n') return true;
             if (c == '\r') {
                 // Consume optional \n after \r
-                int next = fgetc(fp);
-                if (next != '\n' && next != EOF) {
-                    ungetc(next, fp);
+                if (cur.pos < cur.size && cur.data[cur.pos] == '\n') {
+                    cur.pos++;
                 }
                 return true;
             }
@@ -78,50 +90,38 @@ namespace huira {
     }
 
     /**
-     * @brief Decodes a Radiance HDR file into raw float RGB data.
+     * @brief Decodes a Radiance HDR from an in-memory buffer into raw float RGB data.
      *
      * Parses the Radiance header to extract resolution, then decodes the RGBE
      * pixel data. Supports both uncompressed RGBE scanlines and new-style
      * adaptive run-length encoding (RLE) where each channel is encoded separately.
      *
-     * @param filepath Path to the HDR file to read
+     * @param data Pointer to the HDR data in memory
+     * @param size Size of the data in bytes
      * @return Raw decoded data with resolution and float RGB buffer
-     * @throws std::runtime_error if the file cannot be opened or decoded
+     * @throws std::runtime_error if the data is not a valid or supported HDR
      */
-    inline HDRData read_hdr_raw_(const fs::path& filepath)
+    inline HDRData read_hdr_raw_(const unsigned char* data, std::size_t size)
     {
-        HUIRA_LOG_INFO("read_hdr_raw_ - Reading image from: " + filepath.string());
+        HUIRA_LOG_INFO("read_hdr_raw_ - Reading HDR from memory (" + std::to_string(size) + " bytes)");
 
-#ifdef _MSC_VER
-        FILE* fp = nullptr;
-        errno_t err = fopen_s(&fp, filepath.string().c_str(), "rb");
-        if (err != 0 || !fp) {
-            HUIRA_THROW_ERROR("read_hdr_raw_ - Failed to open HDR file: " + filepath.string());
-        }
-#else
-        FILE* fp = fopen(filepath.string().c_str(), "rb");
-        if (!fp) {
-            HUIRA_THROW_ERROR("read_hdr_raw_ - Failed to open HDR file: " + filepath.string());
-        }
-#endif
+        MemCursor_ cur{ data, size };
 
         // Parse header: look for magic number and resolution string
         std::string line;
 
         // First line should be "#?RADIANCE" or "#?RGBE"
-        if (!read_hdr_line_(fp, line)) {
-            fclose(fp);
-            HUIRA_THROW_ERROR("read_hdr_raw_ - Failed to read HDR header: " + filepath.string());
+        if (!read_hdr_line_(cur, line)) {
+            HUIRA_THROW_ERROR("read_hdr_raw_ - Failed to read HDR header");
         }
 
         if (line.substr(0, 2) != "#?") {
-            fclose(fp);
-            HUIRA_THROW_ERROR("read_hdr_raw_ - File is not a valid Radiance HDR: " + filepath.string());
+            HUIRA_THROW_ERROR("read_hdr_raw_ - Data is not a valid Radiance HDR (bad magic)");
         }
 
         // Read header lines until empty line
         bool found_format = false;
-        while (read_hdr_line_(fp, line)) {
+        while (read_hdr_line_(cur, line)) {
             if (line.empty()) break;
 
             if (line.find("FORMAT=32-bit_rle_rgbe") != std::string::npos ||
@@ -131,19 +131,18 @@ namespace huira {
         }
 
         if (!found_format) {
-            HUIRA_LOG_WARNING("read_hdr_raw_ - No FORMAT line found in HDR header, assuming RGBE: " + filepath.string());
+            HUIRA_LOG_WARNING("read_hdr_raw_ - No FORMAT line found in HDR header, assuming RGBE");
         }
 
         // Parse resolution string: "-Y height +X width" is the most common
-        if (!read_hdr_line_(fp, line)) {
-            fclose(fp);
-            HUIRA_THROW_ERROR("read_hdr_raw_ - Failed to read resolution string: " + filepath.string());
+        if (!read_hdr_line_(cur, line)) {
+            HUIRA_THROW_ERROR("read_hdr_raw_ - Failed to read resolution string");
         }
+
         int width = 0;
         int height = 0;
 
         auto parse_resolution = [&](const std::string& prefix_y, const std::string& prefix_x) -> bool {
-            // Expected format: "<prefix_y> <height> <prefix_x> <width>"
             if (line.find(prefix_y) != 0) return false;
             std::istringstream iss(line.substr(prefix_y.size()));
             int h = 0;
@@ -155,7 +154,7 @@ namespace huira {
                 return true;
             }
             return false;
-            };
+        };
 
         if (parse_resolution("-Y", "+X"))
         {
@@ -174,14 +173,12 @@ namespace huira {
             /* Both flipped */
         }
         else {
-            fclose(fp);
-            HUIRA_THROW_ERROR("read_hdr_raw_ - Unsupported resolution format: \"" + line + "\": " + filepath.string());
+            HUIRA_THROW_ERROR("read_hdr_raw_ - Unsupported resolution format: \"" + line + "\"");
         }
 
         if (width <= 0 || height <= 0) {
-            fclose(fp);
             HUIRA_THROW_ERROR("read_hdr_raw_ - Invalid dimensions (" +
-                std::to_string(width) + " x " + std::to_string(height) + "): " + filepath.string());
+                std::to_string(width) + " x " + std::to_string(height) + ")");
         }
 
         // Decode scanlines
@@ -193,10 +190,8 @@ namespace huira {
         for (int y = 0; y < height; ++y) {
             // Read first 4 bytes to determine encoding
             unsigned char header[4];
-            if (fread(header, 1, 4, fp) != 4) {
-                fclose(fp);
-                HUIRA_THROW_ERROR("read_hdr_raw_ - Unexpected end of data at scanline " +
-                    std::to_string(y) + ": " + filepath.string());
+            if (!cur.read(header, 4)) {
+                HUIRA_THROW_ERROR("read_hdr_raw_ - Unexpected end of data at scanline " + std::to_string(y));
             }
 
             bool is_new_rle = (header[0] == 2 && header[1] == 2 &&
@@ -207,23 +202,21 @@ namespace huira {
                 for (int ch = 0; ch < 4; ++ch) {
                     int pos = 0;
                     while (pos < width) {
-                        unsigned char byte;
-                        if (fread(&byte, 1, 1, fp) != 1) {
-                            fclose(fp);
-                            HUIRA_THROW_ERROR("read_hdr_raw_ - Unexpected end of RLE data: " + filepath.string());
+                        int byte = cur.getc();
+                        if (byte == -1) {
+                            HUIRA_THROW_ERROR("read_hdr_raw_ - Unexpected end of RLE data");
                         }
 
                         if (byte > 128) {
                             // Run: repeat next byte (byte - 128) times
                             int count = byte - 128;
-                            unsigned char val;
-                            if (fread(&val, 1, 1, fp) != 1) {
-                                fclose(fp);
-                                HUIRA_THROW_ERROR("read_hdr_raw_ - Unexpected end of RLE data: " + filepath.string());
+                            int val = cur.getc();
+                            if (val == -1) {
+                                HUIRA_THROW_ERROR("read_hdr_raw_ - Unexpected end of RLE data");
                             }
                             for (int i = 0; i < count && pos < width; ++i) {
-                                std::size_t index = static_cast<std::size_t>(pos) * 4 + static_cast<std::size_t>(ch);
-                                scanline[index] = val;
+                                scanline[static_cast<std::size_t>(pos) * 4 + static_cast<std::size_t>(ch)] =
+                                    static_cast<unsigned char>(val);
                                 ++pos;
                             }
                         }
@@ -231,13 +224,12 @@ namespace huira {
                             // Literal: read 'byte' values
                             int count = byte;
                             for (int i = 0; i < count && pos < width; ++i) {
-                                unsigned char val;
-                                if (fread(&val, 1, 1, fp) != 1) {
-                                    fclose(fp);
-                                    HUIRA_THROW_ERROR("read_hdr_raw_ - Unexpected end of RLE data: " + filepath.string());
+                                int val = cur.getc();
+                                if (val == -1) {
+                                    HUIRA_THROW_ERROR("read_hdr_raw_ - Unexpected end of RLE data");
                                 }
-                                std::size_t index = static_cast<std::size_t>(pos) * 4 + static_cast<std::size_t>(ch);
-                                scanline[index] = val;
+                                scanline[static_cast<std::size_t>(pos) * 4 + static_cast<std::size_t>(ch)] =
+                                    static_cast<unsigned char>(val);
                                 ++pos;
                             }
                         }
@@ -254,9 +246,8 @@ namespace huira {
                 // Read remaining pixels for this scanline
                 if (width > 1) {
                     std::size_t remaining = static_cast<std::size_t>(width - 1) * 4;
-                    if (fread(&scanline[4], 1, remaining, fp) != remaining) {
-                        fclose(fp);
-                        HUIRA_THROW_ERROR("read_hdr_raw_ - Unexpected end of data: " + filepath.string());
+                    if (!cur.read(&scanline[4], remaining)) {
+                        HUIRA_THROW_ERROR("read_hdr_raw_ - Unexpected end of data");
                     }
                 }
             }
@@ -271,8 +262,6 @@ namespace huira {
             }
         }
 
-        fclose(fp);
-
         HDRData hdr_data{};
         hdr_data.resolution = Resolution{ width, height };
         hdr_data.width = width;
@@ -282,23 +271,23 @@ namespace huira {
         return hdr_data;
     }
 
+    // =========================================================================
+    // RGB readers
+    // =========================================================================
+
     /**
-     * @brief Reads a Radiance HDR (.hdr) image file and returns linear RGB data.
+     * @brief Reads a Radiance HDR from an in-memory buffer and returns linear RGB data.
      *
-     * Always returns an Image<RGB> in linear color space. HDR files natively
-     * store linear radiance values using RGBE encoding, so no gamma conversion
-     * is needed. HDR does not support alpha channels.
+     * HDR files natively store linear radiance values using RGBE encoding,
+     * so no gamma conversion is needed. HDR does not support alpha channels.
      *
-     * Supports both uncompressed and new-style run-length encoded (RLE) HDR files.
-     *
-     * @param filepath Path to the HDR file to read
+     * @param data Pointer to the HDR data in memory
+     * @param size Size of the data in bytes
      * @return The linear RGB image.
-     * @throws std::runtime_error if the file cannot be opened, is not a valid HDR,
-     *         or if any error occurs during reading
      */
-    inline Image<RGB> read_image_hdr(const fs::path& filepath)
+    inline Image<RGB> read_image_hdr(const unsigned char* data, std::size_t size)
     {
-        auto hdr_data = read_hdr_raw_(filepath);
+        auto hdr_data = read_hdr_raw_(data, size);
 
         Image<RGB> image(hdr_data.resolution);
 
@@ -315,19 +304,36 @@ namespace huira {
     }
 
     /**
-     * @brief Reads a Radiance HDR (.hdr) image file and returns linear mono data.
+     * @brief Reads a Radiance HDR file and returns linear RGB data.
      *
-     * RGB channels are averaged to produce mono output. Since HDR files store
-     * linear radiance values, no gamma conversion is applied.
+     * Convenience overload that reads the file into memory and forwards
+     * to the buffer-based implementation.
      *
      * @param filepath Path to the HDR file to read
-     * @return The linear mono image.
-     * @throws std::runtime_error if the file cannot be opened, is not a valid HDR,
-     *         or if any error occurs during reading
+     * @return The linear RGB image.
      */
-    inline Image<float> read_image_hdr_mono(const fs::path& filepath)
+    inline Image<RGB> read_image_hdr(const fs::path& filepath)
     {
-        auto hdr_data = read_hdr_raw_(filepath);
+        auto file_data = read_file_to_buffer(filepath);
+        return read_image_hdr(file_data.data(), file_data.size());
+    }
+
+    // =========================================================================
+    // Mono readers
+    // =========================================================================
+
+    /**
+     * @brief Reads a Radiance HDR from an in-memory buffer and returns linear mono data.
+     *
+     * RGB channels are averaged to produce mono output.
+     *
+     * @param data Pointer to the HDR data in memory
+     * @param size Size of the data in bytes
+     * @return The linear mono image.
+     */
+    inline Image<float> read_image_hdr_mono(const unsigned char* data, std::size_t size)
+    {
+        auto hdr_data = read_hdr_raw_(data, size);
 
         Image<float> image(hdr_data.resolution);
 
@@ -341,6 +347,21 @@ namespace huira {
         }
 
         return image;
+    }
+
+    /**
+     * @brief Reads a Radiance HDR file and returns linear mono data.
+     *
+     * Convenience overload that reads the file into memory and forwards
+     * to the buffer-based implementation.
+     *
+     * @param filepath Path to the HDR file to read
+     * @return The linear mono image.
+     */
+    inline Image<float> read_image_hdr_mono(const fs::path& filepath)
+    {
+        auto file_data = read_file_to_buffer(filepath);
+        return read_image_hdr_mono(file_data.data(), file_data.size());
     }
 
 }
