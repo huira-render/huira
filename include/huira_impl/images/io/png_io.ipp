@@ -290,18 +290,21 @@ namespace huira {
      * alpha channels. Grayscale values are promoted to RGB with equal channel values.
      *
      * @param filepath Path to the PNG file to read
+     * @param read_alpha Whether to load the alpha channel if present (default: true)
      * @return A pair containing the linear RGB image and an optional alpha channel image.
      *         If the PNG has no alpha channel, the second image will be empty (0x0).
      * @throws std::runtime_error if the file cannot be opened, is not a valid PNG,
      *         or if any error occurs during reading
      */
-    inline std::pair<Image<RGB>, Image<float>> read_image_png(const fs::path& filepath)
+    inline std::pair<Image<RGB>, Image<float>> read_image_png(const fs::path& filepath, bool read_alpha)
     {
         auto png_data = read_png_raw_(filepath);
 
         // Create output images
         Image<RGB> image(png_data.resolution);
         Image<float> alpha_image(0, 0);
+
+        png_data.has_alpha = read_alpha && png_data.has_alpha;
 
         if (png_data.has_alpha) {
             alpha_image = Image<float>(png_data.resolution, 1.0f);
@@ -363,13 +366,30 @@ namespace huira {
         return { std::move(image), std::move(alpha_image) };
     }
 
-    std::pair<Image<float>, Image<float>> read_image_png_mono(const fs::path& filepath)
+    /**
+     * @brief Reads a PNG image file and returns linear mono + alpha data.
+     *
+     * Loads a PNG image from disk, automatically detecting and converting from the
+     * source color space (sRGB, linear, gamma, or ICC profile) to linear light.
+     * Supports 8-bit and 16-bit images, grayscale and RGB color types, and optional
+     * alpha channels. Grayscale values are promoted to RGB with equal channel values.
+     *
+     * @param filepath Path to the PNG file to read
+     * @param read_alpha Whether to load the alpha channel if present (default: true)
+     * @return A pair containing the linear mono image and an optional alpha channel image.
+     *         If the PNG has no alpha channel, the second image will be empty (0x0).
+     * @throws std::runtime_error if the file cannot be opened, is not a valid PNG,
+     *         or if any error occurs during reading
+     */
+    std::pair<Image<float>, Image<float>> read_image_png_mono(const fs::path& filepath, bool read_alpha)
     {
         auto png_data = read_png_raw_(filepath);
 
         // Create output images
         Image<float> image(png_data.resolution);
         Image<float> alpha_image(0, 0);
+
+        png_data.has_alpha = read_alpha && png_data.has_alpha;
 
         if (png_data.has_alpha) {
             alpha_image = Image<float>(png_data.resolution, 1.0f);
