@@ -104,7 +104,7 @@ namespace huira {
         if (!is_truecolor && !is_gray && !is_color_mapped) {
             fclose(fp);
             HUIRA_THROW_ERROR("read_tga_raw_ - Unsupported TGA image type (" +
-                std::to_string(image_type) + "): " + filepath.string());
+                std::to_string(static_cast<int>(image_type)) + "): " + filepath.string());
         }
 
         // Skip image ID field

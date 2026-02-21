@@ -117,7 +117,7 @@ namespace huira {
         if (bits_per_pixel != 24 && bits_per_pixel != 32) {
             fclose(fp);
             HUIRA_THROW_ERROR("read_bmp_raw_ - Unsupported BMP bit depth (" +
-                std::to_string(bits_per_pixel) + "), only 24 and 32 supported: " + filepath.string());
+                std::to_string(static_cast<int>(bits_per_pixel)) + "), only 24 and 32 supported: " + filepath.string());
         }
 
         int width = static_cast<int>(raw_width);

@@ -102,19 +102,19 @@ namespace huira {
         if (!is_float && sample_format != SAMPLEFORMAT_UINT && sample_format != SAMPLEFORMAT_INT) {
             TIFFClose(tif);
             HUIRA_THROW_ERROR("read_tiff_raw_ - Unsupported sample format (" +
-                std::to_string(sample_format) + "): " + filepath.string());
+                std::to_string(static_cast<int>(sample_format)) + "): " + filepath.string());
         }
 
         if (!is_float && bits_per_sample != 8 && bits_per_sample != 16 && bits_per_sample != 32) {
             TIFFClose(tif);
             HUIRA_THROW_ERROR("read_tiff_raw_ - Unsupported bits per sample (" +
-                std::to_string(bits_per_sample) + "): " + filepath.string());
+                std::to_string(static_cast<int>(bits_per_sample)) + "): " + filepath.string());
         }
 
         if (is_float && bits_per_sample != 32) {
             TIFFClose(tif);
             HUIRA_THROW_ERROR("read_tiff_raw_ - Unsupported float bit depth (" +
-                std::to_string(bits_per_sample) + "), only 32-bit float supported: " + filepath.string());
+                std::to_string(static_cast<int>(bits_per_sample)) + "), only 32-bit float supported: " + filepath.string());
         }
 
         // Handle palette images via RGBA fallback
@@ -295,7 +295,7 @@ namespace huira {
                         if (TIFFReadScanline(tif, scanline_buf.data(), y, ch) < 0) {
                             TIFFClose(tif);
                             HUIRA_THROW_ERROR("read_tiff_raw_ - Failed to read scanline " +
-                                std::to_string(y) + " channel " + std::to_string(ch) + ": " + filepath.string());
+                                std::to_string(y) + " channel " + std::to_string(static_cast<int>(ch)) + ": " + filepath.string());
                         }
 
                         for (uint32_t x = 0; x < width; ++x) {
