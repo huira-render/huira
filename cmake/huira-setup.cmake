@@ -37,6 +37,7 @@ find_package(TBB CONFIG REQUIRED)
 find_package(libjpeg-turbo CONFIG REQUIRED)
 find_package(PNG REQUIRED)
 find_package(CFITSIO REQUIRED)
+find_package(TIFF REQUIRED)
 # Conda-forge's cfitsio includes 'm' in its link interface, which doesn't
 # exist on Windows (math functions are in the CRT). Remove it.
 if(WIN32 AND TARGET CFITSIO::CFITSIO)
@@ -53,6 +54,7 @@ target_link_libraries(huira INTERFACE
     assimp::assimp
     TBB::tbb
     TBB::tbbmalloc
+    TIFF::TIFF
     CFITSIO::CFITSIO
     libjpeg-turbo::turbojpeg
     PNG::PNG
