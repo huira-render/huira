@@ -15,48 +15,30 @@
 #include "huira/images/image.hpp"
 #include "huira/images/io/color_space.hpp"
 #include "huira/images/io/convert_pixel.hpp"
+#include "huira/images/io/io_util.hpp"
 #include "huira/util/logger.hpp"
 #include "huira/util/paths.hpp"
 
 namespace fs = std::filesystem;
 
 namespace huira {
-    /**
-     * @brief Specifies the color space encoding used in a PNG file.
-     */
     enum class PngColorSpace {
-        SRGB,        ///< sRGB chunk present, or assumed default
-        LINEAR,      ///< gAMA = 1.0
-        GAMMA,       ///< gAMA chunk with custom gamma
-        ICC_PROFILE, ///< iCCP chunk present
-        UNKNOWN      ///< Unknown or unsupported
+        SRGB,
+        LINEAR,
+        GAMMA,
+        ICC_PROFILE,
+        UNKNOWN
     };
 
-    /**
-     * @brief Contains color space information extracted from a PNG file.
-     */
     struct PngColorInfo {
-        PngColorSpace space = PngColorSpace::SRGB; ///< The detected color space
-        double gamma = 2.2;  ///< Gamma value (only used if space == GAMMA)
-        // TODO add ICC profile data
+        PngColorSpace space = PngColorSpace::SRGB;
+        double gamma = 2.2;
     };
 
-    /**
-     * @brief Detects the color space of a PNG file from its metadata chunks.
-     *
-     * Checks for iCCP (ICC profile), sRGB, and gAMA chunks to determine the
-     * color space encoding used in the PNG file. If no explicit color space
-     * information is found, sRGB is assumed as the default.
-     *
-     * @param png_ptr PNG read structure
-     * @param info_ptr PNG info structure
-     * @return Color space information including the space type and gamma value
-     */
     inline PngColorInfo detect_png_color_space_(png_structp png_ptr, png_infop info_ptr)
     {
         PngColorInfo info;
 
-        // Check for ICC profile:
         png_charp name;
         int compression_type;
         png_bytep profile;
@@ -66,14 +48,12 @@ namespace huira {
             return info;
         }
 
-        // Check for sRGB chunk:
         int srgb_intent;
         if (png_get_sRGB(png_ptr, info_ptr, &srgb_intent)) {
             info.space = PngColorSpace::SRGB;
             return info;
         }
 
-        // Check for gAMA chunk:
         double file_gamma;
         if (png_get_gAMA(png_ptr, info_ptr, &file_gamma)) {
             if (std::abs(file_gamma - 1.0) < 0.01) {
@@ -93,18 +73,6 @@ namespace huira {
         return info;
     }
 
-    /**
-     * @brief Converts an integer-encoded pixel value to linear floating-point.
-     *
-     * Applies the appropriate transfer function based on the detected color space
-     * (sRGB, linear, gamma, or ICC profile) to convert from encoded values to
-     * linear light values.
-     *
-     * @tparam T Integer type of the encoded pixel (uint8_t or uint16_t)
-     * @param encoded The encoded pixel value
-     * @param color_info Color space information from the PNG file
-     * @return Linear floating-point value in the range [0, 1]
-     */
     template <IsInteger T>
     float linearize_png_pixel_(T encoded, const PngColorInfo& color_info)
     {
@@ -113,30 +81,25 @@ namespace huira {
         switch (color_info.space) {
         case PngColorSpace::LINEAR:
             return encoded_f;
-
         case PngColorSpace::SRGB:
             return srgb_to_linear(encoded_f);
-
         case PngColorSpace::ICC_PROFILE:
             return srgb_to_linear(encoded_f);
-
         case PngColorSpace::UNKNOWN:
             return srgb_to_linear(encoded_f);
-
         case PngColorSpace::GAMMA:
             return gamma_to_linear(encoded_f, static_cast<float>(color_info.gamma));
-
         default:
             return srgb_to_linear(encoded_f);
         }
     }
 
     struct PNGData {
-        Resolution resolution{ 0,0 };
+        Resolution resolution{ 0, 0 };
         png_uint_32 height;
         png_uint_32 width;
         unsigned int channels;
-        
+
         std::vector<png_byte> raw_data;
         std::size_t row_bytes;
         PngColorInfo color_info;
@@ -147,64 +110,90 @@ namespace huira {
         bool is_gray = false;
     };
 
-    inline PNGData read_png_raw_(const fs::path& filepath)
-    {
-        HUIRA_LOG_INFO("read_png_raw_ - Reading image from: " + filepath.string());
+    /**
+     * @brief State for libpng custom memory read callback.
+     */
+    struct PngMemReadState_ {
+        const unsigned char* data;
+        std::size_t size;
+        std::size_t pos;
+    };
 
-        // Cross-platform file opening
-#ifdef _MSC_VER
-        FILE* fp = nullptr;
-        errno_t err = fopen_s(&fp, filepath.string().c_str(), "rb");
-        if (err != 0 || !fp) {
-            HUIRA_THROW_ERROR("read_png_raw_ - Failed to open PNG file: " + filepath.string());
+    /**
+     * @brief Custom libpng read callback that reads from a memory buffer.
+     *
+     * Registered via png_set_read_fn to replace file-based I/O. libpng calls
+     * this function whenever it needs to read bytes from the data source.
+     *
+     * @param png_ptr PNG read structure (io_ptr points to PngMemReadState_)
+     * @param out_bytes Destination buffer
+     * @param byte_count Number of bytes to read
+     */
+    inline void png_mem_read_callback_(png_structp png_ptr, png_bytep out_bytes, png_size_t byte_count) noexcept
+    {
+        auto* state = reinterpret_cast<PngMemReadState_*>(png_get_io_ptr(png_ptr));
+        if (state->pos + byte_count > state->size) {
+            png_error(png_ptr, "Read past end of PNG memory buffer");
+            return;
         }
-#else
-        FILE* fp = fopen(filepath.string().c_str(), "rb");
-        if (!fp) {
-            HUIRA_THROW_ERROR("read_png_raw_ - Failed to open PNG file: " + filepath.string());
+        std::memcpy(out_bytes, state->data + state->pos, byte_count);
+        state->pos += byte_count;
+    }
+
+    /**
+     * @brief Decodes a PNG from an in-memory buffer into raw byte data.
+     *
+     * Uses libpng with a custom read callback to decompress from memory.
+     * Handles palette expansion, low bit depth expansion, tRNS alpha expansion,
+     * and byte order normalization for 16-bit images.
+     *
+     * @param data Pointer to the PNG data in memory
+     * @param size Size of the data in bytes
+     * @return Raw decoded data with resolution, color info, and pixel buffer
+     * @throws std::runtime_error if the data is not a valid or supported PNG
+     */
+    inline PNGData read_png_raw_(const unsigned char* data, std::size_t size)
+    {
+        HUIRA_LOG_INFO("read_png_raw_ - Reading PNG from memory (" + std::to_string(size) + " bytes)");
+
+        if (size < 8) {
+            HUIRA_THROW_ERROR("read_png_raw_ - Data too small to be a valid PNG");
         }
-#endif
 
         // Verify PNG signature
-        std::array<png_byte, 8> sig{};
-        if (fread(sig.data(), 1, 8, fp) != 8 ||
-            png_sig_cmp(sig.data(), 0, 8) != 0) {
-            fclose(fp);
-            HUIRA_THROW_ERROR("read_png_raw_ - File is not a valid PNG: " + filepath.string());
+        if (png_sig_cmp(data, 0, 8) != 0) {
+            HUIRA_THROW_ERROR("read_png_raw_ - Data is not a valid PNG (bad signature)");
         }
 
         png_structp png_ptr = png_create_read_struct(
             PNG_LIBPNG_VER_STRING, nullptr, nullptr, nullptr);
         if (!png_ptr) {
-            fclose(fp);
             HUIRA_THROW_ERROR("read_png_raw_ - Failed to create PNG read struct");
         }
 
         png_infop info_ptr = png_create_info_struct(png_ptr);
         if (!info_ptr) {
             png_destroy_read_struct(&png_ptr, nullptr, nullptr);
-            fclose(fp);
             HUIRA_THROW_ERROR("read_png_raw_ - Failed to create PNG info struct");
         }
 
-        // libpng error handling via setjmp (required for C library)
-        // Suppress MSVC warnings about setjmp/C++ interaction - this is safe because
-        // no C++ objects with non-trivial destructors exist between setjmp and longjmp
 #ifdef _MSC_VER
 #pragma warning(push)
 #pragma warning(disable: 4611 5039)
 #endif
         if (setjmp(png_jmpbuf(png_ptr))) {
             png_destroy_read_struct(&png_ptr, &info_ptr, nullptr);
-            fclose(fp);
-            HUIRA_THROW_ERROR("read_png_raw_ - Error during PNG read: " + filepath.string());
+            HUIRA_THROW_ERROR("read_png_raw_ - Error during PNG read");
         }
 #ifdef _MSC_VER
 #pragma warning(pop)
 #endif
 
-        png_init_io(png_ptr, fp);
+        // Set up custom memory read
+        PngMemReadState_ read_state{ data, size, 8 };  // Skip past signature
+        png_set_read_fn(png_ptr, &read_state, png_mem_read_callback_);
         png_set_sig_bytes(png_ptr, 8);
+
         png_read_info(png_ptr, info_ptr);
 
         // Detect color space before any transformations
@@ -264,7 +253,6 @@ namespace huira {
         png_read_image(png_ptr, row_pointers.data());
         png_read_end(png_ptr, nullptr);
         png_destroy_read_struct(&png_ptr, &info_ptr, nullptr);
-        fclose(fp);
 
         PNGData png_data{};
         png_data.resolution = resolution;
@@ -281,26 +269,22 @@ namespace huira {
         return png_data;
     }
 
-    /**
-     * @brief Reads a PNG image file and returns linear RGB + alpha data.
-     *
-     * Loads a PNG image from disk, automatically detecting and converting from the
-     * source color space (sRGB, linear, gamma, or ICC profile) to linear light.
-     * Supports 8-bit and 16-bit images, grayscale and RGB color types, and optional
-     * alpha channels. Grayscale values are promoted to RGB with equal channel values.
-     *
-     * @param filepath Path to the PNG file to read
-     * @param read_alpha Whether to load the alpha channel if present (default: true)
-     * @return A pair containing the linear RGB image and an optional alpha channel image.
-     *         If the PNG has no alpha channel, the second image will be empty (0x0).
-     * @throws std::runtime_error if the file cannot be opened, is not a valid PNG,
-     *         or if any error occurs during reading
-     */
-    inline std::pair<Image<RGB>, Image<float>> read_image_png(const fs::path& filepath, bool read_alpha)
-    {
-        auto png_data = read_png_raw_(filepath);
+    // =========================================================================
+    // RGB readers
+    // =========================================================================
 
-        // Create output images
+    /**
+     * @brief Reads a PNG from an in-memory buffer and returns linear RGB + alpha data.
+     *
+     * @param data Pointer to the PNG data in memory
+     * @param size Size of the data in bytes
+     * @param read_alpha Whether to load the alpha channel if present (default: true)
+     * @return A pair containing the linear RGB image and an optional alpha image.
+     */
+    inline std::pair<Image<RGB>, Image<float>> read_image_png(const unsigned char* data, std::size_t size, bool read_alpha)
+    {
+        auto png_data = read_png_raw_(data, size);
+
         Image<RGB> image(png_data.resolution);
         Image<float> alpha_image(0, 0);
 
@@ -322,7 +306,7 @@ namespace huira {
                         uint16_t val;
                         std::memcpy(&val, p, sizeof(uint16_t));
                         return val;
-                        };
+                    };
 
                     if (png_data.is_gray) {
                         float mono = linearize_png_pixel_<uint16_t>(read_u16(byte_ptr), png_data.color_info);
@@ -341,7 +325,6 @@ namespace huira {
                     }
                 }
                 else {
-                    // 8-bit
                     const png_byte* ptr = png_data.raw_data.data() + y_u * png_data.row_bytes + x_u * png_data.channels;
 
                     if (png_data.is_gray) {
@@ -367,25 +350,33 @@ namespace huira {
     }
 
     /**
-     * @brief Reads a PNG image file and returns linear mono + alpha data.
+     * @brief Reads a PNG file and returns linear RGB + alpha data.
      *
-     * Loads a PNG image from disk, automatically detecting and converting from the
-     * source color space (sRGB, linear, gamma, or ICC profile) to linear light.
-     * Supports 8-bit and 16-bit images, grayscale and RGB color types, and optional
-     * alpha channels. Grayscale values are promoted to RGB with equal channel values.
-     *
-     * @param filepath Path to the PNG file to read
-     * @param read_alpha Whether to load the alpha channel if present (default: true)
-     * @return A pair containing the linear mono image and an optional alpha channel image.
-     *         If the PNG has no alpha channel, the second image will be empty (0x0).
-     * @throws std::runtime_error if the file cannot be opened, is not a valid PNG,
-     *         or if any error occurs during reading
+     * Convenience overload that reads the file into memory and forwards
+     * to the buffer-based implementation.
      */
-    std::pair<Image<float>, Image<float>> read_image_png_mono(const fs::path& filepath, bool read_alpha)
+    inline std::pair<Image<RGB>, Image<float>> read_image_png(const fs::path& filepath, bool read_alpha)
     {
-        auto png_data = read_png_raw_(filepath);
+        auto file_data = read_file_to_buffer(filepath);
+        return read_image_png(file_data.data(), file_data.size(), read_alpha);
+    }
 
-        // Create output images
+    // =========================================================================
+    // Mono readers
+    // =========================================================================
+
+    /**
+     * @brief Reads a PNG from an in-memory buffer and returns linear mono + alpha data.
+     *
+     * @param data Pointer to the PNG data in memory
+     * @param size Size of the data in bytes
+     * @param read_alpha Whether to load the alpha channel if present (default: true)
+     * @return A pair containing the linear mono image and an optional alpha image.
+     */
+    inline std::pair<Image<float>, Image<float>> read_image_png_mono(const unsigned char* data, std::size_t size, bool read_alpha)
+    {
+        auto png_data = read_png_raw_(data, size);
+
         Image<float> image(png_data.resolution);
         Image<float> alpha_image(0, 0);
 
@@ -407,7 +398,7 @@ namespace huira {
                         uint16_t val;
                         std::memcpy(&val, p, sizeof(uint16_t));
                         return val;
-                        };
+                    };
 
                     if (png_data.is_gray) {
                         float mono = linearize_png_pixel_<uint16_t>(read_u16(byte_ptr), png_data.color_info);
@@ -426,7 +417,6 @@ namespace huira {
                     }
                 }
                 else {
-                    // 8-bit
                     const png_byte* ptr = png_data.raw_data.data() + y_u * png_data.row_bytes + x_u * png_data.channels;
 
                     if (png_data.is_gray) {
@@ -452,29 +442,27 @@ namespace huira {
     }
 
     /**
-     * @brief Writes a linear RGB image to a PNG file without an alpha channel.
+     * @brief Reads a PNG file and returns linear mono + alpha data.
      *
-     * Convenience overload that writes an RGB image without an alpha channel.
-     * 
-     * @param filepath Path where the PNG file will be written
-     * @param image The linear RGB image to write
-     * @param bit_depth Bit depth of the output PNG (8 or 16)
+     * Convenience overload that reads the file into memory and forwards
+     * to the buffer-based implementation.
      */
+    inline std::pair<Image<float>, Image<float>> read_image_png_mono(const fs::path& filepath, bool read_alpha)
+    {
+        auto file_data = read_file_to_buffer(filepath);
+        return read_image_png_mono(file_data.data(), file_data.size(), read_alpha);
+    }
+
+    // =========================================================================
+    // Writers (file-only, unchanged)
+    // =========================================================================
+
     inline void write_image_png(const fs::path& filepath, const Image<RGB>& image, int bit_depth)
     {
         Image<float> alpha(0, 0);
         write_image_png(filepath, image, alpha, bit_depth);
     }
 
-    /**
-     * @brief Writes a linear Mono image to a PNG file without an alpha channel.
-     *
-     * Convenience overload that promotes a Mono image to RGB and writes it without an alpha channel.
-     * 
-     * @param filepath Path where the PNG file will be written
-     * @param image The linear Mono image to write
-     * @param bit_depth Bit depth of the output PNG (8 or 16)
-     */
     inline void write_image_png(const fs::path& filepath, const Image<float>& image, int bit_depth)
     {
         Image<float> alpha(0, 0);
@@ -487,21 +475,9 @@ namespace huira {
         write_image_png(filepath, image_rgb, alpha, bit_depth);
     }
 
-
-    /**
-     * @brief Writes a linear Mono image to a PNG file with an alpha channel.
-     *
-     * Convenience overload that promotes a Mono image to RGB and writes it with an alpha channel.
-     *
-     * @param filepath Path where the PNG file will be written
-     * @param image The linear Mono image to write
-     * @param alpha The alpha channel image (must match dimensions of image)
-     * @param bit_depth Bit depth of the output PNG (8 or 16)
-     */
     inline void write_image_png(const fs::path& filepath, const Image<float>& image,
         const Image<float>& alpha, int bit_depth)
     {
-
         Image<RGB> image_rgb(image.width(), image.height());
         for (std::size_t i = 0; i < image.size(); ++i) {
             image_rgb[i] = RGB{ image[i], image[i], image[i] };
@@ -510,20 +486,6 @@ namespace huira {
         write_image_png(filepath, image_rgb, alpha, bit_depth);
     }
 
-    /**
-     * @brief Writes a linear RGB image with optional alpha to a PNG file (sRGB encoded).
-     *
-     * Converts the image from linear color space to sRGB and writes it to a PNG file.
-     * The function automatically creates necessary directories and supports 8-bit or
-     * 16-bit output. An sRGB color profile is embedded in the PNG metadata.
-     *
-     * @param filepath Path where the PNG file will be written
-     * @param image The linear RGB image to write
-     * @param alpha Optional alpha channel image (must match dimensions of image, or be empty)
-     * @param bit_depth Bit depth of the output PNG (must be 8 or 16)
-     * @throws std::runtime_error if the file cannot be created, the image is empty,
-     *         bit_depth is invalid, or if any error occurs during writing
-     */
     inline void write_image_png(const fs::path& filepath, const Image<RGB>& image,
         const Image<float>& alpha, int bit_depth)
     {
@@ -554,7 +516,6 @@ namespace huira {
         int width = image.width();
         int height = image.height();
 
-        // Cross-platform file opening
 #ifdef _MSC_VER
         FILE* fp = nullptr;
         errno_t err = fopen_s(&fp, filepath.string().c_str(), "wb");
@@ -597,7 +558,6 @@ namespace huira {
 
         png_init_io(png_ptr, fp);
 
-        // Set image header
         png_set_IHDR(png_ptr, info_ptr,
             static_cast<png_uint_32>(width),
             static_cast<png_uint_32>(height),
@@ -607,17 +567,13 @@ namespace huira {
             PNG_COMPRESSION_TYPE_DEFAULT,
             PNG_FILTER_TYPE_DEFAULT);
 
-        // Mark as sRGB (we're converting from linear to sRGB on write)
         png_set_sRGB_gAMA_and_cHRM(png_ptr, info_ptr, PNG_sRGB_INTENT_PERCEPTUAL);
-
         png_write_info(png_ptr, info_ptr);
 
-        // PNG stores 16-bit values in big-endian; swap bytes on little-endian systems
         if (bit_depth == 16) {
             png_set_swap(png_ptr);
         }
 
-        // Write image data row by row
         if (bit_depth == 16) {
             std::vector<uint16_t> row_data(static_cast<std::size_t>(width) * channels);
 
@@ -640,7 +596,6 @@ namespace huira {
             }
         }
         else {
-            // 8-bit
             std::vector<uint8_t> row_data(static_cast<std::size_t>(width) * channels);
 
             for (int y = 0; y < height; ++y) {
