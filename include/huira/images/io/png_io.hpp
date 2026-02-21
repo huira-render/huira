@@ -20,9 +20,9 @@ namespace huira {
      * @throws std::runtime_error if the file cannot be opened, is not a valid PNG,
      *         or if any error occurs during reading
      */
-    std::pair<Image<RGB>, Image<float>> read_image_png(const fs::path& filepath);
+    std::pair<Image<RGB>, Image<float>> read_image_png(const fs::path& filepath, bool read_alpha = true);
 
-    std::pair<Image<float>, Image<float>> read_image_png_mono(const fs::path& filepath);
+    std::pair<Image<float>, Image<float>> read_image_png_mono(const fs::path& filepath, bool read_alpha = true);
 
 
     void write_image_png(const fs::path& filepath, const Image<RGB>& image, int bit_depth = 8);
