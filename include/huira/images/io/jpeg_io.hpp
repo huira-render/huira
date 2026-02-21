@@ -1,14 +1,18 @@
 #pragma once
 
 #include <filesystem>
-#include <utility>
 
-#include "huira/core/concepts/pixel_concepts.hpp"
+#include "huira/core/spectral_bins.hpp"
 #include "huira/images/image.hpp"
 
 namespace huira {
-    template <IsImagePixel T>
-    std::pair<Image<T>, Image<float>> read_image_jpeg(const fs::path& filepath);
+    Image<RGB> read_image_jpeg(const fs::path& filepath);
+
+    Image<float> read_image_jpeg_mono(const fs::path& filepath);
+
+    void write_image_jpeg(const fs::path& filepath, const Image<RGB>& image, int quality = 95);
+
+    void write_image_jpeg(const fs::path& filepath, const Image<float>& image, int quality = 95);
 }
 
 #include "huira_impl/images/io/jpeg_io.ipp"
