@@ -1,3 +1,10 @@
+## Description
+Huira is a C++ library for rendering and ray-tracing for scientific applications.  Particularly spacecraft navigation and planetary science.
+
+The project uses a limited selection of C++20, as it aims to be portable across macos, windows, and linux.
+
+All includes should be in alphabetical order, with the STL includes first, followed by third-party libraries, and then project-specific includes. Each group should be separated by a blank line.
+
 ## File Structure
 - This is a header-only library
 - The include/huira directory contains the declarations in .hpp files
@@ -25,6 +32,10 @@
 ## Namespaces
 - All library code lives in the `huira` namespace
 - sub-namespaces (e.g. `huira::detail` or `huira::units`) are allowed, but not required
+
+## Python Bindings
+- Python bindings are implemented in bindings/python/include/
+- If the interface of a class or function is changed in C++, the corresponding Python bindings should be updated accordingly.
 
 ## Tests
 - Tests should be implemented for as much of the public API as possible
