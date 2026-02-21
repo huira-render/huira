@@ -12,7 +12,7 @@
 namespace fs = std::filesystem;
 
 namespace huira {
-    ImageFormat detect_image_format(const fs::path& filepath)
+    inline ImageFormat detect_image_format(const fs::path& filepath)
     {
         // TODO More robust format detection (e.g., magic numbers)
         auto ext = filepath.extension().string();
@@ -27,16 +27,31 @@ namespace huira {
         }
     }
 
-    template <IsImagePixel T>
-    std::pair<Image<T>, Image<float>> read_image(const fs::path& filepath)
+    inline std::pair<Image<RGB>, Image<float>> read_image(const fs::path& filepath)
     {
         ImageFormat fmt = detect_image_format(filepath);
 
         if (fmt == ImageFormat::IMAGE_FORMAT_PNG) {
-            return read_image_png<T>(filepath);
+            return read_image_png(filepath);
         }
         else if (fmt == ImageFormat::IMAGE_FORMAT_JPEG) {
-            return read_image_jpeg<T>(filepath);
+            auto image = read_image_jpeg(filepath);
+            return { std::move(image), Image<float>(0, 0) };
+        }
+        else {
+            HUIRA_THROW_ERROR("Unsupported or unknown image format for file: " + filepath.string());
+        }
+    }
+
+    inline std::pair<Image<float>, Image<float>> read_image_mono(const fs::path& filepath)
+    {
+        ImageFormat fmt = detect_image_format(filepath);
+        if (fmt == ImageFormat::IMAGE_FORMAT_PNG) {
+            return read_image_png_mono(filepath);
+        }
+        else if (fmt == ImageFormat::IMAGE_FORMAT_JPEG) {
+            auto image = read_image_jpeg_mono(filepath);
+            return { std::move(image), Image<float>(0, 0) };
         }
         else {
             HUIRA_THROW_ERROR("Unsupported or unknown image format for file: " + filepath.string());
