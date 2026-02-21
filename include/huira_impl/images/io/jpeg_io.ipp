@@ -8,6 +8,7 @@
 #include "huira/core/spectral_bins.hpp"
 #include "huira/images/image.hpp"
 #include "huira/images/io/color_space.hpp"
+#include "huira/images/io/io_util.hpp"
 #include "huira/util/logger.hpp"
 #include "huira/util/paths.hpp"
 
@@ -15,62 +16,30 @@ namespace fs = std::filesystem;
 
 namespace huira {
 
-    /**
-     * @brief Raw decoded JPEG data before pixel interpretation.
-     */
     struct JPEGData {
         Resolution resolution{ 0, 0 };
         int width = 0;
         int height = 0;
 
-        std::vector<unsigned char> raw_data;  ///< Decoded pixel data (always RGB, 3 bytes per pixel)
+        std::vector<unsigned char> raw_data;
     };
 
     /**
-     * @brief Decodes a JPEG file into raw RGB byte data.
+     * @brief Decodes a JPEG from an in-memory buffer into raw RGB byte data.
      *
      * Uses the TurboJPEG API to decompress the JPEG into 8-bit RGB pixel data,
      * regardless of whether the source is grayscale or color. TurboJPEG handles
      * the grayscale-to-RGB promotion internally.
      *
-     * @param filepath Path to the JPEG file to read
+     * @param data Pointer to the JPEG data in memory
+     * @param size Size of the data in bytes
      * @return Raw decoded data with resolution and pixel buffer
-     * @throws std::runtime_error if the file cannot be opened or decoded
+     * @throws std::runtime_error if the data cannot be decoded
      */
-    inline JPEGData read_jpeg_raw_(const fs::path& filepath)
+    inline JPEGData read_jpeg_raw_(const unsigned char* data, std::size_t size)
     {
-        HUIRA_LOG_INFO("read_jpeg_raw_ - Reading image from: " + filepath.string());
+        HUIRA_LOG_INFO("read_jpeg_raw_ - Reading JPEG from memory (" + std::to_string(size) + " bytes)");
 
-        // Read entire file into memory
-#ifdef _MSC_VER
-        FILE* fp = nullptr;
-        errno_t err = fopen_s(&fp, filepath.string().c_str(), "rb");
-        if (err != 0 || !fp) {
-            HUIRA_THROW_ERROR("read_jpeg_raw_ - Failed to open JPEG file: " + filepath.string());
-        }
-#else
-        FILE* fp = fopen(filepath.string().c_str(), "rb");
-        if (!fp) {
-            HUIRA_THROW_ERROR("read_jpeg_raw_ - Failed to open JPEG file: " + filepath.string());
-        }
-#endif
-
-        fseek(fp, 0, SEEK_END);
-        long file_size = ftell(fp);
-        if (file_size <= 0) {
-            fclose(fp);
-            HUIRA_THROW_ERROR("read_jpeg_raw_ - Failed to determine file size or file is empty: " + filepath.string());
-        }
-        fseek(fp, 0, SEEK_SET);
-
-        std::vector<unsigned char> file_data(static_cast<std::size_t>(file_size));
-        if (fread(file_data.data(), 1, static_cast<std::size_t>(file_size), fp) != static_cast<std::size_t>(file_size)) {
-            fclose(fp);
-            HUIRA_THROW_ERROR("read_jpeg_raw_ - Failed to read JPEG file: " + filepath.string());
-        }
-        fclose(fp);
-
-        // Decompress using TurboJPEG
         tjhandle decompressor = tjInitDecompress();
         if (!decompressor) {
             HUIRA_THROW_ERROR("read_jpeg_raw_ - Failed to create TurboJPEG decompressor");
@@ -81,12 +50,12 @@ namespace huira {
         int subsamp = 0;
         int colorspace = 0;
 
-        if (tjDecompressHeader3(decompressor, file_data.data(),
-            static_cast<unsigned long>(file_size),
-            &width, &height, &subsamp, &colorspace) != 0) {
+        if (tjDecompressHeader3(decompressor, data,
+                static_cast<unsigned long>(size),
+                &width, &height, &subsamp, &colorspace) != 0) {
             std::string tj_err = tjGetErrorStr2(decompressor);
             tjDestroy(decompressor);
-            HUIRA_THROW_ERROR("read_jpeg_raw_ - Failed to read JPEG header: " + filepath.string() + " (" + tj_err + ")");
+            HUIRA_THROW_ERROR("read_jpeg_raw_ - Failed to read JPEG header (" + tj_err + ")");
         }
 
         // Always decompress to RGB — TurboJPEG handles grayscale promotion
@@ -94,12 +63,12 @@ namespace huira {
         constexpr int channels = 3;
         std::vector<unsigned char> raw_data(static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * channels);
 
-        if (tjDecompress2(decompressor, file_data.data(),
-            static_cast<unsigned long>(file_size),
-            raw_data.data(), width, 0, height, pixel_format, 0) != 0) {
+        if (tjDecompress2(decompressor, data,
+                static_cast<unsigned long>(size),
+                raw_data.data(), width, 0, height, pixel_format, 0) != 0) {
             std::string tj_err = tjGetErrorStr2(decompressor);
             tjDestroy(decompressor);
-            HUIRA_THROW_ERROR("read_jpeg_raw_ - Failed to decompress JPEG: " + filepath.string() + " (" + tj_err + ")");
+            HUIRA_THROW_ERROR("read_jpeg_raw_ - Failed to decompress JPEG (" + tj_err + ")");
         }
 
         tjDestroy(decompressor);
@@ -113,20 +82,23 @@ namespace huira {
         return jpeg_data;
     }
 
+    // =========================================================================
+    // RGB readers
+    // =========================================================================
+
     /**
-     * @brief Reads a JPEG image file and returns linear RGB data.
+     * @brief Reads a JPEG from an in-memory buffer and returns linear RGB data.
      *
-     * Loads a JPEG image from disk and converts from sRGB to linear light.
-     * Grayscale JPEGs are promoted to RGB by TurboJPEG during decompression.
+     * Converts from sRGB to linear light. Grayscale JPEGs are promoted to RGB
+     * by TurboJPEG during decompression.
      *
-     * @param filepath Path to the JPEG file to read
+     * @param data Pointer to the JPEG data in memory
+     * @param size Size of the data in bytes
      * @return The linear RGB image.
-     * @throws std::runtime_error if the file cannot be opened, is not a valid JPEG,
-     *         or if any error occurs during reading
      */
-    inline Image<RGB> read_image_jpeg(const fs::path& filepath)
+    inline Image<RGB> read_image_jpeg(const unsigned char* data, std::size_t size)
     {
-        auto jpeg_data = read_jpeg_raw_(filepath);
+        auto jpeg_data = read_jpeg_raw_(data, size);
 
         Image<RGB> image(jpeg_data.resolution);
 
@@ -149,19 +121,36 @@ namespace huira {
     }
 
     /**
-     * @brief Reads a JPEG image file and returns linear mono data.
+     * @brief Reads a JPEG file and returns linear RGB data.
      *
-     * Loads a JPEG image from disk, converts from sRGB to linear light,
-     * and averages the RGB channels to produce a single-channel result.
+     * Convenience overload that reads the file into memory and forwards
+     * to the buffer-based implementation.
      *
      * @param filepath Path to the JPEG file to read
-     * @return The linear mono image.
-     * @throws std::runtime_error if the file cannot be opened, is not a valid JPEG,
-     *         or if any error occurs during reading
+     * @return The linear RGB image.
      */
-    inline Image<float> read_image_jpeg_mono(const fs::path& filepath)
+    inline Image<RGB> read_image_jpeg(const fs::path& filepath)
     {
-        auto jpeg_data = read_jpeg_raw_(filepath);
+        auto file_data = read_file_to_buffer(filepath);
+        return read_image_jpeg(file_data.data(), file_data.size());
+    }
+
+    // =========================================================================
+    // Mono readers
+    // =========================================================================
+
+    /**
+     * @brief Reads a JPEG from an in-memory buffer and returns linear mono data.
+     *
+     * Converts from sRGB to linear light, then averages the RGB channels.
+     *
+     * @param data Pointer to the JPEG data in memory
+     * @param size Size of the data in bytes
+     * @return The linear mono image.
+     */
+    inline Image<float> read_image_jpeg_mono(const unsigned char* data, std::size_t size)
+    {
+        auto jpeg_data = read_jpeg_raw_(data, size);
 
         Image<float> image(jpeg_data.resolution);
 
@@ -182,6 +171,25 @@ namespace huira {
 
         return image;
     }
+
+    /**
+     * @brief Reads a JPEG file and returns linear mono data.
+     *
+     * Convenience overload that reads the file into memory and forwards
+     * to the buffer-based implementation.
+     *
+     * @param filepath Path to the JPEG file to read
+     * @return The linear mono image.
+     */
+    inline Image<float> read_image_jpeg_mono(const fs::path& filepath)
+    {
+        auto file_data = read_file_to_buffer(filepath);
+        return read_image_jpeg_mono(file_data.data(), file_data.size());
+    }
+
+    // =========================================================================
+    // Writers (file-only, unchanged)
+    // =========================================================================
 
     /**
      * @brief Writes a linear RGB image to a JPEG file (sRGB encoded).
@@ -238,11 +246,11 @@ namespace huira {
         unsigned long jpeg_size = 0;
 
         if (tjCompress2(compressor, srgb_data.data(), width, 0, height,
-            TJPF_RGB, &jpeg_buf, &jpeg_size, TJSAMP_444, quality,
-            TJFLAG_NOREALLOC) != 0) {
+                TJPF_RGB, &jpeg_buf, &jpeg_size, TJSAMP_444, quality,
+                TJFLAG_NOREALLOC) != 0) {
             // TJFLAG_NOREALLOC may fail if initial buffer is too small; retry without it
             if (tjCompress2(compressor, srgb_data.data(), width, 0, height,
-                TJPF_RGB, &jpeg_buf, &jpeg_size, TJSAMP_444, quality, 0) != 0) {
+                    TJPF_RGB, &jpeg_buf, &jpeg_size, TJSAMP_444, quality, 0) != 0) {
                 std::string tj_err = tjGetErrorStr2(compressor);
                 tjDestroy(compressor);
                 HUIRA_THROW_ERROR("write_image_jpeg - Failed to compress JPEG: " + filepath.string() + " (" + tj_err + ")");

@@ -9,119 +9,87 @@
 #include "huira/core/spectral_bins.hpp"
 #include "huira/images/image.hpp"
 #include "huira/images/io/color_space.hpp"
+#include "huira/images/io/io_util.hpp"
 #include "huira/util/logger.hpp"
 
 namespace fs = std::filesystem;
 
 namespace huira {
 
-    /**
-     * @brief Raw decoded BMP data before pixel interpretation.
-     */
     struct BMPData {
         Resolution resolution{ 0, 0 };
         int width = 0;
         int height = 0;
 
-        std::vector<unsigned char> raw_data;  ///< Decoded pixel data (RGB or RGBA, top-to-bottom)
-        int channels = 3;                     ///< 3 for RGB, 4 for RGBA
+        std::vector<unsigned char> raw_data;
+        int channels = 3;
         bool has_alpha = false;
     };
 
     /**
-     * @brief Decodes a BMP file into raw byte data.
+     * @brief Decodes a BMP from an in-memory buffer into raw byte data.
      *
      * Reads the BMP file header and DIB header, validates the format, and extracts
      * pixel data. Handles bottom-up row ordering (standard for BMP) by flipping
      * rows during extraction. Supports 24-bit RGB and 32-bit RGBA uncompressed formats.
      *
-     * @param filepath Path to the BMP file to read
+     * @param data Pointer to the BMP data in memory
+     * @param size Size of the data in bytes
      * @return Raw decoded data with resolution and pixel buffer
-     * @throws std::runtime_error if the file cannot be opened or uses an unsupported format
+     * @throws std::runtime_error if the data is not a valid or supported BMP
      */
-    inline BMPData read_bmp_raw_(const fs::path& filepath)
+    inline BMPData read_bmp_raw_(const unsigned char* data, std::size_t size)
     {
-        HUIRA_LOG_INFO("read_bmp_raw_ - Reading image from: " + filepath.string());
+        HUIRA_LOG_INFO("read_bmp_raw_ - Reading BMP from memory (" + std::to_string(size) + " bytes)");
 
-#ifdef _MSC_VER
-        FILE* fp = nullptr;
-        errno_t err = fopen_s(&fp, filepath.string().c_str(), "rb");
-        if (err != 0 || !fp) {
-            HUIRA_THROW_ERROR("read_bmp_raw_ - Failed to open BMP file: " + filepath.string());
-        }
-#else
-        FILE* fp = fopen(filepath.string().c_str(), "rb");
-        if (!fp) {
-            HUIRA_THROW_ERROR("read_bmp_raw_ - Failed to open BMP file: " + filepath.string());
-        }
-#endif
-
-        // Read BMP file header (14 bytes)
-        unsigned char file_header[14];
-        if (fread(file_header, 1, 14, fp) != 14) {
-            fclose(fp);
-            HUIRA_THROW_ERROR("read_bmp_raw_ - Failed to read BMP file header: " + filepath.string());
+        if (size < 54) {
+            HUIRA_THROW_ERROR("read_bmp_raw_ - Data too small to be a valid BMP (" + std::to_string(size) + " bytes)");
         }
 
         // Validate signature
-        if (file_header[0] != 'B' || file_header[1] != 'M') {
-            fclose(fp);
-            HUIRA_THROW_ERROR("read_bmp_raw_ - File is not a valid BMP: " + filepath.string());
+        if (data[0] != 'B' || data[1] != 'M') {
+            HUIRA_THROW_ERROR("read_bmp_raw_ - Data is not a valid BMP (bad signature)");
         }
 
+        // Read BMP file header (14 bytes)
         uint32_t pixel_offset;
-        std::memcpy(&pixel_offset, &file_header[10], sizeof(uint32_t));
+        std::memcpy(&pixel_offset, &data[10], sizeof(uint32_t));
 
-        // Read DIB header (at least 40 bytes for BITMAPINFOHEADER)
-        unsigned char dib_header[124];  // Large enough for BITMAPV5HEADER
-        if (fread(dib_header, 1, 4, fp) != 4) {
-            fclose(fp);
-            HUIRA_THROW_ERROR("read_bmp_raw_ - Failed to read DIB header size: " + filepath.string());
-        }
-
+        // Read DIB header
         uint32_t dib_size;
-        std::memcpy(&dib_size, &dib_header[0], sizeof(uint32_t));
+        std::memcpy(&dib_size, &data[14], sizeof(uint32_t));
 
         if (dib_size < 40) {
-            fclose(fp);
-            HUIRA_THROW_ERROR("read_bmp_raw_ - Unsupported BMP DIB header (size " +
-                std::to_string(dib_size) + "): " + filepath.string());
+            HUIRA_THROW_ERROR("read_bmp_raw_ - Unsupported BMP DIB header (size " + std::to_string(dib_size) + ")");
         }
 
-        // Read the rest of the DIB header
-        std::size_t remaining = static_cast<std::size_t>(dib_size) - 4;
-        if (remaining > sizeof(dib_header) - 4) {
-            remaining = sizeof(dib_header) - 4;
+        if (size < 14 + dib_size) {
+            HUIRA_THROW_ERROR("read_bmp_raw_ - Data truncated in DIB header");
         }
-        if (fread(&dib_header[4], 1, remaining, fp) != remaining) {
-            fclose(fp);
-            HUIRA_THROW_ERROR("read_bmp_raw_ - Failed to read DIB header: " + filepath.string());
-        }
+
+        const unsigned char* dib = &data[14];
 
         int32_t raw_width, raw_height;
         uint16_t bits_per_pixel;
         uint32_t compression;
 
-        std::memcpy(&raw_width, &dib_header[4], sizeof(int32_t));
-        std::memcpy(&raw_height, &dib_header[8], sizeof(int32_t));
-        std::memcpy(&bits_per_pixel, &dib_header[14], sizeof(uint16_t));
-        std::memcpy(&compression, &dib_header[16], sizeof(uint32_t));
+        std::memcpy(&raw_width, &dib[4], sizeof(int32_t));
+        std::memcpy(&raw_height, &dib[8], sizeof(int32_t));
+        std::memcpy(&bits_per_pixel, &dib[14], sizeof(uint16_t));
+        std::memcpy(&compression, &dib[16], sizeof(uint32_t));
 
         // We support BI_RGB (0) and BI_BITFIELDS (3) for 32-bit
         if (compression != 0 && compression != 3) {
-            fclose(fp);
-            HUIRA_THROW_ERROR("read_bmp_raw_ - Unsupported BMP compression type (" +
-                std::to_string(compression) + "): " + filepath.string());
+            HUIRA_THROW_ERROR("read_bmp_raw_ - Unsupported BMP compression type (" + std::to_string(compression) + ")");
         }
 
         if (bits_per_pixel != 24 && bits_per_pixel != 32) {
-            fclose(fp);
             HUIRA_THROW_ERROR("read_bmp_raw_ - Unsupported BMP bit depth (" +
-                std::to_string(static_cast<int>(bits_per_pixel)) + "), only 24 and 32 supported: " + filepath.string());
+                std::to_string(static_cast<int>(bits_per_pixel)) + "), only 24 and 32 supported");
         }
 
         int width = static_cast<int>(raw_width);
-        bool flip_vertical = (raw_height > 0);  // Positive height = bottom-up
+        bool flip_vertical = (raw_height > 0);
         int height = (raw_height > 0) ? static_cast<int>(raw_height) : static_cast<int>(-raw_height);
 
         bool has_alpha = (bits_per_pixel == 32);
@@ -131,23 +99,20 @@ namespace huira {
         // BMP rows are padded to 4-byte boundaries
         std::size_t row_stride = (static_cast<std::size_t>(width * file_channels) + 3) & ~static_cast<std::size_t>(3);
 
-        // Seek to pixel data
-        fseek(fp, static_cast<long>(pixel_offset), SEEK_SET);
-
-        // Read raw pixel data
-        std::vector<unsigned char> file_pixels(row_stride * static_cast<std::size_t>(height));
-        if (fread(file_pixels.data(), 1, file_pixels.size(), fp) != file_pixels.size()) {
-            fclose(fp);
-            HUIRA_THROW_ERROR("read_bmp_raw_ - Failed to read pixel data: " + filepath.string());
+        std::size_t required_size = static_cast<std::size_t>(pixel_offset) + row_stride * static_cast<std::size_t>(height);
+        if (size < required_size) {
+            HUIRA_THROW_ERROR("read_bmp_raw_ - Data truncated in pixel data (need " +
+                std::to_string(required_size) + ", have " + std::to_string(size) + ")");
         }
-        fclose(fp);
+
+        const unsigned char* pixel_data = data + pixel_offset;
 
         // Convert from BGR(A) bottom-up to RGB(A) top-down
         std::vector<unsigned char> raw_data(static_cast<std::size_t>(width) * static_cast<std::size_t>(height * out_channels));
 
         for (int y = 0; y < height; ++y) {
             int src_y = flip_vertical ? (height - 1 - y) : y;
-            const unsigned char* src_row = file_pixels.data() + static_cast<std::size_t>(src_y) * row_stride;
+            const unsigned char* src_row = pixel_data + static_cast<std::size_t>(src_y) * row_stride;
 
             for (int x = 0; x < width; ++x) {
                 std::size_t src_idx = static_cast<std::size_t>(x * file_channels);
@@ -176,25 +141,21 @@ namespace huira {
         return bmp_data;
     }
 
+    // =========================================================================
+    // RGB readers
+    // =========================================================================
+
     /**
-     * @brief Reads a BMP image file and returns linear RGB + alpha data.
+     * @brief Reads a BMP from an in-memory buffer and returns linear RGB + alpha data.
      *
-     * Always returns an Image<RGB> in linear color space.
-     * Supports 24-bit (RGB) and 32-bit (RGBA) uncompressed BMPs.
-     * If the BMP has an alpha channel, the second image contains it; otherwise
-     * the second image is empty (0x0).
-     *
-     * BMP pixel data is assumed to be sRGB encoded and is linearized on load.
-     *
-     * @param filepath Path to the BMP file to read
+     * @param data Pointer to the BMP data in memory
+     * @param size Size of the data in bytes
      * @param read_alpha Whether to load the alpha channel if present (default: true)
      * @return A pair containing the linear RGB image and an optional alpha image.
-     * @throws std::runtime_error if the file cannot be opened, is not a valid BMP,
-     *         or uses an unsupported format (e.g. compressed or palettized)
      */
-    inline std::pair<Image<RGB>, Image<float>> read_image_bmp(const fs::path& filepath, bool read_alpha)
+    inline std::pair<Image<RGB>, Image<float>> read_image_bmp(const unsigned char* data, std::size_t size, bool read_alpha)
     {
-        auto bmp_data = read_bmp_raw_(filepath);
+        auto bmp_data = read_bmp_raw_(data, size);
 
         Image<RGB> image(bmp_data.resolution);
         Image<float> alpha_image(0, 0);
@@ -226,18 +187,38 @@ namespace huira {
     }
 
     /**
-     * @brief Reads a BMP image file and returns linear mono data.
+     * @brief Reads a BMP file and returns linear RGB + alpha data.
+     *
+     * Convenience overload that reads the file into memory and forwards
+     * to the buffer-based implementation.
+     *
+     * @param filepath Path to the BMP file to read
+     * @param read_alpha Whether to load the alpha channel if present (default: true)
+     * @return A pair containing the linear RGB image and an optional alpha image.
+     */
+    inline std::pair<Image<RGB>, Image<float>> read_image_bmp(const fs::path& filepath, bool read_alpha)
+    {
+        auto file_data = read_file_to_buffer(filepath);
+        return read_image_bmp(file_data.data(), file_data.size(), read_alpha);
+    }
+
+    // =========================================================================
+    // Mono readers
+    // =========================================================================
+
+    /**
+     * @brief Reads a BMP from an in-memory buffer and returns linear mono + alpha data.
      *
      * RGB channels are averaged after linearization to produce mono output.
      *
-     * @param filepath Path to the BMP file to read
+     * @param data Pointer to the BMP data in memory
+     * @param size Size of the data in bytes
+     * @param read_alpha Whether to load the alpha channel if present (default: true)
      * @return A pair containing the linear mono image and an optional alpha image.
-     * @throws std::runtime_error if the file cannot be opened, is not a valid BMP,
-     *         or uses an unsupported format
      */
-    inline std::pair<Image<float>, Image<float>> read_image_bmp_mono(const fs::path& filepath, bool read_alpha)
+    inline std::pair<Image<float>, Image<float>> read_image_bmp_mono(const unsigned char* data, std::size_t size, bool read_alpha)
     {
-        auto bmp_data = read_bmp_raw_(filepath);
+        auto bmp_data = read_bmp_raw_(data, size);
 
         Image<float> image(bmp_data.resolution);
         Image<float> alpha_image(0, 0);
@@ -266,6 +247,22 @@ namespace huira {
         }
 
         return { std::move(image), std::move(alpha_image) };
+    }
+
+    /**
+     * @brief Reads a BMP file and returns linear mono + alpha data.
+     *
+     * Convenience overload that reads the file into memory and forwards
+     * to the buffer-based implementation.
+     *
+     * @param filepath Path to the BMP file to read
+     * @param read_alpha Whether to load the alpha channel if present (default: true)
+     * @return A pair containing the linear mono image and an optional alpha image.
+     */
+    inline std::pair<Image<float>, Image<float>> read_image_bmp_mono(const fs::path& filepath, bool read_alpha)
+    {
+        auto file_data = read_file_to_buffer(filepath);
+        return read_image_bmp_mono(file_data.data(), file_data.size(), read_alpha);
     }
 
 }
