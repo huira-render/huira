@@ -14,7 +14,10 @@
 #include "huira/assets/io/model_loader.hpp"
 #include "huira/handles/model_handle.hpp"
 #include "huira/handles/root_frame_handle.hpp"
+#include "huira/handles/material_handle.hpp"
 #include "huira/handles/mesh_handle.hpp"
+#include "huira/images/image.hpp"
+#include "huira/materials/material.hpp"
 #include "huira/stars/star.hpp"
 #include "huira/scene/name_registry.hpp"
 #include "huira/assets/io/model_loader.hpp"
@@ -99,6 +102,10 @@ namespace huira {
         void delete_model(const ModelHandle<TSpectral>& model_handle);
 
 
+        MaterialHandle<TSpectral> new_lambertian_material(std::string name = "");
+        MaterialHandle<TSpectral> new_ggx_material(std::string name = "");
+        MaterialHandle<TSpectral> add_material(std::shared_ptr<Material<TSpectral>> material, std::string name = "");
+
         void add_star(const Star<TSpectral>& star);
         void set_stars(const std::vector<Star<TSpectral>>& stars);
         void load_stars(const fs::path& star_catalog_path, const Time& time, float min_magnitude = 100.f);
@@ -121,6 +128,20 @@ namespace huira {
         NameRegistry<UnresolvedObject<TSpectral>> unresolved_objects_;
         NameRegistry<CameraModel<TSpectral>> camera_models_;
         NameRegistry<Model<TSpectral>> models_;
+
+        // Material Assets:
+        NameRegistry<Material<TSpectral>> materials_;
+        NameRegistry<Image<TSpectral>> spectral_images_;
+        NameRegistry<Image<float>> mono_images_;
+        NameRegistry<Image<Vec3<float>>> normal_maps_;
+
+        // Default textures:
+        std::unique_ptr<Image<TSpectral>>   default_albedo_image_;
+        std::unique_ptr<Image<float>>       default_metallic_image_;
+        std::unique_ptr<Image<float>>       default_roughness_image_;
+        std::unique_ptr<Image<Vec3<float>>> default_normal_image_;
+        std::unique_ptr<Image<TSpectral>>   default_emission_image_;
+
 
         std::vector<Star<TSpectral>> stars_;
 

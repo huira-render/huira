@@ -25,11 +25,11 @@ namespace huira {
         const float alpha = roughness * roughness;
         const float alpha2 = alpha * alpha;
 
-        const TSpectral f0 = params.base_color * metallic
+        const TSpectral f0 = params.albedo * metallic
             + TSpectral{ 0.04f } * (1.0f - metallic);
 
         // Diffuse
-        const TSpectral diffuse = params.base_color * ((1.0f - metallic) * INV_PI<float>());
+        const TSpectral diffuse = params.albedo * ((1.0f - metallic) * INV_PI<float>());
 
         // Specular
         Vec3<float> h = glm::normalize(wo + wi);
@@ -143,26 +143,26 @@ namespace huira {
 
 
     template <IsSpectral TSpectral>
-    static float GGXMicrofacetBSDF<TSpectral>::ggx_D(float n_dot_h, float alpha2) noexcept {
+    float GGXMicrofacetBSDF<TSpectral>::ggx_D(float n_dot_h, float alpha2) noexcept {
         const float cos2 = n_dot_h * n_dot_h;
         const float denom = cos2 * (alpha2 - 1.0f) + 1.0f;
         return alpha2 / (std::numbers::pi_v<float> *denom * denom);
     }
 
     template <IsSpectral TSpectral>
-    static float GGXMicrofacetBSDF<TSpectral>::smith_G1(float n_dot_v, float alpha2) noexcept {
+    float GGXMicrofacetBSDF<TSpectral>::smith_G1(float n_dot_v, float alpha2) noexcept {
         const float cos2 = n_dot_v * n_dot_v;
         const float tan2 = (1.0f - cos2) / std::max(cos2, 1e-8f);
         return 2.0f / (1.0f + std::sqrt(1.0f + alpha2 * tan2));
     }
 
     template <IsSpectral TSpectral>
-    static float GGXMicrofacetBSDF<TSpectral>::smith_G2(float n_dot_wo, float n_dot_wi, float alpha2) noexcept {
+    float GGXMicrofacetBSDF<TSpectral>::smith_G2(float n_dot_wo, float n_dot_wi, float alpha2) noexcept {
         return smith_G1(n_dot_wo, alpha2) * smith_G1(n_dot_wi, alpha2);
     }
 
     template <IsSpectral TSpectral>
-    static TSpectral GGXMicrofacetBSDF<TSpectral>::schlick_fresnel(float cos_theta, const TSpectral& f0) noexcept {
+    TSpectral GGXMicrofacetBSDF<TSpectral>::schlick_fresnel(float cos_theta, const TSpectral& f0) noexcept {
         const float t = 1.0f - cos_theta;
         const float t2 = t * t;
         const float t5 = t2 * t2 * t;
