@@ -1,5 +1,7 @@
 #pragma once
 
+#include <memory>
+
 #include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/images/image.hpp"
 #include "huira/materials/bsdfs/bsdf.hpp"
@@ -10,6 +12,7 @@ namespace huira {
     /**
      * @brief Result of texture evaluation at a surface point.
      */
+    template <IsSpecctral TSpectral>
     struct MaterialEval {
         ShadingParams<TSpectral> params;
         Interaction<TSpectral>   isect;
@@ -38,7 +41,7 @@ namespace huira {
     class Material {
     public:
 
-        [[nodiscard]] MaterialEval evaluate(const Interaction<TSpectral>& isect) const;
+        [[nodiscard]] MaterialEval<TSpectral> evaluate(const Interaction<TSpectral>& isect) const;
 
         [[nodiscard]] bool is_emissive() const noexcept;
 
@@ -47,20 +50,20 @@ namespace huira {
         [[nodiscard]] TSpectral bsdf_eval(
             const Vec3<float>& wo,
             const Vec3<float>& wi,
-            const MaterialEval& eval) const;
+            const MaterialEval<TSpectral>& eval) const;
 
-        [[nodiscard]] TSpectral bsdf_sample(
+        [[nodiscard]] BSDFSample<TSpectral> bsdf_sample(
             const Vec3<float>& wo,
-            const MaterialEval& eval
+            const MaterialEval<TSpectral>& eval,
             float u1, float u2) const;
 
         [[nodiscard]] float bsdf_pdf(
             const Vec3<float>& wo,
             const Vec3<float>& wi,
-            const MaterialEval& eval) const;
+            const MaterialEval<TSpectral>& eval) const;
 
     private:
-        BSDF<TSpectral>* bsdf = nullptr;
+        std::unique_ptr<BSDF<TSpectral>> bsdf = nullptr;
         
         Image<TSpectral>*   base_color_image = nullptr;
         Image<float>*       metallic_image   = nullptr;
