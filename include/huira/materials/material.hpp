@@ -1,18 +1,24 @@
 #pragma once
 
 #include <memory>
+#include <cstdint>
 
 #include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/images/image.hpp"
 #include "huira/materials/bsdfs/bsdf.hpp"
 #include "huira/materials/shading_params.hpp"
 #include "huira/render/interaction.hpp"
+#include "huira/scene/scene_object.hpp"
 
 namespace huira {
+    // Forward Declare
+    template <IsSpectral TSpectral>
+    class Scene;
+
     /**
      * @brief Result of texture evaluation at a surface point.
      */
-    template <IsSpecctral TSpectral>
+    template <IsSpectral TSpectral>
     struct MaterialEval {
         ShadingParams<TSpectral> params;
         Interaction<TSpectral>   isect;
@@ -38,14 +44,12 @@ namespace huira {
      * @tparam TSpectral The spectral type used in the rendering pipeline
      */
     template <IsSpectral TSpectral>
-    class Material {
+    class Material : public SceneObject<Material<TSpectral>, TSpectral> {
     public:
+        Material(const Material&) = delete;
+        Material& operator=(const Material&) = delete;
 
         [[nodiscard]] MaterialEval<TSpectral> evaluate(const Interaction<TSpectral>& isect) const;
-
-        [[nodiscard]] bool is_emissive() const noexcept;
-
-        [[nodiscard]] TSpectral emitted(const Interaction<TSpectral>& isect) const;
 
         [[nodiscard]] TSpectral bsdf_eval(
             const Vec3<float>& wo,
@@ -62,20 +66,46 @@ namespace huira {
             const Vec3<float>& wi,
             const MaterialEval<TSpectral>& eval) const;
 
+        void set_albedo(const Image<TSpectral>* albedo_image);
+        void set_albedo_factor(TSpectral albedo_factor);
+        void reset_albedo();
+
+        std::uint64_t id() const override { return id_; }
+        std::string type() const override { return "Material"; }
+
     private:
-        std::unique_ptr<BSDF<TSpectral>> bsdf = nullptr;
+        Material(
+            std::unique_ptr<BSDF<TSpectral>> bsdf,
+            Image<TSpectral>* albedo_image,
+            Image<float>* metallic_image,
+            Image<float>* roughness_image,
+            Image<Vec3<float>>* normal_image,
+            Image<TSpectral>* emissive_image);
+
+        std::unique_ptr<BSDF<TSpectral>> bsdf_;
         
-        Image<TSpectral>*   base_color_image = nullptr;
-        Image<float>*       metallic_image   = nullptr;
-        Image<float>*       roughness_image  = nullptr;
-        Image<Vec3<float>>* normal_image     = nullptr;
-        Image<TSpectral>*   emissive_image   = nullptr;
+        Image<TSpectral>*   albedo_image_;
+        Image<float>*       metallic_image_;
+        Image<float>*       roughness_image_;
+        Image<Vec3<float>>* normal_image_;
+        Image<TSpectral>*   emissive_image_;
+
+        Image<TSpectral>*   default_albedo_image_;
+        Image<float>*       default_metallic_image_;
+        Image<float>*       default_roughness_image_;
+        Image<Vec3<float>>* default_normal_image_;
+        Image<TSpectral>*   default_emissive_image_;
         
-        TSpectral base_color_factor{ 1 };
-        float     metallic_factor  = 0.0f;
-        float     roughness_factor = 0.5f;
-        TSpectral emissive_factor{ 0 };
-        float     normal_scale     = 1.0f;
+        TSpectral albedo_factor_{ 1.0f };
+        float     metallic_factor_  = 1.0f;
+        float     roughness_factor_ = 1.0f;
+        TSpectral emissive_factor_{ 1.0f };
+        float     normal_scale_     = 1.0f;
+
+        std::uint64_t id_ = 0;
+        static inline std::uint64_t next_id_ = 0;
+
+        friend class Scene<TSpectral>;
     };
 
 }

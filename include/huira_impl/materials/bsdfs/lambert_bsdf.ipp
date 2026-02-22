@@ -9,11 +9,13 @@ namespace huira {
         const Interaction<TSpectral>& isect,
         const ShadingParams<TSpectral>& params) const
     {
+        (void)wo;
+
         const float cos_theta_i = glm::dot(wi, isect.normal_s);
         if (cos_theta_i <= 0.0f) {
             return TSpectral{ 0 };
         }
-        return params.base_color * INV_PI<float>();
+        return params.albedo * INV_PI<float>();
     }
 
     template <IsSpectral TSpectral>
@@ -23,19 +25,25 @@ namespace huira {
         const ShadingParams<TSpectral>& params,
         float u1, float u2) const
     {
+        (void)wo;
+
         auto hs = sampling::cosine_hemisphere(u1, u2);
         const Vec3<float> wi = sampling::local_to_world(
             hs.direction, isect.tangent, isect.bitangent, isect.normal_s);
 
         const float cos_theta_i = glm::dot(wi, isect.normal_s);
         if (cos_theta_i <= 0.0f) {
-            return { .wi = wi, .value = TSpectral{ 0 }, .pdf = 0.0f };
+            BSDFSample<TSpectral> result{};
+            result.wi = wi;
+            result.value = TSpectral{ 0 };
+            result.pdf = 0.f;
+            return result;
         }
 
         // f * |cos| / pdf = (base_color/pi) * cos / (cos/pi) = base_color
         BSDFSample<TSpectral> result{};
         result.wi = wi;
-        result.value = value;
+        result.value = params.albedo;
         result.pdf = hs.pdf;
         return result;
     }
@@ -47,6 +55,9 @@ namespace huira {
         const Interaction<TSpectral>& isect,
         const ShadingParams<TSpectral>& params) const
     {
+        (void)wo;
+        (void)params;
+
         const float cos_theta_i = glm::dot(wi, isect.normal_s);
         if (cos_theta_i <= 0.0f) {
             return 0.0f;
