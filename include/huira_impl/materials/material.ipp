@@ -7,10 +7,10 @@ namespace huira {
      * the normal map. Returns everything the BSDF needs on the stack.
      *
      * @param isect The surface interaction from the ray-geometry hit
-     * @return EvalResult with ShadingParams and modified Interaction
+     * @return MaterialEval<TSpectral> with ShadingParams and modified Interaction
      */
     template <IsSpectral TSpectral>
-    MaterialEval Material<TSpectral>::evaluate(const Interaction<TSpectral>& isect) const {
+    MaterialEval<TSpectral> Material<TSpectral>::evaluate(const Interaction<TSpectral>& isect) const {
         const Vec2<float>& uv = isect.uv;
 
         ShadingParams<TSpectral> params;
@@ -46,7 +46,7 @@ namespace huira {
             shading_isect.tangent,
             shading_isect.bitangent);
 
-        MaterialEval result{};
+        MaterialEval<TSpectral> result{};
         result.params = params;
         result.isect = shading_isect;
         return result;
@@ -73,15 +73,15 @@ namespace huira {
     TSpectral Material<TSpectral>::bsdf_eval(
         const Vec3<float>& wo,
         const Vec3<float>& wi,
-        const MaterialEval& eval) const
+        const MaterialEval<TSpectral>& eval) const
     {
         return bsdf->eval(wo, wi, eval.isect, eval.params);
     }
 
     template <IsSpectral TSpectral>
-    TSpectral Material<TSpectral>::bsdf_sample(
+    BSDFSample<TSpectral> Material<TSpectral>::bsdf_sample(
         const Vec3<float>& wo,
-        const MaterialEval& eval,
+        const MaterialEval<TSpectral>& eval,
         float u1, float u2) const
     {
         return bsdf->sample(wo, eval.isect, eval.params, u1, u2);
@@ -91,7 +91,7 @@ namespace huira {
     float Material<TSpectral>::bsdf_pdf(
         const Vec3<float>& wo,
         const Vec3<float>& wi,
-        const MaterialEval& eval) const
+        const MaterialEval<TSpectral>& eval) const
     {
         return bsdf->pdf(wo, wi, eval.isect, eval.params);
     }
