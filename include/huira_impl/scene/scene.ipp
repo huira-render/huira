@@ -18,6 +18,9 @@
 #include "huira/assets/unresolved/unresolved_asteroid.hpp"
 #include "huira/assets/unresolved/unresolved_emitter.hpp"
 
+#include "huira/materials/bsdfs/lambert_bsdf.hpp"
+#include "huira/materials/bsdfs/ggx_bsdf.hpp"
+
 namespace huira {
     // Suppressing C4355: 'this' is passed to FrameNode constructor, but FrameNode only stores
     // the pointer without calling back into the incomplete Scene object.
@@ -35,6 +38,13 @@ namespace huira {
         , root(root_node_)
     {
         root_node_->set_spice("SOLAR SYSTEM BARYCENTER", "J2000");
+
+        // Initialize default textures:
+        default_albedo_image_ = std::make_unique<Image<TSpectral>>(1, 1, TSpectral{ 1 });
+        default_metallic_image_ = std::make_unique<Image<float>>(1, 1, 0.f);
+        default_roughness_image_ = std::make_unique<Image<float>>(1, 1, 0.5f);
+        default_normal_image_ = std::make_unique<Image<Vec3<float>>>(1, 1, Vec3<float>{0.5, 0.5, 1.0});
+        default_emission_image_ = std::make_unique<Image<TSpectral>>(1, 1, TSpectral{ 0 });
     };
 
 #ifdef _MSC_VER
@@ -494,6 +504,46 @@ namespace huira {
         auto model_shared = model_handle.get();
         prune_graph_references_(model_shared.get());
         models_.remove(model_shared);
+    }
+
+
+    template <IsSpectral TSpectral>
+    MaterialHandle<TSpectral> Scene<TSpectral>::new_lambertian_material(std::string name)
+    {
+        auto material = std::shared_ptr<Material<TSpectral>>(
+            new Material<TSpectral>(
+                std::make_unique<LambertBSDF<TSpectral>>(),
+                default_albedo_image_.get(),
+                default_metallic_image_.get(),
+                default_roughness_image_.get(),
+                default_normal_image_.get(),
+                default_emission_image_.get()
+            )
+        );
+        return this->add_material(material, name);
+    }
+
+    template <IsSpectral TSpectral>
+    MaterialHandle<TSpectral> Scene<TSpectral>::new_ggx_material(std::string name)
+    {
+        auto material = std::shared_ptr<Material<TSpectral>>(
+            new Material<TSpectral>(
+                std::make_unique<GGXMicrofacetBSDF<TSpectral>>(),
+                default_albedo_image_.get(),
+                default_metallic_image_.get(),
+                default_roughness_image_.get(),
+                default_normal_image_.get(),
+                default_emission_image_.get()
+            )
+        );
+        return this->add_material(material, name);
+    }
+
+    template <IsSpectral TSpectral>
+    MaterialHandle<TSpectral> Scene<TSpectral>::add_material(std::shared_ptr<Material<TSpectral>> material, std::string name)
+    {
+        materials_.add(material, name);
+        return MaterialHandle<TSpectral>{ material };
     }
 
 

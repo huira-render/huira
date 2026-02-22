@@ -20,7 +20,7 @@ namespace huira {
     struct ShadingParams {
         /// Base color / albedo. Already incorporates vertex_albedo, texture
         /// sampling, and scalar factor multiplication.
-        TSpectral base_color{ 1 };
+        TSpectral albedo{ 1 };
 
         /// Perceptual roughness in [0, 1]. Squared internally by microfacet BSDFs.
         float roughness = 0.5f;
@@ -30,6 +30,8 @@ namespace huira {
 
         /// Opacity in [0, 1]. 1 = fully opaque.
         float opacity = 1.0f;
+
+        TSpectral emission{ 0 };
     };
 
 }
