@@ -112,6 +112,7 @@ namespace huira {
         float max() const;            ///< Maximum value across all bins.
         float min() const;            ///< Minimum value across all bins.
         float integrate() const;      ///< Wavelength-weighted integral over all bins.
+        float integrate_over_band(double min_wavelength, double max_wavelength) const; ///< Integral over specified wavelength range.
         bool valid() const;           ///< Checks if all spectral values are valid (non-negative, not NaN, not infinite).
         bool valid_ratio() const;     ///< Checks if all spectral values are valid ratios (between 0 and 1, not NaN, not infinite).
 
@@ -187,6 +188,24 @@ namespace huira {
 
     /// @brief 8 uniformly spaced bins covering the visible spectrum (380-750nm).
     using Visible8 = UniformSpectralBins<8, 380, 750>;
+
+
+    /// @brief Conversion function from RGB to a spectral representation (e.g., Visible8).
+    template <typename TSpectral>
+    TSpectral convert_rgb_to_spectral(const RGB& rgb)
+    {
+        if constexpr (std::same_as<TSpectral, RGB>) {
+            return rgb;
+        } else {
+            TSpectral spectral;
+            for (std::size_t i = 0; i < TSpectral::size(); ++i) {
+                const Bin& bin = TSpectral::get_bin(i);
+                float denom = static_cast<float>(bin.max_wavelength - bin.min_wavelength);
+                spectral[i] = rgb.integrate_over_band(bin.min_wavelength, bin.max_wavelength) / denom;
+            }
+            return spectral;
+        }
+    }
 }
 
 #include "huira_impl/core/spectral_bins.ipp"
