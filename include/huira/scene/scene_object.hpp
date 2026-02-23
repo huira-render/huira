@@ -22,7 +22,7 @@ namespace huira {
      * @tparam TDerived Derived type (CRTP)
      * @tparam TSpectral Spectral type (e.g., RGB, Spectral)
      */
-    template <typename TDerived, IsSpectral TSpectral>
+    template <typename TDerived>
     class SceneObject : public std::enable_shared_from_this<TDerived> {
     public:
         SceneObject() = default;
@@ -84,7 +84,6 @@ namespace huira {
 
     private:
         std::atomic<bool> scene_owned_{ true }; // Only scene should modify this
-        friend class Scene<TSpectral>;
 
         std::string name_ = ""; // Only NameRegistry should modify this
         

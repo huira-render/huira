@@ -19,7 +19,7 @@ namespace huira {
      * @tparam TSpectral The spectral representation type.
      */
     template <IsSpectral TSpectral>
-    class Mesh : public SceneObject<Mesh<TSpectral>, TSpectral> {
+    class Mesh : public SceneObject<Mesh<TSpectral>> {
     public:
         Mesh() : id_(next_id_++) {}
         Mesh(IndexBuffer index_buffer, VertexBuffer<TSpectral> vertex_buffer) noexcept;

@@ -37,7 +37,7 @@ namespace huira {
      * @tparam TSpectral The spectral type (e.g., float, Vec3f, etc.)
      */
     template <IsSpectral TSpectral>
-    class CameraModel : public SceneObject<CameraModel<TSpectral>, TSpectral> {
+    class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     public:
         CameraModel();
 

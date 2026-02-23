@@ -45,7 +45,15 @@ namespace huira {
         default_roughness_image_ = std::make_unique<Image<float>>(1, 1, 0.5f);
         default_normal_image_ = std::make_unique<Image<Vec3<float>>>(1, 1, Vec3<float>{0.5, 0.5, 1.0});
         default_emission_image_ = std::make_unique<Image<TSpectral>>(1, 1, TSpectral{ 0 });
+
+        HUIRA_LOG_INFO("Scene created");
     };
+
+    template <IsSpectral TSpectral>
+    Scene<TSpectral>::~Scene()
+    {
+        HUIRA_LOG_INFO("Scene destroyed");
+    }
 
 #ifdef _MSC_VER
 #pragma warning(pop)
@@ -547,6 +555,25 @@ namespace huira {
     }
 
 
+    //template <IsSpectral TSpectral>
+    //TextureHandle<TSpectral> Scene<TSpectral>::add_texture(Image<TSpectral> texture, std::string name)
+    //{
+    //    spectral_images_.add(texture, name);
+    //}
+    //
+    //template <IsSpectral TSpectral>
+    //TextureHandle<float> Scene<TSpectral>::add_texture(Image<float> texture, std::string name)
+    //{
+    //
+    //}
+    //
+    //template <IsSpectral TSpectral>
+    //TextureHandle<Vec3<float>> Scene<TSpectral>::add_texture(Image<Vec3<float>> texture, std::string name)
+    //{
+    //
+    //}
+
+
     /**
      * @brief Adds a star to the scene.
      * @param star Star to add
@@ -763,7 +790,7 @@ namespace huira {
         // Check if the node is an Instance
         if (const auto* instance_node = dynamic_cast<const Instance<TSpectral>*>(node)) {
             std::string instance_str = "Instance[" + std::to_string(instance_node->id()) + "]";
-            instance_str += instance_node->name_.empty() ? "" : " " + instance_node->name_;
+            instance_str += instance_node->name().empty() ? "" : " " + instance_node->name();
             std::cout << on_green(instance_str) << " -> ";
             std::visit([&](auto* raw_ptr) noexcept {
                 using AssetType = std::decay_t<decltype(*raw_ptr)>;
