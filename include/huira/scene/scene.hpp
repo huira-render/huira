@@ -16,8 +16,10 @@
 #include "huira/handles/root_frame_handle.hpp"
 #include "huira/handles/material_handle.hpp"
 #include "huira/handles/mesh_handle.hpp"
+#include "huira/handles/texture_handle.hpp"
 #include "huira/images/image.hpp"
 #include "huira/materials/material.hpp"
+#include "huira/materials/texture.hpp"
 #include "huira/stars/star.hpp"
 #include "huira/scene/name_registry.hpp"
 #include "huira/assets/io/model_loader.hpp"
@@ -106,9 +108,9 @@ namespace huira {
         MaterialHandle<TSpectral> new_cook_torrance_material(std::string name = "");
         MaterialHandle<TSpectral> add_material(std::shared_ptr<Material<TSpectral>> material, std::string name = "");
 
-        //TextureHandle<TSpectral> add_texture(Image<TSpectral> texture, std::string name = "");
-        //TextureHandle<float> add_texture(Image<float> texture, std::string name = "");
-        //TextureHandle<Vec3<float>> add_texture(Image<Vec3<float>> texture, std::string name = "");
+        TextureHandle<TSpectral> add_texture(Image<TSpectral> image, std::string name = "");
+        TextureHandle<float> add_texture(Image<float> image, std::string name = "");
+        TextureHandle<Vec3<float>> add_texture(Image<Vec3<float>> image, std::string name = "");
 
         void add_star(const Star<TSpectral>& star);
         void set_stars(const std::vector<Star<TSpectral>>& stars);
@@ -134,9 +136,9 @@ namespace huira {
 
         // Material Assets:
         NameRegistry<Material<TSpectral>> materials_;
-        NameRegistry<Image<TSpectral>> spectral_images_;
-        NameRegistry<Image<float>> mono_images_;
-        NameRegistry<Image<Vec3<float>>> normal_maps_;
+        NameRegistry<Texture<TSpectral>> spectral_textures_;
+        NameRegistry<Texture<float>> mono_textures_;
+        NameRegistry<Texture<Vec3<float>>> vec3_textures_;
 
         // Default textures:
         std::unique_ptr<Image<TSpectral>>   default_albedo_image_;

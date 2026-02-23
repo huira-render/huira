@@ -555,23 +555,29 @@ namespace huira {
     }
 
 
-    //template <IsSpectral TSpectral>
-    //TextureHandle<TSpectral> Scene<TSpectral>::add_texture(Image<TSpectral> texture, std::string name)
-    //{
-    //    spectral_images_.add(texture, name);
-    //}
-    //
-    //template <IsSpectral TSpectral>
-    //TextureHandle<float> Scene<TSpectral>::add_texture(Image<float> texture, std::string name)
-    //{
-    //
-    //}
-    //
-    //template <IsSpectral TSpectral>
-    //TextureHandle<Vec3<float>> Scene<TSpectral>::add_texture(Image<Vec3<float>> texture, std::string name)
-    //{
-    //
-    //}
+    template <IsSpectral TSpectral>
+    TextureHandle<TSpectral> Scene<TSpectral>::add_texture(Image<TSpectral> image, std::string name)
+    {
+        auto texture = std::make_shared<Texture<TSpectral>>(std::move(image));
+        spectral_textures_.add(texture, name);
+        return TextureHandle<TSpectral>{ texture };
+    }
+    
+    template <IsSpectral TSpectral>
+    TextureHandle<float> Scene<TSpectral>::add_texture(Image<float> image, std::string name)
+    {
+        auto texture = std::make_shared<Texture<float>>(std::move(image));
+        mono_textures_.add(texture, name);
+        return TextureHandle<float>{ texture };
+    }
+    
+    template <IsSpectral TSpectral>
+    TextureHandle<Vec3<float>> Scene<TSpectral>::add_texture(Image<Vec3<float>> image, std::string name)
+    {
+        auto texture = std::make_shared<Texture<Vec3<float>>>(std::move(image));
+        vec3_textures_.add(texture, name);
+        return TextureHandle<Vec3<float>>{ texture };
+    }
 
 
     /**
