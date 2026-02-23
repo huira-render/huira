@@ -19,7 +19,7 @@
 #include "huira/assets/unresolved/unresolved_emitter.hpp"
 
 #include "huira/materials/bsdfs/lambert_bsdf.hpp"
-#include "huira/materials/bsdfs/ggx_bsdf.hpp"
+#include "huira/materials/bsdfs/cook_torrance_bsdf.hpp"
 
 namespace huira {
     // Suppressing C4355: 'this' is passed to FrameNode constructor, but FrameNode only stores
@@ -524,11 +524,11 @@ namespace huira {
     }
 
     template <IsSpectral TSpectral>
-    MaterialHandle<TSpectral> Scene<TSpectral>::new_ggx_material(std::string name)
+    MaterialHandle<TSpectral> Scene<TSpectral>::new_cook_torrance_material(std::string name)
     {
         auto material = std::shared_ptr<Material<TSpectral>>(
             new Material<TSpectral>(
-                std::make_unique<GGXMicrofacetBSDF<TSpectral>>(),
+                std::make_unique<CookTorranceBSDF<TSpectral>>(),
                 default_albedo_image_.get(),
                 default_metallic_image_.get(),
                 default_roughness_image_.get(),
