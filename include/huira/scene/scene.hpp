@@ -103,7 +103,7 @@ namespace huira {
 
 
         MaterialHandle<TSpectral> new_lambertian_material(std::string name = "");
-        MaterialHandle<TSpectral> new_ggx_material(std::string name = "");
+        MaterialHandle<TSpectral> new_cook_torrance_material(std::string name = "");
         MaterialHandle<TSpectral> add_material(std::shared_ptr<Material<TSpectral>> material, std::string name = "");
 
         void add_star(const Star<TSpectral>& star);
