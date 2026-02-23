@@ -24,7 +24,7 @@ namespace huira {
      * @tparam TSpectral The spectral representation type.
      */
     template <IsSpectral TSpectral>
-    class UnresolvedObject : public SceneObject<UnresolvedObject<TSpectral>, TSpectral> {
+    class UnresolvedObject : public SceneObject<UnresolvedObject<TSpectral>> {
     public:
         UnresolvedObject() = default;
         UnresolvedObject(const units::SpectralWattsPerMeterSquared<TSpectral>& spectral_irradiance);

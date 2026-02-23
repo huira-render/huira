@@ -53,7 +53,7 @@ namespace huira {
      * @tparam TSpectral Spectral type (e.g., RGB, Spectral)
      */
     template <IsSpectral TSpectral>
-    class Node : public SceneObject<Node<TSpectral>, TSpectral> {
+    class Node : public SceneObject<Node<TSpectral>> {
     public:
         Node(Scene<TSpectral>* scene);
         virtual ~Node() override = default;

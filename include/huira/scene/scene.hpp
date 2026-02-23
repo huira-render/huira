@@ -50,6 +50,7 @@ namespace huira {
         Scene& operator=(const Scene&) = delete; // Delete the copy assignment operator
 
         Scene();
+        ~Scene();
 
         RootFrameHandle<TSpectral> root;
         
@@ -100,17 +101,19 @@ namespace huira {
         void set_name(const ModelHandle<TSpectral>& model_handle, const std::string& name);
         ModelHandle<TSpectral> get_model(const std::string& name);
         void delete_model(const ModelHandle<TSpectral>& model_handle);
-
-
+        
         MaterialHandle<TSpectral> new_lambertian_material(std::string name = "");
         MaterialHandle<TSpectral> new_cook_torrance_material(std::string name = "");
         MaterialHandle<TSpectral> add_material(std::shared_ptr<Material<TSpectral>> material, std::string name = "");
+
+        //TextureHandle<TSpectral> add_texture(Image<TSpectral> texture, std::string name = "");
+        //TextureHandle<float> add_texture(Image<float> texture, std::string name = "");
+        //TextureHandle<Vec3<float>> add_texture(Image<Vec3<float>> texture, std::string name = "");
 
         void add_star(const Star<TSpectral>& star);
         void set_stars(const std::vector<Star<TSpectral>>& stars);
         void load_stars(const fs::path& star_catalog_path, const Time& time, float min_magnitude = 100.f);
         
-
         void prune_unreferenced_assets();
 
         void print_meshes() const;

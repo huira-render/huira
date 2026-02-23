@@ -44,7 +44,7 @@ namespace huira {
      * @tparam TSpectral The spectral type used in the rendering pipeline
      */
     template <IsSpectral TSpectral>
-    class Material : public SceneObject<Material<TSpectral>, TSpectral> {
+    class Material : public SceneObject<Material<TSpectral>> {
     public:
         Material(const Material&) = delete;
         Material& operator=(const Material&) = delete;
@@ -70,37 +70,53 @@ namespace huira {
         void set_albedo_factor(TSpectral albedo_factor);
         void reset_albedo();
 
+        void set_metallic_image(const Image<float>* metallic_image);
+        void set_metallic_factor(float metallic_factor);
+        void reset_metallic();
+
+        void set_roughness_image(const Image<float>* roughness_image);
+        void set_roughness_factor(float roughness_factor);
+        void reset_roughness();
+
+        void set_normal_image(const Image<Vec3<float>>* normal_image);
+        void set_normal_factor(float normal_factor);
+        void reset_normal();
+
+        void set_emissive_image(const Image<TSpectral>* emissive_image);
+        void set_emissive_factor(TSpectral emissive_factor);
+        void reset_emissive();
+
         std::uint64_t id() const override { return id_; }
         std::string type() const override { return "Material"; }
 
     private:
         Material(
             std::unique_ptr<BSDF<TSpectral>> bsdf,
-            Image<TSpectral>* albedo_image,
-            Image<float>* metallic_image,
-            Image<float>* roughness_image,
-            Image<Vec3<float>>* normal_image,
-            Image<TSpectral>* emissive_image);
+            const Image<TSpectral>* albedo_image,
+            const Image<float>* metallic_image,
+            const Image<float>* roughness_image,
+            const Image<Vec3<float>>* normal_image,
+            const Image<TSpectral>* emissive_image);
 
         std::unique_ptr<BSDF<TSpectral>> bsdf_;
         
-        Image<TSpectral>*   albedo_image_;
-        Image<float>*       metallic_image_;
-        Image<float>*       roughness_image_;
-        Image<Vec3<float>>* normal_image_;
-        Image<TSpectral>*   emissive_image_;
+        const Image<TSpectral>*   albedo_image_;
+        const Image<float>*       metallic_image_;
+        const Image<float>*       roughness_image_;
+        const Image<Vec3<float>>* normal_image_;
+        const Image<TSpectral>*   emissive_image_;
 
-        Image<TSpectral>*   default_albedo_image_;
-        Image<float>*       default_metallic_image_;
-        Image<float>*       default_roughness_image_;
-        Image<Vec3<float>>* default_normal_image_;
-        Image<TSpectral>*   default_emissive_image_;
+        const Image<TSpectral>*   default_albedo_image_;
+        const Image<float>*       default_metallic_image_;
+        const Image<float>*       default_roughness_image_;
+        const Image<Vec3<float>>* default_normal_image_;
+        const Image<TSpectral>*   default_emissive_image_;
         
         TSpectral albedo_factor_{ 1.0f };
         float     metallic_factor_  = 1.0f;
         float     roughness_factor_ = 1.0f;
+        float     normal_factor_     = 1.0f;
         TSpectral emissive_factor_{ 1.0f };
-        float     normal_scale_     = 1.0f;
 
         std::uint64_t id_ = 0;
         static inline std::uint64_t next_id_ = 0;

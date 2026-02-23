@@ -45,7 +45,7 @@ namespace huira {
      * @tparam TSpectral The spectral representation type.
      */
     template <IsSpectral TSpectral>
-    class Light : public SceneObject<Light<TSpectral>, TSpectral> {
+    class Light : public SceneObject<Light<TSpectral>> {
     public:
         Light() : id_(next_id_++) {}
 

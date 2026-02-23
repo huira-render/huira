@@ -32,7 +32,7 @@ namespace huira {
      * @tparam TSpectral The spectral representation type.
      */
     template <IsSpectral TSpectral>
-    class Model : public SceneObject<Model<TSpectral>, TSpectral> {
+    class Model : public SceneObject<Model<TSpectral>> {
     public:
         Model() : id_(next_id_++) {}
         ~Model() override = default;

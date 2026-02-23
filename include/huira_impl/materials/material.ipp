@@ -27,8 +27,8 @@ namespace huira {
         // after remap, which leaves the shading normal unchanged)
         Vec3<float> ts_normal = normal_image_->sample_bilinear(uv.x, uv.y);
         ts_normal = ts_normal * 2.0f - Vec3<float>{ 1.0f };
-        ts_normal.x *= normal_scale_;
-        ts_normal.y *= normal_scale_;
+        ts_normal.x *= normal_factor_;
+        ts_normal.y *= normal_factor_;
         ts_normal = glm::normalize(ts_normal);
 
         Interaction<TSpectral> shading_isect = isect;
@@ -97,13 +97,91 @@ namespace huira {
     }
 
     template <IsSpectral TSpectral>
+    void Material<TSpectral>::set_metallic_image(const Image<float>* metallic_image)
+    {
+        metallic_image_ = metallic_image;
+    }
+
+    template <IsSpectral TSpectral>
+    void Material<TSpectral>::set_metallic_factor(float metallic_factor)
+    {
+        metallic_factor_ = metallic_factor;
+    }
+
+    template <IsSpectral TSpectral>
+    void Material<TSpectral>::reset_metallic()
+    {
+        metallic_image_ = default_metallic_image_;
+        metallic_factor_ = 1.0f;
+    }
+
+    template <IsSpectral TSpectral>
+    void Material<TSpectral>::set_roughness_image(const Image<float>* roughness_image)
+    {
+        roughness_image_ = roughness_image;
+    }
+
+    template <IsSpectral TSpectral>
+    void Material<TSpectral>::set_roughness_factor(float roughness_factor)
+    {
+        roughness_factor_ = roughness_factor;
+    }
+
+    template <IsSpectral TSpectral>
+    void Material<TSpectral>::reset_roughness()
+    {
+        roughness_image_ = default_roughness_image_;
+        roughness_factor_ = 1.0f;
+    }
+
+    template <IsSpectral TSpectral>
+
+    void Material<TSpectral>::set_normal_image(const Image<Vec3<float>>* normal_image)
+    {
+        normal_image_ = normal_image;
+    }
+
+    template <IsSpectral TSpectral>
+    void Material<TSpectral>::set_normal_factor(float normal_factor)
+    {
+        normal_factor_ = normal_factor;
+    }
+
+    template <IsSpectral TSpectral>
+    void Material<TSpectral>::reset_normal()
+    {
+        normal_image_ = default_normal_image_;
+        normal_factor_ = 1.0f;
+    }
+
+    template <IsSpectral TSpectral>
+
+    void Material<TSpectral>::set_emissive_image(const Image<TSpectral>* emissive_image)
+    {
+        emissive_image_ = emissive_image;
+    }
+
+    template <IsSpectral TSpectral>
+    void Material<TSpectral>::set_emissive_factor(TSpectral emissive_factor)
+    {
+        emissive_factor_ = emissive_factor;
+    }
+
+    template <IsSpectral TSpectral>
+    void Material<TSpectral>::reset_emissive()
+    {
+        emissive_image_ = default_emissive_image_;
+        emissive_factor_ = TSpectral{ 1.0f };
+    }
+
+    template <IsSpectral TSpectral>
     Material<TSpectral>::Material(
         std::unique_ptr<BSDF<TSpectral>> bsdf,
-        Image<TSpectral>* albedo_image,
-        Image<float>* metallic_image,
-        Image<float>* roughness_image,
-        Image<Vec3<float>>* normal_image,
-        Image<TSpectral>* emissive_image) :
+        const Image<TSpectral>* albedo_image,
+        const Image<float>* metallic_image,
+        const Image<float>* roughness_image,
+        const Image<Vec3<float>>* normal_image,
+        const Image<TSpectral>* emissive_image) :
         bsdf_{ std::move(bsdf) },
         default_albedo_image_{ albedo_image },
         default_metallic_image_{ metallic_image },
