@@ -21,8 +21,10 @@
 #include "huira/handles/frame_handle_py.ipp"
 #include "huira/handles/instance_handle_py.ipp"
 #include "huira/handles/light_handle_py.ipp"
+#include "huira/handles/material_handle_py.ipp"
 #include "huira/handles/node_handle_py.ipp"
 #include "huira/handles/root_frame_handle_py.ipp"
+#include "huira/handles/texture_handle_py.ipp"
 #include "huira/handles/unresolved_handle_py.ipp"
 
 #include "huira/images/fits_metadata_py.ipp"
@@ -51,6 +53,11 @@ inline void bind_spectral(py::module_& m) {
     huira::bind_frame_handle<TSpectral>(m);
     huira::bind_root_frame_handle<TSpectral>(m);
 
+    std::string img_name = "Image_" + m.attr("__name__").cast<std::string>();
+    huira::bind_image<TSpectral>(m, img_name.c_str());
+
+    huira::bind_material_handle<TSpectral>(m);
+
     huira::bind_frame_buffer<TSpectral>(m);
 
     huira::bind_scene<TSpectral>(m);
@@ -78,7 +85,9 @@ PYBIND11_MODULE(_huira, m) {
     huira::bind_distortion_coefficients(m);
 
     huira::bind_fits_metadata(m);
-    huira::bind_all_images(m);
+    huira::bind_common_images(m);
+
+    huira::bind_common_textures(m);
 
     // Observation Mode Enum:
     py::enum_<huira::ObservationMode>(m, "ObservationMode", py::arithmetic())

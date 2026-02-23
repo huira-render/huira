@@ -254,7 +254,7 @@ namespace huira {
     // ---------------------------------------------------------------------------
     // bind_all_images  --  call this once from PYBIND11_MODULE
     // ---------------------------------------------------------------------------
-    inline void bind_all_images(py::module_& m) {
+    inline void bind_common_images(py::module_& m) {
         // Scalar images
         bind_image<float>(m, "Image_f32");
         bind_image<double>(m, "Image_f64");
@@ -263,8 +263,7 @@ namespace huira {
         bind_image<uint32_t>(m, "Image_u32");
         bind_image<uint64_t>(m, "Image_u64");
 
-        // Vec3 (RGB) images
-        bind_image<RGB>(m, "Image_rgb_f32");
+        bind_image<Vec3<float>>(m, "Image_Vec3f");
 
         // IO functions
         bind_image_io(m);

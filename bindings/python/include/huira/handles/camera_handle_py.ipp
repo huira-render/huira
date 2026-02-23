@@ -101,8 +101,10 @@ namespace huira {
             .def("use_blender_convention", &HandleType::use_blender_convention,
                 py::arg("value") = true)
 
+            .def("valid", &HandleType::valid)
+            .def("__bool__", &HandleType::valid)
             .def("__repr__", [](const HandleType&) {
-            return "<CameraModelHandle>";
-                });
+                return "<CameraModelHandle>";
+            });
     }
 }

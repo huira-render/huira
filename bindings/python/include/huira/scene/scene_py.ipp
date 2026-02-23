@@ -206,6 +206,42 @@ namespace huira {
                 py::arg("camera_model_handle"), py::arg("name"),
                 "Set the name of a camera model")
 
+            
+            // =============================================================
+            // Materials
+            // =============================================================
+                                
+            .def("new_lambertian_material", &SceneType::new_lambertian_material,
+                py::arg("name") = "",
+                "Create a new Lambertian material")
+            .def("new_cook_torrance_material", &SceneType::new_cook_torrance_material,
+                py::arg("name") = "",
+                "Create a new Cook-Torrance material")
+            .def("add_material", &SceneType::add_material,
+                py::arg("material"), py::arg("name") = "",
+                "Add an existing material to the scene")
+            
+            // =============================================================
+            // Textures
+            // =============================================================
+            
+            .def("add_spectral_texture",
+                static_cast<TextureHandle<TSpectral>(SceneType::*)(Image<TSpectral>, std::string)>(
+                    &SceneType::add_texture),
+                py::arg("image"), py::arg("name") = "",
+                "Add a spectral texture from an image")
+            .def("add_float_texture",
+                static_cast<TextureHandle<float>(SceneType::*)(Image<float>, std::string)>(
+                    &SceneType::add_texture),
+                py::arg("image"), py::arg("name") = "",
+                "Add a float texture from a single-channel image")
+            .def("add_normal_texture",
+                static_cast<TextureHandle<Vec3<float>>(SceneType::*)(Image<Vec3<float>>, std::string)>(
+                    &SceneType::add_texture),
+                py::arg("image"), py::arg("name") = "",
+                "Add a normal map texture from a Vec3 image")
+            
+
             // =============================================================
             // Star loading
             // =============================================================
