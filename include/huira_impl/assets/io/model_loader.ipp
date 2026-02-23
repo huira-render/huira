@@ -1,4 +1,4 @@
-
+#include <algorithm>
 #include <cmath>
 #include <string>
 
@@ -28,7 +28,8 @@ namespace huira {
         Scene<TSpectral>& scene,
         const fs::path& file_path,
         std::string name,
-        unsigned int post_process_flags
+        unsigned int post_process_flags,
+        std::function<TSpectral(RGB)> spectral_conversion
     ) {
         // Validate file exists
         if (!fs::exists(file_path)) {
@@ -75,6 +76,7 @@ namespace huira {
         ctx.ai_scene = ai_scene;
         ctx.model = shared_model.get();
         ctx.scene = &scene;
+        ctx.spectral_conversion = std::move(spectral_conversion);
 
         // TODO: MATERIAL AND TEXTURE LOADING
         // // Load embedded textures
@@ -206,13 +208,15 @@ namespace huira {
                 vertex.uv = Vec2<double>{0.0, 0.0};
             }
 
-            // TODO: VERTEX COLOR AND ADDITIONAL ATTRIBUTES
-            // if (ai_mesh->HasVertexColors(0)) {
-            //     const aiColor4D& color = ai_mesh->mColors[0][i];
-            //     vertex.color = Vec4<double>{color.r, color.g, color.b, color.a};
-            // }
-            //
-            // // Tangent and bitangent (needed for normal mapping)
+            // Load vertex albedo
+            if (ai_mesh->HasVertexColors(0)) {
+                const aiColor4D& color = ai_mesh->mColors[0][i];
+                // NOTE: Vertex alpha is ignored
+                RGB rgb{color.r, color.g, color.b};
+                vertex.albedo = ctx.spectral_conversion(rgb);
+            }
+            
+            // Tangent and bitangent (needed for normal mapping)
             // if (ai_mesh->HasTangentsAndBitangents()) {
             //     vertex.tangent = convert_vec3_(ai_mesh->mTangents[i]);
             //     vertex.bitangent = convert_vec3_(ai_mesh->mBitangents[i]);

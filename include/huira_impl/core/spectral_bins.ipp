@@ -177,7 +177,27 @@ namespace huira {
             integral += data_[i] * bin_width;
         }
         return integral;
+    }
 
+    template <std::size_t N, auto... Args>
+    float SpectralBins<N, Args...>::integrate_over_band(double min_wavelength, double max_wavelength) const
+    {
+        float integral = 0.0f;
+        for (std::size_t i = 0; i < N; ++i) {
+            double bin_min = bins_[i].min_wavelength;
+            double bin_max = bins_[i].max_wavelength;
+
+            if (bin_max <= min_wavelength || bin_min >= max_wavelength) {
+                continue;
+            }
+
+            double overlap_min = std::max(bin_min, min_wavelength);
+            double overlap_max = std::min(bin_max, max_wavelength);
+            double overlap_width = overlap_max - overlap_min;
+
+            integral += static_cast<float>(data_[i] * overlap_width);
+        }
+        return integral;
     }
 
     /**
