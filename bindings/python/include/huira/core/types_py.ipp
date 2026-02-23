@@ -88,8 +88,8 @@ namespace huira {
                 return arr;
             }, "Return a 3x3 numpy array (row-major)")
 
-            .def("__repr__", [](const Mat3<double>& m) {
-                return mat_to_string<3, 3, double>(m);
+            .def("__repr__", [](const Mat3<double>& mat) {
+                return mat_to_string<3, 3, double>(mat);
             })
             ;
 

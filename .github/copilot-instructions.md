@@ -26,6 +26,7 @@ All includes should be in alphabetical order, with the STL includes first, follo
 ## Documentation
 - All public APIs must have Doxygen-style documentation
 - Place documentation comments in .ipp files, not .hpp files
+- Class/struct level documentation should be in the .hpp file, but method/function-level documentation should be in the .ipp file.
 - Exceptions: one-liner implementations in .hpp, or declaration-specific notes that cannot reasonably be moved (e.g., template parameter constraints)
 - Keep .hpp files clean and concise — they should read as a quick reference of the interface
 

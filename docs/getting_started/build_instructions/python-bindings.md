@@ -21,4 +21,17 @@ You can verify the installation with:
 python -c "import huira; print(huira.__version__)"
 ```
 
-NOTE: Do not run `import huira` from within the `bindings/python/` directory.  This will cause an import error as it will try to import the unbuilt source files rather than the installed version.
+**Note:** Do not run `import huira` from within the `bindings/python/` directory.  This will cause an import error as it will try to import the unbuilt source files rather than the installed version.
+
+**Note:** The `huira` CLI command may not work when installed this way, as the shared libraries are not bundled into the wheel during local builds. The CLI works out of the box when installed from PyPI (`pip install huira`) or via conda. For local development, you can either use the CMake build directly (`cmake --build`) to access the CLI, or set your library path to point at your conda environment:
+
+On macOS:
+```bash
+export DYLD_LIBRARY_PATH=$CONDA_PREFIX/lib
+```
+
+On Linux:
+```bash
+export LD_LIBRARY_PATH=$CONDA_PREFIX/lib
+```
+
