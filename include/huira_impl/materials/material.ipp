@@ -21,24 +21,29 @@ namespace huira {
 
         params.roughness = roughness_image_->sample_bilinear(uv.x, uv.y) * roughness_factor_;
 
-        params.emission = emissive_image_->sample_bilinear(isect.uv.x, isect.uv.y) * emissive_factor_;
+        params.emission = emissive_image_->sample_bilinear(uv.x, uv.y) * emissive_factor_;
 
-        // Normal mapping (unconditional — default 1x1 image yields {0,0,1}
-        // after remap, which leaves the shading normal unchanged)
+        Interaction<TSpectral> shading_isect = isect;
+
+        // Build tangent frame from the geometric normal
+        build_default_tangent_frame(isect.normal_s,
+            shading_isect.tangent, shading_isect.bitangent);
+
+        // Sample and remap normal map
         Vec3<float> ts_normal = normal_image_->sample_bilinear(uv.x, uv.y);
-        ts_normal = ts_normal * 2.0f - Vec3<float>{ 1.0f };
+        ts_normal = ts_normal * 2.0f - Vec3<float>{1.0f};
         ts_normal.x *= normal_factor_;
         ts_normal.y *= normal_factor_;
         ts_normal = glm::normalize(ts_normal);
 
-        Interaction<TSpectral> shading_isect = isect;
-
+        // Transform from tangent space to world space
         Vec3<float> perturbed =
-            isect.tangent * ts_normal.x +
-            isect.bitangent * ts_normal.y +
+            shading_isect.tangent * ts_normal.x +
+            shading_isect.bitangent * ts_normal.y +
             isect.normal_s * ts_normal.z;
-
         shading_isect.normal_s = glm::normalize(perturbed);
+
+        // Rebuild tangent frame from perturbed normal for BSDF
         build_default_tangent_frame(
             shading_isect.normal_s,
             shading_isect.tangent,

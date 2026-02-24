@@ -10,6 +10,12 @@
 #include "huira/core/types.hpp"
 #include "huira/util/logger.hpp"
 
+#include "huira/images/io/bmp_io.hpp"
+#include "huira/images/io/hdr_io.hpp"
+#include "huira/images/io/jpeg_io.hpp"
+#include "huira/images/io/png_io.hpp"
+#include "huira/images/io/tga_io.hpp"
+
 namespace huira {
     /**
      * @brief Load a 3D model from file and add it to the scene.
@@ -77,6 +83,7 @@ namespace huira {
         ctx.model = shared_model.get();
         ctx.scene = &scene;
         ctx.spectral_conversion = std::move(spectral_conversion);
+        ctx.base_directory = file_path.parent_path();
         
         // Process all materials:
         process_materials_(ctx);
@@ -147,10 +154,8 @@ namespace huira {
     template <IsSpectral TSpectral>
     MeshHandle<TSpectral> ModelLoader<TSpectral>::convert_mesh_(
         const aiMesh* ai_mesh,
-        LoadContext& ctx
-    ) {
-        (void)ctx; // Will be used for materials
-
+        LoadContext& ctx)
+    {
         // Build index buffer
         IndexBuffer indices;
         indices.reserve(ai_mesh->mNumFaces * 3);
@@ -181,18 +186,18 @@ namespace huira {
             if (ai_mesh->HasNormals()) {
                 vertex.normal = convert_vec3_(ai_mesh->mNormals[i]);
             } else {
-                vertex.normal = Vec3<double>{0.0, 1.0, 0.0}; // Default up
+                vertex.normal = Vec3<float>{0.0, 1.0, 0.0}; // Default up
             }
 
             // Texture coordinates (first UV channel only for now)
             if (ai_mesh->HasTextureCoords(0)) {
                 // ASSIMP stores UVs as 3D vectors; we only need the first two components
-                vertex.uv = Vec2<double>{
-                    static_cast<double>(ai_mesh->mTextureCoords[0][i].x),
-                    static_cast<double>(ai_mesh->mTextureCoords[0][i].y)
+                vertex.uv = Vec2<float>{
+                    static_cast<float>(ai_mesh->mTextureCoords[0][i].x),
+                    static_cast<float>(ai_mesh->mTextureCoords[0][i].y)
                 };
             } else {
-                vertex.uv = Vec2<double>{0.0, 0.0};
+                vertex.uv = Vec2<float>{0.0, 0.0};
             }
 
             // Load vertex albedo
@@ -214,13 +219,21 @@ namespace huira {
             vertices.push_back(vertex);
         }
 
-        // TODO: MATERIAL ASSIGNMENT
-        // The mesh stores a material index that we'd look up:
-        // unsigned int material_index = ai_mesh->mMaterialIndex;
-        // Material<TSpectral>* material = ctx.material_map[material_index];
-        // The Mesh constructor or a setter would then associate the material.
         auto mesh = Mesh<TSpectral>(std::move(indices), std::move(vertices), std::move(tangent_buffer));
         auto mesh_handle = ctx.scene->add_mesh(std::move(mesh), std::string(ai_mesh->mName.C_Str()));
+
+        // Assign material
+        unsigned int material_index = ai_mesh->mMaterialIndex;
+        auto mat_it = ctx.material_map.find(material_index);
+        if (mat_it != ctx.material_map.end()) {
+            mesh_handle.get()->set_material(mat_it->second.get().get());
+        }
+        else {
+            HUIRA_LOG_WARNING("ModelLoader::convert_mesh_ - No material found for mesh " +
+                std::string(ai_mesh->mName.C_Str()) + " (material index " +
+                std::to_string(material_index) + ")");
+        }
+
         return mesh_handle;
     }
 
@@ -342,11 +355,11 @@ namespace huira {
      * @return Vec3 object
      */
     template <IsSpectral TSpectral>
-    Vec3<double> ModelLoader<TSpectral>::convert_vec3_(const aiVector3D& v) {
-        return Vec3<double>{
-            static_cast<double>(v.x),
-            static_cast<double>(v.y),
-            static_cast<double>(v.z)
+    Vec3<float> ModelLoader<TSpectral>::convert_vec3_(const aiVector3D& v) {
+        return Vec3<float>{
+            static_cast<float>(v.x),
+            static_cast<float>(v.y),
+            static_cast<float>(v.z)
         };
     }
 
@@ -405,6 +418,135 @@ namespace huira {
         }
     }
 
+
+    enum class ImageFormat_ { PNG, JPEG, TGA, BMP, HDR, Unknown };
+    inline ImageFormat_ detect_image_format_(const std::string& hint_or_extension) {
+        std::string lower = hint_or_extension;
+        std::transform(lower.begin(), lower.end(), lower.begin(),
+            [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+        // Strip leading dot if present
+        if (!lower.empty() && lower[0] == '.') {
+            lower = lower.substr(1);
+        }
+
+        if (lower == "png")                    return ImageFormat_::PNG;
+        if (lower == "jpg" || lower == "jpeg") return ImageFormat_::JPEG;
+        if (lower == "tga")                    return ImageFormat_::TGA;
+        if (lower == "bmp")                    return ImageFormat_::BMP;
+        if (lower == "hdr")                    return ImageFormat_::HDR;
+        return ImageFormat_::Unknown;
+    }
+
+    inline Image<RGB> load_rgb_from_buffer_(
+        const unsigned char* data, std::size_t size, ImageFormat_ format)
+    {
+        switch (format) {
+        case ImageFormat_::PNG:  return read_image_png(data, size).first;
+        case ImageFormat_::JPEG: return read_image_jpeg(data, size);
+        case ImageFormat_::TGA:  return read_image_tga(data, size).first;
+        case ImageFormat_::BMP:  return read_image_bmp(data, size).first;
+        case ImageFormat_::HDR:  return read_image_hdr(data, size);
+        case ImageFormat_::Unknown:
+        default:
+            HUIRA_THROW_ERROR("load_rgb_from_buffer_ - Unsupported image format");
+        }
+    }
+
+    inline Image<float> load_mono_from_buffer_(
+        const unsigned char* data, std::size_t size, ImageFormat_ format)
+    {
+        switch (format) {
+        case ImageFormat_::PNG:  return read_image_png_mono(data, size).first;
+        case ImageFormat_::JPEG: return read_image_jpeg_mono(data, size);
+        case ImageFormat_::TGA:  return read_image_tga_mono(data, size).first;
+        case ImageFormat_::BMP:  return read_image_bmp_mono(data, size).first;
+        case ImageFormat_::HDR:  return read_image_hdr_mono(data, size);
+        case ImageFormat_::Unknown:
+        default:
+            HUIRA_THROW_ERROR("load_mono_from_buffer_ - Unsupported image format");
+        }
+    }
+
+    inline Image<RGB> load_rgb_from_file_(const fs::path& filepath) {
+        ImageFormat_ format = detect_image_format_(filepath.extension().string());
+        switch (format) {
+        case ImageFormat_::PNG:  return read_image_png(filepath).first;
+        case ImageFormat_::JPEG: return read_image_jpeg(filepath);
+        case ImageFormat_::TGA:  return read_image_tga(filepath).first;
+        case ImageFormat_::BMP:  return read_image_bmp(filepath).first;
+        case ImageFormat_::HDR:  return read_image_hdr(filepath);
+        case ImageFormat_::Unknown:
+        default:
+            HUIRA_THROW_ERROR("load_rgb_from_file_ - Unsupported format: " +
+                filepath.extension().string());
+        }
+    }
+
+    inline Image<float> load_mono_from_file_(const fs::path& filepath) {
+        ImageFormat_ format = detect_image_format_(filepath.extension().string());
+        switch (format) {
+        case ImageFormat_::PNG:  return read_image_png_mono(filepath).first;
+        case ImageFormat_::JPEG: return read_image_jpeg_mono(filepath);
+        case ImageFormat_::TGA:  return read_image_tga_mono(filepath).first;
+        case ImageFormat_::BMP:  return read_image_bmp_mono(filepath).first;
+        case ImageFormat_::HDR:  return read_image_hdr_mono(filepath);
+        case ImageFormat_::Unknown:
+        default:
+            HUIRA_THROW_ERROR("load_mono_from_file_ - Unsupported format: " +
+                filepath.extension().string());
+        }
+    }
+
+    /// Convert Image<RGB> to Image<Vec3<float>> (direct channel copy, for normal maps)
+    inline Image<Vec3<float>> rgb_to_vec3_(const Image<RGB>& rgb) {
+        Image<Vec3<float>> result(rgb.width(), rgb.height());
+        for (int y = 0; y < rgb.height(); ++y) {
+            for (int x = 0; x < rgb.width(); ++x) {
+                const RGB& p = rgb(x, y);
+                result(x, y) = Vec3<float>{ p[0], p[1], p[2] };
+            }
+        }
+        return result;
+    }
+
+    template <IsSpectral TSpectral, typename TPixel>
+    Image<TPixel> convert_embedded_raw_(
+        const aiTexture* embedded,
+        const std::function<TSpectral(RGB)>& spectral_conversion)
+    {
+        const int w = static_cast<int>(embedded->mWidth);
+        const int h = static_cast<int>(embedded->mHeight);
+        const float inv255 = 1.0f / 255.0f;
+
+        Image<TPixel> result(w, h);
+
+        for (int y = 0; y < h; ++y) {
+            for (int x = 0; x < w; ++x) {
+                const aiTexel& texel = embedded->pcData[y * w + x];
+                const float r = static_cast<float>(texel.r) * inv255;
+                const float g = static_cast<float>(texel.g) * inv255;
+                const float b = static_cast<float>(texel.b) * inv255;
+
+                if constexpr (std::is_same_v<TPixel, TSpectral>) {
+                    result(x, y) = spectral_conversion(RGB{ r, g, b });
+                }
+                else if constexpr (std::is_same_v<TPixel, float>) {
+                    // Luminance-weighted grayscale
+                    result(x, y) = 0.2126f * r + 0.7152f * g + 0.0722f * b;
+                }
+                else if constexpr (std::is_same_v<TPixel, Vec3<float>>) {
+                    result(x, y) = Vec3<float>{ r, g, b };
+                }
+                else {
+                    static_assert(sizeof(TPixel) == 0, "Unsupported pixel type");
+                }
+            }
+        }
+
+        return result;
+    }
+
     /**
      * @brief Load a texture from an aiMaterial for a given texture type.
      *
@@ -413,9 +555,9 @@ namespace huira {
      * to the target pixel type TPixel, registers it with the Scene, and returns
      * a TextureHandle. Uses the LoadContext caches for deduplication.
      *
-     * @tparam TPixel Target pixel type for the loaded image
+     * @tparam TPixel Target pixel type (TSpectral, float, or Vec3<float>)
      * @param ai_mat The ASSIMP material
-     * @param tex_type The ASSIMP texture type (e.g., aiTextureType_BASE_COLOR)
+     * @param tex_type The ASSIMP texture type slot
      * @param ctx Loading context with scene reference and caches
      * @return TextureHandle if a texture was found and loaded, std::nullopt otherwise
      */
@@ -426,9 +568,174 @@ namespace huira {
         aiTextureType tex_type,
         LoadContext& ctx)
     {
-        (void)ai_mat;
-        (void)tex_type;
-        (void)ctx;
-        return std::nullopt;
+        // Check if this material has a texture for the requested slot
+        if (ai_mat->GetTextureCount(tex_type) == 0) {
+            return std::nullopt;
+        }
+
+        // Get the texture path from ASSIMP
+        aiString ai_path;
+        if (ai_mat->GetTexture(tex_type, 0, &ai_path) != AI_SUCCESS) {
+            HUIRA_LOG_WARNING("ModelLoader::load_material_texture_ - "
+                "Failed to get texture path for type " +
+                std::to_string(static_cast<int>(tex_type)));
+            return std::nullopt;
+        }
+
+        const std::string tex_path_str(ai_path.C_Str());
+
+        // Check deduplication cache
+        auto& cache = get_texture_cache_<TPixel>(ctx);
+        auto cache_it = cache.find(tex_path_str);
+        if (cache_it != cache.end()) {
+            return cache_it->second;
+        }
+
+        // ------------------------------------------------------------------
+        //  Load the image data
+        // ------------------------------------------------------------------
+
+        Image<TPixel> image;
+        bool loaded = false;
+
+        // Check for embedded texture
+        const aiTexture* embedded = ctx.ai_scene->GetEmbeddedTexture(tex_path_str.c_str());
+
+        if (embedded) {
+            if (embedded->mHeight == 0) {
+                // Compressed embedded texture: mWidth = byte count, achFormatHint = format
+                const auto* data = reinterpret_cast<const unsigned char*>(embedded->pcData);
+                const auto  size = static_cast<std::size_t>(embedded->mWidth);
+                ImageFormat_ format = detect_image_format_(std::string(embedded->achFormatHint));
+
+                if (format == ImageFormat_::Unknown) {
+                    HUIRA_LOG_WARNING("ModelLoader::load_material_texture_ - "
+                        "Unknown embedded format hint: " +
+                        std::string(embedded->achFormatHint) +
+                        " for texture: " + tex_path_str);
+                    return std::nullopt;
+                }
+
+                try {
+                    if constexpr (std::is_same_v<TPixel, TSpectral>) {
+                        Image<RGB> rgb = load_rgb_from_buffer_(data, size, format);
+                        image = Image<TSpectral>(rgb.width(), rgb.height());
+                        for (int y = 0; y < rgb.height(); ++y) {
+                            for (int x = 0; x < rgb.width(); ++x) {
+                                image(x, y) = ctx.spectral_conversion(rgb(x, y));
+                            }
+                        }
+                    }
+                    else if constexpr (std::is_same_v<TPixel, float>) {
+                        image = load_mono_from_buffer_(data, size, format);
+                    }
+                    else if constexpr (std::is_same_v<TPixel, Vec3<float>>) {
+                        Image<RGB> rgb = load_rgb_from_buffer_(data, size, format);
+                        image = rgb_to_vec3_(rgb);
+                    }
+                    loaded = true;
+                }
+                catch (const std::exception& e) {
+                    HUIRA_LOG_WARNING("ModelLoader::load_material_texture_ - "
+                        "Failed to decode embedded texture: " + tex_path_str +
+                        " (" + e.what() + ")");
+                    return std::nullopt;
+                }
+
+            }
+            else {
+                // Uncompressed embedded texture (raw ARGB8888 aiTexel data)
+                try {
+                    image = convert_embedded_raw_<TSpectral, TPixel>(
+                        embedded, ctx.spectral_conversion);
+                    loaded = true;
+                }
+                catch (const std::exception& e) {
+                    HUIRA_LOG_WARNING("ModelLoader::load_material_texture_ - "
+                        "Failed to convert raw embedded texture: " + tex_path_str +
+                        " (" + e.what() + ")");
+                    return std::nullopt;
+                }
+            }
+
+        }
+        else {
+            // External texture file
+            fs::path resolved_path = ctx.base_directory / tex_path_str;
+            if (!fs::exists(resolved_path)) {
+                // Try the path as-is (might be absolute)
+                resolved_path = fs::path(tex_path_str);
+            }
+
+            if (!fs::exists(resolved_path)) {
+                HUIRA_LOG_WARNING("ModelLoader::load_material_texture_ - "
+                    "Texture file not found: " + tex_path_str +
+                    " (searched: " + (ctx.base_directory / tex_path_str).string() + ")");
+                return std::nullopt;
+            }
+
+            try {
+                if constexpr (std::is_same_v<TPixel, TSpectral>) {
+                    Image<RGB> rgb = load_rgb_from_file_(resolved_path);
+                    image = Image<TSpectral>(rgb.width(), rgb.height());
+                    for (int y = 0; y < rgb.height(); ++y) {
+                        for (int x = 0; x < rgb.width(); ++x) {
+                            image(x, y) = ctx.spectral_conversion(rgb(x, y));
+                        }
+                    }
+                }
+                else if constexpr (std::is_same_v<TPixel, float>) {
+                    image = load_mono_from_file_(resolved_path);
+                }
+                else if constexpr (std::is_same_v<TPixel, Vec3<float>>) {
+                    Image<RGB> rgb = load_rgb_from_file_(resolved_path);
+                    image = rgb_to_vec3_(rgb);
+                }
+                loaded = true;
+            }
+            catch (const std::exception& e) {
+                HUIRA_LOG_WARNING("ModelLoader::load_material_texture_ - "
+                    "Failed to load texture file: " + resolved_path.string() +
+                    " (" + e.what() + ")");
+                return std::nullopt;
+            }
+        }
+
+        if (!loaded) {
+            return std::nullopt;
+        }
+
+        // Register with the Scene and cache
+        std::string tex_name = fs::path(tex_path_str).stem().string();
+        TextureHandle<TPixel> handle = ctx.scene->add_texture(std::move(image), tex_name);
+        cache.emplace(tex_path_str, handle);
+
+        HUIRA_LOG_DEBUG("ModelLoader::load_material_texture_ - Loaded texture: " +
+            tex_name + " (" + std::to_string(image.width()) + "x" +
+            std::to_string(image.height()) + ")");
+
+        return handle;
     }
+
+    // =========================================================================
+    //  Texture cache accessor
+    // =========================================================================
+
+    template <IsSpectral TSpectral>
+    template <typename TPixel>
+    auto& ModelLoader<TSpectral>::get_texture_cache_(LoadContext& ctx) {
+        if constexpr (std::is_same_v<TPixel, TSpectral>) {
+            return ctx.spectral_texture_cache;
+        }
+        else if constexpr (std::is_same_v<TPixel, float>) {
+            return ctx.mono_texture_cache;
+        }
+        else if constexpr (std::is_same_v<TPixel, Vec3<float>>) {
+            return ctx.vec3_texture_cache;
+        }
+        else {
+            static_assert(sizeof(TPixel) == 0, "Unsupported texture pixel type");
+        }
+    }
+
 }

@@ -34,6 +34,7 @@ namespace huira {
         Mesh& operator=(Mesh&&) = default;
 
         void set_material(Material<TSpectral>* material);
+        [[nodiscard]] const Material<TSpectral>* material() const noexcept { return material_; }
 
         std::size_t index_count() const noexcept;
         std::size_t vertex_count() const noexcept;

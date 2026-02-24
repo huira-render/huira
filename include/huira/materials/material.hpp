@@ -89,6 +89,12 @@ namespace huira {
         std::uint64_t id() const override { return id_; }
         std::string type() const override { return "Material"; }
 
+        const Image<TSpectral>* albedo_image_;
+        const Image<float>* metallic_image_;
+        const Image<float>* roughness_image_;
+        const Image<Vec3<float>>* normal_image_;
+        const Image<TSpectral>* emissive_image_;
+
     private:
         Material(
             std::unique_ptr<BSDF<TSpectral>> bsdf,
@@ -100,11 +106,7 @@ namespace huira {
 
         std::unique_ptr<BSDF<TSpectral>> bsdf_;
         
-        const Image<TSpectral>*   albedo_image_;
-        const Image<float>*       metallic_image_;
-        const Image<float>*       roughness_image_;
-        const Image<Vec3<float>>* normal_image_;
-        const Image<TSpectral>*   emissive_image_;
+
 
         const Image<TSpectral>*   default_albedo_image_;
         const Image<float>*       default_metallic_image_;

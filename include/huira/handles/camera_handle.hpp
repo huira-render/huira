@@ -81,7 +81,7 @@ namespace huira {
         template <IsPSF TPSF, typename... Args>
         void set_psf(Args&&... args) const;
 
-        void use_aperture_psf(int radius, int banks) const;
+        void use_aperture_psf(int radius = 64, int banks = 16) const;
         void delete_psf() const;
 
         Pixel project_point(const Vec3<float>& point_camera_coords) const;

@@ -46,6 +46,18 @@ namespace huira {
         default_normal_image_ = std::make_unique<Image<Vec3<float>>>(1, 1, Vec3<float>{0.5, 0.5, 1.0});
         default_emission_image_ = std::make_unique<Image<TSpectral>>(1, 1, TSpectral{ 0 });
 
+        // Initialize default material:
+        default_material_ = std::unique_ptr<Material<TSpectral>>(
+            new Material<TSpectral>(
+                std::make_unique<LambertBSDF<TSpectral>>(),
+                default_albedo_image_.get(),
+                default_metallic_image_.get(),
+                default_roughness_image_.get(),
+                default_normal_image_.get(),
+                default_emission_image_.get()
+            )
+        );
+
         HUIRA_LOG_INFO("Scene created");
     };
 
@@ -69,6 +81,7 @@ namespace huira {
     MeshHandle<TSpectral> Scene<TSpectral>::add_mesh(Mesh<TSpectral>&& mesh, std::string name)
     {
         auto mesh_shared = std::make_shared<Mesh<TSpectral>>(std::move(mesh));
+        mesh_shared->set_material(default_material_.get());
         meshes_.add(mesh_shared, name);
         return MeshHandle<TSpectral>{ mesh_shared };
     };
@@ -766,10 +779,14 @@ namespace huira {
      */
     template <IsSpectral TSpectral>
     void Scene<TSpectral>::print_contents() const {
+        std::size_t num_textures = spectral_textures_.size() + mono_textures_.size() + vec3_textures_.size();
+
         std::cout << "Scene Contents:\n";
         std::cout << " - " << "Stars: " << std::to_string(stars_.size()) << " loaded\n";
         std::cout << " - " << blue("CameraModels: " + std::to_string(camera_models_.size()) + " loaded") << "\n";
         std::cout << " - " << green("Meshes: " + std::to_string(meshes_.size()) + " loaded") << "\n";
+        std::cout << "    - " << green("Materials: " + std::to_string(materials_.size()) + " loaded") << "\n";
+        std::cout << "    - " << green("Textures: " + std::to_string(num_textures) + " loaded") << "\n";
         std::cout << " - " << yellow("Lights: " + std::to_string(lights_.size()) + " loaded") << "\n";
         std::cout << " - " << cyan("UnresolvedObjects: " + std::to_string(unresolved_objects_.size()) + " loaded") << "\n";
         std::cout << " - " << magenta("Models: " + std::to_string(models_.size()) + " loaded") << "\n";

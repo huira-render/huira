@@ -50,7 +50,7 @@ namespace huira {
     /**
      * @brief libtiff read callback — reads bytes from the memory buffer.
      */
-    inline tsize_t tiff_mem_read_(thandle_t handle, tdata_t buf, tsize_t n)
+    inline tsize_t tiff_mem_read_(thandle_t handle, tdata_t buf, tsize_t n) noexcept
     {
         auto* state = reinterpret_cast<TiffMemState_*>(handle);
         tsize_t available = state->size - static_cast<tsize_t>(state->pos);
@@ -65,7 +65,7 @@ namespace huira {
     /**
      * @brief libtiff write callback — not supported for read-only access.
      */
-    inline tsize_t tiff_mem_write_(thandle_t, tdata_t, tsize_t)
+    inline tsize_t tiff_mem_write_(thandle_t, tdata_t, tsize_t) noexcept
     {
         return 0;
     }
@@ -73,7 +73,7 @@ namespace huira {
     /**
      * @brief libtiff seek callback — repositions the read cursor.
      */
-    inline toff_t tiff_mem_seek_(thandle_t handle, toff_t offset, int whence)
+    inline toff_t tiff_mem_seek_(thandle_t handle, toff_t offset, int whence) noexcept
     {
         auto* state = reinterpret_cast<TiffMemState_*>(handle);
         toff_t new_pos;
@@ -93,7 +93,7 @@ namespace huira {
     /**
      * @brief libtiff close callback — no-op for memory buffers.
      */
-    inline int tiff_mem_close_(thandle_t)
+    inline int tiff_mem_close_(thandle_t) noexcept
     {
         return 0;
     }
@@ -101,7 +101,7 @@ namespace huira {
     /**
      * @brief libtiff size callback — returns the total buffer size.
      */
-    inline toff_t tiff_mem_size_(thandle_t handle)
+    inline toff_t tiff_mem_size_(thandle_t handle) noexcept
     {
         auto* state = reinterpret_cast<TiffMemState_*>(handle);
         return static_cast<toff_t>(state->size);

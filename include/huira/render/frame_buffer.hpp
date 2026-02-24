@@ -25,6 +25,10 @@ namespace huira {
         Image<float>& depth() { return depth_; }
         bool has_depth() const { return has_(depth_); }
 
+        void enable_albedo(bool enable = true) { enable_(albedo_, TSpectral{ 0 }, enable); }
+        Image<TSpectral>& albedo() { return albedo_; }
+        bool has_albedo() const { return has_(albedo_); }
+
 
         void enable_mesh_ids(bool enable = true) { enable_(mesh_ids_, uint64_t{ 0 }, enable); }
         Image<uint64_t>& mesh_ids() { return mesh_ids_; }
@@ -57,6 +61,9 @@ namespace huira {
             if (has_depth()) {
                 depth_.fill(std::numeric_limits<float>::infinity());
             }
+            if (has_albedo()) {
+                albedo_.fill(TSpectral{ 0 });
+            }
             if (has_mesh_ids()) {
                 mesh_ids_.fill(uint64_t{ 0 });
             }
@@ -82,6 +89,7 @@ namespace huira {
         Resolution resolution_;
 
         Image<float> depth_;
+        Image<TSpectral> albedo_;
         Image<uint64_t> mesh_ids_;
         Image<Vec3<float>> camera_normals_;
         Image<Vec3<float>> world_normals_;

@@ -91,6 +91,7 @@ namespace huira {
         // Extract the lights:
         auto lights = this->get_lights(scene_view);
 
+        Vec3<float> camera_origin{ 0,0,0 }; // Camera is at the origin by definition
         
         // Reset any existing data in the frame buffer:
         frame_buffer.clear();
@@ -104,6 +105,8 @@ namespace huira {
             auto& mesh = batch.mesh;
             auto vertices = mesh->vertex_buffer();
             auto indices = mesh->index_buffer();
+
+            auto material = mesh->material();
 
             for (const Transform<float>& instance_tf : batch.instances) {
                 // Loop over triangles (from index buffer):
@@ -137,15 +140,19 @@ namespace huira {
                     min_y = std::max(min_y, 0);
                     max_y = std::min(max_y, static_cast<int>(res_y) - 1);
 
+                    auto uv0 = vertices[idx0].uv;
+                    auto uv1 = vertices[idx1].uv;
+                    auto uv2 = vertices[idx2].uv;
+
                     // Rasterize the triangle within the bounding box
                     Interaction<TSpectral> interaction;
                     for (int y = min_y; y <= max_y; ++y) {
                         for (int x = min_x; x <= max_x; ++x) {
                             Pixel p{ static_cast<float>(x) + 0.5f, static_cast<float>(y) + 0.5f };
-                            interaction.uvw = barycentric_coordinates(v0_p, v1_p, v2_p, p);
-                            float u = interaction.uvw[0];
-                            float v = interaction.uvw[1];
-                            float w = interaction.uvw[2];
+                            Vec3<float> uvw = barycentric_coordinates(v0_p, v1_p, v2_p, p);
+                            float u = uvw[0];
+                            float v = uvw[1];
+                            float w = uvw[2];
                             if (u >= 0 && v >= 0 && w >= 0) {
                                 // Interpolate depth
                                 // Perspective-correct depth interpolation
@@ -177,18 +184,34 @@ namespace huira {
                                         v * n1 / z1 +
                                         w * n2 / z2);
 
+                                    interaction.uv = depth * (
+                                        u * uv0 / z0 +
+                                        v * uv1 / z1 +
+                                        w * uv2 / z2);
+
+
+                                    // Evaluate material textures once for this fragment
+                                    auto [params, shading_isect] = material->evaluate(interaction);
+
                                     if (frame_buffer.has_received_power()) {
                                         TSpectral fragment_radiance{ 0 };
+
                                         for (auto& light_instance : lights) {
                                             auto& light = light_instance.light;
                                             auto& light_transform = light_instance.transform;
 
                                             auto sample = light->sample_li(interaction, light_transform, this->sampler_);
 
-                                            // Apply lambertian:
                                             if (sample) {
+                                                auto wo = glm::normalize(camera_origin - interaction.position);
                                                 const auto& s = *sample;
-                                                fragment_radiance += s.Li * std::max(0.0f, glm::dot(interaction.normal_s, s.wi));
+                                                TSpectral f = material->bsdf_eval(
+                                                    wo,
+                                                    s.wi,
+                                                    { params, shading_isect });
+                                                float cos_theta = std::max(0.0f, glm::dot(shading_isect.normal_s, s.wi));
+
+                                                fragment_radiance += s.Li * f * cos_theta;
                                             }
                                         }
                                         frame_buffer.received_power()(x, y) = fragment_radiance;
@@ -196,6 +219,10 @@ namespace huira {
 
                                     if (frame_buffer.has_mesh_ids()) {
                                         frame_buffer.mesh_ids()(x, y) = mesh->id();
+                                    }
+
+                                    if (frame_buffer.has_albedo()) {
+                                        frame_buffer.albedo()(x, y) = params.albedo;
                                     }
 
                                     if (frame_buffer.has_camera_normals()) {

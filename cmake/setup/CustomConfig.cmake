@@ -187,6 +187,7 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
         -Wno-reserved-id-macro
         -Wno-disabled-macro-expansion
         -Wno-unsafe-buffer-usage
+        -Wmissing-noreturn
         
         # Floating point warnings that are often false positives
         -Wno-double-promotion
