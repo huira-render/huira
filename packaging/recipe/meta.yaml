@@ -73,9 +73,7 @@ about:
   home: https://www.huira.space
   license: MIT
   license_file: ../../LICENSE # Change for conda-forge submission to point to the LICENSE file in the tarball
-  summary: Spectral renderer for space applications
-  description: |
-    Huira is a C++ library for ray tracing in space applications.
+  summary: A library for space rendering, LiDAR simulation, and solar radiation pressure modeling.
 
 extra:
   recipe-maintainers:
