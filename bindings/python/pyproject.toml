@@ -5,7 +5,7 @@ build-backend = "scikit_build_core.build"
 [project]
 name = "huira"
 dynamic = ["version"]
-description = "Python bindings for the Huira library"
+description = "A library for space rendering, LiDAR simulation, and solar radiation pressure modeling."
 requires-python = ">=3.9"
 license = "MIT"
 readme = "README.md"

@@ -1,17 +1,18 @@
 # <img src="./docs/_static/logo/full/adaptive.svg" width="400">
 
-*Huira* is a ray-tracing library for rendering large scenes, star fields, and simulating solar radiation pressure.
-
+*Huira* is a library for space rendering, LiDAR simulation, and solar radiation pressure modeling.
 
 [![Linux CI/CD](https://github.com/huira-render/huira/actions/workflows/linux-ci-cd.yml/badge.svg?branch=main)](https://github.com/huira-render/huira/actions/workflows/linux-ci-cd.yml?query=branch%3Amain)
 [![Windows CI/CD](https://github.com/huira-render/huira/actions/workflows/windows-ci-cd.yml/badge.svg?branch=main)](https://github.com/huira-render/huira/actions/workflows/windows-ci-cd.yml?query=branch%3Amain)
 [![macOS CI/CD](https://github.com/huira-render/huira/actions/workflows/macos-ci-cd.yml/badge.svg?branch=main)](https://github.com/huira-render/huira/actions/workflows/macos-ci-cd.yml?query=branch%3Amain)
-[![Coverage](https://codecov.io/gh/huira-render/huira/branch/main/graph/badge.svg)](https://app.codecov.io/gh/huira-render/huira/tree/main)
 
 [![Conda Build](https://github.com/huira-render/huira/actions/workflows/conda-build.yml/badge.svg?branch=main)](https://github.com/huira-render/huira/actions/workflows/conda-build.yml?query=branch%3Amain)
 [![Python](https://github.com/huira-render/huira/actions/workflows/python.yml/badge.svg?branch=main)](https://github.com/huira-render/huira/actions/workflows/python.yml?query=branch%3Amain)
 
+[![Coverage](https://codecov.io/gh/huira-render/huira/branch/main/graph/badge.svg)](https://app.codecov.io/gh/huira-render/huira/tree/main)
+
 ***
+
 # Features
 Initial work on Huira has been on the basic architecture as well as distribution/cross-platform compatibility.  As much of that work is now completed, new features are expected to be released in relatively short order.
 
@@ -25,16 +26,15 @@ If there are features you wish to see, that you don't see listed here, please fe
 - Logging and crash report generation
 - API Reference Documentation (NOTE: Some docs may appear incomplete or poorly formatted)
 
-## Features Coming Soon
+## Features Coming Soon (Order of Priority)
 - 3D mesh and material support
+- TLE support
 - Motion blur
 - Camera Depth-of-Field
 - Digital Elevation Maps
-- Level-of-detail support
 - Solar Radiation Pressure simulation
 - LIDAR simulation
-- TLE support
-- Improved API Reference Documentation and Quick-start guides
+- Level-of-detail support
 
 ## Long Term Plans
 - Vulkan based GPU Acceleration
@@ -45,13 +45,27 @@ If there are features you wish to see, that you don't see listed here, please fe
 # Installing Huira
 
 ## Python
-Huira's python bindings are available on [PyPI](https://pypi.org/project/huira/), and can be installed with:
+Huira's python bindings are available on [PyPI](https://pypi.org/project/huira/) and can be installed with:
 
 ```bash
 pip install huira
 ```
 
 For building from source or more details, see the **[Python Bindings](docs/getting_started/build_instructions/python-bindings.md)** guide.
+
+## C++ (Package Managers)
+Huira's C++ library is available on [vcpkg](https://vcpkg.io/en/package/huira), and can be installed with:
+
+### vcpkg:
+```bash
+vcpkg install huira[tools]
+```
+
+*Note:* vcpkg is not intended to be an application distribution system, so installed applications are not immediately accessible.  To use the `huira` command line program, you need to run:
+
+```bash
+.\path\to\vcpkg\installed\x64-windows\tools\huira\huira
+```
 
 ## C++ (Building From Source)
 Please see the platform specific build guides:

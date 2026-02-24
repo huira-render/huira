@@ -1,7 +1,7 @@
 Huira
 =====
 
-*Huira* is a ray-tracing library for rendering large scenes, star fields, and simulating solar radiation pressure.  It is named after Huiracocha, the creator of the Sun, Moon, and Stars in Inca mythology.
+*Huira* is a library for space rendering, LiDAR simulation, and solar radiation pressure modeling.
 
 .. toctree::
     :hidden:
