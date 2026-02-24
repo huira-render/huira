@@ -1,3 +1,7 @@
+#include <algorithm>
+
+#include "huira/util/logger.hpp"
+
 namespace huira {
     /**
      * @brief Constructs a Mesh from index and vertex buffers.
@@ -10,12 +14,43 @@ namespace huira {
      * @param vertex_buffer Buffer containing vertex data (positions, normals, etc.).
      */
     template <IsSpectral TSpectral>
-    Mesh<TSpectral>::Mesh(IndexBuffer index_buffer, VertexBuffer<TSpectral> vertex_buffer) noexcept
+    Mesh<TSpectral>::Mesh(IndexBuffer index_buffer, VertexBuffer<TSpectral> vertex_buffer)
             : index_buffer_(std::move(index_buffer)),
             vertex_buffer_(std::move(vertex_buffer)),
             id_(next_id_++)
     {
-        
+        const auto c = vertex_buffer_.size();
+        if (std::ranges::any_of(index_buffer_, [c](std::uint32_t i) { return i >= c;})) {
+            HUIRA_THROW_ERROR("Mesh::Mesh - index_buffer contains out-of-bounds indices.");
+        }
+    }
+
+    template <IsSpectral TSpectral>
+    Mesh<TSpectral>::Mesh(IndexBuffer index_buffer, VertexBuffer<TSpectral> vertex_buffer, TangentBuffer tangent_buffer)
+        : index_buffer_(std::move(index_buffer)),
+        vertex_buffer_(std::move(vertex_buffer)),
+        tangent_buffer_(std::move(tangent_buffer)),
+        id_(next_id_++)
+    {
+        const auto vertex_count = vertex_buffer_.size();
+        if (std::ranges::any_of(index_buffer_, [vertex_count](std::uint32_t idx) {
+            return idx >= vertex_count;
+        })) {
+            HUIRA_THROW_ERROR("Mesh::Mesh - index_buffer contains out-of-bounds indices.");
+        }
+
+        if (tangent_buffer_.size() == 0) {
+            return;
+        }
+        if (tangent_buffer_.size() != vertex_buffer_.size()) {
+            HUIRA_THROW_ERROR("Mesh::Mesh - tangent_buffer must be the same size as vertex_buffer.");
+        }
+    }
+
+    template <IsSpectral TSpectral>
+    void Mesh<TSpectral>::set_material(Material<TSpectral>* material)
+    {
+        material_ = material;
     }
 
     /**
@@ -71,5 +106,11 @@ namespace huira {
     [[nodiscard]] const VertexBuffer<TSpectral>& Mesh<TSpectral>::vertex_buffer() const noexcept 
     { 
         return vertex_buffer_;
+    }
+
+    template <IsSpectral TSpectral>
+    [[nodiscard]] const TangentBuffer& Mesh<TSpectral>::tangent_buffer() const noexcept
+    {
+        return tangent_buffer_;
     }
 }
