@@ -113,10 +113,10 @@ namespace huira {
         [[nodiscard]] const PixelT& at(const Pixel& pixel) const;
 
         // Sampling (normalized UV coordinates in [0,1])
-        template<WrapMode W = WrapMode::Clamp>
+        template<WrapMode W = WrapMode::Repeat>
         [[nodiscard]] PixelT sample_nearest_neighbor(float u, float v) const;
 
-        template<WrapMode W = WrapMode::Clamp>
+        template<WrapMode W = WrapMode::Repeat>
         [[nodiscard]] PixelT sample_bilinear(float u, float v) const;
 
         [[nodiscard]] PixelT* data() noexcept;

@@ -55,6 +55,8 @@ namespace huira {
             const aiScene* ai_scene;
             Model<TSpectral>* model;
 
+            fs::path base_directory;
+
             Scene<TSpectral>* scene;
 
             std::function<TSpectral(RGB)> spectral_conversion;
@@ -79,7 +81,7 @@ namespace huira {
 
         static Transform<double> convert_transform_(const aiMatrix4x4& ai_matrix);
 
-        static Vec3<double> convert_vec3_(const aiVector3D& ai_vec);
+        static Vec3<float> convert_vec3_(const aiVector3D& ai_vec);
 
         static void process_materials_(LoadContext& ctx);
 
@@ -88,6 +90,9 @@ namespace huira {
             const aiMaterial* ai_mat,
             aiTextureType tex_type,
             LoadContext& ctx);
+
+        template <typename TPixel>
+        static auto& get_texture_cache_(LoadContext& ctx);
     };
 
 }

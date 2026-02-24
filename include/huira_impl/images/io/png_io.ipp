@@ -140,6 +140,16 @@ namespace huira {
         state->pos += byte_count;
     }
 
+
+    inline void png_warning_handler_(png_structp /*png_ptr*/, png_const_charp message) noexcept {
+        HUIRA_LOG_DEBUG(std::string("libpng warning: ") + message);
+    }
+
+    inline void png_error_handler_(png_structp png_ptr, png_const_charp message) noexcept {
+        HUIRA_LOG_ERROR(std::string("libpng error: ") + message);
+        longjmp(png_jmpbuf(png_ptr), 1);
+    }
+
     /**
      * @brief Decodes a PNG from an in-memory buffer into raw byte data.
      *
@@ -166,7 +176,7 @@ namespace huira {
         }
 
         png_structp png_ptr = png_create_read_struct(
-            PNG_LIBPNG_VER_STRING, nullptr, nullptr, nullptr);
+            PNG_LIBPNG_VER_STRING, nullptr, png_error_handler_, png_warning_handler_);
         if (!png_ptr) {
             HUIRA_THROW_ERROR("read_png_raw_ - Failed to create PNG read struct");
         }

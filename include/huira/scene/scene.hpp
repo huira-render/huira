@@ -140,6 +140,9 @@ namespace huira {
         NameRegistry<Texture<float>> mono_textures_;
         NameRegistry<Texture<Vec3<float>>> vec3_textures_;
 
+        // Default material:
+        std::unique_ptr<Material<TSpectral>> default_material_;
+
         // Default textures:
         std::unique_ptr<Image<TSpectral>>   default_albedo_image_;
         std::unique_ptr<Image<float>>       default_metallic_image_;

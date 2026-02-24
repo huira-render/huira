@@ -24,8 +24,7 @@ namespace huira {
         Vec3<float> tangent;        ///< Tangent vector (for normal mapping / anisotropic BSDFs)
         Vec3<float> bitangent;      ///< Bitangent vector (cross(normal_s, tangent))
 
-        Vec3<float> uvw;            ///< Barycentric coordinates (u, v, w) for interpolation
-        Vec2<float> uv;             ///< Texture coordinates for material/texture lookup
+        Vec2<float> uv;             ///< Texture coordinates (u, v)
 
         Vec3<float> wo;             ///< Outgoing direction (towards camera), world space
 

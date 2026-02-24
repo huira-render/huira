@@ -8,6 +8,7 @@
 #include "huira/core/spectral_bins.hpp"
 #include "huira/images/image.hpp"
 #include "huira/images/io/color_space.hpp"
+#include "huira/images/io/convert_pixel.hpp"
 #include "huira/images/io/io_util.hpp"
 #include "huira/util/logger.hpp"
 #include "huira/util/paths.hpp"
