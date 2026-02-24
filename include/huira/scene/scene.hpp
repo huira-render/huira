@@ -32,18 +32,18 @@ namespace huira {
     class SceneView;
 
 
+    /**
+     * @brief Scene graph and asset manager for a rendered world.
+     *
+     * The Scene class manages all assets (meshes, lights, unresolved objects, camera models, models, stars)
+     * and the scene graph (root node, child nodes, instances, etc.). It provides methods for adding, removing,
+     * and querying assets, as well as for loading star catalogs and models. The scene graph is rooted at a
+     * FrameNode and supports hierarchical relationships between nodes and assets. Scene is non-copyable.
+     *
+     * @tparam TSpectral Spectral type used for asset spectral properties
+     */
     template <IsSpectral TSpectral>
-        /**
-         * @brief Scene graph and asset manager for a rendered world.
-         *
-         * The Scene class manages all assets (meshes, lights, unresolved objects, camera models, models, stars)
-         * and the scene graph (root node, child nodes, instances, etc.). It provides methods for adding, removing,
-         * and querying assets, as well as for loading star catalogs and models. The scene graph is rooted at a
-         * FrameNode and supports hierarchical relationships between nodes and assets. Scene is non-copyable.
-         *
-         * @tparam TSpectral Spectral type used for asset spectral properties
-         */
-        class Scene {
+    class Scene {
     private:
         std::shared_ptr<FrameNode<TSpectral>> root_node_;
 

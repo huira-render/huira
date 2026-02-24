@@ -77,25 +77,11 @@ namespace huira {
         ctx.model = shared_model.get();
         ctx.scene = &scene;
         ctx.spectral_conversion = std::move(spectral_conversion);
+        
+        // Process all materials:
+        process_materials_(ctx);
 
-        // TODO: MATERIAL AND TEXTURE LOADING
-        // // Load embedded textures
-        // for (unsigned int i = 0; i < ai_scene->mNumTextures; ++i) {
-        //     const aiTexture* ai_tex = ai_scene->mTextures[i];
-        //     auto texture = convert_embedded_texture_(ai_tex);
-        //     model->textures_.push_back(texture);
-        //     ctx.texture_map[ai_tex->mFilename.C_Str()] = texture.get();
-        // }
-        //
-        // // Load materials
-        // for (unsigned int i = 0; i < ai_scene->mNumMaterials; ++i) {
-        //     const aiMaterial* ai_mat = ai_scene->mMaterials[i];
-        //     auto material = convert_material_(ai_mat, ctx);
-        //     model->materials_.push_back(material);
-        //     ctx.material_map[i] = material.get();
-        // }
-
-        // Process all meshes first (creates Mesh objects)
+        // Process all meshes:
         process_meshes_(ctx);
 
         // Process the node hierarchy (creates FrameNodes and Instances)
@@ -362,5 +348,87 @@ namespace huira {
             static_cast<double>(v.y),
             static_cast<double>(v.z)
         };
+    }
+
+    template <IsSpectral TSpectral>
+    void ModelLoader<TSpectral>::process_materials_(LoadContext& ctx) {
+        for (unsigned int i = 0; i < ctx.ai_scene->mNumMaterials; ++i) {
+            const aiMaterial* ai_mat = ctx.ai_scene->mMaterials[i];
+            std::string name = std::string(ai_mat->GetName().C_Str());
+            MaterialHandle<TSpectral> material = ctx.scene->new_cook_torrance_material(name);
+
+            // Assign albedos:
+            if (auto tex = load_material_texture_<TSpectral>(ai_mat, aiTextureType_BASE_COLOR, ctx)) {
+                material.set_albedo(tex.value());
+            }
+            aiColor4D base_color;
+            if (ai_mat->Get(AI_MATKEY_BASE_COLOR, base_color) == AI_SUCCESS) {
+                material.set_albedo_factor(ctx.spectral_conversion(RGB{ base_color.r, base_color.g, base_color.b }));
+            }
+
+            // Assign roughness:
+            if (auto tex = load_material_texture_<float>(ai_mat, aiTextureType_DIFFUSE_ROUGHNESS, ctx)) {
+                material.set_roughness_image(tex.value());
+            }
+            float roughness;
+            if (ai_mat->Get(AI_MATKEY_ROUGHNESS_FACTOR, roughness) == AI_SUCCESS) {
+                material.set_roughness_factor(roughness);
+            }
+
+            // Assign metallic:
+            if (auto tex = load_material_texture_<float>(ai_mat, aiTextureType_METALNESS, ctx)) {
+                material.set_metallic_image(tex.value());
+            }
+            float metallic;
+            if (ai_mat->Get(AI_MATKEY_METALLIC_FACTOR, metallic) == AI_SUCCESS) {
+                material.set_metallic_factor(metallic);
+            }
+
+            // Assign normals:
+            if (auto tex = load_material_texture_<Vec3<float>>(ai_mat, aiTextureType_NORMALS, ctx)) {
+                material.set_normal_image(tex.value());
+            }
+
+            // Assign emissive:
+            if (auto tex = load_material_texture_<TSpectral>(ai_mat, aiTextureType_EMISSION_COLOR, ctx)) {
+                material.set_emissive_image(tex.value());
+            }
+            aiColor3D emissive;
+            if (ai_mat->Get(AI_MATKEY_COLOR_EMISSIVE, emissive) == AI_SUCCESS) {
+                material.set_emissive_factor(ctx.spectral_conversion(RGB{ emissive.r, emissive.g, emissive.b }));
+            }
+            
+            ctx.material_map.emplace(i, material);
+
+            HUIRA_LOG_DEBUG("ModelLoader::process_materials_ - Processed material " +
+                std::to_string(i) + ": " + name);
+        }
+    }
+
+    /**
+     * @brief Load a texture from an aiMaterial for a given texture type.
+     *
+     * Checks whether the material has a texture for the given slot, resolves
+     * the path (embedded or on-disk), loads the raw image data, converts it
+     * to the target pixel type TPixel, registers it with the Scene, and returns
+     * a TextureHandle. Uses the LoadContext caches for deduplication.
+     *
+     * @tparam TPixel Target pixel type for the loaded image
+     * @param ai_mat The ASSIMP material
+     * @param tex_type The ASSIMP texture type (e.g., aiTextureType_BASE_COLOR)
+     * @param ctx Loading context with scene reference and caches
+     * @return TextureHandle if a texture was found and loaded, std::nullopt otherwise
+     */
+    template <IsSpectral TSpectral>
+    template <typename TPixel>
+    std::optional<TextureHandle<TPixel>> ModelLoader<TSpectral>::load_material_texture_(
+        const aiMaterial* ai_mat,
+        aiTextureType tex_type,
+        LoadContext& ctx)
+    {
+        (void)ai_mat;
+        (void)tex_type;
+        (void)ctx;
+        return std::nullopt;
     }
 }

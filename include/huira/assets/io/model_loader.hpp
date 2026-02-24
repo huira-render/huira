@@ -17,7 +17,7 @@
 #include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/core/types.hpp"
 #include "huira/handles/mesh_handle.hpp"
-#include "huira/materials/material.hpp"
+#include "huira/handles/material_handle.hpp"
 #include "huira/scene/frame_node.hpp"
 #include "huira/scene/instance.hpp"
 
@@ -63,7 +63,12 @@ namespace huira {
             std::unordered_map<unsigned int, MeshHandle<TSpectral>> mesh_map;
 
             // Maps ASSIMP material index to our Material pointer
-            std::unordered_map<unsigned int, Material<TSpectral>*> material_map;
+            std::unordered_map<unsigned int, MaterialHandle<TSpectral>> material_map;
+
+            // Texture deduplication caches (keyed by resolved file path)
+            std::unordered_map<std::string, TextureHandle<TSpectral>>   spectral_texture_cache;
+            std::unordered_map<std::string, TextureHandle<float>>       mono_texture_cache;
+            std::unordered_map<std::string, TextureHandle<Vec3<float>>> vec3_texture_cache;
         };
         
         static void process_meshes_(LoadContext& ctx);
@@ -75,6 +80,14 @@ namespace huira {
         static Transform<double> convert_transform_(const aiMatrix4x4& ai_matrix);
 
         static Vec3<double> convert_vec3_(const aiVector3D& ai_vec);
+
+        static void process_materials_(LoadContext& ctx);
+
+        template <typename TPixel>
+        static std::optional<TextureHandle<TPixel>> load_material_texture_(
+            const aiMaterial* ai_mat,
+            aiTextureType tex_type,
+            LoadContext& ctx);
     };
 
 }

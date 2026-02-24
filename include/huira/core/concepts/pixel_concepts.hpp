@@ -17,6 +17,16 @@ namespace huira {
     template<typename T>
     inline constexpr bool is_spectral_bins_v = is_spectral_bins<T>::value;
 
+    // Type traits for detecting Vec2 specializations
+    template<typename T>
+    struct is_vec2 : std::false_type {};
+
+    template<IsFloatingPoint T>
+    struct is_vec2<Vec2<T>> : std::true_type {};
+
+    template<typename T>
+    inline constexpr bool is_vec2_v = is_vec2<T>::value;
+
     // Type traits for detecting Vec3 specializations
     template<typename T>
     struct is_vec3 : std::false_type {};
@@ -27,12 +37,24 @@ namespace huira {
     template<typename T>
     inline constexpr bool is_vec3_v = is_vec3<T>::value;
 
+    // Type traits for detecting Vec4 specializations
+    template<typename T>
+    struct is_vec4 : std::false_type {};
+
+    template<IsFloatingPoint T>
+    struct is_vec4<Vec4<T>> : std::true_type {};
+
+    template<typename T>
+    inline constexpr bool is_vec4_v = is_vec4<T>::value;
+
     template <typename T>
     concept IsNonSpectralPixel =
         IsSignedInteger<T> ||
         IsUnsignedInteger<T> ||
         IsFloatingPoint<T> ||
-        is_vec3_v<T>;
+        is_vec2_v<T> ||
+        is_vec3_v<T> ||
+        is_vec4_v<T>;
 
     // Valid pixel types for Image<T>
     template<typename T>
