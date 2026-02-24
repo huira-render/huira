@@ -6,6 +6,7 @@
 
 #include "huira/core/types.hpp"
 #include "huira/core/concepts/spectral_concepts.hpp"
+#include "huira/materials/material.hpp"
 #include "huira/scene/scene_object.hpp"
 
 namespace huira {
@@ -22,7 +23,8 @@ namespace huira {
     class Mesh : public SceneObject<Mesh<TSpectral>> {
     public:
         Mesh() : id_(next_id_++) {}
-        Mesh(IndexBuffer index_buffer, VertexBuffer<TSpectral> vertex_buffer) noexcept;
+        Mesh(IndexBuffer index_buffer, VertexBuffer<TSpectral> vertex_buffer);
+        Mesh(IndexBuffer index_buffer, VertexBuffer<TSpectral> vertex_buffer, TangentBuffer tangent_buffer);
         ~Mesh() override = default;
 
         Mesh(const Mesh&) = delete;
@@ -31,12 +33,17 @@ namespace huira {
         Mesh(Mesh&&) = default;
         Mesh& operator=(Mesh&&) = default;
 
+        void set_material(Material<TSpectral>* material);
+
         std::size_t index_count() const noexcept;
         std::size_t vertex_count() const noexcept;
         std::size_t triangle_count() const noexcept;
 
         [[nodiscard]] const IndexBuffer& index_buffer() const noexcept;
         [[nodiscard]] const VertexBuffer<TSpectral>& vertex_buffer() const noexcept;
+        [[nodiscard]] const TangentBuffer& tangent_buffer() const noexcept;
+
+        [[nodiscard]] bool has_tangents() const noexcept { return !tangent_buffer_.empty(); }
 
         std::uint64_t id() const override { return id_; }
         std::string type() const override { return "Mesh"; }
@@ -44,6 +51,9 @@ namespace huira {
     private:
         IndexBuffer index_buffer_;
         VertexBuffer<TSpectral> vertex_buffer_;
+
+        Material<TSpectral>* material_ = nullptr;
+        TangentBuffer tangent_buffer_;
 
         std::uint64_t id_ = 0;
         static inline std::uint64_t next_id_ = 0;

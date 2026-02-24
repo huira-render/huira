@@ -182,6 +182,7 @@ namespace huira {
 
         // Build vertex buffer
         VertexBuffer<TSpectral> vertices;
+        TangentBuffer tangent_buffer;
         vertices.reserve(ai_mesh->mNumVertices);
 
         for (unsigned int i = 0; i < ai_mesh->mNumVertices; ++i) {
@@ -217,10 +218,12 @@ namespace huira {
             }
             
             // Tangent and bitangent (needed for normal mapping)
-            // if (ai_mesh->HasTangentsAndBitangents()) {
-            //     vertex.tangent = convert_vec3_(ai_mesh->mTangents[i]);
-            //     vertex.bitangent = convert_vec3_(ai_mesh->mBitangents[i]);
-            // }
+            if (ai_mesh->HasTangentsAndBitangents()) {
+                Tangent vertex_tangent;
+                vertex_tangent.tangent = convert_vec3_(ai_mesh->mTangents[i]);
+                vertex_tangent.bitangent = convert_vec3_(ai_mesh->mBitangents[i]);
+                tangent_buffer.push_back(vertex_tangent);
+            }
 
             vertices.push_back(vertex);
         }
@@ -230,7 +233,7 @@ namespace huira {
         // unsigned int material_index = ai_mesh->mMaterialIndex;
         // Material<TSpectral>* material = ctx.material_map[material_index];
         // The Mesh constructor or a setter would then associate the material.
-        auto mesh = Mesh<TSpectral>(std::move(indices), std::move(vertices));
+        auto mesh = Mesh<TSpectral>(std::move(indices), std::move(vertices), std::move(tangent_buffer));
         auto mesh_handle = ctx.scene->add_mesh(std::move(mesh), std::string(ai_mesh->mName.C_Str()));
         return mesh_handle;
     }

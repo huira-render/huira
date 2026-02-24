@@ -223,4 +223,10 @@ namespace huira {
 
     template <IsSpectral TSpectral>
     using VertexBuffer = std::vector<Vertex<TSpectral>>;
+
+    struct Tangent {
+        Vec3<float> tangent{ 0,0,0 };
+        Vec3<float> bitangent{ 0,0,0 };
+    };
+    typedef std::vector<Tangent> TangentBuffer;
 }

@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <string>
+#include <array>
 
 namespace huira {
     /**
