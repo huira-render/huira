@@ -39,7 +39,6 @@ namespace huira {
             aiProcess_Triangulate |
             aiProcess_GenNormals |
             aiProcess_CalcTangentSpace |
-            aiProcess_FlipUVs |
             aiProcess_JoinIdenticalVertices |
             aiProcess_SortByPType;
         
