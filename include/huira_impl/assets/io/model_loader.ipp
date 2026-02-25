@@ -194,7 +194,7 @@ namespace huira {
                 // ASSIMP stores UVs as 3D vectors; we only need the first two components
                 vertex.uv = Vec2<float>{
                     static_cast<float>(ai_mesh->mTextureCoords[0][i].x),
-                    static_cast<float>(ai_mesh->mTextureCoords[0][i].y)
+                    1.f - static_cast<float>(ai_mesh->mTextureCoords[0][i].y)
                 };
             } else {
                 vertex.uv = Vec2<float>{0.0, 0.0};

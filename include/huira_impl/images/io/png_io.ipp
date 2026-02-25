@@ -145,7 +145,7 @@ namespace huira {
         HUIRA_LOG_DEBUG(std::string("libpng warning: ") + message);
     }
 
-    inline void png_error_handler_(png_structp png_ptr, png_const_charp message) noexcept {
+    [[noreturn]] inline void png_error_handler_(png_structp png_ptr, png_const_charp message) noexcept {
         HUIRA_LOG_ERROR(std::string("libpng error: ") + message);
         longjmp(png_jmpbuf(png_ptr), 1);
     }
