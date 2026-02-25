@@ -380,21 +380,50 @@ namespace huira {
             }
 
             // Assign roughness:
-            if (auto tex = load_material_texture_<float>(ai_mat, aiTextureType_DIFFUSE_ROUGHNESS, ctx)) {
-                material.set_roughness_image(tex.value());
-            }
-            float roughness;
-            if (ai_mat->Get(AI_MATKEY_ROUGHNESS_FACTOR, roughness) == AI_SUCCESS) {
-                material.set_roughness_factor(roughness);
-            }
+            //if (auto tex = load_material_texture_<float>(ai_mat, aiTextureType_DIFFUSE_ROUGHNESS, ctx)) {
+            //    material.set_roughness_image(tex.value());
+            //}
+            //float roughness;
+            //if (ai_mat->Get(AI_MATKEY_ROUGHNESS_FACTOR, roughness) == AI_SUCCESS) {
+            //    material.set_roughness_factor(roughness);
+            //}
+            //
+            //// Assign metallic:
+            //if (auto tex = load_material_texture_<float>(ai_mat, aiTextureType_METALNESS, ctx)) {
+            //    material.set_metallic_image(tex.value());
+            //}
+            //float metallic;
+            //if (ai_mat->Get(AI_MATKEY_METALLIC_FACTOR, metallic) == AI_SUCCESS) {
+            //    material.set_metallic_factor(metallic);
+            //}
 
-            // Assign metallic:
-            if (auto tex = load_material_texture_<float>(ai_mat, aiTextureType_METALNESS, ctx)) {
-                material.set_metallic_image(tex.value());
-            }
-            float metallic;
-            if (ai_mat->Get(AI_MATKEY_METALLIC_FACTOR, metallic) == AI_SUCCESS) {
-                material.set_metallic_factor(metallic);
+            // Replace the separate roughness/metallic loading with:
+            if (ai_mat->GetTextureCount(aiTextureType_DIFFUSE_ROUGHNESS) > 0 ||
+                ai_mat->GetTextureCount(aiTextureType_METALNESS) > 0)
+            {
+                // Load as RGB to extract individual channels
+                aiTextureType packed_type = ai_mat->GetTextureCount(aiTextureType_DIFFUSE_ROUGHNESS) > 0
+                    ? aiTextureType_DIFFUSE_ROUGHNESS
+                    : aiTextureType_METALNESS;
+
+                if (auto tex = load_material_texture_<Vec3<float>>(ai_mat, packed_type, ctx)) {
+                    const Image<Vec3<float>>& packed = *tex.value().get()->image();
+
+                    // Extract channels: green = roughness, blue = metallic
+                    Image<float> roughness_img(packed.width(), packed.height());
+                    Image<float> metallic_img(packed.width(), packed.height());
+                    for (int y = 0; y < packed.height(); ++y) {
+                        for (int x = 0; x < packed.width(); ++x) {
+                            roughness_img(x, y) = packed(x, y).y; // green
+                            metallic_img(x, y) = packed(x, y).z;  // blue
+                        }
+                    }
+
+                    auto rough_handle = ctx.scene->add_texture(std::move(roughness_img), name + "_roughness");
+                    auto metal_handle = ctx.scene->add_texture(std::move(metallic_img), name + "_metallic");
+                    material.set_roughness_image(rough_handle);
+                    material.set_metallic_image(metal_handle);
+                }
             }
 
             // Assign normals:
@@ -544,6 +573,28 @@ namespace huira {
             }
         }
 
+        return result;
+    }
+
+    /// Extract green channel from an RGB image (for GLTF roughness)
+    inline Image<float> extract_green_channel_(const Image<RGB>& rgb) {
+        Image<float> result(rgb.width(), rgb.height());
+        for (int y = 0; y < rgb.height(); ++y) {
+            for (int x = 0; x < rgb.width(); ++x) {
+                result(x, y) = rgb(x, y)[1]; // green
+            }
+        }
+        return result;
+    }
+
+    /// Extract blue channel from an RGB image (for GLTF metallic)
+    inline Image<float> extract_blue_channel_(const Image<RGB>& rgb) {
+        Image<float> result(rgb.width(), rgb.height());
+        for (int y = 0; y < rgb.height(); ++y) {
+            for (int x = 0; x < rgb.width(); ++x) {
+                result(x, y) = rgb(x, y)[2]; // blue
+            }
+        }
         return result;
     }
 

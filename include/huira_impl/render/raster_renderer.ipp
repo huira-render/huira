@@ -106,6 +106,10 @@ namespace huira {
             auto vertices = mesh->vertex_buffer();
             auto indices = mesh->index_buffer();
 
+            Vec3<float> t0{ 0 }, t1{ 0 }, t2{ 0 }, bt0{ 0 }, bt1{ 0 }, bt2{ 0 };
+            auto tangents = mesh->tangent_buffer();
+            bool has_tangents = mesh->has_tangents();
+
             auto material = mesh->material();
 
             for (const Transform<float>& instance_tf : batch.instances) {
@@ -122,6 +126,17 @@ namespace huira {
                     auto n0 = glm::normalize(instance_tf.apply_to_direction(vertices[idx0].normal));
                     auto n1 = glm::normalize(instance_tf.apply_to_direction(vertices[idx1].normal));
                     auto n2 = glm::normalize(instance_tf.apply_to_direction(vertices[idx2].normal));
+
+                    
+                    if (has_tangents) {
+                        t0 = instance_tf.apply_to_direction(tangents[idx0].tangent);
+                        t1 = instance_tf.apply_to_direction(tangents[idx1].tangent);
+                        t2 = instance_tf.apply_to_direction(tangents[idx2].tangent);
+
+                        bt0 = instance_tf.apply_to_direction(tangents[idx0].bitangent);
+                        bt1 = instance_tf.apply_to_direction(tangents[idx1].bitangent);
+                        bt2 = instance_tf.apply_to_direction(tangents[idx2].bitangent);
+                    }
 
                     // Triangle (v0, v1, v2) can be processed here
                     Pixel v0_p = camera->project_point(v0);
@@ -189,9 +204,17 @@ namespace huira {
                                         v * uv1 / z1 +
                                         w * uv2 / z2);
 
+                            interaction.tangent = Vec3<float>{ 0.0f };
+                            interaction.bitangent = Vec3<float>{ 0.0f };
+                            if (has_tangents) {
+                                interaction.tangent = glm::normalize(
+                                    depth * (u * t0 / z0 + v * t1 / z1 + w * t2 / z2));
+                                interaction.bitangent = glm::normalize(
+                                    depth * (u * bt0 / z0 + v * bt1 / z1 + w * bt2 / z2));
+                            }
 
-                                    // Evaluate material textures once for this fragment
-                                    auto [params, shading_isect] = material->evaluate(interaction);
+                            // Evaluate material textures once for this fragment
+                            auto [params, shading_isect] = material->evaluate(interaction);
 
                                     if (frame_buffer.has_received_power()) {
                                         TSpectral fragment_radiance{ 0 };
@@ -225,19 +248,77 @@ namespace huira {
                                         frame_buffer.albedo()(x, y) = params.albedo;
                                     }
 
-                                    if (frame_buffer.has_camera_normals()) {
-                                        // Interpolate normals
-                                        Vec3<float> n_display = interaction.normal_s;
-                                        n_display[0] = 0.5f * (n_display[0] + 1.0f);
-                                        n_display[1] = 0.5f * (n_display[1] + 1.0f);
-                                        n_display[2] = 0.5f * (n_display[2] + 1.0f);
-                                        frame_buffer.camera_normals()(x, y) = n_display;
-                                    }
-                                }
-                            }
+                        if (frame_buffer.has_received_power())
+                            frame_buffer.received_power()(x, y) = accum_radiance * inv;
+                        if (frame_buffer.has_albedo())
+                            frame_buffer.albedo()(x, y) = accum_albedo * inv;
+                        if (frame_buffer.has_mesh_ids())
+                            frame_buffer.mesh_ids()(x, y) = static_cast<std::uint64_t>(best_mesh_id);
+                        if (frame_buffer.has_camera_normals()) {
+                            Vec3<float> n = glm::normalize(accum_normals);
+                            frame_buffer.camera_normals()(x, y) = 0.5f * (n + Vec3<float>{1.0f});
                         }
                     }
                 }
+            }
+        }
+    }
+
+    /**
+     * @brief Rasterize mesh geometry from the scene view into the frame buffer.
+     * 
+     * This method implements a basic triangle rasterization pipeline. For each mesh instance
+     * in the scene, it projects triangles to screen space, performs per-pixel rasterization
+     * with depth testing, and computes lighting using a simple Lambertian shading model.
+     * 
+     * The method supports multiple frame buffer outputs:
+     * - Received power (radiance with Lambertian shading)
+     * - Mesh IDs (for segmentation)
+     * - Camera-space normals (for debugging/analysis)
+     * 
+     * @tparam TSpectral Spectral type for the rendering pipeline
+     * @param scene_view The scene view containing meshes and lights to render
+     * @param frame_buffer The frame buffer to rasterize into
+     */
+    template <IsSpectral TSpectral>
+    void RasterRenderer<TSpectral>::rasterize_(
+        SceneView<TSpectral>& scene_view,
+        FrameBuffer<TSpectral>& frame_buffer)
+    {
+        // Extract the camera:
+        auto camera = this->get_camera(scene_view);
+
+
+        // Extract meshes and their instances from the scene view
+        auto meshes = this->get_meshes(scene_view);
+
+
+        // Extract the lights:
+        auto lights = this->get_lights(scene_view);
+        
+        // Reset any existing data in the frame buffer:
+        frame_buffer.clear();
+
+        // Make sure depth buffer is enabled:
+        frame_buffer.enable_depth();
+
+        // Loop over all instances:
+        std::size_t i = 0;
+        for (auto& batch : meshes) {
+            auto& mesh = batch.mesh;
+
+            auto material = mesh->material();
+            Image<Vec3<float>> normal_map = *material->normal_image_;
+            Image<RGB> normal(normal_map.resolution());
+            for (std::size_t i = 0; i < normal_map.size(); ++i) {
+                normal[i] = RGB{ normal_map[i].x, normal_map[i].y, normal_map[i].z };
+            }
+            std::string id = std::to_string(i);
+            write_image_png("output/material/Mesh_" + id + "_normal.png", normal);
+            i++;
+
+            for (const Transform<float>& instance_tf : batch.instances) {
+                rasterize_instance_(instance_tf, camera, frame_buffer, mesh, lights);
             }
         }
     }
