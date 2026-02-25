@@ -105,8 +105,6 @@ namespace huira {
             const Image<TSpectral>* emissive_image);
 
         std::unique_ptr<BSDF<TSpectral>> bsdf_;
-        
-
 
         const Image<TSpectral>*   default_albedo_image_;
         const Image<float>*       default_metallic_image_;
