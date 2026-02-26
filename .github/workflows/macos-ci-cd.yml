@@ -1,4 +1,4 @@
-name: macOS CI/CD
+name: macOS Build
 
 on:
   push:

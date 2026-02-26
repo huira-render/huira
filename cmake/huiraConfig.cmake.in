@@ -19,7 +19,7 @@ find_dependency(assimp CONFIG)
 
 find_dependency(TBB CONFIG)
 
-find_dependency(JPEG)
+find_dependency(libjpeg-turbo CONFIG)
 find_dependency(PNG)
 find_package(CFITSIO REQUIRED)
 # Conda-forge's cfitsio includes 'm' in its link interface, which doesn't

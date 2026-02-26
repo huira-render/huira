@@ -1,0 +1,84 @@
+name: vcpkg Build
+
+on:
+  schedule:
+    - cron: '0 0 * * 6'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  version-check:
+    name: Version Check
+    uses: ./.github/workflows/version-check.yml
+
+  vcpkg-build:
+    needs: version-check
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux
+            os: ubuntu-22.04
+          - platform: macos
+            os: macos-14
+          - platform: windows
+            os: windows-2022
+    runs-on: ${{ matrix.os }}
+    name: Build (${{ matrix.platform }})
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Clone vcpkg (latest)
+        run: git clone https://github.com/microsoft/vcpkg.git ${{ github.workspace }}/vcpkg --depth 1
+
+      - name: Bootstrap vcpkg (Linux/macOS)
+        if: matrix.platform != 'windows'
+        run: ${{ github.workspace }}/vcpkg/bootstrap-vcpkg.sh
+
+      - name: Bootstrap vcpkg (Windows)
+        if: matrix.platform == 'windows'
+        run: ${{ github.workspace }}\vcpkg\bootstrap-vcpkg.bat
+
+      - name: Install huira port
+        run: >
+          ${{ github.workspace }}/vcpkg/vcpkg install huira
+          --overlay-ports=packaging/vcpkg-port
+          --triplet=${{ matrix.platform == 'windows' && 'x64-windows' || matrix.platform == 'macos' && 'arm64-osx' || 'x64-linux' }}
+
+      - name: Test find_package works
+        shell: bash
+        run: |
+          cd tests/packaging
+          mkdir build && cd build
+          cmake .. \
+            -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake \
+            -DVCPKG_OVERLAY_PORTS=${{ github.workspace }}/packaging/vcpkg-port
+          cmake --build .
+          ctest --output-on-failure
+
+  vcpkg-ci:
+    name: vcpkg CI
+    if: always()
+    needs:
+      - version-check
+      - vcpkg-build
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check all jobs passed
+        run: |
+          if [[ "${{ contains(needs.*.result, 'failure') }}" == "true" ]]; then
+            echo "One or more jobs failed"
+            exit 1
+          fi
+          echo "All jobs passed or were skipped successfully"
