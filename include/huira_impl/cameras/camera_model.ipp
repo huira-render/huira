@@ -54,6 +54,8 @@ namespace huira {
     void CameraModel<TSpectral>::set_distortion(Args&&... args)
     {
         distortion_ = std::make_unique<TDistortion>(std::forward<Args>(args)...);
+        compute_distortion_field_();
+        compute_visibility_cone_();
     }
 
 
@@ -258,30 +260,55 @@ namespace huira {
     template <IsSpectral TSpectral>
     Pixel CameraModel<TSpectral>::project_point(const Vec3<float>& point_camera_coords) const
     {
-        constexpr float kEpsilon = 1e-6f;
-        float x = point_camera_coords.x;
-        float y = point_camera_coords.y;
-        float z = point_camera_coords.z;
         auto NaN = std::numeric_limits<float>::quiet_NaN();
 
-        float depth = z;
+        if (!in_fov(point_camera_coords)) {
+            return Pixel{ NaN, NaN };
+        }
+
         float sign_y = 1.0f;
+        float depth = point_camera_coords.z;
         if (blender_convention_) {
-            depth = -z;
+            depth = -depth;
             sign_y = -1.0f;
         }
 
-        if (depth < kEpsilon) {
-            return Pixel{ NaN, NaN };  // behind camera
-        }
-        // Compute normalized image coordinates:
-        Pixel normalized{ x / depth, sign_y * y / depth };
+        Pixel normalized{ point_camera_coords.x / depth, sign_y * point_camera_coords.y / depth };
         if (distortion_) {
             normalized = distortion_->distort(normalized);
         }
-        float px = fx_ * normalized[0] + cx_;
-        float py = fy_ * normalized[1] + cy_;
-        return Pixel{ px, py };
+        return Pixel{ fx_ * normalized[0] + cx_, fy_ * normalized[1] + cy_ };
+    }
+
+    template <IsSpectral TSpectral>
+    Ray<TSpectral> CameraModel<TSpectral>::cast_ray(const Pixel& pixel) const
+    {
+        if (distortion_) {
+            float u = pixel[0] / static_cast<float>(rx_ - 1);
+            float v = pixel[1] / static_cast<float>(ry_ - 1);
+            Vec3<float> direction = distortion_field_.sample_bilinear<WrapMode::Clamp>(u, v);
+            return Ray<TSpectral>{ Vec3<float>{0.f, 0.f, 0.f}, glm::normalize(direction) };
+        }
+        return cast_ray_(pixel);
+    }
+
+    template <IsSpectral TSpectral>
+    Ray<TSpectral> CameraModel<TSpectral>::cast_ray(int x, int y) const
+    {
+        Pixel pixel{ static_cast<float>(x), static_cast<float>(y) };
+        return cast_ray(pixel);
+    }
+
+    template <IsSpectral TSpectral>
+    bool CameraModel<TSpectral>::in_fov(const Vec3<float>& point) const
+    {
+        float len2 = glm::dot(point, point);
+        if (len2 < 1e-12f) {
+            return false;
+        }
+
+        float z = blender_convention_ ? -point.z : point.z;
+        return z * glm::inversesqrt(len2) >= z_cutoff_;
     }
 
 
@@ -343,6 +370,86 @@ namespace huira {
         cy_ = static_cast<float>(sensor_->resolution().y) * 0.5f;
         rx_ = static_cast<float>(sensor_->resolution().x);
         ry_ = static_cast<float>(sensor_->resolution().y);
+
+        compute_visibility_cone_();
+    }
+
+    template <IsSpectral TSpectral>
+    Ray<TSpectral> CameraModel<TSpectral>::cast_ray_(const Pixel& pixel) const
+    {
+        // Invert the intrinsic matrix
+        float nx = (pixel[0] - cx_) / fx_;
+        float ny = (pixel[1] - cy_) / fy_;
+
+        Pixel normalized{ nx, ny };
+
+        // Undistort
+        if (distortion_) {
+            normalized = distortion_->undistort(normalized);
+        }
+
+        // Build direction in camera coordinates
+        float dir_x = normalized[0];
+        float dir_y = normalized[1];
+
+        Vec3<float> origin{ 0.f, 0.f, 0.f };
+        Vec3<float> direction;
+
+        if (blender_convention_) {
+            direction = Vec3<float>{ dir_x, -dir_y, -1.0f };
+        }
+        else {
+            direction = Vec3<float>{ dir_x, dir_y, 1.0f };
+        }
+
+        return Ray<TSpectral>{ origin, glm::normalize(direction) };
+    }
+
+    template <IsSpectral TSpectral>
+    void CameraModel<TSpectral>::compute_distortion_field_()
+    {
+        Resolution res = sensor_->resolution();
+
+        distortion_field_ = Image<Vec3<float>>(res, Vec3<float>{0, 0, 0});
+
+        for (int x = 0; x < res.x; ++x) {
+            for (int y = 0; y < res.y; ++y) {
+                Pixel pixel{ static_cast<float>(x), static_cast<float>(y) };
+                Ray<TSpectral> ray = cast_ray_(pixel);
+                distortion_field_(x, y) = ray.direction();
+            }
+        }
+    }
+
+    template <IsSpectral TSpectral>
+    void CameraModel<TSpectral>::compute_visibility_cone_()
+    {
+        Resolution res = sensor_->resolution();
+
+        Vec3<float> zdir{ 0, 0, 1 };
+        if (blender_convention_) {
+            zdir = Vec3<float>{ 0, 0, -1 };
+        }
+
+        float min_dot = 1.f;
+
+        auto update = [&](int i, int j) {
+            Ray<TSpectral> ray = cast_ray(i, j);
+            Vec3<float> direction = ray.direction();
+            min_dot = std::min(min_dot, glm::dot(direction, zdir));
+            };
+
+        for (int i = 0; i < res.x; ++i) {
+            update(i, 0);
+            update(i, res.y - 1);
+        }
+        for (int j = 1; j < res.y - 1; ++j) {
+            update(0, j);
+            update(res.x - 1, j);
+        }
+
+        visibility_cone_ = std::acos(std::clamp(min_dot, -1.f, 1.f));
+        z_cutoff_ = std::cos(visibility_cone_);
     }
 }
 
