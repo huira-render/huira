@@ -49,7 +49,6 @@ def main():
     
     # Load stars
     scene.load_stars(star_catalog_path, time)
-    scene.print_contents()
     
     # Create an instance of the camera using SPICE configuration
     mapcam = scene.root.new_instance(camera_model)

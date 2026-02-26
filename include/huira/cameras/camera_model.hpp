@@ -1,4 +1,3 @@
-
 #pragma once
 
 #include <cstdint>
@@ -18,6 +17,7 @@
 #include "huira/cameras/psfs/psf.hpp"
 #include "huira/cameras/sensors/sensor_model.hpp"
 #include "huira/render/frame_buffer.hpp"
+#include "huira/render/ray.hpp"
 #include "huira/scene/node.hpp"
 #include "huira/scene/scene_object.hpp"
 
@@ -88,6 +88,11 @@ namespace huira {
 
         Pixel project_point(const Vec3<float>& point_camera_coords) const;
 
+        Ray<TSpectral> cast_ray(const Pixel& pixel) const;
+        Ray<TSpectral> cast_ray(int x, int y) const;
+
+        bool in_fov(const Vec3<float>& point) const;
+
         void readout(FrameBuffer<TSpectral>& fb, float exposure_time) const { sensor_->readout(fb, exposure_time); }
 
         float get_projected_aperture_area(const Vec3<float>& direction) const;
@@ -122,6 +127,15 @@ namespace huira {
         float rx_;
         float ry_;
         void compute_intrinsics_();
+
+        Ray<TSpectral> cast_ray_(const Pixel& pixel) const;
+
+        Image<Vec3<float>> distortion_field_;
+        void compute_distortion_field_();
+
+        float visibility_cone_;
+        float z_cutoff_;
+        void compute_visibility_cone_();
 
         bool blender_convention_ = false;
 

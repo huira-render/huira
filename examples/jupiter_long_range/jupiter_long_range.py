@@ -37,7 +37,7 @@ def main():
     camera_model.set_sensor_pixel_pitch(um(8.5), um(8.5))
     camera_model.set_sensor_resolution(1920, 1080)
     camera_model.set_sensor_bit_depth(14)
-    camera_model.use_aperture_psf(32, 16)
+    camera_model.use_aperture_psf(64, 16)
     
     # Set the observation time
     time = huira.Time("2016-09-19T16:22:05.728")
@@ -45,7 +45,6 @@ def main():
     
     # Load stars
     scene.load_stars(star_catalog_path, time)
-    scene.print_contents()
 
     # Create the sun
     sun_light = scene.new_sun_light()

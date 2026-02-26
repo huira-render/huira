@@ -41,7 +41,7 @@ int main(int argc, char** argv) {
     camera_model.set_sensor_pixel_pitch(8.5_um, 8.5_um);
     camera_model.set_sensor_resolution(1920, 1080);
     camera_model.set_sensor_bit_depth(14);
-    camera_model.use_aperture_psf(32, 16);
+    camera_model.use_aperture_psf(64, 16);
     
     huira::Time time("2016-09-19T16:22:05.728");
     float exposure_time = 1.f;
@@ -55,8 +55,8 @@ int main(int argc, char** argv) {
     sun.set_spice_origin("SUN");
 
     // Create unresolved objects for Jupiter and its moons:
-    auto jupiter_model = scene.new_unresolved_sphere(69911000_m, sun, TSpectral{ 0.5f });
-    //auto jupiter_model = scene.new_unresolved_object_from_magnitude(-1.44, "Jupiter");
+    //auto jupiter_model = scene.new_unresolved_sphere(69911000_m, sun, TSpectral{ 0.5f });
+    auto jupiter_model = scene.new_unresolved_object_from_magnitude(-1.44, "Jupiter");
     //auto jupiter_model = scene.new_unresolved_object(TSpectral{ 1e-8 });
     auto io_model = scene.new_unresolved_object_from_magnitude(5.02);
     auto europa_model = scene.new_unresolved_object_from_magnitude(5.29);
