@@ -56,6 +56,6 @@ target_link_libraries(huira INTERFACE
     TBB::tbbmalloc
     TIFF::TIFF
     CFITSIO::CFITSIO
-    libjpeg-turbo::turbojpeg
+    $<IF:$<TARGET_EXISTS:libjpeg-turbo::turbojpeg>,libjpeg-turbo::turbojpeg,libjpeg-turbo::turbojpeg-static>
     PNG::PNG
 )

@@ -60,7 +60,7 @@ before-all = [
     "git clone https://github.com/microsoft/vcpkg.git /opt/vcpkg",
     "/opt/vcpkg/bootstrap-vcpkg.sh -disableMetrics",
     "echo 'set(VCPKG_BUILD_TYPE release)' >> /opt/vcpkg/triplets/x64-linux.cmake",
-    "/opt/vcpkg/vcpkg install --x-manifest-root=/project/packaging --x-install-root=/opt/vcpkg_installed --triplet=x64-linux --x-feature=apps",
+    "/opt/vcpkg/vcpkg install --x-manifest-root=/project/packaging/vcpkg-port --x-install-root=/opt/vcpkg_installed --triplet=x64-linux --x-feature=tools",
 ]
 environment = { CMAKE_TOOLCHAIN_FILE = "/opt/vcpkg/scripts/buildsystems/vcpkg.cmake", VCPKG_INSTALLED_DIR = "/opt/vcpkg_installed", VCPKG_MANIFEST_INSTALL = "OFF" }
 
