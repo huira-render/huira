@@ -18,7 +18,7 @@ Initial work on Huira has been on the basic architecture as well as distribution
 
 If there are features you wish to see, that you don't see listed here, please feel free to submit a [Feature Request](https://github.com/huira-render/huira/issues/new?template=feature_request.md)
 
-## Currently Stable Features (as of v0.8.1)
+## Currently Stable Features (as of v0.8.2)
 - Radiometrically accurate unresolved rendering with calibrated camera distortion models and common camera controls
 - SPICE toolkit integration for spacecraft ephemeris and reference frames
 - Star field rendering with accurate celestial coordinates
