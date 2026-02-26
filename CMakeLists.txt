@@ -8,7 +8,7 @@ option(HUIRA_EXAMPLES "Build Examples" OFF)
 option(HUIRA_TESTS "Build Tests" OFF)
 option(HUIRA_DOCS "Build Documentation" OFF)
 option(HUIRA_PYTHON "Build Python Bindings" OFF)
-option(HUIRA_LOCAL_DEV "Build Local Development Directory" ON)
+option(HUIRA_LOCAL_DEV "Build Local Development Directory" OFF)
 option(HUIRA_NATIVE_ARCH "Optimize for the build machine's CPU architecture" ON)
 
 # Documentation uses Sphinx autodoc which requires the Python extension module
