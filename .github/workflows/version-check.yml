@@ -29,26 +29,24 @@ jobs:
                          grep -oP '^\s*version:\s*\K[0-9]+\.[0-9]+\.[0-9]+' packaging/recipe/meta.yaml | head -1)
           echo "meta.yaml version: $META_VERSION"
 
-          # Check VERSION matches meta.yaml
+          # Always check VERSION matches meta.yaml
           if [ "$VERSION_FILE" != "$META_VERSION" ]; then
             echo "::error::Version mismatch: VERSION file ($VERSION_FILE) != meta.yaml ($META_VERSION)"
             exit 1
           fi
 
-          # Get the latest git tag (if any exist)
-          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-
-          if [ -z "$LATEST_TAG" ]; then
-            echo "No git tags found - skipping tag check"
-          else
-            # Strip leading 'v' if present
-            TAG_VERSION="${LATEST_TAG#v}"
-            echo "Latest git tag: $LATEST_TAG (version: $TAG_VERSION)"
+          # Only check git tag when triggered by a tag push
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            TAG_VERSION="${GITHUB_REF#refs/tags/}"
+            TAG_VERSION="${TAG_VERSION#v}"
+            echo "Tag push detected — checking tag version: $TAG_VERSION"
 
             if [ "$VERSION_FILE" != "$TAG_VERSION" ]; then
-              echo "::error::Version mismatch: VERSION file ($VERSION_FILE) != git tag ($TAG_VERSION)"
+              echo "::error::Version mismatch: VERSION file ($VERSION_FILE) != tag ($TAG_VERSION)"
               exit 1
             fi
+            echo "All versions (file, meta.yaml, tag) are consistent"
+          else
+            echo "Not a tag push — skipping tag version check"
+            echo "VERSION and meta.yaml are consistent"
           fi
-
-          echo "All versions are consistent"
