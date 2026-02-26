@@ -27,6 +27,12 @@ from ._huira import (
     # Solid Angle
     Steradian, SquareDegree,
 
+    # Speed
+    MetersPerSecond, KilometersPerSecond, MilesPerHour, KilometersPerHour,
+
+    # Angular Rate
+    RadiansPerSecond, DegreesPerSecond,
+
     # Frequency
     Hertz, Kilohertz, Megahertz, Gigahertz, Terahertz,
 

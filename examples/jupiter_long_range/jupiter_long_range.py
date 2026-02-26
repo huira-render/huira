@@ -9,6 +9,7 @@ from huira.units import Kilometer as km
 from huira.units import Millimeter as mm
 from huira.units import Micrometer as um
 from huira.units import Degree as deg
+from huira.units import KilometersPerSecond as kps
 
 def parse_input_paths():
     if len(sys.argv) != 3:
@@ -83,6 +84,7 @@ def main():
     # Create a camera instance in the ECI frame and set it's position and orientation
     navcam = eci.new_instance(camera_model)
     navcam.set_position(km(7000), km(0), km(0))
+    navcam.set_velocity(kps(0), kps(8), kps(0))
 
     quat = huira.Quaternion(w=0.50865, x=-0.50865, y=0.491198, z=0.491198)
     navcam.set_rotation(huira.Rotation.from_parent_to_local(quat))

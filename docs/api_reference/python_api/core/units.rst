@@ -37,6 +37,14 @@ Available Units
    * - Solid Angle
      - Steradian, SquareDegree
      - Steradian
+   * - Speed
+     - MetersPerSecond
+     - KilometersPerSecond
+     - MilesPerHour
+     - KilometersPerHour
+   * - Angular Rate
+     - RadiansPerSecond
+     - DegreesPerSecond
    * - Frequency
      - Hertz, KiloHertz, MegaHertz, GigaHertz, TeraHertz
      - Hertz
