@@ -243,7 +243,7 @@ namespace huira {
                             }
 
                             accum_radiance += fragment_radiance;
-                            accum_normals += interaction.normal_s;
+                            accum_normals += shading_isect.normal_s;
                             accum_albedo += params.albedo;
                             hit_count++;
 
@@ -265,8 +265,7 @@ namespace huira {
                         if (frame_buffer.has_mesh_ids())
                             frame_buffer.mesh_ids()(x, y) = static_cast<std::uint64_t>(best_mesh_id);
                         if (frame_buffer.has_camera_normals()) {
-                            Vec3<float> n = glm::normalize(accum_normals);
-                            frame_buffer.camera_normals()(x, y) = 0.5f * (n + Vec3<float>{1.0f});
+                            frame_buffer.camera_normals()(x, y) = glm::normalize(accum_normals);
                         }
                     }
                 }

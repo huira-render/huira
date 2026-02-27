@@ -89,7 +89,8 @@ namespace huira {
         static std::optional<TextureHandle<TPixel>> load_material_texture_(
             const aiMaterial* ai_mat,
             aiTextureType tex_type,
-            LoadContext& ctx);
+            LoadContext& ctx,
+            bool is_normal_map = false);
 
         template <typename TPixel>
         static auto& get_texture_cache_(LoadContext& ctx);

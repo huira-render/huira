@@ -409,7 +409,7 @@ namespace huira {
             }
 
             // Assign normals:
-            if (auto tex = load_material_texture_<Vec3<float>>(ai_mat, aiTextureType_NORMALS, ctx)) {
+            if (auto tex = load_material_texture_<Vec3<float>>(ai_mat, aiTextureType_NORMALS, ctx, true)) {
                 material.set_normal_image(tex.value());
             }
 
@@ -599,7 +599,8 @@ namespace huira {
     std::optional<TextureHandle<TPixel>> ModelLoader<TSpectral>::load_material_texture_(
         const aiMaterial* ai_mat,
         aiTextureType tex_type,
-        LoadContext& ctx)
+        LoadContext& ctx,
+        bool is_normal_map)
     {
         // Check if this material has a texture for the requested slot
         if (ai_mat->GetTextureCount(tex_type) == 0) {
@@ -740,7 +741,14 @@ namespace huira {
 
         // Register with the Scene and cache
         std::string tex_name = fs::path(tex_path_str).stem().string();
-        TextureHandle<TPixel> handle = ctx.scene->add_texture(std::move(image), tex_name);
+        TextureHandle<TPixel> handle = [&]() {
+            if constexpr (std::is_same_v<TPixel, Vec3<float>>) {
+                if (is_normal_map) {
+                    return ctx.scene->add_normal_texture(std::move(image), tex_name);
+                }
+            }
+            return ctx.scene->add_texture(std::move(image), tex_name);
+            }();
         cache.emplace(tex_path_str, handle);
 
         HUIRA_LOG_DEBUG("ModelLoader::load_material_texture_ - Loaded texture: " +
