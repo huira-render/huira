@@ -86,7 +86,6 @@ namespace huira {
                     for (std::size_t i = 0; i < 3; ++i) {
                         pixel_value[i] = noise_and_adc(signal_e[i], dark_e, this->config_, max_dn, rng, read_noise_dist);
                     }
-
                     output(x, y) = pixel_value;
                 }
                 else {

@@ -313,6 +313,13 @@ namespace huira {
     }
 
     template <IsSpectral TSpectral>
+    float CameraModel<TSpectral>::pixel_radiance_to_power(int x, int y) const
+    {
+        Ray<TSpectral> ray = cast_ray(x, y);
+        return pixel_solid_angles_(x, y) * this->get_projected_aperture_area(ray.direction());
+    }
+
+    template <IsSpectral TSpectral>
     bool CameraModel<TSpectral>::in_fov(const Vec3<float>& point) const
     {
         float len2 = glm::dot(point, point);
@@ -385,15 +392,17 @@ namespace huira {
         ry_ = static_cast<float>(sensor_->resolution().y);
 
         compute_visibility_cone_();
+
+        compute_pixel_solid_angles_();
     }
 
     template <IsSpectral TSpectral>
-    Ray<TSpectral> CameraModel<TSpectral>::cast_ray_(const Pixel& pixel) const
+    template <IsFloatingPoint TFloat>
+    Vec3<TFloat> CameraModel<TSpectral>::pixel_to_direction_(const Pixel& pixel) const
     {
         // Invert the intrinsic matrix
         float nx = (pixel[0] - cx_) / fx_;
         float ny = (pixel[1] - cy_) / fy_;
-
         Pixel normalized{ nx, ny };
 
         // Undistort
@@ -402,20 +411,25 @@ namespace huira {
         }
 
         // Build direction in camera coordinates
-        float dir_x = normalized[0];
-        float dir_y = normalized[1];
-
-        Vec3<float> origin{ 0.f, 0.f, 0.f };
-        Vec3<float> direction;
-
+        TFloat dir_x = static_cast<TFloat>(normalized[0]);
+        TFloat dir_y = static_cast<TFloat>(normalized[1]);
+        
+        Vec3<TFloat> direction;
         if (blender_convention_) {
-            direction = Vec3<float>{ dir_x, -dir_y, -1.0f };
+            direction = Vec3<TFloat>{ dir_x, -dir_y, static_cast<TFloat>(-1)};
         }
         else {
-            direction = Vec3<float>{ dir_x, dir_y, 1.0f };
+            direction = Vec3<TFloat>{ dir_x, dir_y, static_cast<TFloat>(1) };
         }
 
-        return Ray<TSpectral>{ origin, glm::normalize(direction) };
+        return glm::normalize(direction);
+    }
+
+    template <IsSpectral TSpectral>
+    Ray<TSpectral> CameraModel<TSpectral>::cast_ray_(const Pixel& pixel) const
+    {
+        Vec3<float> origin{ 0.f, 0.f, 0.f };
+        return Ray<TSpectral>{ origin, pixel_to_direction_<float>(pixel) };
     }
 
     template <IsSpectral TSpectral>
@@ -432,6 +446,58 @@ namespace huira {
                 distortion_field_(x, y) = ray.direction();
             }
         }
+    }
+
+    template <IsSpectral TSpectral>
+    void CameraModel<TSpectral>::compute_pixel_solid_angles_()
+    {
+        Resolution res = sensor_->resolution();
+
+        pixel_solid_angles_ = Image<float>(res, 0.f);
+        for (int x = 0; x < res.x; ++x) {
+            for (int y = 0; y < res.y; ++y) {
+                // Calculate normalized directions to pixel corners
+                Vec3<double> c0 = pixel_to_direction_<double>(Pixel{static_cast<float>(x),     static_cast<float>(y)});
+                Vec3<double> c1 = pixel_to_direction_<double>(Pixel{static_cast<float>(x + 1), static_cast<float>(y)});
+                Vec3<double> c2 = pixel_to_direction_<double>(Pixel{static_cast<float>(x + 1), static_cast<float>(y + 1)});
+                Vec3<double> c3 = pixel_to_direction_<double>(Pixel{static_cast<float>(x),     static_cast<float>(y + 1)});
+
+                // Compute solid angle as sum of two triangular areas
+                double omega1 = triangle_solid_angle_(c0, c1, c2);
+                double omega2 = triangle_solid_angle_(c0, c2, c3);
+
+                pixel_solid_angles_(x, y) = static_cast<float>(omega1 + omega2);
+            }
+        }
+    }
+
+    template <IsSpectral TSpectral>
+    Vec3<double> CameraModel<TSpectral>::tangent_(const Vec3<double>& p0, const Vec3<double>& p1) const
+    {
+        Vec3<double> p = p1 - p0;
+        Vec3<double> r = glm::cross(p0, p);
+        Vec3<double> t = glm::cross(r, p0);
+        return glm::normalize(t);
+    }
+
+    template <IsSpectral TSpectral>
+    double CameraModel<TSpectral>::triangle_solid_angle_(const Vec3<double>& c0, const Vec3<double>& c1, const Vec3<double>& c2) const
+    {
+        // Compute interior angles using tangent vectors
+        Vec3<double> t01 = tangent_(c0, c1);
+        Vec3<double> t02 = tangent_(c0, c2);
+        double angle0 = std::acos(glm::dot(t01, t02));
+
+        Vec3<double> t10 = tangent_(c1, c0);
+        Vec3<double> t12 = tangent_(c1, c2);
+        double angle1 = std::acos(glm::dot(t10, t12));
+
+        Vec3<double> t20 = tangent_(c2, c0);
+        Vec3<double> t21 = tangent_(c2, c1);
+        double angle2 = std::acos(glm::dot(t20, t21));
+
+        // Apply Girard's theorem
+        return angle0 + angle1 + angle2 - PI<double>();
     }
 
     template <IsSpectral TSpectral>

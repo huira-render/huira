@@ -259,7 +259,7 @@ namespace huira {
                         depth_buffer(x, y) = min_depth;
 
                         if (frame_buffer.has_received_power())
-                            frame_buffer.received_power()(x, y) = accum_radiance * inv;
+                            frame_buffer.received_power()(x, y) = camera->pixel_radiance_to_power(x,y) * (accum_radiance * inv);
                         if (frame_buffer.has_albedo())
                             frame_buffer.albedo()(x, y) = accum_albedo * inv;
                         if (frame_buffer.has_mesh_ids())

@@ -92,6 +92,8 @@ namespace huira {
         Ray<TSpectral> cast_ray(const Pixel& pixel) const;
         Ray<TSpectral> cast_ray(int x, int y) const;
 
+        float pixel_radiance_to_power(int x, int y) const;
+
         bool in_fov(const Vec3<float>& point) const;
 
         void readout(FrameBuffer<TSpectral>& fb, float exposure_time) const { sensor_->readout(fb, exposure_time); }
@@ -129,10 +131,19 @@ namespace huira {
         float ry_;
         void compute_intrinsics_();
 
-        Ray<TSpectral> cast_ray_(const Pixel& pixel) const;
+        template <IsFloatingPoint TFloat>
+        Vec3<TFloat> pixel_to_direction_(const Pixel& pixel) const;
 
+        Ray<TSpectral> cast_ray_(const Pixel& pixel) const;
+        
         Image<Vec3<float>> distortion_field_;
         void compute_distortion_field_();
+
+        Image<float> pixel_solid_angles_;
+        void compute_pixel_solid_angles_();
+
+        Vec3<double> tangent_(const Vec3<double>& p0, const Vec3<double>& p1) const;
+        double triangle_solid_angle_(const Vec3<double>& c0, const Vec3<double>& c1, const Vec3<double>& c2) const;
 
         float visibility_cone_;
         float z_cutoff_;

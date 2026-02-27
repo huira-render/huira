@@ -31,7 +31,7 @@ int main(int argc, char** argv) {
 
     // Specify the time:
     huira::Time time("2019-02-06T10:27:00");
-    float exposure_time = 0.1f;
+    float exposure_time = 0.05f;
 
     // Configure a camera model:
     auto camera_model = scene.new_camera_model();
@@ -51,7 +51,7 @@ int main(int argc, char** argv) {
     auto gateway = scene.root.new_instance(gateway_model);
 
     // Create some local light source:
-    auto point_light = scene.new_point_light(50_W);
+    auto point_light = scene.new_point_light(5000_W);
     auto light = scene.root.new_instance(point_light);
     light.set_position(0_m, -200_m, 50_m);
 
