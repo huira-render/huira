@@ -69,7 +69,7 @@ def main():
     renderer.render(scene_view, frame_buffer, exposure_time)
     
     # Save the results
-    huira.write_png("starfield.png", frame_buffer.sensor_response, 8)
+    huira.write_png("output/starfield.png", frame_buffer.sensor_response, 8)
 
 if __name__ == "__main__":
     main()
