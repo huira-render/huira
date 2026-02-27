@@ -592,6 +592,15 @@ namespace huira {
         return TextureHandle<Vec3<float>>{ texture };
     }
 
+    template <IsSpectral TSpectral>
+    TextureHandle<Vec3<float>> Scene<TSpectral>::add_normal_texture(Image<Vec3<float>> image, std::string name)
+    {
+        for (std::size_t i = 0; i < image.size(); ++i) {
+            image[i] = glm::normalize(image[i] * 2.0f - Vec3<float>{1.0f});
+        }
+        return add_texture(std::move(image), name);
+    }
+
 
     /**
      * @brief Adds a star to the scene.

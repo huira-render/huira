@@ -111,6 +111,7 @@ namespace huira {
         TextureHandle<TSpectral> add_texture(Image<TSpectral> image, std::string name = "");
         TextureHandle<float> add_texture(Image<float> image, std::string name = "");
         TextureHandle<Vec3<float>> add_texture(Image<Vec3<float>> image, std::string name = "");
+        TextureHandle<Vec3<float>> add_normal_texture(Image<Vec3<float>> image, std::string name = "");
 
         void add_star(const Star<TSpectral>& star);
         void set_stars(const std::vector<Star<TSpectral>>& stars);

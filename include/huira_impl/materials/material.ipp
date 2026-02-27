@@ -27,7 +27,6 @@ namespace huira {
 
         if (isect.tangent != Vec3<float>{0.0f}) {
             Vec3<float> ts_normal = glm::normalize(normal_image_->sample_bilinear(uv.x, uv.y));
-            ts_normal = ts_normal * 2.0f - Vec3<float>{1.0f};
 
             ts_normal.x *= normal_factor_;
             ts_normal.y *= normal_factor_;
@@ -135,7 +134,6 @@ namespace huira {
     }
 
     template <IsSpectral TSpectral>
-
     void Material<TSpectral>::set_normal_image(const Image<Vec3<float>>* normal_image)
     {
         normal_image_ = normal_image;
