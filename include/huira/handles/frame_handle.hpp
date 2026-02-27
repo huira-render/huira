@@ -8,6 +8,7 @@
 #include "huira/handles/light_handle.hpp"
 #include "huira/handles/unresolved_handle.hpp"
 #include "huira/handles/instance_handle.hpp"
+#include "huira/handles/model_handle.hpp"
 #include "huira/handles/mesh_handle.hpp"
 #include "huira/scene/frame_node.hpp"
 

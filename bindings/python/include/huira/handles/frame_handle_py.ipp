@@ -4,6 +4,10 @@
 #include "pybind11/stl.h"
 
 #include "huira/handles/frame_handle.hpp"
+#include "huira/handles/light_handle.hpp"
+#include "huira/handles/unresolved_handle.hpp"
+#include "huira/handles/model_handle.hpp"
+
 #include "huira/handles/node_handle_py.ipp"
 
 namespace py = pybind11;
@@ -31,6 +35,9 @@ namespace huira {
             .def("new_instance", [](const HandleType& self, const UnresolvedObjectHandle<TSpectral>& asset) {
                 return self.new_instance(asset);
             }, py::arg("asset_handle"))
+            .def("new_instance", [](const HandleType& self, const ModelHandle<TSpectral>& asset) {
+            return self.new_instance(asset);
+                }, py::arg("asset_handle"))
             .def("delete_instance", &HandleType::delete_instance,
                 py::arg("instance"))
 
