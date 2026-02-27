@@ -114,9 +114,13 @@ namespace huira {
             }
 
             // Triangle (v0, v1, v2) can be processed here
-            Pixel v0_p = camera->project_point(v0);
-            Pixel v1_p = camera->project_point(v1);
-            Pixel v2_p = camera->project_point(v2);
+            Pixel v0_p = camera->project_point_no_distortion(v0);
+            Pixel v1_p = camera->project_point_no_distortion(v1);
+            Pixel v2_p = camera->project_point_no_distortion(v2);
+
+            if (std::isnan(v0_p[0]) || std::isnan(v1_p[0]) || std::isnan(v2_p[0]))
+                continue;
+            
 
             // Compute bounding box in pixel coordinates
             int min_x = static_cast<int>(std::floor(std::min(std::min(v0_p.x, v1_p.x), v2_p.x)));

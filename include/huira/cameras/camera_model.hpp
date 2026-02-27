@@ -87,6 +87,7 @@ namespace huira {
         int get_psf_radius() const { return psf_->get_radius(); }
 
         Pixel project_point(const Vec3<float>& point_camera_coords) const;
+        Pixel project_point_no_distortion(const Vec3<float>& point_camera_coords) const;
 
         Ray<TSpectral> cast_ray(const Pixel& pixel) const;
         Ray<TSpectral> cast_ray(int x, int y) const;

@@ -281,6 +281,19 @@ namespace huira {
     }
 
     template <IsSpectral TSpectral>
+    Pixel CameraModel<TSpectral>::project_point_no_distortion(const Vec3<float>& point_camera_coords) const
+    {
+        auto NaN = std::numeric_limits<float>::quiet_NaN();
+
+        float depth = blender_convention_ ? -point_camera_coords.z : point_camera_coords.z;
+        if (depth <= 0.f) return Pixel{ NaN, NaN };
+
+        float sign_y = blender_convention_ ? -1.0f : 1.0f;
+        Pixel normalized{ point_camera_coords.x / depth, sign_y * point_camera_coords.y / depth };
+        return Pixel{ fx_ * normalized[0] + cx_, fy_ * normalized[1] + cy_ };
+    }
+
+    template <IsSpectral TSpectral>
     Ray<TSpectral> CameraModel<TSpectral>::cast_ray(const Pixel& pixel) const
     {
         if (distortion_) {
