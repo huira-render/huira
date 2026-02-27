@@ -22,6 +22,7 @@
 #include "huira/handles/instance_handle_py.ipp"
 #include "huira/handles/light_handle_py.ipp"
 #include "huira/handles/material_handle_py.ipp"
+#include "huira/handles/model_handle_py.ipp"
 #include "huira/handles/node_handle_py.ipp"
 #include "huira/handles/root_frame_handle_py.ipp"
 #include "huira/handles/texture_handle_py.ipp"
@@ -57,6 +58,8 @@ inline void bind_spectral(py::module_& m) {
     huira::bind_image<TSpectral>(m, img_name.c_str());
 
     huira::bind_material_handle<TSpectral>(m);
+
+    huira::bind_model_handle<TSpectral>(m);
 
     huira::bind_frame_buffer<TSpectral>(m);
 

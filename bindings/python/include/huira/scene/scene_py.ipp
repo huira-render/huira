@@ -240,7 +240,30 @@ namespace huira {
                     &SceneType::add_texture),
                 py::arg("image"), py::arg("name") = "",
                 "Add a normal map texture from a Vec3 image")
-            
+
+
+            // =============================================================
+            // Models
+            // =============================================================
+
+            .def("load_model",
+            [](SceneType& self, const fs::path& file, std::string name) {
+                return self.load_model(file, std::move(name));
+            },
+            py::arg("file"), py::arg("name") = "",
+            "Load a model from a file")
+            .def("get_model", &SceneType::get_model,
+            py::arg("name"),
+            "Get a model handle by name")
+            .def("delete_model", &SceneType::delete_model,
+            py::arg("model_handle"))
+            .def("set_model_name",
+            static_cast<void (SceneType::*)(
+            const ModelHandle<TSpectral>&, const std::string&)>(
+            &SceneType::set_name),
+            py::arg("model_handle"), py::arg("name"),
+            "Set the name of a model")
+
 
             // =============================================================
             // Star loading
