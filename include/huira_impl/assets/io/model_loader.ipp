@@ -379,24 +379,6 @@ namespace huira {
                 material.set_albedo_factor(ctx.spectral_conversion(RGB{ base_color.r, base_color.g, base_color.b }));
             }
 
-            // Assign roughness:
-            //if (auto tex = load_material_texture_<float>(ai_mat, aiTextureType_DIFFUSE_ROUGHNESS, ctx)) {
-            //    material.set_roughness_image(tex.value());
-            //}
-            //float roughness;
-            //if (ai_mat->Get(AI_MATKEY_ROUGHNESS_FACTOR, roughness) == AI_SUCCESS) {
-            //    material.set_roughness_factor(roughness);
-            //}
-            //
-            //// Assign metallic:
-            //if (auto tex = load_material_texture_<float>(ai_mat, aiTextureType_METALNESS, ctx)) {
-            //    material.set_metallic_image(tex.value());
-            //}
-            //float metallic;
-            //if (ai_mat->Get(AI_MATKEY_METALLIC_FACTOR, metallic) == AI_SUCCESS) {
-            //    material.set_metallic_factor(metallic);
-            //}
-
             // Replace the separate roughness/metallic loading with:
             if (ai_mat->GetTextureCount(aiTextureType_DIFFUSE_ROUGHNESS) > 0 ||
                 ai_mat->GetTextureCount(aiTextureType_METALNESS) > 0)

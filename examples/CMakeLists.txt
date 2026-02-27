@@ -1,2 +1,3 @@
-add_subdirectory(star_field)
 add_subdirectory(jupiter_long_range)
+add_subdirectory(lunar_gateway)
+add_subdirectory(star_field)
