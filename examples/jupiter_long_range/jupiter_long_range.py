@@ -13,7 +13,7 @@ from huira.units import KilometersPerSecond as kps
 
 def parse_input_paths():
     if len(sys.argv) != 3:
-        print("Usage: star_field.py <tycho2.hrsc_path> <kernel_path>")
+        print("Usage: python jupiter_long_range.py <tycho2.hrsc_path> <kernel_path>")
         sys.exit(1)
     star_catalog_path = Path(sys.argv[1])
     kernel_path = Path(sys.argv[2])
@@ -80,7 +80,7 @@ def main():
     # Create the ECI J2000 Reference Frame:
     eci = scene.root.new_spice_subframe("EARTH_BARYCENTER", "J2000")
 
-    # Create a camera instance in the ECI frame and set it's position and orientation
+    # Create a camera instance in the ECI frame and set it's position, velocity, and orientation
     navcam = eci.new_instance(camera_model)
     navcam.set_position(km(7000), km(0), km(0))
     navcam.set_velocity(kps(0), kps(8), kps(0))
