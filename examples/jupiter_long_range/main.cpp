@@ -15,7 +15,7 @@ namespace fs = std::filesystem;
 
 static std::pair<fs::path, fs::path> parse_input_paths(int argc, char** argv) {
     if (argc != 3) {
-        std::cerr << "Usage: star_field <tycho2.hrsc_path> <kernel_path>" << std::endl;
+        std::cerr << "Usage: jupiter_long_range <tycho2.hrsc_path> <kernel_path>" << std::endl;
         std::exit(1);
     }
     fs::path star_catalog_path = argv[1];
@@ -75,9 +75,16 @@ int main(int argc, char** argv) {
     auto callisto = scene.root.new_instance(callisto_model);
     callisto.set_spice_origin("CALLISTO");
 
-    // Create an instance of the camera:
-    auto navcam = scene.root.new_instance(camera_model);
-    navcam.set_spice_origin("EARTH_BARYCENTER");
+    // Create the ECI J2000 Reference Frame:
+    auto eci = scene.root.new_spice_subframe("EARTH_BARYCENTER", "J2000");
+
+    // Create a camera instance in the ECI frame and set it's position, velocity, and orientation
+    auto navcam = eci.new_instance(camera_model);
+    navcam.set_position(7000_Km, 0_Km, 0_Km);
+    navcam.set_velocity(0_Kmps, 8_Kmps, 0_Kmps);
+
+    auto quat = huira::Quaternion<double>(0.50865, -0.50865, 0.491198, 0.491198);
+    navcam.set_rotation(huira::Rotation<double>::from_parent_to_local(quat));
     
     // Configure the render buffers:
     auto frame_buffer = camera_model.make_frame_buffer();
@@ -86,8 +93,6 @@ int main(int argc, char** argv) {
 
     // Create the renderer:
     huira::RasterRenderer<TSpectral> renderer;
-
-    navcam.set_euler_angles(90_deg, 0_deg, 272_deg);
 
     auto scene_view = huira::SceneView<TSpectral>(scene, time, navcam, huira::ObservationMode::ABERRATED_STATE);
 

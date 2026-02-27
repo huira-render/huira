@@ -11,7 +11,7 @@ from huira.units import Degree as deg
 
 def parse_input_paths():
     if len(sys.argv) != 3:
-        print("Usage: star_field.py <tycho2.hrsc_path> <kernel_path>")
+        print("Usage: python star_field.py <tycho2.hrsc_path> <kernel_path>")
         sys.exit(1)
     star_catalog_path = Path(sys.argv[1])
     kernel_path = Path(sys.argv[2])
