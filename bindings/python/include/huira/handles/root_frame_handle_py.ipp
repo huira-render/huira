@@ -30,6 +30,9 @@ namespace huira {
             .def("new_instance", [](const HandleType& self, const UnresolvedObjectHandle<TSpectral>& asset) {
                 return self.new_instance(asset);
             }, py::arg("asset_handle"))
+            .def("new_instance", [](const HandleType& self, const ModelHandle<TSpectral>& asset) {
+                return self.new_instance(asset);
+                }, py::arg("asset_handle"))
             .def("delete_instance", &HandleType::delete_instance,
                 py::arg("instance"))
 

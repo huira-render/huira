@@ -29,11 +29,11 @@ int main(int argc, char** argv) {
     // Create the scene:
     huira::Scene<TSpectral> scene;
 
-    // Specify the time:
+    // Set the observation time
     huira::Time time("2019-02-06T10:27:00");
     float exposure_time = 0.05f;
 
-    // Configure a camera model:
+    // Configure a camera model
     auto camera_model = scene.new_camera_model();
     camera_model.use_blender_convention();
     camera_model.set_focal_length(50_mm);
@@ -41,30 +41,26 @@ int main(int argc, char** argv) {
     camera_model.set_sensor_size(36_mm);
     camera_model.use_aperture_psf();
 
-    // Create an instance of the camera and model:
+    // Create an instance of the camera and model
     auto navcam = scene.root.new_instance(camera_model);
     navcam.set_position(40_m, -40_m, 0_m);
     navcam.set_euler_angles(95_deg, 0_deg, 45_deg);
 
-    // Load stars:
+    // Load the gateway mode
     auto gateway_model = scene.load_model(gateway_path);
     auto gateway = scene.root.new_instance(gateway_model);
 
-    // Create some local light source:
+    // Create a local light source
     auto point_light = scene.new_point_light(5000_W);
     auto light = scene.root.new_instance(point_light);
     light.set_position(0_m, -200_m, 50_m);
 
-    // Print the scene contents:
+    // Print the scene contents
     scene.print_contents();
     
 
     // Configure the render buffers:
     auto frame_buffer = camera_model.make_frame_buffer();
-    frame_buffer.enable_depth();
-    frame_buffer.enable_albedo();
-    frame_buffer.enable_camera_normals();
-    frame_buffer.enable_received_power();
     frame_buffer.enable_sensor_response();
 
     // Create the renderer:
@@ -77,24 +73,4 @@ int main(int argc, char** argv) {
 
     // Save the results:
     huira::write_image_png("output/gateway_render.png", frame_buffer.sensor_response(), 8);
-    huira::write_image_png("output/gateway_albedo.png", frame_buffer.albedo(), 8);
-    huira::write_image_png("output/gateway_power.png", frame_buffer.received_power(), 8);
-
-    // Convert normals to RGB for visualization:
-    auto normals_vec3 = frame_buffer.camera_normals();
-    huira::Image<huira::RGB> normals(normals_vec3.resolution());
-    for (std::size_t i = 0; i < normals.size(); ++i) {
-        const auto& n = normals_vec3[i];
-        if (n.x == 0 && n.y == 0 && n.z == 0) {
-            normals[i] = huira::RGB{ 0, 0, 0 }; // Keep zero normals as black
-            continue;
-        }
-        normals[i] = huira::RGB{
-            static_cast<float>(n.x * 0.5f + 0.5),
-            static_cast<float>(n.y * 0.5f + 0.5),
-            static_cast<float>(n.z * 0.5f + 0.5)
-        };
-    }
-
-    huira::write_image_png("output/gateway_normals.png", normals, 8);
 }
