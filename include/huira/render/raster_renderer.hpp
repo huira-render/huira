@@ -22,18 +22,17 @@ namespace huira {
 
         void render(SceneView<TSpectral>& scene_view, FrameBuffer<TSpectral>& frame_buffer, float exposure_time) override;
 
+        void set_supersample(int super_sample);
+
     private:
+        int ss_factor_ = 1;
+
         void rasterize_(SceneView<TSpectral>& scene_view, FrameBuffer<TSpectral>& frame_buffer);
 
         void rasterize_instance_(
             const Transform<float>& instance_tf,
             const std::shared_ptr<CameraModel<TSpectral>>& camera, FrameBuffer<TSpectral>& frame_buffer,
             const std::shared_ptr<Mesh<TSpectral>>& mesh, const std::vector<LightInstance<TSpectral>>& lights);
-
-        void render_fragment_(const std::shared_ptr<CameraModel<TSpectral>>& camera,
-            FrameBuffer<TSpectral>& frame_buffer,
-            const std::shared_ptr<Mesh<TSpectral>>& mesh,
-            const std::vector<LightInstance<TSpectral>>& lights);
     };
 }
 
