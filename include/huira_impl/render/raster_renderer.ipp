@@ -61,15 +61,21 @@ namespace huira {
     }
 
     template <IsSpectral TSpectral>
+    void RasterRenderer<TSpectral>::set_supersample(int super_sample)
+    {
+        ss_factor_ = super_sample;
+        if (ss_factor_ <= 0) {
+            ss_factor_ = 1;  // 1 corresponds to no super-sampling
+        }
+        HUIRA_LOG_INFO("RasterRenderer::set_supersample - " + std::to_string(super_sample) + " interpreted as " + std::to_string(ss_factor_));
+    }
+
+    template <IsSpectral TSpectral>
     void RasterRenderer<TSpectral>::rasterize_instance_(
         const Transform<float>& instance_tf,
         const std::shared_ptr<CameraModel<TSpectral>>& camera, FrameBuffer<TSpectral>& frame_buffer,
         const std::shared_ptr<Mesh<TSpectral>>& mesh, const std::vector<LightInstance<TSpectral>>& lights)
     {
-
-        // TODO Move sub-sampling setting somewhere else:
-        int ss_factor_ = 3;
-
         int res_x = camera->resolution().x;
         int res_y = camera->resolution().y;
         Vec3<float> camera_origin{ 0,0,0 }; // Camera is at the origin by definition
@@ -205,9 +211,6 @@ namespace huira {
                                     depth * (u * bt0 / z0 + v * bt1 / z1 + w * bt2 / z2));
                             }
 
-
-                            // Evaluate material textures once for this fragment
-                            auto [params, shading_isect] = material->evaluate(interaction);
                             // Evaluate material textures once for this fragment
                             auto [params, shading_isect] = material->evaluate(interaction);
 
