@@ -43,7 +43,7 @@ namespace huira {
         default_albedo_image_ = std::make_unique<Image<TSpectral>>(1, 1, TSpectral{ 1 });
         default_metallic_image_ = std::make_unique<Image<float>>(1, 1, 0.f);
         default_roughness_image_ = std::make_unique<Image<float>>(1, 1, 0.5f);
-        default_normal_image_ = std::make_unique<Image<Vec3<float>>>(1, 1, Vec3<float>{0.5, 0.5, 1.0});
+        default_normal_image_ = std::make_unique<Image<Vec3<float>>>(1, 1, Vec3<float>{0.f, 0.f, 1.0});
         default_emission_image_ = std::make_unique<Image<TSpectral>>(1, 1, TSpectral{ 0 });
 
         // Initialize default material:

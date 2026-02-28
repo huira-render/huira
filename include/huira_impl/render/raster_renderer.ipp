@@ -203,12 +203,6 @@ namespace huira {
                             interaction.tangent = Vec3<float>{ 0.0f };
                             interaction.bitangent = Vec3<float>{ 0.0f };
                             if (has_tangents) {
-                                interaction.tangent = -glm::normalize(u * t0 + v * t1 + w * t2);
-                                interaction.bitangent = -glm::normalize(u * bt0 + v * bt1 + w * bt2);
-                            }
-                            interaction.tangent = Vec3<float>{ 0.0f };
-                            interaction.bitangent = Vec3<float>{ 0.0f };
-                            if (has_tangents) {
                                 interaction.tangent = glm::normalize(
                                     depth * (u * t0 / z0 + v * t1 / z1 + w * t2 / z2));
                                 interaction.bitangent = glm::normalize(
