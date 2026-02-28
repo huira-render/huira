@@ -21,6 +21,11 @@
 
 namespace fs = std::filesystem;
 
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable: 4611 5039)
+#endif
+
 namespace huira {
     enum class PngColorSpace {
         SRGB,
@@ -119,35 +124,37 @@ namespace huira {
         std::size_t pos;
     };
 
-    /**
-     * @brief Custom libpng read callback that reads from a memory buffer.
-     *
-     * Registered via png_set_read_fn to replace file-based I/O. libpng calls
-     * this function whenever it needs to read bytes from the data source.
-     *
-     * @param png_ptr PNG read structure (io_ptr points to PngMemReadState_)
-     * @param out_bytes Destination buffer
-     * @param byte_count Number of bytes to read
-     */
-    inline void png_mem_read_callback_(png_structp png_ptr, png_bytep out_bytes, png_size_t byte_count) noexcept
-    {
-        auto* state = reinterpret_cast<PngMemReadState_*>(png_get_io_ptr(png_ptr));
-        if (state->pos + byte_count > state->size) {
-            png_error(png_ptr, "Read past end of PNG memory buffer");
-            return;
+    extern "C" {
+        /**
+         * @brief Custom libpng read callback that reads from a memory buffer.
+         *
+         * Registered via png_set_read_fn to replace file-based I/O. libpng calls
+         * this function whenever it needs to read bytes from the data source.
+         *
+         * @param png_ptr PNG read structure (io_ptr points to PngMemReadState_)
+         * @param out_bytes Destination buffer
+         * @param byte_count Number of bytes to read
+         */
+        static void png_mem_read_callback_(png_structp png_ptr, png_bytep out_bytes, png_size_t byte_count)
+        {
+            auto* state = reinterpret_cast<PngMemReadState_*>(png_get_io_ptr(png_ptr));
+            if (state->pos + byte_count > state->size) {
+                png_error(png_ptr, "Read past end of PNG memory buffer");
+                return;
+            }
+            std::memcpy(out_bytes, state->data + state->pos, byte_count);
+            state->pos += byte_count;
         }
-        std::memcpy(out_bytes, state->data + state->pos, byte_count);
-        state->pos += byte_count;
-    }
 
+        static void png_warning_handler_(png_structp /*png_ptr*/, png_const_charp message) {
+            HUIRA_LOG_DEBUG(std::string("libpng warning: ") + message);
+        }
 
-    inline void png_warning_handler_(png_structp /*png_ptr*/, png_const_charp message) noexcept {
-        HUIRA_LOG_DEBUG(std::string("libpng warning: ") + message);
-    }
+        [[noreturn]] static void png_error_handler_(png_structp png_ptr, png_const_charp message) {
+            HUIRA_LOG_ERROR(std::string("libpng error: ") + message);
+            longjmp(png_jmpbuf(png_ptr), 1);
+        }
 
-    [[noreturn]] inline void png_error_handler_(png_structp png_ptr, png_const_charp message) noexcept {
-        HUIRA_LOG_ERROR(std::string("libpng error: ") + message);
-        longjmp(png_jmpbuf(png_ptr), 1);
     }
 
     /**
@@ -187,17 +194,10 @@ namespace huira {
             HUIRA_THROW_ERROR("read_png_raw_ - Failed to create PNG info struct");
         }
 
-#ifdef _MSC_VER
-#pragma warning(push)
-#pragma warning(disable: 4611 5039)
-#endif
         if (setjmp(png_jmpbuf(png_ptr))) {
             png_destroy_read_struct(&png_ptr, &info_ptr, nullptr);
             HUIRA_THROW_ERROR("read_png_raw_ - Error during PNG read");
         }
-#ifdef _MSC_VER
-#pragma warning(pop)
-#endif
 
         // Set up custom memory read
         PngMemReadState_ read_state{ data, size, 8 };  // Skip past signature
@@ -633,3 +633,7 @@ namespace huira {
     }
 
 }
+
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
