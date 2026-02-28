@@ -10,6 +10,16 @@
     "assimp",
     "cfitsio",
     "cspice",
+    {
+      "name": "embree",
+      "default-features": false,
+      "features": [
+        "geometry-instance",
+        "geometry-triangle",
+        "ray-packets",
+        "tasking-tbb"
+      ]
+    },
     "glm",
     "libjpeg-turbo",
     "libpng",
