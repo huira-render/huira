@@ -52,7 +52,7 @@ jobs:
 
       - name: Install huira port
         run: >
-          ${{ github.workspace }}/vcpkg/vcpkg install huira
+          ${{ github.workspace }}/vcpkg/vcpkg install "huira[tools,tests]"
           --overlay-ports=packaging/vcpkg-port
           --triplet=${{ matrix.platform == 'windows' && 'x64-windows' || matrix.platform == 'macos' && 'arm64-osx' || 'x64-linux' }}
 
@@ -61,9 +61,14 @@ jobs:
         run: |
           cd tests/packaging
           mkdir build && cd build
+          TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake"
+          OVERLAY_PORTS="${{ github.workspace }}/packaging/vcpkg-port"
+          # Convert backslashes to forward slashes (needed on Windows Git Bash)
+          TOOLCHAIN_FILE="${TOOLCHAIN_FILE//\\//}"
+          OVERLAY_PORTS="${OVERLAY_PORTS//\\//}"
           cmake .. \
-            -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake \
-            -DVCPKG_OVERLAY_PORTS=${{ github.workspace }}/packaging/vcpkg-port
+            -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN_FILE" \
+            -DVCPKG_OVERLAY_PORTS="$OVERLAY_PORTS"
           cmake --build .
           ctest --output-on-failure
 

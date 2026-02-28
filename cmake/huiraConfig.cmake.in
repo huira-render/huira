@@ -5,25 +5,10 @@ include(CMakeFindDependencyMacro)
 # Add installed find modules to module path
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}")
 
-# Find GLM
-find_dependency(glm CONFIG QUIET)
-if(NOT glm_FOUND)
-    find_path(GLM_INCLUDE_DIR glm/glm.hpp REQUIRED)
-    add_library(glm::glm INTERFACE IMPORTED)
-    target_include_directories(glm::glm INTERFACE ${GLM_INCLUDE_DIR})
-endif()
-
-find_dependency(CSPICE)
-
+# Find dependencies (in order):
 find_dependency(assimp CONFIG)
 
-find_dependency(TBB CONFIG)
-
-find_dependency(libjpeg-turbo CONFIG)
-find_dependency(PNG)
-find_package(CFITSIO REQUIRED)
-# Conda-forge's cfitsio includes 'm' in its link interface, which doesn't
-# exist on Windows (math functions are in the CRT). Remove it.
+find_dependency(CFITSIO)
 if(WIN32 AND TARGET CFITSIO::CFITSIO)
     get_target_property(_cfitsio_libs CFITSIO::CFITSIO INTERFACE_LINK_LIBRARIES)
     if(_cfitsio_libs)
@@ -31,6 +16,30 @@ if(WIN32 AND TARGET CFITSIO::CFITSIO)
         set_target_properties(CFITSIO::CFITSIO PROPERTIES INTERFACE_LINK_LIBRARIES "${_cfitsio_libs}")
     endif()
 endif()
+
+find_dependency(CSPICE)
+
+find_dependency(embree CONFIG)
+
+find_dependency(glm CONFIG)
+if(NOT glm_FOUND)
+    find_path(GLM_INCLUDE_DIR glm/glm.hpp REQUIRED)
+    add_library(glm::glm INTERFACE IMPORTED)
+    target_include_directories(glm::glm INTERFACE ${GLM_INCLUDE_DIR})
+endif()
+
+find_dependency(libjpeg-turbo CONFIG)
+if(TARGET libjpeg-turbo::turbojpeg)
+    set(TURBOJPEG_TARGET libjpeg-turbo::turbojpeg)
+else()
+    set(TURBOJPEG_TARGET libjpeg-turbo::turbojpeg-static)
+endif()
+
+find_dependency(PNG)
+
+find_dependency(TBB CONFIG)
+
+find_dependency(TIFF)
 
 include("${CMAKE_CURRENT_LIST_DIR}/huiraTargets.cmake")
 check_required_components(huira)
