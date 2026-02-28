@@ -69,8 +69,8 @@ jobs:
           cmake .. \
             -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN_FILE" \
             -DVCPKG_OVERLAY_PORTS="$OVERLAY_PORTS"
-          cmake --build .
-          ctest --output-on-failure
+          cmake --build . --config Release
+          ctest --output-on-failure -C Release
 
   vcpkg-ci:
     name: vcpkg CI
