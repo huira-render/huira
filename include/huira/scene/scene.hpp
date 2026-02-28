@@ -7,11 +7,12 @@
 #include <string>
 #include <filesystem>
 
-#include "huira/core/concepts/spectral_concepts.hpp"
+#include <embree4/rtcore.h>
 
 #include "huira/assets/mesh.hpp"
 #include "huira/assets/model.hpp"
 #include "huira/assets/io/model_loader.hpp"
+#include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/handles/model_handle.hpp"
 #include "huira/handles/root_frame_handle.hpp"
 #include "huira/handles/material_handle.hpp"
@@ -165,6 +166,9 @@ namespace huira {
 
         NameRegistry<Node<TSpectral>> node_registry_;
         void register_node_name_(const std::shared_ptr<Node<TSpectral>>& node, const std::string& name);
+
+        /// Embree RTC Device
+        RTCDevice device_;
 
         friend class Node<TSpectral>;
         friend class FrameNode<TSpectral>;

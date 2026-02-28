@@ -58,12 +58,20 @@ namespace huira {
             )
         );
 
+        // Create the Embree RTC Device:
+        device_ = rtcNewDevice(nullptr);
+        if (!device_) {
+            HUIRA_THROW_ERROR("Scene::Scene - Failed to create Embree device (error: "
+                + std::to_string(rtcGetDeviceError(nullptr)) + ").");
+        }
+
         HUIRA_LOG_INFO("Scene created");
     };
 
     template <IsSpectral TSpectral>
     Scene<TSpectral>::~Scene()
     {
+        rtcReleaseDevice(device_);
         HUIRA_LOG_INFO("Scene destroyed");
     }
 
@@ -82,6 +90,7 @@ namespace huira {
     {
         auto mesh_shared = std::make_shared<Mesh<TSpectral>>(std::move(mesh));
         mesh_shared->set_material(default_material_.get());
+        mesh_shared->set_device(device_);
         meshes_.add(mesh_shared, name);
         return MeshHandle<TSpectral>{ mesh_shared };
     };
