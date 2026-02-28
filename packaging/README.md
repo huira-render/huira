@@ -1,12 +1,10 @@
 # Dependencies Directory
 
-This directory contains the dependencies required for building huira.
+This directory contains lists of dependencies for various package managers required for building/distributing huira.
 
-# conda
-- `enviornment.yml`: used to set up a conda environment with the necessary packages.
-- `recipe/`: contains the conda build recipe for creating a conda package of huira.  This is used in CI and for distribution via conda-forge.
+- `enviornment.yml`: Used to set up the `huira_env` conda environment for building the project locally.
 
-# vcpkg
-- `vcpkg-port/vcpkg.json`: manifest file to be used with [vcpkg](https://vcpkg.io/en/)
-- `vcpkg-port/portfile.cmake`: portfile used in distribution
-- `vcpkg-port/usage`: usage file used in distribution
+- `recipe/`: The conda build recipe for creating a conda package of huira distributed via conda-forge.  This is also used in the conda-build CI workflow.
+
+- `vcpkg-port/`: Contains the `vcpkg.json` manifest file, `portfile.cmake`, and `usage` file distributed via [vcpkg](https://vcpkg.io/en/package/huira)
+  - When building locally with vcpkg as a package manager, this `vcpkg.json` manifest file is used to install all dependencies.  This is also used in the vcpkg-build CI workflow.
