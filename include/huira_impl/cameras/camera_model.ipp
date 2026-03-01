@@ -55,7 +55,7 @@ namespace huira {
     {
         distortion_ = std::make_unique<TDistortion>(std::forward<Args>(args)...);
         compute_distortion_field_();
-        compute_visibility_cone_();
+        compute_frustum_();
     }
 
 
@@ -326,9 +326,7 @@ namespace huira {
         if (len2 < 1e-12f) {
             return false;
         }
-
-        float z = blender_convention_ ? -point.z : point.z;
-        return z * glm::inversesqrt(len2) >= z_cutoff_;
+        return view_frustum_.contains(point);
     }
 
 
@@ -391,7 +389,7 @@ namespace huira {
         rx_ = static_cast<float>(sensor_->resolution().x);
         ry_ = static_cast<float>(sensor_->resolution().y);
 
-        compute_visibility_cone_();
+        compute_frustum_();
 
         compute_pixel_solid_angles_();
     }
@@ -501,34 +499,58 @@ namespace huira {
     }
 
     template <IsSpectral TSpectral>
-    void CameraModel<TSpectral>::compute_visibility_cone_()
+    void CameraModel<TSpectral>::compute_frustum_()
     {
         Resolution res = sensor_->resolution();
 
+        Vec3<float> xdir{ 1,0,0 };
+        Vec3<float> ydir{ 0,1,0 };
         Vec3<float> zdir{ 0, 0, 1 };
         if (blender_convention_) {
             zdir = Vec3<float>{ 0, 0, -1 };
+            ydir = Vec3<float>{ 0, -1, 0 };
         }
 
-        float min_dot = 1.f;
+        // Initialize the frustum side planes:
+        Vec3<float> left_extrema{ 0,0,0 };
+        float left_min_dot = 100.f;
 
-        auto update = [&](int i, int j) {
+        Vec3<float> right_extrema{ 0,0,0 };
+        float right_min_dot = 100.f;
+
+        Vec3<float> top_extrema{ 0,0,0 };
+        float top_min_dot = 100.f;
+
+        Vec3<float> bottom_extrema{ 0,0,0 };
+        float bottom_min_dot = 100.f;
+
+        auto update = [&](int i, int j, Vec3<float>& extrema, float& min_dot) {
             Ray<TSpectral> ray = cast_ray(i, j);
             Vec3<float> direction = ray.direction();
-            min_dot = std::min(min_dot, glm::dot(direction, zdir));
+            float d = glm::dot(direction, zdir);
+            if (d < min_dot) {
+                extrema = direction;
+                min_dot = d;
+            }
             };
 
+        // Loop over all edge-pixels
         for (int i = 0; i < res.x; ++i) {
-            update(i, 0);
-            update(i, res.y - 1);
+            update(i, 0, top_extrema, top_min_dot);
+            update(i, res.y - 1, bottom_extrema, bottom_min_dot);
         }
         for (int j = 1; j < res.y - 1; ++j) {
-            update(0, j);
-            update(res.x - 1, j);
+            update(0, j, left_extrema, left_min_dot);
+            update(res.x - 1, j, right_extrema, right_min_dot);
         }
 
-        visibility_cone_ = std::acos(std::clamp(min_dot, -1.f, 1.f));
-        z_cutoff_ = std::cos(visibility_cone_);
+        // Form the frustum planes:
+        Vec3<float> left_normal = glm::normalize(glm::cross(ydir, left_extrema));
+        Vec3<float> right_normal = glm::normalize(glm::cross(right_extrema, ydir));
+        Vec3<float> top_normal = glm::normalize(glm::cross(top_extrema, xdir));
+        Vec3<float> bottom_normal = glm::normalize(glm::cross(xdir, bottom_extrema));
+
+        view_frustum_ = Frustum({ zdir, left_normal, right_normal, top_normal, bottom_normal });
     }
 }
 
