@@ -260,12 +260,6 @@ namespace huira {
     template <IsSpectral TSpectral>
     Pixel CameraModel<TSpectral>::project_point(const Vec3<float>& point_camera_coords) const
     {
-        auto NaN = std::numeric_limits<float>::quiet_NaN();
-
-        if (!in_fov(point_camera_coords)) {
-            return Pixel{ NaN, NaN };
-        }
-
         float sign_y = 1.0f;
         float depth = point_camera_coords.z;
         if (blender_convention_) {
@@ -281,16 +275,14 @@ namespace huira {
     }
 
     template <IsSpectral TSpectral>
-    Pixel CameraModel<TSpectral>::project_point_no_distortion(const Vec3<float>& point_camera_coords) const
+    Pixel CameraModel<TSpectral>::try_project_point(const Vec3<float>& point_camera_coords) const
     {
         auto NaN = std::numeric_limits<float>::quiet_NaN();
+        if (!in_fov(point_camera_coords)) {
+            return Pixel{ NaN, NaN };
+        }
 
-        float depth = blender_convention_ ? -point_camera_coords.z : point_camera_coords.z;
-        if (depth <= 0.f) return Pixel{ NaN, NaN };
-
-        float sign_y = blender_convention_ ? -1.0f : 1.0f;
-        Pixel normalized{ point_camera_coords.x / depth, sign_y * point_camera_coords.y / depth };
-        return Pixel{ fx_ * normalized[0] + cx_, fy_ * normalized[1] + cy_ };
+        return project_point(point_camera_coords);
     }
 
     template <IsSpectral TSpectral>
@@ -550,7 +542,7 @@ namespace huira {
         Vec3<float> top_normal = glm::normalize(glm::cross(top_extrema, xdir));
         Vec3<float> bottom_normal = glm::normalize(glm::cross(xdir, bottom_extrema));
 
-        view_frustum_ = Frustum({ zdir, left_normal, right_normal, top_normal, bottom_normal });
+        view_frustum_ = Frustum<TSpectral>({ zdir, left_normal, right_normal, top_normal, bottom_normal });
     }
 }
 
