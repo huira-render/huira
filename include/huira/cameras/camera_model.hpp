@@ -88,10 +88,12 @@ namespace huira {
         int get_psf_radius() const { return psf_->get_radius(); }
 
         Pixel project_point(const Vec3<float>& point_camera_coords) const;
-        Pixel project_point_no_distortion(const Vec3<float>& point_camera_coords) const;
+        Pixel try_project_point(const Vec3<float>& point_camera_coords) const;
 
         Ray<TSpectral> cast_ray(const Pixel& pixel) const;
         Ray<TSpectral> cast_ray(int x, int y) const;
+
+        const Frustum<TSpectral>& view_frustum() const { return view_frustum_; }
 
         float pixel_radiance_to_power(int x, int y) const;
 
@@ -146,7 +148,7 @@ namespace huira {
         Vec3<double> tangent_(const Vec3<double>& p0, const Vec3<double>& p1) const;
         double triangle_solid_angle_(const Vec3<double>& c0, const Vec3<double>& c1, const Vec3<double>& c2) const;
 
-        Frustum view_frustum_;
+        Frustum<TSpectral> view_frustum_;
         void compute_frustum_();
 
         bool blender_convention_ = false;

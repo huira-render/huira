@@ -27,12 +27,17 @@ namespace huira {
     private:
         int ss_factor_ = 1;
 
-        void rasterize_(SceneView<TSpectral>& scene_view, FrameBuffer<TSpectral>& frame_buffer);
+        void rasterize_(SceneView<TSpectral>& scene_view, FrameBuffer<TSpectral>& frame_buffer) const;
 
         void rasterize_instance_(
             const Transform<float>& instance_tf,
             const std::shared_ptr<CameraModel<TSpectral>>& camera, FrameBuffer<TSpectral>& frame_buffer,
-            const std::shared_ptr<Mesh<TSpectral>>& mesh, const std::vector<LightInstance<TSpectral>>& lights);
+            const std::shared_ptr<Mesh<TSpectral>>& mesh, const std::vector<LightInstance<TSpectral>>& lights) const;
+
+        void rasterize_triangle_(
+            const Triangle<TSpectral>& triangle,
+            const std::shared_ptr<CameraModel<TSpectral>>& camera, FrameBuffer<TSpectral>& frame_buffer,
+            const std::shared_ptr<Mesh<TSpectral>>& mesh, const std::vector<LightInstance<TSpectral>>& lights) const;
     };
 }
 

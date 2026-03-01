@@ -1,9 +1,11 @@
 #pragma once
 
+#include <array>
+#include <cstdint>
+#include <optional>
 #include <string>
 #include <sstream>
 #include <vector>
-#include <cstdint>
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include "glm/glm.hpp"
@@ -229,4 +231,10 @@ namespace huira {
         Vec3<float> bitangent{ 0,0,0 };
     };
     typedef std::vector<Tangent> TangentBuffer;
+
+    template <IsSpectral TSpectral>
+    struct Triangle {
+        std::array<Vertex<TSpectral>, 3> vertices;
+        std::optional<std::array<Tangent, 3>> tangents;
+    };
 }

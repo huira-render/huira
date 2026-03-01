@@ -2,8 +2,10 @@
 
 #include <vector>
 #include <utility>
+#include <array>
 
-#include <glm/glm.hpp>
+#include "huira/core/types.hpp"
+#include "huira/core/concepts/spectral_concepts.hpp"
 
 namespace huira {
     /**
@@ -22,21 +24,45 @@ namespace huira {
      * A boresight plane (normal = boresight direction) can be included to reject
      * points behind the camera.
      */
+    template <IsSpectral TSpectral>
     class Frustum {
     public:
         Frustum() = default;
-        explicit Frustum(const std::vector<glm::vec3>& plane_normals);
+        explicit Frustum(const std::vector<Vec3<float>>& plane_normals);
 
-        [[nodiscard]] bool contains(const glm::vec3& direction) const;
+        [[nodiscard]] bool contains(const Vec3<float>& direction) const;
+
+        [[nodiscard]] std::vector<Triangle<TSpectral>> clip_triangle(const Triangle<TSpectral>& triangle) const;
 
         /** @brief Number of planes defining this frustum. */
         [[nodiscard]] std::size_t plane_count() const noexcept { return plane_normals_.size(); }
 
         /** @brief Access the plane normals. */
-        [[nodiscard]] const std::vector<glm::vec3>& plane_normals() const noexcept { return plane_normals_; }
+        [[nodiscard]] const std::vector<Vec3<float>>& plane_normals() const noexcept { return plane_normals_; }
 
     private:
-        std::vector<glm::vec3> plane_normals_;
+        std::vector<Vec3<float>> plane_normals_;
+
+        /**
+         * @brief Internal polygon vertex used during clipping.
+         *
+         * Bundles a Vertex with an optional Tangent so that both are
+         * interpolated together during Sutherland-Hodgman passes.
+         */
+        struct ClipVertex {
+            Vertex<TSpectral> vertex;
+            Tangent tangent;
+        };
+
+        [[nodiscard]] static ClipVertex lerp_clip_vertex_(
+            const ClipVertex& a,
+            const ClipVertex& b,
+            float t);
+
+
+        [[nodiscard]] static std::vector<ClipVertex> clip_polygon_by_plane_(
+            const std::vector<ClipVertex>& polygon,
+            const Vec3<float>& plane_normal);
     };
 
 }
