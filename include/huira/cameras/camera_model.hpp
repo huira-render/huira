@@ -17,6 +17,7 @@
 #include "huira/cameras/psfs/psf.hpp"
 #include "huira/cameras/sensors/sensor_model.hpp"
 #include "huira/render/frame_buffer.hpp"
+#include "huira/render/frustum.hpp"
 #include "huira/render/ray.hpp"
 #include "huira/scene/node.hpp"
 #include "huira/scene/scene_object.hpp"
@@ -145,9 +146,8 @@ namespace huira {
         Vec3<double> tangent_(const Vec3<double>& p0, const Vec3<double>& p1) const;
         double triangle_solid_angle_(const Vec3<double>& c0, const Vec3<double>& c1, const Vec3<double>& c2) const;
 
-        float visibility_cone_;
-        float z_cutoff_;
-        void compute_visibility_cone_();
+        Frustum view_frustum_;
+        void compute_frustum_();
 
         bool blender_convention_ = false;
 
