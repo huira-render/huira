@@ -8,8 +8,8 @@
 #include "huira/assets/lights/light.hpp"
 #include "huira/assets/mesh.hpp"
 #include "huira/assets/unresolved/unresolved_object.hpp"
-
-#include "huira/core/time.hpp"
+#include "huira/core/units/units.hpp"
+#include "huira/core/interval.hpp"
 #include "huira/core/transform.hpp"
 #include "huira/handles/camera_handle.hpp"
 #include "huira/scene/scene.hpp"
@@ -31,11 +31,16 @@ namespace huira {
     class SceneView {
     public:
         SceneView(const Scene<TSpectral>& scene,
-            const Time& time,
+            const Interval& exposure_interval,
             const InstanceHandle<TSpectral>& camera_instance,
-            ObservationMode obs_mode);
+            ObservationMode obs_mode,
+            bool motion_blur = false);
 
-        Time get_time() const { return time_; }
+        Interval get_exposure_interval() const { return exposure_interval_; }
+        units::Second duration() const { return exposure_interval_.duration(); }
+        Time get_time() const { return exposure_interval_.center(); }
+        Time get_start_time() const { return exposure_interval_.start; }
+        Time get_end_time() const { return exposure_interval_.end; }
 
     private:
         void traverse_and_collect_(const std::shared_ptr<Node<TSpectral>>& node,
@@ -64,7 +69,7 @@ namespace huira {
 
         std::vector<Star<TSpectral>> stars_;
 
-        Time time_;
+        Interval exposure_interval_;
 
         friend class Renderer<TSpectral>;
     };

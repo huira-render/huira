@@ -22,7 +22,7 @@ namespace huira {
     public:
         virtual ~Renderer() = default;
 
-        virtual void render(SceneView<TSpectral>& scene_view, FrameBuffer<TSpectral>& frame_buffer, float exposure_time) = 0;
+        virtual void render(SceneView<TSpectral>& scene_view, FrameBuffer<TSpectral>& frame_buffer) = 0;
 
     protected:
         void render_unresolved_(SceneView<TSpectral>& scene_view, FrameBuffer<TSpectral>& frame_buffer);

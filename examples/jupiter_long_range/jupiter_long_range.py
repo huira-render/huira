@@ -10,6 +10,7 @@ from huira.units import Millimeter as mm
 from huira.units import Micrometer as um
 from huira.units import Degree as deg
 from huira.units import KilometersPerSecond as kps
+from huira.units import Second as sec
 
 def parse_input_paths():
     if len(sys.argv) != 3:
@@ -23,7 +24,7 @@ def main():
     # Parse input paths
     star_catalog_path, kernel_path = parse_input_paths()
 
-    # Load the require SPICE kernels:
+    # Load the require SPICE kernels
     huira.spice.furnsh(kernel_path / "spk/de440s.bsp");
     huira.spice.furnsh(kernel_path / "spk/jup365.bsp");
 
@@ -41,7 +42,7 @@ def main():
     
     # Set the observation time
     time = huira.Time("2016-09-19T16:22:05.728")
-    exposure_time = 1
+    exposure = huira.Interval.from_center(time, sec(1))
     
     # Load stars
     scene.load_stars(star_catalog_path, time)
@@ -60,7 +61,7 @@ def main():
     ganymede_model = scene.new_unresolved_object_from_magnitude(4.61);
     callisto_model = scene.new_unresolved_object_from_magnitude(5.65);
 
-    # Create new instances of the unresolved objects:
+    # Create new instances of the unresolved objects
     jupiter = scene.root.new_instance(jupiter_model);
     jupiter.set_spice_origin("JUPITER");
 
@@ -77,7 +78,7 @@ def main():
     callisto.set_spice_origin("CALLISTO");
 
     
-    # Create the ECI J2000 Reference Frame:
+    # Create the ECI J2000 Reference Frame
     eci = scene.root.new_spice_subframe("EARTH_BARYCENTER", "J2000")
 
     # Create a camera instance in the ECI frame and set it's position, velocity, and orientation
@@ -96,11 +97,11 @@ def main():
     # Create the renderer
     renderer = RasterRenderer()
     
-    # Create a scene view at the observation time
-    scene_view = SceneView(scene, time, navcam, huira.ObservationMode.ABERRATED_STATE)
+    # Create a scene view over the exposure interval
+    scene_view = SceneView(scene, exposure, navcam, huira.ObservationMode.ABERRATED_STATE)
     
     # Render the current scene view
-    renderer.render(scene_view, frame_buffer, exposure_time)
+    renderer.render(scene_view, frame_buffer)
     
     # Save the results
     huira.write_png("output/jupiter_long_range.png", frame_buffer.sensor_response, 8)

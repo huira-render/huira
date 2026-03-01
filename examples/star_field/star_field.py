@@ -8,6 +8,7 @@ from huira.rgb import Scene, SceneView, RasterRenderer
 from huira.units import Millimeter as mm
 from huira.units import Micrometer as um
 from huira.units import Degree as deg
+from huira.units import Second as sec
 
 def parse_input_paths():
     if len(sys.argv) != 3:
@@ -45,7 +46,7 @@ def main():
     
     # Set the observation time
     time = huira.Time("2016-09-19T16:22:05.728")
-    exposure_time = 9.984285275
+    exposure = huira.Interval.from_center(time, sec(9.984285275))
     
     # Load stars
     scene.load_stars(star_catalog_path, time)
@@ -62,11 +63,11 @@ def main():
     # Create the renderer
     renderer = RasterRenderer()
     
-    # Create a scene view at the observation time
-    scene_view = SceneView(scene, time, mapcam, huira.ObservationMode.ABERRATED_STATE)
+    # Create a scene view over the exposure interval
+    scene_view = SceneView(scene, exposure, mapcam, huira.ObservationMode.ABERRATED_STATE)
     
     # Render the current scene view
-    renderer.render(scene_view, frame_buffer, exposure_time)
+    renderer.render(scene_view, frame_buffer)
     
     # Save the results
     huira.write_png("output/starfield.png", frame_buffer.sensor_response, 8)

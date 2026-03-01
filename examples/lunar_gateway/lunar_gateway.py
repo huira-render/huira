@@ -9,6 +9,7 @@ from huira.units import Meter as m
 from huira.units import Millimeter as mm
 from huira.units import Degree as deg
 from huira.units import Watt as W
+from huira.units import Second as sec
 
 def parse_input_paths():
     if len(sys.argv) != 2:
@@ -26,7 +27,7 @@ def main():
 
     # Set the observation time
     time = huira.Time("2019-02-06T10:27:00")
-    exposure_time = 0.05
+    exposure = huira.Interval(time, time + sec(0.05))
 
     # Configure a camera model
     camera_model = scene.new_camera_model()
@@ -60,11 +61,11 @@ def main():
     # Create the renderer
     renderer = RasterRenderer()
     
-    # Create a scene view at the observation time
-    scene_view = SceneView(scene, time, navcam, huira.ObservationMode.ABERRATED_STATE)
+    # Create a scene view over the exposure interval
+    scene_view = SceneView(scene, exposure, navcam, huira.ObservationMode.ABERRATED_STATE)
     
     # Render the current scene view
-    renderer.render(scene_view, frame_buffer, exposure_time)
+    renderer.render(scene_view, frame_buffer)
     
     # Save the results
     huira.write_png("output/gateway_render.png", frame_buffer.sensor_response, 8)

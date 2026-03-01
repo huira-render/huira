@@ -17,7 +17,6 @@ namespace huira {
             .def("render", &RR::render,
                 py::arg("scene_view"),
                 py::arg("frame_buffer"),
-                py::arg("exposure_time"),
                 py::call_guard<py::gil_scoped_release>())
             .def("__repr__", [](const RR&) {
             return "RasterRenderer()";

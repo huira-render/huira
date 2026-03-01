@@ -96,7 +96,7 @@ namespace huira {
 
         bool in_fov(const Vec3<float>& point) const;
 
-        void readout(FrameBuffer<TSpectral>& fb, float exposure_time) const { sensor_->readout(fb, exposure_time); }
+        void readout(FrameBuffer<TSpectral>& fb, units::Second exposure_time) const { sensor_->readout(fb, exposure_time); }
 
         float get_projected_aperture_area(const Vec3<float>& direction) const;
 

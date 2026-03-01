@@ -24,17 +24,17 @@ static std::pair<fs::path, fs::path> parse_input_paths(int argc, char** argv) {
 }
 
 int main(int argc, char** argv) {
-    // Parsing input paths:
+    // Parsing input paths
     auto [star_catalog_path, kernel_path] = parse_input_paths(argc, argv);
 
-    // Load the require SPICE kernels:
+    // Load the require SPICE kernels
     huira::spice::furnsh(kernel_path / "spk/de440s.bsp");
     huira::spice::furnsh(kernel_path / "spk/jup365.bsp");
 
-    // Create the scene:
+    // Create the scene
     huira::Scene<TSpectral> scene;
 
-    // Configure a camera model:
+    // Configure a camera model
     auto camera_model = scene.new_camera_model();
     camera_model.set_focal_length(125_mm);
     camera_model.set_fstop(3.30f);
@@ -44,17 +44,17 @@ int main(int argc, char** argv) {
     camera_model.use_aperture_psf(64, 16);
     
     huira::Time time("2016-09-19T16:22:05.728");
-    float exposure_time = 1.f;
+    huira::Interval exposure_interval = huira::Interval::from_centered(time, 1_s);
 
-    // Load stars:
+    // Load stars
     scene.load_stars(star_catalog_path, time);
 
-    // Create the sun:
+    // Create the sun
     auto sun_light = scene.new_sun_light();
     auto sun = scene.root.new_instance(sun_light);
     sun.set_spice_origin("SUN");
 
-    // Create unresolved objects for Jupiter and its moons:
+    // Create unresolved objects for Jupiter and its moons
     //auto jupiter_model = scene.new_unresolved_sphere(69911000_m, sun, TSpectral{ 0.5f });
     auto jupiter_model = scene.new_unresolved_object_from_magnitude(-1.44, "Jupiter");
     //auto jupiter_model = scene.new_unresolved_object(TSpectral{ 1e-8 });
@@ -63,7 +63,7 @@ int main(int argc, char** argv) {
     auto ganymede_model = scene.new_unresolved_object_from_magnitude(4.61);
     auto callisto_model = scene.new_unresolved_object_from_magnitude(5.65);
 
-    // Create new instances of the unresolved objects:
+    // Create new instances of the unresolved objects
     auto jupiter = scene.root.new_instance(jupiter_model);
     jupiter.set_spice_origin("JUPITER");
     auto io = scene.root.new_instance(io_model);
@@ -75,7 +75,7 @@ int main(int argc, char** argv) {
     auto callisto = scene.root.new_instance(callisto_model);
     callisto.set_spice_origin("CALLISTO");
 
-    // Create the ECI J2000 Reference Frame:
+    // Create the ECI J2000 Reference Frame
     auto eci = scene.root.new_spice_subframe("EARTH_BARYCENTER", "J2000");
 
     // Create a camera instance in the ECI frame and set it's position, velocity, and orientation
@@ -86,20 +86,21 @@ int main(int argc, char** argv) {
     auto quat = huira::Quaternion<double>(0.50865, -0.50865, 0.491198, 0.491198);
     navcam.set_rotation(huira::Rotation<double>::from_parent_to_local(quat));
     
-    // Configure the render buffers:
+    // Configure the render buffers
     auto frame_buffer = camera_model.make_frame_buffer();
     frame_buffer.enable_received_power();
     frame_buffer.enable_sensor_response();
 
-    // Create the renderer:
+    // Create the renderer
     huira::RasterRenderer<TSpectral> renderer;
 
-    auto scene_view = huira::SceneView<TSpectral>(scene, time, navcam, huira::ObservationMode::ABERRATED_STATE);
+    // Create a scene view over the exposure interval
+    auto scene_view = huira::SceneView<TSpectral>(scene, exposure_interval, navcam, huira::ObservationMode::ABERRATED_STATE);
 
-    // Render the current scene view:
-    renderer.render(scene_view, frame_buffer, exposure_time);
+    // Render the current scene view
+    renderer.render(scene_view, frame_buffer);
 
-    // Save the results:
+    // Save the results
     huira::write_image_png("output/jupiter_long_range.png", frame_buffer.sensor_response(), 8);
     
 }
