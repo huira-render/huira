@@ -4,6 +4,7 @@
 #include <cstddef>
 
 #include "huira/cameras/sensors/sensor_model.hpp"
+#include "huira/core/units/units.hpp"
 #include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/render/frame_buffer.hpp"
 
@@ -39,7 +40,7 @@ namespace huira {
 
         ~SimpleSensor() override = default;
 
-        void readout(FrameBuffer<TSpectral>& fb, float exposure_time) const override;
+        void readout(FrameBuffer<TSpectral>& fb, units::Second exposure_time) const override;
     };
 }
 

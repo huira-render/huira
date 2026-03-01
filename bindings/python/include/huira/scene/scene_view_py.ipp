@@ -2,6 +2,7 @@
 
 #include "pybind11/pybind11.h"
 
+#include "huira/core/interval.hpp"
 #include "huira/scene/scene_view.hpp"
 #include "huira/scene/scene_view_types.hpp"
 
@@ -15,11 +16,11 @@ namespace huira {
 
         py::class_<SV>(m, "SceneView")
             .def(py::init<const Scene<TSpectral>&,
-                const Time&,
+                const Interval&,
                 const InstanceHandle<TSpectral>&,
                 ObservationMode>(),
                 py::arg("scene"),
-                py::arg("time"),
+                py::arg("exposure_interval"),
                 py::arg("camera_instance"),
                 py::arg("observation_mode"))
             .def("get_time", &SV::get_time)

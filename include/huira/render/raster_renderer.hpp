@@ -20,7 +20,7 @@ namespace huira {
     public:
         ~RasterRenderer() override = default;
 
-        void render(SceneView<TSpectral>& scene_view, FrameBuffer<TSpectral>& frame_buffer, float exposure_time) override;
+        void render(SceneView<TSpectral>& scene_view, FrameBuffer<TSpectral>& frame_buffer) override;
 
         void set_supersample(int super_sample);
 

@@ -25,89 +25,96 @@ namespace huira {
      */
     template <IsSpectral TSpectral>
     SceneView<TSpectral>::SceneView(const Scene<TSpectral>& scene,
-        const Time& t_obs,
+        const Interval& exposure_interval,
         const InstanceHandle<TSpectral>& camera_instance,
-        ObservationMode obs_mode)
-        : time_{ t_obs }
+        ObservationMode obs_mode,
+        bool motion_blur)
+        : exposure_interval_{ exposure_interval }
     {
+        // Get the camera model:
         auto camera_node = camera_instance.get();
-
         const auto& asset_var = camera_node->asset();
         if (!std::holds_alternative<CameraModel<TSpectral>*>(asset_var)) {
             HUIRA_THROW_ERROR("SceneView received an Instance for the observer that does not contain a CameraModel!");
         }
-
         this->camera_model_ = std::get<CameraModel<TSpectral>*>(asset_var)->shared_from_this();
 
-        Transform<double> obs_ssb = camera_node->get_ssb_transform_(t_obs);
-        Rotation<double> sensor_rotation = camera_model_->sensor_rotation();
-        obs_ssb.rotation = obs_ssb.rotation * sensor_rotation;
-
-        HUIRA_LOG_INFO("Generating SceneView at time ET=" + std::to_string(t_obs.et()) +
-            " for CameraModel[" + std::to_string(camera_model_->id()) + "] '" + camera_model_->name() + "'.");
-        
-        traverse_and_collect_(scene.root_node_, t_obs, obs_ssb, obs_mode);
-
-        HUIRA_LOG_INFO("SceneView collected " + std::to_string(geometry_.size()) + " unique mesh batches and " +
-            std::to_string(lights_.size()) + " light instances.");
-
-        // Check for unlinked objects:
-        for (auto& mesh : scene.meshes_) {
-            auto* key = mesh.get();
-            if (batch_lookup_.find(key) == batch_lookup_.end()) {
-                HUIRA_LOG_WARNING("Mesh[" + std::to_string(mesh->id()) + "] '" + mesh->name() +
-                    "' is unlinked in the scene graph and will not be rendered.");
-            }
+        if (motion_blur) {
+            HUIRA_THROW_ERROR("SceneView::SceneView - Motion blur is not yet implemented.");
         }
+        else {
+            Time t_obs = exposure_interval_.center();
 
-        for (auto& light : scene.lights_) {
-            bool found = false;
-            for (const auto& instance : lights_) {
-                if (instance.light->id() == light->id()) {
-                    found = true;
-                    break;
+            Transform<double> obs_ssb = camera_node->get_ssb_transform_(t_obs);
+            Rotation<double> sensor_rotation = camera_model_->sensor_rotation();
+            obs_ssb.rotation = obs_ssb.rotation * sensor_rotation;
+
+            HUIRA_LOG_INFO("Generating SceneView at time ET=" + std::to_string(t_obs.et()) +
+                " for CameraModel[" + std::to_string(camera_model_->id()) + "] '" + camera_model_->name() + "'.");
+
+            traverse_and_collect_(scene.root_node_, t_obs, obs_ssb, obs_mode);
+
+            HUIRA_LOG_INFO("SceneView collected " + std::to_string(geometry_.size()) + " unique mesh batches and " +
+                std::to_string(lights_.size()) + " light instances.");
+
+            // Check for unlinked objects:
+            for (auto& mesh : scene.meshes_) {
+                auto* key = mesh.get();
+                if (batch_lookup_.find(key) == batch_lookup_.end()) {
+                    HUIRA_LOG_WARNING("Mesh[" + std::to_string(mesh->id()) + "] '" + mesh->name() +
+                        "' is unlinked in the scene graph and will not be rendered.");
                 }
             }
-            if (!found) {
-                HUIRA_LOG_WARNING("Light[" + std::to_string(light->id()) + "] '" + light->name() +
-                    "' is unlinked in the scene graph and will not be rendered.");
-            }
-        }
 
-        for (auto& unresolved_object : scene.unresolved_objects_) {
-            bool found = false;
-            for (const auto& instance : unresolved_objects_) {
-                if (instance.unresolved_object->id() == unresolved_object->id()) {
-                    found = true;
-                    break;
+            for (auto& light : scene.lights_) {
+                bool found = false;
+                for (const auto& instance : lights_) {
+                    if (instance.light->id() == light->id()) {
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    HUIRA_LOG_WARNING("Light[" + std::to_string(light->id()) + "] '" + light->name() +
+                        "' is unlinked in the scene graph and will not be rendered.");
                 }
             }
-            if (!found) {
-                HUIRA_LOG_WARNING("UnresolvedObject[" + std::to_string(unresolved_object->id()) + "] '" + unresolved_object->name() +
-                    "' is unlinked in the scene graph and will not be rendered.");
+
+            for (auto& unresolved_object : scene.unresolved_objects_) {
+                bool found = false;
+                for (const auto& instance : unresolved_objects_) {
+                    if (instance.unresolved_object->id() == unresolved_object->id()) {
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    HUIRA_LOG_WARNING("UnresolvedObject[" + std::to_string(unresolved_object->id()) + "] '" + unresolved_object->name() +
+                        "' is unlinked in the scene graph and will not be rendered.");
+                }
             }
-        }
 
-        // Copy stars in camera frame:
-        stars_ = std::vector<Star<TSpectral>>(scene.stars_.size());
-        for (std::size_t i = 0; i < scene.stars_.size(); ++i) {
-            Vec3<double> direction = scene.stars_[i].get_direction();
-            TSpectral irradiance = scene.stars_[i].get_irradiance();
+            // Copy stars in camera frame:
+            stars_ = std::vector<Star<TSpectral>>(scene.stars_.size());
+            for (std::size_t i = 0; i < scene.stars_.size(); ++i) {
+                Vec3<double> direction = scene.stars_[i].get_direction();
+                TSpectral irradiance = scene.stars_[i].get_irradiance();
 
-            // Compute stellar aberration:
-            Vec3<double> aberrated_direction = compute_aberrated_direction(direction, obs_ssb.velocity);
-            Vec3<double> apparent_direction = obs_ssb.rotation.inverse() * aberrated_direction;
+                // Compute stellar aberration:
+                Vec3<double> aberrated_direction = compute_aberrated_direction(direction, obs_ssb.velocity);
+                Vec3<double> apparent_direction = obs_ssb.rotation.inverse() * aberrated_direction;
 
-            stars_[i] = Star<TSpectral>(apparent_direction, irradiance);
-        }
+                stars_[i] = Star<TSpectral>(apparent_direction, irradiance);
+            }
 
-        
-        // Resolve all unresolved objects now that we have light positions
-        for (auto& unresolved_object : unresolved_objects_) {
-            unresolved_object.unresolved_object->resolve_irradiance(
-                unresolved_object.transform,
-                lights_
-            );
+
+            // Resolve all unresolved objects now that we have light positions
+            for (auto& unresolved_object : unresolved_objects_) {
+                unresolved_object.unresolved_object->resolve_irradiance(
+                    unresolved_object.transform,
+                    lights_
+                );
+            }
         }
     }
 

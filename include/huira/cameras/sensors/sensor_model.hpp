@@ -116,7 +116,7 @@ namespace huira {
         void set_rotation(units::Radian angle) { config_.rotation = angle; }
         units::Radian rotation() const { return config_.rotation; }
 
-        virtual void readout(FrameBuffer<TSpectral>& fb, float exposure_time) const = 0;
+        virtual void readout(FrameBuffer<TSpectral>& fb, units::Second exposure_time) const = 0;
 
     protected:
         SensorConfig<TSpectral> config_;

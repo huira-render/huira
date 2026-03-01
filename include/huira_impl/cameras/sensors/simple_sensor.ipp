@@ -1,6 +1,7 @@
 #include <random>
 #include <cstddef>
 
+#include "huira/core/units/units.hpp"
 #include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/render/frame_buffer.hpp"
 #include "huira/images/image.hpp"
@@ -52,11 +53,13 @@ namespace huira {
      * @param exposure_time The exposure time in seconds.
      */
     template <IsSpectral TSpectral>
-    void SimpleSensor<TSpectral>::readout(FrameBuffer<TSpectral>& fb, float exposure_time) const
+    void SimpleSensor<TSpectral>::readout(FrameBuffer<TSpectral>& fb, units::Second exposure_time) const
     {
         Image<TSpectral>& received_power = fb.received_power();
         auto& output = fb.sensor_response();
         output.set_sensor_bit_depth(this->config_.bit_depth);
+
+        float dt = static_cast<float>(exposure_time.to_si());
 
         // TODO Move this somewhere else?
         static std::mt19937 rng(1);
@@ -69,7 +72,7 @@ namespace huira {
             for (int x = 0; x < received_power.width(); ++x) {
 
                 // Power to energy
-                TSpectral received_energy = received_power(x, y) * exposure_time;
+                TSpectral received_energy = received_power(x, y) * dt;
 
                 // Photon Conversion
                 TSpectral photons = received_energy / photon_energy;
@@ -80,7 +83,7 @@ namespace huira {
                 // Compute Noise and ADC:
                 if constexpr (std::is_same_v<TSpectral, RGB>) {
                     RGB signal_e{ electrons[0], electrons[1], electrons[2] };
-                    float dark_e = this->config_.dark_current * exposure_time;
+                    float dark_e = this->config_.dark_current * dt;
 
                     RGB pixel_value;
                     for (std::size_t i = 0; i < 3; ++i) {
@@ -90,7 +93,7 @@ namespace huira {
                 }
                 else {
                     float signal_e = electrons.total();
-                    float dark_e = this->config_.dark_current * exposure_time;
+                    float dark_e = this->config_.dark_current * dt;
                     output(x, y) = noise_and_adc(signal_e, dark_e, this->config_, max_dn, rng, read_noise_dist);
                 }
             }

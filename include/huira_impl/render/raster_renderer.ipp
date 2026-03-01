@@ -50,14 +50,13 @@ namespace huira {
     template <IsSpectral TSpectral>
     void RasterRenderer<TSpectral>::render(
         SceneView<TSpectral>& scene_view,
-        FrameBuffer<TSpectral>& frame_buffer,
-        float exposure_time)
+        FrameBuffer<TSpectral>& frame_buffer)
     {
         this->rasterize_(scene_view, frame_buffer);
 
         this->render_unresolved_(scene_view, frame_buffer);
 
-        this->get_camera(scene_view)->readout(frame_buffer, exposure_time);
+        this->get_camera(scene_view)->readout(frame_buffer, scene_view.duration());
     }
 
     template <IsSpectral TSpectral>

@@ -23,15 +23,15 @@ static fs::path parse_input_paths(int argc, char** argv) {
 }
 
 int main(int argc, char** argv) {
-    // Parsing input paths:
+    // Parsing input paths
     fs::path gateway_path = parse_input_paths(argc, argv);
 
-    // Create the scene:
+    // Create the scene
     huira::Scene<TSpectral> scene;
 
     // Set the observation time
     huira::Time time("2019-02-06T10:27:00");
-    float exposure_time = 0.05f;
+    huira::Interval exposure_interval{ time, time + 0.05_s };
 
     // Configure a camera model
     auto camera_model = scene.new_camera_model();
@@ -59,18 +59,19 @@ int main(int argc, char** argv) {
     scene.print_contents();
     
 
-    // Configure the render buffers:
+    // Configure the render buffers
     auto frame_buffer = camera_model.make_frame_buffer();
     frame_buffer.enable_sensor_response();
 
-    // Create the renderer:
+    // Create the renderer
     huira::RasterRenderer<TSpectral> renderer;
 
-    auto scene_view = huira::SceneView<TSpectral>(scene, time, navcam, huira::ObservationMode::ABERRATED_STATE);
+    // Create a scene view over the exposure interval
+    auto scene_view = huira::SceneView<TSpectral>(scene, exposure_interval, navcam, huira::ObservationMode::ABERRATED_STATE);
 
-    // Render the current scene view:
-    renderer.render(scene_view, frame_buffer, exposure_time);
+    // Render the current scene view
+    renderer.render(scene_view, frame_buffer);
 
-    // Save the results:
+    // Save the results
     huira::write_image_png("output/gateway_render.png", frame_buffer.sensor_response(), 8);
 }

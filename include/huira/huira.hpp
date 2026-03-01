@@ -8,6 +8,8 @@
 
 // Core components:
 // #include "huira/core/constants.hpp"    // Not part of public API
+#include "huira/core/interval.hpp"
+//#include "huira/core/physics.hpp"       // Not part of publci API
 #include "huira/core/rotation.hpp"
 #include "huira/core/spectral_bins.hpp"
 #include "huira/core/time.hpp"

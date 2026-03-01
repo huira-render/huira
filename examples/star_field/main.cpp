@@ -51,7 +51,7 @@ int main(int argc, char** argv) {
 
     // Set the observation time
     huira::Time time("2016-09-19T16:22:05.728");
-    float exposure_time = 9.984285275f;
+    huira::Interval exposure_interval{ time, time + 9.984285275_s };
 
     // Load stars
     scene.load_stars(star_catalog_path, time);
@@ -68,11 +68,11 @@ int main(int argc, char** argv) {
     // Create the renderer
     huira::RasterRenderer<TSpectral> renderer;
 
-    // Create a scene view at the observation time
-    auto scene_view = huira::SceneView<TSpectral>(scene, time, mapcam, huira::ObservationMode::ABERRATED_STATE);
+    //  Create a scene view over the exposure interval
+    auto scene_view = huira::SceneView<TSpectral>(scene, exposure_interval, mapcam, huira::ObservationMode::ABERRATED_STATE);
 
     // Render the current scene view
-    renderer.render(scene_view, frame_buffer, exposure_time);
+    renderer.render(scene_view, frame_buffer);
 
     // Save the results
     huira::write_image_png("output/starfield.png", frame_buffer.sensor_response(), 8);
