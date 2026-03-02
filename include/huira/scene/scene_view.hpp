@@ -77,6 +77,9 @@ namespace huira {
 
         std::vector<std::vector<Star<TSpectral>>> stars_;
 
+        void build_tlas_();
+
+        RTCDevice device_ = nullptr;
         RTCScene tlas_ = nullptr;
         struct InstanceMapping {
             std::size_t batch_index;      // Index into geometry_

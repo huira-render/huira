@@ -1,3 +1,5 @@
+#include <array>
+
 #include "huira/core/concepts/numeric_concepts.hpp"
 
 namespace huira {
@@ -48,6 +50,31 @@ namespace huira {
         result[3][3] = T(1);
 
         return result;
+    }
+
+    /**
+     * @brief Convert the transform to a 3x4 embree style matrix.
+     * @return float* Embree transformation matrix
+     */
+    template <IsFloatingPoint T>
+    std::array<float, 12> Transform<T>::to_embree() const
+    {
+        // Set the 3x4 affine transform (row-major).
+        // Embree expects a float[12] in row-major layout:
+        //   [ R00 R01 R02 Tx ]
+        //   [ R10 R11 R12 Ty ]
+        //   [ R20 R21 R22 Tz ]
+
+        std::array<float, 12> tx;
+        Mat4<T> mat = to_matrix();
+        for (int i = 0; i < 3; ++i) {
+            for (int j = 0; j < 4; ++j) {
+                std::size_t idx = static_cast<std::size_t>(i + 4*j);
+                tx[idx] = static_cast<float>(mat[j][i]);
+            }
+        }
+
+        return tx;
     }
 
 

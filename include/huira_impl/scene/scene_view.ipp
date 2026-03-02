@@ -29,7 +29,8 @@ namespace huira {
         const InstanceHandle<TSpectral>& camera_instance,
         ObservationMode obs_mode,
         bool motion_blur, std::size_t num_temporal_samples)
-        : exposure_interval_{ exposure_interval }
+        : exposure_interval_{ exposure_interval },
+        device_{ scene.device_ }
     {
         // Create the temporal samples:
         if (motion_blur) {
@@ -128,6 +129,8 @@ namespace huira {
                 lights_
             );
         }
+
+        build_tlas_();
 
         HUIRA_LOG_INFO("SceneView::SceneView - Created over interval [" + std::to_string(exposure_interval.start.et()) +
             ",  " + std::to_string(exposure_interval.end.et()) + "] " + 
@@ -331,9 +334,57 @@ namespace huira {
                 }, asset_var);
         }
 
-        // 3. Recurse Rigidly
         for (const auto& child : node->get_children()) {
             traverse_model_graph_(child, current_transforms);
         }
+    }
+
+    template <IsSpectral TSpectral>
+    void SceneView<TSpectral>::build_tlas_()
+    {
+        tlas_ = rtcNewScene(device_);
+        bool motion_blur = (temporal_samples_.size() != 1);
+        if (motion_blur) {
+            rtcSetSceneFlags(tlas_, RTC_SCENE_FLAG_DYNAMIC);
+        }
+
+        // For each mesh batch (unique mesh + list of instance transforms):
+        for (std::size_t batch_idx = 0; batch_idx < geometry_.size(); ++batch_idx) {
+            const auto& batch = geometry_[batch_idx];
+            RTCScene mesh_blas = batch.mesh->blas();
+
+            for (std::size_t inst_idx = 0; inst_idx < batch.instances.size(); ++inst_idx) {
+
+                std::size_t N = batch.instances[inst_idx].size();
+                for (std::size_t t_idx = 0; t_idx < N; ++t_idx) {
+                    RTCGeometry inst_geom = rtcNewGeometry(device_, RTC_GEOMETRY_TYPE_INSTANCE);
+                    rtcSetGeometryInstancedScene(inst_geom, mesh_blas);
+                    rtcSetGeometryTimeStepCount(inst_geom, static_cast<unsigned int>(N));
+
+                    if (motion_blur) {
+                        rtcSetGeometryTimeRange(inst_geom, 0.0f, 1.0f);
+                    }
+
+                    rtcSetGeometryTransform(inst_geom,
+                        static_cast<unsigned int>(t_idx),
+                        RTC_FORMAT_FLOAT3X4_ROW_MAJOR,
+                        batch.instances[inst_idx][t_idx].to_embree().data());
+
+                    rtcCommitGeometry(inst_geom);
+
+                    // Attach to TLAS — the returned ID is the geomID we'll see in ray hits:
+                    unsigned int geom_id = rtcAttachGeometry(tlas_, inst_geom);
+                    rtcReleaseGeometry(inst_geom);
+
+                    // Record the mapping so we can resolve hits:
+                    if (geom_id >= instance_mappings_.size()) {
+                        instance_mappings_.resize(geom_id + 1);
+                    }
+                    instance_mappings_[geom_id] = { batch_idx, inst_idx };
+                }
+            }
+        }
+
+        rtcCommitScene(tlas_);
     }
 }
