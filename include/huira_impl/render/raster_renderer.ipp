@@ -329,11 +329,19 @@ namespace huira {
         // Make sure depth buffer is enabled:
         frame_buffer.enable_depth();
 
+        bool motion_blur_logged = false;
+
         // Loop over all instances:
         for (auto& batch : meshes) {
             auto& mesh = batch.mesh;
-            for (const Transform<float>& instance_tf : batch.instances) {
-                rasterize_instance_(instance_tf, camera, frame_buffer, mesh, lights);
+            for (const std::vector<Transform<float>>& instance_tf : batch.instances) {
+                if (!motion_blur_logged) {
+                    if (instance_tf.size() != 1) {
+                        HUIRA_LOG_INFO("RasterRenderer::rasterize_ - Motion blur is not supported.  First temporal sample used for object instances");
+                    }
+                    motion_blur_logged = true;
+                }
+                rasterize_instance_(instance_tf[0], camera, frame_buffer, mesh, lights);
             }
         }
     }

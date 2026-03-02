@@ -103,24 +103,28 @@ namespace huira::units {
         }
 
         // Scalar multiplication
-        constexpr Quantity operator*(double scalar) const {
-            return Quantity(value_ * scalar);
+        template <IsNumeric T>
+        constexpr Quantity operator*(T scalar) const {
+            return Quantity(value_ * static_cast<double>(scalar));
         }
 
         // Scalar division
-        constexpr Quantity operator/(double scalar) const {
-            return Quantity(value_ / scalar);
+        template <IsNumeric T>
+        constexpr Quantity operator/(T scalar) const {
+            return Quantity(value_ / static_cast<double>(scalar));
         }
 
         // Scalar multiplication assignment
-        constexpr Quantity& operator*=(double scalar) {
-            value_ *= scalar;
+        template <IsNumeric T>
+        constexpr Quantity& operator*=(T scalar) {
+            value_ *= static_cast<double>(scalar);
             return *this;
         }
 
         // Scalar division assignment
-        constexpr Quantity& operator/=(double scalar) {
-            value_ /= scalar;
+        template <IsNumeric T>
+        constexpr Quantity& operator/=(T scalar) {
+            value_ /= static_cast<double>(scalar);
             return *this;
         }
 
@@ -267,9 +271,9 @@ namespace huira::units {
         }
     }
 
-    template<IsDimensionality Dim, IsRatioOrTag Scale>
-    constexpr auto operator*(double scalar, const Quantity<Dim, Scale>& quantity) {
-        return Quantity<Dim, Scale>(quantity.raw_value() * scalar);
+    template<IsNumeric T, IsDimensionality Dim, IsRatioOrTag Scale>
+    constexpr auto operator*(T scalar, const Quantity<Dim, Scale>& quantity) {
+        return Quantity<Dim, Scale>(quantity.raw_value() * static_cast<double>(scalar));
     }
 
     template<IsDimensionality Dim, IsRatioOrTag Scale1, IsRatioOrTag Scale2>
@@ -454,21 +458,25 @@ namespace huira::units {
             return *this;
         }
 
-        constexpr Quantity operator*(double scalar) const {
-            return Quantity(value_ * scalar);
+        template <IsNumeric T>
+        constexpr Quantity operator*(T scalar) const {
+            return Quantity(value_ * static_cast<double>(scalar));
         }
 
-        constexpr Quantity operator/(double scalar) const {
-            return Quantity(value_ / scalar);
+        template <IsNumeric T>
+        constexpr Quantity operator/(T scalar) const {
+            return Quantity(value_ / static_cast<double>(scalar));
         }
 
-        constexpr Quantity& operator*=(double scalar) {
-            value_ *= scalar;
+        template <IsNumeric T>
+        constexpr Quantity& operator*=(T scalar) {
+            value_ *= static_cast<double>(scalar);
             return *this;
         }
 
-        constexpr Quantity& operator/=(double scalar) {
-            value_ /= scalar;
+        template <IsNumeric T>
+        constexpr Quantity& operator/=(T scalar) {
+            value_ /= static_cast<double>(scalar);
             return *this;
         }
 

@@ -18,7 +18,8 @@ namespace huira {
         std::same_as<T, std::uint8_t> ||
         std::same_as<T, std::uint16_t> ||
         std::same_as<T, std::uint32_t> ||
-        std::same_as<T, std::uint64_t>;
+        std::same_as<T, std::uint64_t> ||
+        std::same_as<T, std::size_t>;
 
     // @concept IsSignedInteger
     template <typename T>

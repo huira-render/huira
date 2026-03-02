@@ -28,9 +28,20 @@ namespace huira {
         const Interval& exposure_interval,
         const InstanceHandle<TSpectral>& camera_instance,
         ObservationMode obs_mode,
-        bool motion_blur)
+        bool motion_blur, std::size_t num_temporal_samples)
         : exposure_interval_{ exposure_interval }
     {
+        // Create the temporal samples:
+        if (motion_blur) {
+            if (num_temporal_samples < 2) {
+                HUIRA_THROW_ERROR("SceneView::SceneView - Motion blur requires 2 or more temporal samples");
+            }
+            temporal_samples_ = exposure_interval_.samples(num_temporal_samples);
+        }
+        else {
+            temporal_samples_ = { exposure_interval_.center() };
+        }
+
         // Get the camera model:
         auto camera_node = camera_instance.get();
         const auto& asset_var = camera_node->asset();
@@ -39,83 +50,95 @@ namespace huira {
         }
         this->camera_model_ = std::get<CameraModel<TSpectral>*>(asset_var)->shared_from_this();
 
-        if (motion_blur) {
-            HUIRA_THROW_ERROR("SceneView::SceneView - Motion blur is not yet implemented.");
-        }
-        else {
-            Time t_obs = exposure_interval_.center();
-
-            Transform<double> obs_ssb = camera_node->get_ssb_transform_(t_obs);
+        // Extract camera pose:
+        std::vector<Transform<double>> observer_transforms(temporal_samples_.size());
+        for (std::size_t i = 0; i < temporal_samples_.size(); ++i) {
+            Transform<double> obs_ssb = camera_node->get_ssb_transform_(temporal_samples_[i]);
             Rotation<double> sensor_rotation = camera_model_->sensor_rotation();
             obs_ssb.rotation = obs_ssb.rotation * sensor_rotation;
 
-            HUIRA_LOG_INFO("Generating SceneView at time ET=" + std::to_string(t_obs.et()) +
-                " for CameraModel[" + std::to_string(camera_model_->id()) + "] '" + camera_model_->name() + "'.");
+            observer_transforms[i] = obs_ssb;
+        }
 
-            traverse_and_collect_(scene.root_node_, t_obs, obs_ssb, obs_mode);
+        // Collect geometry and lights by traversing the scene graph:
+        traverse_and_collect_(scene.root_node_, observer_transforms, obs_mode);
+        HUIRA_LOG_INFO("SceneView collected " + std::to_string(geometry_.size()) + " unique mesh batches and " +
+            std::to_string(lights_.size()) + " light instances.");
 
-            HUIRA_LOG_INFO("SceneView collected " + std::to_string(geometry_.size()) + " unique mesh batches and " +
-                std::to_string(lights_.size()) + " light instances.");
-
-            // Check for unlinked objects:
-            for (auto& mesh : scene.meshes_) {
-                auto* key = mesh.get();
-                if (batch_lookup_.find(key) == batch_lookup_.end()) {
-                    HUIRA_LOG_WARNING("Mesh[" + std::to_string(mesh->id()) + "] '" + mesh->name() +
-                        "' is unlinked in the scene graph and will not be rendered.");
-                }
-            }
-
-            for (auto& light : scene.lights_) {
-                bool found = false;
-                for (const auto& instance : lights_) {
-                    if (instance.light->id() == light->id()) {
-                        found = true;
-                        break;
-                    }
-                }
-                if (!found) {
-                    HUIRA_LOG_WARNING("Light[" + std::to_string(light->id()) + "] '" + light->name() +
-                        "' is unlinked in the scene graph and will not be rendered.");
-                }
-            }
-
-            for (auto& unresolved_object : scene.unresolved_objects_) {
-                bool found = false;
-                for (const auto& instance : unresolved_objects_) {
-                    if (instance.unresolved_object->id() == unresolved_object->id()) {
-                        found = true;
-                        break;
-                    }
-                }
-                if (!found) {
-                    HUIRA_LOG_WARNING("UnresolvedObject[" + std::to_string(unresolved_object->id()) + "] '" + unresolved_object->name() +
-                        "' is unlinked in the scene graph and will not be rendered.");
-                }
-            }
-
-            // Copy stars in camera frame:
-            stars_ = std::vector<Star<TSpectral>>(scene.stars_.size());
-            for (std::size_t i = 0; i < scene.stars_.size(); ++i) {
-                Vec3<double> direction = scene.stars_[i].get_direction();
-                TSpectral irradiance = scene.stars_[i].get_irradiance();
-
-                // Compute stellar aberration:
-                Vec3<double> aberrated_direction = compute_aberrated_direction(direction, obs_ssb.velocity);
-                Vec3<double> apparent_direction = obs_ssb.rotation.inverse() * aberrated_direction;
-
-                stars_[i] = Star<TSpectral>(apparent_direction, irradiance);
-            }
-
-
-            // Resolve all unresolved objects now that we have light positions
-            for (auto& unresolved_object : unresolved_objects_) {
-                unresolved_object.unresolved_object->resolve_irradiance(
-                    unresolved_object.transform,
-                    lights_
-                );
+        // Check for unlinked objects:
+        for (auto& mesh : scene.meshes_) {
+            auto* key = mesh.get();
+            if (batch_lookup_.find(key) == batch_lookup_.end()) {
+                HUIRA_LOG_WARNING("Mesh[" + std::to_string(mesh->id()) + "] '" + mesh->name() +
+                    "' is unlinked in the scene graph and will not be rendered.");
             }
         }
+
+        for (auto& light : scene.lights_) {
+            bool found = false;
+            for (const auto& instance : lights_) {
+                if (instance.light->id() == light->id()) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                HUIRA_LOG_WARNING("Light[" + std::to_string(light->id()) + "] '" + light->name() +
+                    "' is unlinked in the scene graph and will not be rendered.");
+            }
+        }
+
+        for (auto& unresolved_object : scene.unresolved_objects_) {
+            bool found = false;
+            for (const auto& instance : unresolved_objects_) {
+                if (instance.unresolved_object->id() == unresolved_object->id()) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                HUIRA_LOG_WARNING("UnresolvedObject[" + std::to_string(unresolved_object->id()) + "] '" + unresolved_object->name() +
+                    "' is unlinked in the scene graph and will not be rendered.");
+            }
+        }
+
+        // TODO Handle render arcs:
+        // Copy stars in camera frame:
+        //stars_ = std::vector<Star<TSpectral>>(scene.stars_.size());
+        //for (std::size_t i = 0; i < scene.stars_.size(); ++i) {
+        //    Vec3<double> direction = scene.stars_[i].get_direction();
+        //    TSpectral irradiance = scene.stars_[i].get_irradiance();
+        //
+        //    // Compute stellar aberration:
+        //    Vec3<double> aberrated_direction = compute_aberrated_direction(direction, obs_ssb.velocity);
+        //    Vec3<double> apparent_direction = obs_ssb.rotation.inverse() * aberrated_direction;
+        //
+        //    stars_[i] = Star<TSpectral>(apparent_direction, irradiance);
+        //}
+        //
+        //
+        //// Resolve all unresolved objects now that we have light positions
+        //for (auto& unresolved_object : unresolved_objects_) {
+        //    unresolved_object.unresolved_object->resolve_irradiance(
+        //        unresolved_object.transform,
+        //        lights_
+        //    );
+        //}
+
+        HUIRA_LOG_INFO("SceneView::SceneView - Created over interval [" + std::to_string(exposure_interval.start.et()) +
+            ",  " + std::to_string(exposure_interval.end.et()) + "] " + 
+            "for CameraModel[" + std::to_string(camera_model_->id()) + "] '" + camera_model_->name() + "'." +
+            " MOTION BLUR ON");
+    }
+
+    template <IsSpectral TSpectral>
+    SceneView<TSpectral>::~SceneView()
+    {
+        if (tlas_) {
+            rtcReleaseScene(tlas_);
+        }
+
+        HUIRA_LOG_INFO("SceneView::~SceneView - destroyed, released TLAS and cleared geometry and lights.");
     }
 
 
@@ -131,24 +154,29 @@ namespace huira {
      */
     template <IsSpectral TSpectral>
     void SceneView<TSpectral>::traverse_and_collect_(const std::shared_ptr<Node<TSpectral>>& node,
-        const Time& t_obs, const Transform<double> obs_ssb, ObservationMode obs_mode)
+        const std::vector<Transform<double>>& observer_transforms, ObservationMode obs_mode)
     {
         if (auto instance = std::dynamic_pointer_cast<Instance<TSpectral>>(node)) {
-            Transform<double> instance_ssb = node->get_apparent_transform(obs_mode, t_obs, obs_ssb);
+            std::vector<Transform<float>> render_transforms(temporal_samples_.size());
+            for (std::size_t i = 0; i < temporal_samples_.size(); ++i) {
+                const Transform<double>& obs_ssb = observer_transforms[i];
 
-            Transform<double> local_apparent = obs_ssb.inverse() * instance_ssb;
+                Transform<double> instance_ssb = node->get_apparent_transform(obs_mode, temporal_samples_[i], obs_ssb);
 
-            // Down-cast to single precision once in local space:
-            Transform<float> render_transform = static_cast<Transform<float>>(local_apparent);
+                Transform<double> local_apparent = obs_ssb.inverse() * instance_ssb;
+
+                // Down-cast to single precision once in local space:
+                render_transforms[i] = static_cast<Transform<float>>(local_apparent);
+            }
 
             const auto& asset_var = instance->asset();
             std::visit([&](auto* raw_ptr) noexcept {
-                handle_asset_ptr_(raw_ptr, render_transform);
+                handle_asset_ptr_(raw_ptr, render_transforms);
                 }, asset_var);
         }
 
         for (const auto& child : node->get_children()) {
-            traverse_and_collect_(child, t_obs, obs_ssb, obs_mode);
+            traverse_and_collect_(child, observer_transforms, obs_mode);
         }
     }
 
@@ -159,9 +187,9 @@ namespace huira {
      * @param xf Render transform
      */
     template <IsSpectral TSpectral>
-    void SceneView<TSpectral>::handle_asset_ptr_(Mesh<TSpectral>* mesh, const Transform<float>& xf)
+    void SceneView<TSpectral>::handle_asset_ptr_(Mesh<TSpectral>* mesh, const std::vector<Transform<float>>& instance_apparent_transforms)
     {
-        add_mesh_instance_(mesh->shared_from_this(), xf);
+        add_mesh_instance_(mesh->shared_from_this(), instance_apparent_transforms);
     }
 
 
@@ -171,9 +199,9 @@ namespace huira {
      * @param xf Render transform
      */
     template <IsSpectral TSpectral>
-    void SceneView<TSpectral>::handle_asset_ptr_(Light<TSpectral>* light, const Transform<float>& xf)
+    void SceneView<TSpectral>::handle_asset_ptr_(Light<TSpectral>* light, const std::vector<Transform<float>>& instance_apparent_transforms)
     {
-        add_light_instance_(light->shared_from_this(), xf);
+        add_light_instance_(light->shared_from_this(), instance_apparent_transforms);
     }
 
 
@@ -183,10 +211,10 @@ namespace huira {
      * @param xf Render transform
      */
     template <IsSpectral TSpectral>
-    void SceneView<TSpectral>::handle_asset_ptr_(CameraModel<TSpectral>* camera, const Transform<float>& xf)
+    void SceneView<TSpectral>::handle_asset_ptr_(CameraModel<TSpectral>* camera, const std::vector<Transform<float>>& instance_apparent_transforms)
     {
         (void)camera;
-        (void)xf;
+        (void)instance_apparent_transforms;
     }
 
 
@@ -196,25 +224,25 @@ namespace huira {
      * @param xf Render transform
      */
     template <IsSpectral TSpectral>
-    void SceneView<TSpectral>::handle_asset_ptr_(UnresolvedObject<TSpectral>* light, const Transform<float>& xf)
+    void SceneView<TSpectral>::handle_asset_ptr_(UnresolvedObject<TSpectral>* light, const std::vector<Transform<float>>& instance_apparent_transforms)
     {
-        add_unresolved_instance_(light->shared_from_this(), xf);
+        add_unresolved_instance_(light->shared_from_this(), instance_apparent_transforms);
     }
 
 
     /**
      * @brief Handle model asset pointer and traverse its scene graph.
      * @param model Model pointer
-     * @param instance_apparent_xf Render transform
+     * @param instance_apparent_transforms Render transform
      */
     template <IsSpectral TSpectral>
-    void SceneView<TSpectral>::handle_asset_ptr_(Model<TSpectral>* model, const Transform<float>& instance_apparent_xf)
+    void SceneView<TSpectral>::handle_asset_ptr_(Model<TSpectral>* model, const std::vector<Transform<float>>& instance_apparent_transforms)
     {
         if (!model) {
             return;
         }
         std::shared_ptr<FrameNode<TSpectral>> model_graph_ptr = model->root_node_;
-        traverse_model_graph_(model_graph_ptr, instance_apparent_xf);
+        traverse_model_graph_(model_graph_ptr, instance_apparent_transforms);
     }
 
 
@@ -224,19 +252,19 @@ namespace huira {
      * @param render_transform Render transform
      */
     template <IsSpectral TSpectral>
-    void SceneView<TSpectral>::add_mesh_instance_(std::shared_ptr<Mesh<TSpectral>> mesh, const Transform<float>& render_transform)
+    void SceneView<TSpectral>::add_mesh_instance_(std::shared_ptr<Mesh<TSpectral>> mesh, const std::vector<Transform<float>>& instance_apparent_transforms)
     {
         auto* key = mesh.get();
         auto it = batch_lookup_.find(key);
 
         if (it != batch_lookup_.end()) {
             size_t index = it->second;
-            geometry_[index].instances.push_back(render_transform);
+            geometry_[index].instances.push_back(instance_apparent_transforms);
         }
         else {
             MeshBatch<TSpectral> batch;
             batch.mesh = mesh;
-            batch.instances.push_back(render_transform);
+            batch.instances.push_back(instance_apparent_transforms);
 
             geometry_.push_back(std::move(batch));
 
@@ -251,11 +279,13 @@ namespace huira {
      * @param render_transform Render transform
      */
     template <IsSpectral TSpectral>
-    void SceneView<TSpectral>::add_light_instance_(std::shared_ptr<Light<TSpectral>> light, const Transform<float>& render_transform)
+    void SceneView<TSpectral>::add_light_instance_(std::shared_ptr<Light<TSpectral>> light, const std::vector<Transform<float>>& instance_apparent_transforms)
     {
+        // TODO Is it valid to store just one light temporal sample?
+
         LightInstance<TSpectral> instance;
         instance.light = light;
-        instance.transform = render_transform;
+        instance.transform = instance_apparent_transforms[0];
 
         lights_.push_back(std::move(instance));
     }
@@ -267,11 +297,11 @@ namespace huira {
      * @param render_transform Render transform
      */
     template <IsSpectral TSpectral>
-    void SceneView<TSpectral>::add_unresolved_instance_(std::shared_ptr<UnresolvedObject<TSpectral>> unresolved_object, const Transform<float>& render_transform)
+    void SceneView<TSpectral>::add_unresolved_instance_(std::shared_ptr<UnresolvedObject<TSpectral>> unresolved_object, const std::vector<Transform<float>>& instance_apparent_transforms)
     {
         UnresolvedInstance<TSpectral> instance;
         instance.unresolved_object = unresolved_object;
-        instance.transform = render_transform;
+        instance.transforms = instance_apparent_transforms;
 
         unresolved_objects_.push_back(std::move(instance));
     }
@@ -283,20 +313,23 @@ namespace huira {
      * @param parent_tf Parent transform
      */
     template <IsSpectral TSpectral>
-    void SceneView<TSpectral>::traverse_model_graph_(const std::shared_ptr<Node<TSpectral>> node, const Transform<float>& parent_tf)
+    void SceneView<TSpectral>::traverse_model_graph_(const std::shared_ptr<Node<TSpectral>> node, const std::vector<Transform<float>>& parent_transforms)
     {
-        Transform<float> current_tf = parent_tf * static_cast<Transform<float>>(node->local_transform_);
+        std::vector<Transform<float>> current_transforms(parent_transforms.size());
+        for (std::size_t i = 0; i < parent_transforms.size(); ++i) {
+            current_transforms[i] = parent_transforms[i] * static_cast<Transform<float>>(node->local_transform_);
+        }
 
         if (auto instance = std::dynamic_pointer_cast<Instance<TSpectral>>(node)) {
             const auto& asset_var = instance->asset();
             std::visit([&](auto* raw_ptr) noexcept {
-                handle_asset_ptr_(raw_ptr, current_tf);
+                handle_asset_ptr_(raw_ptr, current_transforms);
                 }, asset_var);
         }
 
         // 3. Recurse Rigidly
         for (const auto& child : node->get_children()) {
-            traverse_model_graph_(child, current_tf);
+            traverse_model_graph_(child, current_transforms);
         }
     }
 }

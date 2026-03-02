@@ -79,6 +79,7 @@ enum class TimeScale {
  */
 class Time {
 public:
+    Time() = default;
     explicit Time(const std::string& utc_string);
 
     static Time from_et(double et);
@@ -108,6 +109,8 @@ public:
     bool operator>=(const Time& other) const;
 
     Time operator+(units::Second delta) const;
+
+    units::Second operator-(Time other) const;
 
     /**
      * @brief Julian Date of J2000.0 epoch (2451545.0).

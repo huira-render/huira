@@ -24,7 +24,7 @@ namespace huira {
     template <IsSpectral TSpectral>
     struct LightInstance {
         std::shared_ptr<Light<TSpectral>> light;
-        Transform<float> transform;
+        Transform<float> transform; // TODO Consider making this a vector as well?  (Would need to interpolate at render time)
     };
 
     /**
@@ -34,7 +34,7 @@ namespace huira {
     template <IsSpectral TSpectral>
     struct UnresolvedInstance {
         std::shared_ptr<UnresolvedObject<TSpectral>> unresolved_object;
-        Transform<float> transform;
+        std::vector<Transform<float>> transforms; // Transform at N times
     };
 
     /**
@@ -44,6 +44,6 @@ namespace huira {
     template <IsSpectral TSpectral>
     struct MeshBatch {
         std::shared_ptr<Mesh<TSpectral>> mesh;
-        std::vector<Transform<float>> instances;
+        std::vector<std::vector<Transform<float>>> instances; // Instances Transforms at N times
     };
 }

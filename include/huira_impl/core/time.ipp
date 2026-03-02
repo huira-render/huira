@@ -287,5 +287,9 @@ namespace huira {
     inline Time Time::operator+(units::Second delta) const {
         return Time(et_ + delta.to_si());
     }
+
+    inline units::Second Time::operator-(Time other) const {
+        return units::Second(et_ - other.et_);
+    }
     /// @}
 }
