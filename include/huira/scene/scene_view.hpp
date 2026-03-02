@@ -5,6 +5,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include "embree4/rtcore.h"
+
 #include "huira/assets/lights/light.hpp"
 #include "huira/assets/mesh.hpp"
 #include "huira/assets/unresolved/unresolved_object.hpp"
@@ -34,7 +36,10 @@ namespace huira {
             const Interval& exposure_interval,
             const InstanceHandle<TSpectral>& camera_instance,
             ObservationMode obs_mode,
-            bool motion_blur = false);
+            bool motion_blur = false,
+            std::size_t num_temporal_Samples = 3);
+
+        ~SceneView();
 
         Interval get_exposure_interval() const { return exposure_interval_; }
         units::Second duration() const { return exposure_interval_.duration(); }
@@ -43,20 +48,23 @@ namespace huira {
         Time get_end_time() const { return exposure_interval_.end; }
 
     private:
+        Interval exposure_interval_;
+        std::vector<Time> temporal_samples_;
+
         void traverse_and_collect_(const std::shared_ptr<Node<TSpectral>>& node,
-            const Time& t_obs, const Transform<double> obs_ssb, ObservationMode obs_mode);
+            const std::vector<Transform<double>>& observer_transforms, ObservationMode obs_mode);
 
-        void handle_asset_ptr_(Mesh<TSpectral>* mesh, const Transform<float>& xf);
-        void handle_asset_ptr_(Light<TSpectral>* light, const Transform<float>& xf);
-        void handle_asset_ptr_(CameraModel<TSpectral>* camera, const Transform<float>& xf);
-        void handle_asset_ptr_(UnresolvedObject<TSpectral>* light, const Transform<float>& xf);
-        void handle_asset_ptr_(Model<TSpectral>* model, const Transform<float>& xf);
+        void handle_asset_ptr_(Mesh<TSpectral>* mesh, const std::vector<Transform<float>>& instance_apparent_transforms);
+        void handle_asset_ptr_(Light<TSpectral>* light, const std::vector<Transform<float>>& instance_apparent_transforms);
+        void handle_asset_ptr_(CameraModel<TSpectral>* camera, const std::vector<Transform<float>>& instance_apparent_transforms);
+        void handle_asset_ptr_(UnresolvedObject<TSpectral>* light, const std::vector<Transform<float>>& instance_apparent_transforms);
+        void handle_asset_ptr_(Model<TSpectral>* model, const std::vector<Transform<float>>& instance_apparent_transforms);
 
-        void add_mesh_instance_(std::shared_ptr<Mesh<TSpectral>> mesh, const Transform<float>& render_transform);
-        void add_light_instance_(std::shared_ptr<Light<TSpectral>> light, const Transform<float>& render_transform);
-        void add_unresolved_instance_(std::shared_ptr<UnresolvedObject<TSpectral>> unresolved_object, const Transform<float>& render_transform);
+        void add_mesh_instance_(std::shared_ptr<Mesh<TSpectral>> mesh, const std::vector<Transform<float>>& instance_apparent_transforms);
+        void add_light_instance_(std::shared_ptr<Light<TSpectral>> light, const std::vector<Transform<float>>& instance_apparent_transforms);
+        void add_unresolved_instance_(std::shared_ptr<UnresolvedObject<TSpectral>> unresolved_object, const std::vector<Transform<float>>& instance_apparent_transforms);
 
-        void traverse_model_graph_(const std::shared_ptr<Node<TSpectral>> node, const Transform<float>& parent_tf);
+        void traverse_model_graph_(const std::shared_ptr<Node<TSpectral>> node, const std::vector<Transform<float>>& parent_transform);
 
         std::shared_ptr<CameraModel<TSpectral>> camera_model_;
 
@@ -69,7 +77,12 @@ namespace huira {
 
         std::vector<Star<TSpectral>> stars_;
 
-        Interval exposure_interval_;
+        RTCScene tlas_ = nullptr;
+        struct InstanceMapping {
+            std::size_t batch_index;      // Index into geometry_
+            std::size_t instance_index;   // Index into geometry_[batch_index].instances
+        };
+        std::vector<InstanceMapping> instance_mappings_;
 
         friend class Renderer<TSpectral>;
     };

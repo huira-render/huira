@@ -78,6 +78,24 @@ namespace huira {
             return start + units::Second((end.et() - start.et()) / 2.0);
         }
 
+        /** @brief Create uniformly spaced Time samples across the interval. */
+        std::vector<Time> samples(std::size_t N) const {
+            if (N == 0) {
+                HUIRA_THROW_ERROR("Interval::samples - Cannot produce 0 interval samples");
+            }
+            else if (N == 1) {
+                return { this->center() };
+            }
+            else {
+                std::vector<Time> result(N);
+                units::Second dt = (this->end - this->start) / static_cast<float>(N - 1);
+                for (std::size_t i = 0; i < N; ++i) {
+                    result[i] = start + (i * dt);
+                }
+                return result;
+            }
+        }
+
         /** @brief The total duration of the exposure in seconds. */
         units::Second duration() const {
             return units::Second(end.et() - start.et());
