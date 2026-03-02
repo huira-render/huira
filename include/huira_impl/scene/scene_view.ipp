@@ -102,28 +102,32 @@ namespace huira {
             }
         }
 
-        // TODO Handle render arcs:
         // Copy stars in camera frame:
-        //stars_ = std::vector<Star<TSpectral>>(scene.stars_.size());
-        //for (std::size_t i = 0; i < scene.stars_.size(); ++i) {
-        //    Vec3<double> direction = scene.stars_[i].get_direction();
-        //    TSpectral irradiance = scene.stars_[i].get_irradiance();
-        //
-        //    // Compute stellar aberration:
-        //    Vec3<double> aberrated_direction = compute_aberrated_direction(direction, obs_ssb.velocity);
-        //    Vec3<double> apparent_direction = obs_ssb.rotation.inverse() * aberrated_direction;
-        //
-        //    stars_[i] = Star<TSpectral>(apparent_direction, irradiance);
-        //}
-        //
-        //
-        //// Resolve all unresolved objects now that we have light positions
-        //for (auto& unresolved_object : unresolved_objects_) {
-        //    unresolved_object.unresolved_object->resolve_irradiance(
-        //        unresolved_object.transform,
-        //        lights_
-        //    );
-        //}
+        stars_ = std::vector<std::vector<Star<TSpectral>>>(scene.stars_.size());
+        for (std::size_t i = 0; i < scene.stars_.size(); ++i) {
+            Vec3<double> direction = scene.stars_[i].get_direction();
+            TSpectral irradiance = scene.stars_[i].get_irradiance();
+
+            std::vector<Star<TSpectral>> star_samples(num_temporal_samples);
+            for (std::size_t j = 0; j < num_temporal_samples; ++j) {
+                // Compute stellar aberration:
+                Vec3<double> aberrated_direction = compute_aberrated_direction(direction, observer_transforms[j].velocity);
+                Vec3<double> apparent_direction = observer_transforms[j].rotation.inverse() * aberrated_direction;
+                star_samples[j] = Star<TSpectral>(apparent_direction, irradiance);
+            }
+
+            stars_[i] = star_samples;
+        }
+        
+        
+        // Resolve all unresolved objects now that we have light positions
+        for (auto& unresolved_object : unresolved_objects_) {
+            // NOTE: Here we use the irradiance computed using the transform at the start of the interval
+            unresolved_object.unresolved_object->resolve_irradiance(
+                unresolved_object.transforms[0],
+                lights_
+            );
+        }
 
         HUIRA_LOG_INFO("SceneView::SceneView - Created over interval [" + std::to_string(exposure_interval.start.et()) +
             ",  " + std::to_string(exposure_interval.end.et()) + "] " + 

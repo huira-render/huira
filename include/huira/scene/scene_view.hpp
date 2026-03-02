@@ -75,7 +75,7 @@ namespace huira {
 
         std::vector<UnresolvedInstance<TSpectral>> unresolved_objects_;
 
-        std::vector<Star<TSpectral>> stars_;
+        std::vector<std::vector<Star<TSpectral>>> stars_;
 
         RTCScene tlas_ = nullptr;
         struct InstanceMapping {
