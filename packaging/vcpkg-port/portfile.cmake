@@ -1,12 +1,16 @@
 set(VCPKG_BUILD_TYPE release) # Only headers and tools
 
-vcpkg_from_github(
-    OUT_SOURCE_PATH SOURCE_PATH
-    REPO huira-render/huira
-    REF "v${VERSION}"
-    SHA512 acbe259332e59eadf84f588a8e9bc5c5c717469fec2be5098ffeecaa6f5c2557dc3c0ad2d968c2803e289b75714fc7a87021b6960be5b321ce1dfd9f029db3fe
-    HEAD_REF main
-)
+# Use this for local CI:
+get_filename_component(SOURCE_PATH "${CURRENT_PORT_DIR}/../.." ABSOLUTE)
+
+# Uncomment and update for actual releases on the public registry:
+#vcpkg_from_github(
+#    OUT_SOURCE_PATH SOURCE_PATH
+#    REPO huira-render/huira
+#    REF "v${VERSION}"
+#    SHA512 acbe259332e59eadf84f588a8e9bc5c5c717469fec2be5098ffeecaa6f5c2557dc3c0ad2d968c2803e289b75714fc7a87021b6960be5b321ce1dfd9f029db3fe
+#    HEAD_REF main
+#)
 
 vcpkg_check_features(OUT_FEATURE_OPTIONS FEATURE_OPTIONS
     FEATURES
