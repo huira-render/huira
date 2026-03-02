@@ -6,6 +6,7 @@
 
 #include "huira/core/types.hpp"
 #include "huira/core/concepts/spectral_concepts.hpp"
+#include "huira/render/trajectory_arc.hpp"
 
 namespace huira {
     /**
@@ -33,6 +34,8 @@ namespace huira {
         [[nodiscard]] bool contains(const Vec3<float>& direction) const;
 
         [[nodiscard]] std::vector<Triangle<TSpectral>> clip_triangle(const Triangle<TSpectral>& triangle) const;
+
+        [[nodiscard]] std::vector<std::pair<float, float>> clip_arc(const TrajectoryArc& arc) const;
 
         /** @brief Number of planes defining this frustum. */
         [[nodiscard]] std::size_t plane_count() const noexcept { return plane_normals_.size(); }
@@ -63,6 +66,13 @@ namespace huira {
         [[nodiscard]] static std::vector<ClipVertex> clip_polygon_by_plane_(
             const std::vector<ClipVertex>& polygon,
             const Vec3<float>& plane_normal);
+
+        [[nodiscard]] static std::vector<std::pair<float, float>> arc_intervals_inside_plane_(
+            const TrajectoryArc& arc, const Vec3<float>& normal);
+
+        [[nodiscard]] static std::vector<std::pair<float, float>> intersect_intervals_(
+            const std::vector<std::pair<float, float>>& a,
+            const std::vector<std::pair<float, float>>& b);
     };
 
 }

@@ -92,6 +92,34 @@ namespace huira {
     }
 
     /**
+     * @brief Clip a trajectory arc against the frustum.
+     *
+     * For each plane, computes the parameter intervals where the arc is on
+     * the positive side (dot >= 0). The visible intervals are the intersection
+     * of all per-plane intervals.
+     */
+    template <IsSpectral TSpectral>
+    std::vector<std::pair<float, float>> Frustum<TSpectral>::clip_arc(const TrajectoryArc& arc) const
+    {
+        if (plane_normals_.empty()) {
+            return { { 0.0f, 1.0f } };
+        }
+
+        std::vector<std::pair<float, float>> result = { { 0.0f, 1.0f } };
+
+        for (const auto& normal : plane_normals_) {
+            auto plane_intervals = arc_intervals_inside_plane_(arc, normal);
+            result = intersect_intervals_(result, plane_intervals);
+
+            if (result.empty()) {
+                return {};
+            }
+        }
+
+        return result;
+    }
+
+    /**
      * @brief Linearly interpolate all attributes between two ClipVertex instances.
      *
      * Position, normal, uv, albedo, tangent, and bitangent are all interpolated.
@@ -164,5 +192,81 @@ namespace huira {
         }
 
         return output;
+    }
+
+    /**
+     * @brief Compute the intervals of the arc where dot(normal, arc(t)) >= 0.
+     *
+     * Finds all roots (plane crossings), then tests the sign between consecutive
+     * roots to determine which intervals are on the positive side.
+     */
+    template <IsSpectral TSpectral>
+    std::vector<std::pair<float, float>> Frustum<TSpectral>::arc_intervals_inside_plane_(
+        const TrajectoryArc& arc, const Vec3<float>& normal)
+    {
+        constexpr float eps = 1e-6f;
+
+        auto crossings = arc.find_plane_crossings(normal);
+
+        // Build candidate interval boundaries: [0, crossings..., 1]
+        std::vector<float> boundaries;
+        boundaries.reserve(crossings.size() + 2);
+        boundaries.push_back(0.0f);
+        for (float t : crossings) {
+            if (t > eps && t < 1.0f - eps) {
+                boundaries.push_back(t);
+            }
+        }
+        boundaries.push_back(1.0f);
+
+        // Test the midpoint of each interval to determine sign:
+        std::vector<std::pair<float, float>> intervals;
+        for (std::size_t i = 0; i + 1 < boundaries.size(); ++i) {
+            float t_mid = (boundaries[i] + boundaries[i + 1]) / 2.0f;
+            Vec3<float> dir = arc.evaluate(t_mid);
+            if (glm::dot(normal, dir) >= 0.0f) {
+                // Merge with previous interval if contiguous:
+                if (!intervals.empty() && std::abs(intervals.back().second - boundaries[i]) < eps) {
+                    intervals.back().second = boundaries[i + 1];
+                }
+                else {
+                    intervals.emplace_back(boundaries[i], boundaries[i + 1]);
+                }
+            }
+        }
+
+        return intervals;
+    }
+
+    /**
+     * @brief Intersect two sorted, non-overlapping interval sets.
+     *
+     * Standard sweep-line interval intersection.
+     */
+    template <IsSpectral TSpectral>
+    std::vector<std::pair<float, float>> Frustum<TSpectral>::intersect_intervals_(
+        const std::vector<std::pair<float, float>>& a,
+        const std::vector<std::pair<float, float>>& b)
+    {
+        std::vector<std::pair<float, float>> result;
+        std::size_t i = 0, j = 0;
+
+        while (i < a.size() && j < b.size()) {
+            float lo = std::max(a[i].first, b[j].first);
+            float hi = std::min(a[i].second, b[j].second);
+
+            if (lo < hi) {
+                result.emplace_back(lo, hi);
+            }
+
+            if (a[i].second < b[j].second) {
+                ++i;
+            }
+            else {
+                ++j;
+            }
+        }
+
+        return result;
     }
 }
