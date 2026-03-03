@@ -28,7 +28,7 @@ If there are features you wish to see, that you don't see listed here, please fe
 - Logging and crash report generation
 - API Reference Documentation (NOTE: Some docs may appear incomplete or poorly formatted)
 
-## Features Currently in development (as of v0.8.3-dev)
+## Features Currently in development (for v0.9.0)
 - 3D mesh and material support
 - Motion blur
 - Camera Depth-of-Field
