@@ -18,8 +18,8 @@ namespace huira {
     TrajectoryArc::TrajectoryArc(const std::vector<Vec3<float>>& samples)
         : sample_count_(samples.size())
     {
-        if (samples.size() < 2) {
-            throw std::invalid_argument("TrajectoryArc requires at least 2 sample points.");
+        if (samples.size() < 1) {
+            throw std::invalid_argument("TrajectoryArc requires at least 1 sample point.");
         }
 
         if (is_polynomial_()) {
@@ -72,12 +72,19 @@ namespace huira {
      */
     void TrajectoryArc::build_polynomial_(const std::vector<Vec3<float>>& samples)
     {
-        if (samples.size() == 2) {
+        if (samples.size() == 1) {
+            // Constant: f(t) = p0
+            poly_coeffs_.resize(1);
+            poly_coeffs_[0] = samples[0];
+        }
+        else if (samples.size() == 2) {
+            // Linear: f(t) = p0 + (p1 - p0) * t
             poly_coeffs_.resize(2);
             poly_coeffs_[0] = samples[0];
             poly_coeffs_[1] = samples[1] - samples[0];
         }
         else {
+            // Quadratic: Lagrange at t = 0, 0.5, 1
             const auto& p0 = samples[0];
             const auto& p1 = samples[1];
             const auto& p2 = samples[2];
