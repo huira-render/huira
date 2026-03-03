@@ -1,5 +1,7 @@
 #include <array>
 
+#include "embree4/rtcore.h"
+
 #include "huira/core/concepts/numeric_concepts.hpp"
 
 namespace huira {
@@ -53,28 +55,38 @@ namespace huira {
     }
 
     /**
-     * @brief Convert the transform to a 3x4 embree style matrix.
-     * @return float* Embree transformation matrix
+     * @brief Convert the transform to embree pose information.
+     * @return RTCQuaternionDecomposition Embree pose information
      */
     template <IsFloatingPoint T>
-    std::array<float, 12> Transform<T>::to_embree() const
+    RTCQuaternionDecomposition Transform<T>::to_embree() const
     {
-        // Set the 3x4 affine transform (row-major).
-        // Embree expects a float[12] in row-major layout:
-        //   [ R00 R01 R02 Tx ]
-        //   [ R10 R11 R12 Ty ]
-        //   [ R20 R21 R22 Tz ]
+        RTCQuaternionDecomposition decomp;
 
-        std::array<float, 12> tx;
-        Mat4<T> mat = to_matrix();
-        for (int i = 0; i < 3; ++i) {
-            for (int j = 0; j < 4; ++j) {
-                std::size_t idx = static_cast<std::size_t>(i + 4*j);
-                tx[idx] = static_cast<float>(mat[j][i]);
-            }
-        }
+        // Scale:
+        decomp.scale_x = static_cast<float>(scale.x);
+        decomp.scale_y = static_cast<float>(scale.y);
+        decomp.scale_z = static_cast<float>(scale.z);
 
-        return tx;
+        // No shear:
+        decomp.skew_xy = 0.0f;
+        decomp.skew_xz = 0.0f;
+        decomp.skew_yz = 0.0f;
+
+        // Translation:
+        decomp.shift_x = static_cast<float>(position.x);
+        decomp.shift_y = static_cast<float>(position.y);
+        decomp.shift_z = static_cast<float>(position.z);
+
+        // Quaternion — check your Rotation class's convention.
+        // Embree uses (r, i, j, k) = (w, x, y, z):
+        auto q = rotation.local_to_parent_quaternion();
+        decomp.quaternion_r = static_cast<float>(q[0]);
+        decomp.quaternion_i = static_cast<float>(q[1]);
+        decomp.quaternion_j = static_cast<float>(q[2]);
+        decomp.quaternion_k = static_cast<float>(q[3]);
+
+        return decomp;
     }
 
 
