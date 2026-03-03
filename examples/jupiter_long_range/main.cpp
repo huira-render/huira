@@ -81,7 +81,8 @@ int main(int argc, char** argv) {
     // Create a camera instance in the ECI frame and set it's position, velocity, and orientation
     auto navcam = eci.new_instance(camera_model);
     navcam.set_position(7000_Km, 0_Km, 0_Km);
-    navcam.set_velocity(0_Kmps, 8_Kmps, 0_Kmps);
+    navcam.set_velocity(0_Kmps, 8000_Kmps, 0_Kmps);
+    navcam.set_angular_velocity(huira::units::DegreesPerSecond(5), huira::units::DegreesPerSecond(5), huira::units::DegreesPerSecond(5));
 
     auto quat = huira::Quaternion<double>(0.50865, -0.50865, 0.491198, 0.491198);
     navcam.set_rotation(huira::Rotation<double>::from_parent_to_local(quat));
@@ -95,7 +96,9 @@ int main(int argc, char** argv) {
     huira::RasterRenderer<TSpectral> renderer;
 
     // Create a scene view over the exposure interval
-    auto scene_view = huira::SceneView<TSpectral>(scene, exposure_interval, navcam, huira::ObservationMode::ABERRATED_STATE);
+    bool motion_blur = true;
+    std::size_t num_blur_samples = 3;
+    auto scene_view = huira::SceneView<TSpectral>(scene, exposure_interval, navcam, huira::ObservationMode::ABERRATED_STATE, motion_blur, num_blur_samples);
 
     // Render the current scene view
     renderer.render(scene_view, frame_buffer);
