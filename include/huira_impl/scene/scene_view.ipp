@@ -109,8 +109,8 @@ namespace huira {
             Vec3<double> direction = scene.stars_[i].get_direction();
             TSpectral irradiance = scene.stars_[i].get_irradiance();
 
-            std::vector<Star<TSpectral>> star_samples(num_temporal_samples);
-            for (std::size_t j = 0; j < num_temporal_samples; ++j) {
+            std::vector<Star<TSpectral>> star_samples(temporal_samples_.size());
+            for (std::size_t j = 0; j < temporal_samples_.size(); ++j) {
                 // Compute stellar aberration:
                 Vec3<double> aberrated_direction = compute_aberrated_direction(direction, observer_transforms[j].velocity);
                 Vec3<double> apparent_direction = observer_transforms[j].rotation.inverse() * aberrated_direction;
@@ -356,32 +356,33 @@ namespace huira {
             for (std::size_t inst_idx = 0; inst_idx < batch.instances.size(); ++inst_idx) {
 
                 std::size_t N = batch.instances[inst_idx].size();
-                for (std::size_t t_idx = 0; t_idx < N; ++t_idx) {
-                    RTCGeometry inst_geom = rtcNewGeometry(device_, RTC_GEOMETRY_TYPE_INSTANCE);
-                    rtcSetGeometryInstancedScene(inst_geom, mesh_blas);
-                    rtcSetGeometryTimeStepCount(inst_geom, static_cast<unsigned int>(N));
 
-                    if (motion_blur) {
-                        rtcSetGeometryTimeRange(inst_geom, 0.0f, 1.0f);
-                    }
+                RTCGeometry inst_geom = rtcNewGeometry(device_, RTC_GEOMETRY_TYPE_INSTANCE);
+                rtcSetGeometryInstancedScene(inst_geom, mesh_blas);
+                rtcSetGeometryTimeStepCount(inst_geom, static_cast<unsigned int>(N));
 
-                    rtcSetGeometryTransform(inst_geom,
-                        static_cast<unsigned int>(t_idx),
-                        RTC_FORMAT_FLOAT3X4_ROW_MAJOR,
-                        batch.instances[inst_idx][t_idx].to_embree().data());
-
-                    rtcCommitGeometry(inst_geom);
-
-                    // Attach to TLAS — the returned ID is the geomID we'll see in ray hits:
-                    unsigned int geom_id = rtcAttachGeometry(tlas_, inst_geom);
-                    rtcReleaseGeometry(inst_geom);
-
-                    // Record the mapping so we can resolve hits:
-                    if (geom_id >= instance_mappings_.size()) {
-                        instance_mappings_.resize(geom_id + 1);
-                    }
-                    instance_mappings_[geom_id] = { batch_idx, inst_idx };
+                if (motion_blur) {
+                    rtcSetGeometryTimeRange(inst_geom, 0.0f, 1.0f);
                 }
+
+                for (std::size_t t_idx = 0; t_idx < N; ++t_idx) {
+                    RTCQuaternionDecomposition decomp = batch.instances[inst_idx][t_idx].to_embree();
+                    rtcSetGeometryTransformQuaternion(inst_geom,
+                        static_cast<unsigned int>(t_idx),
+                        &decomp);
+                }
+
+                rtcCommitGeometry(inst_geom);
+
+                // Attach to TLAS — the returned ID is the geomID we'll see in ray hits:
+                unsigned int geom_id = rtcAttachGeometry(tlas_, inst_geom);
+                rtcReleaseGeometry(inst_geom);
+
+                // Record the mapping so we can resolve hits:
+                if (geom_id >= instance_mappings_.size()) {
+                    instance_mappings_.resize(geom_id + 1);
+                }
+                instance_mappings_[geom_id] = { batch_idx, inst_idx };
             }
         }
 

@@ -2,6 +2,8 @@
 
 #include <array>
 
+#include "embree4/rtcore.h"
+
 #include "huira/core/concepts/numeric_concepts.hpp"
 #include "huira/core/rotation.hpp"
 #include "huira/core/types.hpp"
@@ -29,7 +31,7 @@ namespace huira {
 
         Mat4<T> to_matrix() const;
 
-        std::array<float, 12> to_embree() const;
+        RTCQuaternionDecomposition to_embree() const;
 
         Transform<T> inverse() const;
 
