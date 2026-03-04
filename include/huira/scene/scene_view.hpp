@@ -14,6 +14,8 @@
 #include "huira/core/interval.hpp"
 #include "huira/core/transform.hpp"
 #include "huira/handles/camera_handle.hpp"
+#include "huira/render/interaction.hpp"
+#include "huira/render/ray.hpp"
 #include "huira/scene/scene.hpp"
 #include "huira/scene/scene_view_types.hpp"
 
@@ -40,6 +42,14 @@ namespace huira {
             std::size_t num_temporal_Samples = 3);
 
         ~SceneView();
+
+        [[nodiscard]] HitRecord intersect(const Ray<TSpectral>& ray, float time = 0.5f) const;
+
+        [[nodiscard]] bool occluded(const Ray<TSpectral>& ray, float t_far, float time = 0.5f) const;
+
+        [[nodiscard]] Interaction<TSpectral> resolve_hit(
+            const Ray<TSpectral>& ray,
+            const HitRecord& hit) const;
 
         Interval get_exposure_interval() const { return exposure_interval_; }
         units::Second duration() const { return exposure_interval_.duration(); }

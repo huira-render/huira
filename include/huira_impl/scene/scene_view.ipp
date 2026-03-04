@@ -1,5 +1,6 @@
 #include <memory>
 #include <vector>
+#include <limits>
 
 #include "huira/assets/lights/light.hpp"
 #include "huira/assets/mesh.hpp"
@@ -147,6 +148,136 @@ namespace huira {
 
         HUIRA_LOG_INFO("SceneView::~SceneView - destroyed, released TLAS and cleared geometry and lights.");
     }
+
+
+    template <IsSpectral TSpectral>
+    HitRecord SceneView<TSpectral>::intersect(const Ray<TSpectral>& ray, float time) const
+    {
+        RTCRayHit rayhit{};
+        rayhit.ray.org_x = ray.origin().x;
+        rayhit.ray.org_y = ray.origin().y;
+        rayhit.ray.org_z = ray.origin().z;
+        rayhit.ray.dir_x = ray.direction().x;
+        rayhit.ray.dir_y = ray.direction().y;
+        rayhit.ray.dir_z = ray.direction().z;
+        rayhit.ray.tnear = 0.f;
+        rayhit.ray.tfar = std::numeric_limits<float>::infinity();
+        rayhit.ray.time = time;
+        rayhit.ray.mask = 0xFFFFFFFF;
+        rayhit.ray.flags = 0;
+        rayhit.hit.geomID = RTC_INVALID_GEOMETRY_ID;
+        rayhit.hit.instID[0] = RTC_INVALID_GEOMETRY_ID;
+
+        rtcIntersect1(tlas_, &rayhit);
+
+        HitRecord rec;
+        if (rayhit.hit.geomID != RTC_INVALID_GEOMETRY_ID) {
+            rec.t = rayhit.ray.tfar;
+            rec.u = rayhit.hit.u;
+            rec.v = rayhit.hit.v;
+            rec.inst_id = rayhit.hit.instID[0];
+            rec.geom_id = rayhit.hit.geomID;
+            rec.prim_id = rayhit.hit.primID;
+            rec.Ng = Vec3<float>{ rayhit.hit.Ng_x, rayhit.hit.Ng_y, rayhit.hit.Ng_z };
+        }
+        return rec;
+    }
+
+    template <IsSpectral TSpectral>
+    bool SceneView<TSpectral>::occluded(const Ray<TSpectral>& ray, float t_far, float time) const
+    {
+        RTCRay rtc_ray{};
+        rtc_ray.org_x = ray.origin().x;
+        rtc_ray.org_y = ray.origin().y;
+        rtc_ray.org_z = ray.origin().z;
+        rtc_ray.dir_x = ray.direction().x;
+        rtc_ray.dir_y = ray.direction().y;
+        rtc_ray.dir_z = ray.direction().z;
+        rtc_ray.tnear = 0.f;
+        rtc_ray.tfar = t_far;
+        rtc_ray.time = time;
+        rtc_ray.mask = 0xFFFFFFFF;
+        rtc_ray.flags = 0;
+
+        rtcOccluded1(tlas_, &rtc_ray);
+
+        // Embree sets tfar to -inf on occlusion:
+        return rtc_ray.tfar < 0.0f;
+    }
+
+
+    template <IsSpectral TSpectral>
+    Interaction<TSpectral> SceneView<TSpectral>::resolve_hit(
+        const Ray<TSpectral>& ray,
+        const HitRecord& hit) const
+    {
+        Interaction<TSpectral> isect{};
+
+        // Look up which mesh and instance this hit corresponds to:
+        const auto& mapping = instance_mappings_[hit.inst_id];
+        const auto& batch = geometry_[mapping.batch_index];
+        const auto& mesh = batch.mesh;
+        const auto& indices = mesh->index_buffer();
+        const auto& vertices = mesh->vertex_buffer();
+
+        // Triangle vertex indices:
+        std::uint32_t idx0 = indices[hit.prim_id * 3 + 0];
+        std::uint32_t idx1 = indices[hit.prim_id * 3 + 1];
+        std::uint32_t idx2 = indices[hit.prim_id * 3 + 2];
+
+        // Embree barycentric convention: P = (1-u-v)*V0 + u*V1 + v*V2
+        float w = 1.0f - hit.u - hit.v;
+
+        // Hit position from the ray (more numerically stable than interpolating):
+        isect.position = ray.at(hit.t);
+        isect.wo = -ray.direction();
+
+        // Geometric normal (from Embree, in world/camera space since TLAS
+        // instance transforms are applied by Embree):
+        isect.normal_g = glm::normalize(hit.Ng);
+
+        const auto& instance_transforms = batch.instances[mapping.instance_index];
+        const Transform<float>& xf = instance_transforms[0];
+
+        // TODO: For motion blur, consider interpolating the transform at ray.time
+        // for more accurate shading normals on fast-moving objects.
+
+        // Interpolate shading normal:
+        Vec3<float> n0 = vertices[idx0].normal;
+        Vec3<float> n1 = vertices[idx1].normal;
+        Vec3<float> n2 = vertices[idx2].normal;
+        Vec3<float> ns_object = w * n0 + hit.u * n1 + hit.v * n2;
+        isect.normal_s = glm::normalize(xf.apply_to_direction(ns_object));
+
+        // Interpolate UVs (transform-independent):
+        isect.uv = w * vertices[idx0].uv
+            + hit.u * vertices[idx1].uv
+            + hit.v * vertices[idx2].uv;
+
+        // Interpolate vertex albedo:
+        isect.vertex_albedo = w * vertices[idx0].albedo
+            + hit.u * vertices[idx1].albedo
+            + hit.v * vertices[idx2].albedo;
+
+        // Interpolate tangent frame:
+        isect.tangent = Vec3<float>{ 0.0f };
+        isect.bitangent = Vec3<float>{ 0.0f };
+        if (mesh->has_tangents()) {
+            const auto& tangents = mesh->tangent_buffer();
+            Vec3<float> t_object = w * tangents[idx0].tangent
+                + hit.u * tangents[idx1].tangent
+                + hit.v * tangents[idx2].tangent;
+            Vec3<float> bt_object = w * tangents[idx0].bitangent
+                + hit.u * tangents[idx1].bitangent
+                + hit.v * tangents[idx2].bitangent;
+
+            isect.tangent = glm::normalize(xf.apply_to_direction(t_object));
+            isect.bitangent = glm::normalize(xf.apply_to_direction(bt_object));
+        }
+
+        return isect;
+    }
+
 
 
     /**
