@@ -163,6 +163,18 @@ namespace huira {
     }
 
     /**
+     * @brief Sets the body-frame angular velocity using individual components.
+     *
+     * @param wx The x-body frame component of angular velocity
+     * @param wy The y-body frame component of angular velocity
+     * @param wz The z-body frame component of angular velocity
+     */
+    template <IsSpectral TSpectral, typename TNode>
+    void NodeHandle<TSpectral, TNode>::set_body_angular_velocity(units::RadiansPerSecond wx, units::RadiansPerSecond wy, units::RadiansPerSecond wz) const {
+        this->get_()->set_body_angular_velocity(wx, wy, wz);
+    }
+
+    /**
      * @brief Gets the local angular velocity.
      *
      * @return Vec3<double> The local 3D angular velocity vector

@@ -49,6 +49,7 @@ namespace huira {
 
         // Angular velocity
         void set_angular_velocity(units::RadiansPerSecond wx, units::RadiansPerSecond wy, units::RadiansPerSecond wz) const;
+        void set_body_angular_velocity(units::RadiansPerSecond wx, units::RadiansPerSecond wy, units::RadiansPerSecond wz) const;
         Vec3<double> get_static_angular_velocity() const;
 
 
