@@ -267,15 +267,16 @@ namespace huira {
     /**
      * @brief Get the apparent transform of the node for a given observation mode and time.
      * @param obs_mode Observation mode (true, geometric, aberrated)
+     * @param epoch Time that the manually set transform corresponds to
      * @param t_obs Observation time
      * @param observer_ssb_state Observer's SSB transform
      * @return Transform<double> Apparent transform
      */
     template <IsSpectral TSpectral>
-    Transform<double> Node<TSpectral>::get_apparent_transform(ObservationMode obs_mode, const Time& t_obs, const Transform<double>& observer_ssb_state) const
+    Transform<double> Node<TSpectral>::get_apparent_transform(ObservationMode obs_mode, const Time& epoch, const Time& t_obs, const Transform<double>& observer_ssb_state) const
     {
         bool iterate = (obs_mode != ObservationMode::TRUE_STATE);
-        auto [apparent_state, _] = get_geometric_state_(t_obs, observer_ssb_state, iterate);
+        auto [apparent_state, _] = get_geometric_state_(epoch, t_obs, observer_ssb_state, iterate);
 
         if (obs_mode == ObservationMode::ABERRATED_STATE) {
             // Geometric Direction:
@@ -299,6 +300,7 @@ namespace huira {
 
     /**
      * @brief Get the geometric state (transform and light time) of the node.
+     * @param epoch Time that the manually set transform corresponds to
      * @param t_obs Observation time
      * @param observer_ssb_state Observer's SSB transform
      * @param iterate Whether to iterate for aberration
@@ -306,16 +308,16 @@ namespace huira {
      * @return std::pair<Transform<double>, double> {transform, light time}
      */
     template <IsSpectral TSpectral>
-    std::pair<Transform<double>, double> Node<TSpectral>::get_geometric_state_(const Time& t_obs, const Transform<double>& observer_ssb_state, bool iterate, double tol) const
+    std::pair<Transform<double>, double> Node<TSpectral>::get_geometric_state_(const Time& epoch, const Time& t_obs, const Transform<double>& observer_ssb_state, bool iterate, double tol) const
     {
         if (!iterate) {
-            return { this->get_ssb_transform_(t_obs), 0.0 };
+            return { this->get_ssb_transform_(epoch, t_obs), 0.0 };
         }
 
-        Transform<double> full_ssb_transform = this->get_ssb_transform_(t_obs);
+        Transform<double> full_ssb_transform = this->get_ssb_transform_(epoch, t_obs);
         double dt = glm::length(observer_ssb_state.position - full_ssb_transform.position) / SPEED_OF_LIGHT<double>();
         for (std::size_t i = 0; i < 10; ++i) {
-            full_ssb_transform = this->get_ssb_transform_(t_obs, dt);
+            full_ssb_transform = this->get_ssb_transform_(epoch, t_obs, dt);
 
             const double new_dt = glm::length(observer_ssb_state.position - full_ssb_transform.position) / SPEED_OF_LIGHT<double>();
 
@@ -334,12 +336,13 @@ namespace huira {
 
     /**
      * @brief Get the node's transform in the Solar System Barycenter (SSB) frame.
+     * @param epoch Time that the manually set transform corresponds to
      * @param t_obs Observation time
      * @param dt Light time delay
      * @return Transform<double> SSB transform
      */
     template <IsSpectral TSpectral>
-    Transform<double> Node<TSpectral>::get_ssb_transform_(const Time& t_obs, double dt) const
+    Transform<double> Node<TSpectral>::get_ssb_transform_(const Time& epoch, const Time& t_obs, double dt) const
     {
         // The time at which the object emitted the light we are seeing now.
         Time t_emit = Time::from_et(t_obs.et() - dt);
@@ -358,8 +361,8 @@ namespace huira {
                 HUIRA_THROW_ERROR(this->get_info() +
                     " - cannot compute SSB transform: node has MANUAL position but no parent");
             }
-            Transform<double> parent_ssb = parent_->get_ssb_transform_(t_obs, dt);
-            Transform<double> local = this->get_local_position_at_(t_obs, dt);
+            Transform<double> parent_ssb = parent_->get_ssb_transform_(epoch, t_obs, dt);
+            Transform<double> local = this->get_local_position_at_(epoch, t_obs, dt);
             ssb_state = parent_ssb * local;
         }
 
@@ -376,9 +379,9 @@ namespace huira {
                 HUIRA_THROW_ERROR(this->get_info() +
                     " - cannot compute SSB transform: node has MANUAL rotation but no parent");
             }
-            parent_ssb_rot = parent_->get_ssb_transform_(t_obs, dt);
+            parent_ssb_rot = parent_->get_ssb_transform_(epoch, t_obs, dt);
 
-            Transform<double> local = this->get_local_rotation_at_(t_obs, dt);
+            Transform<double> local = this->get_local_rotation_at_(epoch, t_obs, dt);
             ssb_state.rotation = parent_ssb_rot.rotation * local.rotation;
             ssb_state.angular_velocity = parent_ssb_rot.angular_velocity + (parent_ssb_rot.rotation * local.angular_velocity);
         }
@@ -389,17 +392,19 @@ namespace huira {
 
     /**
      * @brief Get the node's local position transform at a given time.
+     * @param epoch Time that the manually set transform corresponds to
      * @param t_obs Observation time
      * @param dt Light time delay
      * @return Transform<double> Local position transform
      */
     template <IsSpectral TSpectral>
-    Transform<double> Node<TSpectral>::get_local_position_at_(const Time& t_obs, double dt) const
+    Transform<double> Node<TSpectral>::get_local_position_at_(const Time& epoch, const Time& t_obs, double dt) const
     {
-        (void)t_obs; // Not used for manual.  Would be used for custom ball back functions.
+        double total_dt = (t_obs.et() - dt) - epoch.et();
+
         Transform<double> local_transform_at_time{};
         if (position_mode_ == TransformMode::MANUAL_TRANSFORM) {
-            local_transform_at_time.position = local_transform_.position - dt * local_transform_.velocity;
+            local_transform_at_time.position = local_transform_.position + total_dt * local_transform_.velocity;
             local_transform_at_time.velocity = local_transform_.velocity;
         }
         else {
@@ -411,18 +416,20 @@ namespace huira {
 
     /**
      * @brief Get the node's local rotation transform at a given time.
+     * @param epoch Time that the manually set transform corresponds to
      * @param t_obs Observation time
      * @param dt Light time delay
      * @return Transform<double> Local rotation transform
      */
     template <IsSpectral TSpectral>
-    Transform<double> Node<TSpectral>::get_local_rotation_at_(const Time& t_obs, double dt) const
+    Transform<double> Node<TSpectral>::get_local_rotation_at_(const Time& epoch, const Time& t_obs, double dt) const
     {
-        (void)t_obs; // Not used for manual.  Would be used for custom ball back functions.
+        double total_dt = (t_obs.et() - dt) - epoch.et();
+
         Transform<double> local_transform_at_time{};
         if (rotation_mode_ == TransformMode::MANUAL_TRANSFORM) {
             // Approximate rotation by treat angular_velocity * dt as euler angles
-            Vec3<double> euler_angles = local_transform_.angular_velocity * dt;
+            Vec3<double> euler_angles = local_transform_.angular_velocity * total_dt;
             Rotation<double> delta_rotation = Rotation<double>::intrinsic_euler_angles(
                 units::Radian{ euler_angles[0] },
                 units::Radian{ euler_angles[1] },
