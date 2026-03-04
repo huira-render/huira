@@ -86,7 +86,7 @@ namespace huira {
         TransformMode get_position_mode() const { return position_mode_; }
         TransformMode get_rotation_mode() const { return rotation_mode_; }
 
-        Transform<double> get_apparent_transform(ObservationMode obs_mode, const Time& t_obs, const Transform<double>& observer_ssb_state) const;
+        Transform<double> get_apparent_transform(ObservationMode obs_mode, const Time& epoch, const Time& t_obs, const Transform<double>& observer_ssb_state) const;
 
         Vec3<double> get_static_position() const;
         Rotation<double> get_static_rotation() const;
@@ -130,11 +130,11 @@ namespace huira {
         std::pair<const Node<TSpectral>*, Transform<double>> find_spice_origin_ancestor_() const;
         std::pair<const Node<TSpectral>*, std::pair<Rotation<double>, Vec3<double>>> find_spice_frame_ancestor_() const;
 
-        std::pair<Transform<double>, double> get_geometric_state_(const Time& t_obs, const Transform<double>& observer_ssb_state, bool iterate, double tol = 1e-12) const;
+        std::pair<Transform<double>, double> get_geometric_state_(const Time& epoch, const Time& t_obs, const Transform<double>& observer_ssb_state, bool iterate, double tol = 1e-12) const;
 
-        Transform<double> get_ssb_transform_(const Time& t_obs, double dt = 0.0) const;
-        Transform<double> get_local_position_at_(const Time& t_obs, double dt) const;
-        Transform<double> get_local_rotation_at_(const Time& t_obs, double dt) const;
+        Transform<double> get_ssb_transform_(const Time& epoch, const Time& t_obs, double dt = 0.0) const;
+        Transform<double> get_local_position_at_(const Time& epoch, const Time& t_obs, double dt) const;
+        Transform<double> get_local_rotation_at_(const Time& epoch, const Time& t_obs, double dt) const;
 
         friend class Scene<TSpectral>;
         friend class FrameNode<TSpectral>;

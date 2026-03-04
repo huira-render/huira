@@ -81,8 +81,8 @@ int main(int argc, char** argv) {
     // Create a camera instance in the ECI frame and set it's position, velocity, and orientation
     auto navcam = eci.new_instance(camera_model);
     navcam.set_position(7000_Km, 0_Km, 0_Km);
-    navcam.set_velocity(0_Kmps, 8000_Kmps, 0_Kmps);
-    navcam.set_angular_velocity(huira::units::DegreesPerSecond(5), huira::units::DegreesPerSecond(5), huira::units::DegreesPerSecond(5));
+    navcam.set_velocity(0_Kmps, 8_Kmps, 0_Kmps);
+    navcam.set_angular_velocity(huira::units::DegreesPerSecond(1), huira::units::DegreesPerSecond(0), huira::units::DegreesPerSecond(0));
 
     auto quat = huira::Quaternion<double>(0.50865, -0.50865, 0.491198, 0.491198);
     navcam.set_rotation(huira::Rotation<double>::from_parent_to_local(quat));
