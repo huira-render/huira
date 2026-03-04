@@ -448,7 +448,7 @@ namespace huira {
         
                         float projected_area =
                             camera->get_projected_aperture_area(proj.direction);
-                        TSpectral power = proj.irradiance * projected_area;
+                        TSpectral power = proj.weight * proj.irradiance * projected_area;
         
                         if (camera->has_psf()) {
                             float floor_x = std::floor(star_p.x);

@@ -74,6 +74,7 @@ namespace huira {
 
         void set_angular_velocity(const Vec3<double>& angular_velocity);
         void set_angular_velocity(units::RadiansPerSecond wx, units::RadiansPerSecond wy, units::RadiansPerSecond wz);
+        void set_body_angular_velocity(units::RadiansPerSecond wx, units::RadiansPerSecond wy, units::RadiansPerSecond wz);
 
         void set_spice_origin(const std::string& spice_origin);
         void set_spice_frame(const std::string& spice_frame);
@@ -106,6 +107,7 @@ namespace huira {
 
     protected:
         Transform<double> local_transform_;
+        bool body_frame_rates_ = false;
 
         TransformMode position_mode_ = TransformMode::MANUAL_TRANSFORM;
         TransformMode rotation_mode_ = TransformMode::MANUAL_TRANSFORM;

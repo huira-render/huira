@@ -199,6 +199,29 @@ namespace huira {
             std::to_string(wz.to_si()) + ")");
 
         this->local_transform_.angular_velocity = Vec3<double>{ wx.to_si(), wy.to_si(), wz.to_si() };
+        this->body_frame_rates_ = false;
+    }
+
+    /**
+     * @brief Set the node's body-frame angular velocity manually using unit types.
+     * @param wx X-body angular velocity (rad/s)
+     * @param wy Y-body angular velocity (rad/s)
+     * @param wz Z-body angular velocity (rad/s)
+     */
+    template <IsSpectral TSpectral>
+    void Node<TSpectral>::set_body_angular_velocity(units::RadiansPerSecond wx, units::RadiansPerSecond wy, units::RadiansPerSecond wz)
+    {
+        if (this->rotation_mode_ != TransformMode::MANUAL_TRANSFORM) {
+            HUIRA_THROW_ERROR(this->get_info() + " - cannot manually set angular velocity when node does not use manual rotation");
+        }
+
+        HUIRA_LOG_INFO(this->get_info() + " - set_angular_velocity(" +
+            std::to_string(wx.to_si()) + ", " +
+            std::to_string(wy.to_si()) + ", " +
+            std::to_string(wz.to_si()) + ")");
+
+        this->local_transform_.angular_velocity = Vec3<double>{ wx.to_si(), wy.to_si(), wz.to_si() };
+        this->body_frame_rates_ = true;
     }
 
 
@@ -428,13 +451,26 @@ namespace huira {
 
         Transform<double> local_transform_at_time{};
         if (rotation_mode_ == TransformMode::MANUAL_TRANSFORM) {
-            // Approximate rotation by treat angular_velocity * dt as euler angles
-            Vec3<double> euler_angles = local_transform_.angular_velocity * total_dt;
-            Rotation<double> delta_rotation = Rotation<double>::intrinsic_euler_angles(
-                units::Radian{ euler_angles[0] },
-                units::Radian{ euler_angles[1] },
-                units::Radian{ euler_angles[2] });
-            local_transform_at_time.rotation = delta_rotation * local_transform_.rotation;
+            Vec3<double> omega = local_transform_.angular_velocity;
+            double angle = glm::length(omega) * total_dt;
+
+            if (std::abs(angle) < 1e-12) {
+                local_transform_at_time.rotation = local_transform_.rotation;
+            }
+            else {
+                Vec3<double> axis = glm::normalize(omega);
+                Rotation<double> delta = Rotation<double>::from_local_to_parent(axis, units::Radian{ angle });
+
+                if (body_frame_rates_) {
+                    // Body-frame: q(t) = q_0 * delta
+                    local_transform_at_time.rotation = local_transform_.rotation * delta;
+                }
+                else {
+                    // Inertial-frame: q(t) = delta * q_0
+                    local_transform_at_time.rotation = delta * local_transform_.rotation;
+                }
+            }
+
             local_transform_at_time.angular_velocity = local_transform_.angular_velocity;
         }
         else {
