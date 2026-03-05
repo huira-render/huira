@@ -207,7 +207,11 @@ namespace huira {
      */
     std::vector<float> TrajectoryArc::find_crossings_polynomial_(const Vec3<float>& normal) const
     {
-        if (poly_coeffs_.size() == 2) {
+        if (poly_coeffs_.size() == 1) {
+            // Constant: dot(normal, p0) is either >= 0 or < 0. No crossings.
+            return {};
+        }
+        else if (poly_coeffs_.size() == 2) {
             float c0 = glm::dot(normal, poly_coeffs_[0]);
             float c1 = glm::dot(normal, poly_coeffs_[1]);
             return solve_linear_(c1, c0, 0.0f, 1.0f);
