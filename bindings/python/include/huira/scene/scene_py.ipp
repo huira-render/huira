@@ -275,6 +275,16 @@ namespace huira {
                 py::arg("min_magnitude") = 100.f,
                 "Load stars from a catalog file for the given observation time")
 
+            .def("load_dynamic_stars", &SceneType::load_dynamic_stars,
+                py::arg("star_catalog_path"),
+                py::arg("time"),
+                py::arg("min_magnitude") = 100.f,
+                "Load dynamic stars from a catalog file for the given observation time")
+
+            .def("update_star_epoch", &SceneType::update_star_epoch,
+                py::arg("time"),
+                "Update the epoch time for dynamic stars, causing their positions to be updated accordingly")
+
             // =============================================================
             // Debug printing
             // =============================================================

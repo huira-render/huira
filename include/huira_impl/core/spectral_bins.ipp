@@ -62,6 +62,151 @@ namespace huira {
     }
 
 
+
+    /**
+     * @brief Integrates externally-sampled spectral data into each bin.
+     *
+     * Given a set of (wavelength, value) pairs representing a continuous spectral function
+     * (e.g. a sensor quantum-efficiency curve loaded from a CSV), this method integrates
+     * the data over each bin's wavelength range using the trapezoidal rule with linear
+     * interpolation at bin boundaries, then divides by the bin width to produce a mean
+     * value per bin.
+     *
+     *   bin[i] = (1 / bin_width_nm) * integral(value(λ) dλ,  bin_min_nm, bin_max_nm)
+     *
+     * Bins with no overlapping data (entirely outside the sampled range) are set to 0.
+     *
+     * @param wavelengths Sample wavelengths in **nanometers**, strictly ascending.
+     * @param values      Spectral values at each corresponding wavelength.
+     * @return SpectralBins with the mean spectral value over each bin.
+     * @throws std::invalid_argument if lengths differ, vectors are empty, or wavelengths
+     *         are not strictly ascending.
+     */
+    template <std::size_t N, auto... Args>
+    SpectralBins<N, Args...> SpectralBins<N, Args...>::integrate_over_data(
+        const std::vector<double>& wavelengths,
+        const std::vector<float>& values)
+    {
+        // --- Precondition checks ---
+        if (wavelengths.size() != values.size()) {
+            throw std::invalid_argument(
+                "integrate_over_data: wavelengths and values must have the same length");
+        }
+        if (wavelengths.empty()) {
+            throw std::invalid_argument(
+                "integrate_over_data: wavelengths and values must not be empty");
+        }
+        for (std::size_t k = 1; k < wavelengths.size(); ++k) {
+            if (wavelengths[k] <= wavelengths[k - 1]) {
+                throw std::invalid_argument(
+                    "integrate_over_data: wavelengths must be strictly ascending");
+            }
+        }
+
+        const std::size_t M = wavelengths.size();
+
+        // Linearly interpolate a value at wavelength `t` between adjacent sample indices.
+        auto lerp_value = [&](std::size_t lo, std::size_t hi, double t) -> double {
+            double alpha = (t - wavelengths[lo]) / (wavelengths[hi] - wavelengths[lo]);
+            return static_cast<double>(values[lo]) * (1.0 - alpha)
+                + static_cast<double>(values[hi]) * alpha;
+            };
+
+        // Manual lower-bound: returns first index k where wavelengths[k] >= target.
+        auto lower_bound_idx = [&](double target) -> std::size_t {
+            std::size_t first = 0, count = M;
+            while (count > 0) {
+                std::size_t step = count / 2, mid = first + step;
+                if (wavelengths[mid] < target) { first = mid + 1; count -= step + 1; }
+                else { count = step; }
+            }
+            return first;
+            };
+
+        SpectralBins result;
+
+        for (std::size_t i = 0; i < N; ++i) {
+            // Bin edges in nm (bins_ stores SI metres, so multiply by 1e9).
+            const double bin_min_nm = bins_[i].min_wavelength * 1e9;
+            const double bin_max_nm = bins_[i].max_wavelength * 1e9;
+            const double bin_width = bin_max_nm - bin_min_nm;
+
+            // Index of the first sample at or above bin_min_nm.
+            const std::size_t lo_idx = lower_bound_idx(bin_min_nm);
+
+            // Bin has no coverage if all samples are below it, or the first sample is already
+            // at or beyond bin_max_nm (i.e. no samples fall inside the bin and no sample pair
+            // straddles it).
+            if (lo_idx == M) {
+                result[i] = 0.0f;   // entire bin is beyond the data range
+                continue;
+            }
+            if (wavelengths[lo_idx] >= bin_max_nm && lo_idx == 0) {
+                result[i] = 0.0f;   // entire bin is before the data range
+                continue;
+            }
+            // Also handle the case where the bin sits entirely in a gap beyond the first sample
+            // but the lower-bound index points past bin_max_nm.
+            if (lo_idx > 0 && wavelengths[lo_idx] >= bin_max_nm) {
+                // No sample inside the bin, but the bin straddles a gap between lo_idx-1 and
+                // lo_idx.  Integrate the linear segment across the full bin width.
+                double left_val = lerp_value(lo_idx - 1, lo_idx, bin_min_nm);
+                double right_val = lerp_value(lo_idx - 1, lo_idx, bin_max_nm);
+                result[i] = static_cast<float>(0.5 * (left_val + right_val));
+                continue;
+            }
+
+            // --- Accumulate the trapezoid integral across the bin ---
+            // We walk left-to-right, tracking (prev_lam, prev_val) as the last knot processed.
+            double integral = 0.0;
+            double prev_lam = 0.0;
+            double prev_val = 0.0;
+            bool   have_prev = false;
+
+            // Left edge: if bin_min_nm falls strictly between two samples, interpolate.
+            if (lo_idx > 0 && wavelengths[lo_idx] > bin_min_nm) {
+                prev_lam = bin_min_nm;
+                prev_val = lerp_value(lo_idx - 1, lo_idx, bin_min_nm);
+                have_prev = true;
+            }
+
+            // Interior samples: all k where bin_min_nm <= wavelengths[k] < bin_max_nm.
+            for (std::size_t k = lo_idx; k < M && wavelengths[k] < bin_max_nm; ++k) {
+                double cur_lam = wavelengths[k];
+                double cur_val = static_cast<double>(values[k]);
+                if (have_prev) {
+                    integral += 0.5 * (prev_val + cur_val) * (cur_lam - prev_lam);
+                }
+                prev_lam = cur_lam;
+                prev_val = cur_val;
+                have_prev = true;
+            }
+
+            // Right edge: interpolate at bin_max_nm.
+            // hi_idx is the first index >= bin_max_nm.
+            const std::size_t hi_idx = lower_bound_idx(bin_max_nm);
+            double right_val = 0.0;
+            if (hi_idx < M) {
+                // bin_max_nm falls between wavelengths[hi_idx-1] and wavelengths[hi_idx]
+                // (or exactly on wavelengths[hi_idx], but lower_bound guarantees hi_idx > lo_idx).
+                right_val = lerp_value(hi_idx - 1, hi_idx, bin_max_nm);
+            }
+            else {
+                // bin_max_nm is beyond the last sample: extend flat from the last sample.
+                right_val = static_cast<double>(values[M - 1]);
+            }
+
+            if (have_prev) {
+                integral += 0.5 * (prev_val + right_val) * (bin_max_nm - prev_lam);
+            }
+
+            result[i] = static_cast<float>(integral / bin_width);
+        }
+
+        return result;
+    }
+
+
     template <std::size_t N, auto... Args>
     std::array<Bin, N> SpectralBins<N, Args...>::bins_ = SpectralBins<N, Args...>::initialize_bins_static_();
 
