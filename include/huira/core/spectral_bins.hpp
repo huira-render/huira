@@ -74,6 +74,9 @@ namespace huira {
         constexpr SpectralBins& operator=(const SpectralBins&) = default;
         constexpr SpectralBins& operator=(SpectralBins&&) = default;
 
+        // Factory methods
+        static SpectralBins integrate_over_data(const std::vector<double>& wavelengths, const std::vector<float>& values);
+
         // Element access
         constexpr reference operator[](size_type pos) { return data_[pos]; }
         constexpr const_reference operator[](size_type pos) const { return data_[pos]; }

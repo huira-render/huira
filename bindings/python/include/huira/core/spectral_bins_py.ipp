@@ -25,6 +25,13 @@ namespace huira {
             .def(py::init<float>(), py::arg("value"),
                 "Create with all bins set to the given value")
 
+            // Factory method
+            .def_static("integrate_over_data",
+                [](const std::vector<double>& wavelengths, const std::vector<float>& values) {
+                    return TSpectral::integrate_over_data(wavelengths, values);
+                },
+                py::arg("wavelengths"), py::arg("values"))
+
             // Construct from a Python list
             .def(py::init([](std::vector<float> values) {
             if (values.size() != N) {
