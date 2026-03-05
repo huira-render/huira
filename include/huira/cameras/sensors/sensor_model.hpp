@@ -27,7 +27,7 @@ namespace huira {
         units::Micrometer pitch_x{ 8.5 };
         units::Micrometer pitch_y{ 8.5 };
 
-        TSpectral quantum_efficiency = TSpectral{ 0.7f };
+        TSpectral quantum_efficiency = default_qe();
 
         float full_well_capacity = 20000.f; // e-
 
@@ -59,6 +59,12 @@ namespace huira {
          * @return The gain in decibels.
          */
         float gain_db() const { return unity_db - 20.f * std::log10(gain); }
+
+        constexpr TSpectral default_qe() const {
+            TSpectral qe = 1.f / TSpectral::photon_energies();
+            qe = qe / qe.max(); // Normalize to max of 1
+            return qe;
+        }
     };
 
 
