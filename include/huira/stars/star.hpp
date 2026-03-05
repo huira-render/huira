@@ -14,6 +14,9 @@ namespace huira {
         Star(const StarData& star_data, Time time);
         Star(const StarData& star_data, double years_since_j2000);
 
+        void update_direction(const StarData& star_data, Time time);
+        void update_direction(const StarData& star_data, double years_since_j2000);
+
         Vec3<double> get_direction() const { return direction_; }
         TSpectral get_irradiance() const { return irradiance_; }
 
