@@ -25,19 +25,20 @@ namespace huira {
 
         Interaction<TSpectral> shading_isect = isect;
 
-        if (isect.tangent != Vec3<float>{0.0f}) {
-            Vec3<float> ts_normal = glm::normalize(normal_image_->sample_bilinear(uv.x, uv.y));
-
-            ts_normal.x *= normal_factor_;
-            ts_normal.y *= normal_factor_;
-            ts_normal = glm::normalize(ts_normal);
-
-            Vec3<float> perturbed =
-                isect.tangent * ts_normal.x +
-                isect.bitangent * ts_normal.y +
-                isect.normal_s * ts_normal.z;
-            shading_isect.normal_s = glm::normalize(perturbed);
-        }
+        // TODO Fix the tangent space computations
+        //if (isect.tangent != Vec3<float>{0.0f}) {
+        //    Vec3<float> ts_normal = glm::normalize(normal_image_->sample_bilinear(uv.x, uv.y));
+        //
+        //    ts_normal.x *= normal_factor_;
+        //    ts_normal.y *= normal_factor_;
+        //    ts_normal = glm::normalize(ts_normal);
+        //
+        //    Vec3<float> perturbed =
+        //        isect.tangent * ts_normal.x +
+        //        isect.bitangent * ts_normal.y +
+        //        isect.normal_s * ts_normal.z;
+        //    shading_isect.normal_s = glm::normalize(perturbed);
+        //}
 
         // Keep the original tangent/bitangent, just orthogonalize against new normal
         shading_isect.tangent = glm::normalize(isect.tangent - glm::dot(isect.tangent, shading_isect.normal_s) * shading_isect.normal_s);
