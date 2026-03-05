@@ -63,8 +63,8 @@ namespace huira {
         auto& depth_buffer = frame_buffer.depth();
 
         // TODO Make configurable
-        const int spp = 100;
-        const int max_bounces = 3;
+        const int spp = 10;
+        const int max_bounces = 1;
         const float inv_spp = 1.0f / static_cast<float>(spp);
 
         // Tile-based parallel rendering:
@@ -257,6 +257,9 @@ namespace huira {
 
     template <IsSpectral TSpectral>
     struct RenderItem {
+        RenderItem(TrajectoryArc set_arc, std::vector<TSpectral> set_irradiance, int set_effective_radius)
+            : arc(std::move(set_arc)), irradiance(std::move(set_irradiance)), effective_radius(set_effective_radius) {}
+
         TrajectoryArc arc;
         std::vector<TSpectral> irradiance;
         int effective_radius;
