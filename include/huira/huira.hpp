@@ -33,6 +33,7 @@
 
 // Image interfaces
 #include "huira/images/image.hpp"
+#include "huira/images/color_map.hpp"
 #include "huira/images/io/read_image.hpp"
 #include "huira/images/io/png_io.hpp"
 #include "huira/images/io/jpeg_io.hpp"

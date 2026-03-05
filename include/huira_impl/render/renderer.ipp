@@ -6,146 +6,254 @@
 #include "tbb/blocked_range.h"
 #include "tbb/parallel_for.h"
 
+#include "huira_impl/render/psf_lut.ipp"
+
 #include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/core/types.hpp"
 
 namespace huira {
-    /**
-     * @brief Configuration parameters for the radius lookup table.
-     * 
-     * Controls how the effective PSF radius is determined based on photon count thresholds
-     * and minimum radius constraints.
-     */
-    struct RadiusLUTConfig {
-        float photon_threshold = 0.1f; // photon count that counts as "visible" (0.1 photons per second)
-        int min_radius = 1;            // never go below this
-    };
+    template <IsSpectral TSpectral>
+    void Renderer<TSpectral>::render(SceneView<TSpectral>& scene_view, FrameBuffer<TSpectral>& frame_buffer)
+    {
+        auto& camera = scene_view.camera_model_;
+        const int fb_width = frame_buffer.width();
+        const int fb_height = frame_buffer.height();
+        if (camera->resolution().width != fb_width || camera->resolution().height != fb_height) {
+            HUIRA_THROW_ERROR("Renderer::render - Frame buffer resolution does not match camera resolution.");
+        }
+
+        this->path_trace_(scene_view, frame_buffer);
+
+        this->render_unresolved_(scene_view, frame_buffer);
+
+        this->get_camera(scene_view)->readout(frame_buffer, scene_view.duration());
+    }
+
+
 
     /**
-     * @brief Entry in the radius lookup table.
-     * 
-     * Maps a PSF radius to the minimum irradiance threshold that requires that radius
-     * for accurate rendering.
-     */
-    struct RadiusLUTEntry {
-        int   radius;
-        float min_irradiance; 
-    };
-
-    /**
-     * @brief Build a lookup table mapping PSF radius to minimum irradiance thresholds.
-     * 
-     * This function analyzes the PSF kernel to determine, for each radius from 1 to full_radius,
-     * what minimum irradiance level would produce at least photon_threshold photons per second
-     * at the highest-sensitivity pixel within that radius ring. The resulting LUT allows efficient
-     * per-star radius culling: stars with low irradiance can use smaller PSF kernels without
-     * visible quality loss.
-     * 
+     * @brief Path trace a scene view into a frame buffer.
+     *
+     * Traces camera rays through each pixel, evaluating direct lighting with
+     * shadow rays and indirect illumination via recursive path tracing with
+     * Russian roulette termination.
+     *
+     * The rendering is parallelized over tiles using TBB. Each tile accumulates
+     * results from multiple samples per pixel (spp_) into the frame buffer.
+     *
      * @tparam TSpectral Spectral type for the rendering pipeline
-     * @param center_kernel The full PSF kernel centered at (0,0) offset
-     * @param full_radius_signed The maximum PSF radius in pixels
-     * @param area The projected aperture area for photon flux calculations
-     * @param photon_energies Per-channel photon energies for flux-to-photon conversion
-     * @param config Configuration parameters for LUT generation
-     * @return std::vector<RadiusLUTEntry> Lookup table sorted by increasing radius
+     * @param scene_view The scene view containing geometry, lights, and environment
+     * @param frame_buffer The frame buffer to render into
      */
     template <IsSpectral TSpectral>
-    static std::vector<RadiusLUTEntry> build_radius_lut(
-        const Image<TSpectral>& center_kernel,
-        int full_radius_signed,
-        float area,
-        const TSpectral& photon_energies,
-        const RadiusLUTConfig& config = {})
+    void Renderer<TSpectral>::path_trace_(
+        SceneView<TSpectral>& scene_view,
+        FrameBuffer<TSpectral>& frame_buffer)
     {
-        std::vector<RadiusLUTEntry> lut;
-        if (full_radius_signed <= 0) {
-            return lut;
-        }
+        auto& camera = scene_view.camera_model_;
+        const int fb_width = frame_buffer.width();
+        const int fb_height = frame_buffer.height();
+        const auto& lights = scene_view.lights_;
 
-        const std::size_t full_radius = static_cast<std::size_t>(full_radius_signed);
-        const std::size_t k_w = static_cast<std::size_t>(center_kernel.width());
-        const std::size_t k_h = static_cast<std::size_t>(center_kernel.height());
+        // Make sure required buffers are enabled:
+        frame_buffer.clear();
+        frame_buffer.enable_depth();
 
-        lut.reserve(full_radius);
+        auto& power_buffer = frame_buffer.received_power();
+        auto& depth_buffer = frame_buffer.depth();
 
-        // Precompute per-channel conversion: area / photon_energy[c]
-        TSpectral conversion;
-        for (std::size_t c = 0; c < TSpectral::size(); ++c) {
-            float e = photon_energies[c];
-            conversion[c] = (e > 0.0f) ? (area / e) : 0.0f;
-        }
+        // TODO Make configurable
+        const int spp = 100;
+        const int max_bounces = 3;
+        const float inv_spp = 1.0f / static_cast<float>(spp);
 
-        // Helper: accumulate max sensitivity from a single kernel pixel.
-        auto scan_pixel = [&](std::size_t kx, std::size_t ky, float& max_sensitivity) {
-            if (kx >= k_w || ky >= k_h) {
-                return;
-            }
-            const TSpectral& w = center_kernel(static_cast<int>(kx), static_cast<int>(ky));
-            for (std::size_t c = 0; c < TSpectral::size(); ++c) {
-                float s = w[c] * conversion[c];
-                max_sensitivity = std::max(max_sensitivity, s);
-            }
-            };
+        // Tile-based parallel rendering:
+        constexpr int TILE_SIZE = 16;
+        int tiles_x = (fb_width + TILE_SIZE - 1) / TILE_SIZE;
+        int tiles_y = (fb_height + TILE_SIZE - 1) / TILE_SIZE;
+        int num_tiles = tiles_x * tiles_y;
 
-        for (std::size_t r = 1; r <= full_radius; ++r) {
-            float max_sensitivity = 0.0f;
+        tbb::parallel_for(tbb::blocked_range<int>(0, num_tiles),
+            [&](const tbb::blocked_range<int>& range) {
+                for (int tile_idx = range.begin(); tile_idx < range.end(); ++tile_idx) {
+                    int tile_y = tile_idx / tiles_x;
+                    int tile_x = tile_idx % tiles_x;
 
-            // Absolute kernel coordinates for this ring's bounding box.
-            // r <= full_radius, so lo >= 0 and hi <= 2*full_radius.
-            const std::size_t lo = full_radius - r;
-            const std::size_t hi = full_radius + r;
+                    int x0 = tile_x * TILE_SIZE;
+                    int y0 = tile_y * TILE_SIZE;
+                    int x1 = std::min(x0 + TILE_SIZE, fb_width);
+                    int y1 = std::min(y0 + TILE_SIZE, fb_height);
 
-            // Top & bottom rows: kx spans [lo .. hi]
-            for (std::size_t kx = lo; kx <= hi; ++kx) {
-                scan_pixel(kx, lo, max_sensitivity);
-                scan_pixel(kx, hi, max_sensitivity);
-            }
+                    // Per-tile RNG seeded from tile index for reproducibility:
+                    // TODO: Replace with your Sampler class if you have one
+                    std::mt19937 rng(static_cast<unsigned int>(tile_idx));
+                    std::uniform_real_distribution<float> uniform(0.0f, 1.0f);
 
-            // Left & right columns (excluding corners): ky spans (lo .. hi)
-            for (std::size_t ky = lo + 1; ky < hi; ++ky) {
-                scan_pixel(lo, ky, max_sensitivity);
-                scan_pixel(hi, ky, max_sensitivity);
-            }
+                    for (int y = y0; y < y1; ++y) {
+                        for (int x = x0; x < x1; ++x) {
 
-            if (max_sensitivity > 0.0f) {
-                float min_irradiance = config.photon_threshold / max_sensitivity;
-                lut.push_back({ static_cast<int>(r), min_irradiance });
-            }
-        }
+                            TSpectral pixel_radiance{ 0 };
+                            float closest_depth = std::numeric_limits<float>::infinity();
+                            Vec3<float> camera_normals{ 0 };
 
-        return lut;
+                            for (int s = 0; s < spp; ++s) {
+                                // Jittered sub-pixel sample:
+                                float sx = static_cast<float>(x) + uniform(rng);
+                                float sy = static_cast<float>(y) + uniform(rng);
+
+                                // Generate camera ray from pixel coordinates:
+                                Ray<TSpectral> ray = camera->cast_ray(Pixel{ sx, sy });
+
+                                // Motion blur: randomize time sample per ray
+                                float time = uniform(rng);  // [0, 1] maps to shutter interval
+
+                                TSpectral throughput{ 1 };
+                                TSpectral sample_radiance{ 0 };
+                                for (int bounce = 0; bounce < max_bounces; ++bounce) {
+                                    HitRecord hit = scene_view.intersect(ray, time);
+
+                                    if (!hit.hit()) {
+                                        // TODO add environment lighting
+                                        break;
+                                    }
+
+                                    // Resolve full shading data:
+                                    Interaction<TSpectral> isect = scene_view.resolve_hit(ray, hit);
+
+                                    // Look up mesh material:
+                                    const auto& mapping = scene_view.instance_mappings_[hit.inst_id];
+                                    const auto& batch = scene_view.geometry_[mapping.batch_index];
+                                    const auto* material = batch.mesh->material();
+
+                                    // Evaluate material textures:
+                                    auto [params, shading_isect] = material->evaluate(isect);
+
+                                    // Record primary ray info:
+                                    if (bounce == 0) {
+                                        closest_depth = std::min(closest_depth, hit.t);
+                                        camera_normals += shading_isect.normal_s;
+                                    }
+
+                                    // --- Direct lighting (next event estimation) ---
+                                    for (const auto& light_instance : lights) {
+                                        auto sample = light_instance.light->sample_li(
+                                            isect, light_instance.transform, this->sampler_);
+
+                                        if (!sample) continue;
+                                        const auto& ls = *sample;
+
+                                        // Shadow test:
+                                        Vec3<float> shadow_origin = offset_intersection_(
+                                            isect.position, isect.normal_g);
+                                        float light_dist = glm::length(
+                                            light_instance.transform.position - isect.position);
+                                        Ray<TSpectral> shadow_ray(shadow_origin, ls.wi);
+
+                                        if (scene_view.occluded(shadow_ray, light_dist - 1e-3f, time)) {
+                                            continue;
+                                        }
+
+                                        // Evaluate BSDF:
+                                        TSpectral f = material->bsdf_eval(
+                                            isect.wo, ls.wi, { params, shading_isect });
+                                        float cos_theta = std::max(0.0f,
+                                            glm::dot(shading_isect.normal_s, ls.wi));
+
+                                        sample_radiance += throughput * ls.Li * f * cos_theta;
+                                    }
+
+                                    // --- Indirect lighting (BSDF sampling) ---
+                                    // TODO: Replace with your BSDF sampling API.
+                                    // This is a placeholder for cosine-weighted hemisphere sampling
+                                    // for Lambertian surfaces. For a proper implementation, call
+                                    // material->bsdf_sample(...) which returns a sampled direction,
+                                    // BSDF value, and PDF.
+
+                                    // Cosine-weighted hemisphere sample (Lambertian):
+                                    float r1 = uniform(rng);
+                                    float r2 = uniform(rng);
+                                    float cos_theta_s = std::sqrt(1.0f - r1);
+                                    float sin_theta_s = std::sqrt(r1);
+                                    float phi = 2.0f * PI<float>() * r2;
+
+                                    Vec3<float> local_dir{
+                                        sin_theta_s * std::cos(phi),
+                                        sin_theta_s * std::sin(phi),
+                                        cos_theta_s
+                                    };
+
+                                    // Transform to world space using shading normal frame:
+                                    Vec3<float> tangent, bitangent;
+                                    if (glm::length(shading_isect.tangent) > 0.01f) {
+                                        tangent = shading_isect.tangent;
+                                        bitangent = shading_isect.bitangent;
+                                    }
+                                    else {
+                                        build_default_tangent_frame(
+                                            shading_isect.normal_s, tangent, bitangent);
+                                    }
+
+                                    Vec3<float> wi_world = glm::normalize(
+                                        local_dir.x * tangent +
+                                        local_dir.y * bitangent +
+                                        local_dir.z * shading_isect.normal_s);
+
+                                    // Evaluate BSDF for this sampled direction:
+                                    TSpectral f = material->bsdf_eval(
+                                        isect.wo, wi_world, { params, shading_isect });
+
+                                    float cos_theta_i = std::max(0.0f,
+                                        glm::dot(shading_isect.normal_s, wi_world));
+
+                                    // PDF for cosine-weighted hemisphere:
+                                    float pdf = cos_theta_i * INV_PI<float>();
+
+                                    if (pdf < 1e-8f) break;
+
+                                    // Update throughput:
+                                    throughput = throughput * f * cos_theta_i / pdf;
+
+                                    // Russian roulette (after a few bounces):
+                                    if (bounce >= 3) {
+                                        float p_continue = std::min(0.95f, throughput.max());
+                                        if (uniform(rng) > p_continue) {
+                                            break;
+                                        }
+                                        throughput = throughput / p_continue;
+                                    }
+
+                                    // Spawn next ray:
+                                    Vec3<float> new_origin = offset_intersection_(
+                                        isect.position, isect.normal_g);
+                                    ray = Ray<TSpectral>(new_origin, wi_world);
+                                }
+
+                                pixel_radiance += sample_radiance;
+                                
+                            }
+
+                            // Average over samples and write to frame buffer:
+                            TSpectral avg_radiance = pixel_radiance * inv_spp;
+                            Vec3<float> avg_camera_normals = glm::normalize(camera_normals * inv_spp);
+
+                            if (frame_buffer.has_received_power()) {
+                                power_buffer(x, y) = camera->pixel_radiance_to_power(x, y) * avg_radiance;
+                            }
+
+                            if (closest_depth < std::numeric_limits<float>::infinity()) {
+                                depth_buffer(x, y) = closest_depth;
+                            }
+
+                            if (frame_buffer.has_camera_normals()) {
+                                frame_buffer.camera_normals()(x, y) = avg_camera_normals;
+                            }
+                        }
+                    }
+                }
+            });
     }
 
-    /**
-     * @brief Look up the effective PSF radius for a given irradiance level.
-     * 
-     * Searches the radius LUT to find the smallest radius that can accurately render
-     * a point source with the specified maximum irradiance. The effective radius is
-     * clamped to be at least min_radius.
-     * 
-     * @param lut The radius lookup table (result of build_radius_lut)
-     * @param max_irradiance The maximum irradiance of the point source across all channels
-     * @param min_radius Minimum allowed radius (typically 1)
-     * @return int The effective PSF radius to use for rendering this point source
-     */
-    static int lookup_effective_radius(
-        const std::vector<RadiusLUTEntry>& lut,
-        float max_irradiance,
-        int min_radius)
-    {
-        if (lut.empty()) {
-            return min_radius;
-        }
 
-        std::size_t i = lut.size();
-        while (i-- > 0) {
-            if (max_irradiance >= lut[i].min_irradiance) {
-                return std::max(lut[i].radius, min_radius);
-            }
-        }
-
-        return min_radius;
-    }
 
     template <IsSpectral TSpectral>
     struct RenderItem {
@@ -211,7 +319,6 @@ namespace huira {
         }
 
         auto& camera = scene_view.camera_model_;
-        
         const int fb_width = frame_buffer.width();
         const int fb_height = frame_buffer.height();
         
