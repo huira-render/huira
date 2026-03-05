@@ -20,29 +20,25 @@ namespace huira {
      * Collects geometry, lights, unresolved objects, and stars for rendering.
      *
      * @param scene Scene to view
-     * @param t_obs Observation time
+     * @param exposure_interval Exposure interval 
      * @param camera_instance Camera instance handle
      * @param obs_mode Observation mode
+     * @param num_temporal_samples Number of temporal samples for motion blur (default: 1)
      */
     template <IsSpectral TSpectral>
     SceneView<TSpectral>::SceneView(const Scene<TSpectral>& scene,
         const Interval& exposure_interval,
         const InstanceHandle<TSpectral>& camera_instance,
         ObservationMode obs_mode,
-        bool motion_blur, std::size_t num_temporal_samples)
+        std::size_t num_temporal_samples)
         : exposure_interval_{ exposure_interval },
         device_{ scene.device_ }
     {
         // Create the temporal samples:
-        if (motion_blur) {
-            if (num_temporal_samples < 2) {
-                HUIRA_THROW_ERROR("SceneView::SceneView - Motion blur requires 2 or more temporal samples");
-            }
-            temporal_samples_ = exposure_interval_.samples(num_temporal_samples);
+        if (num_temporal_samples < 1) {
+            num_temporal_samples = 1;
         }
-        else {
-            temporal_samples_ = { exposure_interval_.center() };
-        }
+        temporal_samples_ = exposure_interval_.samples(num_temporal_samples);
 
         // Get the camera model:
         auto camera_node = camera_instance.get();

@@ -31,7 +31,7 @@ int main(int argc, char** argv) {
 
     // Set the observation time
     huira::Time time("2019-02-06T10:27:00");
-    huira::Interval exposure_interval{ time, time + 0.05_s };
+    huira::Interval exposure_interval{ time, time + 0.5_s };
 
     // Configure a camera model
     auto camera_model = scene.new_camera_model();
@@ -55,6 +55,7 @@ int main(int argc, char** argv) {
     auto light = scene.root.new_instance(point_light);
     light.set_position(0_m, -200_m, 50_m);
 
+
     // Print the scene contents
     scene.print_contents();
     
@@ -62,9 +63,10 @@ int main(int argc, char** argv) {
     // Configure the render buffers
     auto frame_buffer = camera_model.make_frame_buffer();
     frame_buffer.enable_sensor_response();
+    frame_buffer.enable_camera_normals();
 
     // Create the renderer
-    huira::RasterRenderer<TSpectral> renderer;
+    huira::Renderer<TSpectral> renderer;
 
     // Create a scene view over the exposure interval
     auto scene_view = huira::SceneView<TSpectral>(scene, exposure_interval, navcam, huira::ObservationMode::ABERRATED_STATE);
@@ -74,4 +76,5 @@ int main(int argc, char** argv) {
 
     // Save the results
     huira::write_image_png("output/gateway_render.png", frame_buffer.sensor_response(), 8);
+    huira::write_image_png("output/gateway_normals.png", huira::normal_map(frame_buffer.camera_normals()), 8);
 }
