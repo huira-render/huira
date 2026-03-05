@@ -610,17 +610,6 @@ namespace huira {
         return add_texture(std::move(image), name);
     }
 
-
-    /**
-     * @brief Adds a star to the scene.
-     * @param star Star to add
-     */
-    template <IsSpectral TSpectral>
-    void Scene<TSpectral>::add_star(const Star<TSpectral>& star)
-    {
-        stars_.push_back(star);
-    }
-
     /**
      * @brief Sets the stars in the scene.
      * @param stars Vector of stars
@@ -629,6 +618,9 @@ namespace huira {
     void Scene<TSpectral>::set_stars(const std::vector<Star<TSpectral>>& stars)
     {
         stars_ = stars;
+        dynamic_stars_ = false;
+
+        HUIRA_LOG_INFO("Scene::set_stars - " + std::to_string(stars.size()) + " stars are added manually");
     }
 
     /**
@@ -658,7 +650,72 @@ namespace huira {
         );
 
         // Add the stars to the scene:
-        set_stars(stars);
+        stars_ = stars;
+        dynamic_stars_ = false;
+
+        HUIRA_LOG_INFO("Scene::load_stars - " + std::to_string(stars.size()) + " stars are added statically");
+    }
+
+    /**
+     * @brief Loads dynamic stars from a catalog file.  These can have their proper motion updated by calling update_star_epoch().
+     * @param star_catalog_path Path to the star catalog
+     * @param time Time for proper motion
+     * @param min_magnitude Minimum magnitude to load
+     */
+    template <IsSpectral TSpectral>
+    void Scene<TSpectral>::load_dynamic_stars(const fs::path& star_catalog_path, const Time& time, float min_magnitude)
+    {
+        // Read the catalog:
+        StarCatalog star_catalog = StarCatalog::read_star_data(star_catalog_path, min_magnitude);
+        const std::vector<StarData>& star_data = star_catalog.get_star_data();
+
+        double tsince = time.julian_years_since_j2000(TimeScale::TT);
+
+        // Create the stars:
+        std::vector<Star<TSpectral>> stars(star_data.size());
+        tbb::parallel_for(
+            tbb::blocked_range<std::size_t>(0, star_data.size()),
+            [&](const tbb::blocked_range<std::size_t>& r) {
+                for (std::size_t i = r.begin(); i != r.end(); ++i) {
+                    stars[i] = Star<TSpectral>(star_data[i], tsince);
+                }
+            }
+        );
+
+        // Add the stars to the scene:
+        dynamic_stars_ = true;
+        stars_ = stars;
+        dynamic_star_data_ = star_data;
+        star_epoch_ = time;
+
+        HUIRA_LOG_INFO("Scene::load_dynamic_stars - " + std::to_string(stars.size()) + " stars are added dynamically");
+    }
+
+    template <IsSpectral TSpectral>
+    void Scene<TSpectral>::update_star_epoch(const Time& new_epoch)
+    {
+        if (!dynamic_stars_) {
+            HUIRA_LOG_WARNING("Scene::update_star_epoch - Attempted to update star epoch, but stars were not loaded as dynamic.  Call load_dynamic_stars() to load stars with proper motions.");
+            return;
+        }
+
+        if (new_epoch == star_epoch_) {
+            return;
+        }
+
+        double tsince = new_epoch.julian_years_since_j2000(TimeScale::TT);
+
+        tbb::parallel_for(
+            tbb::blocked_range<std::size_t>(0, stars_.size()),
+            [&](const tbb::blocked_range<std::size_t>& r) {
+                for (std::size_t i = r.begin(); i != r.end(); ++i) {
+                    stars_[i].update_direction(dynamic_star_data_[i], tsince);
+                }
+            }
+        );
+        star_epoch_ = new_epoch;
+
+        HUIRA_LOG_INFO("Scene::update_star_epoch - Updated star epoch to " + new_epoch.to_utc_string());
     }
 
     /**

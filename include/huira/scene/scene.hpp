@@ -22,6 +22,7 @@
 #include "huira/materials/material.hpp"
 #include "huira/materials/texture.hpp"
 #include "huira/stars/star.hpp"
+#include "huira/stars/io/star_data.hpp"
 #include "huira/scene/name_registry.hpp"
 #include "huira/assets/io/model_loader.hpp"
 
@@ -114,9 +115,11 @@ namespace huira {
         TextureHandle<Vec3<float>> add_texture(Image<Vec3<float>> image, std::string name = "");
         TextureHandle<Vec3<float>> add_normal_texture(Image<Vec3<float>> image, std::string name = "");
 
-        void add_star(const Star<TSpectral>& star);
         void set_stars(const std::vector<Star<TSpectral>>& stars);
         void load_stars(const fs::path& star_catalog_path, const Time& time, float min_magnitude = 100.f);
+        
+        void load_dynamic_stars(const fs::path& star_catalog_path, const Time& time, float min_magnitude = 100.f);
+        void update_star_epoch(const Time& time);
         
         void prune_unreferenced_assets();
 
@@ -153,7 +156,10 @@ namespace huira {
         std::unique_ptr<Image<TSpectral>>   default_emission_image_;
 
 
+        bool dynamic_stars_ = false;
         std::vector<Star<TSpectral>> stars_;
+        std::vector<StarData> dynamic_star_data_;
+        Time star_epoch_;
 
         void print_node_(const Node<TSpectral>* node, const std::string& prefix, bool is_last) const;
         void print_node_details_(const Node<TSpectral>* node) const;

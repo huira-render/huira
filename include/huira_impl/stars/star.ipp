@@ -57,6 +57,19 @@ namespace huira {
     }
 
     template <IsSpectral TSpectral>
+    void Star<TSpectral>::update_direction(const StarData& star_data, Time time)
+    {
+        double years_since_j2000 = time.julian_years_since_j2000(TimeScale::TT);
+        compute_direction_(star_data.RA, star_data.DEC, star_data.pmRA, star_data.pmDEC, years_since_j2000);
+    }
+
+    template <IsSpectral TSpectral>
+    void Star<TSpectral>::update_direction(const StarData& star_data, double years_since_j2000)
+    {
+        compute_direction_(star_data.RA, star_data.DEC, star_data.pmRA, star_data.pmDEC, years_since_j2000);
+    }
+
+    template <IsSpectral TSpectral>
     void Star<TSpectral>::compute_direction_(double RA, double DEC, float pmRAmas, float pmDECmas, double years_since_j2000)
     {
         constexpr double MAS_TO_RAD = PI<double>() / (180.0 * 3600.0 * 1000.0);
