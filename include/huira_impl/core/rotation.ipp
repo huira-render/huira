@@ -318,7 +318,7 @@ namespace huira {
 	template <IsFloatingPoint T>
 	ShusterQuaternion<T> Rotation<T>::local_to_parent_shuster_quaternion() const
 	{
-		return to_shuster(glm::quat_cast(matrix_));
+		return to_shuster(this->local_to_parent_quaternion());
 	}
 
 
@@ -340,8 +340,7 @@ namespace huira {
 	template <IsFloatingPoint T>
 	ShusterQuaternion<T> Rotation<T>::parent_to_local_shuster_quaternion() const
 	{
-		Quaternion<T> hamilton_quat = glm::inverse(glm::quat_cast(matrix_));
-		return to_shuster(hamilton_quat);
+		return to_shuster(this->parent_to_local_quaternion());
 	}
 
 

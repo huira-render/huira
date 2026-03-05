@@ -73,18 +73,23 @@ namespace huira {
         decomp.skew_xz = 0.0f;
         decomp.skew_yz = 0.0f;
 
+        // No shift:
+        decomp.shift_x = 0.0f;
+        decomp.shift_y = 0.0f;
+        decomp.shift_z = 0.0f;
+
         // Translation:
-        decomp.shift_x = static_cast<float>(position.x);
-        decomp.shift_y = static_cast<float>(position.y);
-        decomp.shift_z = static_cast<float>(position.z);
+        decomp.translation_x = static_cast<float>(position.x);
+        decomp.translation_y = static_cast<float>(position.y);
+        decomp.translation_z = static_cast<float>(position.z);
 
         // Quaternion — check your Rotation class's convention.
         // Embree uses (r, i, j, k) = (w, x, y, z):
         auto q = rotation.local_to_parent_quaternion();
-        decomp.quaternion_r = static_cast<float>(q[0]);
-        decomp.quaternion_i = static_cast<float>(q[1]);
-        decomp.quaternion_j = static_cast<float>(q[2]);
-        decomp.quaternion_k = static_cast<float>(q[3]);
+        decomp.quaternion_r = static_cast<float>(q.w);
+        decomp.quaternion_i = static_cast<float>(q.x);
+        decomp.quaternion_j = static_cast<float>(q.y);
+        decomp.quaternion_k = static_cast<float>(q.z);
 
         return decomp;
     }

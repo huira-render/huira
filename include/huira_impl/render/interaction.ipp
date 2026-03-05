@@ -1,3 +1,4 @@
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -112,16 +113,16 @@ namespace huira {
     inline Vec3<T> offset_intersection_(Vec3<T> intersection, const Vec3<T>& N) {
         using IntType = std::conditional_t<std::is_same_v<T, float>, int32_t, int64_t>;
 
-        const Vec3<IntType> offset_int{
+        std::array<IntType, 3> offset_int{
             static_cast<IntType>(int_scale<T>() * N.x),
             static_cast<IntType>(int_scale<T>() * N.y),
             static_cast<IntType>(int_scale<T>() * N.z)
         };
 
         const Vec3<T> offset_result{
-            int_as_float(float_as_int(intersection.x) + (intersection.x < 0 ? -offset_int.x : offset_int.x)),
-            int_as_float(float_as_int(intersection.y) + (intersection.y < 0 ? -offset_int.y : offset_int.y)),
-            int_as_float(float_as_int(intersection.z) + (intersection.z < 0 ? -offset_int.z : offset_int.z))
+            int_as_float(float_as_int(intersection.x) + (intersection.x < 0 ? -offset_int[0] : offset_int[0])),
+            int_as_float(float_as_int(intersection.y) + (intersection.y < 0 ? -offset_int[1] : offset_int[1])),
+            int_as_float(float_as_int(intersection.z) + (intersection.z < 0 ? -offset_int[2] : offset_int[2]))
         };
 
         const T threshold = origin<T>();
