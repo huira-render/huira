@@ -38,8 +38,7 @@ namespace huira {
             const Interval& exposure_interval,
             const InstanceHandle<TSpectral>& camera_instance,
             ObservationMode obs_mode,
-            bool motion_blur = false,
-            std::size_t num_temporal_Samples = 3);
+            std::size_t num_temporal_Samples = 1);
 
         ~SceneView();
 
