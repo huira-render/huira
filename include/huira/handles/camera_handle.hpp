@@ -42,7 +42,7 @@ namespace huira {
         void set_fstop(float fstop) const;
         float fstop() const;
 
-        template <IsDistortion TDistortion, typename... Args>
+        template <IsDistortion<TSpectral> TDistortion, typename... Args>
         void set_distortion(Args&&... args) const;
 
         void set_brown_conrady_distortion(BrownCoefficients coeffs) const;
@@ -51,7 +51,7 @@ namespace huira {
 
         void delete_distortion() const;
 
-        template <IsSensor TSensor, typename... Args>
+        template <IsSensor<TSpectral> TSensor, typename... Args>
         void set_sensor(Args&&... args) const;
 
         void set_sensor_resolution(Resolution resolution) const;

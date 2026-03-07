@@ -131,21 +131,8 @@ namespace huira {
         friend class CameraModel<TSpectral>;
     };
 
-    template <typename T>
-    struct is_sensor : std::false_type {};
-
-    // Forward Declare
-    class SimpleRGBSensor;
-
-    template <>
-    struct is_sensor<SimpleRGBSensor> : std::true_type {};
-
-    template <template <typename> class Derived, typename TSpectral>
-        requires std::derived_from<Derived<TSpectral>, SensorModel<TSpectral>>
-    struct is_distortion<Derived<TSpectral>> : std::true_type {};
-
-    template <typename T>
-    concept IsSensor = is_sensor<T>::value;
+    template <typename T, typename TSpectral>
+    concept IsSensor = std::derived_from<T, SensorModel<TSpectral>>;
 }
 
 #include "huira_impl/cameras/sensors/sensor_model.ipp"

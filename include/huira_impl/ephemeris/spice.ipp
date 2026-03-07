@@ -382,4 +382,38 @@ namespace huira::spice {
         // SPICE represents tha passive rotation of parent-to-local:
         return { rotation_obj, ang_vel_parent };
     }
+
+
+    /**
+     * @brief Compute the state (position and velocity) of an object in a conic orbit at a given time.
+     * @tparam T Floating point type
+     * @param elements Array of 8 orbital elements: [a, e, i, Ω, ω, M0, epoch, mu]
+     * - a: Semi-major axis (km)
+     * - e: Eccentricity
+     * - i: Inclination (radians)
+     * - Ω: Longitude of ascending node (radians)
+     * - ω: Argument of periapsis (radians)
+     * - M0: Mean anomaly at epoch (radians)
+     * - epoch: Epoch of the elements (seconds past J2000)
+     * - mu: Gravitational parameter of the central body (km^3/s^2)
+     * @param time Observation time
+     * @return std::pair<Vec3<T>, Vec3<T>> {position, velocity} in meters and meters per second
+     */
+    template <huira::IsFloatingPoint T>
+    inline std::pair<Vec3<T>, Vec3<T>> conics(
+        const std::array<double, 8>& elements,
+        const huira::Time& time
+    ) {
+        SpiceDouble et = time.et();
+        SpiceDouble state[6];
+
+        call_spice(conics_c, elements.data(), et, state);
+
+        Vec3<T> position_km{ static_cast<T>(state[0]), static_cast<T>(state[1]), static_cast<T>(state[2]) };
+        Vec3<T> velocity_km{ static_cast<T>(state[3]), static_cast<T>(state[4]), static_cast<T>(state[5]) };
+
+        Vec3<T> position = position_km * static_cast<T>(1000.0); // Convert to meters
+        Vec3<T> velocity = velocity_km * static_cast<T>(1000.0); // Convert to meters per second
+        return { position, velocity };
+    }
 }

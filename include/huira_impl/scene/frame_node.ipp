@@ -175,14 +175,14 @@ namespace huira {
      * @return bool True if allowed
      */
     template <IsSpectral TSpectral>
-    bool FrameNode<TSpectral>::position_can_be_manual_() const
+    bool FrameNode<TSpectral>::position_must_be_spice_() const
     {
         for (const auto& child : children_) {
             if (child->position_mode_ == TransformMode::SPICE_TRANSFORM) {
-                return false;
+                return true;
             }
         }
-        return true;
+        return false;
     }
 
 
@@ -191,13 +191,13 @@ namespace huira {
      * @return bool True if allowed
      */
     template <IsSpectral TSpectral>
-    bool FrameNode<TSpectral>::rotation_can_be_manual_() const
+    bool FrameNode<TSpectral>::rotation_must_be_spice_() const
     {
         for (const auto& child : children_) {
             if (child->rotation_mode_ == TransformMode::SPICE_TRANSFORM) {
-                return false;
+                return true;
             }
         }
-        return true;
+        return false;
     }
 }

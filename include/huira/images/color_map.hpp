@@ -5,7 +5,7 @@
 #include "huira/images/image.hpp"
 
 namespace huira {
-    Image<huira::RGB> normal_map(Image<Vec3<float>> normals)
+    inline Image<huira::RGB> normal_map(Image<Vec3<float>> normals)
     {
         Image<huira::RGB> output(normals.resolution());
         for (std::size_t i = 0; i < normals.size(); ++i) {

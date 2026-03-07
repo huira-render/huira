@@ -57,14 +57,7 @@ namespace huira {
         double tolerance_ = 1e-6;
     };
 
-    template <typename T>
-    struct is_distortion : std::false_type {};
-
-    template <template <typename> class Derived, typename TSpectral>
-        requires std::derived_from<Derived<TSpectral>, Distortion<TSpectral>>
-    struct is_distortion<Derived<TSpectral>> : std::true_type {};
-
-    template <typename T>
-    concept IsDistortion = is_distortion<T>::value;
+    template <typename T, typename TSpectral>
+    concept IsDistortion = std::derived_from<T, Distortion<TSpectral>>;
 
 }
