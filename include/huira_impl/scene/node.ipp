@@ -33,7 +33,7 @@ namespace huira {
     template <IsSpectral TSpectral>
     void Node<TSpectral>::set_position(const Vec3<double>& position)
     {
-        if (!this->position_can_be_manual_()) {
+        if (this->position_must_be_spice_()) {
             HUIRA_THROW_ERROR(this->get_info() +
                 " - cannot manually set position when child has a spice_origin");
         }
@@ -53,7 +53,7 @@ namespace huira {
     template <IsSpectral TSpectral>
     void Node<TSpectral>::set_position(units::Meter x, units::Meter y, units::Meter z)
     {
-        if (!this->position_can_be_manual_()) {
+        if (this->position_must_be_spice_()) {
             HUIRA_THROW_ERROR(this->get_info() +
                 " - cannot manually set position when child has a spice_origin");
         }
@@ -78,7 +78,7 @@ namespace huira {
     template <IsSpectral TSpectral>
     void Node<TSpectral>::set_rotation(const Rotation<double>& rotation)
     {
-        if (!this->rotation_can_be_manual_()) {
+        if (this->rotation_must_be_spice_()) {
             HUIRA_THROW_ERROR(this->get_info() +
                 " - cannot manually set rotation when child has a spice_frame");
         }
@@ -225,6 +225,22 @@ namespace huira {
     }
 
 
+
+    template <IsSpectral TSpectral>
+    void Node<TSpectral>::set_manual_transform(const Transform<double>& transform)
+    {
+        if (this->rotation_must_be_spice_() || this->position_must_be_spice_()) {
+            HUIRA_THROW_ERROR(this->get_info() +
+                " - cannot manually set transformation when child has a spice_frame");
+        }
+
+        HUIRA_LOG_INFO(this->get_info() + " - set_manual_transform(" + transform.to_string());
+
+        this->local_transform_ = transform;
+        this->body_frame_rates_ = false;
+    }
+
+
     /**
      * @brief Set the node's SPICE origin for ephemeris-based transforms.
      * @param spice_origin SPICE origin string
@@ -284,6 +300,37 @@ namespace huira {
         this->position_mode_ = TransformMode::SPICE_TRANSFORM;
         this->rotation_mode_ = TransformMode::SPICE_TRANSFORM;
     }
+
+
+    template <IsSpectral TSpectral>
+    template <IsPositionCallback TCallback, typename... Args>
+    void Node<TSpectral>::set_custom_position_callback(Args&&... args)
+    {
+        position_callback_ = std::make_unique<TCallback>(std::forward<Args>(args)...);
+        this->position_mode_ = TransformMode::POSITION_CALLBACK;
+        this->spice_origin_ = "";
+    }
+
+    template <IsSpectral TSpectral>
+    template <IsRotationCallback TCallback, typename... Args>
+    void Node<TSpectral>::set_custom_rotation_callback(Args&&... args)
+    {
+        rotation_callback_ = std::make_unique<TCallback>(std::forward<Args>(args)...);
+        this->rotation_mode_ = TransformMode::ROTATION_CALLBACK;
+        this->spice_frame_ = "";
+    }
+
+    template <IsSpectral TSpectral>
+    template <IsTransformCallback TCallback, typename... Args>
+    void Node<TSpectral>::set_custom_state_callback(Args&&... args)
+    {
+        transform_callback_ = std::make_unique<TCallback>(std::forward<Args>(args)...);
+        this->position_mode_ = TransformMode::TRANSFORM_CALLBACK;
+        this->rotation_mode_ = TransformMode::TRANSFORM_CALLBACK;
+        this->spice_origin_ = "";
+        this->spice_frame_ = "";
+    }
+
 
 
 
@@ -367,49 +414,77 @@ namespace huira {
     template <IsSpectral TSpectral>
     Transform<double> Node<TSpectral>::get_ssb_transform_(const Time& epoch, const Time& t_obs, double dt) const
     {
-        // The time at which the object emitted the light we are seeing now.
         Time t_emit = Time::from_et(t_obs.et() - dt);
 
-        Transform<double> ssb_state{};
-
-        if (position_mode_ == TransformMode::SPICE_TRANSFORM) {
+        // Fully SPICE-defined: no parent needed, compute directly against SSB
+        if (position_mode_ == TransformMode::SPICE_TRANSFORM &&
+            rotation_mode_ == TransformMode::SPICE_TRANSFORM) {
+            Transform<double> ssb_state{};
             auto [pos, vel, _] = spice::spkezr<double>(this->spice_origin_, t_emit, "J2000", "NONE", "SSB");
             ssb_state.position = pos;
             ssb_state.velocity = vel;
+            auto [rotation, ang_vel] = spice::sxform<double>("J2000", this->spice_frame_, t_emit);
+            ssb_state.rotation = rotation;
+            ssb_state.angular_velocity = ang_vel;
+            return ssb_state;
         }
-        else {
-            // Recurse for non-spice position:
-            if (!parent_) {
-                // This should never happen
-                HUIRA_THROW_ERROR(this->get_info() +
-                    " - cannot compute SSB transform: node has MANUAL position but no parent");
-            }
-            Transform<double> parent_ssb = parent_->get_ssb_transform_(epoch, t_obs, dt);
-            Transform<double> local = this->get_local_position_at_(epoch, t_obs, dt);
-            ssb_state = parent_ssb * local;
+
+        // Any other configuration require a parent
+        if (!parent_) {
+            HUIRA_THROW_ERROR(this->get_info() +
+                " - cannot compute SSB transform: non-SPICE transform mode but no parent");
+        }
+        Transform<double> parent_ssb = parent_->get_ssb_transform_(epoch, t_obs, dt);
+
+        // Full transform callback: single source defines the entire local state
+        if (position_mode_ == TransformMode::TRANSFORM_CALLBACK &&
+            rotation_mode_ == TransformMode::TRANSFORM_CALLBACK) {
+            transform_callback_->evaluate(t_emit);
+            return parent_ssb * transform_callback_->state;
+        }
+
+
+        // Mixed case - Step 1:
+        Transform<double> local{};
+        if (position_mode_ == TransformMode::SPICE_TRANSFORM) {
+            // Convert SPICE SSB result to local frame
+            auto [pos, vel, _] = spice::spkezr<double>(this->spice_origin_, t_emit, "J2000", "NONE", "SSB");
+            Transform<double> parent_inv = parent_ssb.inverse();
+            local.position = parent_inv.apply_to_point(pos);
+            local.velocity = parent_inv.apply_to_direction(vel);
+        }
+        else if (position_mode_ == TransformMode::MANUAL_TRANSFORM) {
+            auto pos = get_local_position_at_(epoch, t_obs, dt);
+            local.position = pos.position;
+            local.velocity = pos.velocity;
         }
 
         if (rotation_mode_ == TransformMode::SPICE_TRANSFORM) {
             auto [rotation, ang_vel] = spice::sxform<double>("J2000", this->spice_frame_, t_emit);
-            ssb_state.rotation = rotation;
-            ssb_state.angular_velocity = ang_vel;
+            Transform<double> parent_inv = parent_ssb.inverse();
+            local.rotation = parent_inv.rotation * rotation;
+            local.angular_velocity = parent_inv.apply_to_direction(ang_vel);
         }
-        else {
-            // Recurse for non-spice rotation:
-            Transform<double> parent_ssb_rot;
-            if (!parent_) {
-                // This should never happen
-                HUIRA_THROW_ERROR(this->get_info() +
-                    " - cannot compute SSB transform: node has MANUAL rotation but no parent");
-            }
-            parent_ssb_rot = parent_->get_ssb_transform_(epoch, t_obs, dt);
-
-            Transform<double> local = this->get_local_rotation_at_(epoch, t_obs, dt);
-            ssb_state.rotation = parent_ssb_rot.rotation * local.rotation;
-            ssb_state.angular_velocity = parent_ssb_rot.angular_velocity + (parent_ssb_rot.rotation * local.angular_velocity);
+        else if (rotation_mode_ == TransformMode::MANUAL_TRANSFORM) {
+            auto rot = get_local_rotation_at_(epoch, t_obs, dt);
+            local.rotation = rot.rotation;
+            local.angular_velocity = rot.angular_velocity;
         }
 
-        return ssb_state;
+        // Mixed case - Step 2:
+        if (position_mode_ == TransformMode::POSITION_CALLBACK) {
+            position_callback_->evaluate(t_emit, local.rotation, local.angular_velocity);
+            local.position = position_callback_->position;
+            local.velocity = position_callback_->velocity;
+        }
+
+        if (rotation_mode_ == TransformMode::ROTATION_CALLBACK) {
+            rotation_callback_->evaluate(t_emit, local.position, local.velocity);
+            local.rotation = rotation_callback_->rotation;
+            local.angular_velocity = rotation_callback_->angular_velocity;
+        }
+
+        return parent_ssb * local;
     }
 
 
@@ -431,7 +506,8 @@ namespace huira {
             local_transform_at_time.velocity = local_transform_.velocity;
         }
         else {
-            HUIRA_THROW_ERROR("get_local_position_at_ - Unknown position_mode_ TransformMode");
+            // This is not expected to happen since the setters should prevent it
+            HUIRA_THROW_ERROR("get_local_position_at_ - Unknown position_mode_");
         }
         return local_transform_at_time;
     }
@@ -474,7 +550,8 @@ namespace huira {
             local_transform_at_time.angular_velocity = local_transform_.angular_velocity;
         }
         else {
-            HUIRA_THROW_ERROR("get_local_rotation_at_ - Unknown rotation_mode_ TransformMode");
+            // This is not expected to happen since the setters should prevent it
+            HUIRA_THROW_ERROR("get_local_rotation_at_ - Unknown rotation_mode_");
         }
         return local_transform_at_time;
     }

@@ -12,7 +12,7 @@
 #include "huira/core/time.hpp"
 #include "huira/core/transform.hpp"
 #include "huira/scene/scene_object.hpp"
-
+#include "huira/scene/state_callbacks/state_callbacks.hpp"
 
 namespace huira {
     // Forward declare:
@@ -30,7 +30,10 @@ namespace huira {
 
     enum class TransformMode {
         MANUAL_TRANSFORM,
-        SPICE_TRANSFORM
+        SPICE_TRANSFORM,
+        POSITION_CALLBACK,
+        ROTATION_CALLBACK,
+        TRANSFORM_CALLBACK
     };
 
     enum class ObservationMode {
@@ -76,9 +79,22 @@ namespace huira {
         void set_angular_velocity(units::RadiansPerSecond wx, units::RadiansPerSecond wy, units::RadiansPerSecond wz);
         void set_body_angular_velocity(units::RadiansPerSecond wx, units::RadiansPerSecond wy, units::RadiansPerSecond wz);
 
+        void set_manual_transform(const Transform<double>& transform);
+
+
         void set_spice_origin(const std::string& spice_origin);
         void set_spice_frame(const std::string& spice_frame);
         void set_spice(const std::string& spice_origin, const std::string& spice_frame);
+
+
+        template <IsPositionCallback TCallback, typename... Args>
+        void set_custom_position_callback(Args&&... args);
+
+        template <IsRotationCallback TCallback, typename... Args>
+        void set_custom_rotation_callback(Args&&... args);
+
+        template <IsTransformCallback TCallback, typename... Args>
+        void set_custom_state_callback(Args&&... args);
 
 
         std::uint64_t id() const override { return id_; }
@@ -116,10 +132,14 @@ namespace huira {
         std::string spice_frame_ = "";
 
         bool position_can_be_spice_() const;
-        virtual bool position_can_be_manual_() const { return true; }
+        virtual bool position_must_be_spice_() const { return false; }
 
         bool rotation_can_be_spice_() const;
-        virtual bool rotation_can_be_manual_() const { return true; }
+        virtual bool rotation_must_be_spice_() const { return false; }
+
+        std::unique_ptr<PositionCallback> position_callback_;
+        std::unique_ptr<RotationCallback> rotation_callback_;
+        std::unique_ptr<StateCallback> transform_callback_;
 
         std::uint64_t id_ = 0;
         static inline std::uint64_t next_id_ = 0;

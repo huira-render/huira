@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <string>
 
 #include "embree4/rtcore.h"
 
@@ -32,6 +33,8 @@ namespace huira {
         Mat4<T> to_matrix() const;
 
         RTCQuaternionDecomposition to_embree() const;
+
+        std::string to_string() const;
 
         Transform<T> inverse() const;
 

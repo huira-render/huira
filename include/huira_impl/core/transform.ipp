@@ -94,6 +94,17 @@ namespace huira {
         return decomp;
     }
 
+    template <IsFloatingPoint T>
+    std::string Transform<T>::to_string() const
+    {
+        std::string output = "";
+        output += glm::to_string(position) + " | ";
+        output += rotation.to_string() + " | ";
+        output += glm::to_string(scale) + " | ";
+        output += glm::to_string(velocity) + " | ";
+        output += glm::to_string(angular_velocity);
+        return output;
+    }
 
     /**
      * @brief Compute the inverse of the transform.

@@ -50,7 +50,7 @@ namespace huira {
      * @param args Arguments to construct the distortion model
      */
     template <IsSpectral TSpectral>
-    template <IsDistortion TDistortion, typename... Args>
+    template <IsDistortion<TSpectral> TDistortion, typename... Args>
     void CameraModel<TSpectral>::set_distortion(Args&&... args)
     {
         distortion_ = std::make_unique<TDistortion>(std::forward<Args>(args)...);
@@ -100,7 +100,7 @@ namespace huira {
      * @param args Arguments to construct the sensor
      */
     template <IsSpectral TSpectral>
-    template <IsSensor TSensor, typename... Args>
+    template <IsSensor<TSpectral> TSensor, typename... Args>
     void CameraModel<TSpectral>::set_sensor(Args&&... args) {
         sensor_ = std::make_unique<TSensor>(std::forward<Args>(args)...);
         compute_intrinsics_();

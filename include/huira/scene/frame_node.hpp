@@ -65,8 +65,8 @@ namespace huira {
     protected:
         std::vector<std::shared_ptr<Node<TSpectral>>> children_;
 
-        bool position_can_be_manual_() const override;
-        bool rotation_can_be_manual_() const override;
+        bool position_must_be_spice_() const override;
+        bool rotation_must_be_spice_() const override;
 
         friend class Scene<TSpectral>;
         friend class SceneView<TSpectral>;
