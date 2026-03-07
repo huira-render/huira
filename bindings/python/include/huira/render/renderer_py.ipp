@@ -2,24 +2,24 @@
 
 #include "pybind11/pybind11.h"
 
-#include "huira/render/raster_renderer.hpp"
+#include "huira/render/renderer.hpp"
 
 namespace py = pybind11;
 
 namespace huira {
 
     template <IsSpectral TSpectral>
-    void bind_raster_renderer(py::module_& m) {
-        using RR = RasterRenderer<TSpectral>;
+    void bind_renderer(py::module_& m) {
+        using Renderer = Renderer<TSpectral>;
 
-        py::class_<RR>(m, "RasterRenderer")
+        py::class_<Renderer>(m, "Renderer")
             .def(py::init<>())
-            .def("render", &RR::render,
+            .def("render", &Renderer::render,
                 py::arg("scene_view"),
                 py::arg("frame_buffer"),
                 py::call_guard<py::gil_scoped_release>())
-            .def("__repr__", [](const RR&) {
-            return "RasterRenderer()";
+            .def("__repr__", [](const Renderer&) {
+            return "Renderer()";
                 })
             ;
     }

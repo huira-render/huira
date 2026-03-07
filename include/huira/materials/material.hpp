@@ -26,7 +26,7 @@ namespace huira {
 
     /**
      * @brief Surface material: holds image pointers and a BSDF pointer, provides
-     *        the primary shading interface for integrators and rasterizers.
+     *        the primary shading interface for integrators.
      *
      * Material is a concrete class. It does not own any of its referenced data —
      * the Scene owns all Images, BSDFs, and Materials. Material holds non-owning

@@ -33,7 +33,7 @@
 #include "huira/images/image_py.ipp"
 
 #include "huira/render/frame_buffer_py.ipp"
-#include "huira/render/raster_renderer_py.ipp"
+#include "huira/render/renderer_py.ipp"
 
 #include "huira/scene/scene_py.ipp"
 #include "huira/scene/scene_view_py.ipp"
@@ -67,7 +67,7 @@ inline void bind_spectral(py::module_& m) {
     huira::bind_scene<TSpectral>(m);
 
     huira::bind_scene_view<TSpectral>(m);
-    huira::bind_raster_renderer<TSpectral>(m);
+    huira::bind_renderer<TSpectral>(m);
 }
 
 PYBIND11_MODULE(_huira, m) {

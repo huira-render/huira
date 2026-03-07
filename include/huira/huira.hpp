@@ -45,9 +45,8 @@
 // Rendering interfaces:
 #include "huira/render/frame_buffer.hpp"
 #include "huira/render/interaction.hpp"
-#include "huira/render/raster_renderer.hpp"
+#include "huira/render/renderer.hpp"
 #include "huira/render/ray.hpp"
-//#include "huira/render/renderer.hpp"       // Not part of the public API
 //#include "huira/render/sampler.hpp"        // Not part of the public API
 
 // Scene management
