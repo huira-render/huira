@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 
 import huira
-from huira.rgb import Scene, SceneView, RasterRenderer
+from huira.rgb import Scene, SceneView, Renderer
 
 from huira.units import Meter as m
 from huira.units import Millimeter as mm
@@ -59,7 +59,7 @@ def main():
     frame_buffer.enable_sensor_response();
     
     # Create the renderer
-    renderer = RasterRenderer()
+    renderer = Renderer()
     
     # Create a scene view over the exposure interval
     scene_view = SceneView(scene, exposure, navcam, huira.ObservationMode.ABERRATED_STATE)

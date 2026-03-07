@@ -6,7 +6,6 @@ Render API
 
    frame_buffer
    renderer
-   raster_renderer
    interaction
    ray
    sampler

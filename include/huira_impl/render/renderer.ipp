@@ -63,8 +63,8 @@ namespace huira {
         auto& depth_buffer = frame_buffer.depth();
 
         // TODO Make configurable
-        const int spp = 10;
-        const int max_bounces = 1;
+        const int spp = 1000;
+        const int max_bounces = 3;
         const float inv_spp = 1.0f / static_cast<float>(spp);
 
         // Tile-based parallel rendering:

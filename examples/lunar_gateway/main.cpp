@@ -45,6 +45,7 @@ int main(int argc, char** argv) {
     auto navcam = scene.root.new_instance(camera_model);
     navcam.set_position(40_m, -40_m, 0_m);
     navcam.set_euler_angles(95_deg, 0_deg, 45_deg);
+    navcam.set_body_angular_velocity(0_deg / 1_s, 0_deg / 1_s, 10_deg / 1_s);
 
     // Load the gateway mode
     auto gateway_model = scene.load_model(gateway_path);
@@ -69,7 +70,7 @@ int main(int argc, char** argv) {
     huira::Renderer<TSpectral> renderer;
 
     // Create a scene view over the exposure interval
-    auto scene_view = huira::SceneView<TSpectral>(scene, exposure_interval, navcam, huira::ObservationMode::ABERRATED_STATE);
+    auto scene_view = huira::SceneView<TSpectral>(scene, exposure_interval, navcam, huira::ObservationMode::ABERRATED_STATE, 1);
 
     // Render the current scene view
     renderer.render(scene_view, frame_buffer);

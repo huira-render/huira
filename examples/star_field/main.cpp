@@ -51,7 +51,7 @@ int main(int argc, char** argv) {
 
     // Set the observation time
     huira::Time time("2016-09-19T16:22:05.728");
-    huira::Interval exposure_interval{ time, time + 9.984285275_s };
+    huira::Interval exposure_interval{ time, time + 5*9.984285275_s };
 
     // Load stars
     scene.load_stars(star_catalog_path, time);
@@ -59,6 +59,7 @@ int main(int argc, char** argv) {
     // Create an instance of the camera using SPICE configuration
     auto mapcam = scene.root.new_instance(camera_model);
     mapcam.set_spice("ORX_OCAMS_MAPCAM", "ORX_OCAMS_MAPCAM");
+    mapcam.set_body_angular_velocity(1_deg / 1_s, 1_deg / 1_s, 1_deg / 1_s);
     
     // Configure the render buffers
     auto frame_buffer = camera_model.make_frame_buffer();
@@ -66,10 +67,10 @@ int main(int argc, char** argv) {
     frame_buffer.enable_sensor_response();
 
     // Create the renderer
-    huira::RasterRenderer<TSpectral> renderer;
+    huira::Renderer<TSpectral> renderer;
 
     //  Create a scene view over the exposure interval
-    auto scene_view = huira::SceneView<TSpectral>(scene, exposure_interval, mapcam, huira::ObservationMode::ABERRATED_STATE);
+    auto scene_view = huira::SceneView<TSpectral>(scene, exposure_interval, mapcam, huira::ObservationMode::ABERRATED_STATE, 3);
 
     // Render the current scene view
     renderer.render(scene_view, frame_buffer);

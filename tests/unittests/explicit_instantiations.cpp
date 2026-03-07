@@ -48,7 +48,7 @@
 // render/
 #include "huira/render/frame_buffer.hpp"
 #include "huira/render/interaction.hpp"
-#include "huira/render/raster_renderer.hpp"
+#include "huira/render/renderer.hpp"
 #include "huira/render/ray.hpp"
 #include "huira/render/sampler.hpp"
 
@@ -97,7 +97,7 @@ namespace huira {
 
     template class PointLight<TestSpectral>;
 
-    template class RasterRenderer<TestSpectral>;
+    template class Renderer<TestSpectral>;
 
     template class Node<TestSpectral>;
     template class UnresolvedObject<TestSpectral>;

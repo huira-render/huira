@@ -5,4 +5,4 @@ Render API
    :hidden:
 
    frame_buffer
-   raster_renderer
+   renderer

@@ -13,7 +13,7 @@ namespace huira {
      * @brief Abstract base class for scene renderers.
      *
      * Renderer provides the interface and common helpers for rendering a SceneView into a FrameBuffer.
-     * Derived classes implement specific rendering algorithms (e.g., rasterization, ray tracing).
+     * Derived classes implement specific rendering algorithms.
      *
      * @tparam TSpectral Spectral type for the rendering pipeline
      */
