@@ -89,9 +89,20 @@ namespace huira {
 
         template <IsPositionCallback TCallback, typename... Args>
         void set_custom_position_callback(Args&&... args);
+        void set_keplerian_orbit(
+            units::Meter semi_major_axis,
+            double eccentricity,
+            units::Radian inclination,
+            units::Radian raan,
+            units::Radian arg_periapsis,
+            units::Radian mean_anomaly,
+            Time epoch,
+            double mu);
 
         template <IsRotationCallback TCallback, typename... Args>
         void set_custom_rotation_callback(Args&&... args);
+        void set_z_up_y_forward_callback();
+        void set_z_down_y_forward_callback();
 
         template <IsTransformCallback TCallback, typename... Args>
         void set_custom_state_callback(Args&&... args);

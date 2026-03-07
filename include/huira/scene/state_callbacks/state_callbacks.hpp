@@ -8,7 +8,7 @@
 namespace huira {
     struct PositionCallback {
         virtual ~PositionCallback() = default;
-        virtual void evaluate(const Time& epoch, const Rotation<double>& rotation, Vec3<double>& angular_rate) const = 0;
+        virtual void evaluate(const Time& epoch, const Rotation<double>& rotation, const Vec3<double>& angular_rate) = 0;
 
         Vec3<double> position{};
         Vec3<double> velocity{};
@@ -21,7 +21,7 @@ namespace huira {
 
     struct RotationCallback {
         virtual ~RotationCallback() = default;
-        virtual void evaluate(const Time& epoch, const Vec3<double>& position, const Vec3<double>& velocity) const = 0;
+        virtual void evaluate(const Time& epoch, const Vec3<double>& position, const Vec3<double>& velocity) = 0;
 
         Rotation<double> rotation{};
         Vec3<double> angular_velocity{};
@@ -34,7 +34,7 @@ namespace huira {
 
     struct StateCallback {
         virtual ~StateCallback() = default;
-        virtual void evaluate(const Time& epoch) const = 0;
+        virtual void evaluate(const Time& epoch) = 0;
 
         Transform<double> state{};
     };
