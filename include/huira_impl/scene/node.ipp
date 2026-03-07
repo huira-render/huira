@@ -12,6 +12,8 @@
 #include "huira/util/logger.hpp"
 #include "huira/util/validate.hpp"
 
+#include "huira/scene/state_callbacks/keplerian_orbit.hpp"
+#include "huira/scene/state_callbacks/nadir_point.hpp"
 
 namespace huira {
 
@@ -312,12 +314,39 @@ namespace huira {
     }
 
     template <IsSpectral TSpectral>
+    void Node<TSpectral>::set_keplerian_orbit(
+        units::Meter semi_major_axis,
+        double eccentricity,
+        units::Radian inclination,
+        units::Radian raan,
+        units::Radian arg_periapsis,
+        units::Radian mean_anomaly,
+        Time epoch,
+        double mu)
+    {
+        this->set_custom_position_callback<KeplerianOrbitCallback>(semi_major_axis, eccentricity, inclination, raan, arg_periapsis, mean_anomaly, epoch, mu);
+    }
+
+
+    template <IsSpectral TSpectral>
     template <IsRotationCallback TCallback, typename... Args>
     void Node<TSpectral>::set_custom_rotation_callback(Args&&... args)
     {
         rotation_callback_ = std::make_unique<TCallback>(std::forward<Args>(args)...);
         this->rotation_mode_ = TransformMode::ROTATION_CALLBACK;
         this->spice_frame_ = "";
+    }
+
+    template <IsSpectral TSpectral>
+    void Node<TSpectral>::set_z_up_y_forward_callback()
+    {
+        this->set_custom_rotation_callback<ZUpYForwardCallback>();
+    }
+
+    template <IsSpectral TSpectral>
+    void Node<TSpectral>::set_z_down_y_forward_callback()
+    {
+        this->set_custom_rotation_callback<ZDownYForwardCallback>();
     }
 
     template <IsSpectral TSpectral>
