@@ -8,3 +8,7 @@ Frame Handle
 .. autoclass:: huira.visible8.FrameHandle
    :members:
    :undoc-members:
+
+.. autoclass:: huira.visible8.FrameHandle
+   :members:
+   :undoc-members:

@@ -108,4 +108,7 @@ PYBIND11_MODULE(_huira, m) {
     // Bind 8-bin Visible spectral specialization:
     auto visible8 = m.def_submodule("visible8", "Visible (8-bin) spectral specialization");
     bind_spectral<huira::Visible8>(visible8);
+
+    auto swir8 = m.def_submodule("swir8", "Short-wave infrared (8-bin) spectral specialization");
+    bind_spectral<huira::SWIR8>(swir8);
 }
