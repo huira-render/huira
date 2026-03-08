@@ -2,6 +2,7 @@ import os
 import sys
 
 sys.path.insert(0, '@PYTHON_BINDINGS_OUTPUT@')
+sys.path.insert(0, '@CMAKE_CURRENT_SOURCE_DIR@')
 
 # Get absolute path to this file
 conf_dir = os.path.abspath(os.path.dirname(__file__))
@@ -24,8 +25,19 @@ extensions = [
     'sphinx_autodoc_typehints',
     'sphinx_toolbox.sidebar_links',
     'sphinx_design',
-    'myst_parser'
+    'myst_parser',
+    'huira_spectral_ext'
 ]
+
+# Required: the submodule names as Python sees them
+spectral_submodules = ['huira.rgb', 'huira.visible8', 'huira.swir8']
+spectral_submodule_labels = {
+    'huira.rgb':      'RGB',
+    'huira.visible8': 'Visible8',
+    'huira.swir8':    'SWIR8',
+}
+spectral_template_dir = 'api_reference/python_api/spectral'
+spectral_output_dir = 'api_reference/python_api'
 
 # Documentation Options:
 autodoc_default_options = {
@@ -40,7 +52,7 @@ autodoc_default_options = {
 autodoc_mock_imports = []
 
 templates_path = ['_templates']
-exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
+exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', 'api_reference/python_api/spectral']
 
 myst_heading_anchors = 3
 numfig = True

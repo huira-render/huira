@@ -5,9 +5,12 @@ All unit types share a common interface. They can be constructed from numeric va
 compared and combined with other units of the same physical dimension, and are
 implicitly converted to SI base units when passed to functions.
 
+note:: All unit types have the same interface, so only as :class:`huira.Meter` is shown for reference.
+
 .. autoclass:: huira.Meter
    :members:
    :undoc-members:
+
 
 Available Units
 ---------------
@@ -38,10 +41,8 @@ Available Units
      - Steradian, SquareDegree
      - Steradian
    * - Speed
+     - MetersPerSecond, KilometersPerSecond, MilesPerHour, KilometersPerHour
      - MetersPerSecond
-     - KilometersPerSecond
-     - MilesPerHour
-     - KilometersPerHour
    * - Angular Rate
      - RadiansPerSecond
      - DegreesPerSecond

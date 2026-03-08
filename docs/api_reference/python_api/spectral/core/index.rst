@@ -6,9 +6,4 @@ The Core module contains the fundamental building blocks of the engine.
 .. toctree::
    :hidden:
 
-   spectral_bin
-   time
-   interval
-   units
-   rotation
-   types
+   spectral_bins
