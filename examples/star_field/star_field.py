@@ -33,6 +33,7 @@ def main():
 
     # Create the scene
     scene = Scene()
+    scene.set_background_radiance(1e-5)
 
     # Configure a camera model
     camera_model = scene.new_camera_model()
@@ -46,7 +47,7 @@ def main():
     
     # Set the observation time
     time = huira.Time("2016-09-19T16:22:05.728")
-    exposure = huira.Interval.from_center(time, sec(9.984285275))
+    exposure = huira.Interval.from_centered(time, sec(9.984285275))
     
     # Load stars
     scene.load_stars(star_catalog_path, time)

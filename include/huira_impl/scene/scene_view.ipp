@@ -58,6 +58,9 @@ namespace huira {
             observer_transforms[i] = obs_ssb;
         }
 
+        // Copy the background radiance:
+        background_ = scene.background_;
+
         // Collect geometry and lights by traversing the scene graph:
         traverse_and_collect_(scene.root_node_, observer_transforms, obs_mode);
         HUIRA_LOG_INFO("SceneView collected " + std::to_string(geometry_.size()) + " unique mesh batches and " +

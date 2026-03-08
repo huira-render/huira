@@ -86,6 +86,8 @@ namespace huira {
 
         std::vector<std::vector<Star<TSpectral>>> stars_;
 
+        std::shared_ptr<Image<TSpectral>> background_;
+
         void build_tlas_();
 
         RTCDevice device_ = nullptr;

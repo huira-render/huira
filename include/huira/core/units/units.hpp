@@ -209,6 +209,7 @@ namespace huira::units {
     using WattsPerSteradian = Quantity<RadiantIntensity, std::ratio<1, 1>>;
 
     template <IsSpectral T> using SpectralWattsPerMeterSquared = SpectralQuantity<Irradiance, std::ratio<1, 1>, T>;
+    template <IsSpectral T> using SpectralWattsPerMeterSquaredSteradian = SpectralQuantity<Radiance, std::ratio<1, 1>, T>;
     /// @}
 
 

@@ -65,6 +65,8 @@ namespace huira {
                 + std::to_string(rtcGetDeviceError(nullptr)) + ").");
         }
 
+        set_background_radiance(TSpectral{ 0 });
+
         HUIRA_LOG_INFO("Scene created");
     };
 
@@ -575,6 +577,26 @@ namespace huira {
         materials_.add(material, name);
         return MaterialHandle<TSpectral>{ material };
     }
+
+
+    template <IsSpectral TSpectral>
+    void Scene<TSpectral>::set_background_radiance(Image<TSpectral> background)
+    {
+        background_ = std::make_shared<Image<TSpectral>>(std::move(background));
+    }
+
+    template <IsSpectral TSpectral>
+    void Scene<TSpectral>::set_background_radiance(TSpectral background)
+    {
+        background_ = std::make_shared<Image<TSpectral>>(1, 1, background);
+    }
+
+    template <IsSpectral TSpectral>
+    void Scene<TSpectral>::set_background_radiance(float background)
+    {
+        background_ = std::make_shared<Image<TSpectral>>(1, 1, TSpectral::from_total(background));
+    }
+
 
 
     template <IsSpectral TSpectral>
