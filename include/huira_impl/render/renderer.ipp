@@ -62,10 +62,7 @@ namespace huira {
         auto& power_buffer = frame_buffer.received_power();
         auto& depth_buffer = frame_buffer.depth();
 
-        // TODO Make configurable
-        const int spp = 1000;
-        const int max_bounces = 3;
-        const float inv_spp = 1.0f / static_cast<float>(spp);
+        const float inv_spp = 1.0f / static_cast<float>(spp_);
 
         // Tile-based parallel rendering:
         constexpr int TILE_SIZE = 16;
@@ -85,7 +82,6 @@ namespace huira {
                     int y1 = std::min(y0 + TILE_SIZE, fb_height);
 
                     // Per-tile RNG seeded from tile index for reproducibility:
-                    // TODO: Replace with your Sampler class if you have one
                     std::mt19937 rng(static_cast<unsigned int>(tile_idx));
                     std::uniform_real_distribution<float> uniform(0.0f, 1.0f);
 
@@ -96,7 +92,7 @@ namespace huira {
                             float closest_depth = std::numeric_limits<float>::infinity();
                             Vec3<float> camera_normals{ 0 };
 
-                            for (int s = 0; s < spp; ++s) {
+                            for (int s = 0; s < spp_; ++s) {
                                 // Jittered sub-pixel sample:
                                 float sx = static_cast<float>(x) + uniform(rng);
                                 float sy = static_cast<float>(y) + uniform(rng);
@@ -109,7 +105,7 @@ namespace huira {
 
                                 TSpectral throughput{ 1 };
                                 TSpectral sample_radiance{ 0 };
-                                for (int bounce = 0; bounce < max_bounces; ++bounce) {
+                                for (int bounce = 0; bounce < max_bounces_; ++bounce) {
                                     HitRecord hit = scene_view.intersect(ray, time);
 
                                     if (!hit.hit()) {
@@ -163,7 +159,6 @@ namespace huira {
                                     }
 
                                     // --- Indirect lighting (BSDF sampling) ---
-                                    // TODO: Replace with your BSDF sampling API.
                                     // This is a placeholder for cosine-weighted hemisphere sampling
                                     // for Lambertian surfaces. For a proper implementation, call
                                     // material->bsdf_sample(...) which returns a sampled direction,
@@ -483,8 +478,6 @@ namespace huira {
                     float weight = dt / (t_end - t_start);  // normalize so weights sum to ~1
 
                     // Interpolate irradiance at this parameter value:
-                    // TODO: You'll need an interpolation method for irradiance.
-                    // Simplest: lerp between the nearest input samples based on params[k].
                     TSpectral irrad = item.interpolate_irradiances(params[k]);
                     Vec3<float> dir = arc.evaluate(params[k]);
                     const Pixel& p = pixels[k];
