@@ -54,6 +54,7 @@ namespace huira {
         const int fb_width = frame_buffer.width();
         const int fb_height = frame_buffer.height();
         const auto& lights = scene_view.lights_;
+        const auto& background = scene_view.background_;
 
         // Make sure required buffers are enabled:
         frame_buffer.clear();
@@ -109,7 +110,13 @@ namespace huira {
                                     HitRecord hit = scene_view.intersect(ray, time);
 
                                     if (!hit.hit()) {
-                                        // TODO add environment lighting
+                                        // Sample environment map using ray direction
+                                        Vec3<float> d = glm::normalize(ray.direction());
+                                        float u = 0.5f + std::atan2(d.z, d.x) * (0.5f * INV_PI<float>());
+                                        float v = 0.5f - std::asin(std::clamp(d.y, -1.0f, 1.0f)) * INV_PI<float>();
+
+                                        TSpectral env_radiance = background->sample_bilinear(u, v);
+                                        sample_radiance += throughput * env_radiance;
                                         break;
                                     }
 
@@ -158,55 +165,17 @@ namespace huira {
                                         sample_radiance += throughput * ls.Li * f * cos_theta;
                                     }
 
-                                    // --- Indirect lighting (BSDF sampling) ---
-                                    // This is a placeholder for cosine-weighted hemisphere sampling
-                                    // for Lambertian surfaces. For a proper implementation, call
-                                    // material->bsdf_sample(...) which returns a sampled direction,
-                                    // BSDF value, and PDF.
+                                    // Sample the BSDF:
+                                    float u1 = uniform(rng);
+                                    float u2 = uniform(rng);
 
-                                    // Cosine-weighted hemisphere sample (Lambertian):
-                                    float r1 = uniform(rng);
-                                    float r2 = uniform(rng);
-                                    float cos_theta_s = std::sqrt(1.0f - r1);
-                                    float sin_theta_s = std::sqrt(r1);
-                                    float phi = 2.0f * PI<float>() * r2;
+                                    BSDFSample<TSpectral> bs = material->bsdf_sample(
+                                        isect.wo, { params, shading_isect }, u1, u2);
 
-                                    Vec3<float> local_dir{
-                                        sin_theta_s * std::cos(phi),
-                                        sin_theta_s * std::sin(phi),
-                                        cos_theta_s
-                                    };
+                                    if (!bs.is_valid()) break;
 
-                                    // Transform to world space using shading normal frame:
-                                    Vec3<float> tangent, bitangent;
-                                    if (glm::length(shading_isect.tangent) > 0.01f) {
-                                        tangent = shading_isect.tangent;
-                                        bitangent = shading_isect.bitangent;
-                                    }
-                                    else {
-                                        build_default_tangent_frame(
-                                            shading_isect.normal_s, tangent, bitangent);
-                                    }
-
-                                    Vec3<float> wi_world = glm::normalize(
-                                        local_dir.x * tangent +
-                                        local_dir.y * bitangent +
-                                        local_dir.z * shading_isect.normal_s);
-
-                                    // Evaluate BSDF for this sampled direction:
-                                    TSpectral f = material->bsdf_eval(
-                                        isect.wo, wi_world, { params, shading_isect });
-
-                                    float cos_theta_i = std::max(0.0f,
-                                        glm::dot(shading_isect.normal_s, wi_world));
-
-                                    // PDF for cosine-weighted hemisphere:
-                                    float pdf = cos_theta_i * INV_PI<float>();
-
-                                    if (pdf < 1e-8f) break;
-
-                                    // Update throughput:
-                                    throughput = throughput * f * cos_theta_i / pdf;
+                                    // value already contains f * |cos(theta_i)| / pdf
+                                    throughput = throughput * bs.value;
 
                                     // Russian roulette (after a few bounces):
                                     if (bounce >= 3) {
@@ -220,7 +189,7 @@ namespace huira {
                                     // Spawn next ray:
                                     Vec3<float> new_origin = offset_intersection_(
                                         isect.position, isect.normal_g);
-                                    ray = Ray<TSpectral>(new_origin, wi_world);
+                                    ray = Ray<TSpectral>(new_origin, bs.wi);
                                 }
 
                                 pixel_radiance += sample_radiance;

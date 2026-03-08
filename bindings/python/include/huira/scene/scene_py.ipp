@@ -220,11 +220,35 @@ namespace huira {
             .def("add_material", &SceneType::add_material,
                 py::arg("material"), py::arg("name") = "",
                 "Add an existing material to the scene")
-            
+
+            // =============================================================
+            // Background
+            // =============================================================
+            // set_background_radiance — Image
+            .def("set_background_radiance",
+                static_cast<void(SceneType::*)(Image<TSpectral>)>(
+                &SceneType::set_background_radiance),
+                py::arg("background"),
+                "Set background radiance from an Image")
+
+            // set_background_radiance — TSpectral
+            .def("set_background_radiance",
+                static_cast<void(SceneType::*)(TSpectral)>(
+                &SceneType::set_background_radiance),
+                py::arg("background"),
+                "Set background radiance from a spectral value")
+
+            // set_background_radiance — float
+            .def("set_background_radiance",
+                static_cast<void(SceneType::*)(float)>(
+                &SceneType::set_background_radiance),
+                py::arg("background"),
+                "Set background radiance from a total power float")
+
             // =============================================================
             // Textures
             // =============================================================
-            
+
             .def("add_spectral_texture",
                 static_cast<TextureHandle<TSpectral>(SceneType::*)(Image<TSpectral>, std::string)>(
                     &SceneType::add_texture),

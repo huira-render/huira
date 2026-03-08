@@ -63,7 +63,6 @@ namespace huira {
         MeshHandle<TSpectral> get_mesh(const std::string& name);
         void delete_mesh(const MeshHandle<TSpectral>& mesh_handle);
 
-
         LightHandle<TSpectral> new_point_light(const units::SpectralWatts<TSpectral>& spectral_power, std::string name = "");
         LightHandle<TSpectral> new_point_light(const units::Watt& total_power, std::string name = "");
         LightHandle<TSpectral> new_sun_light();
@@ -110,6 +109,10 @@ namespace huira {
         MaterialHandle<TSpectral> new_cook_torrance_material(std::string name = "");
         MaterialHandle<TSpectral> add_material(std::shared_ptr<Material<TSpectral>> material, std::string name = "");
 
+        void set_background_radiance(Image<TSpectral> background);
+        void set_background_radiance(TSpectral background);
+        void set_background_radiance(float background);
+
         TextureHandle<TSpectral> add_texture(Image<TSpectral> image, std::string name = "");
         TextureHandle<float> add_texture(Image<float> image, std::string name = "");
         TextureHandle<Vec3<float>> add_texture(Image<Vec3<float>> image, std::string name = "");
@@ -155,6 +158,7 @@ namespace huira {
         std::unique_ptr<Image<Vec3<float>>> default_normal_image_;
         std::unique_ptr<Image<TSpectral>>   default_emission_image_;
 
+        std::shared_ptr<Image<TSpectral>> background_;
 
         bool dynamic_stars_ = false;
         std::vector<Star<TSpectral>> stars_;

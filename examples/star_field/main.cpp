@@ -51,7 +51,7 @@ int main(int argc, char** argv) {
 
     // Set the observation time
     huira::Time time("2016-09-19T16:22:05.728");
-    huira::Interval exposure_interval{ time, time + 5*9.984285275_s };
+    huira::Interval exposure_interval = huira::Interval::from_centered(time, 9.984285275_s);
 
     // Load stars
     scene.load_stars(star_catalog_path, time);
