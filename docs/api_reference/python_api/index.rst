@@ -7,7 +7,8 @@ Python API Reference
 
    cameras/index
    core/index
-   handles/index
    images/index
-   render/index
-   scene/index
+
+   RGB/index
+   SWIR8/index
+   Visible8/index
