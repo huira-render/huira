@@ -8,3 +8,7 @@ SpectralBins
 .. autoclass:: huira.visible8.SpectralBins
    :members:
    :undoc-members:
+
+.. autoclass:: huira.swir8.SpectralBins
+   :members:
+   :undoc-members:

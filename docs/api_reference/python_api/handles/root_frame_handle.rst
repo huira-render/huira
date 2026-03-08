@@ -8,3 +8,7 @@ Root Frame Handle
 .. autoclass:: huira.visible8.RootFrameHandle
    :members:
    :undoc-members:
+
+.. autoclass:: huira.swir8.RootFrameHandle
+   :members:
+   :undoc-members:

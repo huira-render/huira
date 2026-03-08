@@ -8,3 +8,7 @@ Frame Buffer
 .. autoclass:: huira.visible8.FrameBuffer
    :members:
    :undoc-members:
+
+.. autoclass:: huira.swir8.FrameBuffer
+   :members:
+   :undoc-members:

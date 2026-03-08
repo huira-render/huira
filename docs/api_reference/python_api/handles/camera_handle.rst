@@ -8,3 +8,7 @@ Camera Handle
 .. autoclass:: huira.visible8.CameraModelHandle
    :members:
    :undoc-members:
+
+.. autoclass:: huira.swir8.CameraModelHandle
+   :members:
+   :undoc-members:

@@ -127,8 +127,8 @@ namespace huira {
 
         for (std::size_t i = 0; i < N; ++i) {
             // Bin edges in nm (bins_ stores SI metres, so multiply by 1e9).
-            const double bin_min_nm = bins_[i].min_wavelength * 1e9;
-            const double bin_max_nm = bins_[i].max_wavelength * 1e9;
+            const double bin_min_nm = get_bin(i).min_wavelength * 1e9;
+            const double bin_max_nm = get_bin(i).max_wavelength * 1e9;
             const double bin_width = bin_max_nm - bin_min_nm;
 
             // Index of the first sample at or above bin_min_nm.
@@ -207,10 +207,6 @@ namespace huira {
     }
 
 
-    template <std::size_t N, auto... Args>
-    std::array<Bin, N> SpectralBins<N, Args...>::bins_ = SpectralBins<N, Args...>::initialize_bins_static_();
-
-
     /**
      * @brief Creates a spectral distribution from a total value.
      * 
@@ -227,12 +223,12 @@ namespace huira {
         // Sum total wavelength coverage
         double total_width = 0.0;
         for (std::size_t i = 0; i < N; ++i) {
-            total_width += bins_[i].max_wavelength - bins_[i].min_wavelength;
+            total_width += get_bin(i).max_wavelength - get_bin(i).min_wavelength;
         }
 
         // Distribute proportionally to each bin's width
         for (std::size_t i = 0; i < N; ++i) {
-            double bin_width = bins_[i].max_wavelength - bins_[i].min_wavelength;
+            double bin_width = get_bin(i).max_wavelength - get_bin(i).min_wavelength;
             result[i] = static_cast<float>(static_cast<double>(total) * (bin_width / total_width));
         }
 
@@ -318,7 +314,7 @@ namespace huira {
     float SpectralBins<N, Args...>::integrate() const {
         float integral = 0.0f;
         for (std::size_t i = 0; i < N; ++i) {
-            float bin_width = static_cast<float>(bins_[i].max_wavelength - bins_[i].min_wavelength);
+            float bin_width = static_cast<float>(get_bin(i).max_wavelength - get_bin(i).min_wavelength);
             integral += data_[i] * bin_width;
         }
         return integral;
@@ -329,8 +325,8 @@ namespace huira {
     {
         float integral = 0.0f;
         for (std::size_t i = 0; i < N; ++i) {
-            double bin_min = bins_[i].min_wavelength;
-            double bin_max = bins_[i].max_wavelength;
+            double bin_min = get_bin(i).min_wavelength;
+            double bin_max = get_bin(i).max_wavelength;
 
             if (bin_max <= min_wavelength || bin_min >= max_wavelength) {
                 continue;
@@ -529,7 +525,7 @@ namespace huira {
     {
         SpectralBins<N, Args...> result;
         for (std::size_t i = 0; i < N; ++i) {
-            double wavelength = static_cast<double>(bins_[i].center_wavelength);
+            double wavelength = static_cast<double>(get_bin(i).center_wavelength);
             result[i] = static_cast<float>(photon_energy(wavelength));
         }
         return result;
@@ -747,5 +743,45 @@ namespace huira {
             result[i] = Bin(args_array[i] * 1e-9, args_array[i + 1] * 1e-9);
         }
         return result;
+    }
+
+
+
+    /// @brief Conversion function from RGB to a spectral representation (e.g., Visible8).
+    template <typename TSpectral>
+    TSpectral convert_rgb_to_spectral(const RGB& rgb)
+    {
+        if constexpr (std::same_as<TSpectral, RGB>) {
+            return rgb;
+        }
+        else {
+            // Determine overlap between TSpectral's full range and RGB's full range
+            constexpr double spectral_min = TSpectral::get_bin(0).min_wavelength;
+            constexpr double spectral_max = TSpectral::get_bin(TSpectral::size() - 1).max_wavelength;
+            constexpr double rgb_min = RGB::get_bin(0).min_wavelength;  // 380nm (blue bin min)
+            constexpr double rgb_max = RGB::get_bin(0).max_wavelength;  // 750nm (red bin max)
+
+            constexpr double overlap_min = std::max(spectral_min, rgb_min);
+            constexpr double overlap_max = std::min(spectral_max, rgb_max);
+            constexpr double overlap = overlap_max - overlap_min;
+            constexpr double rgb_range = rgb_max - rgb_min;
+
+            constexpr bool has_significant_overlap = (overlap / rgb_range) > 0.1;
+
+            if constexpr (has_significant_overlap) {
+                TSpectral spectral;
+                for (std::size_t i = 0; i < TSpectral::size(); ++i) {
+                    const Bin& bin = TSpectral::get_bin(i);
+                    float denom = static_cast<float>(bin.max_wavelength - bin.min_wavelength);
+                    spectral[i] = rgb.integrate_over_band(bin.min_wavelength, bin.max_wavelength) / denom;
+                }
+                return spectral;
+            }
+            else {
+                // No significant overlap (e.g. SWIR): fill all bins with grayscale average
+                float gray = (rgb[0] + rgb[1] + rgb[2]) / 3.0f;
+                return TSpectral(gray);
+            }
+        }
     }
 }

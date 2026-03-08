@@ -151,13 +151,12 @@ namespace huira {
         std::string to_string() const;
 
         // Access to bin information
-        static constexpr const Bin& get_bin(std::size_t index) { return bins_[index]; }
-        static constexpr const std::array<Bin, N>& get_all_bins() { return bins_; }
+        static constexpr Bin get_bin(std::size_t index) { return SpectralBins::initialize_bins_static_()[index]; }
+        static constexpr std::array<Bin, N> get_all_bins() { return SpectralBins::initialize_bins_static_(); }
         static constexpr SpectralBins photon_energies();
 
     private:
         std::array<float, N> data_;
-        static std::array<Bin, N> bins_;
 
         static constexpr std::array<Bin, N> initialize_bins_static_();
         static constexpr std::array<Bin, N> initialize_uniform_static_();
@@ -193,23 +192,12 @@ namespace huira {
     /// @brief 8 uniformly spaced bins covering the visible spectrum (380-750nm).
     using Visible8 = UniformSpectralBins<8, 380, 750>;
 
+    /// @brief 8 uniformly spaced bins covering the short-wave infrared spectrum (900-2500nm).
+    using SWIR8 = UniformSpectralBins<8, 900, 2500>;
 
     /// @brief Conversion function from RGB to a spectral representation (e.g., Visible8).
     template <typename TSpectral>
-    TSpectral convert_rgb_to_spectral(const RGB& rgb)
-    {
-        if constexpr (std::same_as<TSpectral, RGB>) {
-            return rgb;
-        } else {
-            TSpectral spectral;
-            for (std::size_t i = 0; i < TSpectral::size(); ++i) {
-                const Bin& bin = TSpectral::get_bin(i);
-                float denom = static_cast<float>(bin.max_wavelength - bin.min_wavelength);
-                spectral[i] = rgb.integrate_over_band(bin.min_wavelength, bin.max_wavelength) / denom;
-            }
-            return spectral;
-        }
-    }
+    TSpectral convert_rgb_to_spectral(const RGB& rgb);
 }
 
 #include "huira_impl/core/spectral_bins.ipp"

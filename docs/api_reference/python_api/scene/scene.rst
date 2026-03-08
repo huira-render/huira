@@ -8,3 +8,7 @@ Scene
 .. autoclass:: huira.visible8.Scene
    :members:
    :undoc-members:
+
+.. autoclass:: huira.swir8.Scene
+   :members:
+   :undoc-members:

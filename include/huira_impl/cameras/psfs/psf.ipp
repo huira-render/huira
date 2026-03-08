@@ -33,14 +33,6 @@ namespace huira {
         }
 
         generate_polyphase_data_();
-
-        for (std::size_t i = 0; i < cache_.kernels.size(); ++i) {
-            auto kernel = cache_.kernels[i];
-            for (std::size_t j = 0; j < kernel.size(); ++j) {
-                kernel[j] = 10000 * kernel[j];
-            }
-            write_image_png("psfs/psf_kernel_" + std::to_string(i) + ".png", kernel);
-        }
     }
 
 

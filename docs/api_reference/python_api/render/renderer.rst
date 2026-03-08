@@ -8,3 +8,7 @@ Renderer
 .. autoclass:: huira.visible8.Renderer
    :members:
    :undoc-members:
+
+.. autoclass:: huira.swir8.Renderer
+   :members:
+   :undoc-members:

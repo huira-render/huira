@@ -8,3 +8,7 @@ Instance Handle
 .. autoclass:: huira.visible8.InstanceHandle
    :members:
    :undoc-members:
+
+.. autoclass:: huira.swir8.InstanceHandle
+   :members:
+   :undoc-members:
