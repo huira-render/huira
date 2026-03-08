@@ -18,10 +18,13 @@ namespace huira {
                 py::arg("scene_view"),
                 py::arg("frame_buffer"),
                 py::call_guard<py::gil_scoped_release>())
+            .def("set_samples_per_pixel", &Renderer::set_samples_per_pixel,
+                py::arg("spp"))
+            .def("set_max_bounces", &Renderer::set_max_bounces,
+                py::arg("max_bounces"))
             .def("__repr__", [](const Renderer&) {
             return "Renderer()";
-                })
-            ;
+                });
     }
 
 }

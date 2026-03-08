@@ -24,7 +24,11 @@ namespace huira {
 
         virtual void render(SceneView<TSpectral>& scene_view, FrameBuffer<TSpectral>& frame_buffer);
 
+        void set_samples_per_pixel(int spp) { spp_ = spp; }
+        void set_max_bounces(int max_bounces) { max_bounces_ = max_bounces; }
+
     protected:
+
         virtual void path_trace_(SceneView<TSpectral>& scene_view, FrameBuffer<TSpectral>& frame_buffer);
 
         virtual void render_unresolved_(SceneView<TSpectral>& scene_view, FrameBuffer<TSpectral>& frame_buffer);
@@ -34,6 +38,10 @@ namespace huira {
         std::vector<LightInstance<TSpectral>> get_lights(SceneView<TSpectral>& scene_view) const { return scene_view.lights_; }
 
         RandomSampler<float> sampler_;
+
+        // Settings
+        int spp_ = 1000;
+        int max_bounces_ = 3;
     };
 }
 
