@@ -33,6 +33,8 @@
 #include "huira/images/image_py.ipp"
 
 #include "huira/render/frame_buffer_py.ipp"
+#include "huira/render/interaction_py.ipp"
+#include "huira/render/ray_py.ipp"
 #include "huira/render/renderer_py.ipp"
 
 #include "huira/scene/scene_py.ipp"
@@ -66,6 +68,9 @@ inline void bind_spectral(py::module_& m) {
 
     huira::bind_scene<TSpectral>(m);
 
+    huira::bind_ray<TSpectral>(m);
+    huira::bind_interaction<TSpectral>(m);
+
     huira::bind_scene_view<TSpectral>(m);
     huira::bind_renderer<TSpectral>(m);
 }
@@ -79,6 +84,7 @@ PYBIND11_MODULE(_huira, m) {
     huira::bind_time(m);
     huira::bind_interval(m);
     huira::bind_bin(m);
+    huira::bind_hit_record(m);
 
     huira::bind_types(m);
     huira::bind_rotation(m);
