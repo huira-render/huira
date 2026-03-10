@@ -1,6 +1,6 @@
 Frame Buffer
 ============
 
-.. autoclass-spectral::FrameBuffer
+.. autoclass-spectral:: FrameBuffer
    :members:
    :undoc-members:

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <limits>
+
 #include "embree4/rtcore.h"
 
 #include "huira/core/types.hpp"
