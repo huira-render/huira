@@ -31,7 +31,7 @@ If there are features you wish to see, that you don't see listed here, please fe
 
 ## Features Coming Soon (Order of Priority)
 | Feature | Status | Expected by | Version |
-| --- | --- | --- |
+| --- | --- | --- | --- |
 | Depth-of-Field | In-Progress | 3/16/26 | v0.9.X |
 | Digital Elevation Maps | In-Progress | 3/16/26 | v0.9.X |
 | Level-of-Detail | Designed | 4/1/26 | v1.0.X |

@@ -19,28 +19,35 @@ Initial work on Huira has been on the basic architecture as well as distribution
 
 If there are features you wish to see, that you don't see listed here, please feel free to submit a [Feature Request](https://github.com/huira-render/huira/issues/new?template=feature_request.md)
 
-## Currently Stable Features (as of v0.8.2)
-- Radiometrically accurate unresolved rendering
+## Currently Stable Features (as of v0.9.0)
+- Radiometrically accurate rendering
 - Calibrated camera distortion models and common camera controls
+- Motion blur
 - SPICE toolkit integration for spacecraft ephemeris and reference frames
-- Star field rendering with accurate celestial coordinates
+- Star field and unresolved rendering
 - Python Bindings
 - Logging and crash report generation
 - API Reference Documentation (NOTE: Some docs may appear incomplete or poorly formatted)
 
 ## Features Coming Soon (Order of Priority)
-- 3D mesh and material support
-- TLE support
-- Motion blur
-- Camera Depth-of-Field
-- Digital Elevation Maps
-- Solar Radiation Pressure simulation
-- LIDAR simulation
-- Level-of-detail support
+| Feature | Status | Expected by | Version |
+| --- | --- | --- | --- |
+| Depth-of-Field | In-Progress | 3/16/26 | v0.9.X |
+| Digital Elevation Maps | In-Progress | 3/16/26 | v0.9.X |
+| Level-of-Detail | Designed | 4/1/26 | v1.0.X |
+| Solar Radiation Pressure | Designed | 4/1/26 | v1.0.X |
+| LIDAR simulation | Planned | 5/1/26 | v1.0.X |
+| TLE support | Licensing | - | - |
 
 ## Long Term Plans
 - Vulkan based GPU Acceleration
 - Desktop application (GUI)
+
+## Known Bugs and Limitations
+- Normal maps are not currently supported (see [issue](https://github.com/huira-render/huira/issues/32))
+- PSF is not applied to extended objects, only point sources
+- Severe lack of formal testing
+
 
 ***
 
