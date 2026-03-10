@@ -50,6 +50,14 @@ namespace huira {
             const Ray<TSpectral>& ray,
             const HitRecord& hit) const;
 
+        [[nodiscard]] std::vector<HitRecord> intersect(const std::vector<Ray<TSpectral>>& rays, float time = 0.5f) const;
+
+        [[nodiscard]] std::vector<bool> occluded(const std::vector<Ray<TSpectral>>& rays, float t_far, float time = 0.5f) const;
+
+        [[nodiscard]] std::vector<Interaction<TSpectral>> resolve_hits(
+            const std::vector<Ray<TSpectral>>& rays,
+            const std::vector<HitRecord>& hits) const;
+
         Interval get_exposure_interval() const { return exposure_interval_; }
         units::Second duration() const { return exposure_interval_.duration(); }
         Time get_time() const { return exposure_interval_.center(); }
@@ -61,7 +69,8 @@ namespace huira {
         std::vector<Time> temporal_samples_;
 
         void traverse_and_collect_(const std::shared_ptr<Node<TSpectral>>& node,
-            const std::vector<Transform<double>>& observer_transforms, ObservationMode obs_mode);
+            const std::vector<Transform<double>>& observer_transforms,
+            const std::vector<Transform<double>>& observer_inverses, ObservationMode obs_mode);
 
         void handle_asset_ptr_(Mesh<TSpectral>* mesh, const std::vector<Transform<float>>& instance_apparent_transforms);
         void handle_asset_ptr_(Light<TSpectral>* light, const std::vector<Transform<float>>& instance_apparent_transforms);
@@ -76,6 +85,7 @@ namespace huira {
         void traverse_model_graph_(const std::shared_ptr<Node<TSpectral>> node, const std::vector<Transform<float>>& parent_transform);
 
         std::shared_ptr<CameraModel<TSpectral>> camera_model_;
+        std::vector<Transform<float>> camera_to_world_;
 
         std::vector<MeshBatch<TSpectral>> geometry_;
         std::unordered_map<const Mesh<TSpectral>*, std::size_t> batch_lookup_;

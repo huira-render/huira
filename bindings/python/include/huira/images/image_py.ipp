@@ -76,8 +76,25 @@ namespace huira {
                     // PixelT must be tightly packed scalars for memcpy to work.
                     static_assert(sizeof(PixelT) == sizeof(Scalar) * C,
                         "PixelT layout is not contiguous scalars");
-                    std::memcpy(img.data(), src,
-                        static_cast<std::size_t>(w) * static_cast<std::size_t>(h) * C * sizeof(Scalar));
+                    PixelT* dst = img.data();
+                    const std::size_t num_pixels = static_cast<std::size_t>(w) * static_cast<std::size_t>(h);
+                    for (std::size_t i = 0; i < num_pixels; ++i) {
+                        if constexpr (C == 1) {
+                            dst[i] = src[i];
+                        }
+                        else {
+                            if constexpr (IsNonSpectralPixel<PixelT>) {
+                                for (std::size_t c = 0; c < C; ++c) {
+                                    dst[i][static_cast<int>(c)] = src[i * C + c];
+                                }
+                            }
+                            else {
+                                for (std::size_t c = 0; c < C; ++c) {
+                                    dst[i][c] = src[i * C + c];
+                                }
+                            }
+                        }
+                    }
                     return img;
                 }),
                 py::arg("array"),

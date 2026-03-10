@@ -56,12 +56,7 @@ namespace huira {
         const auto& lights = scene_view.lights_;
         const auto& background = scene_view.background_;
 
-        // Make sure required buffers are enabled:
         frame_buffer.clear();
-        frame_buffer.enable_depth();
-
-        auto& power_buffer = frame_buffer.received_power();
-        auto& depth_buffer = frame_buffer.depth();
 
         const float inv_spp = 1.0f / static_cast<float>(spp_);
 
@@ -91,6 +86,8 @@ namespace huira {
 
                             TSpectral pixel_radiance{ 0 };
                             float closest_depth = std::numeric_limits<float>::infinity();
+                            std::size_t mesh_id = std::numeric_limits<std::size_t>::max();
+                            TSpectral albedo_total{ 0 };
                             Vec3<float> camera_normals{ 0 };
 
                             for (int s = 0; s < spp_; ++s) {
@@ -120,8 +117,15 @@ namespace huira {
                                         break;
                                     }
 
+                                    if (s == 0) {
+                                        mesh_id = hit.geom_id;
+                                    }
+
                                     // Resolve full shading data:
                                     Interaction<TSpectral> isect = scene_view.resolve_hit(ray, hit);
+                                    Vec3<float> new_origin = offset_intersection_(
+                                        isect.position, isect.normal_g);
+                                    isect.position = new_origin;
 
                                     // Look up mesh material:
                                     const auto& mapping = scene_view.instance_mappings_[hit.inst_id];
@@ -135,24 +139,25 @@ namespace huira {
                                     if (bounce == 0) {
                                         closest_depth = std::min(closest_depth, hit.t);
                                         camera_normals += shading_isect.normal_s;
+                                        albedo_total += params.albedo;
                                     }
 
-                                    // --- Direct lighting (next event estimation) ---
+                                    // Direct lighting (next event estimation)
                                     for (const auto& light_instance : lights) {
                                         auto sample = light_instance.light->sample_li(
                                             isect, light_instance.transform, this->sampler_);
 
-                                        if (!sample) continue;
+                                        if (!sample) {
+                                            continue;
+                                        }
                                         const auto& ls = *sample;
 
                                         // Shadow test:
-                                        Vec3<float> shadow_origin = offset_intersection_(
-                                            isect.position, isect.normal_g);
                                         float light_dist = glm::length(
                                             light_instance.transform.position - isect.position);
-                                        Ray<TSpectral> shadow_ray(shadow_origin, ls.wi);
+                                        Ray<TSpectral> shadow_ray(new_origin, ls.wi);
 
-                                        if (scene_view.occluded(shadow_ray, light_dist - 1e-3f, time)) {
+                                        if (scene_view.occluded(shadow_ray, light_dist, time)) {
                                             continue;
                                         }
 
@@ -187,8 +192,6 @@ namespace huira {
                                     }
 
                                     // Spawn next ray:
-                                    Vec3<float> new_origin = offset_intersection_(
-                                        isect.position, isect.normal_g);
                                     ray = Ray<TSpectral>(new_origin, bs.wi);
                                 }
 
@@ -200,16 +203,28 @@ namespace huira {
                             TSpectral avg_radiance = pixel_radiance * inv_spp;
                             Vec3<float> avg_camera_normals = glm::normalize(camera_normals * inv_spp);
 
-                            if (frame_buffer.has_received_power()) {
-                                power_buffer(x, y) = camera->pixel_radiance_to_power(x, y) * avg_radiance;
+                            if (closest_depth < std::numeric_limits<float>::infinity()) {
+                                frame_buffer.depth()(x, y) = closest_depth;
                             }
 
-                            if (closest_depth < std::numeric_limits<float>::infinity()) {
-                                depth_buffer(x, y) = closest_depth;
+                            if (frame_buffer.has_albedo()) {
+                                frame_buffer.albedo()(x, y) = albedo_total * inv_spp;
+                            }
+
+                            if (frame_buffer.has_mesh_ids()) {
+                                frame_buffer.mesh_ids()(x, y) = mesh_id;
                             }
 
                             if (frame_buffer.has_camera_normals()) {
                                 frame_buffer.camera_normals()(x, y) = avg_camera_normals;
+                            }
+
+                            if (frame_buffer.has_world_normals()) {
+                                frame_buffer.world_normals()(x, y) = scene_view.camera_to_world_[0].apply_to_direction(avg_camera_normals);
+                            }
+
+                            if (frame_buffer.has_received_power()) {
+                                frame_buffer.received_power()(x, y) = camera->pixel_radiance_to_power(x, y) * avg_radiance;
                             }
                         }
                     }

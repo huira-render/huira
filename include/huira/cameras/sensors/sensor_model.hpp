@@ -61,9 +61,8 @@ namespace huira {
         float gain_db() const { return unity_db - 20.f * std::log10(gain); }
 
         constexpr TSpectral default_qe() const {
-            TSpectral qe = 1.f / TSpectral::photon_energies();
-            qe = qe / qe.max(); // Normalize to max of 1
-            return qe;
+            TSpectral qe = TSpectral::photon_energies();
+            return 0.5 * qe / qe.total();
         }
     };
 
