@@ -230,24 +230,18 @@ namespace huira {
         // Embree barycentric convention: P = (1-u-v)*V0 + u*V1 + v*V2
         float w = 1.0f - hit.u - hit.v;
 
+        const auto& instance_transforms = batch.instances[mapping.instance_index];
+        const Transform<float>& xf = instance_transforms[0];
+
         // Hit position from the ray (more numerically stable than interpolating):
         isect.position = w * vertices[idx0].position
             + hit.u * vertices[idx1].position
             + hit.v * vertices[idx2].position;
         isect.wo = -ray.direction();
 
-        // Geometric normal (from Embree, in world/camera space since TLAS
-        // instance transforms are applied by Embree):
-        isect.normal_g = glm::normalize(hit.Ng);
-
-        const auto& instance_transforms = batch.instances[mapping.instance_index];
-        const Transform<float>& xf = instance_transforms[0];
-
-        // TODO: For motion blur, consider interpolating the transform at ray.time
-        // for more accurate shading normals on fast-moving objects.
-
         isect.position = xf.apply_to_point(isect.position);
-        isect.normal_g = glm::normalize(xf.apply_to_direction(isect.normal_g));
+        isect.normal_g = glm::normalize(xf.apply_to_direction(hit.Ng));
+
 
         // Interpolate shading normal:
         Vec3<float> n0 = vertices[idx0].normal;
@@ -255,6 +249,11 @@ namespace huira {
         Vec3<float> n2 = vertices[idx2].normal;
         Vec3<float> ns_object = w * n0 + hit.u * n1 + hit.v * n2;
         isect.normal_s = glm::normalize(xf.apply_to_direction(ns_object));
+
+        isect.normal_g = glm::dot(ray.direction(), isect.normal_g) < 0.0f ? isect.normal_g : -isect.normal_g;
+        if (glm::dot(isect.normal_s, isect.normal_g) < 0.0f) {
+            isect.normal_s = -isect.normal_s;
+        }
 
         // Interpolate UVs (transform-independent):
         isect.uv = w * vertices[idx0].uv
@@ -280,6 +279,10 @@ namespace huira {
 
             isect.tangent = glm::normalize(xf.apply_to_direction(t_object));
             isect.bitangent = glm::normalize(xf.apply_to_direction(bt_object));
+
+            if (glm::dot(glm::cross(isect.tangent, isect.bitangent), isect.normal_s) < 0.0f) {
+                isect.bitangent = -isect.bitangent;
+            }
         }
 
         return isect;

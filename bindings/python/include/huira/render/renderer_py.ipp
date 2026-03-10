@@ -22,6 +22,16 @@ namespace huira {
                 py::arg("spp"))
             .def("set_max_bounces", &Renderer::set_max_bounces,
                 py::arg("max_bounces"))
+
+            .def("set_dynamic_sampling", &Renderer::set_dynamic_sampling,
+                py::arg("dynamic_sampling") = true)
+            .def("set_min_samples", &Renderer::set_min_samples,
+                py::arg("min_samples"))
+            .def("set_variance_threshold", &Renderer::set_variance_threshold,
+                py::arg("threshold"))
+
+            .def("set_clamp_threshold", &Renderer::set_clamp_threshold,
+                py::arg("threshold"))
             .def("__repr__", [](const Renderer&) {
             return "Renderer()";
                 });
