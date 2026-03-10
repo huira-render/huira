@@ -27,7 +27,7 @@ def main():
 
     # Set the observation time
     time = huira.Time("2019-02-06T10:27:00")
-    exposure = huira.Interval(time, time + sec(0.05))
+    exposure = huira.Interval(time, time + sec(0.5))
 
     # Configure a camera model
     camera_model = scene.new_camera_model()
@@ -60,9 +60,12 @@ def main():
     
     # Create the renderer
     renderer = Renderer()
+    renderer.set_max_bounces(3);
+    renderer.set_samples_per_pixel(100);
+    renderer.set_clamp_threshold(0.001);
     
     # Create a scene view over the exposure interval
-    scene_view = SceneView(scene, exposure, navcam, huira.ObservationMode.ABERRATED_STATE)
+    scene_view = SceneView(scene, exposure, navcam, huira.ObservationMode.GEOMETRIC_STATE)
     
     # Render the current scene view
     renderer.render(scene_view, frame_buffer)

@@ -58,8 +58,6 @@ namespace huira {
 
         frame_buffer.clear();
 
-        const float inv_spp = 1.0f / static_cast<float>(spp_);
-
         // Tile-based parallel rendering:
         constexpr int TILE_SIZE = 16;
         int tiles_x = (fb_width + TILE_SIZE - 1) / TILE_SIZE;
@@ -89,6 +87,11 @@ namespace huira {
                             std::size_t mesh_id = std::numeric_limits<std::size_t>::max();
                             TSpectral albedo_total{ 0 };
                             Vec3<float> camera_normals{ 0 };
+
+                            TSpectral mean{ 0 };
+                            TSpectral M2{ 0 };   // sum of squared deviations
+                            int samples_taken = 0;
+                            float inv_samples = 0.0f;
 
                             for (int s = 0; s < spp_; ++s) {
                                 // Jittered sub-pixel sample:
@@ -195,16 +198,52 @@ namespace huira {
                                     ray = Ray<TSpectral>(new_origin, bs.wi);
                                 }
 
-                                pixel_radiance += sample_radiance;
+                                if (std::isnan(sample_radiance[0])) {
+                                    continue;
+                                }
+
+                                float max_val = sample_radiance.max();
+                                if (max_val > clamp_threshold_) {
+                                    sample_radiance *= (clamp_threshold_ / max_val);
+                                }
+
                                 
+
+                                // Welford's online mean/variance update:
+                                samples_taken++;
+                                if (dynamic_sampling_) {
+                                    TSpectral delta = sample_radiance - mean;
+                                    float inv_samples = (1.0f / static_cast<float>(samples_taken));
+                                    mean += delta * inv_samples;
+                                    TSpectral delta2 = sample_radiance - mean;
+                                    M2 += delta * delta2;
+                                }
+
+                                pixel_radiance += sample_radiance;
+
+                                // Early exit check (only after min_spp samples):
+                                if (dynamic_sampling_) {
+                                    if (s >= min_spp_ - 1) {
+                                        TSpectral variance = M2 * inv_samples;
+                                        // Normalize variance relative to mean luminance to avoid
+                                        // over-sampling dark regions:
+                                        float rel_variance = variance.max() / (mean.max() + 1e-4f);
+                                        if (rel_variance < variance_threshold_) {
+                                            break;
+                                        }
+                                    }
+                                }
                             }
+                            float inv_spp = 1.0f / static_cast<float>(samples_taken);
 
                             // Average over samples and write to frame buffer:
                             TSpectral avg_radiance = pixel_radiance * inv_spp;
                             Vec3<float> avg_camera_normals = glm::normalize(camera_normals * inv_spp);
 
-                            if (closest_depth < std::numeric_limits<float>::infinity()) {
-                                frame_buffer.depth()(x, y) = closest_depth;
+                            if (frame_buffer.has_depth()) {
+                                if (closest_depth < std::numeric_limits<float>::infinity()) {
+                                    frame_buffer.depth()(x, y) = closest_depth;
+                                }
                             }
 
                             if (frame_buffer.has_albedo()) {

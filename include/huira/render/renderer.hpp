@@ -27,6 +27,12 @@ namespace huira {
         void set_samples_per_pixel(int spp) { spp_ = spp; }
         void set_max_bounces(int max_bounces) { max_bounces_ = max_bounces; }
 
+        void set_dynamic_sampling(bool dynamic_sampling = true) { dynamic_sampling_ = dynamic_sampling; }
+        void set_min_samples(int min_samples) { min_spp_ = min_samples; }
+        void set_variance_threshold(float threshold) { variance_threshold_ = threshold; }
+
+        void set_clamp_threshold(float threshold) { clamp_threshold_ = threshold; }
+
     protected:
 
         virtual void path_trace_(SceneView<TSpectral>& scene_view, FrameBuffer<TSpectral>& frame_buffer);
@@ -42,6 +48,12 @@ namespace huira {
         // Settings
         int spp_ = 10;
         int max_bounces_ = 3;
+
+        bool dynamic_sampling_ = false;
+        int min_spp_ = 16.f;
+        float variance_threshold_ = 0.001f;
+
+        float clamp_threshold_ = std::numeric_limits<float>::infinity();
     };
 }
 

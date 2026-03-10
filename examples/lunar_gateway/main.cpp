@@ -57,7 +57,7 @@ int main(int argc, char** argv) {
     auto light = scene.root.new_instance(point_light);
     light.set_position(0_m, -200_m, 50_m);
 
-    scene.set_background_radiance(1e-4f);
+    scene.set_background_radiance(1e-7f);
 
     // Print the scene contents
     scene.print_contents();
@@ -66,32 +66,19 @@ int main(int argc, char** argv) {
     // Configure the render buffers
     auto frame_buffer = camera_model.make_frame_buffer();
     frame_buffer.enable_sensor_response();
-    frame_buffer.enable_camera_normals();
-    frame_buffer.enable_world_normals();
-    frame_buffer.enable_depth();
-    frame_buffer.enable_albedo();
-    frame_buffer.enable_received_power();
 
     // Create the renderer
     huira::Renderer<TSpectral> renderer;
     renderer.set_max_bounces(3);
     renderer.set_samples_per_pixel(100);
+    renderer.set_clamp_threshold(0.001f);
 
     // Create a scene view over the exposure interval
-    auto scene_view = huira::SceneView<TSpectral>(scene, exposure_interval, navcam, huira::ObservationMode::ABERRATED_STATE, 1);
+    auto scene_view = huira::SceneView<TSpectral>(scene, exposure_interval, navcam, huira::ObservationMode::GEOMETRIC_STATE, 1);
 
     // Render the current scene view
     renderer.render(scene_view, frame_buffer);
 
     // Save the results
     huira::write_image_png("output/gateway_render.png", frame_buffer.sensor_response(), 8);
-    huira::write_image_png("output/gateway_normals.png", huira::normal_map(frame_buffer.camera_normals()), 8);
-    huira::write_image_png("output/gateway_world_normals.png", huira::normal_map(frame_buffer.world_normals()), 8);
-    huira::write_image_png("output/gateway_depth.png", huira::depth_map(frame_buffer.depth()), 8);
-    huira::write_image_png("output/gateway_albedo.png", frame_buffer.albedo(), 8);
-    auto power = frame_buffer.received_power();
-    for (std::size_t i = 0; i < power.size(); ++i) {
-        power[i] = 1000000000.f * power[i];
-    }
-    huira::write_image_png("output/gateway_received_power.png", power, 8);
 }
