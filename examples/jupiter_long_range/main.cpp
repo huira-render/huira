@@ -9,7 +9,7 @@ using namespace std::chrono;
 
 using namespace huira::units::literals;
 
-using TSpectral = huira::RGB;
+using TSpectral = huira::Visible8;
 
 namespace fs = std::filesystem;
 
@@ -36,15 +36,15 @@ int main(int argc, char** argv) {
 
     // Configure a camera model
     auto camera_model = scene.new_camera_model();
-    camera_model.set_focal_length(55_mm);
+    camera_model.set_focal_length(125_mm);
     camera_model.set_fstop(3.30f);
     camera_model.set_sensor_pixel_pitch(8.5_um, 8.5_um);
     camera_model.set_sensor_resolution(1920, 1080);
-    camera_model.set_sensor_bit_depth(14);
+    camera_model.set_sensor_bit_depth(12);
     camera_model.use_aperture_psf(64, 16);
     
     huira::Time time("2016-09-19T16:22:05.728");
-    huira::Interval exposure_interval = huira::Interval::from_centered(time, 2_s);
+    huira::Interval exposure_interval = huira::Interval::from_centered(time, 1_s);
 
     // Load stars
     scene.load_stars(star_catalog_path, time);
@@ -82,15 +82,12 @@ int main(int argc, char** argv) {
     auto navcam = eci.new_instance(camera_model);
     navcam.set_position(7000_Km, 0_Km, 0_Km);
     navcam.set_velocity(0_Kmps, 8_Kmps, 0_Kmps);
-    navcam.set_angular_velocity(1_degps, 1_degps, 1_degps);
-    navcam.set_euler_angles(0_deg, 0_deg, 0_deg);
 
-    //auto quat = huira::Quaternion<double>(0.50865, -0.50865, 0.491198, 0.491198);
-    //navcam.set_rotation(huira::Rotation<double>::from_parent_to_local(quat));
+    auto quat = huira::Quaternion<double>(0.50865, -0.50865, 0.491198, 0.491198);
+    navcam.set_rotation(huira::Rotation<double>::from_parent_to_local(quat));
     
     // Configure the render buffers
     auto frame_buffer = camera_model.make_frame_buffer();
-    frame_buffer.enable_received_power();
     frame_buffer.enable_sensor_response();
 
     // Create the renderer

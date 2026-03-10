@@ -58,7 +58,6 @@ def main():
     
     # Configure the render buffers
     frame_buffer = camera_model.make_frame_buffer()
-    frame_buffer.enable_received_power()
     frame_buffer.enable_sensor_response()
     
     # Create the renderer

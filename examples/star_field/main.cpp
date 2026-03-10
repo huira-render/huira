@@ -59,11 +59,9 @@ int main(int argc, char** argv) {
     // Create an instance of the camera using SPICE configuration
     auto mapcam = scene.root.new_instance(camera_model);
     mapcam.set_spice("ORX_OCAMS_MAPCAM", "ORX_OCAMS_MAPCAM");
-    mapcam.set_body_angular_velocity(1_deg / 1_s, 1_deg / 1_s, 1_deg / 1_s);
     
     // Configure the render buffers
     auto frame_buffer = camera_model.make_frame_buffer();
-    frame_buffer.enable_received_power();
     frame_buffer.enable_sensor_response();
 
     // Create the renderer

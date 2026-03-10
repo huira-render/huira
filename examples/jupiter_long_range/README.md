@@ -6,6 +6,8 @@ This example shows you how to render a star field with Jupiter and it's moons.
 - [Python Example](#python-example)
 - [C++ Example](#c-example)
 
+![Example Render](https://www.huira.space/assets/examples/jupiter_long_range.png)
+
 ## Get the SPICE Kernels
 
 First, you'll need to download the required kernels:
