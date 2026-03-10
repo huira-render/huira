@@ -349,6 +349,57 @@ namespace huira {
 
 
     /**
+     * @brief Enable or disable depth of field effects.
+     * @param depth_of_field True to enable depth of field, false to disable
+     */
+    template <IsSpectral TSpectral>
+    void CameraModelHandle<TSpectral>::enable_depth_of_field(bool depth_of_field) const
+    {
+        this->get_()->enable_depth_of_field(depth_of_field);
+    }
+
+    /**
+     * @brief Set the focus distance for depth of field calculations.
+     * @param focus_distance Focus distance in meters
+     */
+    template <IsSpectral TSpectral>
+    void CameraModelHandle<TSpectral>::set_focus_distance(units::Meter focus_distance) const
+    {
+        this->get_()->set_focus_distance(focus_distance);
+    }
+
+    /**
+     * @brief Get the current focus distance for depth of field calculations.
+     * @return float Focus distance in meters
+     */
+    template <IsSpectral TSpectral>
+    float CameraModelHandle<TSpectral>::get_focus_distance() const
+    {
+        return this->get_()->get_focus_distance();
+    }
+
+    /**
+     * @brief Set the diopters for depth of field calculations.
+     * @param diopters Diopters value
+     */
+    template <IsSpectral TSpectral>
+    void CameraModelHandle<TSpectral>::set_diopters(float diopters) const
+    {
+        this->get_()->set_diopters(diopters);
+    }
+
+    /**
+     * @brief Get the current diopters value for depth of field calculations.
+     * @return float Diopters value
+     */
+    template <IsSpectral TSpectral>
+    float CameraModelHandle<TSpectral>::get_diopters() const
+    {
+        return this->get_()->get_diopters();
+    }
+
+
+    /**
      * @brief Project a 3D point in camera coordinates onto the image plane.
      * @param point_camera_coords 3D point in camera coordinates (meters)
      * @return Pixel 2D point on the image plane (pixels)

@@ -41,12 +41,14 @@ int main(int argc, char** argv) {
     camera_model.set_sensor_size(36_mm);
     camera_model.use_aperture_psf();
     camera_model.set_sensor_bias_level(10.f);
+    //camera_model.enable_depth_of_field();
+    //camera_model.set_focus_distance(1_m);
 
     // Create an instance of the camera and model
     auto navcam = scene.root.new_instance(camera_model);
     navcam.set_position(40_m, -40_m, 0_m);
     navcam.set_euler_angles(95_deg, 0_deg, 45_deg);
-    navcam.set_body_angular_velocity(0_deg / 1_s, 0_deg / 1_s, 10_deg / 1_s);
+    //navcam.set_body_angular_velocity(0_deg / 1_s, 0_deg / 1_s, 10_deg / 1_s);
 
     // Load the gateway mode
     auto gateway_model = scene.load_model(gateway_path);
@@ -74,7 +76,7 @@ int main(int argc, char** argv) {
     renderer.set_clamp_threshold(0.001f);
 
     // Create a scene view over the exposure interval
-    auto scene_view = huira::SceneView<TSpectral>(scene, exposure_interval, navcam, huira::ObservationMode::GEOMETRIC_STATE, 1);
+    auto scene_view = huira::SceneView<TSpectral>(scene, exposure_interval, navcam, huira::ObservationMode::GEOMETRIC_STATE, 3);
 
     // Render the current scene view
     renderer.render(scene_view, frame_buffer);

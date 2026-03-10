@@ -76,8 +76,7 @@ namespace huira {
                     int y1 = std::min(y0 + TILE_SIZE, fb_height);
 
                     // Per-tile RNG seeded from tile index for reproducibility:
-                    std::mt19937 rng(static_cast<unsigned int>(tile_idx));
-                    std::uniform_real_distribution<float> uniform(0.0f, 1.0f);
+                    RandomSampler<float> sampler(static_cast<unsigned int>(tile_idx));
 
                     for (int y = y0; y < y1; ++y) {
                         for (int x = x0; x < x1; ++x) {
@@ -95,14 +94,14 @@ namespace huira {
 
                             for (int s = 0; s < spp_; ++s) {
                                 // Jittered sub-pixel sample:
-                                float sx = static_cast<float>(x) + uniform(rng);
-                                float sy = static_cast<float>(y) + uniform(rng);
+                                float sx = static_cast<float>(x) + sampler.get_1d();
+                                float sy = static_cast<float>(y) + sampler.get_1d();
 
                                 // Generate camera ray from pixel coordinates:
-                                Ray<TSpectral> ray = camera->cast_ray(Pixel{ sx, sy });
+                                Ray<TSpectral> ray = camera->cast_ray(Pixel{ sx, sy }, sampler);
 
                                 // Motion blur: randomize time sample per ray
-                                float time = uniform(rng);  // [0, 1] maps to shutter interval
+                                float time = sampler.get_1d();  // [0, 1] maps to shutter interval
 
                                 TSpectral throughput{ 1 };
                                 TSpectral sample_radiance{ 0 };
@@ -174,8 +173,8 @@ namespace huira {
                                     }
 
                                     // Sample the BSDF:
-                                    float u1 = uniform(rng);
-                                    float u2 = uniform(rng);
+                                    float u1 = sampler.get_1d();
+                                    float u2 = sampler.get_1d();
 
                                     BSDFSample<TSpectral> bs = material->bsdf_sample(
                                         isect.wo, { params, shading_isect }, u1, u2);
@@ -188,7 +187,7 @@ namespace huira {
                                     // Russian roulette (after a few bounces):
                                     if (bounce >= 3) {
                                         float p_continue = std::min(0.95f, throughput.max());
-                                        if (uniform(rng) > p_continue) {
+                                        if (sampler.get_1d() > p_continue) {
                                             break;
                                         }
                                         throughput = throughput / p_continue;
@@ -213,7 +212,7 @@ namespace huira {
                                 samples_taken++;
                                 if (dynamic_sampling_) {
                                     TSpectral delta = sample_radiance - mean;
-                                    float inv_samples = (1.0f / static_cast<float>(samples_taken));
+                                    inv_samples = (1.0f / static_cast<float>(samples_taken));
                                     mean += delta * inv_samples;
                                     TSpectral delta2 = sample_radiance - mean;
                                     M2 += delta * delta2;
