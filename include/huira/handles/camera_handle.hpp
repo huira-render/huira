@@ -84,6 +84,12 @@ namespace huira {
         void use_aperture_psf(int radius = 64, int banks = 16) const;
         void delete_psf() const;
 
+        void enable_depth_of_field(bool depth_of_field = true) const;
+        void set_focus_distance(units::Meter focus_distance) const;
+        float get_focus_distance() const;
+        void set_diopters(float diopters) const;
+        float get_diopters() const;
+
         Pixel project_point(const Vec3<float>& point_camera_coords) const;
 
         FrameBuffer<TSpectral> make_frame_buffer() const;

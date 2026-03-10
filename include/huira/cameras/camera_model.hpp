@@ -7,7 +7,6 @@
 #include "huira/core/concepts/numeric_concepts.hpp"
 #include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/core/types.hpp"
-#include "huira/render/sampler.hpp"
 
 #include "huira/cameras/apertures/aperture.hpp"
 #include "huira/cameras/distortion/brown_distortion.hpp"
@@ -19,6 +18,7 @@
 #include "huira/render/frame_buffer.hpp"
 #include "huira/render/frustum.hpp"
 #include "huira/render/ray.hpp"
+#include "huira/render/sampler.hpp"
 #include "huira/scene/node.hpp"
 #include "huira/scene/scene_object.hpp"
 
@@ -87,9 +87,16 @@ namespace huira {
         const Image<TSpectral>& get_psf_kernel(float u, float v) const { return psf_->get_kernel(u, v); }
         int get_psf_radius() const { return psf_->get_radius(); }
 
+        void enable_depth_of_field(bool depth_of_field = true) { depth_of_field_ = depth_of_field; }
+        void set_focus_distance(units::Meter focus_distance);
+        float get_focus_distance() const { return d_; }
+        void set_diopters(float diopters);
+        float get_diopters() const;
+
         Pixel project_point(const Vec3<float>& point_camera_coords) const;
         Pixel try_project_point(const Vec3<float>& point_camera_coords) const;
 
+        Ray<TSpectral> cast_ray(const Pixel& pixel, Sampler<float>& sampler) const;
         Ray<TSpectral> cast_ray(const Pixel& pixel) const;
         Ray<TSpectral> cast_ray(int x, int y) const;
 
@@ -122,6 +129,7 @@ namespace huira {
         std::unique_ptr<PSF<TSpectral>> psf_ = nullptr;
 
         bool use_aperture_psf_ = false;
+        float d_ = std::numeric_limits<float>::infinity();
 
         std::uint64_t id_ = 0;
         static inline std::uint64_t next_id_ = 0;
@@ -133,6 +141,8 @@ namespace huira {
         float rx_;
         float ry_;
         void compute_intrinsics_();
+
+        bool depth_of_field_ = false;
 
         template <IsFloatingPoint TFloat>
         Vec3<TFloat> pixel_to_direction_(const Pixel& pixel) const;

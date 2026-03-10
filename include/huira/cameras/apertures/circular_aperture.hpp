@@ -5,6 +5,7 @@
 #include "huira/cameras/apertures/aperture.hpp"
 #include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/core/units/units.hpp"
+#include "huira/render/sampler.hpp"
 
 namespace huira {
 
@@ -25,6 +26,8 @@ namespace huira {
         void set_area(units::SquareMeter area) override;
         float get_area() const override { return area_; }
 
+        Vec2<float> sample(Sampler<float>& sampler) const override;
+
         void set_diameter(units::Meter diameter);
         float get_diameter() const;
 
@@ -32,6 +35,8 @@ namespace huira {
 
     private:
         float area_ = 1.f;
+        float diameter_;
+        float radius_;
     };
 }
 

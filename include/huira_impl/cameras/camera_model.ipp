@@ -251,6 +251,53 @@ namespace huira {
 
 
     /**
+     * @brief Set the focus distance for depth of field calculations.
+     * @param focus_distance Focus distance in meters
+     */
+    template <IsSpectral TSpectral>
+    void CameraModel<TSpectral>::set_focus_distance(units::Meter focus_distance)
+    {
+        float focus_distance_ = static_cast<float>(focus_distance.to_si());
+        if (std::isnan(focus_distance_)) {
+            HUIRA_THROW_ERROR("CameraModel::set_focus_distance - Focus distance cannot be NaN");
+        }
+        if (std::abs(focus_distance_) < 1e-12f) {
+            HUIRA_THROW_ERROR("CameraModel::set_focus_distance - Focus distance is too small");
+        }
+        d_ = focus_distance_;
+    }
+
+    /**
+     * @brief Get the current focus distance for depth of field calculations.
+     * @return float Focus distance in meters
+     */
+    template <IsSpectral TSpectral>
+    void CameraModel<TSpectral>::set_diopters(float diopters)
+    {
+        float focus_distance;
+        if (std::abs(diopters) < 1e-12f) {
+            focus_distance = std::numeric_limits<float>::infinity();
+        }
+        else {
+            focus_distance = 1.f / diopters;
+        }
+        set_focus_distance(units::Meter(focus_distance));
+    }
+
+    /**
+     * @brief Get the current focus distance in diopters.
+     * @return float Focus distance in diopters
+     */
+    template <IsSpectral TSpectral>
+    float CameraModel<TSpectral>::get_diopters() const
+    {
+        if (std::isinf(d_)) {
+            return 0.f;
+        }
+        return 1.f / d_;
+    }
+
+    /**
      * @brief Project a 3D point in camera coordinates onto the image plane.
      *
      * Uses the pinhole camera model and applies distortion if present.
@@ -286,15 +333,52 @@ namespace huira {
     }
 
     template <IsSpectral TSpectral>
-    Ray<TSpectral> CameraModel<TSpectral>::cast_ray(const Pixel& pixel) const
+    Ray<TSpectral> CameraModel<TSpectral>::cast_ray(const Pixel& pixel, Sampler<float>& sampler) const
     {
+        assert(pixel[0] >= 0 && pixel[0] < rx_ && pixel[1] >= 0 && pixel[1] < ry_);
+
+        Vec3<float> origin{ 0,0,0 };
+        Vec3<float> direction{ 0,0,1 };
         if (distortion_) {
             float u = pixel[0] / static_cast<float>(rx_ - 1);
             float v = pixel[1] / static_cast<float>(ry_ - 1);
-            Vec3<float> direction = distortion_field_.sample_bilinear<WrapMode::Clamp>(u, v);
-            return Ray<TSpectral>{ Vec3<float>{0.f, 0.f, 0.f}, glm::normalize(direction) };
+            direction = distortion_field_.sample_bilinear<WrapMode::Clamp>(u, v);
         }
-        return cast_ray_(pixel);
+        else {
+            direction = pixel_to_direction_<float>(pixel);
+        }
+
+        if (depth_of_field_) {
+            Vec2<float> aperture_sample = aperture_->sample(sampler);
+            Vec3<float> aperture_point{ aperture_sample.x, aperture_sample.y, 0.f };
+
+            if (!std::isinf(d_)) {
+                Vec3<float> focal_point = direction * d_;
+                direction = focal_point - aperture_point;
+            }
+            origin = aperture_point;
+        }
+
+        return Ray<TSpectral>{ origin, glm::normalize(direction) };
+    }
+
+    template <IsSpectral TSpectral>
+    Ray<TSpectral> CameraModel<TSpectral>::cast_ray(const Pixel& pixel) const
+    {
+        assert(pixel[0] >= 0 && pixel[0] < rx_ && pixel[1] >= 0 && pixel[1] < ry_);
+
+        Vec3<float> origin{ 0,0,0 };
+        Vec3<float> direction{ 0,0,1 };
+        if (distortion_) {
+            float u = pixel[0] / static_cast<float>(rx_ - 1);
+            float v = pixel[1] / static_cast<float>(ry_ - 1);
+            direction = distortion_field_.sample_bilinear<WrapMode::Clamp>(u, v);
+        }
+        else {
+            direction = pixel_to_direction_<float>(pixel);
+        }
+
+        return Ray<TSpectral>{ origin, glm::normalize(direction) };
     }
 
     template <IsSpectral TSpectral>
@@ -412,14 +496,7 @@ namespace huira {
             direction = Vec3<TFloat>{ dir_x, dir_y, static_cast<TFloat>(1) };
         }
 
-        return glm::normalize(direction);
-    }
-
-    template <IsSpectral TSpectral>
-    Ray<TSpectral> CameraModel<TSpectral>::cast_ray_(const Pixel& pixel) const
-    {
-        Vec3<float> origin{ 0.f, 0.f, 0.f };
-        return Ray<TSpectral>{ origin, pixel_to_direction_<float>(pixel) };
+        return direction;
     }
 
     template <IsSpectral TSpectral>
@@ -432,8 +509,7 @@ namespace huira {
         for (int x = 0; x < res.x; ++x) {
             for (int y = 0; y < res.y; ++y) {
                 Pixel pixel{ static_cast<float>(x), static_cast<float>(y) };
-                Ray<TSpectral> ray = cast_ray_(pixel);
-                distortion_field_(x, y) = ray.direction();
+                distortion_field_(x, y) = glm::normalize(pixel_to_direction_<float>(pixel));
             }
         }
     }
@@ -447,10 +523,10 @@ namespace huira {
         for (int x = 0; x < res.x; ++x) {
             for (int y = 0; y < res.y; ++y) {
                 // Calculate normalized directions to pixel corners
-                Vec3<double> c0 = pixel_to_direction_<double>(Pixel{static_cast<float>(x),     static_cast<float>(y)});
-                Vec3<double> c1 = pixel_to_direction_<double>(Pixel{static_cast<float>(x + 1), static_cast<float>(y)});
-                Vec3<double> c2 = pixel_to_direction_<double>(Pixel{static_cast<float>(x + 1), static_cast<float>(y + 1)});
-                Vec3<double> c3 = pixel_to_direction_<double>(Pixel{static_cast<float>(x),     static_cast<float>(y + 1)});
+                Vec3<double> c0 = glm::normalize(pixel_to_direction_<double>(Pixel{static_cast<float>(x),     static_cast<float>(y)}));
+                Vec3<double> c1 = glm::normalize(pixel_to_direction_<double>(Pixel{static_cast<float>(x + 1), static_cast<float>(y)}));
+                Vec3<double> c2 = glm::normalize(pixel_to_direction_<double>(Pixel{static_cast<float>(x + 1), static_cast<float>(y + 1)}));
+                Vec3<double> c3 = glm::normalize(pixel_to_direction_<double>(Pixel{static_cast<float>(x),     static_cast<float>(y + 1)}));
 
                 // Compute solid angle as sum of two triangular areas
                 double omega1 = triangle_solid_angle_(c0, c1, c2);

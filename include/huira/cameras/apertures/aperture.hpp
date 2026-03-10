@@ -6,6 +6,7 @@
 #include "huira/cameras/psfs/psf.hpp"
 #include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/core/units/units.hpp"
+#include "huira/render/sampler.hpp"
 
 namespace huira {
 
@@ -23,6 +24,8 @@ namespace huira {
 
         virtual float get_area() const = 0;
         virtual void set_area(units::SquareMeter area) = 0;
+
+        virtual Vec2<float> sample(Sampler<float>& sample) const = 0;
 
         virtual std::unique_ptr<PSF<TSpectral>> make_psf(units::Meter focal_length, units::Meter pitch_x, units::Meter pitch_y, int radius, int banks) = 0;
     };

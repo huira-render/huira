@@ -21,6 +21,8 @@ namespace huira {
     CircularAperture<TSpectral>::CircularAperture(units::Meter diameter)
     {
         this->set_diameter(diameter);
+        diameter_ = static_cast<float>(diameter.to_si());
+        radius_ = diameter_ / 2.f;
     }
 
 
@@ -35,6 +37,33 @@ namespace huira {
     void CircularAperture<TSpectral>::set_area(units::SquareMeter area)
     {
         this->area_ = static_cast<float>(area.to_si());
+        diameter_ = std::sqrt(4.f * this->area_ / PI<float>());
+        radius_ = diameter_ / 2.f;
+    }
+
+    template <IsSpectral TSpectral>
+    Vec2<float> CircularAperture<TSpectral>::sample(Sampler<float>& sampler) const
+    {
+        Vec2<float> u = sampler.get_2d();
+
+        // Map from [0,1] to [-1,1]
+        float a = 2.f * u.x - 1.f;
+        float b = 2.f * u.y - 1.f;
+
+        float r, theta;
+        if (a * a > b * b) {
+            r = a;
+            theta = (PI<float>() / 4.f) * (b / a);
+        }
+        else if (b != 0.f) {
+            r = b;
+            theta = (PI<float>() / 2.f) - (PI<float>() / 4.f) * (a / b);
+        }
+        else {
+            return { 0.f, 0.f };
+        }
+
+        return { radius_ * r * std::cos(theta), radius_ * r * std::sin(theta) };
     }
 
 
@@ -49,7 +78,9 @@ namespace huira {
     void CircularAperture<TSpectral>::set_diameter(units::Meter diameter) 
     { 
         float d = static_cast<float>(diameter.to_si());
-        this->area_ = PI<float>() * (d * d) / 4.f; 
+        this->area_ = PI<float>() * (d * d) / 4.f;
+        this->diameter_ = d;
+        this->radius_ = d / 2.f;
     }
 
 
@@ -63,7 +94,7 @@ namespace huira {
     template <IsSpectral TSpectral>
     float CircularAperture<TSpectral>::get_diameter() const 
     {
-        return std::sqrt(4.f * this->area_ / PI<float>());
+        return diameter_;
     }
 
 
@@ -82,7 +113,7 @@ namespace huira {
     template <IsSpectral TSpectral>
     std::unique_ptr<PSF<TSpectral>> CircularAperture<TSpectral>::make_psf(units::Meter focal_length, units::Meter pitch_x, units::Meter pitch_y, int radius, int banks)
     {
-        units::Meter diameter(get_diameter());
+        units::Meter diameter(diameter_);
         return std::make_unique<AiryDisk<TSpectral>>(focal_length, pitch_x, pitch_y, diameter, radius, banks);
     }
 }
