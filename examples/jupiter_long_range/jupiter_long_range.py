@@ -42,7 +42,7 @@ def main():
     
     # Set the observation time
     time = huira.Time("2016-09-19T16:22:05.728")
-    exposure = huira.Interval.from_center(time, sec(1))
+    exposure = huira.Interval.from_centered(time, sec(1))
     
     # Load stars
     scene.load_stars(star_catalog_path, time)

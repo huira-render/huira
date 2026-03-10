@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <vector>
+#include <limits>
 
 #include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/render/frame_buffer.hpp"
@@ -50,7 +51,7 @@ namespace huira {
         int max_bounces_ = 3;
 
         bool dynamic_sampling_ = false;
-        int min_spp_ = 16.f;
+        int min_spp_ = 16;
         float variance_threshold_ = 0.001f;
 
         float clamp_threshold_ = std::numeric_limits<float>::infinity();
