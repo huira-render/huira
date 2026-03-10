@@ -13,7 +13,6 @@
 
 
 namespace huira {
-
     /**
      * @brief Construct a SceneView for a given scene, time, camera, and observation mode.
      *
@@ -50,19 +49,23 @@ namespace huira {
 
         // Extract camera pose:
         std::vector<Transform<double>> observer_transforms(temporal_samples_.size());
+        std::vector<Transform<double>> observer_inverses(temporal_samples_.size());
+        camera_to_world_ = std::vector<Transform<float>>(temporal_samples_.size());
         for (std::size_t i = 0; i < temporal_samples_.size(); ++i) {
             Transform<double> obs_ssb = camera_node->get_ssb_transform_(temporal_samples_[0], temporal_samples_[i]);
             Rotation<double> sensor_rotation = camera_model_->sensor_rotation();
             obs_ssb.rotation = obs_ssb.rotation * sensor_rotation;
 
             observer_transforms[i] = obs_ssb;
+            observer_inverses[i] = obs_ssb.inverse();
+            camera_to_world_[i] = static_cast<Transform<float>>(observer_inverses[i]);
         }
 
         // Copy the background radiance:
         background_ = scene.background_;
 
         // Collect geometry and lights by traversing the scene graph:
-        traverse_and_collect_(scene.root_node_, observer_transforms, obs_mode);
+        traverse_and_collect_(scene.root_node_, observer_transforms, observer_inverses, obs_mode);
         HUIRA_LOG_INFO("SceneView collected " + std::to_string(geometry_.size()) + " unique mesh batches and " +
             std::to_string(lights_.size()) + " light instances.");
 
@@ -228,7 +231,9 @@ namespace huira {
         float w = 1.0f - hit.u - hit.v;
 
         // Hit position from the ray (more numerically stable than interpolating):
-        isect.position = ray.at(hit.t);
+        isect.position = w * vertices[idx0].position
+            + hit.u * vertices[idx1].position
+            + hit.v * vertices[idx2].position;
         isect.wo = -ray.direction();
 
         // Geometric normal (from Embree, in world/camera space since TLAS
@@ -240,6 +245,9 @@ namespace huira {
 
         // TODO: For motion blur, consider interpolating the transform at ray.time
         // for more accurate shading normals on fast-moving objects.
+
+        isect.position = xf.apply_to_point(isect.position);
+        isect.normal_g = glm::normalize(xf.apply_to_direction(isect.normal_g));
 
         // Interpolate shading normal:
         Vec3<float> n0 = vertices[idx0].normal;
@@ -277,6 +285,48 @@ namespace huira {
         return isect;
     }
 
+    template <IsSpectral TSpectral>
+    std::vector<HitRecord> SceneView<TSpectral>::intersect(const std::vector<Ray<TSpectral>>& rays, float time) const
+    {
+        std::vector<HitRecord> hits(rays.size());
+        tbb::parallel_for(tbb::blocked_range<size_t>(0, rays.size()),
+            [&](const tbb::blocked_range<size_t>& range) {
+                for (size_t i = range.begin(); i < range.end(); ++i) {
+                    hits[i] = intersect(rays[i], time);
+                }
+            });
+        return hits;
+    }
+
+    template <IsSpectral TSpectral>
+    std::vector<bool> SceneView<TSpectral>::occluded(const std::vector<Ray<TSpectral>>& rays, float t_far, float time) const
+    {
+        std::vector<bool> occlusion_results(rays.size());
+        tbb::parallel_for(tbb::blocked_range<size_t>(0, rays.size()),
+            [&](const tbb::blocked_range<size_t>& range) {
+                for (size_t i = range.begin(); i < range.end(); ++i) {
+                    occlusion_results[i] = occluded(rays[i], t_far, time);
+                }
+            });
+        return occlusion_results;
+    }
+
+    template <IsSpectral TSpectral>
+    std::vector<Interaction<TSpectral>> SceneView<TSpectral>::resolve_hits(
+        const std::vector<Ray<TSpectral>>& rays,
+        const std::vector<HitRecord>& hits) const
+    {
+        std::vector<Interaction<TSpectral>> interactions(hits.size());
+        tbb::parallel_for(tbb::blocked_range<size_t>(0, hits.size()),
+            [&](const tbb::blocked_range<size_t>& range) {
+                for (size_t i = range.begin(); i < range.end(); ++i) {
+                    if (hits[i].hit()) {
+                        interactions[i] = resolve_hit(rays[i], hits[i]);
+                    }
+                }
+            });
+        return interactions;
+    }
 
 
     /**
@@ -286,21 +336,25 @@ namespace huira {
      *
      * @param node Node to traverse
      * @param t_obs Observation time
-     * @param obs_ssb Observer SSB transform
+     * @param obs_ssb Observer SSB transforms
+     * @param obs_ssb Observer SSB inverse transforms
      * @param obs_mode Observation mode
      */
     template <IsSpectral TSpectral>
     void SceneView<TSpectral>::traverse_and_collect_(const std::shared_ptr<Node<TSpectral>>& node,
-        const std::vector<Transform<double>>& observer_transforms, ObservationMode obs_mode)
+        const std::vector<Transform<double>>& observer_transforms,
+        const std::vector<Transform<double>>& observer_inverses,
+        ObservationMode obs_mode)
     {
         if (auto instance = std::dynamic_pointer_cast<Instance<TSpectral>>(node)) {
             std::vector<Transform<float>> render_transforms(temporal_samples_.size());
             for (std::size_t i = 0; i < temporal_samples_.size(); ++i) {
                 const Transform<double>& obs_ssb = observer_transforms[i];
+                const Transform<double>& obs_inv = observer_inverses[i];
 
                 Transform<double> instance_ssb = node->get_apparent_transform(obs_mode, temporal_samples_[0], temporal_samples_[i], obs_ssb);
 
-                Transform<double> local_apparent = obs_ssb.inverse() * instance_ssb;
+                Transform<double> local_apparent = obs_inv * instance_ssb;
 
                 // Down-cast to single precision once in local space:
                 render_transforms[i] = static_cast<Transform<float>>(local_apparent);
@@ -313,7 +367,7 @@ namespace huira {
         }
 
         for (const auto& child : node->get_children()) {
-            traverse_and_collect_(child, observer_transforms, obs_mode);
+            traverse_and_collect_(child, observer_transforms, observer_inverses, obs_mode);
         }
     }
 

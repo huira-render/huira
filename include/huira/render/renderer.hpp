@@ -40,7 +40,7 @@ namespace huira {
         RandomSampler<float> sampler_;
 
         // Settings
-        int spp_ = 1000;
+        int spp_ = 10;
         int max_bounces_ = 3;
     };
 }
