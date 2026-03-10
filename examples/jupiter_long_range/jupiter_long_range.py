@@ -37,7 +37,7 @@ def main():
     camera_model.set_fstop(3.30)
     camera_model.set_sensor_pixel_pitch(um(8.5), um(8.5))
     camera_model.set_sensor_resolution(1920, 1080)
-    camera_model.set_sensor_bit_depth(14)
+    camera_model.set_sensor_bit_depth(12)
     camera_model.use_aperture_psf(64, 16)
     
     # Set the observation time
@@ -91,7 +91,6 @@ def main():
     
     # Configure the render buffers
     frame_buffer = camera_model.make_frame_buffer()
-    frame_buffer.enable_received_power()
     frame_buffer.enable_sensor_response()
     
     # Create the renderer

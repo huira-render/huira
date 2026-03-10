@@ -6,6 +6,8 @@ This example shows you how to render a star field using OSIRIS-REx ephemerides.
 - [Python Example](#python-example)
 - [C++ Example](#c-example)
 
+![Example Render](https://www.huira.space/assets/examples/starfield.png)
+
 ## Get the SPICE Kernels
 
 First, you'll need to download the required OSIRIS-REx kernels:

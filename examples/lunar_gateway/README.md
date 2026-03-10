@@ -6,6 +6,8 @@ This example shows you how to render a star field with Jupiter and it's moons.
 - [Python Example](#python-example)
 - [C++ Example](#c-example)
 
+![Example Render](https://www.huira.space/assets/examples/gateway_render.png)
+
 ## Get the Lunar Gateway Model
 
 First, you'll need to download the required kernels:
