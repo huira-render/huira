@@ -76,7 +76,7 @@ before-all = [
     "curl -fsSL https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-MacOSX-$(uname -m).sh -o /tmp/miniforge.sh",
     "bash /tmp/miniforge.sh -b -p $HOME/conda",
     "rm /tmp/miniforge.sh",
-    "$HOME/conda/bin/conda install -y -c conda-forge assimp cfitsio cspice embree3 fftw gdal glm indicators libcurl libtiff libpng libjpeg-turbo tbb-devel",
+    "$HOME/conda/bin/conda install -y -c conda-forge assimp cfitsio cspice embree fftw gdal glm indicators libcurl libtiff libpng libjpeg-turbo tbb-devel",
 ]
 environment = { CONDA_PREFIX = "$HOME/conda", REPAIR_LIBRARY_PATH = "$HOME/conda/lib", MACOSX_DEPLOYMENT_TARGET = "11.0" }
 repair-wheel-command = """\
@@ -91,7 +91,7 @@ repair-wheel-command = """\
 before-all = [
     "curl -fsSL https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Windows-x86_64.exe -o %TEMP%\\miniforge.exe",
     "start /wait \"\" %TEMP%\\miniforge.exe /InstallationType=JustMe /RegisterPython=0 /AddToPath=0 /S /D=C:\\Miniconda",
-    "C:\\Miniconda\\condabin\\conda.bat install -y -c conda-forge assimp cfitsio cspice embree3 fftw gdal glm indicators libcurl libtiff libpng libjpeg-turbo tbb-devel",
+    "C:\\Miniconda\\condabin\\conda.bat install -y -c conda-forge assimp cfitsio cspice embree fftw gdal glm indicators libcurl libtiff libpng libjpeg-turbo tbb-devel",
 ]
 environment = { CONDA_PREFIX = "C:\\Miniconda" }
 before-build = "pip install delvewheel"
