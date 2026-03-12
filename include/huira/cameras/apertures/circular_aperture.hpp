@@ -24,14 +24,18 @@ namespace huira {
         ~CircularAperture() override = default;
 
         void set_area(units::SquareMeter area) override;
-        float get_area() const override { return area_; }
+        units::SquareMeter get_area() const override { return units::SquareMeter(area_); }
 
         Vec2<float> sample(Sampler<float>& sampler) const override;
 
         void set_diameter(units::Meter diameter);
-        float get_diameter() const;
+        units::Meter get_diameter() const;
 
         std::unique_ptr<PSF<TSpectral>> make_psf(units::Meter focal_length, units::Meter pitch_x, units::Meter pitch_y, int radius, int banks) override;
+
+
+    protected:
+        void rasterize_kernel_(Image<float>& kernel, float radius_pixels) override;
 
     private:
         float area_ = 1.f;

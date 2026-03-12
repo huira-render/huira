@@ -37,7 +37,7 @@ namespace huira {
         using Handle<CameraModel<TSpectral>>::Handle;
 
         void set_focal_length(units::Millimeter focal_length) const;
-        float focal_length() const;
+        units::Millimeter focal_length() const;
 
         void set_fstop(float fstop) const;
         float fstop() const;
@@ -86,9 +86,9 @@ namespace huira {
 
         void enable_depth_of_field(bool depth_of_field = true) const;
         void set_focus_distance(units::Meter focus_distance) const;
-        float get_focus_distance() const;
-        void set_diopters(float diopters) const;
-        float get_diopters() const;
+        units::Meter get_focus_distance() const;
+        void set_diopters(units::Diopter diopters) const;
+        units::Diopter get_diopters() const;
 
         Pixel project_point(const Vec3<float>& point_camera_coords) const;
 
