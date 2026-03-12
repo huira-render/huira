@@ -92,9 +92,9 @@ namespace huira {
      * @return The diameter in meters.
      */
     template <IsSpectral TSpectral>
-    float CircularAperture<TSpectral>::get_diameter() const 
+    units::Meter CircularAperture<TSpectral>::get_diameter() const 
     {
-        return diameter_;
+        return units::Meter(diameter_);
     }
 
 
@@ -115,5 +115,12 @@ namespace huira {
     {
         units::Meter diameter(diameter_);
         return std::make_unique<AiryDisk<TSpectral>>(focal_length, pitch_x, pitch_y, diameter, radius, banks);
+    }
+
+    template <IsSpectral TSpectral>
+    void CircularAperture<TSpectral>::rasterize_kernel_(Image<float>& kernel, float radius_pixels)
+    {
+        (void)kernel;
+        (void)radius_pixels;
     }
 }

@@ -46,7 +46,7 @@ namespace huira {
         CameraModel& operator=(const CameraModel&) = delete;
 
         void set_focal_length(units::Millimeter focal_length);
-        float focal_length() const { return focal_length_; }
+        units::Millimeter focal_length() const { return units::Millimeter(focal_length_); }
 
         void set_fstop(float fstop);
         float fstop() const;
@@ -89,9 +89,9 @@ namespace huira {
 
         void enable_depth_of_field(bool depth_of_field = true) { depth_of_field_ = depth_of_field; }
         void set_focus_distance(units::Meter focus_distance);
-        float get_focus_distance() const { return d_; }
-        void set_diopters(float diopters);
-        float get_diopters() const;
+        units::Meter get_focus_distance() const { return units::Meter(d_); }
+        void set_diopters(units::Diopter diopters);
+        units::Diopter get_diopters() const;
 
         Pixel project_point(const Vec3<float>& point_camera_coords) const;
         Pixel try_project_point(const Vec3<float>& point_camera_coords) const;

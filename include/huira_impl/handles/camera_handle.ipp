@@ -18,7 +18,7 @@ namespace huira {
      * @return float Focal length
      */
     template <IsSpectral TSpectral>
-    float CameraModelHandle<TSpectral>::focal_length() const
+    units::Millimeter CameraModelHandle<TSpectral>::focal_length() const
     {
         return this->get_()->focal_length();
     }
@@ -373,7 +373,7 @@ namespace huira {
      * @return float Focus distance in meters
      */
     template <IsSpectral TSpectral>
-    float CameraModelHandle<TSpectral>::get_focus_distance() const
+    units::Meter CameraModelHandle<TSpectral>::get_focus_distance() const
     {
         return this->get_()->get_focus_distance();
     }
@@ -383,7 +383,7 @@ namespace huira {
      * @param diopters Diopters value
      */
     template <IsSpectral TSpectral>
-    void CameraModelHandle<TSpectral>::set_diopters(float diopters) const
+    void CameraModelHandle<TSpectral>::set_diopters(units::Diopter diopters) const
     {
         this->get_()->set_diopters(diopters);
     }
@@ -393,7 +393,7 @@ namespace huira {
      * @return float Diopters value
      */
     template <IsSpectral TSpectral>
-    float CameraModelHandle<TSpectral>::get_diopters() const
+    units::Diopter CameraModelHandle<TSpectral>::get_diopters() const
     {
         return this->get_()->get_diopters();
     }

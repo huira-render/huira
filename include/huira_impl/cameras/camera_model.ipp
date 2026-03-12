@@ -31,7 +31,7 @@ namespace huira {
     template <IsSpectral TSpectral>
     void CameraModel<TSpectral>::set_focal_length(units::Millimeter focal_length)
     {
-        focal_length_ = static_cast<float>(focal_length.to_si());
+        focal_length_ = focal_length.to_si_f();
         compute_intrinsics_();
         if (use_aperture_psf_) {
             units::Meter f(focal_length_);
@@ -257,7 +257,7 @@ namespace huira {
     template <IsSpectral TSpectral>
     void CameraModel<TSpectral>::set_focus_distance(units::Meter focus_distance)
     {
-        float focus_distance_ = static_cast<float>(focus_distance.to_si());
+        float focus_distance_ = focus_distance.to_si_f();
         if (std::isnan(focus_distance_)) {
             HUIRA_THROW_ERROR("CameraModel::set_focus_distance - Focus distance cannot be NaN");
         }
@@ -272,16 +272,16 @@ namespace huira {
      * @return float Focus distance in meters
      */
     template <IsSpectral TSpectral>
-    void CameraModel<TSpectral>::set_diopters(float diopters)
+    void CameraModel<TSpectral>::set_diopters(units::Diopter diopters)
     {
-        float focus_distance;
-        if (std::abs(diopters) < 1e-12f) {
-            focus_distance = std::numeric_limits<float>::infinity();
+        units::Meter focus_distance;
+        if (std::abs(diopters.to_si_f()) < 1e-12f) {
+            focus_distance = units::Meter(std::numeric_limits<float>::infinity());
         }
         else {
             focus_distance = 1.f / diopters;
         }
-        set_focus_distance(units::Meter(focus_distance));
+        set_focus_distance(focus_distance);
     }
 
     /**
@@ -289,12 +289,12 @@ namespace huira {
      * @return float Focus distance in diopters
      */
     template <IsSpectral TSpectral>
-    float CameraModel<TSpectral>::get_diopters() const
+    units::Diopter CameraModel<TSpectral>::get_diopters() const
     {
         if (std::isinf(d_)) {
-            return 0.f;
+            return units::Diopter(0.f);
         }
-        return 1.f / d_;
+        return units::Diopter(1.f / d_);
     }
 
     /**
@@ -415,7 +415,7 @@ namespace huira {
     float CameraModel<TSpectral>::get_projected_aperture_area(const Vec3<float>& direction) const
     {
         float cosTheta = glm::dot(glm::normalize(direction), Vec3<float>{0, 0, 1});
-        return this->aperture_->get_area() * std::abs(cosTheta);
+        return this->aperture_->get_area().to_si_f() * std::abs(cosTheta);
     }
 
 
@@ -445,8 +445,8 @@ namespace huira {
     template <IsSpectral TSpectral>
     float CameraModel<TSpectral>::fstop() const
     {
-        this->aperture_->get_area();
-        float aperture_diameter = 2.f * std::sqrt(this->aperture_->get_area() / PI<float>());
+        float area = this->aperture_->get_area().to_si_f();
+        float aperture_diameter = 2.f * std::sqrt(area / PI<float>());
         return focal_length_ / aperture_diameter;
     }
 
