@@ -125,7 +125,14 @@ namespace huira::units {
     // ===================== //
     // === Derived Units === //
     // ===================== //
-    /// @defroup velocity_units Velocity Units
+    /// @defgroup diopter_units Diopter units
+    /// @{
+    using Diopter = Quantity<ReciprocalLength, std::ratio<1, 1>>;
+    using Millidiopter = Quantity<ReciprocalLength, std::milli>;
+    using Microdiopter = Quantity<ReciprocalLength, std::micro>;
+    /// @}
+
+    /// @defgroup velocity_units Velocity Units
     /// @{
     using MetersPerSecond = Quantity<Velocity, std::ratio<1, 1>>;
     using KilometersPerSecond = Quantity<Velocity, std::kilo>;
@@ -320,6 +327,14 @@ namespace huira::units {
         constexpr Kilowatt operator""_KW(long double value) { return Kilowatt(static_cast<double>(value)); }
         constexpr Megawatt operator""_MW(unsigned long long value) { return Megawatt(static_cast<double>(value)); }
         constexpr Megawatt operator""_MW(long double value) { return Megawatt(static_cast<double>(value)); }
+
+        // Diopter literals
+        constexpr Diopter operator""_dpt(unsigned long long value) { return Diopter(static_cast<double>(value)); }
+        constexpr Diopter operator""_dpt(long double value) { return Diopter(static_cast<double>(value)); }
+        constexpr Millidiopter operator""_mdpt(unsigned long long value) { return Millidiopter(static_cast<double>(value)); }
+        constexpr Millidiopter operator""_mdpt(long double value) { return Millidiopter(static_cast<double>(value)); }
+        constexpr Microdiopter operator""_udpt(unsigned long long value) { return Microdiopter(static_cast<double>(value)); }
+        constexpr Microdiopter operator""_udpt(long double value) { return Microdiopter(static_cast<double>(value)); }
 
         // Velocity literals
         constexpr MetersPerSecond operator""_mps(unsigned long long value) { return MetersPerSecond(static_cast<double>(value)); }

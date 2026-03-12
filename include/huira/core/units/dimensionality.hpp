@@ -79,6 +79,7 @@ namespace huira::units {
     using Acceleration = decltype(Velocity{} / Time{});
 
     // Named SI Derived Unit Types:
+    using ReciprocalLength = decltype(Dimensionless{} / Length{});
     using Frequency = decltype(Dimensionless{} / Time{});
     using Force = decltype(Mass{} *Acceleration{});
     using Pressure = decltype(Force{} / Area{});    
