@@ -62,6 +62,8 @@ namespace huira::units {
 
         double to_si() const;
 
+        float to_si_f() const;
+
         double value() const;
 
         double raw_value() const;
@@ -273,7 +275,13 @@ namespace huira::units {
 
     template<IsNumeric T, IsDimensionality Dim, IsRatioOrTag Scale>
     constexpr auto operator*(T scalar, const Quantity<Dim, Scale>& quantity) {
-        return Quantity<Dim, Scale>(quantity.raw_value() * static_cast<double>(scalar));
+        return Quantity<Dim, Scale>(static_cast<double>(scalar) * quantity.raw_value());
+    }
+
+    template<IsNumeric T, IsDimensionality Dim, IsRatioOrTag Scale>
+    constexpr auto operator/(T scalar, const Quantity<Dim, Scale>& quantity) {
+        using ReciprocalDim = decltype(Dimensionless{} / Dim{});
+        return Quantity<ReciprocalDim, Scale>(static_cast<double>(scalar) / quantity.raw_value());
     }
 
     template<IsDimensionality Dim, IsRatioOrTag Scale1, IsRatioOrTag Scale2>
@@ -421,6 +429,8 @@ namespace huira::units {
         }
 
         double to_si() const;
+
+        float to_si_f() const;
 
         double value() const;
 

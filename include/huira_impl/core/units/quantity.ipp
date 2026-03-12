@@ -15,6 +15,12 @@ namespace huira::units {
         return this->to_si(value_);
     }
 
+    template<IsDimensionality Dim, IsRatioOrTag Scale>
+    float Quantity<Dim, Scale>::to_si_f() const
+    {
+        return static_cast<float>(this->to_si(value_));
+    }
+
     /**
      * @brief Get the raw value in the current scale
      *
@@ -81,6 +87,12 @@ namespace huira::units {
     double Quantity<Dimensionless, Scale>::to_si() const
     {
         return this->to_si(value_);
+    }
+
+    template<IsRatioOrTag Scale>
+    float Quantity<Dimensionless, Scale>::to_si_f() const
+    {
+        return static_cast<float>(this->to_si(value_));
     }
 
     /**
