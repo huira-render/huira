@@ -352,8 +352,8 @@ namespace huira {
         {
             switch (bitpix) {
                 case  8:  return 255.0;
-                case 16:  return 65535.0;
-                case 32:  return 4294967295.0;
+                case 16:  return 32767.0;
+                case 32:  return 2147483647.0;
                 default:  return 1.0;
             }
         }
@@ -554,24 +554,43 @@ namespace huira {
         float actual_min =  std::numeric_limits<float>::max();
         float actual_max = -std::numeric_limits<float>::max();
 
+        long blank_value = 0;
+        if (is_integer) {
+            blank_value = static_cast<long>(adc_max) + 1;
+
+            long container_max = static_cast<long>(detail::bitpix_max(bit_depth));
+            if (blank_value > container_max)
+                blank_value = container_max;
+        }
+
+        bool has_blank = false;
         for (int y = 0; y < h; ++y) {
             const int fits_row = h - 1 - y;
             float* dst = buffer.data() + static_cast<std::size_t>(fits_row * w);
             for (int x = 0; x < w; ++x) {
                 float px = image(x, y);
 
-                if (is_integer) {
-                    // Map [0, 1] → [0, adc_max] and clamp to the BITPIX container.
-                    px = std::clamp(
-                        px * static_cast<float>(adc_max),
-                        0.f,
-                        static_cast<float>(detail::bitpix_max(bit_depth))
-                    );
+                if (!std::isfinite(px)) {
+                    if (is_integer) {
+                        dst[x] = static_cast<float>(blank_value);
+                        has_blank = true;
+                    }
+                    else {
+                        dst[x] = std::numeric_limits<float>::quiet_NaN();
+                    }
                 }
-
-                dst[x] = px;
-                actual_min = std::min(actual_min, px);
-                actual_max = std::max(actual_max, px);
+                else {
+                    if (is_integer) {
+                        px = std::clamp(
+                            px * static_cast<float>(adc_max),
+                            0.f,
+                            static_cast<float>(detail::bitpix_max(bit_depth))
+                        );
+                    }
+                    dst[x] = px;
+                    actual_min = std::min(actual_min, px);
+                    actual_max = std::max(actual_max, px);
+                }
             }
         }
 
@@ -584,6 +603,13 @@ namespace huira {
                 detail::write_double_key(ff.fptr, "DATAMAX", actual_max,
                                          "Maximum pixel value", status);
             detail::fits_check(status, "write DATAMIN/DATAMAX");
+        }
+
+        if (is_integer && has_blank) {
+            long blank_val = static_cast<long>(blank_value);
+            fits_update_key(ff.fptr, TLONG, "BLANK", &blank_val,
+                "Value representing undefined pixels", &status);
+            detail::fits_check(status, "write BLANK keyword");
         }
 
         // --- Write pixels ---

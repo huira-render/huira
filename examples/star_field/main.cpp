@@ -63,6 +63,7 @@ int main(int argc, char** argv) {
     // Configure the render buffers
     auto frame_buffer = camera_model.make_frame_buffer();
     frame_buffer.enable_sensor_response();
+    frame_buffer.enable_depth();
 
     // Create the renderer
     huira::Renderer<TSpectral> renderer;
