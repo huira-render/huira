@@ -19,10 +19,11 @@ Initial work on Huira has been on the basic architecture as well as distribution
 
 If there are features you wish to see, that you don't see listed here, please feel free to submit a [Feature Request](https://github.com/huira-render/huira/issues/new?template=feature_request.md)
 
-## Currently Stable Features (as of v0.9.0)
+## Currently Stable Features (as of v0.9.1)
 - Radiometrically accurate rendering
 - Calibrated camera distortion models and common camera controls
 - Motion blur
+- Depth-of-Field
 - SPICE toolkit integration for spacecraft ephemeris and reference frames
 - Star field and unresolved rendering
 - Python Bindings
@@ -32,9 +33,9 @@ If there are features you wish to see, that you don't see listed here, please fe
 ## Features Coming Soon (Order of Priority)
 | Feature | Status | Expected by | Version |
 | --- | --- | --- | --- |
-| Depth-of-Field | In-Progress | 3/16/26 | v0.9.X |
 | Digital Elevation Maps | In-Progress | 3/16/26 | v0.9.X |
 | Level-of-Detail | Designed | 4/1/26 | v1.0.X |
+| Additional BSDFs | In-Progress | 4/1/26 | v1.0.x |
 | Solar Radiation Pressure | Designed | 4/1/26 | v1.0.X |
 | LIDAR simulation | Planned | 5/1/26 | v1.0.X |
 | TLE support | Licensing | - | - |
