@@ -214,6 +214,11 @@ namespace huira {
         bind_quantity_type<huira::units::Steradian>(m, "Steradian");
         bind_quantity_type<huira::units::SquareDegree>(m, "SquareDegree");
 
+        // Diopter Units
+        bind_quantity_type<huira::units::Diopter>(m, "Diopter");
+        bind_quantity_type<huira::units::Millidiopter>(m, "Millidiopter");
+        bind_quantity_type<huira::units::Microdiopter>(m, "Microdiopter");
+
         // Speed Units
         bind_quantity_type<huira::units::MetersPerSecond>(m, "MetersPerSecond");
         bind_quantity_type<huira::units::KilometersPerSecond>(m, "KilometersPerSecond");
