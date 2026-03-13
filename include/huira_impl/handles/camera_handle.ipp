@@ -339,6 +339,17 @@ namespace huira {
 
 
     /**
+     * @brief Convolve the specified PSF with rendered extended images.
+     * @param convolve_psf True to enable convolving the PSF with rendered images.
+     */
+    template <IsSpectral TSpectral>
+    void CameraModelHandle<TSpectral>::enable_psf_convolution(bool convolve_psf) const
+    {
+        this->get_()->enable_psf_convolution(convolve_psf);
+    }
+
+
+    /**
      * @brief Delete the PSF and disable aperture PSF usage.
      */
     template <IsSpectral TSpectral>

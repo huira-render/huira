@@ -48,10 +48,11 @@ int main(int argc, char** argv) {
     camera_model.set_sensor_resolution(1024, 1024);
     camera_model.use_aperture_psf(32, 16);
     camera_model.set_sensor_bit_depth(14);
+    camera_model.enable_psf_convolution();
 
     // Set the observation time
     huira::Time time("2016-09-19T16:22:05.728");
-    huira::Interval exposure_interval = huira::Interval::from_centered(time, 10*9.984285275_s);
+    huira::Interval exposure_interval = huira::Interval::from_centered(time, 30*9.984285275_s);
 
     // Load stars
     scene.load_stars(star_catalog_path, time);

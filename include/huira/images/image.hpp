@@ -143,6 +143,10 @@ namespace huira {
 
         template<WrapMode W>
         [[nodiscard]] float wrap_coordinate(float coord, float max) const noexcept;
+
+        void convolve_direct_(const Image& kernel);
+
+        void convolve_fft_(const Image& kernel);
     };
 
 }
