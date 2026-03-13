@@ -118,9 +118,35 @@ namespace huira {
     }
 
     template <IsSpectral TSpectral>
-    void CircularAperture<TSpectral>::rasterize_kernel_(Image<float>& kernel, float radius_pixels)
+    units::Meter CircularAperture<TSpectral>::get_bounding_radius() const
     {
-        (void)kernel;
-        (void)radius_pixels;
+        return units::Meter(radius_);
+    }
+
+    template <IsSpectral TSpectral>
+    void CircularAperture<TSpectral>::rasterize_kernel_(
+        Image<float>& kernel,
+        float radius_pixels,
+        float offset_x,
+        float offset_y)
+    {
+        const int dim = kernel.width();
+        const float cx = static_cast<float>(dim / 2) + offset_x;
+        const float cy = static_cast<float>(dim / 2) + offset_y;
+
+        for (int y = 0; y < dim; ++y) {
+            for (int x = 0; x < dim; ++x) {
+                // Distance from pixel center to disc center
+                float dx = (static_cast<float>(x) + 0.5f) - cx;
+                float dy = (static_cast<float>(y) + 0.5f) - cy;
+                float dist = std::sqrt(dx * dx + dy * dy);
+
+                // Antialiased coverage: fully inside, fully outside,
+                // or linear ramp over a 1-pixel transition band at the edge
+                float coverage = std::clamp(radius_pixels - dist + 0.5f, 0.f, 1.f);
+
+                kernel(x, y) = coverage;
+            }
+        }
     }
 }

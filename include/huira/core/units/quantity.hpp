@@ -33,7 +33,9 @@ namespace huira::units {
             requires std::is_arithmetic_v<T>
         : value_(static_cast<double>(value))
         {
-            validate_real(value_, "Unit[" + Dim::to_si_string() + "]");
+            if (std::isnan(value_)) {
+                HUIRA_THROW_ERROR("Unit[" + Dim::to_si_string() + "] - Cannot be NaN");
+            }
         }
 
         template<IsRatioOrTag OtherScale>

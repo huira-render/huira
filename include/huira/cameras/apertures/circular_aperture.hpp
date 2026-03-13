@@ -33,9 +33,10 @@ namespace huira {
 
         std::unique_ptr<PSF<TSpectral>> make_psf(units::Meter focal_length, units::Meter pitch_x, units::Meter pitch_y, int radius, int banks) override;
 
+        units::Meter get_bounding_radius() const override;
 
     protected:
-        void rasterize_kernel_(Image<float>& kernel, float radius_pixels) override;
+        void rasterize_kernel_(Image<float>& kernel, float radius_pixels, float offset_x, float offset_y) override;
 
     private:
         float area_ = 1.f;

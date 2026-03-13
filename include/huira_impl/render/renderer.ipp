@@ -22,6 +22,8 @@ namespace huira {
             HUIRA_THROW_ERROR("Renderer::render - Frame buffer resolution does not match camera resolution.");
         }
 
+        frame_buffer.clear();
+
         this->path_trace_(scene_view, frame_buffer);
 
         this->render_unresolved_(scene_view, frame_buffer);
@@ -55,8 +57,6 @@ namespace huira {
         const int fb_height = frame_buffer.height();
         const auto& lights = scene_view.lights_;
         const auto& background = scene_view.background_;
-
-        frame_buffer.clear();
 
         // Tile-based parallel rendering:
         constexpr int TILE_SIZE = 16;
@@ -341,8 +341,17 @@ namespace huira {
         auto& camera = scene_view.camera_model_;
         const int fb_width = frame_buffer.width();
         const int fb_height = frame_buffer.height();
-        
-        const int full_radius = camera->has_psf() ? camera->get_psf_radius() : 0;
+
+        // Determine the stamp radius based on camera settings:
+        bool use_defocus = camera->aperture_->has_defocus();
+        bool use_psf_direct = camera->has_psf() && !use_defocus;
+        int stamp_radius = 0;
+        if (use_defocus) {
+            stamp_radius = camera->aperture_->get_defocus_radius();
+        }
+        else if (use_psf_direct) {
+            stamp_radius = camera->get_psf_radius();
+        }
         
         // Collect all unresolved points (stars + UnresolvedObjects) in a single list for processing:
         std::vector<RenderItem<TSpectral>> items;
@@ -358,7 +367,7 @@ namespace huira {
                 irradiances[i] = star[i].get_irradiance();
             }
             TrajectoryArc arc(directions);
-            items.push_back({ arc, irradiances, full_radius });
+            items.push_back({ arc, irradiances, stamp_radius });
         }
         for (const auto& instance : scene_view.unresolved_objects_) {
             std::vector<Vec3<float>> directions(instance.transforms.size());
@@ -368,7 +377,7 @@ namespace huira {
                 irradiances[i] = instance.unresolved_object->get_irradiance(times[i]);
             }
             TrajectoryArc arc(directions);
-            items.push_back({ arc, irradiances, full_radius});
+            items.push_back({ arc, irradiances, stamp_radius});
         }
         
         if (items.empty()) {
@@ -376,7 +385,7 @@ namespace huira {
         }
         
         // Build radius LUT and assign per-star radii:
-        if (camera->has_psf() && full_radius > 1) {
+        if (use_psf_direct && stamp_radius > 1) {
             const Image<TSpectral>& center_kernel =
                 camera->get_psf_kernel(0.0f, 0.0f);
         
@@ -389,7 +398,7 @@ namespace huira {
         
             RadiusLUTConfig config;
             std::vector<RadiusLUTEntry> radius_lut =
-                build_radius_lut(center_kernel, full_radius,
+                build_radius_lut(center_kernel, stamp_radius,
                     representative_area,
                     photon_energies, config);
         
@@ -521,7 +530,7 @@ namespace huira {
         const auto& depth_buffer = frame_buffer.depth();
         bool has_depth = frame_buffer.has_depth();
         
-        int margin = full_radius;
+        int margin = stamp_radius;
         
         struct TileBuffer {
             Image<TSpectral> buf;
@@ -575,38 +584,66 @@ namespace huira {
                             camera->get_projected_aperture_area(proj.direction);
                         TSpectral power = proj.weight * proj.irradiance * projected_area;
         
-                        if (camera->has_psf()) {
+                        if (stamp_radius > 0) {
                             float floor_x = std::floor(star_p.x);
                             float floor_y = std::floor(star_p.y);
                             float frac_x = star_p.x - floor_x;
                             float frac_y = star_p.y - floor_y;
-        
-                            const Image<TSpectral>& kernel =
-                                camera->get_psf_kernel(frac_x, frac_y);
-        
+
                             int eff_r = item.effective_radius;
-                            int k_offset = full_radius - eff_r;
-                            int crop_dim = 2 * eff_r + 1;
-        
-                            int start_x = static_cast<int>(floor_x) - eff_r;
-                            int start_y = static_cast<int>(floor_y) - eff_r;
-        
-                            int kx_begin = std::max(0, local_x0 - start_x);
-                            int kx_end = std::min(crop_dim, local_x1 - start_x);
-        
-                            int ky_begin = std::max(0, local_y0 - start_y);
-                            int ky_end = std::min(crop_dim, local_y1 - start_y);
-        
-                            for (int ky = ky_begin; ky < ky_end; ++ky) {
-                                int img_y = start_y + ky;
-                                int ly = img_y - local_y0;
-        
-                                for (int kx = kx_begin; kx < kx_end; ++kx) {
-                                    int img_x = start_x + kx;
-                                    int lx = img_x - local_x0;
-        
-                                    local_buf(lx, ly) +=
-                                        power * kernel(kx + k_offset, ky + k_offset);
+
+                            if (use_defocus) {
+                                const Image<float>& kernel =
+                                    camera->aperture_->get_defocus_kernel(frac_x, frac_y);
+
+                                int k_offset = camera->aperture_->get_defocus_radius() - eff_r;
+                                int crop_dim = 2 * eff_r + 1;
+                                int start_x = static_cast<int>(floor_x) - eff_r;
+                                int start_y = static_cast<int>(floor_y) - eff_r;
+
+                                // Clamp to local tile bounds
+                                int kx_begin = std::max(0, local_x0 - start_x);
+                                int kx_end = std::min(crop_dim, local_x1 - start_x);
+                                int ky_begin = std::max(0, local_y0 - start_y);
+                                int ky_end = std::min(crop_dim, local_y1 - start_y);
+
+                                for (int ky = ky_begin; ky < ky_end; ++ky) {
+                                    int ly = start_y + ky - local_y0;
+                                    for (int kx = kx_begin; kx < kx_end; ++kx) {
+                                        int lx = start_x + kx - local_x0;
+                                        // Note: scalar kernel * spectral power
+                                        local_buf(lx, ly) +=
+                                            power * kernel(kx + k_offset, ky + k_offset);
+                                    }
+                                }
+                            }
+                            else {
+                                const Image<TSpectral>& kernel =
+                                    camera->get_psf_kernel(frac_x, frac_y);
+
+                                int k_offset = stamp_radius - eff_r;
+                                int crop_dim = 2 * eff_r + 1;
+
+                                int start_x = static_cast<int>(floor_x) - eff_r;
+                                int start_y = static_cast<int>(floor_y) - eff_r;
+
+                                int kx_begin = std::max(0, local_x0 - start_x);
+                                int kx_end = std::min(crop_dim, local_x1 - start_x);
+
+                                int ky_begin = std::max(0, local_y0 - start_y);
+                                int ky_end = std::min(crop_dim, local_y1 - start_y);
+
+                                for (int ky = ky_begin; ky < ky_end; ++ky) {
+                                    int img_y = start_y + ky;
+                                    int ly = img_y - local_y0;
+
+                                    for (int kx = kx_begin; kx < kx_end; ++kx) {
+                                        int img_x = start_x + kx;
+                                        int lx = img_x - local_x0;
+
+                                        local_buf(lx, ly) +=
+                                            power * kernel(kx + k_offset, ky + k_offset);
+                                    }
                                 }
                             }
                         }
