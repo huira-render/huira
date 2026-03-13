@@ -24,9 +24,13 @@ namespace huira {
 
         frame_buffer.clear();
 
-        this->path_trace_(scene_view, frame_buffer);
+        Image<TSpectral> ray_traced_power = this->path_trace_(scene_view, frame_buffer);
 
-        this->render_unresolved_(scene_view, frame_buffer);
+        Image<TSpectral> star_power = this->render_unresolved_(scene_view, frame_buffer);
+
+        if (frame_buffer.has_received_power()) {
+            frame_buffer.received_power() = ray_traced_power + star_power;
+        }
 
         this->get_camera(scene_view)->readout(frame_buffer, scene_view.duration());
     }
@@ -48,7 +52,7 @@ namespace huira {
      * @param frame_buffer The frame buffer to render into
      */
     template <IsSpectral TSpectral>
-    void Renderer<TSpectral>::path_trace_(
+    Image<TSpectral> Renderer<TSpectral>::path_trace_(
         SceneView<TSpectral>& scene_view,
         FrameBuffer<TSpectral>& frame_buffer)
     {
@@ -57,6 +61,11 @@ namespace huira {
         const int fb_height = frame_buffer.height();
         const auto& lights = scene_view.lights_;
         const auto& background = scene_view.background_;
+
+        Image<TSpectral> received_power(0, 0, TSpectral{ 0 });
+        if (frame_buffer.has_received_power()) {
+            received_power = Image<TSpectral>(fb_width, fb_height, TSpectral{ 0 });
+        }
 
         // Tile-based parallel rendering:
         constexpr int TILE_SIZE = 16;
@@ -206,7 +215,7 @@ namespace huira {
                                     sample_radiance *= (clamp_threshold_ / max_val);
                                 }
 
-                                
+
 
                                 // Welford's online mean/variance update:
                                 samples_taken++;
@@ -262,12 +271,19 @@ namespace huira {
                             }
 
                             if (frame_buffer.has_received_power()) {
-                                frame_buffer.received_power()(x, y) = camera->pixel_radiance_to_power(x, y) * avg_radiance;
+                                received_power(x, y) = camera->pixel_radiance_to_power(x, y) * avg_radiance;
                             }
                         }
                     }
                 }
             });
+
+        if (frame_buffer.has_received_power() && camera->convolve_psf_) {
+            const Image<TSpectral>& psf = camera->get_psf_kernel(0.0f, 0.0f);
+            received_power.convolve(psf);
+        }
+
+        return received_power;
     }
 
 
@@ -329,18 +345,21 @@ namespace huira {
      * @param frame_buffer The frame buffer to render into
      */
     template <IsSpectral TSpectral>
-    void Renderer<TSpectral>::render_unresolved_(
+    Image<TSpectral> Renderer<TSpectral>::render_unresolved_(
         SceneView<TSpectral>& scene_view,
         FrameBuffer<TSpectral>& frame_buffer)
     {
-        bool has_power = frame_buffer.has_received_power();
-        if (!has_power) {
-            return;
-        }
-
         auto& camera = scene_view.camera_model_;
         const int fb_width = frame_buffer.width();
         const int fb_height = frame_buffer.height();
+
+        Image<TSpectral> received_power(0, 0, TSpectral{ 0 });
+        if (frame_buffer.has_received_power()) {
+            received_power = Image<TSpectral>(fb_width, fb_height, TSpectral{ 0 });
+        }
+        else {
+            return received_power;
+        }
 
         // Determine the stamp radius based on camera settings:
         bool use_defocus = camera->aperture_->has_defocus();
@@ -381,7 +400,7 @@ namespace huira {
         }
         
         if (items.empty()) {
-            return;
+            return received_power;
         }
         
         // Build radius LUT and assign per-star radii:
@@ -526,7 +545,6 @@ namespace huira {
 
         
         // Render tiles in parallel:
-        auto& power_buffer = frame_buffer.received_power();
         const auto& depth_buffer = frame_buffer.depth();
         bool has_depth = frame_buffer.has_depth();
         
@@ -689,11 +707,18 @@ namespace huira {
                                 if (val[c] != 0.0f) { nonzero = true; break; }
                             }
                             if (nonzero) {
-                                power_buffer(tb.origin_x + lx, y) += val;
+                                received_power(tb.origin_x + lx, y) += val;
                             }
                         }
                     }
                 }
             });
+
+        if (use_defocus && camera->convolve_psf_) {
+            const Image<TSpectral>& psf = camera->get_psf_kernel(0.0f, 0.0f);
+            received_power.convolve(psf);
+        }
+
+        return received_power;
     }
 }

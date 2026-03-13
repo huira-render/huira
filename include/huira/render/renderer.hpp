@@ -36,9 +36,9 @@ namespace huira {
 
     protected:
 
-        virtual void path_trace_(SceneView<TSpectral>& scene_view, FrameBuffer<TSpectral>& frame_buffer);
+        virtual Image<TSpectral> path_trace_(SceneView<TSpectral>& scene_view, FrameBuffer<TSpectral>& frame_buffer);
 
-        virtual void render_unresolved_(SceneView<TSpectral>& scene_view, FrameBuffer<TSpectral>& frame_buffer);
+        virtual Image<TSpectral> render_unresolved_(SceneView<TSpectral>& scene_view, FrameBuffer<TSpectral>& frame_buffer);
 
         std::shared_ptr<CameraModel<TSpectral>> get_camera(SceneView<TSpectral>& scene_view) const { return scene_view.camera_model_; }
         std::vector<MeshBatch<TSpectral>> get_meshes(SceneView<TSpectral>& scene_view) const { return scene_view.geometry_; }
