@@ -68,8 +68,6 @@ int main(int argc, char** argv) {
     // Create the renderer
     huira::Renderer<TSpectral> renderer;
 
-    camera_model.set_diopters(huira::units::Diopter(static_cast<float>(0) / 1000.f));
-
     //  Create a scene view over the exposure interval
     for (int i = 50; i > -50; --i) {
         camera_model.set_diopters(huira::units::Diopter(static_cast<float>(i)/1000.f));

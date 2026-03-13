@@ -347,7 +347,7 @@ namespace huira {
         bool use_psf_direct = camera->has_psf() && !use_defocus;
         int stamp_radius = 0;
         if (use_defocus) {
-            stamp_radius = camera->aperture_->get_defocus_radius();
+            stamp_radius = camera->aperture_->get_defocus_half_extent();
         }
         else if (use_psf_direct) {
             stamp_radius = camera->get_psf_radius();
@@ -596,7 +596,7 @@ namespace huira {
                                 const Image<float>& kernel =
                                     camera->aperture_->get_defocus_kernel(frac_x, frac_y);
 
-                                int k_offset = camera->aperture_->get_defocus_radius() - eff_r;
+                                int k_offset = camera->aperture_->get_defocus_half_extent() - eff_r;
                                 int crop_dim = 2 * eff_r + 1;
                                 int start_x = static_cast<int>(floor_x) - eff_r;
                                 int start_y = static_cast<int>(floor_y) - eff_r;

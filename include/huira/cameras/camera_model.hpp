@@ -149,8 +149,6 @@ namespace huira {
 
         template <IsFloatingPoint TFloat>
         Vec3<TFloat> pixel_to_direction_(const Pixel& pixel) const;
-
-        Ray<TSpectral> cast_ray_(const Pixel& pixel) const;
         
         Image<Vec3<float>> distortion_field_;
         void compute_distortion_field_();
