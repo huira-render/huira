@@ -1,9 +1,10 @@
 # FindCFITSIO.cmake - Robust CFITSIO discovery for huira
 #
-# Tries three strategies in order:
-#   1. vcpkg CMake config    (unofficial-cfitsio)
-#   2. pkg-config            (cfitsio.pc — conda, apt, brew, etc.)
-#   3. Manual path search    (fallback)
+# Tries four strategies in order:
+#   1. Official cfitsio CMake config  (cfitsio >= 4.4, vcpkg >= #50344)
+#   2. Legacy vcpkg CMake config      (unofficial-cfitsio, older vcpkg)
+#   3. pkg-config                     (cfitsio.pc — conda, apt, brew, etc.)
+#   4. Manual path search             (fallback)
 #
 # Sets:
 #   CFITSIO_FOUND          - True if CFITSIO was found
@@ -23,15 +24,58 @@ if(TARGET CFITSIO::CFITSIO)
 endif()
 
 
-# ─── Strategy 1: vcpkg CMake config ──────────────────────────────────────
+# ─── Strategy 1: Official cfitsio CMake config ──────────────────────────
 #
-# vcpkg ships unofficial-cfitsio with a config file.  The target it
-# creates is just "cfitsio" (no namespace), so we wrap it.
+# cfitsio >= 4.4 (and vcpkg after PR #50344) ships official CMake config
+# that provides CFITSIO::CFITSIO directly.
+#
+find_package(cfitsio CONFIG QUIET)
+
+if(cfitsio_FOUND AND TARGET CFITSIO::CFITSIO)
+    # The official config already provides CFITSIO::CFITSIO — nothing to wrap.
+    get_target_property(_inc CFITSIO::CFITSIO INTERFACE_INCLUDE_DIRECTORIES)
+    if(_inc)
+        set(CFITSIO_INCLUDE_DIRS "${_inc}")
+    endif()
+
+    set(CFITSIO_FOUND TRUE)
+
+    find_package_handle_standard_args(CFITSIO
+        REQUIRED_VARS CFITSIO_FOUND
+    )
+    return()
+endif()
+
+# The official config may also export a lowercase target (cfitsio::cfitsio)
+# depending on version. Handle that case too.
+if(cfitsio_FOUND AND TARGET cfitsio::cfitsio AND NOT TARGET CFITSIO::CFITSIO)
+    add_library(CFITSIO::CFITSIO INTERFACE IMPORTED)
+    set_target_properties(CFITSIO::CFITSIO PROPERTIES
+        INTERFACE_LINK_LIBRARIES cfitsio::cfitsio
+    )
+
+    get_target_property(_inc cfitsio::cfitsio INTERFACE_INCLUDE_DIRECTORIES)
+    if(_inc)
+        set(CFITSIO_INCLUDE_DIRS "${_inc}")
+    endif()
+
+    set(CFITSIO_FOUND TRUE)
+
+    find_package_handle_standard_args(CFITSIO
+        REQUIRED_VARS CFITSIO_FOUND
+    )
+    return()
+endif()
+
+
+# ─── Strategy 2: Legacy vcpkg CMake config (unofficial-cfitsio) ──────────
+#
+# Older vcpkg snapshots ship unofficial-cfitsio with a config file.
+# The target it creates is just "cfitsio" (no namespace), so we wrap it.
 #
 find_package(unofficial-cfitsio CONFIG QUIET)
 
 if(unofficial-cfitsio_FOUND OR TARGET cfitsio)
-    # vcpkg's config exposes a plain "cfitsio" target.
     if(NOT TARGET CFITSIO::CFITSIO)
         add_library(CFITSIO::CFITSIO INTERFACE IMPORTED)
         set_target_properties(CFITSIO::CFITSIO PROPERTIES
@@ -54,7 +98,7 @@ if(unofficial-cfitsio_FOUND OR TARGET cfitsio)
 endif()
 
 
-# ─── Strategy 2: pkg-config ──────────────────────────────────────────────
+# ─── Strategy 3: pkg-config ─────────────────────────────────────────────
 #
 # conda, apt, brew, and manual installs usually provide cfitsio.pc.
 #
@@ -82,6 +126,18 @@ if(PKG_CONFIG_FOUND)
             )
         endif()
 
+        # pkg-config on conda-forge may include 'm' in the link interface,
+        # which doesn't exist on Windows (math functions are in the CRT).
+        if(WIN32)
+            get_target_property(_cfitsio_libs CFITSIO::CFITSIO INTERFACE_LINK_LIBRARIES)
+            if(_cfitsio_libs)
+                list(REMOVE_ITEM _cfitsio_libs "m")
+                set_target_properties(CFITSIO::CFITSIO PROPERTIES
+                    INTERFACE_LINK_LIBRARIES "${_cfitsio_libs}"
+                )
+            endif()
+        endif()
+
         find_package_handle_standard_args(CFITSIO
             REQUIRED_VARS CFITSIO_INCLUDE_DIRS CFITSIO_LIBRARIES
             VERSION_VAR   CFITSIO_VERSION
@@ -91,7 +147,7 @@ if(PKG_CONFIG_FOUND)
 endif()
 
 
-# ─── Strategy 3: Manual search ───────────────────────────────────────────
+# ─── Strategy 4: Manual search ──────────────────────────────────────────
 #
 # Look for fitsio.h and libcfitsio in common locations.
 #
@@ -140,6 +196,17 @@ if(CFITSIO_FOUND AND NOT TARGET CFITSIO::CFITSIO)
         INTERFACE_INCLUDE_DIRECTORIES "${CFITSIO_INCLUDE_DIRS}"
         INTERFACE_LINK_LIBRARIES      "${CFITSIO_LIBRARIES}"
     )
+
+    # Manual search on conda-forge Windows may also include 'm'.
+    if(WIN32)
+        get_target_property(_cfitsio_libs CFITSIO::CFITSIO INTERFACE_LINK_LIBRARIES)
+        if(_cfitsio_libs)
+            list(REMOVE_ITEM _cfitsio_libs "m")
+            set_target_properties(CFITSIO::CFITSIO PROPERTIES
+                INTERFACE_LINK_LIBRARIES "${_cfitsio_libs}"
+            )
+        endif()
+    endif()
 endif()
 
 mark_as_advanced(CFITSIO_INCLUDE_DIRS CFITSIO_LIBRARIES)
