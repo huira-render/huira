@@ -462,6 +462,13 @@ namespace huira {
         return data_.data();
     }
 
+    template <IsImagePixel PixelT>
+    void Image<PixelT>::convolve(const Image<PixelT>& kernel)
+    {
+        // TODO Implement
+        (void)kernel;
+    }
+
     /**
      * @brief Clears the image, removing all pixel data.
      * 
@@ -481,6 +488,19 @@ namespace huira {
     template<IsImagePixel PixelT>
     void Image<PixelT>::fill(const PixelT& value) {
         std::fill(data_.begin(), data_.end(), value);
+    }
+
+    template <IsImagePixel PixelT>
+    Image<PixelT> Image<PixelT>::operator+(const Image<PixelT>& other) const
+    {
+        if (this->resolution() != other.resolution()) {
+            HUIRA_THROW_ERROR("Image::operator+ - Images with different resolutions cannot be added");
+        }
+        Image<PixelT> output(this->resolution());
+        for (std::size_t i = 0; i < this->size(); ++i) {
+            output[i] = this->data_[i] + other[i];
+        }
+        return output;
     }
 
     /**

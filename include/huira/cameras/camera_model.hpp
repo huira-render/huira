@@ -84,6 +84,7 @@ namespace huira {
         void set_psf(Args&&... args);
 
         void use_aperture_psf(int radius = 64, int banks = 16);
+        void enable_psf_convolution(bool convolve_psf = true) { convolve_psf_ = convolve_psf; }
         void delete_psf();
 
         bool has_psf() const { return psf_ != nullptr; }
@@ -130,6 +131,7 @@ namespace huira {
         std::unique_ptr<Aperture<TSpectral>> aperture_;
         std::unique_ptr<Distortion<TSpectral>> distortion_ = nullptr;
         std::unique_ptr<PSF<TSpectral>> psf_ = nullptr;
+        bool convolve_psf_ = false;
 
         bool use_aperture_psf_ = false;
         float d_ = std::numeric_limits<float>::infinity();

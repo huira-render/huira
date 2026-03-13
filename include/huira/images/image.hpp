@@ -124,10 +124,14 @@ namespace huira {
 
         [[nodiscard]] int sensor_bit_depth() const noexcept { return sensor_bit_depth_; }
         void set_sensor_bit_depth(int bits) noexcept { sensor_bit_depth_ = bits; }
+        
+        void convolve(const Image& kernel);
 
         void clear();
         void fill(const PixelT& value);
         void reset(const PixelT& value = PixelT{ 0 }) { fill(value); }
+
+        Image operator+(const Image& other) const;
 
     private:
         std::vector<PixelT> data_;
