@@ -54,6 +54,15 @@ namespace huira {
                     self.set_sensor_size(detail::unit_from_py<units::Millimeter>(w));
                 }, py::arg("width"))
 
+            // Distortion
+            .def("set_brown_conrady_distortion", &HandleType::set_brown_conrady_distortion,
+                py::arg("coeffs"))
+            .def("set_opencv_distortion", &HandleType::set_opencv_distortion,
+                py::arg("coeffs"))
+            .def("set_owen_distortion", &HandleType::set_owen_distortion,
+                py::arg("coeffs"))
+            .def("delete_distortion", &HandleType::delete_distortion)
+
             // Sensor properties
             .def("set_sensor_quantum_efficiency", &HandleType::set_sensor_quantum_efficiency,
                 py::arg("qe"), "Set quantum efficiency (as SpectralBins)")
@@ -83,16 +92,22 @@ namespace huira {
             // PSF
             .def("use_aperture_psf", &HandleType::use_aperture_psf,
                 py::arg("radius"), py::arg("banks"))
+            .def("enable_psf_convolution", &HandleType::enable_psf_convolution,
+                py::arg("convolve_psf") = true)
             .def("delete_psf", &HandleType::delete_psf)
 
-            // Distortion
-            .def("set_brown_conrady_distortion", &HandleType::set_brown_conrady_distortion,
-                py::arg("coeffs"))
-            .def("set_opencv_distortion", &HandleType::set_opencv_distortion,
-                py::arg("coeffs"))
-            .def("set_owen_distortion", &HandleType::set_owen_distortion,
-                py::arg("coeffs"))
-            .def("delete_distortion", &HandleType::delete_distortion)
+            .def("enable_depth_of_field", &HandleType::enable_depth_of_field,
+                py::arg("depth_of_field") = true)
+            .def("set_focus_distance", [](const HandleType& self, const py::object& fd) {
+            self.set_focus_distance(detail::unit_from_py<units::Meter>(fd));
+                }, py::arg("focus_distance"),
+                    "Set the focus distance (accepts any distance unit)")
+            .def("get_focus_distance", &HandleType::get_focus_distance)
+            .def("set_diopters", [](const HandleType& self, const py::object& dpts) {
+            self.set_diopters(detail::unit_from_py<units::Diopter>(dpts));
+                }, py::arg("diopters"),
+                    "Set the camera diopter (accepts units of diopters)")
+            .def("get_diopters", &HandleType::get_diopters)
 
             // Make the FrameBuffer
             .def("make_frame_buffer", &HandleType::make_frame_buffer)

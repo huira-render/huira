@@ -27,6 +27,9 @@ from ._huira import (
     # Solid Angle
     Steradian, SquareDegree,
 
+    # Diopter
+    Diopter, Millidiopter, Microdiopter,
+
     # Speed
     MetersPerSecond, KilometersPerSecond, MilesPerHour, KilometersPerHour,
 

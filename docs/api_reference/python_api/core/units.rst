@@ -40,6 +40,9 @@ Available Units
    * - Solid Angle
      - Steradian, SquareDegree
      - Steradian
+   * - OpticalPower
+     - Diopter, Millidiopter, Microdiopter
+     - Diopter
    * - Speed
      - MetersPerSecond, KilometersPerSecond, MilesPerHour, KilometersPerHour
      - MetersPerSecond

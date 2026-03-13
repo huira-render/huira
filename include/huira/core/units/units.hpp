@@ -125,7 +125,7 @@ namespace huira::units {
     // ===================== //
     // === Derived Units === //
     // ===================== //
-    /// @defgroup diopter_units Diopter units
+    /// @defgroup diopter_units Optical Power units
     /// @{
     using Diopter = Quantity<ReciprocalLength, std::ratio<1, 1>>;
     using Millidiopter = Quantity<ReciprocalLength, std::milli>;
