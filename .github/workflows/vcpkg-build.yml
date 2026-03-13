@@ -28,10 +28,16 @@ jobs:
         include:
           - platform: linux
             os: ubuntu-22.04
+            triplet: x64-linux
           - platform: macos
             os: macos-14
+            triplet: arm64-osx
           - platform: windows
             os: windows-2022
+            triplet: x64-windows
+          - platform: windows-static
+            os: windows-2022
+            triplet: x64-windows-static
     runs-on: ${{ matrix.os }}
     name: Build (${{ matrix.platform }})
 
@@ -45,20 +51,44 @@ jobs:
         run: git clone https://github.com/microsoft/vcpkg.git ${{ github.workspace }}/vcpkg --depth 1
 
       - name: Bootstrap vcpkg (Linux/macOS)
-        if: matrix.platform != 'windows'
+        if: runner.os != 'Windows'
         run: ${{ github.workspace }}/vcpkg/bootstrap-vcpkg.sh
 
       - name: Bootstrap vcpkg (Windows)
-        if: matrix.platform == 'windows'
+        if: runner.os == 'Windows'
         run: ${{ github.workspace }}\vcpkg\bootstrap-vcpkg.bat
+
+      - name: Verify pkg-config is NOT available (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          if command -v pkg-config &>/dev/null; then
+            echo "::warning::pkg-config is available — this may mask find module issues"
+          else
+            echo "pkg-config not found (expected on Windows CI)"
+          fi
 
       - name: Install huira port
         run: >
-          ${{ github.workspace }}/vcpkg/vcpkg install "huira[tools,tests]"
+          ${{ github.workspace }}/vcpkg/vcpkg install "huira[tools]"
           --overlay-ports=packaging/vcpkg-port
-          --triplet=${{ matrix.platform == 'windows' && 'x64-windows' || matrix.platform == 'macos' && 'arm64-osx' || 'x64-linux' }}
+          --triplet=${{ matrix.triplet }}
 
-      - name: Test find_package works
+      - name: Test find_package (single-config / Ninja)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          cd tests/packaging
+          mkdir build && cd build
+          cmake .. \
+            -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake" \
+            -DVCPKG_OVERLAY_PORTS="${{ github.workspace }}/packaging/vcpkg-port" \
+            -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }}
+          cmake --build . --config Release
+          ctest --output-on-failure -C Release
+
+      - name: Test find_package (multi-config / Visual Studio)
+        if: runner.os == 'Windows'
         shell: bash
         run: |
           cd tests/packaging
@@ -69,10 +99,16 @@ jobs:
           TOOLCHAIN_FILE="${TOOLCHAIN_FILE//\\//}"
           OVERLAY_PORTS="${OVERLAY_PORTS//\\//}"
           cmake .. \
+            -G "Visual Studio 17 2022" \
+            -A x64 \
             -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN_FILE" \
-            -DVCPKG_OVERLAY_PORTS="$OVERLAY_PORTS"
+            -DVCPKG_OVERLAY_PORTS="$OVERLAY_PORTS" \
+            -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }}
           cmake --build . --config Release
           ctest --output-on-failure -C Release
+          # Also build Debug to exercise multi-config
+          cmake --build . --config Debug
+          ctest --output-on-failure -C Debug
 
   vcpkg-ci:
     name: vcpkg CI
