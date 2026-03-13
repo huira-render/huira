@@ -2,6 +2,8 @@
 
 #include <memory>
 
+#include "huira/core/types.hpp"
+#include "huira/images/image.hpp"
 #include "huira/cameras/psfs/psf.hpp"
 #include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/core/units/units.hpp"
@@ -44,15 +46,17 @@ namespace huira {
         int get_defocus_radius() const { return defocus_cache_.radius; }
         bool has_defocus() const { return defocus_cache_.radius > 0; }
 
+        virtual units::Meter get_bounding_radius() const = 0;
+
     protected:
         struct PolyphaseCache {
             int radius = 0;
-            int dim = 0;
             int banks = 0;
+            int dim = 0;
             std::vector<Image<float>> kernels;
         } defocus_cache_;
 
-        virtual void rasterize_kernel_(Image<float>& kernel, float radius_pixels) = 0;
+        virtual void rasterize_kernel_(Image<float>& kernel, float radius_pixels, float offset_x, float offset_y) = 0;
 
     private:
         void generate_polyphase_data_();

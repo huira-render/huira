@@ -51,7 +51,7 @@ int main(int argc, char** argv) {
 
     // Set the observation time
     huira::Time time("2016-09-19T16:22:05.728");
-    huira::Interval exposure_interval = huira::Interval::from_centered(time, 9.984285275_s);
+    huira::Interval exposure_interval = huira::Interval::from_centered(time, 10*9.984285275_s);
 
     // Load stars
     scene.load_stars(star_catalog_path, time);
@@ -68,12 +68,19 @@ int main(int argc, char** argv) {
     // Create the renderer
     huira::Renderer<TSpectral> renderer;
 
+    camera_model.set_diopters(huira::units::Diopter(static_cast<float>(0) / 1000.f));
+
     //  Create a scene view over the exposure interval
-    auto scene_view = huira::SceneView<TSpectral>(scene, exposure_interval, mapcam, huira::ObservationMode::ABERRATED_STATE, 3);
+    for (int i = 50; i > -50; --i) {
+        camera_model.set_diopters(huira::units::Diopter(static_cast<float>(i)/1000.f));
+        auto scene_view = huira::SceneView<TSpectral>(scene, exposure_interval, mapcam, huira::ObservationMode::ABERRATED_STATE, 3);
 
-    // Render the current scene view
-    renderer.render(scene_view, frame_buffer);
+        // Render the current scene view
+        renderer.render(scene_view, frame_buffer);
 
-    // Save the results
-    huira::write_image_png("output/starfield.png", frame_buffer.sensor_response(), 8);
+        // Save the results
+        char filename[64];
+        std::snprintf(filename, sizeof(filename), "output/starfield_%03d.png", i + 50);
+        huira::write_image_png(filename, frame_buffer.sensor_response(), 8);
+    }
 }

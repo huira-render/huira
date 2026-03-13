@@ -27,6 +27,9 @@ namespace huira {
     template <IsSpectral TSpectral>
     class CameraModelHandle;
 
+    template <IsSpectral TSpectral>
+    class Renderer;
+
     /**
      * @brief CameraModel represents a pinhole or thin-lens camera with configurable sensor, aperture, and distortion models.
      *
@@ -46,7 +49,7 @@ namespace huira {
         CameraModel& operator=(const CameraModel&) = delete;
 
         void set_focal_length(units::Millimeter focal_length);
-        units::Millimeter focal_length() const { return units::Millimeter(focal_length_); }
+        units::Millimeter focal_length() const { return units::Millimeter(1000 * focal_length_); }
 
         void set_fstop(float fstop);
         float fstop() const;
@@ -164,6 +167,7 @@ namespace huira {
         bool blender_convention_ = false;
 
         friend class CameraModelHandle<TSpectral>;
+        friend class Renderer<TSpectral>;
     };
 }
 

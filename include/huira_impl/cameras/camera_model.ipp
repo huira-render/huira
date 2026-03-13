@@ -265,6 +265,10 @@ namespace huira {
             HUIRA_THROW_ERROR("CameraModel::set_focus_distance - Focus distance is too small");
         }
         d_ = focus_distance_;
+
+        units::Meter pitch_x(sensor_->pixel_pitch().x);
+        units::Meter pitch_y(sensor_->pixel_pitch().y);
+        this->aperture_->build_defocus_kernel(this->get_diopters(), this->focal_length(), pitch_x, pitch_y, 16);
     }
 
     /**
