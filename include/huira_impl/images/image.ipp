@@ -5,6 +5,8 @@
 #include <cmath>
 #include <stdexcept>
 
+#include "fftw3.h"
+
 namespace huira {
 
     /**
@@ -465,8 +467,31 @@ namespace huira {
     template <IsImagePixel PixelT>
     void Image<PixelT>::convolve(const Image<PixelT>& kernel)
     {
-        // TODO Implement
-        (void)kernel;
+        if constexpr (IsInteger<PixelT>) {
+            HUIRA_THROW_ERROR("Image::convolve - Requires a floating-point pixel type");
+        }
+
+        if (kernel.width() == 1 && kernel.height() == 1) {
+            // Degenerate case: just multiply
+            PixelT k = kernel(0, 0);
+            for (int y = 0; y < this->height(); ++y) {
+                for (int x = 0; x < this->width(); ++x) {
+                    (*this)(x, y) *= k;
+                }
+            }
+            return;
+        }
+
+        const int kw = kernel.width();
+        const int kh = kernel.height();
+
+        // Small kernel threshold: direct convolution
+        if (kw * kh <= 25) {
+            convolve_direct_(kernel);
+            return;
+        }
+
+        convolve_fft_(kernel);
     }
 
     /**
@@ -550,4 +575,153 @@ namespace huira {
         }
     }
 
+
+    template <IsImagePixel PixelT>
+    void Image<PixelT>::convolve_direct_(const Image<PixelT>& kernel)
+    {
+        const int kw = kernel.width();
+        const int kh = kernel.height();
+        const int kcx = kw / 2;
+        const int kcy = kh / 2;
+
+        Image<PixelT> result(this->resolution());
+
+        for (int y = 0; y < this->height(); ++y) {
+            for (int x = 0; x < this->width(); ++x) {
+                PixelT sum{};
+                for (int ky = 0; ky < kh; ++ky) {
+                    int sy = y + ky - kcy;
+                    if (sy < 0 || sy >= this->height()) {
+                        continue;
+                    }
+                    for (int kx = 0; kx < kw; ++kx) {
+                        int sx = x + kx - kcx;
+                        if (sx < 0 || sx >= this->width()) {
+                            continue;
+                        }
+                        sum += (*this)(sx, sy) * kernel(kx, ky);
+                    }
+                }
+                result(x, y) = sum;
+            }
+        }
+
+        *this = std::move(result);
+    }
+
+    template <IsImagePixel PixelT>
+    void Image<PixelT>::convolve_fft_(const Image<PixelT>& kernel)
+    {
+        const int kw = kernel.width();
+        const int kh = kernel.height();
+        const int kcx = kw / 2;
+        const int kcy = kh / 2;
+
+        // Padded dimensions for linear (non-circular) convolution
+        const int pw = this->width() + kw - 1;
+        const int ph = this->height() + kh - 1;
+        const int complex_cols = pw / 2 + 1;
+        const std::size_t real_size = static_cast<std::size_t>(pw) * static_cast<std::size_t>(ph);
+        const std::size_t complex_size = static_cast<std::size_t>(complex_cols) * static_cast<std::size_t>(ph);
+
+        // Allocate FFTW buffers
+        float* buf_a = fftwf_alloc_real(real_size);
+        float* buf_b = fftwf_alloc_real(real_size);
+        fftwf_complex* freq_a = fftwf_alloc_complex(complex_size);
+        fftwf_complex* freq_b = fftwf_alloc_complex(complex_size);
+
+        // Create plans (FFTW_ESTIMATE avoids overwriting input during planning)
+        fftwf_plan fwd_a = fftwf_plan_dft_r2c_2d(ph, pw, buf_a, freq_a, FFTW_ESTIMATE);
+        fftwf_plan fwd_b = fftwf_plan_dft_r2c_2d(ph, pw, buf_b, freq_b, FFTW_ESTIMATE);
+        fftwf_plan inv = fftwf_plan_dft_c2r_2d(ph, pw, freq_a, buf_a, FFTW_ESTIMATE);
+
+        const float norm = 1.0f / static_cast<float>(pw * ph);
+        constexpr std::size_t num_channels = ImagePixelTraits<PixelT>::channels;
+        
+        auto get_channel = [](const PixelT& pixel, std::size_t c) -> float {
+            if constexpr (ImagePixelTraits<PixelT>::channels == 1) {
+                (void)c;
+                return static_cast<float>(pixel);
+            }
+            else {
+                return static_cast<float>(pixel[c]);
+            }
+            };
+
+        auto set_channel = [](PixelT& pixel, std::size_t c, float val) {
+            if constexpr (ImagePixelTraits<PixelT>::channels == 1) {
+                (void)c;
+                pixel = static_cast<PixelT>(val);
+            }
+            else {
+                pixel[c] = val;
+            }
+            };
+
+        // Transform kernel once — zero-pad and wrap so center lands at origin
+        std::memset(buf_b, 0, real_size * sizeof(float));
+        for (int ky = 0; ky < kh; ++ky) {
+            for (int kx = 0; kx < kw; ++kx) {
+                // Wrap kernel so that (kcx, kcy) maps to (0,0)
+                int dst_x = (kx - kcx + pw) % pw;
+                int dst_y = (ky - kcy + ph) % ph;
+                // Use channel 0 for now; kernel is the same for all channels
+                // if scalar, otherwise we do this per channel below
+                buf_b[static_cast<std::size_t>(dst_y) * static_cast<std::size_t>(pw) + static_cast<std::size_t>(dst_x)] = 0.0f; // placeholder
+            }
+        }
+
+        Image<PixelT> result(this->resolution());
+
+        for (std::size_t c = 0; c < num_channels; ++c) {
+            // Pack kernel channel into buf_b with wrap-around
+            std::memset(buf_b, 0, real_size * sizeof(float));
+            for (int ky = 0; ky < kh; ++ky) {
+                for (int kx = 0; kx < kw; ++kx) {
+                    int dst_x = (kx - kcx + pw) % pw;
+                    int dst_y = (ky - kcy + ph) % ph;
+                    buf_b[static_cast<std::size_t>(dst_y) * pw + dst_x] = get_channel(kernel(kx, ky), c);
+                }
+            }
+            fftwf_execute(fwd_b);
+
+            // Pack image channel into buf_a (top-left aligned, zero-padded)
+            std::memset(buf_a, 0, real_size * sizeof(float));
+            for (int y = 0; y < this->height(); ++y) {
+                for (int x = 0; x < this->width(); ++x) {
+                    buf_a[static_cast<std::size_t>(y) * pw + x] = get_channel((*this)(x, y), c);
+                }
+            }
+            fftwf_execute(fwd_a);
+
+            // Pointwise complex multiply: freq_a = freq_a * freq_b
+            for (std::size_t i = 0; i < complex_size; ++i) {
+                float re = freq_a[i][0] * freq_b[i][0] - freq_a[i][1] * freq_b[i][1];
+                float im = freq_a[i][0] * freq_b[i][1] + freq_a[i][1] * freq_b[i][0];
+                freq_a[i][0] = re;
+                freq_a[i][1] = im;
+            }
+
+            // Inverse transform
+            fftwf_execute(inv);
+
+            // Unpack result (top-left region is the valid linear convolution)
+            for (int y = 0; y < this->height(); ++y) {
+                for (int x = 0; x < this->width(); ++x) {
+                    set_channel(result(x, y), c, buf_a[static_cast<std::size_t>(y) * pw + x] * norm);
+                }
+            }
+        }
+
+        // Cleanup
+        fftwf_destroy_plan(fwd_a);
+        fftwf_destroy_plan(fwd_b);
+        fftwf_destroy_plan(inv);
+        fftwf_free(buf_a);
+        fftwf_free(buf_b);
+        fftwf_free(freq_a);
+        fftwf_free(freq_b);
+
+        *this = std::move(result);
+    }
 }

@@ -82,6 +82,7 @@ namespace huira {
         void set_psf(Args&&... args) const;
 
         void use_aperture_psf(int radius = 64, int banks = 16) const;
+        void enable_psf_convolution(bool convolve_psf = true) const;
         void delete_psf() const;
 
         void enable_depth_of_field(bool depth_of_field = true) const;
