@@ -7,7 +7,12 @@
 #include "huira/core/types.hpp"
 #include "huira/core/concepts/numeric_concepts.hpp"
 #include "huira/core/concepts/spectral_concepts.hpp"
+#include "huira/core/spectral_bins.hpp"
 
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable: 4686)
+#endif
 
 namespace huira {
     /**
@@ -261,3 +266,7 @@ namespace huira {
         }
     }
 }
+
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif

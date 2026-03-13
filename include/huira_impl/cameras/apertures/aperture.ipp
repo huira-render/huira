@@ -23,16 +23,17 @@ namespace huira {
         const float blur_radius_pixels = blur_radius_meters / pitch;
         if (blur_radius_pixels < 0.5f) {
             // Blur is less than half a pixel - treat as in focus
-            defocus_cache_.radius = 0;
+            defocus_cache_.radius = 0.f;
             defocus_cache_.banks = 0;
             defocus_cache_.dim = 0;
             defocus_cache_.kernels.clear();
             return;
         }
 
-        defocus_cache_.radius = std::max(1, static_cast<int>(std::ceil(blur_radius_pixels)));
+        defocus_cache_.radius = blur_radius_pixels;
+        defocus_cache_.half_extent = std::max(1, static_cast<int>(std::ceil(blur_radius_pixels)));
         defocus_cache_.banks = banks;
-        defocus_cache_.dim = 2 * defocus_cache_.radius + 1;
+        defocus_cache_.dim = 2 * defocus_cache_.half_extent + 1;
 
         generate_polyphase_data_();
     }
@@ -69,7 +70,7 @@ namespace huira {
                 auto& kernel = defocus_cache_.kernels[static_cast<std::size_t>(j * banks + i)];
                 kernel.fill(0.f);
 
-                rasterize_kernel_(kernel, static_cast<float>(defocus_cache_.radius), offset_x, offset_y);
+                rasterize_kernel_(kernel, defocus_cache_.radius, offset_x, offset_y);
 
                 // normalize so kernel sums to 1
                 float sum = 0.f;

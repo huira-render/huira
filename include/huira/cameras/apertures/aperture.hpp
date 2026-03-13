@@ -43,14 +43,16 @@ namespace huira {
 
         const Image<float>& get_defocus_kernel(float u, float v) const;
 
-        int get_defocus_radius() const { return defocus_cache_.radius; }
+        float get_defocus_radius() const { return defocus_cache_.radius; }
+        int get_defocus_half_extent() const { return defocus_cache_.half_extent; }
         bool has_defocus() const { return defocus_cache_.radius > 0; }
 
         virtual units::Meter get_bounding_radius() const = 0;
 
     protected:
         struct PolyphaseCache {
-            int radius = 0;
+            float radius = 0.f;
+            int half_extent = 0;
             int banks = 0;
             int dim = 0;
             std::vector<Image<float>> kernels;

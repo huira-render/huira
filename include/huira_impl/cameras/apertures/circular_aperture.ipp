@@ -131,8 +131,8 @@ namespace huira {
         float offset_y)
     {
         const int dim = kernel.width();
-        const float cx = static_cast<float>(dim / 2) + offset_x;
-        const float cy = static_cast<float>(dim / 2) + offset_y;
+        const float cx = static_cast<float>(dim / 2) + 0.5f + offset_x;
+        const float cy = static_cast<float>(dim / 2) + 0.5f + offset_y;
 
         for (int y = 0; y < dim; ++y) {
             for (int x = 0; x < dim; ++x) {
