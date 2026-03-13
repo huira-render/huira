@@ -48,7 +48,6 @@ int main(int argc, char** argv) {
     camera_model.set_sensor_resolution(1024, 1024);
     camera_model.use_aperture_psf(32, 16);
     camera_model.set_sensor_bit_depth(14);
-    camera_model.enable_psf_convolution();
 
     // Set the observation time
     huira::Time time("2016-09-19T16:22:05.728");
@@ -70,16 +69,11 @@ int main(int argc, char** argv) {
     huira::Renderer<TSpectral> renderer;
 
     //  Create a scene view over the exposure interval
-    for (int i = 50; i > -50; --i) {
-        camera_model.set_diopters(huira::units::Diopter(static_cast<float>(i)/1000.f));
-        auto scene_view = huira::SceneView<TSpectral>(scene, exposure_interval, mapcam, huira::ObservationMode::ABERRATED_STATE, 3);
+    auto scene_view = huira::SceneView<TSpectral>(scene, exposure_interval, mapcam, huira::ObservationMode::ABERRATED_STATE, 3);
 
-        // Render the current scene view
-        renderer.render(scene_view, frame_buffer);
+    // Render the current scene view
+    renderer.render(scene_view, frame_buffer);
 
-        // Save the results
-        char filename[64];
-        std::snprintf(filename, sizeof(filename), "output/starfield_%03d.png", i + 50);
-        huira::write_image_png(filename, frame_buffer.sensor_response(), 8);
-    }
+    // Save the results
+    huira::write_image_png("output/starfield.png", frame_buffer.sensor_response(), 8);
 }
