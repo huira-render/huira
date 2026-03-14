@@ -29,7 +29,7 @@ find_package(CSPICE REQUIRED)
 
 find_package(embree CONFIG REQUIRED)
 
-find_package(FFTW3f CONFIG REQUIRED)
+find_package(FFTW3f REQUIRED)
 
 find_package(glm CONFIG QUIET)
 if(NOT glm_FOUND)

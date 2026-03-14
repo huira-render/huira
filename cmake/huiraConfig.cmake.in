@@ -14,7 +14,7 @@ find_dependency(CSPICE)
 
 find_dependency(embree CONFIG)
 
-find_dependency(FFTW3f CONFIG)
+find_dependency(FFTW3f)
 
 find_dependency(glm CONFIG)
 if(NOT glm_FOUND)
