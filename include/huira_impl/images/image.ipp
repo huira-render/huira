@@ -470,28 +470,30 @@ namespace huira {
         if constexpr (IsInteger<PixelT>) {
             HUIRA_THROW_ERROR("Image::convolve - Requires a floating-point pixel type");
         }
+        else {
 
-        if (kernel.width() == 1 && kernel.height() == 1) {
-            // Degenerate case: just multiply
-            PixelT k = kernel(0, 0);
-            for (int y = 0; y < this->height(); ++y) {
-                for (int x = 0; x < this->width(); ++x) {
-                    (*this)(x, y) *= k;
+            if (kernel.width() == 1 && kernel.height() == 1) {
+                // Degenerate case: just multiply
+                PixelT k = kernel(0, 0);
+                for (int y = 0; y < this->height(); ++y) {
+                    for (int x = 0; x < this->width(); ++x) {
+                        (*this)(x, y) *= k;
+                    }
                 }
+                return;
             }
-            return;
+
+            const int kw = kernel.width();
+            const int kh = kernel.height();
+
+            // Small kernel threshold: direct convolution
+            if (kw * kh <= 25) {
+                convolve_direct_(kernel);
+                return;
+            }
+
+            convolve_fft_(kernel);
         }
-
-        const int kw = kernel.width();
-        const int kh = kernel.height();
-
-        // Small kernel threshold: direct convolution
-        if (kw * kh <= 25) {
-            convolve_direct_(kernel);
-            return;
-        }
-
-        convolve_fft_(kernel);
     }
 
     /**
@@ -644,7 +646,12 @@ namespace huira {
                 return static_cast<float>(pixel);
             }
             else {
-                return static_cast<float>(pixel[c]);
+                if constexpr (IsVec<PixelT>) {
+                    return static_cast<float>(pixel[static_cast<int>(c)]);
+                }
+                else {
+                    return static_cast<float>(pixel[c]);
+                }
             }
             };
 
@@ -654,7 +661,12 @@ namespace huira {
                 pixel = static_cast<PixelT>(val);
             }
             else {
-                pixel[c] = val;
+                if constexpr (IsVec<PixelT>) {
+                    pixel[static_cast<int>(c)] = val;
+                }
+                else {
+                    pixel[c] = val;
+                }
             }
             };
 
@@ -680,7 +692,7 @@ namespace huira {
                 for (int kx = 0; kx < kw; ++kx) {
                     int dst_x = (kx - kcx + pw) % pw;
                     int dst_y = (ky - kcy + ph) % ph;
-                    buf_b[static_cast<std::size_t>(dst_y) * pw + dst_x] = get_channel(kernel(kx, ky), c);
+                    buf_b[static_cast<std::size_t>(dst_y * pw + dst_x)] = get_channel(kernel(kx, ky), c);
                 }
             }
             fftwf_execute(fwd_b);
@@ -689,7 +701,7 @@ namespace huira {
             std::memset(buf_a, 0, real_size * sizeof(float));
             for (int y = 0; y < this->height(); ++y) {
                 for (int x = 0; x < this->width(); ++x) {
-                    buf_a[static_cast<std::size_t>(y) * pw + x] = get_channel((*this)(x, y), c);
+                    buf_a[static_cast<std::size_t>(y * pw + x)] = get_channel((*this)(x, y), c);
                 }
             }
             fftwf_execute(fwd_a);
@@ -708,7 +720,7 @@ namespace huira {
             // Unpack result (top-left region is the valid linear convolution)
             for (int y = 0; y < this->height(); ++y) {
                 for (int x = 0; x < this->width(); ++x) {
-                    set_channel(result(x, y), c, buf_a[static_cast<std::size_t>(y) * pw + x] * norm);
+                    set_channel(result(x, y), c, buf_a[static_cast<std::size_t>(y * pw + x)] * norm);
                 }
             }
         }
