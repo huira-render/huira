@@ -1,4 +1,4 @@
-# FindCFITSIO.cmake - Robust CFITSIO discovery for huira
+# FindCFITSIO.cmake
 #
 # Tries four strategies in order:
 #   1. Official cfitsio CMake config  (cfitsio >= 4.4, vcpkg >= #50344)
@@ -24,11 +24,7 @@ if(TARGET CFITSIO::CFITSIO)
 endif()
 
 
-# ─── Strategy 1: Official cfitsio CMake config ──────────────────────────
-#
-# cfitsio >= 4.4 (and vcpkg after PR #50344) ships official CMake config
-# that provides CFITSIO::CFITSIO directly.
-#
+# Strategy 1: Official cfitsio CMake config 
 find_package(cfitsio CONFIG QUIET)
 
 if(cfitsio_FOUND AND TARGET CFITSIO::CFITSIO)
@@ -46,8 +42,6 @@ if(cfitsio_FOUND AND TARGET CFITSIO::CFITSIO)
     return()
 endif()
 
-# The official config may also export a lowercase target (cfitsio::cfitsio)
-# depending on version. Handle that case too.
 if(cfitsio_FOUND AND TARGET cfitsio::cfitsio AND NOT TARGET CFITSIO::CFITSIO)
     add_library(CFITSIO::CFITSIO INTERFACE IMPORTED)
     set_target_properties(CFITSIO::CFITSIO PROPERTIES
@@ -68,11 +62,7 @@ if(cfitsio_FOUND AND TARGET cfitsio::cfitsio AND NOT TARGET CFITSIO::CFITSIO)
 endif()
 
 
-# ─── Strategy 2: Legacy vcpkg CMake config (unofficial-cfitsio) ──────────
-#
-# Older vcpkg snapshots ship unofficial-cfitsio with a config file.
-# The target it creates is just "cfitsio" (no namespace), so we wrap it.
-#
+# Strategy 2: Legacy vcpkg CMake config (unofficial-cfitsio)
 find_package(unofficial-cfitsio CONFIG QUIET)
 
 if(unofficial-cfitsio_FOUND OR TARGET cfitsio)
@@ -98,10 +88,7 @@ if(unofficial-cfitsio_FOUND OR TARGET cfitsio)
 endif()
 
 
-# ─── Strategy 3: pkg-config ─────────────────────────────────────────────
-#
-# conda, apt, brew, and manual installs usually provide cfitsio.pc.
-#
+# Strategy 3: pkg-config 
 find_package(PkgConfig QUIET)
 
 if(PKG_CONFIG_FOUND)
@@ -147,10 +134,7 @@ if(PKG_CONFIG_FOUND)
 endif()
 
 
-# ─── Strategy 4: Manual search ──────────────────────────────────────────
-#
-# Look for fitsio.h and libcfitsio in common locations.
-#
+# Strategy 4: Manual search
 find_path(CFITSIO_INCLUDE_DIRS
     NAMES fitsio.h
     HINTS
