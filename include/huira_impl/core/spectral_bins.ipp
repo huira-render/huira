@@ -89,17 +89,17 @@ namespace huira {
     {
         // --- Precondition checks ---
         if (wavelengths.size() != values.size()) {
-            throw std::invalid_argument(
-                "integrate_over_data: wavelengths and values must have the same length");
+            HUIRA_THROW_ERROR(
+                "SpectralBins::integrate_over_data: wavelengths and values must have the same length");
         }
         if (wavelengths.empty()) {
-            throw std::invalid_argument(
-                "integrate_over_data: wavelengths and values must not be empty");
+            HUIRA_THROW_ERROR(
+                "SpectralBins::integrate_over_data: wavelengths and values must not be empty");
         }
         for (std::size_t k = 1; k < wavelengths.size(); ++k) {
             if (wavelengths[k] <= wavelengths[k - 1]) {
-                throw std::invalid_argument(
-                    "integrate_over_data: wavelengths must be strictly ascending");
+                HUIRA_THROW_ERROR(
+                    "SpectralBins::integrate_over_data: wavelengths must be strictly ascending");
             }
         }
 
@@ -671,7 +671,8 @@ namespace huira {
         // Check each bin has min < max
         for (std::size_t i = 0; i < N; ++i) {
             if (bins[i].min_wavelength >= bins[i].max_wavelength) {
-                throw "Bin has min_wavelength >= max_wavelength (inverted or zero-width bin)";
+                HUIRA_THROW_ERROR(
+                    "SpectralBins::initialize_bins_static_: Bin has min_wavelength >= max_wavelength (inverted or zero-width bin)");
             }
         }
 
@@ -681,7 +682,7 @@ namespace huira {
                 // Two intervals overlap if one starts before the other ends and vice versa
                 if (bins[i].min_wavelength < bins[j].max_wavelength &&
                     bins[j].min_wavelength < bins[i].max_wavelength) {
-                    throw "Spectral bins overlap";
+                    HUIRA_THROW_ERROR("SpectralBins::initialize_bins_static_: Spectral bins overlap");
                 }
             }
         }

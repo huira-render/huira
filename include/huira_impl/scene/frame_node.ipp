@@ -65,23 +65,6 @@ namespace huira {
 
 
     /**
-     * @brief Create a new Camera leaf node and attach it to this FrameNode.
-     * @return std::weak_ptr<Camera<TSpectral>> Weak pointer to new camera
-     */
-    template <IsSpectral TSpectral>
-    std::weak_ptr<Camera<TSpectral>> FrameNode<TSpectral>::new_camera()
-    {
-        auto child = std::make_shared<Camera<TSpectral>>(this->scene_);
-        child->set_parent_(this);
-
-        HUIRA_LOG_INFO(this->get_info() + " - Added: " + child->get_info());
-
-        children_.push_back(child);
-        return child;
-    }
-
-
-    /**
      * @brief Create a new Instance leaf node for a mesh and attach it to this FrameNode.
      * @param mesh Mesh pointer
      * @return std::weak_ptr<Instance<TSpectral>> Weak pointer to new instance
