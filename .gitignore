@@ -3,6 +3,8 @@
 ################################
 /build/
 /out/
+build/
+**/build/
 
 bindings/python/build/
 bindings/python/*.egg-info/

@@ -74,6 +74,9 @@ After successful compilation, integrate *Huira* into your conda environment:
 cmake --install . --prefix "$CONDA_PREFIX"
 ```
 
+> [!IMPORTANT]
+> To uninstall, you must run `cmake --build . --target uninstall` from within the same `build` directory you installed from.
+
 ***
 
 ## Method 2: vcpkg Package Manager

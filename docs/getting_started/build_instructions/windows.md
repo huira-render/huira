@@ -61,6 +61,9 @@ If you're in cmd prompt or miniforge prompt:
 cmake --install . --config Release --prefix "%CONDA_PREFIX%"
 ```
 
+> [!IMPORTANT]
+> To uninstall, you must run `cmake --build . --target uninstall` from within the same `build` directory you installed from.
+
 ***
 
 ## Method 2: vcpkg Package Manager
