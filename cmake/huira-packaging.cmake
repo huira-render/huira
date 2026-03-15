@@ -4,6 +4,14 @@
 include(CMakePackageConfigHelpers)
 include(GNUInstallDirs)
 
+# Run cleanup of any previous installation before installing
+configure_file(
+    "${CMAKE_SOURCE_DIR}/cmake/pre-install-cleanup.cmake.in"
+    "${CMAKE_BINARY_DIR}/pre-install-cleanup.cmake"
+    @ONLY
+)
+install(SCRIPT "${CMAKE_BINARY_DIR}/pre-install-cleanup.cmake")
+
 # Install headers
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/huira/
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/huira)
@@ -49,3 +57,9 @@ install(FILES
         "${CMAKE_SOURCE_DIR}/cmake/find/FindCFITSIO.cmake"
         "${CMAKE_SOURCE_DIR}/cmake/find/FindFFTW3f.cmake"
         DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/huira)
+
+# Add uninstall target
+add_custom_target(uninstall
+    COMMAND "${CMAKE_COMMAND}" -P "${CMAKE_BINARY_DIR}/pre-install-cleanup.cmake"
+    COMMENT "Uninstalling huira from ${CMAKE_INSTALL_PREFIX}"
+)
