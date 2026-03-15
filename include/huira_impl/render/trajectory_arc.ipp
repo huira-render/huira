@@ -19,7 +19,7 @@ namespace huira {
         : sample_count_(samples.size())
     {
         if (samples.size() < 1) {
-            throw std::invalid_argument("TrajectoryArc requires at least 1 sample point.");
+            HUIRA_THROW_ERROR("TrajectoryArc::TrajectoryArc - requires at least 1 sample point.");
         }
 
         if (is_polynomial_()) {

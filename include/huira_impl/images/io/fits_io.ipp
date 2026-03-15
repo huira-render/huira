@@ -382,7 +382,7 @@ namespace huira {
         detail::fits_check(status, "get image params");
 
         if (naxis < 2) {
-            throw std::runtime_error(
+            HUIRA_THROW_ERROR(
                 "FITS file has NAXIS=" + std::to_string(naxis)
                 + "; expected at least 2 for an image."
             );
@@ -397,7 +397,7 @@ namespace huira {
         //         fits_read_pix(fptr, TFLOAT, fpixel, w*h, ...);
         //     }
         if (naxis >= 3 && naxes[2] > 1) {
-            throw std::runtime_error(
+            HUIRA_THROW_ERROR(
                 "FITS file is a data cube (NAXIS3=" + std::to_string(naxes[2])
                 + ").  Use read_image_fits_cube() for multi-band images."
             );

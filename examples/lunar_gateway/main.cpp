@@ -4,14 +4,11 @@
 #include <iostream>
 #include <utility>
 
-using namespace std;
-using namespace std::chrono;
+namespace fs = std::filesystem;
 
 using namespace huira::units::literals;
 
 using TSpectral = huira::RGB;
-
-namespace fs = std::filesystem;
 
 static fs::path parse_input_paths(int argc, char** argv) {
     if (argc != 2) {

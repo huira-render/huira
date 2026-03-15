@@ -15,15 +15,6 @@
 namespace fs = std::filesystem;
 
 namespace huira::spice {
-
-    // ==================================== //
-    // === SPICE error handling utility === //
-    // ==================================== //
-    class SpiceError : public std::runtime_error {
-    public:
-        explicit SpiceError(const std::string& msg) : std::runtime_error(msg) {}
-    };
-
     inline void check_spice_error() {
         if (!failed_c()) {
             return;
@@ -164,7 +155,7 @@ namespace huira::spice {
                     getmsg_c("LONG", 1841, msg);
                     reset_c();
                     erract_c("SET", 0, oldAction);  // Restore before throwing
-                    throw SpiceError(std::string("Failed to load default LSK: ") + msg);
+                    HUIRA_THROW_ERROR("ensure_lsk_loaded() - Failed to load default LSK: " + std::string(msg));
                 }
             }
 

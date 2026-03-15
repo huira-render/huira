@@ -244,12 +244,12 @@ namespace huira {
      * 
      * @param index Linear index into the image data (0 to size()-1)
      * @return Reference to the pixel at the specified index
-     * @throws std::out_of_range if the index is out of bounds
+     * @throws std::runtime_error if the index is out of bounds
      */
     template<IsImagePixel PixelT>
     PixelT& Image<PixelT>::at(std::size_t index) {
         if (index >= data_.size()) {
-            throw std::out_of_range("Image index out of bounds");
+            HUIRA_THROW_ERROR("Image::at: index out of bounds");
         }
         return data_[index];
     }
@@ -259,12 +259,12 @@ namespace huira {
      * 
      * @param index Linear index into the image data (0 to size()-1)
      * @return Const reference to the pixel at the specified index
-     * @throws std::out_of_range if the index is out of bounds
+     * @throws std::runtime_error if the index is out of bounds
      */
     template<IsImagePixel PixelT>
     const PixelT& Image<PixelT>::at(std::size_t index) const {
         if (index >= data_.size()) {
-            throw std::out_of_range("Image index out of bounds");
+            HUIRA_THROW_ERROR("Image::at: index out of bounds");
         }
         return data_[index];
     }
@@ -275,12 +275,12 @@ namespace huira {
      * @param x The x-coordinate (column) of the pixel
      * @param y The y-coordinate (row) of the pixel
      * @return Reference to the pixel at (x, y)
-     * @throws std::out_of_range if the coordinates are out of bounds
+     * @throws std::runtime_error if the coordinates are out of bounds
      */
     template<IsImagePixel PixelT>
     PixelT& Image<PixelT>::at(int x, int y) {
         if (x >= resolution_.width || y >= resolution_.height) {
-            throw std::out_of_range("Image coordinates out of bounds");
+            HUIRA_THROW_ERROR("Image::at: coordinates out of bounds");
         }
         return data_[to_linear(x, y)];
     }
@@ -291,12 +291,12 @@ namespace huira {
      * @param x The x-coordinate (column) of the pixel
      * @param y The y-coordinate (row) of the pixel
      * @return Const reference to the pixel at (x, y)
-     * @throws std::out_of_range if the coordinates are out of bounds
+     * @throws std::runtime_error if the coordinates are out of bounds
      */
     template<IsImagePixel PixelT>
     const PixelT& Image<PixelT>::at(int x, int y) const {
         if (x >= resolution_.width || y >= resolution_.height) {
-            throw std::out_of_range("Image coordinates out of bounds");
+            HUIRA_THROW_ERROR("Image::at: coordinates out of bounds");
         }
         return data_[to_linear(x, y)];
     }
@@ -308,7 +308,7 @@ namespace huira {
      * 
      * @param pixel The pixel coordinates (floating point values are truncated)
      * @return Reference to the pixel at the converted coordinates
-     * @throws std::out_of_range if the coordinates are out of bounds
+     * @throws std::runtime_error if the coordinates are out of bounds
      */
     template<IsImagePixel PixelT>
     PixelT& Image<PixelT>::at(const Pixel& pixel) {
@@ -316,7 +316,7 @@ namespace huira {
         auto x = static_cast<int>(pixel.x);
         auto y = static_cast<int>(pixel.y);
         if (x >= resolution_.width || y >= resolution_.height) {
-            throw std::out_of_range("Image pixel coordinates out of bounds");
+            HUIRA_THROW_ERROR("Image::at: pixel coordinates out of bounds");
         }
         return data_[to_linear(x, y)];
     }
@@ -328,7 +328,7 @@ namespace huira {
      * 
      * @param pixel The pixel coordinates (floating point values are truncated)
      * @return Const reference to the pixel at the converted coordinates
-     * @throws std::out_of_range if the coordinates are out of bounds
+     * @throws std::runtime_error if the coordinates are out of bounds
      */
     template<IsImagePixel PixelT>
     const PixelT& Image<PixelT>::at(const Pixel& pixel) const {
@@ -336,7 +336,7 @@ namespace huira {
         auto x = static_cast<int>(pixel.x);
         auto y = static_cast<int>(pixel.y);
         if (x >= resolution_.width || y >= resolution_.height) {
-            throw std::out_of_range("Image pixel coordinates out of bounds");
+            HUIRA_THROW_ERROR("Image::at: pixel coordinates out of bounds");
         }
         return data_[to_linear(x, y)];
     }
