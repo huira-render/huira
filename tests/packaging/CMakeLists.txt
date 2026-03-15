@@ -1,4 +1,9 @@
 cmake_minimum_required(VERSION 3.16)
+
+if(VCPKG_TARGET_TRIPLET MATCHES "-static$")
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
+
 project(huira_packaging_test LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)

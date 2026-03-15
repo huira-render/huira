@@ -5,11 +5,10 @@ include(CMakeFindDependencyMacro)
 # Add installed find modules to module path
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}")
 
-# Compute the data directory relative to this config file's location.
-# This file is at <prefix>/lib/cmake/huira/huiraConfig.cmake
-# Data is at    <prefix>/share/huira/data
-get_filename_component(_huira_prefix "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
-set(HUIRA_DATA_DIR "${_huira_prefix}/@CMAKE_INSTALL_DATADIR@/huira/data")
+# PACKAGE_PREFIX_DIR is set by @PACKAGE_INIT@ and is always the correct
+# prefix, regardless of whether the config file lives in lib/cmake/huira
+# (normal install) or share/huira (vcpkg after config fixup).
+set(HUIRA_DATA_DIR "${PACKAGE_PREFIX_DIR}/@CMAKE_INSTALL_DATADIR@/huira/data")
 
 # Find dependencies (in order):
 find_dependency(assimp CONFIG)
