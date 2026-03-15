@@ -671,8 +671,7 @@ namespace huira {
         // Check each bin has min < max
         for (std::size_t i = 0; i < N; ++i) {
             if (bins[i].min_wavelength >= bins[i].max_wavelength) {
-                HUIRA_THROW_ERROR(
-                    "SpectralBins::initialize_bins_static_: Bin has min_wavelength >= max_wavelength (inverted or zero-width bin)");
+                throw "SpectralBins::initialize_bins_static_: Bin has min_wavelength >= max_wavelength (inverted or zero-width bin)";
             }
         }
 
@@ -682,7 +681,7 @@ namespace huira {
                 // Two intervals overlap if one starts before the other ends and vice versa
                 if (bins[i].min_wavelength < bins[j].max_wavelength &&
                     bins[j].min_wavelength < bins[i].max_wavelength) {
-                    HUIRA_THROW_ERROR("SpectralBins::initialize_bins_static_: Spectral bins overlap");
+                    throw "SpectralBins::initialize_bins_static_: Spectral bins overlap";
                 }
             }
         }
