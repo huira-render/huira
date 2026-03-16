@@ -3,6 +3,7 @@
 #include <string>
 
 #include "huira/core/physics.hpp"
+#include "huira/util/logger.hpp"
 
 namespace huira {
     /**

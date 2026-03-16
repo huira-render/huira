@@ -358,6 +358,15 @@ namespace huira {
             }
         }
 
+        inline long fits_blank_value(int bit_depth)
+        {
+            switch (bit_depth) {
+            case  8: return 0;          // reserve 0; clamp valid pixels to [1, 255]
+            case 16: return -32768;     // signed min, outside valid ADU range
+            case 32: return -2147483648L;
+            default: return 0;         // float formats use NaN, not BLANK
+            }
+        }
     } // namespace detail
 
 
@@ -556,11 +565,7 @@ namespace huira {
 
         long blank_value = 0;
         if (is_integer) {
-            blank_value = static_cast<long>(adc_max) + 1;
-
-            long container_max = static_cast<long>(detail::bitpix_max(bit_depth));
-            if (blank_value > container_max)
-                blank_value = container_max;
+            blank_value = detail::fits_blank_value(bit_depth);
         }
 
         bool has_blank = false;
@@ -581,9 +586,10 @@ namespace huira {
                 }
                 else {
                     if (is_integer) {
+                        float lo = (bit_depth == 8) ? 1.f : 0.f;
                         px = std::clamp(
                             px * static_cast<float>(adc_max),
-                            0.f,
+                            lo,
                             static_cast<float>(detail::bitpix_max(bit_depth))
                         );
                     }

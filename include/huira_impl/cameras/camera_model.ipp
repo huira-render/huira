@@ -272,8 +272,12 @@ namespace huira {
     }
 
     /**
-     * @brief Get the current focus distance for depth of field calculations.
-     * @return float Focus distance in meters
+     * @brief Set the focus distance using diopters.
+      *
+      * Converts the given diopter value to a focus distance in meters and forwards
+      * it to set_focus_distance().
+      *
+      * @param diopters Focus distance expressed in diopters
      */
     template <IsSpectral TSpectral>
     void CameraModel<TSpectral>::set_diopters(units::Diopter diopters)
@@ -290,7 +294,7 @@ namespace huira {
 
     /**
      * @brief Get the current focus distance in diopters.
-     * @return float Focus distance in diopters
+     * @return units::Diopter Focus distance expressed in diopters
      */
     template <IsSpectral TSpectral>
     units::Diopter CameraModel<TSpectral>::get_diopters() const

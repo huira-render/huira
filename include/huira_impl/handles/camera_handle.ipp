@@ -15,7 +15,7 @@ namespace huira {
 
     /**
      * @brief Get the focal length of the camera (in millimeters).
-     * @return float Focal length
+     * @return units::Millimeter Focal length in millimeters
      */
     template <IsSpectral TSpectral>
     units::Millimeter CameraModelHandle<TSpectral>::focal_length() const
@@ -381,7 +381,7 @@ namespace huira {
 
     /**
      * @brief Get the current focus distance for depth of field calculations.
-     * @return float Focus distance in meters
+     * @return units::Meter Focus distance in meters
      */
     template <IsSpectral TSpectral>
     units::Meter CameraModelHandle<TSpectral>::get_focus_distance() const
@@ -401,7 +401,7 @@ namespace huira {
 
     /**
      * @brief Get the current diopters value for depth of field calculations.
-     * @return float Diopters value
+     * @return units::Diopter Diopters value
      */
     template <IsSpectral TSpectral>
     units::Diopter CameraModelHandle<TSpectral>::get_diopters() const
