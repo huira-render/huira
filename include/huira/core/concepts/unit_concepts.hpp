@@ -14,6 +14,9 @@ namespace huira::units {
     concept IsRatio = is_std_ratio_impl<T>::value;
 
     template<typename T>
+    inline constexpr bool is_std_ratio_v = is_std_ratio_impl<T>::value;
+
+    template<typename T>
     struct is_unit_tag : std::false_type {};
 
 

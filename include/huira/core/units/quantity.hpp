@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <ostream>
 #include <ratio>
 #include <string>
@@ -283,7 +284,13 @@ namespace huira::units {
     template<IsNumeric T, IsDimensionality Dim, IsRatioOrTag Scale>
     constexpr auto operator/(T scalar, const Quantity<Dim, Scale>& quantity) {
         using ReciprocalDim = decltype(Dimensionless{} / Dim{});
-        return Quantity<ReciprocalDim, Scale>(static_cast<double>(scalar) / quantity.raw_value());
+        if constexpr (is_std_ratio_v<Scale>) {
+            using ReciprocalScale = ratio_divide<std::ratio<1, 1>, Scale>;
+            return Quantity<ReciprocalDim, ReciprocalScale>(static_cast<double>(scalar) / quantity.raw_value());
+        }
+        else {
+            return Quantity<ReciprocalDim, std::ratio<1, 1>>(static_cast<double>(scalar) / quantity.to_si());
+        }
     }
 
     template<IsDimensionality Dim, IsRatioOrTag Scale1, IsRatioOrTag Scale2>

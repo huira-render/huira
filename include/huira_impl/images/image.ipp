@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cmath>
+#include <cstring>
 #include <stdexcept>
 
 #include "fftw3.h"
@@ -669,19 +670,6 @@ namespace huira {
                 }
             }
             };
-
-        // Transform kernel once — zero-pad and wrap so center lands at origin
-        std::memset(buf_b, 0, real_size * sizeof(float));
-        for (int ky = 0; ky < kh; ++ky) {
-            for (int kx = 0; kx < kw; ++kx) {
-                // Wrap kernel so that (kcx, kcy) maps to (0,0)
-                int dst_x = (kx - kcx + pw) % pw;
-                int dst_y = (ky - kcy + ph) % ph;
-                // Use channel 0 for now; kernel is the same for all channels
-                // if scalar, otherwise we do this per channel below
-                buf_b[static_cast<std::size_t>(dst_y) * static_cast<std::size_t>(pw) + static_cast<std::size_t>(dst_x)] = 0.0f; // placeholder
-            }
-        }
 
         Image<PixelT> result(this->resolution());
 

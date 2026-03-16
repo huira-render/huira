@@ -21,8 +21,6 @@ namespace huira {
     CircularAperture<TSpectral>::CircularAperture(units::Meter diameter)
     {
         this->set_diameter(diameter);
-        diameter_ = static_cast<float>(diameter.to_si());
-        radius_ = diameter_ / 2.f;
     }
 
 
@@ -36,7 +34,7 @@ namespace huira {
     template <IsSpectral TSpectral>
     void CircularAperture<TSpectral>::set_area(units::SquareMeter area)
     {
-        this->area_ = static_cast<float>(area.to_si());
+        this->area_ = area.to_si_f();
         diameter_ = std::sqrt(4.f * this->area_ / PI<float>());
         radius_ = diameter_ / 2.f;
     }
@@ -77,7 +75,7 @@ namespace huira {
     template <IsSpectral TSpectral>
     void CircularAperture<TSpectral>::set_diameter(units::Meter diameter) 
     { 
-        float d = static_cast<float>(diameter.to_si());
+        float d = diameter.to_si_f();
         this->area_ = PI<float>() * (d * d) / 4.f;
         this->diameter_ = d;
         this->radius_ = d / 2.f;
