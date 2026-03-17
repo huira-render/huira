@@ -47,6 +47,7 @@
           "name": "curl",
           "default-features": false
         },
+        "gdal",
         "indicators"
       ]
     },

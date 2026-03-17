@@ -3,18 +3,21 @@ add_executable(huira_cli
     cli.cpp
 
     commands/fetch_tycho2.cpp
+    commands/process_dems.cpp
     commands/process_tycho2.cpp
 )
 
-find_package(TCLAP REQUIRED)
 find_package(CURL REQUIRED)
+find_package(GDAL CONFIG REQUIRED)
 find_package(indicators REQUIRED)
+find_package(TCLAP REQUIRED)
 
 target_link_libraries(huira_cli PRIVATE
     huira::huira
-    TCLAP::TCLAP
     CURL::libcurl
     indicators::indicators
+    GDAL::GDAL
+    TCLAP::TCLAP
 )
 
 target_include_directories(huira_cli PRIVATE
