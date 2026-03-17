@@ -56,6 +56,7 @@ namespace huira {
         RootFrameHandle<TSpectral> root;
         
         MeshHandle<TSpectral> add_mesh(Mesh<TSpectral>&& mesh, std::string name = "");
+        MeshHandle<TSpectral> add_mesh(std::shared_ptr<Mesh<TSpectral>> mesh_shared, std::string name = "");
         void set_name(const MeshHandle<TSpectral>& mesh_handle, const std::string& name);
         MeshHandle<TSpectral> get_mesh(const std::string& name);
         void delete_mesh(const MeshHandle<TSpectral>& mesh_handle);

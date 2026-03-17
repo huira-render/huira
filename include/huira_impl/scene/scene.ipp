@@ -92,6 +92,15 @@ namespace huira {
         return MeshHandle<TSpectral>{ mesh_shared };
     };
 
+    template <IsSpectral TSpectral>
+    MeshHandle<TSpectral> Scene<TSpectral>::add_mesh(std::shared_ptr<Mesh<TSpectral>> mesh_shared, std::string name)
+    {
+        mesh_shared->set_material(default_material_.get());
+        mesh_shared->set_device(device_);
+        meshes_.add(mesh_shared, name);
+        return MeshHandle<TSpectral>{ mesh_shared };
+    };
+
     /**
      * @brief Sets the name for a mesh asset.
      * @param mesh_handle Handle to the mesh
