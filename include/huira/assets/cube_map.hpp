@@ -1,8 +1,10 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <filesystem>
 #include <functional>
+#include <memory>
 #include <unordered_map>
 #include <vector>
 
@@ -10,139 +12,171 @@
 #include "huira/images/image.hpp"
 #include "huira/util/logger.hpp"
 
+#include "huira/scene/scene_object.hpp"
+
 namespace fs = std::filesystem;
 
 namespace huira {
-    class DEMtoCubeMap {
+    template <IsFloatingPoint T>
+    class OBB {
     public:
-        void add_dem(const fs::path& dem_path)
-        {
-            dem_paths_.push_back(dem_path);
-        }
-
-        void build(const fs::path& output, int resolution)
-        {
-            (void)output;
-            (void)resolution;
-            // TODO Skipping for now
-        }
+        OBB() = default;
+        OBB(const Vec3<T>& center, const Vec3<T>& half_extents, const Mat3<T>& rotation)
+            : center_(center), half_extents_(half_extents), rotation_(rotation) {}
+        const Vec3<T>& center() const { return center_; }
+        const Vec3<T>& half_extents() const { return half_extents_; }
+        const Mat3<T>& rotation() const { return rotation_; }
 
     private:
-        std::vector<fs::path> dem_paths_;
-    };
-
-    enum CubeFace : std::uint8_t {
-        POSITIVE_X = 0,
-        NEGATIVE_X = 1,
-        POSITIVE_Y = 2,
-        NEGATIVE_Y = 3,
-        POSITIVE_Z = 4,
-        NEGATIVE_Z = 5
+        Vec3<T> center_;
+        Vec3<T> half_extents_;
+        Rotation<T> rotation_;
     };
 
     struct TileAddress {
-        CubeFace face;
-        int level;
-        int x, y;
-
-        TileAddress parent() const
-        {
-
-        }
-
-        TileAddress neighbor(Direction dir) const
-        {
-
-        }
-
-        std::pair<Vec2<float>, Vec2<float>> uv_bounds(int level_resolution) const
-        {
-
-        }
-
-        bool operator==(const TileAddress& other) const
-        {
-            return x == other.x && y == other.y && level == other.level && face == other.face;
+        std::uint16_t level;
+        std::uint16_t x, y;
+        bool operator==(const TileAddress& other) const {
+            return level == other.level && x == other.x && y == other.y;
         }
     };
-
 }
 
-template<>
-struct std::hash<huira::TileAddress> {
-    std::size_t operator()(const huira::TileAddress& addr) const noexcept {
-        // combine face, level, x, y
-        std::size_t h = std::hash<uint8_t>{}(static_cast<uint8_t>(addr.face));
-        h ^= std::hash<int>{}(addr.level) + 0x9e3779b9 + (h << 6) + (h >> 2);
-        h ^= std::hash<int>{}(addr.x) + 0x9e3779b9 + (h << 6) + (h >> 2);
-        h ^= std::hash<int>{}(addr.y) + 0x9e3779b9 + (h << 6) + (h >> 2);
-        return h;
-    }
-};
+namespace std {
+    template <>
+    struct hash<huira::TileAddress> {
+        std::size_t operator()(const huira::TileAddress& addr) const {
+            return (static_cast<std::size_t>(addr.level) << 32) | (static_cast<std::size_t>(addr.x) << 16) | addr.y;
+        }
+    };
+}
 
-namespace huira {
+namespace huira{
 
-    template <IsImagePixel PixelT>
-    class CubeMapTile {
-    public:
-        CubeMapTile(TileAddress address, Image<PixelT> data)
-            : address_(address), data_(std::move(data)) {}
+    struct QuadtreeNode {
+        // Each node corresponds to a tile
+        std::uint64_t file_id;
+        std::uint64_t byte_offset;
+        OBB<double> bounding_box;
+        Vec3<double> normal;
+        double normal_cone_angle;
 
-        const TileAddress& address() const { return address_; }
-        const Image<PixelT>& data() const { return data_; }
+        TileAddress tile_address;
 
-    protected:
-        TileAddress address_;
-        Image<PixelT> data_;
+        std::array<std::unique_ptr<QuadtreeNode>, 4> children;
     };
 
     template <IsSpectral TSpectral>
-    class CubeMapHeightTile : public CubeMapTile<float> {
+    class CubeMap : public SceneObject<CubeMap<TSpectral>> {
     public:
-        std::shared_ptr<Mesh<TSpectral>> get_mesh()
+        CubeMap(const fs::path& cubemap_path) : id_(next_id_++)
         {
-            if (!mesh_cache_) {
-                // TODO Build mesh from height data
-            }
-            return mesh_cache_;
+            // TODO Load the cubemap into QuadtreeNode
+            // Mapping of file_path to file_id
+            (void)cubemap_path; // Placeholder to suppress unused parameter warning
         }
+
+        std::pair<std::vector<TileAddress>, std::vector<TileAddress>> get_visible_tile_updates(CameraModel<TSpectral> camera, Transform<double> camera_transform)
+        {
+            // Reset the lists of loaded/unloaded tiles for this frame
+            this->unloaded_tiles_.clear();
+            this->newly_loaded_tiles_.clear();
+
+            for (std::size_t i = 0; i < face_trees_.size(); ++i) {
+                // We use i as the face index
+                update_meshes_(camera, camera_transform, face_trees_[i], i);
+            }
+
+            return { newly_loaded_tiles_, unloaded_tiles_ };
+        }
+
+        std::uint64_t id() const override { return id_; }
+        std::string type() const override { return "CubeMap"; }
 
     private:
-        std::shared_ptr<Mesh<TSpectral>> mesh_cache_;
-    };
 
+        std::array<QuadtreeNode, 6> face_trees_;
+        std::unordered_map<std::uint64_t, fs::path> file_id_to_path_;
 
-    template <IsSpectral TSpectral>
-    class CubeMapHeight {
-    public:
-        CubeMapHeight(const fs::path& cubemap_path)
+        // Cached loaded data
+        std::unordered_map<TileAddress, std::shared_ptr<Mesh<TSpectral>>> loaded_meshes_;
+        std::vector<TileAddress> newly_loaded_tiles_;
+        std::vector<TileAddress> unloaded_tiles_;
+
+        std::uint64_t id_ = 0;
+        static inline std::uint64_t next_id_ = 0;
+
+        void update_meshes_(const CameraModel<TSpectral>& camera, const Transform<double>& camera_transform, const QuadtreeNode& node, std::size_t face_index)
         {
-            // TODO Implement
-            (void)cubemap_path;
-        }
+            // TODO Determine if the node is visible
+            bool visible = true; // Placeholder
+            if (visible) {
+                // TODO Determine if the node's LOD is suitable for rendering
+                bool suitable_lod = true; // Placeholder
+                if (suitable_lod) {
+                    // Load it if we haven't already:
+                    if (loaded_meshes_.find(node.tile_address) == loaded_meshes_.end()) {
+                        loaded_meshes_[node.tile_address] = make_mesh(node);
+                        newly_loaded_tiles_.push_back(node.tile_address);
+                    }
 
-        std::vector<TileAddress> get_visible_tiles() const
-        {
-            // TODO Implement this for a camera.  For now, just return all
-            std::vector<TileAddress> addresses;
-            for (const auto& pair : tiles_) {
-                addresses.push_back(pair.first);
-            }
-            return addresses;
-        }
-
-        std::shared_ptr<Mesh<TSpectral>> get_mesh(const TileAddress& addr) const
-        {
-            auto it = tiles_.find(addr);
-            if (it != tiles_.end()) {
-                return it->second->get_mesh();
+                    // Remove children meshes if they exist
+                    for (const auto& child : node.children) {
+                        if (child) {
+                            unload_below_(*child);
+                        }
+                    }
+                }
+                else {
+                    // Need to go deeper into the tree
+                    for (const auto& child : node.children) {
+                        if (child) {
+                            update_meshes_(camera, camera_transform, *child, face_index);
+                        }
+                    }
+                }
             }
             else {
-                HUIRA_THROW_ERROR("CubeMapHeight::tile - Tile not found: face=" + std::to_string(static_cast<uint8_t>(addr.face)) + ", level=" + std::to_string(addr.level) + ", x=" + std::to_string(addr.x) + ", y=" + std::to_string(addr.y));
+                unload_below_(node);
             }
         }
 
-    private:
-        std::unordered_map<TileAddress, std::unique_ptr<CubeMapHeightTile<TSpectral>>> tiles_;
+        void unload_below_(const QuadtreeNode& node)
+        {
+            // Recursively remove all child meshes for this node
+            for (const auto& child : node.children) {
+                if (child) {
+                    unload_below_(*child);
+                    unloaded_tiles_.push_back(child->tile_address);
+                }
+            }
+            // Remove the mesh for this node if it exists
+            loaded_meshes_.erase(node.tile_address);
+        }
+
+        std::shared_ptr<Mesh<TSpectral>> make_mesh_(const QuadtreeNode& node)
+        {
+            if (file_id_to_path_.find(node.file_id) == file_id_to_path_.end()) {
+                HUIRA_THROW_ERROR("CubeMap::make_mesh_ - File ID " + std::to_string(node.file_id) + "not found in cubemap file mapping");
+            }
+            const fs::path& path = file_id_to_path_[node.file_id];
+
+            Image<float> height_image = load_heights(path, node.tile_address);
+
+            // TODO create the mesh vertex data from the height image and the tile address
+
+            VertexBuffer<TSpectral> vertex_buffer;
+            IndexBuffer index_buffer;
+
+            return std::make_shared<Mesh<TSpectral>>(vertex_buffer, index_buffer);
+        }
+
+        Image<float> load_heights(const fs::path& path, const TileAddress& tile_address)
+        {
+            // TODO Load the height data from the file at the byte offset.
+            (void)path;
+            (void)tile_address;
+            return Image<float>();
+        }
     };
 }
