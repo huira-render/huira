@@ -9,6 +9,7 @@
 
 #include "huira/assets/mesh.hpp"
 #include "huira/assets/model.hpp"
+#include "huira/assets/cube_map.hpp"
 #include "huira/assets/io/model_loader.hpp"
 #include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/handles/model_handle.hpp"
@@ -94,6 +95,7 @@ namespace huira {
         CameraModelHandle<TSpectral> get_camera_model(const std::string& name);
         void delete_camera_model(const CameraModelHandle<TSpectral>& camera_model_handle);
 
+        void load_cubemap(const fs::path& cubemap_path, std::string name = "");
 
         ModelHandle<TSpectral> load_model(
             const fs::path& file,
@@ -139,6 +141,8 @@ namespace huira {
         NameRegistry<UnresolvedObject<TSpectral>> unresolved_objects_;
         NameRegistry<CameraModel<TSpectral>> camera_models_;
         NameRegistry<Model<TSpectral>> models_;
+
+        NameRegistry<CubeMap<TSpectral>> cubemaps_;
 
         // Material Assets:
         NameRegistry<Material<TSpectral>> materials_;

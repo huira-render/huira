@@ -7,6 +7,7 @@
 
 #include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/assets/io/model_loader.hpp"
+#include "huira/assets/cube_map.hpp"
 #include "huira/handles/model_handle.hpp"
 #include "huira/handles/frame_handle.hpp"
 #include "huira/util/logger.hpp"
@@ -502,6 +503,18 @@ namespace huira {
         auto camera_model_shared = camera_model_handle.get();
         prune_graph_references_(camera_model_shared.get());
         camera_models_.remove(camera_model_shared);
+    }
+
+
+    /**
+     * @brief Loads a cubemap from file and adds it to the scene.
+     * @param cubemap_path Path to the cubemap file
+     * @param name Optional name
+     */
+    template <IsSpectral TSpectral>
+    void Scene<TSpectral>::load_cubemap(const fs::path& cubemap_path, std::string name)
+    {
+        this->cubemaps_.add(std::make_shared<CubeMap<TSpectral>>(cubemap_path), name);
     }
 
 
