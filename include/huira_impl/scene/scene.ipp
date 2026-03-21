@@ -3,6 +3,10 @@
 
 #include "embree4/rtcore.h"
 #include "huira/assets/io/model_loader.hpp"
+#include "huira/assets/cube_map.hpp"
+#include "huira/util/logger.hpp"
+#include "huira/util/colorful_text.hpp"
+#include "huira/stars/io/star_catalog.hpp"
 #include "huira/assets/lights/light.hpp"
 #include "huira/assets/lights/sphere_light.hpp"
 #include "huira/assets/unresolved/unresolved_asteroid.hpp"
