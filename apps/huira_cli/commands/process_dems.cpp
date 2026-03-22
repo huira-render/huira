@@ -10,7 +10,7 @@
 namespace fs = std::filesystem;
 
 namespace huira::cli::dems {
-    int process_dems(const fs::path& input_dir, const fs::path& output_dir, const Context& ctx) {
+    static int process_dems(const fs::path& input_dir, const fs::path& output_dir, const Context& ctx) {
         if (ctx.verbose) {
             std::cout << "Processing DEMs from: " << input_dir << "\n";
         }
