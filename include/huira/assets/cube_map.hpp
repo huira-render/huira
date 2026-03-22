@@ -54,6 +54,10 @@ namespace std {
 namespace huira{
 
     struct QuadtreeNode {
+        QuadtreeNode() = default;
+        QuadtreeNode(const QuadtreeNode&) = delete;
+        QuadtreeNode& operator=(const QuadtreeNode&) = delete;
+
         // Each node corresponds to a tile
         std::uint64_t file_id;
         std::uint64_t byte_offset;
@@ -116,7 +120,7 @@ namespace huira{
                 if (suitable_lod) {
                     // Load it if we haven't already:
                     if (loaded_meshes_.find(node.tile_address) == loaded_meshes_.end()) {
-                        loaded_meshes_[node.tile_address] = make_mesh(node);
+                        loaded_meshes_[node.tile_address] = make_mesh_(node);
                         newly_loaded_tiles_.push_back(node.tile_address);
                     }
 
