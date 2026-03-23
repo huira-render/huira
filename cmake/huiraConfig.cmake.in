@@ -21,6 +21,8 @@ find_dependency(embree CONFIG)
 
 find_dependency(FFTW3f)
 
+find_dependency(GDAL)
+
 find_dependency(glm CONFIG)
 if(NOT glm_FOUND)
     find_path(GLM_INCLUDE_DIR glm/glm.hpp REQUIRED)
