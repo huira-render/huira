@@ -14,33 +14,9 @@
 
 #include "huira/scene/scene_object.hpp"
 
+#include "huira/assets/io/cubemap_builder.hpp"
+
 namespace fs = std::filesystem;
-
-namespace huira {
-    template <IsFloatingPoint T>
-    class OBB {
-    public:
-        OBB() = default;
-        OBB(const Vec3<T>& center, const Vec3<T>& half_extents, const Mat3<T>& rotation)
-            : center_(center), half_extents_(half_extents), rotation_(rotation) {}
-        const Vec3<T>& center() const { return center_; }
-        const Vec3<T>& half_extents() const { return half_extents_; }
-        const Mat3<T>& rotation() const { return rotation_; }
-
-    private:
-        Vec3<T> center_;
-        Vec3<T> half_extents_;
-        Rotation<T> rotation_;
-    };
-
-    struct TileAddress {
-        std::uint16_t level;
-        std::uint16_t x, y;
-        bool operator==(const TileAddress& other) const {
-            return level == other.level && x == other.x && y == other.y;
-        }
-    };
-}
 
 namespace std {
     template <>
@@ -61,7 +37,7 @@ namespace huira{
         // Each node corresponds to a tile
         std::uint64_t file_id;
         std::uint64_t byte_offset;
-        OBB<double> bounding_box;
+        OBBData<double> bounding_box;
         Vec3<double> normal;
         double normal_cone_angle;
 

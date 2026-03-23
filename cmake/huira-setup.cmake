@@ -30,6 +30,8 @@ find_package(embree CONFIG REQUIRED)
 
 find_package(FFTW3f REQUIRED)
 
+find_package(GDAL CONFIG REQUIRED)
+
 find_package(glm CONFIG QUIET)
 if(NOT glm_FOUND)
     find_path(GLM_INCLUDE_DIR glm/glm.hpp REQUIRED)
@@ -56,6 +58,7 @@ target_link_libraries(huira INTERFACE
     CSPICE::cspice
     embree
     FFTW3::fftw3f
+    GDAL::GDAL
     glm::glm
     ${TURBOJPEG_TARGET}
     PNG::PNG
