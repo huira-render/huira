@@ -97,6 +97,10 @@ namespace huira {
     // -----------------------------------------------------------------------
 
     struct BuildNode {
+        BuildNode() = default;
+        BuildNode(const BuildNode&) = delete;
+        BuildNode& operator=(const BuildNode&) = delete;
+
         TileAddress   address    = {};
         std::uint64_t file_id    = 0;
         std::uint64_t byte_offset = 0;
@@ -344,6 +348,8 @@ namespace huira {
 
     class TileDataWriter {
     public:
+        TileDataWriter(const TileDataWriter&) = delete;
+        TileDataWriter& operator=(const TileDataWriter&) = delete;
         TileDataWriter(const fs::path& dir, const std::string& base,
                        std::uint64_t max_bytes, std::size_t tile_size)
             : dir_(dir), base_(base), max_bytes_(max_bytes)
@@ -410,7 +416,7 @@ namespace huira {
         // The VRT resolution should be at least as fine as the deepest tile
         // level we might produce. At max_depth, a tile covers
         // face_edge / 2^max_depth meters and has tile_size pixels.
-        std::size_t vrt_pixels = tile_size * (1 << max_depth);
+        std::size_t vrt_pixels = tile_size * (1ULL << max_depth);
 
         // Cap at something sane to avoid absurd memory reservations in the
         // VRT metadata. The actual pixel data is computed on-demand.
@@ -744,9 +750,9 @@ namespace huira {
         for (std::size_t i = 0; i < 4; ++i) {
             auto child = std::make_unique<BuildNode>();
             child->address.face  = node.address.face;
-            child->address.level = node.address.level + 1;
-            child->address.x     = node.address.x * 2 + (i & 1);
-            child->address.y     = node.address.y * 2 + ((i >> 1) & 1);
+            child->address.level = static_cast<std::uint16_t>(node.address.level + 1);
+            child->address.x     = static_cast<std::uint16_t>(node.address.x * 2 + (i & 1));
+            child->address.y     = static_cast<std::uint16_t>(node.address.y * 2 + ((i >> 1) & 1));
             node.children[i] = std::move(child);
         }
 
@@ -773,7 +779,8 @@ namespace huira {
                     for (auto& entry : fs::recursive_directory_iterator(p)) {
                         if (!entry.is_regular_file()) continue;
                         auto ext = entry.path().extension().string();
-                        std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+                        std::transform(ext.begin(), ext.end(), ext.begin(),
+                            [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
                         if (ext == ".tif" || ext == ".tiff" || ext == ".img"
                             || ext == ".hgt" || ext == ".dt2" || ext == ".grd")
                             all_dems.push_back(entry.path());
