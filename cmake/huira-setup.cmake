@@ -1,7 +1,12 @@
 include(GNUInstallDirs)
 
+include(FindProjData)
+
 add_library(huira INTERFACE)
 add_library(huira::huira ALIAS huira)
+if(PROJ_DATA_DIR)
+    target_compile_definitions(huira INTERFACE HUIRA_PROJ_DIR="${PROJ_DATA_DIR}")
+endif()
 
 target_include_directories(huira
     INTERFACE
