@@ -41,6 +41,8 @@
 
 #include "huira/core/constants.hpp"
 
+#include "huira/util/ensure_proj_data.hpp"
+
 namespace fs = std::filesystem;
 
 namespace huira {
@@ -767,6 +769,7 @@ namespace huira {
     inline CubeMapBuildResult build_cubemap(const std::vector<fs::path>& dem_paths,
                                             const CubeMapBuildSettings& settings)
     {
+        ensure_proj_data({});
         CubeMapBuildResult result;
         try {
             GDALAllRegister();
