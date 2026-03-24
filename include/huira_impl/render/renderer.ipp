@@ -538,9 +538,9 @@ namespace huira {
             // Per-channel photon energies:
             TSpectral photon_energies = TSpectral::photon_energies();
         
-            RadiusLUTConfig config;
+            RadiusLUTConfig config{};
             std::vector<RadiusLUTEntry> radius_lut =
-                build_radius_lut(center_kernel, stamp_radius,
+                build_radius_lut<TSpectral>(center_kernel, stamp_radius,
                     representative_area,
                     photon_energies, config);
         
