@@ -38,6 +38,7 @@
 #include "ogr_spatialref.h"
 
 #include "huira/images/image.hpp"
+#include "huira/images/io/png_io.hpp"
 
 #include "huira/core/constants.hpp"
 
@@ -57,7 +58,7 @@ namespace huira {
     struct CubeMapBuildSettings {
         std::size_t   max_depth       = 12;
         std::size_t   tile_size       = 512;
-        double        sphere_radius   = 1737400.0;
+        double        sphere_radius   = 0.;
         std::uint64_t max_file_bytes  = 2ULL * 1024 * 1024 * 1024;
         fs::path      output_dir      = ".";
         std::string   output_name     = "cubemap";
@@ -360,13 +361,21 @@ namespace huira {
             roll_();
         }
 
-        ~TileDataWriter() { if (stream_.is_open()) stream_.close(); }
+        ~TileDataWriter() {
+            if (stream_.is_open()) {
+                stream_.close();
+            }
+        }
 
-        struct Ref { std::uint64_t file_id; std::uint64_t byte_offset; };
+        struct Ref {
+            std::uint64_t file_id;
+            std::uint64_t byte_offset;
+        };
 
         Ref write(const Image<float>& tile) {
-            if (offset_ + tile_bytes_ > max_bytes_)
+            if (offset_ + tile_bytes_ > max_bytes_) {
                 roll_();
+            }
 
             Ref ref;
             ref.file_id     = paths_.size() - 1;
@@ -393,8 +402,9 @@ namespace huira {
             name << base_ << "_" << paths_.size() << ".hrct";
             fs::path p = dir_ / name.str();
             stream_.open(p, std::ios::binary | std::ios::trunc);
-            if (!stream_)
-                throw std::runtime_error("Cannot open: " + p.string());
+            if (!stream_) {
+                HUIRA_THROW_ERROR("Cannot open: " + p.string());
+            }
             paths_.push_back(p);
             offset_ = 0;
         }
@@ -407,58 +417,40 @@ namespace huira {
     // projection and return the result as a single GDAL dataset (backed by a
     // VRT, so no pixel data is materialized until read).
     // -----------------------------------------------------------------------
-
-    inline GDALDataset* build_face_vrt(const std::vector<fs::path>& dem_paths,
-                                       std::size_t face, double radius,
-                                       std::size_t tile_size, std::size_t max_depth)
+    inline GDALDataset* build_face_vrt(const std::vector<GDALDatasetH>& srcs,
+        std::size_t face, double radius)
     {
         std::string dst_proj = face_proj_string(face, radius);
         double half = face_half_extent(radius);
 
-        // The VRT resolution should be at least as fine as the deepest tile
-        // level we might produce. At max_depth, a tile covers
-        // face_edge / 2^max_depth meters and has tile_size pixels.
-        std::size_t vrt_pixels = tile_size * (1ULL << max_depth);
-
-        // Cap at something sane to avoid absurd memory reservations in the
-        // VRT metadata. The actual pixel data is computed on-demand.
-        vrt_pixels = std::min(vrt_pixels, tile_size * 4096);
-
-        double pixel_size = (2.0 * half) / static_cast<double>(vrt_pixels);
-
-        std::vector<std::string> args = {
-            "-t_srs",      dst_proj,
-            "-te",         std::to_string(-half), std::to_string(-half),
-                           std::to_string(half),  std::to_string(half),
-            "-tr",         std::to_string(pixel_size), std::to_string(pixel_size),
-            "-r",          "bilinear",
-            "-of",         "VRT",
-            "-srcnodata",  std::to_string(NO_RASTER_DATA),
-            "-dstnodata",  std::to_string(NO_RASTER_DATA),
+        std::vector<std::string> warp_args = {
+            "-t_srs",     dst_proj,
+            "-te",        std::to_string(-half), std::to_string(-half),
+                          std::to_string(half),  std::to_string(half),
+            "-ts",        "1024", "1024",
+            "-ot",        "Float32",
+            "-r",         "bilinear",
+            "-of",        "VRT",
+            "-wo",        "SAMPLE_GRID=YES",
+            "-wo",        "SOURCE_EXTRA=100",
+            "-srcnodata", std::to_string(NO_RASTER_DATA),
+            "-dstnodata", std::to_string(NO_RASTER_DATA),
         };
-        std::vector<const char*> argv;
-        for (auto& a : args) argv.push_back(a.c_str());
-        argv.push_back(nullptr);
-
-        GDALWarpAppOptions* opts = GDALWarpAppOptionsNew(
-            const_cast<char**>(argv.data()), nullptr);
-
-        std::vector<GDALDatasetH> srcs;
-        for (auto& p : dem_paths) {
-            GDALDatasetH h = GDALOpen(p.string().c_str(), GA_ReadOnly);
-            if (h) srcs.push_back(h);
+        std::vector<const char*> warp_argv;
+        for (auto& a : warp_args) {
+            warp_argv.push_back(a.c_str());
         }
-        if (srcs.empty()) {
-            GDALWarpAppOptionsFree(opts);
-            return nullptr;
-        }
+        warp_argv.push_back(nullptr);
+
+        GDALWarpAppOptions* warp_opts = GDALWarpAppOptionsNew(
+            const_cast<char**>(warp_argv.data()), nullptr);
 
         int err = 0;
         GDALDatasetH out = GDALWarp("", nullptr,
-                                     static_cast<int>(srcs.size()), srcs.data(),
-                                     opts, &err);
-        GDALWarpAppOptionsFree(opts);
-        for (auto h : srcs) GDALClose(h);
+            static_cast<int>(srcs.size()),
+            const_cast<GDALDatasetH*>(srcs.data()),
+            warp_opts, &err);
+        GDALWarpAppOptionsFree(warp_opts);
 
         return static_cast<GDALDataset*>(out);
     }
@@ -491,8 +483,12 @@ namespace huira {
         double px1 = (gx_max - gt[0]) / gt[1];
         double py1 = (gy_min - gt[3]) / gt[5];
 
-        if (px0 > px1) std::swap(px0, px1);
-        if (py0 > py1) std::swap(py0, py1);
+        if (px0 > px1) {
+            std::swap(px0, px1);
+        }
+        if (py0 > py1) {
+            std::swap(py0, py1);
+        }
 
         int sx = static_cast<int>(std::floor(px0));
         int sy = static_cast<int>(std::floor(py0));
@@ -507,19 +503,34 @@ namespace huira {
         sh = std::min(sh, dh - sy);
 
         Image<float> tile(static_cast<int>(tile_size), static_cast<int>(tile_size), NO_RASTER_DATA);
-        if (sw <= 0 || sh <= 0) return tile;
+        if (sw <= 0 || sh <= 0 || vrt->GetRasterCount() == 0) {
+            return tile;
+        }
 
-        vrt->GetRasterBand(1)->RasterIO(
+        auto count = vrt->GetRasterCount();
+        auto rb = vrt->GetRasterBand(1);
+        auto err = rb->RasterIO(
             GF_Read, sx, sy, sw, sh,
             tile.data(), static_cast<int>(tile_size), static_cast<int>(tile_size),
             GDT_Float32, 0, 0);
+        (void)err;
+        (void)count;
+
+        for (std::size_t i = 0; i < tile.size(); ++i) {
+            if (tile[i] != NO_RASTER_DATA) {
+                tile[i] -= static_cast<float>(radius);
+            }
+        }
 
         return tile;
     }
 
     inline bool tile_has_valid_data(const Image<float>& tile) {
-        for (std::size_t i = 0; i < tile.size(); ++i)
-            if (tile[i] != NO_RASTER_DATA) return true;
+        for (std::size_t i = 0; i < tile.size(); ++i) {
+            if (tile[i] != NO_RASTER_DATA) {
+                return true;
+            }
+        }
         return false;
     }
 
@@ -540,11 +551,18 @@ namespace huira {
         float h_max = std::numeric_limits<float>::lowest();
         for (std::size_t i = 0; i < heights.size(); ++i) {
             float v = heights[i];
-            if (v == NO_RASTER_DATA) continue;
+
+            if (v == NO_RASTER_DATA) {
+                continue;
+            }
+
             h_min = std::min(h_min, v);
             h_max = std::max(h_max, v);
         }
-        if (h_min > h_max) { h_min = 0.0f; h_max = 0.0f; }
+
+        if (h_min > h_max) {
+            h_min = 0.0f; h_max = 0.0f;
+        }
 
         double half = face_half_extent(radius);
         double te   = (2.0 * half) / static_cast<double>(1 << addr.level);
@@ -675,8 +693,12 @@ namespace huira {
     inline void accumulate_bounds(BuildNode& node) {
         bool init = false;
         for (auto& child : node.children) {
-            if (!child) continue;
+            if (!child) {
+                continue;
+            }
+
             accumulate_bounds(*child);
+
             if (!init) {
                 node.obb         = child->obb;
                 node.normal_cone = child->normal_cone;
@@ -728,8 +750,34 @@ namespace huira {
         Image<float> tile = read_tile_from_vrt(
             vrt, node.address, settings.tile_size, settings.sphere_radius);
 
-        if (!tile_has_valid_data(tile))
+        if (!tile_has_valid_data(tile)) {
             return;
+        }
+
+        // DEBUG: Write out the tile as a PNG for inspection
+        //Image<float> output_tile = tile;
+        //float max = 0.f;
+        //float min = std::numeric_limits<float>::max();
+        //for (std::size_t i = 0; i < tile.size(); ++i) {
+        //    if (tile[i] == NO_RASTER_DATA) {
+        //        continue;
+        //    }
+        //    if (tile[i] > max) {
+        //        max = tile[i];
+        //    }
+        //    if (tile[i] < min) {
+        //        min = tile[i];
+        //    }
+        //}
+        //for (std::size_t i = 0; i < tile.size(); ++i) {
+        //    if (tile[i] == NO_RASTER_DATA) {
+        //        output_tile[i] = 0.f;
+        //    } else {
+        //        output_tile[i] = (tile[i] - min) / (max - min);
+        //    }
+        //}
+        //std::string filename = ("tile_" + std::to_string(node.address.face) + "_" + std::to_string(node.address.level) + "_" + std::to_string(node.address.x) + "_" + std::to_string(node.address.y) + ".png");
+        //huira::write_image_png(settings.output_dir / filename, output_tile);
 
         auto ref         = writer.write(tile);
         node.file_id     = ref.file_id;
@@ -743,11 +791,14 @@ namespace huira {
         deepest = std::max(deepest, static_cast<std::uint32_t>(node.address.level));
         ++total;
 
-        if (node.address.level >= settings.max_depth)
+        if (node.address.level >= settings.max_depth) {
             return;
+        }
+
         if (!finer_data_available(node.address, settings.tile_size,
-                                  settings.sphere_radius, sources))
+            settings.sphere_radius, sources)) {
             return;
+        }
 
         for (std::size_t i = 0; i < 4; ++i) {
             auto child = std::make_unique<BuildNode>();
@@ -758,8 +809,9 @@ namespace huira {
             node.children[i] = std::move(child);
         }
 
-        for (auto& child : node.children)
+        for (auto& child : node.children) {
             build_face_recursive(*child, vrt, writer, settings, sources, deepest, total);
+        }
     }
 
     // -----------------------------------------------------------------------
@@ -767,12 +819,35 @@ namespace huira {
     // -----------------------------------------------------------------------
 
     inline CubeMapBuildResult build_cubemap(const std::vector<fs::path>& dem_paths,
-                                            const CubeMapBuildSettings& settings)
+                                            CubeMapBuildSettings settings)
     {
         ensure_proj_data({});
         CubeMapBuildResult result;
         try {
             GDALAllRegister();
+
+            CPLSetErrorHandler([](CPLErr eClass, CPLErrorNum err_no, const char* msg) noexcept {
+                switch (eClass) {
+                case CE_Debug:
+                    HUIRA_LOG_DEBUG("GDAL CE_Debug: " + std::to_string(err_no) + "|" + msg);
+                    break;
+                case CE_Warning:
+                    HUIRA_LOG_INFO("GDAL CE_Warning: " + std::to_string(err_no) + "|" + msg);
+                    break;
+                case CE_Failure:
+                    HUIRA_LOG_INFO("GDAL CE_Failure: " + std::to_string(err_no) + "|" + msg);
+                    break;
+                case CE_Fatal:
+                    HUIRA_LOG_ERROR("GDAL CE_Fatal: " + std::to_string(err_no) + "|" + msg);
+                    std::abort();
+                    break;
+                case CE_None:
+                    break;
+                default:
+                    break;
+                }
+                });
+
             fs::create_directories(settings.output_dir);
 
             // Expand directories into individual DEM file paths
@@ -780,13 +855,21 @@ namespace huira {
             for (auto& p : dem_paths) {
                 if (fs::is_directory(p)) {
                     for (auto& entry : fs::recursive_directory_iterator(p)) {
-                        if (!entry.is_regular_file()) continue;
+                        if (!entry.is_regular_file()) {
+                            continue;
+                        }
+
                         auto ext = entry.path().extension().string();
                         std::transform(ext.begin(), ext.end(), ext.begin(),
-                            [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+                            [](unsigned char c) {
+                                return static_cast<char>(std::tolower(c));
+                            });
+
                         if (ext == ".tif" || ext == ".tiff" || ext == ".img"
-                            || ext == ".hgt" || ext == ".dt2" || ext == ".grd")
+                            || ext == ".hgt" || ext == ".dt2" || ext == ".grd") {
+
                             all_dems.push_back(entry.path());
+                        }
                     }
                 } else {
                     all_dems.push_back(p);
@@ -797,13 +880,25 @@ namespace huira {
                 return result;
             }
 
+            // Auto-detect sphere radius if not provided
+            if (settings.sphere_radius == 0.0) {
+                GDALDataset* ds = static_cast<GDALDataset*>(
+                    GDALOpen(all_dems[0].string().c_str(), GA_ReadOnly));
+                if (ds) {
+                    OGRSpatialReference srs;
+                    srs.importFromWkt(ds->GetProjectionRef());
+                    settings.sphere_radius = srs.GetSemiMajor();
+                    GDALClose(ds);
+                }
+            }
+
             // Scan each DEM for geographic extent and native resolution
             std::vector<SourceDEMInfo> sources;
             for (auto& p : all_dems) {
                 try {
                     sources.push_back(scan_dem(p, settings.sphere_radius));
                 } catch (const std::exception& e) {
-                    std::cerr << "Skipping " << p << ": " << e.what() << "\n";
+                    HUIRA_LOG_WARNING("Skipping " + p.string() + ": " + e.what());
                 }
             }
 
@@ -814,27 +909,95 @@ namespace huira {
             std::uint32_t deepest = 0;
             std::uint64_t total   = 0;
 
+            // Open and unscale all source datasets once
+            std::vector<GDALDatasetH> raw_datasets;
+            std::vector<GDALDatasetH> prepared_sources;
+
+            std::vector<std::string> translate_args = {
+                "-ot", "Float32",
+                "-unscale",
+                "-of", "VRT",
+            };
+            std::vector<const char*> translate_argv;
+            for (auto& a : translate_args) {
+                translate_argv.push_back(a.c_str());
+            }
+            translate_argv.push_back(nullptr);
+
+            GDALTranslateOptions* translate_opts = GDALTranslateOptionsNew(
+                const_cast<char**>(translate_argv.data()), nullptr);
+
+            for (auto& p : all_dems) {
+                GDALDatasetH raw = GDALOpen(p.string().c_str(), GA_ReadOnly);
+                if (!raw) {
+                    continue;
+                }
+                raw_datasets.push_back(raw);
+
+                GDALDataset* raw_ds = static_cast<GDALDataset*>(raw);
+                bool needs_unscale = false;
+                for (int b = 1; b <= raw_ds->GetRasterCount(); ++b) {
+                    int has_scale = 0;
+                    int has_offset = 0;
+                    double scale = raw_ds->GetRasterBand(b)->GetScale(&has_scale);
+                    double offset = raw_ds->GetRasterBand(b)->GetOffset(&has_offset);
+                    if ((has_scale && scale != 1.0) || (has_offset && offset != 0.0)) {
+                        needs_unscale = true;
+                        break;
+                    }
+                }
+
+                if (needs_unscale) {
+                    int terr = 0;
+                    GDALDatasetH unscaled = GDALTranslate("", raw, translate_opts, &terr);
+                    if (unscaled) {
+                        prepared_sources.push_back(unscaled);
+                    }
+                    else {
+                        prepared_sources.push_back(raw);
+                    }
+                }
+                else {
+                    prepared_sources.push_back(raw);
+                }
+            }
+            GDALTranslateOptionsFree(translate_opts);
+
             for (std::size_t face = 0; face < NUM_FACES; ++face) {
                 roots[face].address = {
                     static_cast<std::uint8_t>(face), 0, 0, 0
                 };
 
                 GDALDataset* vrt = build_face_vrt(
-                    all_dems, face, settings.sphere_radius,
-                    settings.tile_size, settings.max_depth);
-                if (!vrt) continue;
+                    prepared_sources, face, settings.sphere_radius);
+                if (!vrt) {
+                    continue;
+                }
 
                 build_face_recursive(roots[face], vrt, writer,
-                                     settings, sources, deepest, total);
+                    settings, sources, deepest, total);
                 accumulate_bounds(roots[face]);
                 GDALClose(vrt);
+            }
+
+            // After the face loop and tree serialization:
+            for (auto h : prepared_sources) {
+                GDALClose(h);
+            }
+            // Close raw datasets that were wrapped by translate VRTs
+            // (the unwrapped ones were already closed as part of prepared_sources)
+            for (std::size_t i = 0; i < raw_datasets.size(); ++i) {
+                if (raw_datasets[i] != prepared_sources[i]) {
+                    GDALClose(raw_datasets[i]);
+                }
             }
 
             // Write tree file
             fs::path tree_path = settings.output_dir / (settings.output_name + ".hrcm");
             std::ofstream tree_out(tree_path, std::ios::binary);
-            if (!tree_out)
-                throw std::runtime_error("Cannot create: " + tree_path.string());
+            if (!tree_out) {
+                HUIRA_THROW_ERROR("Cannot create: " + tree_path.string());
+            }
 
             CubeMapFileHeader header;
             header.sphere_radius  = settings.sphere_radius;
@@ -850,8 +1013,9 @@ namespace huira {
                 tree_out.write(s.data(), len);
             }
 
-            for (auto& root : roots)
+            for (auto& root : roots) {
                 serialize_node(tree_out, root);
+            }
 
             tree_out.close();
 
