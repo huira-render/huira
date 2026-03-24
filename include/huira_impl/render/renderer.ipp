@@ -778,6 +778,49 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                 Vec3<float> dir = arc.evaluate(params[k]);
                 pixels[k] = camera->project_point(dir);
             }
+            TrajectoryArc arc(directions);
+            items.push_back({ arc, irradiances, stamp_radius});
+        }
+        
+        if (items.empty()) {
+            return received_power;
+        }
+        
+        // Build radius LUT and assign per-star radii:
+        if (use_psf_direct && stamp_radius > 1) {
+            const Image<TSpectral>& center_kernel =
+                camera->get_psf_kernel(0.0f, 0.0f);
+        
+            // On-axis area is conservative:
+            float representative_area =
+                camera->get_projected_aperture_area(Vec3<float>{0.f, 0.f, -1.f});
+        
+            // Per-channel photon energies:
+            TSpectral photon_energies = TSpectral::photon_energies();
+        
+            RadiusLUTConfig config{};
+            std::vector<RadiusLUTEntry> radius_lut =
+                build_radius_lut<TSpectral>(center_kernel, stamp_radius,
+                    representative_area,
+                    photon_energies, config);
+        
+            // Per-star lookup - just a scalar comparison, no kernel traversal.
+            for (auto& item : items) {
+                item.effective_radius =
+                    lookup_effective_radius(radius_lut, item.max_irradiance(),
+                        config.min_radius);
+            }
+        }
+        
+        // Create the screens-pace tiles for parallel rendering:
+        constexpr int TILE_SIZE = 64;
+        
+        int tiles_x = (fb_width + TILE_SIZE - 1) / TILE_SIZE;
+        int tiles_y = (fb_height + TILE_SIZE - 1) / TILE_SIZE;
+        int num_tiles = tiles_x * tiles_y;
+        
+        float res_x = static_cast<float>(camera->resolution().x);
+        float res_y = static_cast<float>(camera->resolution().y);
 
             // Adaptive subdivision: bisect intervals where pixel distance > threshold
             // Process from back to front so insertions don't invalidate indices
