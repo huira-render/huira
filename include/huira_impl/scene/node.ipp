@@ -455,6 +455,7 @@ namespace huira {
             auto [rotation, ang_vel] = spice::sxform<double>("J2000", this->spice_frame_, t_emit);
             ssb_state.rotation = rotation;
             ssb_state.angular_velocity = ang_vel;
+            ssb_state.scale = this->get_static_scale();
             return ssb_state;
         }
 
@@ -469,7 +470,10 @@ namespace huira {
         if (position_mode_ == TransformMode::TRANSFORM_CALLBACK &&
             rotation_mode_ == TransformMode::TRANSFORM_CALLBACK) {
             transform_callback_->evaluate(t_emit);
-            return parent_ssb * transform_callback_->state;
+            Transform<double> local = transform_callback_->state;
+            local.scale = this->get_static_scale();
+            Transform<double> ssb_state = parent_ssb * local;
+            return ssb_state;
         }
 
 
@@ -512,8 +516,10 @@ namespace huira {
             local.rotation = rotation_callback_->rotation;
             local.angular_velocity = rotation_callback_->angular_velocity;
         }
+        local.scale = this->get_static_scale();
 
-        return parent_ssb * local;
+        Transform<double> ssb_state = parent_ssb * local;
+        return ssb_state;
     }
 
 
