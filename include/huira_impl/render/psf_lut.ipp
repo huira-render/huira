@@ -43,7 +43,7 @@ namespace huira {
      * @return std::vector<RadiusLUTEntry> Lookup table sorted by increasing radius
      */
     template <IsSpectral TSpectral>
-    static std::vector<RadiusLUTEntry> build_radius_lut(
+    std::vector<RadiusLUTEntry> build_radius_lut(
         const Image<TSpectral>& center_kernel,
         int full_radius_signed,
         float area,
@@ -121,7 +121,7 @@ namespace huira {
      * @param min_radius Minimum allowed radius (typically 1)
      * @return int The effective PSF radius to use for rendering this point source
      */
-    static int lookup_effective_radius(
+    inline int lookup_effective_radius(
         const std::vector<RadiusLUTEntry>& lut,
         float max_irradiance,
         int min_radius)
