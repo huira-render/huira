@@ -66,7 +66,7 @@ def main():
     renderer = Renderer()
     renderer.set_max_bounces(3);
     renderer.set_samples_per_pixel(10);
-    renderer.set_clamp_threshold(0.001);
+    renderer.set_indirect_clamp(0.001);
     
     # Create a scene view over the exposure interval
     scene_view = SceneView(scene, exposure, navcam, huira.ObservationMode.GEOMETRIC_STATE)

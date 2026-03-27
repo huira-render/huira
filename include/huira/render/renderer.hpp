@@ -32,7 +32,7 @@ namespace huira {
         void set_min_samples(int min_samples) { min_spp_ = min_samples; }
         void set_variance_threshold(float threshold) { variance_threshold_ = threshold; }
 
-        void set_clamp_threshold(float threshold) { clamp_threshold_ = threshold; }
+        void set_indirect_clamp(float indirect_clamp) { indirect_clamp_threshold_ = indirect_clamp; }
 
     protected:
 
@@ -54,7 +54,7 @@ namespace huira {
         int min_spp_ = 16;
         float variance_threshold_ = 0.001f;
 
-        float clamp_threshold_ = std::numeric_limits<float>::infinity();
+        float indirect_clamp_threshold_ = std::numeric_limits<float>::infinity();
     };
 }
 

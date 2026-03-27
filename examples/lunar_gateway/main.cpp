@@ -28,7 +28,7 @@ int main(int argc, char** argv) {
 
     // Set the observation time
     huira::Time time("2019-02-06T10:27:00");
-    huira::Interval exposure_interval{ time, time + 0.5_s };
+    huira::Interval exposure_interval{ time, time + 0.001_s };
 
     // Configure a camera model
     auto camera_model = scene.new_camera_model();
@@ -38,6 +38,7 @@ int main(int argc, char** argv) {
     camera_model.set_sensor_size(36_mm);
     camera_model.use_aperture_psf();
     camera_model.set_sensor_bias_level(10.f);
+    camera_model.set_fstop(16);
     //camera_model.enable_depth_of_field();
     //camera_model.set_focus_distance(1_m);
 
@@ -52,9 +53,14 @@ int main(int argc, char** argv) {
     auto gateway = scene.root.new_instance(gateway_model);
 
     // Create a local light source
-    auto point_light = scene.new_point_light(5000_W);
-    auto light = scene.root.new_instance(point_light);
-    light.set_position(0_m, -200_m, 50_m);
+    auto sun_light = scene.new_sun_light();
+    auto sun = scene.root.new_instance(sun_light);
+    //sun.set_position(1_au, 0_m, 0_m);
+    sun.set_position(0_m, -1_au, 0_m);
+    //auto point_light = scene.new_point_light(5000_W);
+    //auto light = scene.root.new_instance(point_light);
+    //light.set_position(0_m, -200_m, 50_m);
+    
 
     scene.set_background_radiance(1e-7f);
 
@@ -70,7 +76,7 @@ int main(int argc, char** argv) {
     huira::Renderer<TSpectral> renderer;
     renderer.set_max_bounces(3);
     renderer.set_samples_per_pixel(100);
-    renderer.set_clamp_threshold(0.001f);
+    renderer.set_indirect_clamp(10.0f);
 
     // Create a scene view over the exposure interval
     auto scene_view = huira::SceneView<TSpectral>(scene, exposure_interval, navcam, huira::ObservationMode::GEOMETRIC_STATE, 3);

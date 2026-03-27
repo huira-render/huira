@@ -90,7 +90,10 @@ namespace huira {
                     for (int y = y0; y < y1; ++y) {
                         for (int x = x0; x < x1; ++x) {
 
+                            TSpectral pixel_direct_radiance{ 0 };
+                            TSpectral pixel_indirect_radiance{ 0 };
                             TSpectral pixel_radiance{ 0 };
+
                             float closest_depth = std::numeric_limits<float>::infinity();
                             std::size_t mesh_id = std::numeric_limits<std::size_t>::max();
                             TSpectral albedo_total{ 0 };
@@ -113,7 +116,11 @@ namespace huira {
                                 float time = sampler.get_1d();  // [0, 1] maps to shutter interval
 
                                 TSpectral throughput{ 1 };
-                                TSpectral sample_radiance{ 0 };
+                                TSpectral direct_radiance{ 0 };
+                                TSpectral indirect_radiance{ 0 };
+
+                                float prev_roughness = 0.0f;
+
                                 for (int bounce = 0; bounce < max_bounces_; ++bounce) {
                                     HitRecord hit = scene_view.intersect(ray, time);
 
@@ -124,7 +131,13 @@ namespace huira {
                                         float v = 0.5f - std::asin(std::clamp(d.y, -1.0f, 1.0f)) * INV_PI<float>();
 
                                         TSpectral env_radiance = background->sample_bilinear(u, v);
-                                        sample_radiance += throughput * env_radiance;
+
+                                        if (bounce == 0) {
+                                            direct_radiance += throughput * env_radiance;
+                                        }
+                                        else {
+                                            indirect_radiance += throughput * env_radiance;
+                                        }
                                         break;
                                     }
 
@@ -145,6 +158,12 @@ namespace huira {
 
                                     // Evaluate material textures:
                                     auto [params, shading_isect] = material->evaluate(isect);
+
+                                    // Path regulatization
+                                    if (bounce > 0) {
+                                        params.roughness = std::max(params.roughness, prev_roughness);
+                                    }
+                                    prev_roughness = params.roughness;
 
                                     // Record primary ray info:
                                     if (bounce == 0) {
@@ -178,7 +197,13 @@ namespace huira {
                                         float cos_theta = std::max(0.0f,
                                             glm::dot(shading_isect.normal_s, ls.wi));
 
-                                        sample_radiance += throughput * ls.Li * f * cos_theta;
+                                        TSpectral Ld = throughput * ls.Li * f * cos_theta;
+                                        if (bounce == 0) {
+                                            direct_radiance += Ld;
+                                        }
+                                        else {
+                                            indirect_radiance += Ld;
+                                        }
                                     }
 
                                     // Sample the BSDF:
@@ -188,9 +213,10 @@ namespace huira {
                                     BSDFSample<TSpectral> bs = material->bsdf_sample(
                                         isect.wo, { params, shading_isect }, u1, u2);
 
-                                    if (!bs.is_valid()) break;
-
-                                    // value already contains f * |cos(theta_i)| / pdf
+                                    if (!bs.is_valid()) {
+                                        break;
+                                    }
+                                    
                                     throughput = throughput * bs.value;
 
                                     // Russian roulette (after a few bounces):
@@ -206,27 +232,30 @@ namespace huira {
                                     ray = Ray<TSpectral>(new_origin, bs.wi);
                                 }
 
+                                // Indirect radiance clamping:
+                                float current_indirect_max = indirect_radiance.max();
+                                if (current_indirect_max > indirect_clamp_threshold_) {
+                                    indirect_radiance *= (indirect_clamp_threshold_ / current_indirect_max);
+                                }
+
+                                TSpectral sample_radiance = direct_radiance + indirect_radiance;
+
                                 if (std::isnan(sample_radiance[0])) {
                                     continue;
                                 }
 
-                                float max_val = sample_radiance.max();
-                                if (max_val > clamp_threshold_) {
-                                    sample_radiance *= (clamp_threshold_ / max_val);
-                                }
-
+                                samples_taken++;
 
 
                                 // Welford's online mean/variance update:
-                                samples_taken++;
-                                if (dynamic_sampling_) {
-                                    TSpectral delta = sample_radiance - mean;
-                                    inv_samples = (1.0f / static_cast<float>(samples_taken));
-                                    mean += delta * inv_samples;
-                                    TSpectral delta2 = sample_radiance - mean;
-                                    M2 += delta * delta2;
-                                }
+                                TSpectral delta = sample_radiance - mean;
+                                inv_samples = (1.0f / static_cast<float>(samples_taken));
+                                mean += delta * inv_samples;
+                                TSpectral delta2 = sample_radiance - mean;
+                                M2 += delta * delta2;
 
+                                pixel_direct_radiance += direct_radiance;
+                                pixel_indirect_radiance += indirect_radiance;
                                 pixel_radiance += sample_radiance;
 
                                 // Early exit check (only after min_spp samples):
@@ -246,6 +275,8 @@ namespace huira {
 
                             // Average over samples and write to frame buffer:
                             TSpectral avg_radiance = pixel_radiance * inv_spp;
+                            TSpectral direct_radiance = pixel_direct_radiance * inv_spp;
+                            TSpectral indirect_radiance = pixel_indirect_radiance * inv_spp;
                             Vec3<float> avg_camera_normals = glm::normalize(camera_normals * inv_spp);
 
                             if (frame_buffer.has_depth()) {
@@ -268,6 +299,14 @@ namespace huira {
 
                             if (frame_buffer.has_world_normals()) {
                                 frame_buffer.world_normals()(x, y) = scene_view.camera_to_world_[0].apply_to_direction(avg_camera_normals);
+                            }
+
+                            if (frame_buffer.has_received_direct_power()) {
+                                frame_buffer.received_direct_power()(x, y) = camera->pixel_radiance_to_power(x, y) * direct_radiance;
+                            }
+
+                            if (frame_buffer.has_received_indirect_power()) {
+                                frame_buffer.received_indirect_power()(x, y) = camera->pixel_radiance_to_power(x, y) * indirect_radiance;
                             }
 
                             if (frame_buffer.has_received_power()) {
