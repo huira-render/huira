@@ -28,16 +28,17 @@ int main(int argc, char** argv) {
 
     // Set the observation time
     huira::Time time("2019-02-06T10:27:00");
-    huira::Interval exposure_interval{ time, time + 0.01_s };
+    huira::Interval exposure_interval{ time, time + 0.00025_s };
 
     // Configure a camera model
     auto camera_model = scene.new_camera_model();
     camera_model.use_blender_convention();
-    camera_model.set_focal_length(50_mm);
+    camera_model.set_focal_length(25_mm);
     camera_model.set_sensor_resolution(1920, 1080);
-    camera_model.set_sensor_size(36_mm);
+    camera_model.set_sensor_size(16_mm);
     camera_model.use_aperture_psf();
     camera_model.set_sensor_bias_level(10.f);
+    camera_model.set_fstop(16);
     //camera_model.enable_depth_of_field();
     //camera_model.set_focus_distance(1_m);
 
@@ -71,7 +72,7 @@ int main(int argc, char** argv) {
     huira::Renderer<TSpectral> renderer;
     renderer.set_max_bounces(1);
     renderer.set_samples_per_pixel(10);
-    renderer.set_clamp_threshold(0.001f);
+    renderer.set_indirect_clamp(10.0f);
 
     // Create a scene view over the exposure interval
     auto scene_view = huira::SceneView<TSpectral>(scene, exposure_interval, navcam, huira::ObservationMode::GEOMETRIC_STATE, 3);

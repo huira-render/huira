@@ -30,8 +30,8 @@ namespace huira {
             .def("set_variance_threshold", &Renderer::set_variance_threshold,
                 py::arg("threshold"))
 
-            .def("set_clamp_threshold", &Renderer::set_clamp_threshold,
-                py::arg("threshold"))
+            .def("set_indirect_clamp", &Renderer::set_indirect_clamp,
+                py::arg("indirect_clamp"))
             .def("__repr__", [](const Renderer&) {
             return "Renderer()";
                 });

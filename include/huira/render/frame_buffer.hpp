@@ -44,6 +44,13 @@ namespace huira {
         Image<Vec3<float>>& world_normals() { return world_normals_; }
         bool has_world_normals() const { return has_(world_normals_); }
 
+        void enable_received_direct_power(bool enable = true) { enable_(received_power_, TSpectral{ 0 }, enable); }
+        Image<TSpectral>& received_direct_power() { return received_power_; }
+        bool has_received_direct_power() const { return has_(received_power_); }
+
+        void enable_received_indirect_power(bool enable = true) { enable_(received_power_, TSpectral{ 0 }, enable); }
+        Image<TSpectral>& received_indirect_power() { return received_power_; }
+        bool has_received_indirect_power() const { return has_(received_power_); }
 
         void enable_received_power(bool enable = true) { enable_(received_power_, TSpectral{ 0 }, enable); }
         Image<TSpectral>& received_power() { return received_power_; }
