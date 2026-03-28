@@ -63,8 +63,9 @@ namespace huira {
         MeshHandle<TSpectral> get_mesh(const std::string& name);
         void delete_mesh(const MeshHandle<TSpectral>& mesh_handle);
 
-        LightHandle<TSpectral> new_point_light(const units::SpectralWatts<TSpectral>& spectral_power, std::string name = "");
-        LightHandle<TSpectral> new_point_light(const units::Watt& total_power, std::string name = "");
+        LightHandle<TSpectral> new_sphere_light(const units::Meter& radius, const units::SpectralWattsPerMeterSquaredSteradian<TSpectral>& spectral_radiance, std::string name = "");
+        LightHandle<TSpectral> new_sphere_light(const units::Meter& radius, const units::SpectralWatts<TSpectral>& spectral_power, std::string name = "");
+        LightHandle<TSpectral> new_sphere_light(const units::Meter& radius, const units::Watt& total_power, std::string name = "");
         LightHandle<TSpectral> new_sun_light();
         LightHandle<TSpectral> add_light(std::shared_ptr<Light<TSpectral>> light, std::string name = "");
 

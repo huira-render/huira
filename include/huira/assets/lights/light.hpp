@@ -18,7 +18,6 @@ namespace huira {
      * @brief Specifies the type of light source.
      */
     enum class LightType {
-        Point,
         Sphere
     };
 
@@ -57,7 +56,7 @@ namespace huira {
         virtual std::optional<LightSample<TSpectral>> sample_li(
             const Interaction<TSpectral>& ref,
             const Transform<float>& light_to_world,
-            const Sampler<float>& sampler
+            Sampler<float>& sampler
         ) const = 0;
 
         virtual float pdf_li(

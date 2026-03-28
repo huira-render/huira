@@ -52,12 +52,12 @@ int main(int argc, char** argv) {
     auto gateway_model = scene.load_model(gateway_path);
     auto gateway = scene.root.new_instance(gateway_model);
 
-    // Create a local light source
+    // Create a sun light source
     auto sun_light = scene.new_sun_light();
     auto sun = scene.root.new_instance(sun_light);
     //sun.set_position(1_au, 0_m, 0_m);
     sun.set_position(0_m, -1_au, 0_m);
-    //auto point_light = scene.new_point_light(5000_W);
+    //auto point_light = scene.new_sphere_light(5000_W);
     //auto light = scene.root.new_instance(point_light);
     //light.set_position(0_m, -200_m, 50_m);
     

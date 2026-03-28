@@ -12,7 +12,7 @@
 #include "huira/util/colorful_text.hpp"
 #include "huira/stars/io/star_catalog.hpp"
 #include "huira/assets/lights/light.hpp"
-#include "huira/assets/lights/point_light.hpp"
+#include "huira/assets/lights/sphere_light.hpp"
 #include "huira/assets/unresolved/unresolved_object.hpp"
 #include "huira/assets/unresolved/unresolved_sphere.hpp"
 #include "huira/assets/unresolved/unresolved_asteroid.hpp"
@@ -133,49 +133,61 @@ namespace huira {
 
 
     /**
+     * @brief Creates a new sphere light with spectral radiance.
+     * @param radius Radius of the sphere light
+     * @param spectral_radiance Spectral radiance of the light
+     * @param name Optional name
+     * @return LightHandle<TSpectral> Handle to the new light
+     */
+    template <IsSpectral TSpectral>
+    LightHandle<TSpectral> Scene<TSpectral>::new_sphere_light(const units::Meter& radius, const units::SpectralWattsPerMeterSquaredSteradian<TSpectral>& spectral_radiance, std::string name)
+    {
+        auto light_shared = std::make_shared<SphereLight<TSpectral>>(radius, spectral_radiance);
+        return this->add_light(light_shared, name);
+    }
+
+    /**
      * @brief Creates a new point light with spectral power.
+     * @param radius Radius of the sphere light
      * @param spectral_power Spectral power of the light
      * @param name Optional name
      * @return LightHandle<TSpectral> Handle to the new light
      */
     template <IsSpectral TSpectral>
-    LightHandle<TSpectral> Scene<TSpectral>::new_point_light(const units::SpectralWatts<TSpectral>& spectral_power, std::string name)
+    LightHandle<TSpectral> Scene<TSpectral>::new_sphere_light(const units::Meter& radius, const units::SpectralWatts<TSpectral>& spectral_power, std::string name)
     {
-        auto light_shared = std::make_shared<PointLight<TSpectral>>(spectral_power);
+        auto light_shared = std::make_shared<SphereLight<TSpectral>>(radius, spectral_power);
         return this->add_light(light_shared, name);
     }
 
     /**
      * @brief Creates a new point light with total power.
+     * @param radius Radius of the sphere light
      * @param total_power Total power of the light
      * @param name Optional name
      * @return LightHandle<TSpectral> Handle to the new light
      */
     template <IsSpectral TSpectral>
-    LightHandle<TSpectral> Scene<TSpectral>::new_point_light(const units::Watt& total_power, std::string name)
+    LightHandle<TSpectral> Scene<TSpectral>::new_sphere_light(const units::Meter& radius, const units::Watt& total_power, std::string name)
     {
-        auto light_shared = std::make_shared<PointLight<TSpectral>>(total_power);
+        auto light_shared = std::make_shared<SphereLight<TSpectral>>(radius, total_power);
         return this->add_light(light_shared, name);
     }
 
     /**
-     * @brief Creates a new sun light with solar spectral radiance.
+     * @brief Creates a new sun light with solar spectral radiance, and radius of the sun.
      * @return LightHandle<TSpectral> Handle to the new sun light
      */
     template <IsSpectral TSpectral>
     LightHandle<TSpectral> Scene<TSpectral>::new_sun_light()
     {
-        // TODO Make this a sphere light once implemented
         TSpectral spectral_radiance = black_body<TSpectral>(5800, 1000);
+        units::SpectralWattsPerMeterSquaredSteradian<TSpectral> spectral_radiance_units(spectral_radiance);
 
         // TODO Move solar radius into constants somehow?
-        constexpr float sun_radius = 6.957e8f;
-        constexpr float sun_area = 4.f * PI<float>() * sun_radius * sun_radius;
-        TSpectral spectral_power = spectral_radiance * PI<float>() * sun_area;
+        units::Meter sun_radius(6.957e8);
 
-        units::SpectralWatts<TSpectral> spectral_power_watts(spectral_power);
-
-        return this->new_point_light(spectral_power_watts, "Sun");
+        return this->new_sphere_light(sun_radius, spectral_radiance_units, "Sun");
     }
 
     /**

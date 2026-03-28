@@ -23,7 +23,7 @@ namespace huira {
     class UnresolvedObject;
 
     template <IsSpectral TSpectral>
-    class PointLight;
+    class SphereLight;
 
     template <IsSpectral TSpectral>
     class Camera;

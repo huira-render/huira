@@ -181,12 +181,10 @@ namespace huira {
                                             continue;
                                         }
                                         const auto& ls = *sample;
-
+                                        float light_dist = sample->distance;
+                                        
                                         // Shadow test:
-                                        float light_dist = glm::length(
-                                            light_instance.transform.position - isect.position);
                                         Ray<TSpectral> shadow_ray(new_origin, ls.wi);
-
                                         if (scene_view.occluded(shadow_ray, light_dist, time)) {
                                             continue;
                                         }
@@ -197,7 +195,7 @@ namespace huira {
                                         float cos_theta = std::max(0.0f,
                                             glm::dot(shading_isect.normal_s, ls.wi));
 
-                                        TSpectral Ld = throughput * ls.Li * f * cos_theta;
+                                        TSpectral Ld = throughput * (ls.Li / ls.pdf) * f * cos_theta;
                                         if (bounce == 0) {
                                             direct_radiance += Ld;
                                         }
