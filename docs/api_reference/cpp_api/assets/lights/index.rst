@@ -5,4 +5,4 @@ Lights
    :maxdepth: 1
 
    light
-   point_light
+   sphere_light

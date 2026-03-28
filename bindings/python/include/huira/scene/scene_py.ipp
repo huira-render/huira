@@ -27,22 +27,29 @@ namespace huira {
             // Lights
             // =============================================================
 
-            // new_point_light — spectral power
-            .def("new_point_light",
+            // new_sphere_light — Spectral Radiance
+            .def("new_sphere_light",
                 static_cast<LightHandle<TSpectral>(SceneType::*)(
-                    const units::SpectralWatts<TSpectral>&, std::string)>(
-                        &SceneType::new_point_light),
-                py::arg("spectral_power"), py::arg("name") = "",
-                "Create a point light from spectral power (SpectralWatts)")
+                    const units::Meter&, const units::SpectralWattsPerMeterSquaredSteradian<TSpectral>&, std::string)>(
+                        &SceneType::new_sphere_light),
+                py::arg("radius"), py::arg("spectral_radiance"), py::arg("name") = "",
+                "Create a sphere light from spectral radiance")
 
-            // new_point_light — scalar power
-            .def("new_point_light",
-                [](SceneType& self, const py::object& power, std::string name) {
-                    return self.new_point_light(
-                        detail::unit_from_py<units::Watt>(power), std::move(name));
-                },
-                py::arg("total_power"), py::arg("name") = "",
-                "Create a point light from total power (any power unit)")
+            // new_sphere_light — Spectral Power
+            .def("new_sphere_light",
+                static_cast<LightHandle<TSpectral>(SceneType::*)(
+                    const units::Meter&, const units::SpectralWatts<TSpectral>&, std::string)>(
+                        &SceneType::new_sphere_light),
+                py::arg("radius"), py::arg("spectral_power"), py::arg("name") = "",
+                "Create a sphere light from total spectral power")
+
+            // new_sphere_light — Scalar Power
+            .def("new_sphere_light",
+                static_cast<LightHandle<TSpectral>(SceneType::*)(
+                    const units::Meter&, const units::Watt&, std::string)>(
+                        &SceneType::new_sphere_light),
+                py::arg("radius"), py::arg("total_power"), py::arg("name") = "",
+                "Create a sphere light from total scalar power (Watts)")
 
             .def("new_sun_light", &SceneType::new_sun_light,
                 "Create a sun light source")

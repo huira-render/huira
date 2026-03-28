@@ -1,7 +1,7 @@
 Point Light
 ===========
 
-.. doxygenclass:: huira::PointLight
+.. doxygenclass:: huira::SphereLight
    :members:
    :undoc-members:
    :protected-members:

@@ -10,10 +10,11 @@ from huira.units import Millimeter as mm
 from huira.units import Degree as deg
 from huira.units import Watt as W
 from huira.units import Second as sec
+from huira.units import AstronomicalUnit as au
 
 def parse_input_paths():
     if len(sys.argv) != 2:
-        print("Usage: python lunar_gateway.py <gateway.glb_path> <kernel_path>")
+        print("Usage: python lunar_gateway.py <gateway.glb_path>")
         sys.exit(1)
     gateway_path = Path(sys.argv[1])
     return gateway_path
@@ -27,7 +28,7 @@ def main():
 
     # Set the observation time
     time = huira.Time("2019-02-06T10:27:00")
-    exposure = huira.Interval(time, time + sec(0.5))
+    exposure = huira.Interval(time, time + sec(0.001))
 
     # Configure a camera model
     camera_model = scene.new_camera_model()
@@ -35,6 +36,7 @@ def main():
     camera_model.set_focal_length(mm(50))
     camera_model.set_sensor_resolution(1920, 1080)
     camera_model.set_sensor_size(mm(36))
+    camera_model.set_fstop(16)
 
     # Create an instance of the camera
     navcam = scene.root.new_instance(camera_model)
@@ -45,10 +47,10 @@ def main():
     gateway_model = scene.load_model(gateway_path)
     gateway = scene.root.new_instance(gateway_model)
     
-    # Create a local light source
-    point_light = scene.new_point_light(W(5000))
-    light = scene.root.new_instance(point_light)
-    light.set_position(m(0), m(-200), m(50))
+    # Create a sun light source
+    sun_light = scene.new_sun_light()
+    sun = scene.root.new_instance(sun_light)
+    sun.set_position(m(0), au(-1), m(0))
 
     # Print the scene contents
     scene.print_contents()

@@ -5,7 +5,7 @@
 #include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/util/logger.hpp"
 
-#include "huira/assets/lights/point_light.hpp"
+#include "huira/assets/lights/sphere_light.hpp"
 #include "huira/assets/unresolved/unresolved_object.hpp"
 
 

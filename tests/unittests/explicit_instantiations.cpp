@@ -1,7 +1,7 @@
 // assets/
 #include "huira/assets/io/model_loader.hpp"
 
-#include "huira/assets/lights/point_light.hpp"
+#include "huira/assets/lights/sphere_light.hpp"
 
 #include "huira/assets/mesh.hpp"
 #include "huira/assets/model.hpp"
@@ -95,7 +95,7 @@ namespace huira {
     template class Image<Vec3<float>>;
     template class Image<TestSpectral>;
 
-    template class PointLight<TestSpectral>;
+    template class SphereLight<TestSpectral>;
 
     template class Renderer<TestSpectral>;
 
