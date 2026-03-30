@@ -36,7 +36,8 @@ namespace huira {
             const Vec3<float>& wi) const override;
 
         units::Meter radius() const { return units::Meter(radius_); }
-        TSpectral radiance() const { return radiance_; }
+
+        TSpectral radiance(const Vec3<float>& point_on_light, const Vec3<float>& outgoing_direction) const override;
 
         TSpectral irradiance_at(
             const Vec3<float>& position,

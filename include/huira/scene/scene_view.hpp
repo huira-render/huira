@@ -24,6 +24,11 @@ namespace huira {
     template <IsSpectral TSpectral>
     class Renderer;
 
+    enum class GeometryType {
+        Mesh,
+        Light
+    };
+
     /**
      * @brief View of a scene at a specific time and camera instance.
      *
@@ -102,9 +107,12 @@ namespace huira {
 
         RTCDevice device_ = nullptr;
         RTCScene tlas_ = nullptr;
+
         struct InstanceMapping {
-            std::size_t batch_index;      // Index into geometry_
-            std::size_t instance_index;   // Index into geometry_[batch_index].instances
+            GeometryType type;
+            std::size_t batch_index;    // Index into geometry_
+            std::size_t instance_index; // Index into geometry_[batch_index].instances
+            std::size_t light_index;    // Index into lights_ if type == Light
         };
         std::vector<InstanceMapping> instance_mappings_;
 

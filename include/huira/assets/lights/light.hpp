@@ -65,6 +65,8 @@ namespace huira {
             const Vec3<float>& wi
         ) const = 0;
 
+        virtual TSpectral radiance(const Vec3<float>& point_on_light, const Vec3<float>& outgoing_direction) const = 0;
+
         virtual TSpectral irradiance_at(
             const Vec3<float>& position,
             const Transform<float>& light_to_world

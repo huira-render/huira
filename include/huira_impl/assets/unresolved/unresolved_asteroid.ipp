@@ -145,10 +145,11 @@ namespace huira {
         const Transform<float>& self_transform,
         const std::vector<LightInstance<TSpectral>>& lights
     ) {
+        // TODO Only first element of Light Transforms is used. 
         for (const auto& light_inst : lights) {
             if (light_inst.light.get() == light_) {
                 Vec3<double> to_obs = -self_transform.position;
-                Vec3<double> to_light = light_inst.transform.position - self_transform.position;
+                Vec3<double> to_light = light_inst.transforms[0].position - self_transform.position;
 
                 // Normalize vectors for angles
                 double delta_m = glm::length(to_obs);
