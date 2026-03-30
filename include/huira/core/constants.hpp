@@ -10,6 +10,9 @@ namespace huira {
     constexpr T INV_PI() { return static_cast<T>(1) / PI<T>(); }
 
     template <IsFloatingPoint T>
+    constexpr T HALF_PI() { return PI<T>() / static_cast<T>(2); }
+
+    template <IsFloatingPoint T>
     constexpr T SPEED_OF_LIGHT() { return static_cast<T>(299792458.0); }
 
     template <IsFloatingPoint T>
