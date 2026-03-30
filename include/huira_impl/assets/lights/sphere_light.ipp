@@ -177,6 +177,14 @@ namespace huira {
     }
 
     template <IsSpectral TSpectral>
+    TSpectral SphereLight<TSpectral>::radiance(const Vec3<float>& point_on_light, const Vec3<float>& outgoing_direction) const
+    {
+        (void)point_on_light;
+        (void)outgoing_direction;
+        return radiance_;
+    }
+
+    template <IsSpectral TSpectral>
     TSpectral SphereLight<TSpectral>::irradiance_at(
         const Vec3<float>& position,
         const Transform<float>& light_to_world) const

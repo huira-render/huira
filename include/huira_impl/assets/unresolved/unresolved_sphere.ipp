@@ -117,14 +117,15 @@ namespace huira {
         const Transform<float>& self_transform,
         const std::vector<LightInstance<TSpectral>>& lights
     ) {
+        // TODO Only first element of Light Transforms is used. 
         for (const auto& light_inst : lights) {
             if (light_inst.light.get() == light_) {
-                Vec3<float> L = glm::normalize(light_inst.transform.position - self_transform.position);
+                Vec3<float> L = glm::normalize(light_inst.transforms[0].position - self_transform.position);
                 
                 float distance = glm::length(self_transform.position);
                 Vec3<float> V = -self_transform.position / distance;
 
-                TSpectral incident_irradiance = light_->irradiance_at(self_transform.position, light_inst.transform);
+                TSpectral incident_irradiance = light_->irradiance_at(self_transform.position, light_inst.transforms[0]);
 
                 float phase = std::acos(glm::dot(V, L));
                 float A = PI<float>() * radius_ * radius_; // Cross-sectional area

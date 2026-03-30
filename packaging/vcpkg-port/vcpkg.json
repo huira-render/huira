@@ -15,6 +15,7 @@
       "default-features": false,
       "features": [
         "geometry-instance",
+        "geometry-point",
         "geometry-triangle",
         "ray-packets",
         "tasking-tbb"

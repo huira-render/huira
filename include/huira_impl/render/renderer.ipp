@@ -36,6 +36,41 @@ namespace huira {
     }
 
 
+    inline float power_heuristic(float f_pdf, float g_pdf) {
+        if (std::isinf(f_pdf * f_pdf)) return 1.0f;
+        float f2 = f_pdf * f_pdf;
+        float g2 = g_pdf * g_pdf;
+        return f2 / (f2 + g2);
+    }
+
+    inline Transform<float> interpolate_transform(const std::vector<Transform<float>>& transforms, float t) {
+        if (transforms.empty()) {
+            return Transform<float>{};
+        }
+        if (transforms.size() == 1) {
+            return transforms[0];
+        }
+
+        float scaled_t = t * static_cast<float>(transforms.size() - 1);
+        std::size_t idx = static_cast<std::size_t>(std::floor(scaled_t));
+        idx = std::min(idx, transforms.size() - 2);
+        float frac = scaled_t - static_cast<float>(idx);
+
+        Transform<float> result;
+        // Linearly interpolate position
+        result.position = transforms[idx].position * (1.0f - frac) +
+            transforms[idx + 1].position * frac;
+
+        // Slerp rotation (assuming you are using glm::quat for rotations)
+        auto quat = transforms[idx].rotation.local_to_parent_quaternion();
+        auto next_quat = transforms[idx + 1].rotation.local_to_parent_quaternion();
+        result.rotation.from_local_to_parent(glm::slerp(quat, next_quat, frac));
+
+        // Scale interpolation
+        //result.scale = transforms[idx].scale * (1.0f - frac) + transforms[idx + 1].scale * frac;
+
+        return result;
+    }
 
     /**
      * @brief Path trace a scene view into a frame buffer.
@@ -121,6 +156,9 @@ namespace huira {
 
                                 float prev_roughness = 0.0f;
 
+                                float prev_bsdf_pdf = 1.0f;
+                                Interaction<TSpectral> prev_isect;
+
                                 for (int bounce = 0; bounce < max_bounces_; ++bounce) {
                                     HitRecord hit = scene_view.intersect(ray, time);
 
@@ -141,93 +179,136 @@ namespace huira {
                                         break;
                                     }
 
-                                    if (s == 0) {
-                                        mesh_id = hit.geom_id;
-                                    }
-
-                                    // Resolve full shading data:
-                                    Interaction<TSpectral> isect = scene_view.resolve_hit(ray, hit);
-                                    Vec3<float> new_origin = offset_intersection_(
-                                        isect.position, isect.normal_g);
-                                    isect.position = new_origin;
-
-                                    // Look up mesh material:
                                     const auto& mapping = scene_view.instance_mappings_[hit.inst_id];
-                                    const auto& batch = scene_view.geometry_[mapping.batch_index];
-                                    const auto* material = batch.mesh->material();
 
-                                    // Evaluate material textures:
-                                    auto [params, shading_isect] = material->evaluate(isect);
+                                    if (mapping.type == GeometryType::Light) {
+                                        const auto& light_instance = lights[mapping.light_index];
 
-                                    // Path regulatization
-                                    if (bounce > 0) {
-                                        params.roughness = std::max(params.roughness, prev_roughness);
-                                    }
-                                    prev_roughness = params.roughness;
+                                        Vec3<float> hit_p = ray.origin() + ray.direction() * hit.t;
+                                        Vec3<float> emission_dir = -ray.direction();
+                                        TSpectral Le = light_instance.light->radiance(hit_p, emission_dir);
 
-                                    // Record primary ray info:
-                                    if (bounce == 0) {
-                                        closest_depth = std::min(closest_depth, hit.t);
-                                        camera_normals += shading_isect.normal_s;
-                                        albedo_total += params.albedo;
-                                    }
+                                        float mis_weight = 1.0f;
 
-                                    // Direct lighting (next event estimation)
-                                    for (const auto& light_instance : lights) {
-                                        auto sample = light_instance.light->sample_li(
-                                            isect, light_instance.transform, this->sampler_);
+                                        // Only apply MIS weighting if this wasn't the first camera ray,
+                                        // and if it wasn't a perfect mirror reflection (delta BSDF).
+                                        if (bounce > 0) {
+                                            Transform<float> current_transform = interpolate_transform(light_instance.transforms, time);
 
-                                        if (!sample) {
-                                            continue;
-                                        }
-                                        const auto& ls = *sample;
-                                        float light_dist = sample->distance;
-                                        
-                                        // Shadow test:
-                                        Ray<TSpectral> shadow_ray(new_origin, ls.wi);
-                                        if (scene_view.occluded(shadow_ray, light_dist, time)) {
-                                            continue;
+                                            float light_pdf = light_instance.light->pdf_li(prev_isect, current_transform, ray.direction());
+                                            mis_weight = power_heuristic(prev_bsdf_pdf, light_pdf);
                                         }
 
-                                        // Evaluate BSDF:
-                                        TSpectral f = material->bsdf_eval(
-                                            isect.wo, ls.wi, { params, shading_isect });
-                                        float cos_theta = std::max(0.0f,
-                                            glm::dot(shading_isect.normal_s, ls.wi));
+                                        TSpectral final_radiance = throughput * Le * mis_weight;
 
-                                        TSpectral Ld = throughput * (ls.Li / ls.pdf) * f * cos_theta;
                                         if (bounce == 0) {
-                                            direct_radiance += Ld;
+                                            direct_radiance += final_radiance;
                                         }
                                         else {
-                                            indirect_radiance += Ld;
+                                            indirect_radiance += final_radiance;
                                         }
-                                    }
 
-                                    // Sample the BSDF:
-                                    float u1 = sampler.get_1d();
-                                    float u2 = sampler.get_1d();
-
-                                    BSDFSample<TSpectral> bs = material->bsdf_sample(
-                                        isect.wo, { params, shading_isect }, u1, u2);
-
-                                    if (!bs.is_valid()) {
+                                        // Terminate for hitting light:
                                         break;
                                     }
-                                    
-                                    throughput = throughput * bs.value;
+                                    else {
 
-                                    // Russian roulette (after a few bounces):
-                                    if (bounce >= 3) {
-                                        float p_continue = std::min(0.95f, throughput.max());
-                                        if (sampler.get_1d() > p_continue) {
+                                        if (s == 0) {
+                                            mesh_id = hit.geom_id;
+                                        }
+
+                                        // Resolve full shading data:
+                                        Interaction<TSpectral> isect = scene_view.resolve_hit(ray, hit);
+                                        Vec3<float> new_origin = offset_intersection_(
+                                            isect.position, isect.normal_g);
+                                        isect.position = new_origin;
+
+                                        // Look up mesh material:
+                                        const auto& batch = scene_view.geometry_[mapping.batch_index];
+                                        const auto* material = batch.mesh->material();
+
+                                        // Evaluate material textures:
+                                        auto [params, shading_isect] = material->evaluate(isect);
+
+                                        // Path regulatization
+                                        if (bounce > 0) {
+                                            params.roughness = std::max(params.roughness, prev_roughness);
+                                        }
+                                        prev_roughness = params.roughness;
+
+                                        // Record primary ray info:
+                                        if (bounce == 0) {
+                                            closest_depth = std::min(closest_depth, hit.t);
+                                            camera_normals += shading_isect.normal_s;
+                                            albedo_total += params.albedo;
+                                        }
+
+                                        // Direct lighting (next event estimation)
+                                        for (const auto& light_instance : lights) {
+                                            Transform<float> current_transform = interpolate_transform(light_instance.transforms, time);
+
+                                            auto sample = light_instance.light->sample_li(
+                                                isect, current_transform, this->sampler_);
+
+                                            if (!sample) {
+                                                continue;
+                                            }
+                                            const auto& ls = *sample;
+                                            float light_dist = sample->distance;
+
+                                            // Shadow test:
+                                            Ray<TSpectral> shadow_ray(new_origin, ls.wi);
+                                            if (scene_view.occluded(shadow_ray, light_dist, time)) {
+                                                continue;
+                                            }
+
+                                            // Evaluate BSDF:
+                                            TSpectral f = material->bsdf_eval(
+                                                isect.wo, ls.wi, { params, shading_isect });
+                                            float cos_theta = std::max(0.0f,
+                                                glm::dot(shading_isect.normal_s, ls.wi));
+
+                                            float mis_weight = 1.0f;
+                                            float bsdf_pdf = material->bsdf_pdf(isect.wo, ls.wi, { params, shading_isect });
+                                            mis_weight = power_heuristic(ls.pdf, bsdf_pdf);
+
+                                            TSpectral Ld = throughput * (ls.Li / ls.pdf) * f * cos_theta * mis_weight;
+                                            if (bounce == 0) {
+                                                direct_radiance += Ld;
+                                            }
+                                            else {
+                                                indirect_radiance += Ld;
+                                            }
+                                        }
+
+                                        // Sample the BSDF:
+                                        float u1 = sampler.get_1d();
+                                        float u2 = sampler.get_1d();
+
+                                        BSDFSample<TSpectral> bs = material->bsdf_sample(
+                                            isect.wo, { params, shading_isect }, u1, u2);
+
+                                        if (!bs.is_valid()) {
                                             break;
                                         }
-                                        throughput = throughput / p_continue;
-                                    }
 
-                                    // Spawn next ray:
-                                    ray = Ray<TSpectral>(new_origin, bs.wi);
+                                        prev_bsdf_pdf = bs.pdf;
+                                        prev_isect = shading_isect;
+
+                                        throughput = throughput * bs.value;
+
+                                        // Russian roulette (after a few bounces):
+                                        if (bounce >= 3) {
+                                            float p_continue = std::min(0.95f, throughput.max());
+                                            if (sampler.get_1d() > p_continue) {
+                                                break;
+                                            }
+                                            throughput = throughput / p_continue;
+                                        }
+
+                                        // Spawn next ray:
+                                        ray = Ray<TSpectral>(new_origin, bs.wi);
+                                    }
                                 }
 
                                 // Indirect radiance clamping:

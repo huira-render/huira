@@ -475,11 +475,9 @@ namespace huira {
     template <IsSpectral TSpectral>
     void SceneView<TSpectral>::add_light_instance_(std::shared_ptr<Light<TSpectral>> light, const std::vector<Transform<float>>& instance_apparent_transforms)
     {
-        // TODO Is it valid to store just one light temporal sample?
-
         LightInstance<TSpectral> instance;
         instance.light = light;
-        instance.transform = instance_apparent_transforms[0];
+        instance.transforms = instance_apparent_transforms;
 
         lights_.push_back(std::move(instance));
     }
@@ -535,7 +533,7 @@ namespace huira {
             rtcSetSceneFlags(tlas_, RTC_SCENE_FLAG_DYNAMIC);
         }
 
-        // For each mesh batch (unique mesh + list of instance transforms):
+        // Add Meshes
         for (std::size_t batch_idx = 0; batch_idx < geometry_.size(); ++batch_idx) {
             const auto& batch = geometry_[batch_idx];
             RTCScene mesh_blas = batch.mesh->blas();
@@ -561,16 +559,102 @@ namespace huira {
 
                 rtcCommitGeometry(inst_geom);
 
-                // Attach to TLAS — the returned ID is the geomID we'll see in ray hits:
                 unsigned int geom_id = rtcAttachGeometry(tlas_, inst_geom);
                 rtcReleaseGeometry(inst_geom);
 
-                // Record the mapping so we can resolve hits:
                 if (geom_id >= instance_mappings_.size()) {
                     instance_mappings_.resize(geom_id + 1);
                 }
-                instance_mappings_[geom_id] = { batch_idx, inst_idx };
+
+                // Explicitly label this as a Mesh hit
+                InstanceMapping mapping;
+                mapping.type = GeometryType::Mesh;
+                mapping.batch_index = batch_idx;
+                mapping.instance_index = inst_idx;
+                mapping.light_index = 0;
+                instance_mappings_[geom_id] = mapping;
             }
+        }
+
+        // Add Sphere Lights
+        for (std::size_t l_idx = 0; l_idx < lights_.size(); ++l_idx) {
+            const auto& light_inst = lights_[l_idx];
+
+            auto sphere_light = std::dynamic_pointer_cast<SphereLight<TSpectral>>(light_inst.light);
+            if (!sphere_light) {
+                continue;
+            }
+
+            std::size_t N = light_inst.transforms.size();
+            if (N == 0) {
+                continue;
+            }
+
+
+            // Create a BLAS containing a single static sphere at the origin
+            RTCScene sphere_blas = rtcNewScene(device_);
+            RTCGeometry geom = rtcNewGeometry(device_, RTC_GEOMETRY_TYPE_SPHERE_POINT);
+
+            if (!geom) {
+                RTCError err = rtcGetDeviceError(device_);
+                HUIRA_THROW_ERROR("Embree failed to create SPHERE_POINT. Ensure EMBREE_GEOMETRY_SPHERE is enabled in your build. Error: " + std::to_string(err));
+            }
+
+            float* vertex = static_cast<float*>(rtcSetNewGeometryBuffer(geom,
+                RTC_BUFFER_TYPE_VERTEX, 0, RTC_FORMAT_FLOAT4, 4 * sizeof(float), 1));
+
+            if (!vertex) {
+                RTCError err = rtcGetDeviceError(device_);
+                HUIRA_THROW_ERROR("Embree failed to allocate sphere buffer. Error: " + std::to_string(err));
+            }
+
+            // The sphere itself sits statically at the origin
+            vertex[0] = 0.0f;
+            vertex[1] = 0.0f;
+            vertex[2] = 0.0f;
+            vertex[3] = sphere_light->radius().to_si_f();
+
+            rtcCommitGeometry(geom);
+            rtcAttachGeometry(sphere_blas, geom);
+            rtcReleaseGeometry(geom);
+            rtcCommitScene(sphere_blas);
+
+
+            // Instance the sphere BLAS into the TLAS
+            RTCGeometry inst_geom = rtcNewGeometry(device_, RTC_GEOMETRY_TYPE_INSTANCE);
+            rtcSetGeometryInstancedScene(inst_geom, sphere_blas);
+            rtcSetGeometryTimeStepCount(inst_geom, static_cast<unsigned int>(N));
+
+            if (N > 1) {
+                rtcSetGeometryTimeRange(inst_geom, 0.0f, 1.0f);
+            }
+
+            for (std::size_t t_idx = 0; t_idx < N; ++t_idx) {
+                // Because we instance it, we get to use your existing Transform logic natively!
+                RTCQuaternionDecomposition decomp = light_inst.transforms[t_idx].to_embree();
+                rtcSetGeometryTransformQuaternion(inst_geom,
+                    static_cast<unsigned int>(t_idx),
+                    &decomp);
+            }
+
+            rtcCommitGeometry(inst_geom);
+            unsigned int geom_id = rtcAttachGeometry(tlas_, inst_geom);
+            rtcReleaseGeometry(inst_geom);
+
+            // Embree reference counts scenes; the instance holds a reference, so we release ours.
+            rtcReleaseScene(sphere_blas);
+
+            // Map geom_id back to lights array
+            if (geom_id >= instance_mappings_.size()) {
+                instance_mappings_.resize(geom_id + 1);
+            }
+
+            InstanceMapping mapping;
+            mapping.type = GeometryType::Light;
+            mapping.batch_index = 0;
+            mapping.instance_index = 0;
+            mapping.light_index = l_idx;
+            instance_mappings_[geom_id] = mapping;
         }
 
         rtcCommitScene(tlas_);

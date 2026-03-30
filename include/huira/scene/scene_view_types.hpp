@@ -24,7 +24,7 @@ namespace huira {
     template <IsSpectral TSpectral>
     struct LightInstance {
         std::shared_ptr<Light<TSpectral>> light;
-        Transform<float> transform; // TODO Consider making this a vector as well?  (Would need to interpolate at render time)
+        std::vector<Transform<float>> transforms; // Transform at N times
     };
 
     /**
