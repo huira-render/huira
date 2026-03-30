@@ -8,6 +8,13 @@
 #include "huira/render/interaction.hpp"
 
 namespace huira {
+    struct BSDFRequirements {
+        bool needs_albedo = true;
+        bool needs_normal = true;
+        bool needs_metallic = true;
+        bool needs_roughness = true;
+    };
+
     /**
      * @brief Result of a BSDF sample operation.
      *
@@ -48,6 +55,13 @@ namespace huira {
     class BSDF {
     public:
         virtual ~BSDF() = default;
+
+        /**
+         * @brief Get the requirements of the BSDF.
+         *
+         * @return BSDFRequirements indicating which shading parameters are needed
+         */
+        [[nodiscard]] virtual BSDFRequirements requirements() const = 0;
 
         /**
          * @brief Evaluate the BSDF: f(wo, wi).

@@ -15,29 +15,37 @@ namespace huira {
 
         ShadingParams<TSpectral> params;
 
-        params.albedo = albedo_image_->sample_bilinear(uv.x, uv.y) * albedo_factor_ * isect.vertex_albedo;
+        if (eval_albedo_) {
+            params.albedo = albedo_image_->sample_bilinear(uv.x, uv.y) * albedo_factor_ * isect.vertex_albedo;
+        }
 
-        params.metallic = metallic_image_->sample_bilinear(uv.x, uv.y) * metallic_factor_;
+        if (eval_metallic_) {
+            params.metallic = metallic_image_->sample_bilinear(uv.x, uv.y) * metallic_factor_;
+        }
 
-        params.roughness = roughness_image_->sample_bilinear(uv.x, uv.y) * roughness_factor_;
+        if (eval_roughness_) {
+            params.roughness = roughness_image_->sample_bilinear(uv.x, uv.y) * roughness_factor_;
+        }
 
         params.emission = emissive_image_->sample_bilinear(uv.x, uv.y) * emissive_factor_;
 
         Interaction<TSpectral> shading_isect = isect;
 
         // TODO Fix the tangent space computations
-        //if (isect.tangent != Vec3<float>{0.0f}) {
-        //    Vec3<float> ts_normal = glm::normalize(normal_image_->sample_bilinear(uv.x, uv.y));
-        //
-        //    ts_normal.x *= normal_factor_;
-        //    ts_normal.y *= normal_factor_;
-        //    ts_normal = glm::normalize(ts_normal);
-        //
-        //    Vec3<float> perturbed =
-        //        isect.tangent * ts_normal.x +
-        //        isect.bitangent * ts_normal.y +
-        //        isect.normal_s * ts_normal.z;
-        //    shading_isect.normal_s = glm::normalize(perturbed);
+        //if (eval_normal_) {
+        //    if (isect.tangent != Vec3<float>{0.0f}) {
+        //        Vec3<float> ts_normal = glm::normalize(normal_image_->sample_bilinear(uv.x, uv.y));
+
+        //        ts_normal.x *= normal_factor_;
+        //        ts_normal.y *= normal_factor_;
+        //        ts_normal = glm::normalize(ts_normal);
+
+        //        Vec3<float> perturbed =
+        //            isect.tangent * ts_normal.x +
+        //            isect.bitangent * ts_normal.y +
+        //            isect.normal_s * ts_normal.z;
+        //        shading_isect.normal_s = glm::normalize(perturbed);
+        //    }
         //}
 
         // Keep the original tangent/bitangent, just orthogonalize against new normal
@@ -75,6 +83,22 @@ namespace huira {
         const MaterialEval<TSpectral>& eval) const
     {
         return bsdf_->pdf(wo, wi, eval.isect, eval.params);
+    }
+
+    template <IsSpectral TSpectral>
+    void Material<TSpectral>::set_bsdf(std::unique_ptr<BSDF<TSpectral>> bsdf)
+    {
+        if (!bsdf) {
+            HUIRA_THROW_ERROR("BSDF pointer cannot be null");
+        }
+        bsdf_ = std::move(bsdf);
+
+        // Cache the flags flat in the material memory layout
+        auto reqs = bsdf_->requirements();
+        eval_albedo_ = reqs.needs_albedo;
+        eval_metallic_ = reqs.needs_metallic;
+        eval_roughness_ = reqs.needs_roughness;
+        eval_normal_ = reqs.needs_normal;
     }
 
     template <IsSpectral TSpectral>
@@ -181,7 +205,6 @@ namespace huira {
         const Image<float>* roughness_image,
         const Image<Vec3<float>>* normal_image,
         const Image<TSpectral>* emissive_image) :
-        bsdf_{ std::move(bsdf) },
         default_albedo_image_{ albedo_image },
         default_metallic_image_{ metallic_image },
         default_roughness_image_{ roughness_image },
@@ -194,5 +217,7 @@ namespace huira {
         roughness_image_ = default_roughness_image_;
         normal_image_ = default_normal_image_;
         emissive_image_ = default_emissive_image_;
+
+        set_bsdf(std::move(bsdf));
     };
 }

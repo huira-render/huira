@@ -66,6 +66,8 @@ namespace huira {
             const Vec3<float>& wi,
             const MaterialEval<TSpectral>& eval) const;
 
+        void set_bsdf(std::unique_ptr<BSDF<TSpectral>> bsdf);
+
         void set_albedo(const Image<TSpectral>* albedo_image);
         void set_albedo_factor(TSpectral albedo_factor);
         void reset_albedo();
@@ -104,18 +106,26 @@ namespace huira {
             const Image<Vec3<float>>* normal_image,
             const Image<TSpectral>* emissive_image);
 
-        std::unique_ptr<BSDF<TSpectral>> bsdf_;
+        bool eval_albedo_ = true;
+        const Image<TSpectral>* default_albedo_image_;
 
-        const Image<TSpectral>*   default_albedo_image_;
-        const Image<float>*       default_metallic_image_;
-        const Image<float>*       default_roughness_image_;
+        bool eval_metallic_ = true;
+        const Image<float>* default_metallic_image_;
+
+        bool eval_roughness_ = true;
+        const Image<float>* default_roughness_image_;
+
+        bool eval_normal_ = true;
         const Image<Vec3<float>>* default_normal_image_;
-        const Image<TSpectral>*   default_emissive_image_;
+
+        const Image<TSpectral>* default_emissive_image_;
+
+        std::unique_ptr<BSDF<TSpectral>> bsdf_;
         
         TSpectral albedo_factor_{ 1.0f };
         float     metallic_factor_  = 1.0f;
         float     roughness_factor_ = 1.0f;
-        float     normal_factor_     = 1.0f;
+        float     normal_factor_    = 1.0f;
         TSpectral emissive_factor_{ 1.0f };
 
         std::uint64_t id_ = 0;

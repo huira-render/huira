@@ -6,6 +6,18 @@
 
 namespace huira {
     template <IsSpectral TSpectral>
+    BSDFRequirements CookTorranceBSDF<TSpectral>::requirements() const
+    {
+        BSDFRequirements reqs{};
+        reqs.needs_albedo = true;
+        reqs.needs_normal = true;
+        reqs.needs_metallic = true;
+        reqs.needs_roughness = true;
+        return reqs;
+    }
+
+
+    template <IsSpectral TSpectral>
     TSpectral CookTorranceBSDF<TSpectral>::eval(
         const Vec3<float>& wo,
         const Vec3<float>& wi,
