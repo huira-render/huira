@@ -20,6 +20,8 @@ namespace huira {
     public:
         LambertBSDF() noexcept = default;
 
+        [[nodiscard]] BSDFRequirements requirements() const override;
+
         [[nodiscard]] TSpectral eval(
             const Vec3<float>& wo,
             const Vec3<float>& wi,

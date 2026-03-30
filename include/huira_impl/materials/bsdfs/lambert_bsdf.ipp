@@ -3,6 +3,17 @@
 
 namespace huira {
     template <IsSpectral TSpectral>
+    BSDFRequirements LambertBSDF<TSpectral>::requirements() const
+    {
+        BSDFRequirements reqs{};
+        reqs.needs_albedo = true;
+        reqs.needs_normal = true;
+        reqs.needs_metallic = false;
+        reqs.needs_roughness = false;
+        return reqs;
+    }
+
+    template <IsSpectral TSpectral>
     TSpectral LambertBSDF<TSpectral>::eval(
         const Vec3<float>& wo,
         const Vec3<float>& wi,
