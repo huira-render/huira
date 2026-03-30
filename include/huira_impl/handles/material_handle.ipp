@@ -12,6 +12,12 @@ namespace huira {
     }
 
     template <IsSpectral TSpectral>
+    void MaterialHandle<TSpectral>::set_hapke_bsdf(float h, float B0, float b, float c)
+    {
+        this->get_()->set_hapke_bsdf(h, B0, b, c);
+    }
+
+    template <IsSpectral TSpectral>
     void MaterialHandle<TSpectral>::set_lambert_bsdf()
     {
         this->get_()->set_lambert_bsdf();

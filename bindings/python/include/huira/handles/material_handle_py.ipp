@@ -18,6 +18,9 @@ namespace huira {
             // --- BSDF ---
             .def("set_cook_torrance_bsdf", &HandleType::set_cook_torrance_bsdf,
                 "Set the BSDF to Cook-Torrance")
+            .def("set_hapke_bsdf", &HandleType::set_hapke_bsdf,
+                py::arg("h"), py::arg("B0"), py::arg("b"), py::arg("c"),
+                "Set the BSDF to Hapke (parameters: h, B0, b, c)")
             .def("set_lambert_bsdf", &HandleType::set_lambert_bsdf,
                 "Set the BSDF to Lambert")
             .def("set_lommel_seeliger_bsdf", &HandleType::set_lommel_seeliger_bsdf,
