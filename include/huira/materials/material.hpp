@@ -10,6 +10,12 @@
 #include "huira/render/interaction.hpp"
 #include "huira/scene/scene_object.hpp"
 
+#include "huira/materials/bsdfs/cook_torrance_bsdf.hpp"
+#include "huira/materials/bsdfs/lambert_bsdf.hpp"
+#include "huira/materials/bsdfs/lommel_seeliger_bsdf.hpp"
+#include "huira/materials/bsdfs/mcewen_bsdf.hpp"
+#include "huira/materials/bsdfs/oren_nayar_bsdf.hpp"
+
 namespace huira {
     // Forward Declare
     template <IsSpectral TSpectral>
@@ -67,6 +73,12 @@ namespace huira {
             const MaterialEval<TSpectral>& eval) const;
 
         void set_bsdf(std::unique_ptr<BSDF<TSpectral>> bsdf);
+        void set_cook_torrance_bsdf() { set_bsdf(std::make_unique<CookTorranceBSDF<TSpectral>>()); }
+        void set_lambert_bsdf() { set_bsdf(std::make_unique<LambertBSDF<TSpectral>>()); }
+        void set_lommel_seeliger_bsdf() { set_bsdf(std::make_unique<LommelSeeligerBSDF<TSpectral>>()); }
+        void set_mcewen_bsdf() { set_bsdf(std::make_unique<McEwenBSDF<TSpectral>>()); }
+        void set_oren_nayar_bsdf() { set_bsdf(std::make_unique<OrenNayarBSDF<TSpectral>>()); }
+        
 
         void set_albedo(const Image<TSpectral>* albedo_image);
         void set_albedo_factor(TSpectral albedo_factor);

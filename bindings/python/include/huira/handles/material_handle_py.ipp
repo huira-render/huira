@@ -15,6 +15,18 @@ namespace huira {
 
         py::class_<HandleType>(m, "MaterialHandle")
 
+            // --- BSDF ---
+            .def("set_cook_torrance_bsdf", &HandleType::set_cook_torrance_bsdf,
+                "Set the BSDF to Cook-Torrance")
+            .def("set_lambert_bsdf", &HandleType::set_lambert_bsdf,
+                "Set the BSDF to Lambert")
+            .def("set_lommel_seeliger_bsdf", &HandleType::set_lommel_seeliger_bsdf,
+                "Set the BSDF to Lommel-Seeliger")
+            .def("set_mcewen_bsdf", &HandleType::set_mcewen_bsdf,
+                "Set the BSDF to McEwen")
+            .def("set_oren_nayar_bsdf", &HandleType::set_oren_nayar_bsdf,
+                "Set the BSDF to Oren-Nayar")
+
             // --- Albedo ---
             .def("set_albedo", &HandleType::set_albedo,
                 py::arg("albedo_texture"),
@@ -64,6 +76,8 @@ namespace huira {
                 "Set the emissive factor")
             .def("reset_emissive", &HandleType::reset_emissive,
                 "Reset emissive to default")
+
+
 
             // --- Handle basics ---
             .def("valid", &HandleType::valid)
