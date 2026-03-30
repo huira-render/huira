@@ -22,6 +22,7 @@ namespace huira {
 
         void set_bsdf(std::unique_ptr<BSDF<TSpectral>> bsdf);
         void set_cook_torrance_bsdf();
+        void set_hapke_bsdf(float h, float B0, float b, float c);
         void set_lambert_bsdf();
         void set_lommel_seeliger_bsdf();
         void set_mcewen_bsdf();

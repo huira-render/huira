@@ -120,6 +120,8 @@ namespace huira {
         bool valid() const;           ///< Checks if all spectral values are valid (non-negative, not NaN, not infinite).
         bool valid_ratio() const;     ///< Checks if all spectral values are valid ratios (between 0 and 1, not NaN, not infinite).
 
+        SpectralBins sqrt() const;
+
         // Array-Array Arithmetic Operations
         constexpr SpectralBins& operator+=(const SpectralBins& other);
         constexpr SpectralBins& operator-=(const SpectralBins& other);

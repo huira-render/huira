@@ -392,6 +392,16 @@ namespace huira {
         return true;
     }
 
+    template <std::size_t N, auto... Args>
+    SpectralBins<N, Args...> SpectralBins<N, Args...>::sqrt() const
+    {
+        SpectralBins<N, Args...> output;
+        for (std::size_t i = 0; i < N; ++i) {
+            output[i] = std::sqrt(data_[i]);
+        }
+        return output;
+    }
+
 
     // ========================================= //
     // === Array-Array Arithmetic Operations === //

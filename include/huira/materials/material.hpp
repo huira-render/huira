@@ -11,6 +11,7 @@
 #include "huira/scene/scene_object.hpp"
 
 #include "huira/materials/bsdfs/cook_torrance_bsdf.hpp"
+#include "huira/materials/bsdfs/hapke_bsdf.hpp"
 #include "huira/materials/bsdfs/lambert_bsdf.hpp"
 #include "huira/materials/bsdfs/lommel_seeliger_bsdf.hpp"
 #include "huira/materials/bsdfs/mcewen_bsdf.hpp"
@@ -74,6 +75,7 @@ namespace huira {
 
         void set_bsdf(std::unique_ptr<BSDF<TSpectral>> bsdf);
         void set_cook_torrance_bsdf() { set_bsdf(std::make_unique<CookTorranceBSDF<TSpectral>>()); }
+        void set_hapke_bsdf(float h, float B0, float b, float c) { set_bsdf(std::make_unique<HapkeBSDF<TSpectral>>(h, B0, b, c)); }
         void set_lambert_bsdf() { set_bsdf(std::make_unique<LambertBSDF<TSpectral>>()); }
         void set_lommel_seeliger_bsdf() { set_bsdf(std::make_unique<LommelSeeligerBSDF<TSpectral>>()); }
         void set_mcewen_bsdf() { set_bsdf(std::make_unique<McEwenBSDF<TSpectral>>()); }
