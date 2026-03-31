@@ -32,6 +32,8 @@
 #include "huira/images/fits_metadata_py.ipp"
 #include "huira/images/image_py.ipp"
 
+#include "huira/materials/bsdfs_py.ipp"
+
 #include "huira/render/frame_buffer_py.ipp"
 #include "huira/render/interaction_py.ipp"
 #include "huira/render/ray_py.ipp"
@@ -56,6 +58,8 @@ inline void bind_spectral(py::module_& m) {
     huira::bind_instance_handle<TSpectral>(m);
     huira::bind_frame_handle<TSpectral>(m);
     huira::bind_root_frame_handle<TSpectral>(m);
+
+    huira::bind_bsdfs<TSpectral>(m);
 
     std::string img_name = "Image_" + m.attr("__name__").cast<std::string>();
     huira::bind_image<TSpectral>(m, img_name.c_str());

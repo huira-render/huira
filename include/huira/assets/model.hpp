@@ -8,6 +8,7 @@
 
 #include "huira/assets/mesh.hpp"
 #include "huira/core/concepts/spectral_concepts.hpp"
+#include "huira/handles/material_handle.hpp"
 #include "huira/scene/frame_node.hpp"
 #include "huira/scene/scene_object.hpp"
 
@@ -48,6 +49,10 @@ namespace huira {
         std::string type() const override { return "Model"; }
 
         void print_graph() const;
+
+        MaterialHandle<TSpectral> get_material_by_id(std::uint64_t material_id) const;
+
+        void set_all_bsdfs(const BSDF<TSpectral>& bsdf);
 
     private:
         std::uint64_t id_ = 0;

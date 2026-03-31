@@ -1,46 +1,10 @@
 namespace huira {
     template <IsSpectral TSpectral>
-    void MaterialHandle<TSpectral>::set_bsdf(std::unique_ptr<BSDF<TSpectral>> bsdf)
+    void MaterialHandle<TSpectral>::set_bsdf(const BSDF<TSpectral>& bsdf)
     {
-        this->get_()->set_bsdf(std::move(bsdf));
+        this->get_()->set_bsdf(bsdf);
     }
-
-    template <IsSpectral TSpectral>
-    void MaterialHandle<TSpectral>::set_cook_torrance_bsdf()
-    {
-        this->get_()->set_cook_torrance_bsdf();
-    }
-
-    template <IsSpectral TSpectral>
-    void MaterialHandle<TSpectral>::set_hapke_bsdf(float h, float B0, float b, float c)
-    {
-        this->get_()->set_hapke_bsdf(h, B0, b, c);
-    }
-
-    template <IsSpectral TSpectral>
-    void MaterialHandle<TSpectral>::set_lambert_bsdf()
-    {
-        this->get_()->set_lambert_bsdf();
-    }
-
-    template <IsSpectral TSpectral>
-    void MaterialHandle<TSpectral>::set_lommel_seeliger_bsdf()
-    {
-        this->get_()->set_lommel_seeliger_bsdf();
-    }
-
-    template <IsSpectral TSpectral>
-    void MaterialHandle<TSpectral>::set_mcewen_bsdf()
-    {
-        this->get_()->set_mcewen_bsdf();
-    }
-
-    template <IsSpectral TSpectral>
-    void MaterialHandle<TSpectral>::set_oren_nayar_bsdf()
-    {
-        this->get_()->set_oren_nayar_bsdf();
-    }
-
+    
 
     template <IsSpectral TSpectral>
     void MaterialHandle<TSpectral>::set_albedo(const TextureHandle<TSpectral>& albedo_texture)

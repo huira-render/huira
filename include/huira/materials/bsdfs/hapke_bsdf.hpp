@@ -31,6 +31,11 @@ namespace huira {
 
         [[nodiscard]] BSDFRequirements requirements() const override;
 
+        [[nodiscard]] std::unique_ptr<BSDF<TSpectral>> clone() const override {
+            // Calls the default copy constructor and wraps it in a unique_ptr
+            return std::make_unique<HapkeBSDF<TSpectral>>(*this);
+        }
+
         [[nodiscard]] TSpectral eval(
             const Vec3<float>& wo,
             const Vec3<float>& wi,

@@ -20,13 +20,7 @@ namespace huira {
         MaterialHandle() = delete;
         using Handle<Material<TSpectral>>::Handle;
 
-        void set_bsdf(std::unique_ptr<BSDF<TSpectral>> bsdf);
-        void set_cook_torrance_bsdf();
-        void set_hapke_bsdf(float h, float B0, float b, float c);
-        void set_lambert_bsdf();
-        void set_lommel_seeliger_bsdf();
-        void set_mcewen_bsdf();
-        void set_oren_nayar_bsdf();
+        void set_bsdf(const BSDF<TSpectral>& bsdf);
 
         void set_albedo(const TextureHandle<TSpectral>& albedo_texture);
         void set_albedo_factor(TSpectral albedo_factor);

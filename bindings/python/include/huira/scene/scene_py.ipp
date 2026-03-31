@@ -197,7 +197,6 @@ namespace huira {
             // =============================================================
             // Camera models
             // =============================================================
-
             .def("new_camera_model", &SceneType::new_camera_model,
                 py::arg("name") = "",
                 "Create a new camera model and return its handle")
@@ -216,17 +215,11 @@ namespace huira {
             
             // =============================================================
             // Materials
-            // =============================================================
-                                
-            .def("new_lambertian_material", &SceneType::new_lambertian_material,
-                py::arg("name") = "",
-                "Create a new Lambertian material")
-            .def("new_cook_torrance_material", &SceneType::new_cook_torrance_material,
-                py::arg("name") = "",
-                "Create a new Cook-Torrance material")
-            .def("add_material", &SceneType::add_material,
-                py::arg("material"), py::arg("name") = "",
-                "Add an existing material to the scene")
+            // =============================================================           
+            .def("new_material", &SceneType::new_material,
+                py::arg("bsdf"), py::arg("name") = "",
+                "Create a new material with the specified BSDF")
+
 
             // =============================================================
             // Background

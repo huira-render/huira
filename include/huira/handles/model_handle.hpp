@@ -3,6 +3,7 @@
 #include "huira/assets/model.hpp"
 #include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/handles/handle.hpp"
+#include "huira/handles/material_handle.hpp"
 
 namespace huira {
     template <IsSpectral TSpectral>
@@ -27,6 +28,14 @@ namespace huira {
 
         void print_graph() const {
             this->get_()->print_graph();
+        }
+
+        MaterialHandle<TSpectral> get_material_by_id(std::uint64_t material_id) const {
+            return this->get_()->get_material_by_id(material_id);
+        }
+
+        void set_all_bsdfs(const BSDF<TSpectral>& bsdf) const {
+            return this->get_()->set_all_bsdfs(bsdf);
         }
 
     private:

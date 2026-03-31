@@ -368,7 +368,7 @@ namespace huira {
         for (unsigned int i = 0; i < ctx.ai_scene->mNumMaterials; ++i) {
             const aiMaterial* ai_mat = ctx.ai_scene->mMaterials[i];
             std::string name = std::string(ai_mat->GetName().C_Str());
-            MaterialHandle<TSpectral> material = ctx.scene->new_cook_torrance_material(name);
+            MaterialHandle<TSpectral> material = ctx.scene->new_material(CookTorranceBSDF<TSpectral>(), name);
 
             // Assign albedos:
             if (auto tex = load_material_texture_<TSpectral>(ai_mat, aiTextureType_BASE_COLOR, ctx)) {

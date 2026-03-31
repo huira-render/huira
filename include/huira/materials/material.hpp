@@ -73,13 +73,7 @@ namespace huira {
             const Vec3<float>& wi,
             const MaterialEval<TSpectral>& eval) const;
 
-        void set_bsdf(std::unique_ptr<BSDF<TSpectral>> bsdf);
-        void set_cook_torrance_bsdf() { set_bsdf(std::make_unique<CookTorranceBSDF<TSpectral>>()); }
-        void set_hapke_bsdf(float h, float B0, float b, float c) { set_bsdf(std::make_unique<HapkeBSDF<TSpectral>>(h, B0, b, c)); }
-        void set_lambert_bsdf() { set_bsdf(std::make_unique<LambertBSDF<TSpectral>>()); }
-        void set_lommel_seeliger_bsdf() { set_bsdf(std::make_unique<LommelSeeligerBSDF<TSpectral>>()); }
-        void set_mcewen_bsdf() { set_bsdf(std::make_unique<McEwenBSDF<TSpectral>>()); }
-        void set_oren_nayar_bsdf() { set_bsdf(std::make_unique<OrenNayarBSDF<TSpectral>>()); }
+        void set_bsdf(const BSDF<TSpectral>& bsdf);
         
 
         void set_albedo(const Image<TSpectral>* albedo_image);
@@ -113,7 +107,7 @@ namespace huira {
 
     private:
         Material(
-            std::unique_ptr<BSDF<TSpectral>> bsdf,
+            const BSDF<TSpectral>& bsdf,
             const Image<TSpectral>* albedo_image,
             const Image<float>* metallic_image,
             const Image<float>* roughness_image,

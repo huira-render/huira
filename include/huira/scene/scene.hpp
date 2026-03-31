@@ -105,9 +105,8 @@ namespace huira {
         void set_name(const ModelHandle<TSpectral>& model_handle, const std::string& name);
         ModelHandle<TSpectral> get_model(const std::string& name);
         void delete_model(const ModelHandle<TSpectral>& model_handle);
-        
-        MaterialHandle<TSpectral> new_lambertian_material(std::string name = "");
-        MaterialHandle<TSpectral> new_cook_torrance_material(std::string name = "");
+
+        MaterialHandle<TSpectral> new_material(const BSDF<TSpectral>& bsdf, std::string name = "");
         MaterialHandle<TSpectral> add_material(std::shared_ptr<Material<TSpectral>> material, std::string name = "");
 
         void set_background_radiance(Image<TSpectral> background);

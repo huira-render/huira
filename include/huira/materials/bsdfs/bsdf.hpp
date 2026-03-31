@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
 
 #include "huira/core/types.hpp"
 #include "huira/core/concepts/spectral_concepts.hpp"
@@ -54,7 +55,14 @@ namespace huira {
     template <IsSpectral TSpectral>
     class BSDF {
     public:
+        BSDF() = default;
         virtual ~BSDF() = default;
+        
+        BSDF(const BSDF&) = default;
+        BSDF(BSDF&&) = default;
+        BSDF& operator=(const BSDF&) = default;
+        BSDF& operator=(BSDF&&) = default;
+
 
         /**
          * @brief Get the requirements of the BSDF.
@@ -62,6 +70,14 @@ namespace huira {
          * @return BSDFRequirements indicating which shading parameters are needed
          */
         [[nodiscard]] virtual BSDFRequirements requirements() const = 0;
+
+        /**
+         * @brief Clone the BSDF instance.
+         *
+         * @return A unique_ptr to a new BSDF instance that is a copy of this one.
+         */
+        [[nodiscard]] virtual std::unique_ptr<BSDF<TSpectral>> clone() const = 0;
+
 
         /**
          * @brief Evaluate the BSDF: f(wo, wi).

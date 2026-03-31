@@ -86,12 +86,9 @@ namespace huira {
     }
 
     template <IsSpectral TSpectral>
-    void Material<TSpectral>::set_bsdf(std::unique_ptr<BSDF<TSpectral>> bsdf)
+    void Material<TSpectral>::set_bsdf(const BSDF<TSpectral>& bsdf)
     {
-        if (!bsdf) {
-            HUIRA_THROW_ERROR("BSDF pointer cannot be null");
-        }
-        bsdf_ = std::move(bsdf);
+        bsdf_ = bsdf.clone();
 
         // Cache the flags flat in the material memory layout
         auto reqs = bsdf_->requirements();
@@ -199,7 +196,7 @@ namespace huira {
 
     template <IsSpectral TSpectral>
     Material<TSpectral>::Material(
-        std::unique_ptr<BSDF<TSpectral>> bsdf,
+        const BSDF<TSpectral>& bsdf,
         const Image<TSpectral>* albedo_image,
         const Image<float>* metallic_image,
         const Image<float>* roughness_image,
@@ -218,6 +215,6 @@ namespace huira {
         normal_image_ = default_normal_image_;
         emissive_image_ = default_emissive_image_;
 
-        set_bsdf(std::move(bsdf));
+        set_bsdf(bsdf);
     };
 }
