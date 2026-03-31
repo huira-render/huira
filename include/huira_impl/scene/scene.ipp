@@ -49,7 +49,7 @@ namespace huira {
         // Initialize default material:
         default_material_ = std::unique_ptr<Material<TSpectral>>(
             new Material<TSpectral>(
-                std::make_unique<LambertBSDF<TSpectral>>(),
+                LambertBSDF<TSpectral>(),
                 default_albedo_image_.get(),
                 default_metallic_image_.get(),
                 default_roughness_image_.get(),
@@ -550,34 +550,17 @@ namespace huira {
         models_.remove(model_shared);
     }
 
-
     template <IsSpectral TSpectral>
-    MaterialHandle<TSpectral> Scene<TSpectral>::new_lambertian_material(std::string name)
+    MaterialHandle<TSpectral> Scene<TSpectral>::new_material(const BSDF<TSpectral>& bsdf, std::string name)
     {
         auto material = std::shared_ptr<Material<TSpectral>>(
             new Material<TSpectral>(
-                std::make_unique<LambertBSDF<TSpectral>>(),
-                default_albedo_image_.get(),
-                default_metallic_image_.get(),
-                default_roughness_image_.get(),
-                default_normal_image_.get(),
-                default_emission_image_.get()
-            )
-        );
-        return this->add_material(material, name);
-    }
-
-    template <IsSpectral TSpectral>
-    MaterialHandle<TSpectral> Scene<TSpectral>::new_cook_torrance_material(std::string name)
-    {
-        auto material = std::shared_ptr<Material<TSpectral>>(
-            new Material<TSpectral>(
-                std::make_unique<CookTorranceBSDF<TSpectral>>(),
-                default_albedo_image_.get(),
-                default_metallic_image_.get(),
-                default_roughness_image_.get(),
-                default_normal_image_.get(),
-                default_emission_image_.get()
+            bsdf,
+            default_albedo_image_.get(),
+            default_metallic_image_.get(),
+            default_roughness_image_.get(),
+            default_normal_image_.get(),
+            default_emission_image_.get()
             )
         );
         return this->add_material(material, name);

@@ -17,6 +17,13 @@ namespace huira {
             .def("print_graph", &HandleType::print_graph,
                 "Print the model's node graph")
 
+            .def("get_material_by_id", &HandleType::get_material_by_id,
+                py::arg("material_id"),
+                "Get a specific material handle by its unique ID (as shown in print_graph)")
+
+            .def("set_all_bsdfs", &HandleType::set_all_bsdfs, py::arg("bsdf"),
+                "Assign a new BSDF to all materials")
+
             // --- Handle basics ---
             .def("valid", &HandleType::valid)
             .def("__bool__", &HandleType::valid)

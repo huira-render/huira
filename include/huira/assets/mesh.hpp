@@ -44,7 +44,7 @@ namespace huira {
         void set_device(RTCDevice device) noexcept { device_ = device; }
 
         void set_material(Material<TSpectral>* material);
-        [[nodiscard]] const Material<TSpectral>* material() const noexcept { return material_; }
+        [[nodiscard]] Material<TSpectral>* material() const noexcept { return material_; }
 
         std::size_t index_count() const noexcept;
         std::size_t vertex_count() const noexcept;

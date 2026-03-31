@@ -34,24 +34,25 @@ int main(int argc, char** argv) {
     auto camera_model = scene.new_camera_model();
     camera_model.use_blender_convention();
     camera_model.set_focal_length(25_mm);
-    camera_model.set_sensor_resolution(1920, 1080);
+    camera_model.set_sensor_resolution(1080, 1080);
     camera_model.set_sensor_size(16_mm);
     camera_model.use_aperture_psf();
-    camera_model.set_sensor_bias_level(10.f);
+    camera_model.set_sensor_bias_level(0.f);
+    camera_model.set_sensor_dark_current(0.f);
     camera_model.set_fstop(16);
     //camera_model.enable_depth_of_field();
     //camera_model.set_focus_distance(1_m);
 
     // Create an instance of the camera and model
     auto navcam = scene.root.new_instance(camera_model);
-    navcam.set_position(0_m, 8000_Km, 0_m);
+    navcam.set_position(0_m, 5_m, 0_m);
     navcam.set_euler_angles(90_deg, 0_deg, 180_deg);
     //navcam.set_body_angular_velocity(0_deg / 1_s, 0_deg / 1_s, 10_deg / 1_s);
 
     // Load the moon model
     auto moon_model = scene.load_model(moon_path);
+    moon_model.set_all_bsdfs(huira::McEwenBSDF<TSpectral>());
     auto moon = scene.root.new_instance(moon_model);
-    moon.set_scale(1000); // model is in units of km, not meters
 
     // Create a local light source
     auto sun_light = scene.new_sun_light();

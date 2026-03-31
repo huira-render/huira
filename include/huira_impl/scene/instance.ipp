@@ -15,6 +15,14 @@ namespace huira {
     std::string Instance<TSpectral>::get_info() const {
         return "Instance[" + std::to_string(this->id()) + "]" +
             (this->name().empty() ? "" : " " + this->name()) + " -> " +
-            std::visit([](auto* ptr) { return ptr->get_info(); }, asset_);
+            std::visit([](auto* ptr) {
+            std::string info = ptr->get_info();
+            if constexpr (std::is_same_v<decltype(ptr), Mesh<TSpectral>*>) {
+                if (ptr->material()) {
+                    info += " -> " + ptr->material()->get_info();
+                }
+            }
+            return info;
+                }, asset_);
     }
 }

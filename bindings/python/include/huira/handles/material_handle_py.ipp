@@ -16,19 +16,8 @@ namespace huira {
         py::class_<HandleType>(m, "MaterialHandle")
 
             // --- BSDF ---
-            .def("set_cook_torrance_bsdf", &HandleType::set_cook_torrance_bsdf,
-                "Set the BSDF to Cook-Torrance")
-            .def("set_hapke_bsdf", &HandleType::set_hapke_bsdf,
-                py::arg("h"), py::arg("B0"), py::arg("b"), py::arg("c"),
-                "Set the BSDF to Hapke (parameters: h, B0, b, c)")
-            .def("set_lambert_bsdf", &HandleType::set_lambert_bsdf,
-                "Set the BSDF to Lambert")
-            .def("set_lommel_seeliger_bsdf", &HandleType::set_lommel_seeliger_bsdf,
-                "Set the BSDF to Lommel-Seeliger")
-            .def("set_mcewen_bsdf", &HandleType::set_mcewen_bsdf,
-                "Set the BSDF to McEwen")
-            .def("set_oren_nayar_bsdf", &HandleType::set_oren_nayar_bsdf,
-                "Set the BSDF to Oren-Nayar")
+            .def("set_bsdf", &HandleType::set_bsdf, py::arg("bsdf"),
+                "Assign a new BSDF to this material")
 
             // --- Albedo ---
             .def("set_albedo", &HandleType::set_albedo,
