@@ -64,8 +64,12 @@ namespace huira {
             .def("delete_distortion", &HandleType::delete_distortion)
 
             // Sensor properties
-            .def("set_sensor_quantum_efficiency", &HandleType::set_sensor_quantum_efficiency,
-                py::arg("qe"), "Set quantum efficiency (as SpectralBins)")
+            .def("set_sensor_quantum_efficiency",
+                py::overload_cast<double>(&HandleType::set_sensor_quantum_efficiency, py::const_),
+                py::arg("qe"), "Set quantum efficiency (scalar, e.g. 0.7)")
+            .def("set_sensor_quantum_efficiency",
+                py::overload_cast<TSpectral>(&HandleType::set_sensor_quantum_efficiency, py::const_),
+                py::arg("qe"), "Set quantum efficiency (spectral)")
             .def("set_sensor_full_well_capacity", &HandleType::set_sensor_full_well_capacity,
                 py::arg("fwc"))
             .def("set_sensor_read_noise", &HandleType::set_sensor_read_noise,
@@ -90,8 +94,12 @@ namespace huira {
                     "Set sensor rotation (accepts any angle unit, e.g. Radian, Degree)")
 
             // PSF
-            .def("use_aperture_psf", &HandleType::use_aperture_psf,
-                py::arg("radius"), py::arg("banks"))
+            .def("use_aperture_psf",
+                py::overload_cast<bool>(&HandleType::use_aperture_psf, py::const_),
+                py::arg("value"))
+            .def("use_aperture_psf",
+                py::overload_cast<int, int>(&HandleType::use_aperture_psf, py::const_),
+                py::arg("radius") = 64, py::arg("banks") = 16)
             .def("enable_psf_convolution", &HandleType::enable_psf_convolution,
                 py::arg("convolve_psf") = true)
             .def("delete_psf", &HandleType::delete_psf)

@@ -187,6 +187,16 @@ namespace huira {
     }
 
 
+    /**
+     * @brief Set the sensor quantum efficiency.
+     * @param qe Quantum efficiency value
+     */
+    template <IsSpectral TSpectral>
+    void CameraModelHandle<TSpectral>::set_sensor_quantum_efficiency(double qe) const
+    {
+        this->set_sensor_quantum_efficiency(TSpectral(qe));
+    }
+
 
     /**
      * @brief Set the sensor quantum efficiency.
@@ -333,6 +343,21 @@ namespace huira {
     void CameraModelHandle<TSpectral>::set_psf(Args&&... args) const
     {
         this->get_()->template set_psf<TPSF>(std::forward<Args>(args)...);
+    }
+
+
+    /**
+     * @brief Use the aperture to generate a PSF (point spread function).
+     * @param value True to enable aperture PSF, false to disable
+     */
+    template <IsSpectral TSpectral>
+    void CameraModelHandle<TSpectral>::use_aperture_psf(bool value) const
+    {
+        if (value) {
+            this->get_()->use_aperture_psf();
+        } else {
+            this->get_()->delete_psf();
+        }
     }
 
 

@@ -63,6 +63,7 @@ namespace huira {
         void set_sensor_size(units::Millimeter width, units::Millimeter height) const;
         void set_sensor_size(units::Millimeter width) const;
 
+        void set_sensor_quantum_efficiency(double qe) const;
         void set_sensor_quantum_efficiency(TSpectral qe) const;
         void set_sensor_full_well_capacity(float fwc) const;
         void set_sensor_simulate_noise(bool simulate_noise) const;
@@ -82,6 +83,7 @@ namespace huira {
         template <IsPSF TPSF, typename... Args>
         void set_psf(Args&&... args) const;
 
+        void use_aperture_psf(bool value) const;
         void use_aperture_psf(int radius = 64, int banks = 16) const;
         void enable_psf_convolution(bool convolve_psf = true) const;
         void delete_psf() const;
