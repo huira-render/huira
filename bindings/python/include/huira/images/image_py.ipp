@@ -186,6 +186,9 @@ namespace huira {
             .def("fill", &Img::fill, py::arg("value"))
             .def("clear", &Img::clear)
 
+            .def("get_channel", &Img::get_channel, py::arg("channel"),
+                "Extract a single channel as an Image_f32 (0-indexed).")
+
             .def("__repr__", [class_name](const Img& img) {
             std::ostringstream os;
             os << class_name << "(" << img.width() << "x" << img.height()

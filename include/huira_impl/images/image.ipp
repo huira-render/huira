@@ -531,6 +531,30 @@ namespace huira {
         return output;
     }
 
+    template<IsImagePixel PixelT>
+    Image<float> Image<PixelT>::get_channel(int channel) const
+    {
+        if (channel < 0 || channel >= static_cast<int>(ImagePixelTraits<PixelT>::channels)) {
+            HUIRA_THROW_ERROR("Image::get_channel - Channel index out of bounds");
+        }
+
+        Image<float> output(this->resolution());
+        for (std::size_t i = 0; i < this->size(); ++) {
+            if constexpr (ImagePixelTraits<PixelT>::channels == 1) {
+                output[i] = static_cast<float>(data_[i]);
+            }
+            else {
+                if constexpr (IsVec<PixelT>) {
+                    output[i] = static_cast<float>(data_[i][channel]);
+                }
+                else {
+                    output[i] = static_cast<float>(data_[i][channel]);
+                }
+            }
+        }
+    }
+
+
     /**
      * @brief Converts 2D pixel coordinates to a linear array index.
      * 

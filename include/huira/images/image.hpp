@@ -131,6 +131,8 @@ namespace huira {
         void fill(const PixelT& value);
         void reset(const PixelT& value = PixelT{ 0 }) { fill(value); }
 
+        Image<float> get_channel(int channel) const;
+
         Image operator+(const Image& other) const;
 
     private:
