@@ -72,6 +72,8 @@ namespace huira {
                 py::arg("qe"), "Set quantum efficiency (spectral)")
             .def("set_sensor_full_well_capacity", &HandleType::set_sensor_full_well_capacity,
                 py::arg("fwc"))
+            .def("set_sensor_simulate_noise", &HandleType::set_sensor_simulate_noise,
+                py::arg("simulate_noise"))
             .def("set_sensor_read_noise", &HandleType::set_sensor_read_noise,
                 py::arg("read_noise"))
             .def("set_sensor_dark_current", &HandleType::set_sensor_dark_current,

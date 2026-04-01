@@ -36,6 +36,13 @@ namespace huira {
             return fb.depth();
                 }, py::return_value_policy::reference_internal)
 
+            // -- Albedo -------------------------------------------------------
+            .def("enable_albedo", &FB::enable_albedo, py::arg("enable") = true)
+            .def("has_albedo", &FB::has_albedo)
+            .def_property_readonly("albedo", [](FB& fb) -> Image<TSpectral>&{
+            return fb.albedo();
+                }, py::return_value_policy::reference_internal)
+
             // -- Mesh IDs -----------------------------------------------------
             .def("enable_mesh_ids", &FB::enable_mesh_ids, py::arg("enable") = true)
             .def("has_mesh_ids", &FB::has_mesh_ids)
@@ -55,6 +62,20 @@ namespace huira {
             .def("has_world_normals", &FB::has_world_normals)
             .def_property_readonly("world_normals", [](FB& fb) -> Image<Vec3<float>>&{
             return fb.world_normals();
+                }, py::return_value_policy::reference_internal)
+
+            // -- Received Direct Power ----------------------------------------
+            .def("enable_received_direct_power", &FB::enable_received_direct_power, py::arg("enable") = true)
+            .def("has_received_direct_power", &FB::has_received_direct_power)
+            .def_property_readonly("received_direct_power", [](FB& fb) -> Image<TSpectral>&{
+            return fb.received_direct_power();
+                }, py::return_value_policy::reference_internal)
+
+            // -- Received Indirect Power --------------------------------------
+            .def("enable_received_indirect_power", &FB::enable_received_indirect_power, py::arg("enable") = true)
+            .def("has_received_indirect_power", &FB::has_received_indirect_power)
+            .def_property_readonly("received_indirect_power", [](FB& fb) -> Image<TSpectral>&{
+            return fb.received_indirect_power();
                 }, py::return_value_policy::reference_internal)
 
             // -- Received Power -----------------------------------------------
@@ -77,12 +98,15 @@ namespace huira {
             .def("__repr__", [](const FB& fb) {
             std::ostringstream os;
             os << "FrameBuffer(" << fb.width() << "x" << fb.height();
-            if (fb.has_depth())           os << ", depth";
-            if (fb.has_mesh_ids())        os << ", mesh_ids";
-            if (fb.has_camera_normals())  os << ", camera_normals";
-            if (fb.has_world_normals())   os << ", world_normals";
-            if (fb.has_received_power())  os << ", received_power";
-            if (fb.has_sensor_response()) os << ", sensor_response";
+            if (fb.has_depth())                  os << ", depth";
+            if (fb.has_albedo())                 os << ", albedo";
+            if (fb.has_mesh_ids())               os << ", mesh_ids";
+            if (fb.has_camera_normals())         os << ", camera_normals";
+            if (fb.has_world_normals())          os << ", world_normals";
+            if (fb.has_received_direct_power())  os << ", received_direct_power";
+            if (fb.has_received_indirect_power()) os << ", received_indirect_power";
+            if (fb.has_received_power())          os << ", received_power";
+            if (fb.has_sensor_response())         os << ", sensor_response";
             os << ")";
             return os.str();
                 })
