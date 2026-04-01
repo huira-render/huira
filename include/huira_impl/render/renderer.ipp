@@ -107,6 +107,8 @@ namespace huira {
         int tiles_x = (fb_width + TILE_SIZE - 1) / TILE_SIZE;
         int tiles_y = (fb_height + TILE_SIZE - 1) / TILE_SIZE;
         int num_tiles = tiles_x * tiles_y;
+        float time = 0.f;
+        const bool has_motion_blur = scene_view.temporal_samples_.size() > 1;
 
         tbb::parallel_for(tbb::blocked_range<int>(0, num_tiles),
             [&](const tbb::blocked_range<int>& range) {
@@ -148,7 +150,9 @@ namespace huira {
                                 Ray<TSpectral> ray = camera->cast_ray(Pixel{ sx, sy }, sampler);
 
                                 // Motion blur: randomize time sample per ray
-                                float time = sampler.get_1d();  // [0, 1] maps to shutter interval
+                                if (has_motion_blur) {
+                                    time = sampler.get_1d();  // [0, 1] maps to shutter interval
+                                }
 
                                 TSpectral throughput{ 1 };
                                 TSpectral direct_radiance{ 0 };
@@ -261,6 +265,7 @@ namespace huira {
                                             if (scene_view.occluded(shadow_ray, light_dist, time)) {
                                                 continue;
                                             }
+                                            
 
                                             // Evaluate BSDF:
                                             TSpectral f = material->bsdf_eval(

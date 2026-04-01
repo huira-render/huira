@@ -28,7 +28,7 @@ int main(int argc, char** argv) {
 
     // Set the observation time
     huira::Time time("2019-02-06T10:27:00");
-    huira::Interval exposure_interval{ time, time + 0.00025_s };
+    huira::Interval exposure_interval{ time, time + 0.0025_s };
 
     // Configure a camera model
     auto camera_model = scene.new_camera_model();
@@ -40,6 +40,7 @@ int main(int argc, char** argv) {
     camera_model.set_sensor_bias_level(0.f);
     camera_model.set_sensor_dark_current(0.f);
     camera_model.set_fstop(16);
+    camera_model.set_sensor_simulate_noise(false);
     //camera_model.enable_depth_of_field();
     //camera_model.set_focus_distance(1_m);
 
@@ -51,13 +52,18 @@ int main(int argc, char** argv) {
 
     // Load the moon model
     auto moon_model = scene.load_model(moon_path);
-    moon_model.set_all_bsdfs(huira::McEwenBSDF<TSpectral>());
+    //moon_model.set_all_bsdfs(huira::McEwenBSDF<TSpectral>());
     auto moon = scene.root.new_instance(moon_model);
+    moon.set_scale(1);
 
     // Create a local light source
-    auto sun_light = scene.new_sun_light();
-    auto sun = scene.root.new_instance(sun_light);
-    sun.set_position(1_au, 0_m, 0_m);
+    //auto sun_light = scene.new_sun_light();
+    //auto sun = scene.root.new_instance(sun_light);
+    //sun.set_position(1_au, 0_m, 0_m);
+
+    auto light = scene.new_sphere_light(10_m, 1000000_W, "Test Light");
+    auto lt = scene.root.new_instance(light);
+    lt.set_position(100_m, 0_m, 0_m);
 
     scene.set_background_radiance(1e-7f);
 
@@ -71,12 +77,12 @@ int main(int argc, char** argv) {
 
     // Create the renderer
     huira::Renderer<TSpectral> renderer;
-    renderer.set_max_bounces(1);
-    renderer.set_samples_per_pixel(10);
+    renderer.set_max_bounces(2);
+    renderer.set_samples_per_pixel(1);
     renderer.set_indirect_clamp(10.0f);
 
     // Create a scene view over the exposure interval
-    auto scene_view = huira::SceneView<TSpectral>(scene, exposure_interval, navcam, huira::ObservationMode::GEOMETRIC_STATE, 3);
+    auto scene_view = huira::SceneView<TSpectral>(scene, exposure_interval, navcam, huira::ObservationMode::GEOMETRIC_STATE, 1);
 
     // Render the current scene view
     renderer.render(scene_view, frame_buffer);
