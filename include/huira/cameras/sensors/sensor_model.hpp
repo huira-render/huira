@@ -31,6 +31,7 @@ namespace huira {
 
         float full_well_capacity = 20000.f; // e-
 
+        bool simulate_noise = true; // Whether to simulate noise in the sensor readout
         float read_noise = 10.f;           // e- RMS
         float dark_current = 1.f;          // e-/s
         float bias_level_dn = 10.f;        // ADU
@@ -96,6 +97,9 @@ namespace huira {
 
         void set_full_well_capacity(float fwc);
         float full_well_capacity() const { return config_.full_well_capacity; }
+
+        void set_simulate_noise(bool simulate_noise) { config_.simulate_noise = simulate_noise; }
+        bool simulate_noise() const { return config_.simulate_noise; }
 
         void set_read_noise(float read_noise);
         float read_noise() const { return config_.read_noise; }
