@@ -211,6 +211,16 @@ namespace huira {
 
 
     /**
+     * @brief Enable or disable sensor noise simulation.
+     * @param simulate_noise True to enable noise simulation, false to disable
+     */
+    template <IsSpectral TSpectral>
+    void CameraModelHandle<TSpectral>::set_sensor_simulate_noise(bool simulate_noise) const
+    {
+        this->get_()->sensor_->set_simulate_noise(simulate_noise);
+    }
+
+    /**
      * @brief Set the sensor read noise.
      * @param read_noise Read noise value
      */

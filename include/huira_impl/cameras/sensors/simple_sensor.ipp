@@ -29,16 +29,22 @@ namespace huira {
 
         // Shot Noise (Approximation of Poisson):
         float accumulated_e = signal_e + dark_e;
-        std::normal_distribution<float> shot_dist(0.0f, std::sqrt(accumulated_e));
-        float noisy_e = accumulated_e + shot_dist(rng);
+
+        float bias = 0.f;
+        if (config.simulate_noise) {
+            std::normal_distribution<float> shot_dist(0.0f, std::sqrt(accumulated_e));
+            accumulated_e += shot_dist(rng);
+            accumulated_e += read_noise_dist(rng);
+            bias = config.bias_level_dn;
+        }
 
         // Clamp to Full Well Capacity:
-        noisy_e = std::min(noisy_e, config.full_well_capacity);
-        noisy_e += read_noise_dist(rng);
+        accumulated_e = std::min(accumulated_e, config.full_well_capacity);
 
         // System Gain & Quantization (ADC)
-        float dn_value = (noisy_e / config.gain) + config.bias_level_dn;
-        float intensity = std::max(0.f, std::floor(std::min(dn_value, max_dn))) / max_dn;
+        float dn_value = (accumulated_e / config.gain) + bias;
+        //float intensity = std::max(0.f, std::floor(std::min(dn_value, max_dn))) / max_dn;
+        float intensity = std::clamp(dn_value, 0.f, max_dn) / max_dn;
 
         return intensity;
     }
@@ -68,6 +74,11 @@ namespace huira {
         const TSpectral photon_energy = TSpectral::photon_energies();
         float max_dn = std::pow(2.f, static_cast<float>(this->config_.bit_depth)) - 1.f;
 
+        float dark_e = 0.f;
+        if (this->config_.simulate_noise) {
+            dark_e = this->config_.dark_current * dt;
+        }
+
         for (int y = 0; y < received_power.height(); ++y) {
             for (int x = 0; x < received_power.width(); ++x) {
 
@@ -82,8 +93,7 @@ namespace huira {
 
                 // Compute Noise and ADC:
                 if constexpr (std::is_same_v<TSpectral, RGB>) {
-                    RGB signal_e{ electrons[0], electrons[1], electrons[2] };
-                    float dark_e = this->config_.dark_current * dt;
+                    RGB signal_e{ electrons[0], electrons[1], electrons[2] };                    
 
                     RGB pixel_value;
                     for (std::size_t i = 0; i < 3; ++i) {
@@ -93,7 +103,6 @@ namespace huira {
                 }
                 else {
                     float signal_e = electrons.total();
-                    float dark_e = this->config_.dark_current * dt;
                     output(x, y) = noise_and_adc(signal_e, dark_e, this->config_, max_dn, rng, read_noise_dist);
                 }
             }

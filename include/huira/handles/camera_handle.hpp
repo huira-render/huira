@@ -65,6 +65,7 @@ namespace huira {
 
         void set_sensor_quantum_efficiency(TSpectral qe) const;
         void set_sensor_full_well_capacity(float fwc) const;
+        void set_sensor_simulate_noise(bool simulate_noise) const;
         void set_sensor_read_noise(float read_noise) const;
         void set_sensor_dark_current(float dark_current) const;
         void set_sensor_bias_level(float bias_level) const;
