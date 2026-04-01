@@ -141,6 +141,9 @@ namespace huira {
             " MOTION BLUR ON");
     }
 
+    /**
+     * @brief Destructor for SceneView, releases TLAS and clears geometry and lights.
+     */
     template <IsSpectral TSpectral>
     SceneView<TSpectral>::~SceneView()
     {
@@ -152,6 +155,12 @@ namespace huira {
     }
 
 
+    /**
+     * @brief Intersect a ray with the scene and return the hit record.
+     * @param ray The ray to intersect.
+     * @param time The time for motion blur.
+     * @return The hit record.
+     */
     template <IsSpectral TSpectral>
     HitRecord SceneView<TSpectral>::intersect(const Ray<TSpectral>& ray, float time) const
     {
@@ -185,6 +194,13 @@ namespace huira {
         return rec;
     }
 
+    /**
+     * @brief Test if a ray is occluded by any geometry in the scene.
+     * @param ray The ray to test for occlusion.
+     * @param t_far The maximum distance to check for occlusion.
+     * @param time The time for motion blur.
+     * @return True if the ray is occluded, false otherwise.
+     */
     template <IsSpectral TSpectral>
     bool SceneView<TSpectral>::occluded(const Ray<TSpectral>& ray, float t_far, float time) const
     {
@@ -198,7 +214,7 @@ namespace huira {
         rtc_ray.tnear = 0.f;
         rtc_ray.tfar = t_far;
         rtc_ray.time = time;
-        rtc_ray.mask = 0xFFFFFFFF;
+        rtc_ray.mask = MASK_GEOMETRY_;
         rtc_ray.flags = 0;
 
         rtcOccluded1(tlas_, &rtc_ray);
@@ -208,6 +224,12 @@ namespace huira {
     }
 
 
+    /**
+     * @brief Resolve a hit record into a full interaction, including position, normals, UVs, etc.
+     * @param ray The ray that caused the hit.
+     * @param hit The hit record to resolve.
+     * @return The resolved interaction.
+     */
     template <IsSpectral TSpectral>
     Interaction<TSpectral> SceneView<TSpectral>::resolve_hit(
         const Ray<TSpectral>& ray,
@@ -233,7 +255,7 @@ namespace huira {
         const auto& instance_transforms = batch.instances[mapping.instance_index];
         const Transform<float>& xf = instance_transforms[0];
 
-        // Hit position from the ray (more numerically stable than interpolating):
+        // Hit position via interpolation (more accurate than using the ray origin):
         isect.position = w * vertices[idx0].position
             + hit.u * vertices[idx1].position
             + hit.v * vertices[idx2].position;
@@ -288,6 +310,12 @@ namespace huira {
         return isect;
     }
 
+    /**
+     * @brief Intersect a batch of rays with the scene and return their hit records.
+     * @param rays The rays to intersect.
+     * @param time The time for motion blur.
+     * @return A vector of hit records corresponding to each ray.
+     */
     template <IsSpectral TSpectral>
     std::vector<HitRecord> SceneView<TSpectral>::intersect(const std::vector<Ray<TSpectral>>& rays, float time) const
     {
@@ -301,6 +329,13 @@ namespace huira {
         return hits;
     }
 
+    /**
+     * @brief Test if a batch of rays are occluded by any geometry in the scene.
+     * @param rays The rays to test for occlusion.
+     * @param t_far The maximum distance to check for occlusion.
+     * @param time The time for motion blur.
+     * @return A vector of booleans indicating occlusion for each ray.
+     */
     template <IsSpectral TSpectral>
     std::vector<bool> SceneView<TSpectral>::occluded(const std::vector<Ray<TSpectral>>& rays, float t_far, float time) const
     {
@@ -314,6 +349,12 @@ namespace huira {
         return occlusion_results;
     }
 
+    /**
+     * @brief Resolve a batch of hit records into full interactions.
+     * @param rays The rays that caused the hits.
+     * @param hits The hit records to resolve.
+     * @return A vector of resolved interactions.
+     */
     template <IsSpectral TSpectral>
     std::vector<Interaction<TSpectral>> SceneView<TSpectral>::resolve_hits(
         const std::vector<Ray<TSpectral>>& rays,
@@ -557,6 +598,7 @@ namespace huira {
                         &decomp);
                 }
 
+                rtcSetGeometryMask(inst_geom, MASK_GEOMETRY_);
                 rtcCommitGeometry(inst_geom);
 
                 unsigned int geom_id = rtcAttachGeometry(tlas_, inst_geom);
@@ -594,6 +636,7 @@ namespace huira {
             // Create a BLAS containing a single static sphere at the origin
             RTCScene sphere_blas = rtcNewScene(device_);
             RTCGeometry geom = rtcNewGeometry(device_, RTC_GEOMETRY_TYPE_SPHERE_POINT);
+            rtcSetGeometryMask(geom, MASK_LIGHT_);
 
             if (!geom) {
                 RTCError err = rtcGetDeviceError(device_);
@@ -637,6 +680,7 @@ namespace huira {
                     &decomp);
             }
 
+            rtcSetGeometryMask(inst_geom, MASK_LIGHT_);
             rtcCommitGeometry(inst_geom);
             unsigned int geom_id = rtcAttachGeometry(tlas_, inst_geom);
             rtcReleaseGeometry(inst_geom);

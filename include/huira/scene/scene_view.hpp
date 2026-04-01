@@ -43,7 +43,7 @@ namespace huira {
             const Interval& exposure_interval,
             const InstanceHandle<TSpectral>& camera_instance,
             ObservationMode obs_mode,
-            std::size_t num_temporal_Samples = 1);
+            std::size_t num_temporal_samples = 1);
 
         ~SceneView();
 
@@ -107,6 +107,9 @@ namespace huira {
 
         RTCDevice device_ = nullptr;
         RTCScene tlas_ = nullptr;
+
+        uint32_t MASK_GEOMETRY_ = 0x01;
+        uint32_t MASK_LIGHT_ = 0x02;
 
         struct InstanceMapping {
             GeometryType type;
