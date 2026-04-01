@@ -532,26 +532,28 @@ namespace huira {
     }
 
     template<IsImagePixel PixelT>
-    Image<float> Image<PixelT>::get_channel(int channel) const
+    Image<float> Image<PixelT>::get_channel(std::size_t channel) const
     {
-        if (channel < 0 || channel >= static_cast<int>(ImagePixelTraits<PixelT>::channels)) {
+        if (channel >= static_cast<std::size_t>(ImagePixelTraits<PixelT>::channels)) {
             HUIRA_THROW_ERROR("Image::get_channel - Channel index out of bounds");
         }
 
         Image<float> output(this->resolution());
-        for (std::size_t i = 0; i < this->size(); ++) {
+        for (std::size_t i = 0; i < this->size(); ++i) {
             if constexpr (ImagePixelTraits<PixelT>::channels == 1) {
                 output[i] = static_cast<float>(data_[i]);
             }
             else {
                 if constexpr (IsVec<PixelT>) {
-                    output[i] = static_cast<float>(data_[i][channel]);
+                    output[i] = static_cast<float>(data_[i][static_cast<int>(channel)]);
                 }
                 else {
                     output[i] = static_cast<float>(data_[i][channel]);
                 }
             }
         }
+
+        return output;
     }
 
 

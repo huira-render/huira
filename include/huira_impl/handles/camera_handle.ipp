@@ -194,7 +194,7 @@ namespace huira {
     template <IsSpectral TSpectral>
     void CameraModelHandle<TSpectral>::set_sensor_quantum_efficiency(double qe) const
     {
-        this->set_sensor_quantum_efficiency(TSpectral(qe));
+        this->set_sensor_quantum_efficiency(TSpectral(static_cast<float>(qe)));
     }
 
 
