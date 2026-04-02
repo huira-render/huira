@@ -86,6 +86,8 @@ repair-wheel-command = """\
 
 # ---------------------------------------------------------------------------
 # Windows: conda
+# Miniforge pinned because /latest redirect is broken with Windows curl (April 2026).
+# Check for updates: https://github.com/conda-forge/miniforge/releases
 # ---------------------------------------------------------------------------
 [tool.cibuildwheel.windows]
 before-all = [
@@ -93,6 +95,6 @@ before-all = [
     "start /wait \"\" %TEMP%\\miniforge.exe /InstallationType=JustMe /RegisterPython=0 /AddToPath=0 /S /D=C:\\Miniconda",
     "C:\\Miniconda\\condabin\\conda.bat install -y -c conda-forge assimp cfitsio cspice embree fftw gdal glm indicators libcurl libtiff libpng libjpeg-turbo tbb-devel",
 ]
-environment = { CONDA_PREFIX = "C:\\Miniconda" }
+environment = { CONDA_PREFIX = "C:/Miniconda" }
 before-build = "pip install delvewheel"
 repair-wheel-command = "delvewheel repair --add-path C:\\Miniconda\\Library\\bin;C:\\Miniconda\\Library\\lib;C:\\Miniconda\\bin -w {dest_dir} {wheel}"
