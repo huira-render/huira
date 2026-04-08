@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <filesystem>
 #include <utility>
+#include <string>
 
 #include "huira/core/concepts/pixel_concepts.hpp"
 #include "huira/images/image.hpp"
