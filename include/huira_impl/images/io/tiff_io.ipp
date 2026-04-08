@@ -6,6 +6,8 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <algorithm>
+
 
 #include <tiffio.h>
 
@@ -734,7 +736,7 @@ namespace huira {
                                   const std::string& description,
                                   const std::string& artist)
     {
-        // Convert spectral to mono by taking the first channel
+        // Convert spectral to mono by taking the average of channels
         Image<float> mono_image(image.resolution());
         for (int y = 0; y < image.height(); ++y) {
             for (int x = 0; x < image.width(); ++x) {
