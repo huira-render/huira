@@ -75,7 +75,7 @@ while on windows you'll need to specify the release configuration when building:
 ```bash
 mkdir build
 cd build
-cmake -DCMAKE_TOOLCHAIN_FILE=../cmake/conda-toolchain.cmake -DCMAKE_BUILD_TYPE=Release -DHUIRA_EXAMPLES=ON -DHUIRA_TOOLS=ON ..
+cmake -DCMAKE_TOOLCHAIN_FILE="../cmake/conda-toolchain.cmake" -DCMAKE_BUILD_TYPE=Release -DHUIRA_EXAMPLES=ON -DHUIRA_TOOLS=ON ..
 cmake --build . --config Release -j
 ```
 

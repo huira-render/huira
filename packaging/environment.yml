@@ -2,17 +2,17 @@ name: huira_env
 channels:
   - conda-forge
 dependencies:
-  - assimp=5.4.3         # Asset Importer (3d models)
-  - catch2=3.8.0         # Testing Framework
-  - cfitsio=4.6.2        # FITS I/O
-  - cspice=67            # NASA SPICE 
-  - embree=4.4.0         # Ray tracing Acceleration
-  - fftw=3.3.10          # Fast Fourier Transform
-  - gdal=3.10.0          # Geospatial Abstraction Library
-  - glm=1.0.1            # Linear Algebra for Graphics
-  - indicators=2.3       # Progress bars
-  - libcurl=8.18.0.      # URL Transfer Library
-  - libtiff=4.7.0        # TIFF I/O
-  - libpng=1.6.54        # PNG I/O
-  - libjpeg-turbo=3.1.2  # JPEG I/O
-  - tbb-devel            # Intel TBB
+  - assimp         # Asset Importer (3d models)
+  - catch2         # Testing Framework
+  - cfitsio        # FITS I/O
+  - cspice         # NASA SPICE 
+  - embree         # Ray tracing Acceleration
+  - fftw           # Fast Fourier Transform
+  - gdal           # Geospatial Abstraction Library
+  - glm            # Linear Algebra for Graphics
+  - indicators     # Progress bars
+  - libcurl        # URL Transfer Library
+  - libtiff        # TIFF I/O
+  - libpng         # PNG I/O
+  - libjpeg-turbo  # JPEG I/O
+  - tbb-devel      # Intel TBB
