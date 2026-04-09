@@ -19,18 +19,18 @@
 
 namespace fs = std::filesystem;
 
-// Add a RAII wrapper for TIFF* to ensure proper cleanup
-struct TIFFDeleter {
-    void operator()(TIFF* tif) const {
-        if (tif) {
-            TIFFClose(tif);
-        }
-    }
-};
-
-using ScopedTIFF = std::unique_ptr<TIFF, TIFFDeleter>;
-
 namespace huira {
+
+    // Add a RAII wrapper for TIFF* to ensure proper cleanup
+    struct TIFFDeleter {
+        void operator()(TIFF* tif) const {
+            if (tif) {
+                TIFFClose(tif);
+            }
+        }
+    };
+
+    using ScopedTIFF = std::unique_ptr<TIFF, TIFFDeleter>;
 
     struct TIFFData {
         Resolution resolution{ 0, 0 };
@@ -603,6 +603,8 @@ namespace huira {
         if (bit_depth != 8 && bit_depth != 16) {
             HUIRA_THROW_ERROR("write_image_tiff - Bit depth must be 8 or 16");
         }
+
+        make_path(filepath);
         
         ScopedTIFF tif(TIFFOpen(filepath.string().c_str(), "w"));
         if (!tif) {
@@ -671,6 +673,8 @@ namespace huira {
         if (bit_depth != 8 && bit_depth != 16) {
             HUIRA_THROW_ERROR("write_image_tiff - Bit depth must be 8 or 16");
         }
+
+        make_path(filepath);
         
         ScopedTIFF tif(TIFFOpen(filepath.string().c_str(), "w"));
         if (!tif) {
@@ -733,7 +737,7 @@ namespace huira {
         Image<float> mono_image(image.resolution());
         for (int y = 0; y < image.height(); ++y) {
             for (int x = 0; x < image.width(); ++x) {
-                mono_image(x, y) = image(x, y).total() / static_cast<float>(TSpectral::num_bins);
+                mono_image(x, y) = image(x, y).total() / static_cast<float>(TSpectral::size());
             }
         }
         
