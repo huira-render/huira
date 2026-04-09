@@ -106,7 +106,7 @@ jobs:
 
       - name: Publish test results
         uses: dorny/test-reporter@v1
-        if: always()
+        if: always() && github.ref == 'refs/heads/main'
         with:
           name: Linux Test Results
           path: build/test-results/*.xml
@@ -115,6 +115,7 @@ jobs:
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
+        if: always() && github.ref == 'refs/heads/main'
         with:
           file: build/coverage_filtered.info
           flags: unittests
