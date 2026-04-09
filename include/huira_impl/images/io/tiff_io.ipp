@@ -1,15 +1,15 @@
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
 #include <limits>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
-#include <algorithm>
 
-
-#include <tiffio.h>
+#include "tiffio.h"
 
 #include "huira/core/spectral_bins.hpp"
 #include "huira/images/image.hpp"
@@ -18,6 +18,17 @@
 #include "huira/util/logger.hpp"
 
 namespace fs = std::filesystem;
+
+// Add a RAII wrapper for TIFF* to ensure proper cleanup
+struct TIFFDeleter {
+    void operator()(TIFF* tif) const {
+        if (tif) {
+            TIFFClose(tif);
+        }
+    }
+};
+
+using ScopedTIFF = std::unique_ptr<TIFF, TIFFDeleter>;
 
 namespace huira {
 
@@ -141,7 +152,7 @@ namespace huira {
 
         TiffMemState_ mem_state{ data, static_cast<tsize_t>(size), 0 };
 
-        TIFF* tif = TIFFClientOpen(
+        ScopedTIFF tif = TIFFClientOpen(
             "memory", "r",
             reinterpret_cast<thandle_t>(&mem_state),
             tiff_mem_read_,
@@ -162,16 +173,15 @@ namespace huira {
         uint16_t photometric = PHOTOMETRIC_MINISBLACK;
         uint16_t planar_config = PLANARCONFIG_CONTIG;
 
-        TIFFGetField(tif, TIFFTAG_IMAGEWIDTH, &width);
-        TIFFGetField(tif, TIFFTAG_IMAGELENGTH, &height);
-        TIFFGetFieldDefaulted(tif, TIFFTAG_SAMPLESPERPIXEL, &samples_per_pixel);
-        TIFFGetFieldDefaulted(tif, TIFFTAG_BITSPERSAMPLE, &bits_per_sample);
-        TIFFGetFieldDefaulted(tif, TIFFTAG_SAMPLEFORMAT, &sample_format);
-        TIFFGetFieldDefaulted(tif, TIFFTAG_PHOTOMETRIC, &photometric);
-        TIFFGetFieldDefaulted(tif, TIFFTAG_PLANARCONFIG, &planar_config);
+        TIFFGetField(tif.get(), TIFFTAG_IMAGEWIDTH, &width);
+        TIFFGetField(tif.get(), TIFFTAG_IMAGELENGTH, &height);
+        TIFFGetFieldDefaulted(tif.get(), TIFFTAG_SAMPLESPERPIXEL, &samples_per_pixel);
+        TIFFGetFieldDefaulted(tif.get(), TIFFTAG_BITSPERSAMPLE, &bits_per_sample);
+        TIFFGetFieldDefaulted(tif.get(), TIFFTAG_SAMPLEFORMAT, &sample_format);
+        TIFFGetFieldDefaulted(tif.get(), TIFFTAG_PHOTOMETRIC, &photometric);
+        TIFFGetFieldDefaulted(tif.get(), TIFFTAG_PLANARCONFIG, &planar_config);
 
         if (width == 0 || height == 0) {
-            TIFFClose(tif);
             HUIRA_THROW_ERROR("read_tiff_raw_ - Invalid dimensions (" +
                 std::to_string(width) + " x " + std::to_string(height) + ")");
         }
@@ -180,24 +190,20 @@ namespace huira {
         bool is_float = (sample_format == SAMPLEFORMAT_IEEEFP);
 
         if (sample_format == SAMPLEFORMAT_INT) {
-            TIFFClose(tif);
             HUIRA_THROW_ERROR("read_tiff_raw_ - Unsupported signed integer sample format");
         }
 
         if (!is_float && sample_format != SAMPLEFORMAT_UINT) {
-            TIFFClose(tif);
             HUIRA_THROW_ERROR("read_tiff_raw_ - Unsupported sample format (" +
                 std::to_string(static_cast<int>(sample_format)) + ")");
         }
 
         if (!is_float && bits_per_sample != 8 && bits_per_sample != 16 && bits_per_sample != 32) {
-            TIFFClose(tif);
             HUIRA_THROW_ERROR("read_tiff_raw_ - Unsupported bits per sample (" +
                 std::to_string(static_cast<int>(bits_per_sample)) + ")");
         }
 
         if (is_float && bits_per_sample != 32) {
-            TIFFClose(tif);
             HUIRA_THROW_ERROR("read_tiff_raw_ - Unsupported float bit depth (" +
                 std::to_string(static_cast<int>(bits_per_sample)) + "), only 32-bit float supported");
         }
@@ -207,12 +213,9 @@ namespace huira {
             std::size_t num_pixels = static_cast<std::size_t>(width) * static_cast<std::size_t>(height);
             std::vector<uint32_t> rgba_data(num_pixels);
 
-            if (!TIFFReadRGBAImageOriented(tif, width, height, rgba_data.data(), ORIENTATION_TOPLEFT, 0)) {
-                TIFFClose(tif);
+            if (!TIFFReadRGBAImageOriented(tif.get(), width, height, rgba_data.data(), ORIENTATION_TOPLEFT, 0)) {
                 HUIRA_THROW_ERROR("read_tiff_raw_ - Failed to read palette TIFF via RGBA");
             }
-
-            TIFFClose(tif);
 
             TIFFData tiff_data{};
             tiff_data.resolution = Resolution{ static_cast<int>(width), static_cast<int>(height) };
@@ -242,7 +245,7 @@ namespace huira {
         // Detect alpha channel via extra samples
         uint16_t extra_samples_count = 0;
         uint16_t* extra_samples = nullptr;
-        TIFFGetFieldDefaulted(tif, TIFFTAG_EXTRASAMPLES, &extra_samples_count, &extra_samples);
+        TIFFGetFieldDefaulted(tif.get(), TIFFTAG_EXTRASAMPLES, &extra_samples_count, &extra_samples);
 
         bool has_alpha = false;
         int alpha_index = -1;
@@ -292,16 +295,16 @@ namespace huira {
 
         if (is_tiled) {
             uint32_t tile_width = 0, tile_height = 0;
-            TIFFGetField(tif, TIFFTAG_TILEWIDTH, &tile_width);
-            TIFFGetField(tif, TIFFTAG_TILELENGTH, &tile_height);
+            TIFFGetField(tif.get(), TIFFTAG_TILEWIDTH, &tile_width);
+            TIFFGetField(tif.get(), TIFFTAG_TILELENGTH, &tile_height);
 
-            tsize_t tile_size = TIFFTileSize(tif);
+            tsize_t tile_size = TIFFTileSize(tif.get());
             std::vector<unsigned char> tile_buf(static_cast<std::size_t>(tile_size));
 
             if (planar_config == PLANARCONFIG_CONTIG) {
                 for (uint32_t ty = 0; ty < height; ty += tile_height) {
                     for (uint32_t tx = 0; tx < width; tx += tile_width) {
-                        TIFFReadTile(tif, tile_buf.data(), tx, ty, 0, 0);
+                        TIFFReadTile(tif.get(), tile_buf.data(), tx, ty, 0, 0);
 
                         uint32_t eff_tw = std::min(tile_width, width - tx);
                         uint32_t eff_th = std::min(tile_height, height - ty);
@@ -327,7 +330,7 @@ namespace huira {
                 for (uint16_t ch = 0; ch < samples_per_pixel; ++ch) {
                     for (uint32_t ty = 0; ty < height; ty += tile_height) {
                         for (uint32_t tx = 0; tx < width; tx += tile_width) {
-                            TIFFReadTile(tif, tile_buf.data(), tx, ty, 0, ch);
+                            TIFFReadTile(tif.get(), tile_buf.data(), tx, ty, 0, ch);
 
                             uint32_t eff_tw = std::min(tile_width, width - tx);
                             uint32_t eff_th = std::min(tile_height, height - ty);
@@ -354,8 +357,7 @@ namespace huira {
 
             if (planar_config == PLANARCONFIG_CONTIG) {
                 for (uint32_t y = 0; y < height; ++y) {
-                    if (TIFFReadScanline(tif, scanline_buf.data(), y) < 0) {
-                        TIFFClose(tif);
+                    if (TIFFReadScanline(tif.get(), scanline_buf.data(), y) < 0) {
                         HUIRA_THROW_ERROR("read_tiff_raw_ - Failed to read scanline " + std::to_string(y));
                     }
 
@@ -375,8 +377,7 @@ namespace huira {
                 // PLANARCONFIG_SEPARATE: one set of scanlines per channel
                 for (uint16_t ch = 0; ch < samples_per_pixel; ++ch) {
                     for (uint32_t y = 0; y < height; ++y) {
-                        if (TIFFReadScanline(tif, scanline_buf.data(), y, ch) < 0) {
-                            TIFFClose(tif);
+                        if (TIFFReadScanline(tif.get(), scanline_buf.data(), y, ch) < 0) {
                             HUIRA_THROW_ERROR("read_tiff_raw_ - Failed to read scanline " +
                                 std::to_string(y) + " channel " + std::to_string(static_cast<int>(ch)));
                         }
@@ -392,8 +393,6 @@ namespace huira {
                 }
             }
         }
-
-        TIFFClose(tif);
 
         // Invert MinIsWhite so output is always MinIsBlack convention
         if (photometric == PHOTOMETRIC_MINISWHITE) {
@@ -605,7 +604,7 @@ namespace huira {
             HUIRA_THROW_ERROR("write_image_tiff - Bit depth must be 8 or 16");
         }
         
-        TIFF* tif = TIFFOpen(filepath.string().c_str(), "w");
+        ScopedTIFF tif = TIFFOpen(filepath.string().c_str(), "w");
         if (!tif) {
             HUIRA_THROW_ERROR("write_image_tiff - Failed to open file for writing: " + filepath.string());
         }
@@ -613,21 +612,21 @@ namespace huira {
         uint32_t width = static_cast<uint32_t>(image.width());
         uint32_t height = static_cast<uint32_t>(image.height());
         
-        TIFFSetField(tif, TIFFTAG_IMAGEWIDTH, width);
-        TIFFSetField(tif, TIFFTAG_IMAGELENGTH, height);
-        TIFFSetField(tif, TIFFTAG_SAMPLESPERPIXEL, 3);
-        TIFFSetField(tif, TIFFTAG_BITSPERSAMPLE, static_cast<uint16_t>(bit_depth));
-        TIFFSetField(tif, TIFFTAG_ORIENTATION, ORIENTATION_TOPLEFT);
-        TIFFSetField(tif, TIFFTAG_PLANARCONFIG, PLANARCONFIG_CONTIG);
-        TIFFSetField(tif, TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_RGB);
-        TIFFSetField(tif, TIFFTAG_SAMPLEFORMAT, SAMPLEFORMAT_UINT);
-        TIFFSetField(tif, TIFFTAG_SOFTWARE, "Huira Image Library");
+        TIFFSetField(tif.get(), TIFFTAG_IMAGEWIDTH, width);
+        TIFFSetField(tif.get(), TIFFTAG_IMAGELENGTH, height);
+        TIFFSetField(tif.get(), TIFFTAG_SAMPLESPERPIXEL, 3);
+        TIFFSetField(tif.get(), TIFFTAG_BITSPERSAMPLE, static_cast<uint16_t>(bit_depth));
+        TIFFSetField(tif.get(), TIFFTAG_ORIENTATION, ORIENTATION_TOPLEFT);
+        TIFFSetField(tif.get(), TIFFTAG_PLANARCONFIG, PLANARCONFIG_CONTIG);
+        TIFFSetField(tif.get(), TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_RGB);
+        TIFFSetField(tif.get(), TIFFTAG_SAMPLEFORMAT, SAMPLEFORMAT_UINT);
+        TIFFSetField(tif.get(), TIFFTAG_SOFTWARE, "Huira Image Library");
         
         if (!description.empty()) {
-            TIFFSetField(tif, TIFFTAG_IMAGEDESCRIPTION, description.c_str());
+            TIFFSetField(tif.get(), TIFFTAG_IMAGEDESCRIPTION, description.c_str());
         }
         if (!artist.empty()) {
-            TIFFSetField(tif, TIFFTAG_ARTIST, artist.c_str());
+            TIFFSetField(tif.get(), TIFFTAG_ARTIST, artist.c_str());
         }
         
         std::size_t bytes_per_sample = static_cast<std::size_t>(bit_depth) / 8;
@@ -653,13 +652,10 @@ namespace huira {
                 }
             }
             
-            if (TIFFWriteScanline(tif, scanline.data(), y) < 0) {
-                TIFFClose(tif);
+            if (TIFFWriteScanline(tif.get(), scanline.data(), y) < 0) {
                 HUIRA_THROW_ERROR("write_image_tiff - Failed to write scanline " + std::to_string(y));
             }
         }
-        
-        TIFFClose(tif);
     }
     /**
      * @brief Writes a monochrome float image to a TIFF file with optional metadata.
@@ -676,7 +672,7 @@ namespace huira {
             HUIRA_THROW_ERROR("write_image_tiff - Bit depth must be 8 or 16");
         }
         
-        TIFF* tif = TIFFOpen(filepath.string().c_str(), "w");
+        ScopedTIFF tif = TIFFOpen(filepath.string().c_str(), "w");
         if (!tif) {
             HUIRA_THROW_ERROR("write_image_tiff - Failed to open file for writing: " + filepath.string());
         }
@@ -684,21 +680,21 @@ namespace huira {
         uint32_t width = static_cast<uint32_t>(image.width());
         uint32_t height = static_cast<uint32_t>(image.height());
         
-        TIFFSetField(tif, TIFFTAG_IMAGEWIDTH, width);
-        TIFFSetField(tif, TIFFTAG_IMAGELENGTH, height);
-        TIFFSetField(tif, TIFFTAG_SAMPLESPERPIXEL, 1);
-        TIFFSetField(tif, TIFFTAG_BITSPERSAMPLE, static_cast<uint16_t>(bit_depth));
-        TIFFSetField(tif, TIFFTAG_ORIENTATION, ORIENTATION_TOPLEFT);
-        TIFFSetField(tif, TIFFTAG_PLANARCONFIG, PLANARCONFIG_CONTIG);
-        TIFFSetField(tif, TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_MINISBLACK);
-        TIFFSetField(tif, TIFFTAG_SAMPLEFORMAT, SAMPLEFORMAT_UINT);
-        TIFFSetField(tif, TIFFTAG_SOFTWARE, "Huira Image Library");
+        TIFFSetField(tif.get(), TIFFTAG_IMAGEWIDTH, width);
+        TIFFSetField(tif.get(), TIFFTAG_IMAGELENGTH, height);
+        TIFFSetField(tif.get(), TIFFTAG_SAMPLESPERPIXEL, 1);
+        TIFFSetField(tif.get(), TIFFTAG_BITSPERSAMPLE, static_cast<uint16_t>(bit_depth));
+        TIFFSetField(tif.get(), TIFFTAG_ORIENTATION, ORIENTATION_TOPLEFT);
+        TIFFSetField(tif.get(), TIFFTAG_PLANARCONFIG, PLANARCONFIG_CONTIG);
+        TIFFSetField(tif.get(), TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_MINISBLACK);
+        TIFFSetField(tif.get(), TIFFTAG_SAMPLEFORMAT, SAMPLEFORMAT_UINT);
+        TIFFSetField(tif.get(), TIFFTAG_SOFTWARE, "Huira Image Library");
         
         if (!description.empty()) {
-            TIFFSetField(tif, TIFFTAG_IMAGEDESCRIPTION, description.c_str());
+            TIFFSetField(tif.get(), TIFFTAG_IMAGEDESCRIPTION, description.c_str());
         }
         if (!artist.empty()) {
-            TIFFSetField(tif, TIFFTAG_ARTIST, artist.c_str());
+            TIFFSetField(tif.get(), TIFFTAG_ARTIST, artist.c_str());
         }
         
         std::size_t bytes_per_sample = static_cast<std::size_t>(bit_depth) / 8;
@@ -717,13 +713,10 @@ namespace huira {
                 }
             }
             
-            if (TIFFWriteScanline(tif, scanline.data(), y) < 0) {
-                TIFFClose(tif);
+            if (TIFFWriteScanline(tif.get(), scanline.data(), y) < 0) {
                 HUIRA_THROW_ERROR("write_image_tiff - Failed to write scanline " + std::to_string(y));
             }
         }
-        
-        TIFFClose(tif);
     }
 
     /**
