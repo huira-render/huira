@@ -152,7 +152,7 @@ namespace huira {
 
         TiffMemState_ mem_state{ data, static_cast<tsize_t>(size), 0 };
 
-        ScopedTIFF tif = TIFFClientOpen(
+        ScopedTIFF tif(TIFFClientOpen(
             "memory", "r",
             reinterpret_cast<thandle_t>(&mem_state),
             tiff_mem_read_,
@@ -160,7 +160,7 @@ namespace huira {
             tiff_mem_seek_,
             tiff_mem_close_,
             tiff_mem_size_,
-            nullptr, nullptr);
+            nullptr, nullptr));
 
         if (!tif) {
             HUIRA_THROW_ERROR("read_tiff_raw_ - Failed to open TIFF from memory buffer");
@@ -291,7 +291,7 @@ namespace huira {
 
         std::size_t bytes_per_sample = static_cast<std::size_t>(bits_per_sample) / 8;
 
-        bool is_tiled = TIFFIsTiled(tif) != 0;
+        bool is_tiled = TIFFIsTiled(tif.get()) != 0;
 
         if (is_tiled) {
             uint32_t tile_width = 0, tile_height = 0;
@@ -352,7 +352,7 @@ namespace huira {
         }
         else {
             // Stripped storage
-            tsize_t scanline_size = TIFFScanlineSize(tif);
+            tsize_t scanline_size = TIFFScanlineSize(tif.get());
             std::vector<unsigned char> scanline_buf(static_cast<std::size_t>(scanline_size));
 
             if (planar_config == PLANARCONFIG_CONTIG) {
@@ -604,7 +604,7 @@ namespace huira {
             HUIRA_THROW_ERROR("write_image_tiff - Bit depth must be 8 or 16");
         }
         
-        ScopedTIFF tif = TIFFOpen(filepath.string().c_str(), "w");
+        ScopedTIFF tif(TIFFOpen(filepath.string().c_str(), "w"));
         if (!tif) {
             HUIRA_THROW_ERROR("write_image_tiff - Failed to open file for writing: " + filepath.string());
         }
@@ -672,7 +672,7 @@ namespace huira {
             HUIRA_THROW_ERROR("write_image_tiff - Bit depth must be 8 or 16");
         }
         
-        ScopedTIFF tif = TIFFOpen(filepath.string().c_str(), "w");
+        ScopedTIFF tif(TIFFOpen(filepath.string().c_str(), "w"));
         if (!tif) {
             HUIRA_THROW_ERROR("write_image_tiff - Failed to open file for writing: " + filepath.string());
         }
