@@ -44,3 +44,10 @@ Image I/O
 .. autofunction:: huira.read_jpeg_mono
 
 .. autofunction:: huira.write_jpeg
+
+
+.. autofunction:: huira.read_tiff
+
+.. autofunction:: huira.read_tiff_mono
+
+.. autofunction:: huira.write_tiff
