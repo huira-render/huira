@@ -12,7 +12,7 @@
 #include "huira/images/image.hpp"
 #include "huira/images/io/png_io.hpp"
 #include "huira/images/io/jpeg_io.hpp"
-#include "huira/images/io/fits_io.hpp"
+#include "huira/images/io/tiff_io.hpp"
 
 namespace py = pybind11;
 
