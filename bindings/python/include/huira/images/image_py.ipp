@@ -279,31 +279,11 @@ namespace huira {
             return py::make_tuple(std::move(img), std::move(alpha));
             }, py::arg("filepath"), py::arg("read_alpha") = true, "Read a TIFF as an RGB image from file");
 
-        // Read RGB (Memory Buffer)
-        m.def("read_tiff", [](std::string_view data, bool read_alpha) {
-            auto [img, alpha] = read_image_tiff_rgb(
-                reinterpret_cast<const unsigned char*>(data.data()), 
-                data.size(), 
-                read_alpha
-            );
-            return py::make_tuple(std::move(img), std::move(alpha));
-            }, py::arg("data"), py::arg("read_alpha") = true, "Read a TIFF as an RGB image from a memory buffer");
-
         // Read Mono (File)
         m.def("read_tiff_mono", [](const std::string& path, bool read_alpha) {
             auto [img, alpha] = read_image_tiff_mono(fs::path(path), read_alpha);
             return py::make_tuple(std::move(img), std::move(alpha));
             }, py::arg("filepath"), py::arg("read_alpha") = true, "Read a TIFF as a mono image from file");
-
-        // Read Mono (Memory Buffer)
-        m.def("read_tiff_mono", [](std::string_view data, bool read_alpha) {
-            auto [img, alpha] = read_image_tiff_mono(
-                reinterpret_cast<const unsigned char*>(data.data()), 
-                data.size(), 
-                read_alpha
-            );
-            return py::make_tuple(std::move(img), std::move(alpha));
-            }, py::arg("data"), py::arg("read_alpha") = true, "Read a TIFF as a mono image from a memory buffer");
 
         // Write Float (Mono)
         m.def("write_tiff",
