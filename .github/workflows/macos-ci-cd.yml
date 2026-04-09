@@ -99,7 +99,7 @@ jobs:
 
       - name: Publish test results
         uses: dorny/test-reporter@v1
-        if: always()
+        if: always() && github.ref == 'refs/heads/main'
         with:
           name: macOS Test Results
           path: build/test-results/*.xml
