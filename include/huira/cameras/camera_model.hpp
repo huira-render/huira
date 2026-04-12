@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "huira/core/concepts/numeric_concepts.hpp"
@@ -66,14 +67,22 @@ namespace huira {
         template <IsSensor<TSpectral> TSensor, typename... Args>
         void set_sensor(Args&&... args);
 
-        void set_sensor_resolution(Resolution resolution);
-        void set_sensor_resolution(int width, int height);
+        void configure_sensor_from_pitch(const Resolution& resolution,
+            units::Micrometer pitch_x, std::optional<units::Micrometer> pitch_y = std::nullopt,
+            std::optional<float> cx = std::nullopt,
+            std::optional<float> cy = std::nullopt);
 
-        void set_sensor_pixel_pitch(units::Micrometer pitch_x, units::Micrometer pitch_y);
-        void set_sensor_pixel_pitch(units::Micrometer pitch);
+        void configure_sensor_from_size(const Resolution& resolution,
+            units::Millimeter width, std::optional<units::Millimeter> height = std::nullopt,
+            std::optional<float> cx = std::nullopt,
+            std::optional<float> cy = std::nullopt);
+        
+        void set_intrinsic_matrix(const Mat3<float>& intrinsic_matrix, const Resolution& resolution,
+            units::Millimeter anchor_focal_length);
 
-        void set_sensor_size(units::Millimeter width, units::Millimeter height);
-        void set_sensor_size(units::Millimeter width);
+        void set_intrinsics(float fx, float fy, float cx, float cy,
+            const Resolution& resolution,
+            units::Millimeter anchor_focal_length);
 
         Rotation<double> sensor_rotation() const;
 
@@ -145,6 +154,8 @@ namespace huira {
         float cy_;
         float rx_;
         float ry_;
+
+        bool is_explicit_matrix_ = false;
         void compute_intrinsics_();
 
         bool depth_of_field_ = false;

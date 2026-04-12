@@ -119,71 +119,68 @@ namespace huira {
 
 
     /**
-     * @brief Set the sensor resolution.
-     * @param resolution Sensor resolution (width, height)
+     * @brief Configure the sensor using pixel pitch and resolution.
+     *
+     * This method sets the sensor resolution, pixel pitch, and principal point. It also computes the intrinsics based on the new configuration.
+     * @param resolution Sensor resolution
+     * @param pitch_x Pixel pitch in x direction (micrometers)
+     * @param pitch_y Pixel pitch in y direction (micrometers)
+     * @param cx Principal point x coordinate (must be within resolution bounds)
+     * @param cy Principal point y coordinate (must be within resolution bounds)
      */
     template <IsSpectral TSpectral>
-    void CameraModelHandle<TSpectral>::set_sensor_resolution(Resolution resolution) const
+    void CameraModelHandle<TSpectral>::configure_sensor_from_pitch(const Resolution& resolution,
+        units::Micrometer pitch_x, std::optional<units::Micrometer> pitch_y,
+        std::optional<float> cx, std::optional<float> cy)
     {
-        this->get_()->set_sensor_resolution(resolution);
+        this->get_()->configure_sensor_from_pitch(resolution, pitch_x, pitch_y, cx, cy);
     }
 
-
     /**
-     * @brief Set the sensor resolution by width and height.
-     * @param width Sensor width in pixels
-     * @param height Sensor height in pixels
-     */
-    template <IsSpectral TSpectral>
-    void CameraModelHandle<TSpectral>::set_sensor_resolution(int width, int height) const
-    {
-        this->get_()->set_sensor_resolution(Resolution{ width, height });
-    }
-
-
-    /**
-     * @brief Set the sensor pixel pitch in x and y directions.
-     * @param pitch_x Pixel pitch in x (millimeters)
-     * @param pitch_y Pixel pitch in y (millimeters)
-     */
-    template <IsSpectral TSpectral>
-    void CameraModelHandle<TSpectral>::set_sensor_pixel_pitch(units::Millimeter pitch_x, units::Millimeter pitch_y) const
-    {
-        this->get_()->set_sensor_pixel_pitch(pitch_x, pitch_y);
-    }
-
-
-    /**
-     * @brief Set the sensor pixel pitch (square pixels).
-     * @param pitch Pixel pitch in both x and y (millimeters)
-     */
-    template <IsSpectral TSpectral>
-    void CameraModelHandle<TSpectral>::set_sensor_pixel_pitch(units::Millimeter pitch) const
-    {
-        this->get_()->set_sensor_pixel_pitch(pitch, pitch);
-    }
-
-
-    /**
-     * @brief Set the physical sensor size.
+     * @brief Configure the sensor using physical size and resolution.
+     *
+     * This method sets the sensor resolution, physical size, and principal point. It also computes the intrinsics based on the new configuration.
+     * @param resolution Sensor resolution
      * @param width Sensor width in millimeters
      * @param height Sensor height in millimeters
+     * @param cx Principal point x coordinate (must be within resolution bounds)
+     * @param cy Principal point y coordinate (must be within resolution bounds)
      */
     template <IsSpectral TSpectral>
-    void CameraModelHandle<TSpectral>::set_sensor_size(units::Millimeter width, units::Millimeter height) const
+    void CameraModelHandle<TSpectral>::configure_sensor_from_size(const Resolution& resolution,
+        units::Millimeter width, std::optional<units::Millimeter> height,
+        std::optional<float> cx, std::optional<float> cy)
     {
-        this->get_()->set_sensor_size(width, height);
+        this->get_()->configure_sensor_from_size(resolution, width, height, cx, cy);
     }
 
-
     /**
-     * @brief Set the sensor width and compute height from aspect ratio.
-     * @param width Sensor width in millimeters
+     * @brief Set the intrinsic matrix for the camera.
+     * @param intrinsic_matrix 3x3 intrinsic matrix
+     * @param resolution Sensor resolution
+     * @param anchor_focal_length Anchor focal length in millimeters
      */
     template <IsSpectral TSpectral>
-    void CameraModelHandle<TSpectral>::set_sensor_size(units::Millimeter width) const
+    void CameraModelHandle<TSpectral>::set_intrinsic_matrix(const Mat3<float>& intrinsic_matrix, const Resolution& resolution,
+        units::Millimeter anchor_focal_length)
     {
-        this->get_()->set_sensor_size(width);
+        this->get_()->set_intrinsic_matrix(intrinsic_matrix, resolution, anchor_focal_length);
+    }
+
+    /**
+     * @brief Set the intrinsic parameters for the camera.
+     * @param fx Focal length in x direction
+     * @param fy Focal length in y direction
+     * @param cx Principal point x coordinate
+     * @param cy Principal point y coordinate
+     * @param resolution Sensor resolution
+     * @param anchor_focal_length Anchor focal length in millimeters
+     */
+    template <IsSpectral TSpectral>
+    void CameraModelHandle<TSpectral>::set_intrinsics(float fx, float fy, float cx, float cy, const Resolution& resolution,
+        units::Millimeter anchor_focal_length)
+    {
+        this->get_()->set_intrinsics(fx, fy, cx, cy, resolution, anchor_focal_length);
     }
 
 
@@ -476,5 +473,56 @@ namespace huira {
     void CameraModelHandle<TSpectral>::use_blender_convention(bool value) const
     {
         this->get_()->use_blender_convention(value);
+    }
+
+
+
+
+    // ================== //
+    // === DEPRECATED === //
+    // ================== //
+    template <IsSpectral TSpectral>
+    void CameraModelHandle<TSpectral>::set_sensor_resolution(Resolution resolution) const
+    {
+        (void)resolution;
+        HUIRA_THROW_ERROR("API BREAKING CHANGE: set_sensor_resolution was removed in v0.9.4. Use configure_sensor_from_pitch() or configure_sensor_from_size() instead.");
+    }
+
+    template <IsSpectral TSpectral>
+    void CameraModelHandle<TSpectral>::set_sensor_resolution(int width, int height) const
+    {
+        (void)width;
+        (void)height;
+        HUIRA_THROW_ERROR("API BREAKING CHANGE: set_sensor_resolution was removed in v0.9.4. Use configure_sensor_from_pitch() or configure_sensor_from_size() instead.");
+    }
+
+    template <IsSpectral TSpectral>
+    void CameraModelHandle<TSpectral>::set_sensor_pixel_pitch(units::Millimeter pitch_x, units::Millimeter pitch_y) const
+    {
+        (void)pitch_x;
+        (void)pitch_y;
+        HUIRA_THROW_ERROR("API BREAKING CHANGE: set_sensor_pixel_pitch was removed in v0.9.4. Use configure_sensor_from_pitch() instead.");
+    }
+
+    template <IsSpectral TSpectral>
+    void CameraModelHandle<TSpectral>::set_sensor_pixel_pitch(units::Millimeter pitch) const
+    {
+        (void)pitch;
+        HUIRA_THROW_ERROR("API BREAKING CHANGE: set_sensor_pixel_pitch was removed in v0.9.4. Use configure_sensor_from_pitch() instead.");
+    }
+
+    template <IsSpectral TSpectral>
+    void CameraModelHandle<TSpectral>::set_sensor_size(units::Millimeter width, units::Millimeter height) const
+    {
+        (void)width;
+        (void)height;
+        HUIRA_THROW_ERROR("API BREAKING CHANGE: set_sensor_size was removed in v0.9.4. Use configure_sensor_from_size() instead.");
+    }
+
+    template <IsSpectral TSpectral>
+    void CameraModelHandle<TSpectral>::set_sensor_size(units::Millimeter width) const
+    {
+        (void)width;
+        HUIRA_THROW_ERROR("API BREAKING CHANGE: set_sensor_size was removed in v0.9.4. Use configure_sensor_from_size() instead.");
     }
 }

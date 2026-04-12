@@ -1,6 +1,8 @@
 
 #pragma once
 
+#include <optional>
+
 #include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/core/units/units.hpp"
 
@@ -53,15 +55,21 @@ namespace huira {
 
         template <IsSensor<TSpectral> TSensor, typename... Args>
         void set_sensor(Args&&... args) const;
+        
+        void configure_sensor_from_pitch(const Resolution& resolution,
+            units::Micrometer pitch_x, std::optional<units::Micrometer> pitch_y = std::nullopt,
+            std::optional<float> cx = std::nullopt,
+            std::optional<float> cy = std::nullopt);
 
-        void set_sensor_resolution(Resolution resolution) const;
-        void set_sensor_resolution(int width, int height) const;
+        void configure_sensor_from_size(const Resolution& resolution,
+            units::Millimeter width, std::optional<units::Millimeter> height = std::nullopt,
+            std::optional<float> cx = std::nullopt,
+            std::optional<float> cy = std::nullopt);
 
-        void set_sensor_pixel_pitch(units::Millimeter pitch_x, units::Millimeter pitch_y) const;
-        void set_sensor_pixel_pitch(units::Millimeter pitch) const;
-
-        void set_sensor_size(units::Millimeter width, units::Millimeter height) const;
-        void set_sensor_size(units::Millimeter width) const;
+        void set_intrinsic_matrix(const Mat3<float>& intrinsic_matrix, const Resolution& resolution,
+            units::Millimeter anchor_focal_length);
+        void set_intrinsics(float fx, float fy, float cx, float cy, const Resolution& resolution,
+            units::Millimeter anchor_focal_length);
 
         void set_sensor_quantum_efficiency(double qe) const;
         void set_sensor_quantum_efficiency(TSpectral qe) const;
@@ -103,6 +111,26 @@ namespace huira {
         friend class Scene<TSpectral>;
         friend class SceneView<TSpectral>;
         friend class FrameHandle<TSpectral>;
+
+
+        // DEPRECATED
+        [[deprecated("set_sensor_resolution was removed in v0.9.4.  Use configure_sensor_from_pitch() or configure_sensor_from_size() instead.")]]
+        void set_sensor_resolution(Resolution resolution) const;
+
+        [[deprecated("set_sensor_resolution was removed in v0.9.4.  Use configure_sensor_from_pitch() or configure_sensor_from_size() instead.")]]
+        void set_sensor_resolution(int width, int height) const;
+
+        [[deprecated("set_sensor_pixel_pitch was removed in v0.9.4.  Use configure_sensor_from_pitch() instead.")]]
+        void set_sensor_pixel_pitch(units::Millimeter pitch_x, units::Millimeter pitch_y) const;
+
+        [[deprecated("set_sensor_pixel_pitch was removed in v0.9.4.  Use configure_sensor_from_pitch() instead.")]]
+        void set_sensor_pixel_pitch(units::Millimeter pitch) const;
+
+        [[deprecated("set_sensor_size was removed in v0.9.4.  Use configure_sensor_from_size() instead.")]]
+        void set_sensor_size(units::Millimeter width, units::Millimeter height) const;
+
+        [[deprecated("set_sensor_size was removed in v0.9.4.  Use configure_sensor_from_size() instead.")]]
+        void set_sensor_size(units::Millimeter width) const;
     };
 }
 

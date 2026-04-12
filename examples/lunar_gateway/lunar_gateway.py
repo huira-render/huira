@@ -34,8 +34,7 @@ def main():
     camera_model = scene.new_camera_model()
     camera_model.use_blender_convention()
     camera_model.set_focal_length(mm(50))
-    camera_model.set_sensor_resolution(1920, 1080)
-    camera_model.set_sensor_size(mm(36))
+    camera_model.configure_sensor_from_size((1920, 1080), mm(36), mm(36))
     camera_model.set_fstop(16)
 
     # Create an instance of the camera
