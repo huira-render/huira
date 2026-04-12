@@ -35,8 +35,7 @@ int main(int argc, char** argv) {
     auto camera_model = scene.new_camera_model();
     camera_model.set_focal_length(125_mm);
     camera_model.set_fstop(3.30f);
-    camera_model.set_sensor_pixel_pitch(8.5_um, 8.5_um);
-    camera_model.set_sensor_resolution(1920, 1080);
+    camera_model.configure_sensor_from_pitch({ 1920, 1080 }, 8.5_um, 8.5_um);
     camera_model.set_sensor_bit_depth(12);
     camera_model.use_aperture_psf(64, 16);
     

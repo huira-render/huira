@@ -18,6 +18,8 @@ namespace huira {
         units::Meter diameter(this->focal_length_ / 2.8f);
         this->sensor_ = std::make_unique<SimpleSensor<TSpectral>>();
         this->aperture_ = std::make_unique<CircularAperture<TSpectral>>(diameter);
+        cx_ = static_cast<float>(sensor_->resolution().x) * 0.5f;
+        cy_ = static_cast<float>(sensor_->resolution().y) * 0.5f;
         compute_intrinsics_();
     }
 
@@ -31,7 +33,13 @@ namespace huira {
     template <IsSpectral TSpectral>
     void CameraModel<TSpectral>::set_focal_length(units::Millimeter focal_length)
     {
+        is_explicit_matrix_ = false;
         focal_length_ = focal_length.to_si_f();
+
+        if (focal_length_ <= 0 || std::isinf(focal_length_) || std::isnan(focal_length_)) {
+            HUIRA_THROW_ERROR("CameraModel::set_focal_length - Focal length must be a positive finite value: " + std::to_string(focal_length_));
+        }
+
         compute_intrinsics_();
         if (use_aperture_psf_) {
             units::Meter f(focal_length_);
@@ -106,79 +114,144 @@ namespace huira {
         compute_intrinsics_();
     }
 
-
     /**
-     * @brief Set the sensor resolution.
-     * @param resolution Sensor resolution (width, height)
+     * @brief Configure the sensor using pixel pitch and resolution.
+     *
+     * This method sets the sensor resolution, pixel pitch, and principal point. It also computes the intrinsics based on the new configuration.
+     * @param resolution Sensor resolution
+     * @param pitch_x Pixel pitch in x direction (micrometers)
+     * @param pitch_y Pixel pitch in y direction (micrometers)
+     * @param cx Principal point x coordinate (must be within resolution bounds)
+     * @param cy Principal point y coordinate (must be within resolution bounds)
      */
     template <IsSpectral TSpectral>
-    void CameraModel<TSpectral>::set_sensor_resolution(Resolution resolution)
+    void CameraModel<TSpectral>::configure_sensor_from_pitch(
+        const Resolution& resolution,
+        units::Micrometer pitch_x, std::optional<units::Micrometer> pitch_y,
+        std::optional<float> cx, std::optional<float> cy)
     {
-        sensor_->config_.resolution = resolution;
+        is_explicit_matrix_ = false;
+
+        sensor_->set_resolution(resolution);
+
+        if (!pitch_y.has_value()) {
+            pitch_y = pitch_x;
+        }
+        sensor_->set_pixel_pitch(pitch_x, pitch_y.value());
+
+        float final_cx = cx.value_or(static_cast<float>(resolution.x) * 0.5f);
+        float final_cy = cy.value_or(static_cast<float>(resolution.y) * 0.5f);
+
+        if (std::isnan(final_cx) || std::isnan(final_cy) || std::isinf(final_cx) || std::isinf(final_cy)) {
+            HUIRA_THROW_ERROR("CameraModel - Principal point (cx, cy) must be finite numeric values.");
+        }
+
+        if (final_cx < -static_cast<float>(resolution.x) || final_cx > static_cast<float>(resolution.x) * 2.0f ||
+            final_cy < -static_cast<float>(resolution.y) || final_cy > static_cast<float>(resolution.y) * 2.0f) {
+            HUIRA_LOG_WARNING("Principal point is significantly outside the sensor resolution. Ensure this intended for an off-axis projection.");
+        }
+
+        cx_ = final_cx;
+        cy_ = final_cy;
+
         compute_intrinsics_();
     }
 
-
     /**
-     * @brief Set the sensor resolution by width and height.
-     * @param width Sensor width in pixels
-     * @param height Sensor height in pixels
-     */
-    template <IsSpectral TSpectral>
-    void CameraModel<TSpectral>::set_sensor_resolution(int width, int height)
-    {
-        this->set_sensor_resolution(Resolution{ width, height });
-    }
-
-
-    /**
-     * @brief Set the sensor pixel pitch in x and y directions.
-     * @param pitch_x Pixel pitch in x (micrometers)
-     * @param pitch_y Pixel pitch in y (micrometers)
-     */
-    template <IsSpectral TSpectral>
-    void CameraModel<TSpectral>::set_sensor_pixel_pitch(units::Micrometer pitch_x, units::Micrometer pitch_y)
-    {
-        sensor_->set_pixel_pitch(pitch_x, pitch_y);
-        compute_intrinsics_();
-    }
-
-
-    /**
-     * @brief Set the sensor pixel pitch (square pixels).
-     * @param pitch Pixel pitch in both x and y (micrometers)
-     */
-    template <IsSpectral TSpectral>
-    void CameraModel<TSpectral>::set_sensor_pixel_pitch(units::Micrometer pitch)
-    {
-        sensor_->set_pixel_pitch(pitch, pitch);
-        compute_intrinsics_();
-    }
-
-
-    /**
-     * @brief Set the physical sensor size.
+     * @brief Configure the sensor using physical size and resolution.
+     *
+     * This method sets the sensor resolution, physical size, and principal point. It also computes the intrinsics based on the new configuration.
+     * @param resolution Sensor resolution
      * @param width Sensor width in millimeters
      * @param height Sensor height in millimeters
+     * @param cx Principal point x coordinate (must be within resolution bounds)
+     * @param cy Principal point y coordinate (must be within resolution bounds)
      */
     template <IsSpectral TSpectral>
-    void CameraModel<TSpectral>::set_sensor_size(units::Millimeter width, units::Millimeter height)
+    void CameraModel<TSpectral>::configure_sensor_from_size(
+        const Resolution& resolution,
+        units::Millimeter width, std::optional<units::Millimeter> height,
+        std::optional<float> cx, std::optional<float> cy)
     {
-        sensor_->set_sensor_size(width, height);
+        is_explicit_matrix_ = false;
+
+        sensor_->set_resolution(resolution);
+
+        if (height.has_value()) {
+            sensor_->set_sensor_size(width, height.value());
+        }
+        else {
+            // If height is not provided, assume square pixels and compute height from width and resolution
+            float pixel_size_x = width.to_si_f() / static_cast<float>(resolution.x);
+            float pixel_size_y = pixel_size_x; // Square pixels
+            sensor_->set_pixel_pitch(units::Meter(pixel_size_x), units::Meter(pixel_size_y));
+        }
+
+        float final_cx = cx.value_or(static_cast<float>(resolution.x) * 0.5f);
+        float final_cy = cy.value_or(static_cast<float>(resolution.y) * 0.5f);
+
+        if (std::isnan(final_cx) || std::isnan(final_cy) || std::isinf(final_cx) || std::isinf(final_cy)) {
+            HUIRA_THROW_ERROR("CameraModel - Principal point (cx, cy) must be finite numeric values.");
+        }
+
+        if (final_cx < -static_cast<float>(resolution.x) || final_cx > static_cast<float>(resolution.x) * 2.0f ||
+            final_cy < -static_cast<float>(resolution.y) || final_cy > static_cast<float>(resolution.y) * 2.0f) {
+            HUIRA_LOG_WARNING("Principal point is significantly outside the sensor resolution. Ensure this intended for an off-axis projection.");
+        }
+
+        cx_ = final_cx;
+        cy_ = final_cy;
+
         compute_intrinsics_();
     }
 
-
     /**
-     * @brief Set the sensor width and compute height from aspect ratio.
-     * @param width Sensor width in millimeters
+     * @brief Set the intrinsic matrix for the camera.
+     * @param intrinsic_matrix 3x3 intrinsic matrix
+     * @param resolution Sensor resolution
+     * @param anchor_focal_length Anchor focal length in millimeters
      */
     template <IsSpectral TSpectral>
-    void CameraModel<TSpectral>::set_sensor_size(units::Millimeter width)
+    void CameraModel<TSpectral>::set_intrinsic_matrix(
+        const Mat3<float>& intrinsic_matrix,
+        const Resolution& resolution,
+        units::Millimeter anchor_focal_length)
     {
-        float aspect_ratio = static_cast<float>(sensor_->resolution().y) / static_cast<float>(sensor_->resolution().x);
-        units::Millimeter height = width * aspect_ratio;
-        sensor_->set_sensor_size(width, height);
+        this->set_intrinsics(intrinsic_matrix[0][0], intrinsic_matrix[1][1],
+            intrinsic_matrix[0][2], intrinsic_matrix[1][2],
+            resolution, anchor_focal_length);
+    }
+
+    /**
+     * @brief Set the intrinsic parameters for the camera.
+     * @param fx Focal length in x direction
+     * @param fy Focal length in y direction
+     * @param cx Principal point x coordinate
+     * @param cy Principal point y coordinate
+     * @param resolution Sensor resolution
+     * @param anchor_focal_length Anchor focal length in millimeters
+     */
+    template <IsSpectral TSpectral>
+    void CameraModel<TSpectral>::set_intrinsics(
+        float fx, float fy, float cx, float cy,
+        const Resolution& resolution,
+        units::Millimeter anchor_focal_length)
+    {
+        is_explicit_matrix_ = true;
+        
+        fx_ = fx;
+        fy_ = fy;
+        cx_ = cx;
+        cy_ = cy;
+        sensor_->set_resolution(resolution);   
+        focal_length_ = anchor_focal_length.to_si_f();
+
+        // Use the anchor to compute the pixel_pitch/size
+        units::Meter px(focal_length_ / fx_);
+        units::Meter py(focal_length_ / fy_);
+        sensor_->set_pixel_pitch(px, py);
+        sensor_->set_sensor_size(px * resolution.x, py * resolution.y);
+
         compute_intrinsics_();
     }
 
@@ -466,15 +539,15 @@ namespace huira {
     template <IsSpectral TSpectral>
     void CameraModel<TSpectral>::compute_intrinsics_()
     {
-        fx_ = focal_length_ / sensor_->pixel_pitch().x;
-        fy_ = focal_length_ / sensor_->pixel_pitch().y;
-        cx_ = static_cast<float>(sensor_->resolution().x) * 0.5f;
-        cy_ = static_cast<float>(sensor_->resolution().y) * 0.5f;
         rx_ = static_cast<float>(sensor_->resolution().x);
         ry_ = static_cast<float>(sensor_->resolution().y);
 
-        compute_frustum_();
+        if (!is_explicit_matrix_) {
+            fx_ = focal_length_ / sensor_->pixel_pitch().x;
+            fy_ = focal_length_ / sensor_->pixel_pitch().y;
+        }
 
+        compute_frustum_();
         compute_pixel_solid_angles_();
     }
 

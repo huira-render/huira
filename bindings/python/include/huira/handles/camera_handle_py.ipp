@@ -25,34 +25,76 @@ namespace huira {
             .def("set_fstop", &HandleType::set_fstop, py::arg("fstop"))
             .def("fstop", &HandleType::fstop)
 
-            // Sensor resolution
-            .def("set_sensor_resolution",
-                py::overload_cast<int, int>(&HandleType::set_sensor_resolution, py::const_),
-                py::arg("width"), py::arg("height"))
+            .def("configure_sensor_from_pitch",
+                [](HandleType& self, std::pair<int, int> res, // <-- Removed 'const' here
+                    const py::object& px, const py::object& py_,
+                    std::optional<float> cx, std::optional<float> cy) {
 
-            // Sensor pixel pitch
-            .def("set_sensor_pixel_pitch",
-                [](const HandleType& self, const py::object& px, const py::object& py_) {
-                    self.set_sensor_pixel_pitch(
-                        detail::unit_from_py<units::Millimeter>(px),
-                        detail::unit_from_py<units::Millimeter>(py_));
-                }, py::arg("pixel_pitch_x"), py::arg("pixel_pitch_y"))
-            .def("set_sensor_pixel_pitch",
-                [](const HandleType& self, const py::object& pp) {
-                    self.set_sensor_pixel_pitch(detail::unit_from_py<units::Millimeter>(pp));
-                }, py::arg("pixel_pitch"))
+                        units::Micrometer pitch_x = detail::unit_from_py<units::Micrometer>(px);
+                        std::optional<units::Micrometer> pitch_y = std::nullopt;
 
-            // Sensor size
-            .def("set_sensor_size",
-                [](const HandleType& self, const py::object& w, const py::object& h) {
-                    self.set_sensor_size(
-                        detail::unit_from_py<units::Millimeter>(w),
-                        detail::unit_from_py<units::Millimeter>(h));
-                }, py::arg("width"), py::arg("height"))
-            .def("set_sensor_size",
-                [](const HandleType& self, const py::object& w) {
-                    self.set_sensor_size(detail::unit_from_py<units::Millimeter>(w));
-                }, py::arg("width"))
+                        if (!py_.is_none()) {
+                            pitch_y = detail::unit_from_py<units::Micrometer>(py_);
+                        }
+
+                        self.configure_sensor_from_pitch(
+                            Resolution{ res.first, res.second },
+                            pitch_x, pitch_y, cx, cy
+                        );
+                },
+                py::arg("resolution"), py::arg("pitch_x"),
+                py::arg("pitch_y") = py::none(),
+                py::arg("cx") = py::none(), py::arg("cy") = py::none(),
+                "Configure sensor using a resolution tuple (width, height) and pixel pitch. pitch_y defaults to pitch_x (square pixels). cx/cy default to center.")
+
+            .def("configure_sensor_from_size",
+                [](HandleType& self, std::pair<int, int> res, // <-- Removed 'const' here
+                    const py::object& w, const py::object& h,
+                    std::optional<float> cx, std::optional<float> cy) {
+
+                        units::Millimeter width = detail::unit_from_py<units::Millimeter>(w);
+                        std::optional<units::Millimeter> height = std::nullopt;
+
+                        if (!h.is_none()) {
+                            height = detail::unit_from_py<units::Millimeter>(h);
+                        }
+
+                        self.configure_sensor_from_size(
+                            Resolution{ res.first, res.second },
+                            width, height, cx, cy
+                        );
+                },
+                py::arg("resolution"), py::arg("width"),
+                py::arg("height") = py::none(),
+                py::arg("cx") = py::none(), py::arg("cy") = py::none(),
+                "Configure sensor using a resolution tuple (width, height) and physical size. height defaults to maintaining square pixels. cx/cy default to center.")
+
+            .def("set_intrinsic_matrix",
+                [](HandleType& self, const Mat3<float>& matrix, // <-- Removed 'const' here
+                    std::pair<int, int> res, const py::object& anchor_fl) {
+
+                        self.set_intrinsic_matrix(
+                            matrix,
+                            Resolution{ res.first, res.second },
+                            detail::unit_from_py<units::Millimeter>(anchor_fl)
+                        );
+                },
+                py::arg("intrinsic_matrix"), py::arg("resolution"), py::arg("anchor_focal_length"),
+                "Explicitly set the 3x3 intrinsic matrix with a resolution tuple and physical focal length anchor.")
+
+            .def("set_intrinsics",
+                [](HandleType& self, float fx, float fy, float cx, float cy, // <-- Removed 'const' here
+                    std::pair<int, int> res, const py::object& anchor_fl) {
+
+                        self.set_intrinsics(
+                            fx, fy, cx, cy,
+                            Resolution{ res.first, res.second },
+                            detail::unit_from_py<units::Millimeter>(anchor_fl)
+                        );
+                },
+                py::arg("fx"), py::arg("fy"), py::arg("cx"), py::arg("cy"),
+                py::arg("resolution"), py::arg("anchor_focal_length"),
+                "Explicitly set mathematical intrinsics with a resolution tuple and physical focal length anchor.")
 
             // Distortion
             .def("set_brown_conrady_distortion", &HandleType::set_brown_conrady_distortion,
@@ -130,6 +172,29 @@ namespace huira {
             .def("__bool__", &HandleType::valid)
             .def("__repr__", [](const HandleType&) {
                 return "<CameraModelHandle>";
+            })
+
+
+            // ========================== //
+            // === DEPRECATED METHODS === //
+            // ========================== //
+            .def("set_sensor_resolution", [](HandleType& self, py::args args, py::kwargs kwargs) {
+                throw std::runtime_error(
+                    "API BREAKING CHANGE: set_sensor_resolution was removed in v0.9.4. "
+                    "Use configure_sensor_from_pitch() or configure_sensor_from_size() instead."
+                );
+            })
+            .def("set_sensor_pixel_pitch", [](HandleType& self, py::args args, py::kwargs kwargs) {
+                throw std::runtime_error(
+                    "API BREAKING CHANGE: set_sensor_pixel_pitch was removed in v0.9.4. "
+                    "Use configure_sensor_from_pitch() instead."
+                );
+            })
+            .def("set_sensor_size", [](HandleType& self, py::args args, py::kwargs kwargs) {
+                throw std::runtime_error(
+                    "API BREAKING CHANGE: set_sensor_size was removed in v0.9.4. "
+                    "Use configure_sensor_from_size() instead."
+                );
             });
     }
 }

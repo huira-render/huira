@@ -56,8 +56,7 @@ int main(int argc, char** argv) {
     // Configure a camera model
     auto camera_model = scene.new_camera_model();
     camera_model.set_focal_length(25_mm);
-    camera_model.set_sensor_resolution(1080, 1080);
-    camera_model.set_sensor_size(6_mm);
+    camera_model.configure_sensor_from_size({ 1080, 1080 }, 6_mm);
 
     // Set camera exposure settings
     camera_model.set_fstop(18);

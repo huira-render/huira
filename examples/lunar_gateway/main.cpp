@@ -34,8 +34,7 @@ int main(int argc, char** argv) {
     auto camera_model = scene.new_camera_model();
     camera_model.use_blender_convention();
     camera_model.set_focal_length(50_mm);
-    camera_model.set_sensor_resolution(1920, 1080);
-    camera_model.set_sensor_size(36_mm);
+    camera_model.configure_sensor_from_size({ 1920, 1080 }, 36_mm);
     camera_model.use_aperture_psf();
     camera_model.set_sensor_bias_level(10.f);
     camera_model.set_fstop(16);
