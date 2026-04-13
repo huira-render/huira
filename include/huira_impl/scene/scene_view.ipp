@@ -414,6 +414,17 @@ namespace huira {
         }
     }
 
+    /**
+     * @brief Handle atmosphere asset pointer and add to atmosphere instances.
+     * @param atmosphere Atmosphere pointer
+     * @param instance_apparent_transforms Render transforms
+     */
+    template <IsSpectral TSpectral>
+    void SceneView<TSpectral>::handle_asset_ptr_(Atmosphere<TSpectral>* atmosphere, const std::vector<Transform<float>>& instance_apparent_transforms)
+    {
+        add_atmosphere_instance_(atmosphere->shared_from_this(), instance_apparent_transforms);
+    }
+
 
     /**
      * @brief Handle mesh asset pointer and add to geometry batch.
@@ -479,6 +490,21 @@ namespace huira {
         traverse_model_graph_(model_graph_ptr, instance_apparent_transforms);
     }
 
+
+    /**
+     * @brief Add an atmosphere instance to the atmospheres vector.
+     * @param atmosphere Atmosphere pointer
+     * @param render_transform Render transform
+     */
+    template <IsSpectral TSpectral>
+    void SceneView<TSpectral>::add_atmosphere_instance_(std::shared_ptr<Atmosphere<TSpectral>> atmosphere, const std::vector<Transform<float>>& instance_apparent_transforms)
+    {
+        AtmosphereInstance<TSpectral> instance;
+        instance.atmosphere = atmosphere;
+        instance.transforms = instance_apparent_transforms;
+    
+        atmospheres_.push_back(std::move(instance));
+    }
 
     /**
      * @brief Add a mesh instance to the geometry batch.
@@ -564,6 +590,9 @@ namespace huira {
         }
     }
 
+    /**
+     * @brief Builds the top-level acceleration structure (TLAS) for the scene.
+     */
     template <IsSpectral TSpectral>
     void SceneView<TSpectral>::build_tlas_()
     {
@@ -571,6 +600,95 @@ namespace huira {
         bool motion_blur = (temporal_samples_.size() != 1);
         if (motion_blur) {
             rtcSetSceneFlags(tlas_, RTC_SCENE_FLAG_DYNAMIC);
+        }
+
+        // Add Atmospheres
+        for (std::size_t a_idx = 0; a_idx < atmospheres_.size(); ++a_idx) {
+            const auto& atmosphere_inst = atmospheres_[a_idx];
+
+            std::size_t N = atmosphere_inst.transforms.size();
+            if (N == 0) {
+                continue;
+            }
+
+            // Create a BLAS containing a single static sphere at the origin
+            RTCScene sphere_blas = rtcNewScene(device_->get());
+            RTCGeometry geom = rtcNewGeometry(device_->get(), RTC_GEOMETRY_TYPE_SPHERE_POINT);
+            rtcSetGeometryMask(geom, MASK_GEOMETRY_);
+
+            if (!geom) {
+                RTCError err = rtcGetDeviceError(device_->get());
+                HUIRA_THROW_ERROR("Embree failed to create SPHERE_POINT. Ensure EMBREE_GEOMETRY_SPHERE is enabled in your build. Error: " +
+                    std::to_string(static_cast<int>(err)));
+            }
+
+            float* vertex = static_cast<float*>(rtcSetNewGeometryBuffer(geom,
+                RTC_BUFFER_TYPE_VERTEX, 0, RTC_FORMAT_FLOAT4, 4 * sizeof(float), 1));
+
+            if (!vertex) {
+                RTCError err = rtcGetDeviceError(device_->get());
+                HUIRA_THROW_ERROR("Embree failed to allocate sphere buffer. Error: " +
+                    std::to_string(static_cast<int>(err)));
+            }
+
+            // The sphere itself sits statically at the origin
+            float xy_radius = atmosphere_inst.atmosphere->equatorial_radius().to_si_f();
+            float z_radius = atmosphere_inst.atmosphere->polar_radius().to_si_f();
+            float height = atmosphere_inst.atmosphere->max_height().to_si_f();
+            
+            float xy_scale = xy_radius / z_radius;
+
+            vertex[0] = 0.0f;
+            vertex[1] = 0.0f;
+            vertex[2] = 0.0f;
+            vertex[3] = z_radius + height;
+
+            rtcCommitGeometry(geom);
+            rtcAttachGeometry(sphere_blas, geom);
+            rtcReleaseGeometry(geom);
+            rtcCommitScene(sphere_blas);
+
+
+            // Instance the sphere BLAS into the TLAS
+            RTCGeometry inst_geom = rtcNewGeometry(device_->get(), RTC_GEOMETRY_TYPE_INSTANCE);
+            rtcSetGeometryInstancedScene(inst_geom, sphere_blas);
+            rtcSetGeometryTimeStepCount(inst_geom, static_cast<unsigned int>(N));
+
+            if (N > 1) {
+                rtcSetGeometryTimeRange(inst_geom, 0.0f, 1.0f);
+            }
+
+            for (std::size_t t_idx = 0; t_idx < N; ++t_idx) {
+                Mat4<float> m = static_cast<Mat4<float>>(atmosphere_inst.transforms[t_idx].to_matrix());
+
+                m[0][0] *= xy_scale; m[0][1] *= xy_scale; m[0][2] *= xy_scale;
+                m[1][0] *= xy_scale; m[1][1] *= xy_scale; m[1][2] *= xy_scale;
+
+                rtcSetGeometryTransform(inst_geom,
+                    static_cast<unsigned int>(t_idx),
+                    RTC_FORMAT_FLOAT4X4_COLUMN_MAJOR,
+                    &m[0][0]);
+            }
+
+            rtcSetGeometryMask(inst_geom, MASK_GEOMETRY_);
+            rtcCommitGeometry(inst_geom);
+            unsigned int geom_id = rtcAttachGeometry(tlas_, inst_geom);
+            rtcReleaseGeometry(inst_geom);
+
+            // Embree reference counts scenes; the instance holds a reference, so we release ours.
+            rtcReleaseScene(sphere_blas);
+
+            // Map geom_id back to lights array
+            if (geom_id >= instance_mappings_.size()) {
+                instance_mappings_.resize(geom_id + 1);
+            }
+
+            InstanceMapping mapping;
+            mapping.type = GeometryType::Atmosphere;
+            mapping.batch_index = 0;
+            mapping.instance_index = 0;
+            mapping.atmosphere_index = a_idx;
+            instance_mappings_[geom_id] = mapping;
         }
 
         // Add Meshes
