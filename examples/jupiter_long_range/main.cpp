@@ -17,7 +17,7 @@ static std::pair<fs::path, fs::path> parse_input_paths(int argc, char** argv) {
     }
     fs::path star_catalog_path = argv[1];
     fs::path kernel_path = argv[2];
-    return {star_catalog_path, kernel_path};
+    return { star_catalog_path, kernel_path };
 }
 
 int main(int argc, char** argv) {

@@ -7,6 +7,8 @@
 
 #include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/assets/io/model_loader.hpp"
+#include "huira/assets/atmosphere.hpp"
+#include "huira/handles/atmosphere_handle.hpp"
 #include "huira/handles/model_handle.hpp"
 #include "huira/handles/frame_handle.hpp"
 #include "huira/util/logger.hpp"
@@ -125,6 +127,82 @@ namespace huira {
         prune_graph_references_(mesh_shared.get());
         meshes_.remove(mesh_shared);
     }
+
+
+    /**
+     * @brief Creates a new Earth atmosphere.
+     * @param name Optional name
+     * @return AtmosphereHandle<TSpectral> Handle to the new atmosphere
+     */
+    template <IsSpectral TSpectral>
+    AtmosphereHandle<TSpectral> Scene<TSpectral>::new_earth_atmosphere(std::string name)
+    {
+        AtmosphereParameters<TSpectral> parameters;
+        Atmosphere<TSpectral> earth_atmosphere(parameters);
+        return this->add_atmosphere(std::move(earth_atmosphere), name);
+    }
+
+    /**
+     * @brief Creates a new Mars atmosphere.
+     * @param name Optional name
+     * @return AtmosphereHandle<TSpectral> Handle to the new atmosphere
+     */
+    template <IsSpectral TSpectral>
+    AtmosphereHandle<TSpectral> Scene<TSpectral>::new_mars_atmosphere(std::string name)
+    {
+        AtmosphereParameters<TSpectral> parameters;
+        Atmosphere<TSpectral> mars_atmosphere(parameters);
+        return this->add_atmosphere(std::move(mars_atmosphere), name);
+    }
+
+    /**
+     * @brief Adds an atmosphere to the scene.
+     * @param atmosphere Atmosphere to add (moved)
+     * @param name Optional name for the atmosphere
+     * @return AtmosphereHandle<TSpectral> Handle to the added atmosphere
+     */
+    template <IsSpectral TSpectral>
+    AtmosphereHandle<TSpectral> Scene<TSpectral>::add_atmosphere(Atmosphere<TSpectral>&& atmosphere, std::string name)
+    {
+        auto atmosphere_shared = std::make_shared<Atmosphere<TSpectral>>(std::move(atmosphere));
+        atmospheres_.add(atmosphere_shared, name);
+        return AtmosphereHandle<TSpectral>{ atmosphere_shared };
+    }
+
+    /**
+     * @brief Sets the name for an atmosphere asset.
+     * @param atmosphere_handle Handle to the atmosphere
+     * @param name New name
+     */
+    template <IsSpectral TSpectral>
+    void Scene<TSpectral>::set_name(const AtmosphereHandle<TSpectral>& atmosphere_handle, const std::string& name)
+    {
+        atmospheres_.set_name(atmosphere_handle.get(), name);
+    }
+
+    /**
+     * @brief Retrieves an atmosphere by name.
+     * @param name Name of the atmosphere
+     * @return AtmosphereHandle<TSpectral> Handle to the atmosphere
+     */
+    template <IsSpectral TSpectral>
+    AtmosphereHandle<TSpectral> Scene<TSpectral>::get_atmosphere(const std::string& name)
+    {
+        return AtmosphereHandle<TSpectral>{ atmospheres_.lookup(name) };
+    }
+
+    /**
+     * @brief Deletes an atmosphere from the scene.
+     * @param atmosphere_handle Handle to the atmosphere
+     */
+    template <IsSpectral TSpectral>
+    void Scene<TSpectral>::delete_atmosphere(const AtmosphereHandle<TSpectral>& atmosphere_handle)
+    {
+        auto atmosphere_shared = atmosphere_handle.get();
+        prune_graph_references_(atmosphere_shared.get());
+        atmospheres_.remove(atmosphere_shared);
+    }
+
 
 
     /**

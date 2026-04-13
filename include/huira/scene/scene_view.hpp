@@ -25,6 +25,7 @@ namespace huira {
     class Renderer;
 
     enum class GeometryType {
+        Atmosphere,
         Mesh,
         Light
     };
@@ -77,12 +78,14 @@ namespace huira {
             const std::vector<Transform<double>>& observer_transforms,
             const std::vector<Transform<double>>& observer_inverses, ObservationMode obs_mode);
 
+        void handle_asset_ptr_(Atmosphere<TSpectral>* atmosphere, const std::vector<Transform<float>>& instance_apparent_transforms);
         void handle_asset_ptr_(Mesh<TSpectral>* mesh, const std::vector<Transform<float>>& instance_apparent_transforms);
         void handle_asset_ptr_(Light<TSpectral>* light, const std::vector<Transform<float>>& instance_apparent_transforms);
         void handle_asset_ptr_(CameraModel<TSpectral>* camera, const std::vector<Transform<float>>& instance_apparent_transforms);
         void handle_asset_ptr_(UnresolvedObject<TSpectral>* light, const std::vector<Transform<float>>& instance_apparent_transforms);
         void handle_asset_ptr_(Model<TSpectral>* model, const std::vector<Transform<float>>& instance_apparent_transforms);
 
+        void add_atmosphere_instance_(std::shared_ptr<Atmosphere<TSpectral>> atmosphere, const std::vector<Transform<float>>& instance_apparent_transforms);
         void add_mesh_instance_(std::shared_ptr<Mesh<TSpectral>> mesh, const std::vector<Transform<float>>& instance_apparent_transforms);
         void add_light_instance_(std::shared_ptr<Light<TSpectral>> light, const std::vector<Transform<float>>& instance_apparent_transforms);
         void add_unresolved_instance_(std::shared_ptr<UnresolvedObject<TSpectral>> unresolved_object, const std::vector<Transform<float>>& instance_apparent_transforms);
@@ -91,6 +94,8 @@ namespace huira {
 
         std::shared_ptr<CameraModel<TSpectral>> camera_model_;
         std::vector<Transform<float>> camera_to_world_;
+
+        std::vector<AtmosphereInstance<TSpectral>> atmospheres_;
 
         std::vector<MeshBatch<TSpectral>> geometry_;
         std::unordered_map<const Mesh<TSpectral>*, std::size_t> batch_lookup_;
@@ -113,9 +118,12 @@ namespace huira {
 
         struct InstanceMapping {
             GeometryType type;
-            std::size_t batch_index;    // Index into geometry_
-            std::size_t instance_index; // Index into geometry_[batch_index].instances
-            std::size_t light_index;    // Index into lights_ if type == Light
+            std::size_t batch_index;      // Index into geometry_ if type == Mesh
+            std::size_t instance_index;   // Index into geometry_[batch_index].instances if type == Mesh
+
+            std::size_t light_index;      // Index into lights_ if type == Light
+
+            std::size_t atmosphere_index; // Index into atmospheres_ if type == Atmosphere
         };
         std::vector<InstanceMapping> instance_mappings_;
 

@@ -9,6 +9,9 @@
 namespace huira {
     // Forward declarations
     template <IsSpectral TSpectral>
+    class Atmosphere;
+
+    template <IsSpectral TSpectral>
     class Light;
 
     template <IsSpectral TSpectral>
@@ -16,6 +19,12 @@ namespace huira {
 
     template <IsSpectral TSpectral>
     class UnresolvedObject;
+
+    template <IsSpectral TSpectral>
+    struct AtmosphereInstance {
+        std::shared_ptr<Atmosphere<TSpectral>> atmosphere;
+        std::vector<Transform<float>> transforms; // Transform at N times
+    };
 
     /**
      * @brief Instance of a light in a scene view.

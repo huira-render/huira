@@ -19,6 +19,7 @@ namespace huira {
     FrameNode<TSpectral>::FrameNode(Scene<TSpectral>* scene)
         : Node<TSpectral>(scene)
     {
+
     }
 
 
@@ -61,6 +62,23 @@ namespace huira {
             this->scene_->node_registry_.remove(child);
             children_.erase(it);
         }
+    }
+
+    /**
+     * @brief Create a new Instance leaf node for an atmosphere and attach it to this FrameNode.
+     * @param atmosphere Atmosphere pointer
+     * @return std::weak_ptr<Instance<TSpectral>> Weak pointer to new instance
+     */
+    template <IsSpectral TSpectral>
+    std::weak_ptr<Instance<TSpectral>> FrameNode<TSpectral>::new_instance(Atmosphere<TSpectral>* atmosphere)
+    {
+        auto child = std::make_shared<Instance<TSpectral>>(this->scene_, atmosphere);
+        child->set_parent_(this);
+
+        HUIRA_LOG_INFO(this->get_info() + " - Added: " + child->get_info());
+
+        children_.push_back(child);
+        return child;
     }
 
 

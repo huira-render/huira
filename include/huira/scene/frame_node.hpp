@@ -50,6 +50,7 @@ namespace huira {
         void delete_child(std::weak_ptr<Node<TSpectral>> child);
 
         // Factory methods for leaf nodes:
+        std::weak_ptr<Instance<TSpectral>> new_instance(Atmosphere<TSpectral>* atmosphere);
         std::weak_ptr<Instance<TSpectral>> new_instance(Mesh<TSpectral>* mesh);
         std::weak_ptr<Instance<TSpectral>> new_instance(Light<TSpectral>* light);
         std::weak_ptr<Instance<TSpectral>> new_instance(UnresolvedObject<TSpectral>* unresolved_object);

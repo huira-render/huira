@@ -7,10 +7,12 @@
 #include <unordered_map>
 #include <vector>
 
+#include "huira/assets/atmosphere.hpp"
 #include "huira/assets/mesh.hpp"
 #include "huira/assets/model.hpp"
 #include "huira/assets/io/model_loader.hpp"
 #include "huira/core/concepts/spectral_concepts.hpp"
+#include "huira/handles/atmosphere_handle.hpp"
 #include "huira/handles/model_handle.hpp"
 #include "huira/handles/root_frame_handle.hpp"
 #include "huira/handles/material_handle.hpp"
@@ -59,6 +61,13 @@ namespace huira {
         void set_name(const MeshHandle<TSpectral>& mesh_handle, const std::string& name);
         MeshHandle<TSpectral> get_mesh(const std::string& name);
         void delete_mesh(const MeshHandle<TSpectral>& mesh_handle);
+
+        AtmosphereHandle<TSpectral> new_earth_atmosphere(std::string name = "");
+        AtmosphereHandle<TSpectral> new_mars_atmosphere(std::string name = "");
+        AtmosphereHandle<TSpectral> add_atmosphere(Atmosphere<TSpectral>&& atmosphere, std::string name = "");
+        void set_name(const AtmosphereHandle<TSpectral>& atmosphere_handle, const std::string& name);
+        AtmosphereHandle<TSpectral> get_atmosphere(const std::string& name);
+        void delete_atmosphere(const AtmosphereHandle<TSpectral>& atmosphere_handle);
 
         LightHandle<TSpectral> new_sphere_light(const units::Meter& radius, const units::SpectralWattsPerMeterSquaredSteradian<TSpectral>& spectral_radiance, std::string name = "");
         LightHandle<TSpectral> new_sphere_light(const units::Meter& radius, const units::SpectralWatts<TSpectral>& spectral_power, std::string name = "");
@@ -133,6 +142,7 @@ namespace huira {
 
     private:
         // Assets:
+        NameRegistry<Atmosphere<TSpectral>> atmospheres_;
         NameRegistry<Mesh<TSpectral>> meshes_;
         NameRegistry<Light<TSpectral>> lights_;
         NameRegistry<UnresolvedObject<TSpectral>> unresolved_objects_;
