@@ -11,7 +11,7 @@ namespace huira {
             device_ = rtcNewDevice(config);
             if (!device_) {
                 HUIRA_THROW_ERROR("EmbreeDevice::EmbreeDevice - Failed to create Embree device (error: "
-                    + std::to_string(rtcGetDeviceError(nullptr)) + ").");
+                    + std::to_string(static_cast<int>(rtcGetDeviceError(nullptr))) + ").");
             }
         }
 
