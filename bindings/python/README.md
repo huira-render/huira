@@ -19,9 +19,10 @@ Initial work on Huira has been on the basic architecture as well as distribution
 
 If there are features you wish to see, that you don't see listed here, please feel free to submit a [Feature Request](https://github.com/huira-render/huira/issues/new?template=feature_request.md)
 
-## Currently Stable Features (as of v0.9.4)
+## Currently Stable Features (as of v0.9.5)
 - Radiometrically accurate rendering
 - Planetary BRDFS including Lambertian, Oren-Nayar, Cook-Torrance, McEwen, Lommel-Seeliger
+- Planetary Atmospheres
 - Calibrated camera distortion models and common camera controls
 - Motion blur
 - Depth-of-Field
@@ -35,7 +36,6 @@ If there are features you wish to see, that you don't see listed here, please fe
 ## Features Coming Soon (Order of Priority)
 | Feature | Status | Expected by | Version |
 | --- | --- | --- | --- |
-| Planetary Atmospheres | In-Progress | 5/1/26 | v0.9.5 |
 | Digital Elevation Maps | In-Progress | 5/1/26 | v0.9.6 |
 | Level-of-Detail | Designed | 5/1/26 | v0.9.7 |
 | Solar Radiation Pressure | Designed | 6/1/26 | v1.0.X |
