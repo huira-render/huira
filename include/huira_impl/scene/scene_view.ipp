@@ -639,7 +639,8 @@ namespace huira {
 
             if (!geom) {
                 RTCError err = rtcGetDeviceError(device_->get());
-                HUIRA_THROW_ERROR("Embree failed to create SPHERE_POINT. Ensure EMBREE_GEOMETRY_SPHERE is enabled in your build. Error: " + std::to_string(err));
+                HUIRA_THROW_ERROR("Embree failed to create SPHERE_POINT. Ensure EMBREE_GEOMETRY_SPHERE is enabled in your build. Error: " +
+                    std::to_string(static_cast<int>(err)));
             }
 
             float* vertex = static_cast<float*>(rtcSetNewGeometryBuffer(geom,
@@ -647,7 +648,8 @@ namespace huira {
 
             if (!vertex) {
                 RTCError err = rtcGetDeviceError(device_->get());
-                HUIRA_THROW_ERROR("Embree failed to allocate sphere buffer. Error: " + std::to_string(err));
+                HUIRA_THROW_ERROR("Embree failed to allocate sphere buffer. Error: " +
+                    std::to_string(static_cast<int>(err)));
             }
 
             // The sphere itself sits statically at the origin
