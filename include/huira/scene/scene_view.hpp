@@ -105,7 +105,7 @@ namespace huira {
 
         void build_tlas_();
 
-        RTCDevice device_ = nullptr;
+        std::shared_ptr<EmbreeDevice> device_ = nullptr;
         RTCScene tlas_ = nullptr;
 
         uint32_t MASK_GEOMETRY_ = 0x01;

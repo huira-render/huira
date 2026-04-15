@@ -4,11 +4,12 @@
 #include <memory>
 #include <string>
 
-#include <embree4/rtcore.h>
+#include "embree4/rtcore.h"
 
 #include "huira/core/types.hpp"
 #include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/materials/material.hpp"
+#include "huira/scene/embree_device.hpp"
 #include "huira/scene/scene_object.hpp"
 
 namespace huira {
@@ -41,7 +42,7 @@ namespace huira {
         Mesh(Mesh&& other) noexcept;
         Mesh& operator=(Mesh&& other) noexcept;
 
-        void set_device(RTCDevice device) noexcept { device_ = device; }
+        void set_device(std::shared_ptr<EmbreeDevice> device) noexcept { device_ = device; }
 
         void set_material(Material<TSpectral>* material);
         [[nodiscard]] Material<TSpectral>* material() const noexcept { return material_; }
@@ -70,7 +71,7 @@ namespace huira {
         Material<TSpectral>* material_ = nullptr;
         TangentBuffer tangent_buffer_;
 
-        RTCDevice device_ = nullptr;
+        std::shared_ptr<EmbreeDevice> device_ = nullptr;
         mutable RTCScene blas_ = nullptr;
 
         std::uint64_t id_ = 0;

@@ -3,6 +3,7 @@
 
 #include "tbb/parallel_for.h"
 #include "tbb/blocked_range.h"
+#include "embree4/rtcore.h"
 
 #include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/assets/io/model_loader.hpp"
@@ -37,6 +38,7 @@ namespace huira {
         : root_node_(std::make_shared<FrameNode<TSpectral>>(this))
         , root(root_node_)
     {
+        HUIRA_TRACE_SCOPE("Scene::Scene");
         root_node_->set_spice("SOLAR SYSTEM BARYCENTER", "J2000");
 
         // Initialize default textures:
@@ -59,22 +61,15 @@ namespace huira {
         );
 
         // Create the Embree RTC Device:
-        device_ = rtcNewDevice(nullptr);
-        if (!device_) {
-            HUIRA_THROW_ERROR("Scene::Scene - Failed to create Embree device (error: "
-                + std::to_string(rtcGetDeviceError(nullptr)) + ").");
-        }
+        device_ = std::make_shared<EmbreeDevice>(nullptr);
 
         set_background_radiance(TSpectral{ 0 });
-
-        HUIRA_LOG_INFO("Scene created");
     };
 
     template <IsSpectral TSpectral>
     Scene<TSpectral>::~Scene()
     {
-        rtcReleaseDevice(device_);
-        HUIRA_LOG_INFO("Scene destroyed");
+        HUIRA_TRACE_SCOPE("Scene::~Scene");
     }
 
 #ifdef _MSC_VER

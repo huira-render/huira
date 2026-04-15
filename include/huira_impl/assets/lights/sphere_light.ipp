@@ -17,6 +17,7 @@ namespace huira {
     SphereLight<TSpectral>::SphereLight(const units::Meter& radius, const units::SpectralWatts<TSpectral>& spectral_power)
         : radius_(std::max(radius.to_si_f(), 1e-5f))
     {
+        HUIRA_LOG_INFO("SphereLight::SphereLight(radius, spectral_power)");
         this->set_spectral_power(spectral_power);
     }
 
@@ -29,7 +30,7 @@ namespace huira {
     SphereLight<TSpectral>::SphereLight(const units::Meter& radius, const units::SpectralWattsPerMeterSquaredSteradian<TSpectral>& spectral_radiance)
         : radius_(std::max(radius.to_si_f(), 1e-5f)), radiance_{spectral_radiance.to_si()}
     {
-        
+        HUIRA_LOG_INFO("SphereLight::SphereLight(radius, spectral_radiance)");
     }
 
     /**
@@ -41,6 +42,7 @@ namespace huira {
     SphereLight<TSpectral>::SphereLight(const units::Meter& radius, const units::Watt& power)
         : radius_(std::max(radius.to_si_f(), 1e-5f))
     {
+        HUIRA_LOG_INFO("SphereLight::SphereLight(radius, power)");
         this->set_spectral_power(power);
     }
 
@@ -53,6 +55,7 @@ namespace huira {
     SphereLight<TSpectral>::SphereLight(const units::Meter& radius, const units::Kelvin& temperature)
         : radius_(std::max(radius.to_si_f(), 1e-5f))
     {
+        HUIRA_LOG_INFO("SphereLight::SphereLight(radius, temperature)");
         this->radiance_ = black_body<TSpectral>(temperature.to_si(), 1000);
     }
 

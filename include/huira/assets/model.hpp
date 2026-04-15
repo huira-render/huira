@@ -36,7 +36,7 @@ namespace huira {
     class Model : public SceneObject<Model<TSpectral>> {
     public:
         Model() : id_(next_id_++) {}
-        ~Model() override = default;
+        ~Model() override { HUIRA_LOG_INFO("Model::~Model()"); }
 
         Model(const Model&) = delete;
         Model& operator=(const Model&) = delete;

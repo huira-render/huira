@@ -20,6 +20,7 @@ namespace huira {
     UnresolvedObject<TSpectral>::UnresolvedObject(const units::SpectralWattsPerMeterSquared<TSpectral>& spectral_irradiance)
         : id_(next_id_++)
     {
+        HUIRA_LOG_INFO("UnresolvedObject::UnresolvedObject(spectral_irradiance)");
         this->set_irradiance(spectral_irradiance);
     }
 
@@ -36,6 +37,7 @@ namespace huira {
     UnresolvedObject<TSpectral>::UnresolvedObject(const units::WattsPerMeterSquared& irradiance)
         : id_(next_id_++)
     {
+        HUIRA_LOG_INFO("UnresolvedObject::UnresolvedObject(irradiance)");
         this->set_irradiance(irradiance);
     }
 

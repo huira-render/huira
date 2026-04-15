@@ -3,6 +3,7 @@
 #include <atomic>
 #include <chrono>
 #include <functional>
+#include <iostream>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -190,7 +191,6 @@ namespace huira {
     inline void enable_console_warning(bool enable = true) {
         Logger::instance().enable_console_warning(enable);
     }
-
 }
 
 /**
@@ -298,5 +298,23 @@ namespace huira {
         std::cerr << huira::red("[ERROR] " + _huira_error_msg) << std::endl; \
         throw std::runtime_error(_huira_error_msg); \
     } while(0)
+
+
+namespace huira {
+    class ScopeLogger {
+    private:
+        std::string scope_name;
+    public:
+        ScopeLogger(std::string name) : scope_name(std::move(name)) {
+            HUIRA_LOG_INFO("[START] " + scope_name);
+        }
+
+        ~ScopeLogger() {
+            HUIRA_LOG_INFO("[DONE ] " + scope_name);
+        }
+    };
+}
+
+#define HUIRA_TRACE_SCOPE(name) huira::ScopeLogger _huira_scope_logger(name)
 
 #include "huira_impl/util/logger.ipp"

@@ -1,13 +1,11 @@
 #pragma once
 
-#include <vector>
+#include <filesystem>
 #include <memory>
-#include <unordered_map>
 #include <stdexcept>
 #include <string>
-#include <filesystem>
-
-#include <embree4/rtcore.h>
+#include <unordered_map>
+#include <vector>
 
 #include "huira/assets/mesh.hpp"
 #include "huira/assets/model.hpp"
@@ -32,7 +30,6 @@ namespace huira {
     // Forward declare:
     template <IsSpectral TSpectral>
     class SceneView;
-
 
     /**
      * @brief Scene graph and asset manager for a rendered world.
@@ -178,7 +175,7 @@ namespace huira {
         void register_node_name_(const std::shared_ptr<Node<TSpectral>>& node, const std::string& name);
 
         /// Embree RTC Device
-        RTCDevice device_;
+        std::shared_ptr<EmbreeDevice> device_;
 
         friend class Node<TSpectral>;
         friend class FrameNode<TSpectral>;

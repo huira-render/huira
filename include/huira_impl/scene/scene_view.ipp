@@ -2,6 +2,8 @@
 #include <vector>
 #include <limits>
 
+#include "embree4/rtcore.h"
+
 #include "huira/assets/lights/light.hpp"
 #include "huira/assets/mesh.hpp"
 
@@ -33,6 +35,9 @@ namespace huira {
         : exposure_interval_{ exposure_interval },
         device_{ scene.device_ }
     {
+        HUIRA_TRACE_SCOPE("SceneView::SceneView - Created over interval [" + std::to_string(exposure_interval.start.et()) +
+            ",  " + std::to_string(exposure_interval.end.et()) + "]");
+
         // Create the temporal samples:
         if (num_temporal_samples < 1) {
             num_temporal_samples = 1;
@@ -134,11 +139,6 @@ namespace huira {
         }
 
         build_tlas_();
-
-        HUIRA_LOG_INFO("SceneView::SceneView - Created over interval [" + std::to_string(exposure_interval.start.et()) +
-            ",  " + std::to_string(exposure_interval.end.et()) + "] " + 
-            "for CameraModel[" + std::to_string(camera_model_->id()) + "] '" + camera_model_->name() + "'." +
-            " MOTION BLUR ON");
     }
 
     /**
@@ -147,11 +147,10 @@ namespace huira {
     template <IsSpectral TSpectral>
     SceneView<TSpectral>::~SceneView()
     {
+        HUIRA_TRACE_SCOPE("SceneView::~SceneView");
         if (tlas_) {
             rtcReleaseScene(tlas_);
         }
-
-        HUIRA_LOG_INFO("SceneView::~SceneView - destroyed, released TLAS and cleared geometry and lights.");
     }
 
 
@@ -568,7 +567,7 @@ namespace huira {
     template <IsSpectral TSpectral>
     void SceneView<TSpectral>::build_tlas_()
     {
-        tlas_ = rtcNewScene(device_);
+        tlas_ = rtcNewScene(device_->get());
         bool motion_blur = (temporal_samples_.size() != 1);
         if (motion_blur) {
             rtcSetSceneFlags(tlas_, RTC_SCENE_FLAG_DYNAMIC);
@@ -583,7 +582,7 @@ namespace huira {
 
                 std::size_t N = batch.instances[inst_idx].size();
 
-                RTCGeometry inst_geom = rtcNewGeometry(device_, RTC_GEOMETRY_TYPE_INSTANCE);
+                RTCGeometry inst_geom = rtcNewGeometry(device_->get(), RTC_GEOMETRY_TYPE_INSTANCE);
                 rtcSetGeometryInstancedScene(inst_geom, mesh_blas);
                 rtcSetGeometryTimeStepCount(inst_geom, static_cast<unsigned int>(N));
 
@@ -634,12 +633,12 @@ namespace huira {
 
 
             // Create a BLAS containing a single static sphere at the origin
-            RTCScene sphere_blas = rtcNewScene(device_);
-            RTCGeometry geom = rtcNewGeometry(device_, RTC_GEOMETRY_TYPE_SPHERE_POINT);
+            RTCScene sphere_blas = rtcNewScene(device_->get());
+            RTCGeometry geom = rtcNewGeometry(device_->get(), RTC_GEOMETRY_TYPE_SPHERE_POINT);
             rtcSetGeometryMask(geom, MASK_LIGHT_);
 
             if (!geom) {
-                RTCError err = rtcGetDeviceError(device_);
+                RTCError err = rtcGetDeviceError(device_->get());
                 HUIRA_THROW_ERROR("Embree failed to create SPHERE_POINT. Ensure EMBREE_GEOMETRY_SPHERE is enabled in your build. Error: " + std::to_string(err));
             }
 
@@ -647,7 +646,7 @@ namespace huira {
                 RTC_BUFFER_TYPE_VERTEX, 0, RTC_FORMAT_FLOAT4, 4 * sizeof(float), 1));
 
             if (!vertex) {
-                RTCError err = rtcGetDeviceError(device_);
+                RTCError err = rtcGetDeviceError(device_->get());
                 HUIRA_THROW_ERROR("Embree failed to allocate sphere buffer. Error: " + std::to_string(err));
             }
 
@@ -664,7 +663,7 @@ namespace huira {
 
 
             // Instance the sphere BLAS into the TLAS
-            RTCGeometry inst_geom = rtcNewGeometry(device_, RTC_GEOMETRY_TYPE_INSTANCE);
+            RTCGeometry inst_geom = rtcNewGeometry(device_->get(), RTC_GEOMETRY_TYPE_INSTANCE);
             rtcSetGeometryInstancedScene(inst_geom, sphere_blas);
             rtcSetGeometryTimeStepCount(inst_geom, static_cast<unsigned int>(N));
 
