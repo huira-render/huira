@@ -15,6 +15,7 @@ namespace huira {
     template <IsSpectral TSpectral>
     CameraModel<TSpectral>::CameraModel() : id_(next_id_++)
     {
+        HUIRA_TRACE_SCOPE("CameraModel::CameraModel()");
         units::Meter diameter(this->focal_length_ / 2.8f);
         this->sensor_ = std::make_unique<SimpleSensor<TSpectral>>();
         this->aperture_ = std::make_unique<CircularAperture<TSpectral>>(diameter);

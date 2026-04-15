@@ -22,6 +22,7 @@ namespace huira {
     template <IsSpectral TSpectral>
     UnresolvedEmitter<TSpectral>::UnresolvedEmitter(const units::SpectralWatts<TSpectral>& spectral_power)
     {
+        HUIRA_LOG_INFO("UnresolvedEmitter::UnresolvedEmitter(spectral_power)");
         this->set_spectral_power(spectral_power);
     }
 
@@ -37,6 +38,7 @@ namespace huira {
     template <IsSpectral TSpectral>
     UnresolvedEmitter<TSpectral>::UnresolvedEmitter(const units::Watt& power)
     {
+        HUIRA_LOG_INFO("UnresolvedEmitter::UnresolvedEmitter(power)");
         this->set_spectral_power(power);
     }
 

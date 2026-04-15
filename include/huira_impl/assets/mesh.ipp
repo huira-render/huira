@@ -1,5 +1,7 @@
 #include <algorithm>
 
+#include "embree4/rtcore.h"
+
 #include "huira/util/logger.hpp"
 
 namespace huira {
@@ -21,6 +23,7 @@ namespace huira {
         vertex_buffer_(std::move(vertex_buffer)),
         id_(next_id_++)
     {
+        HUIRA_TRACE_SCOPE("Mesh::Mesh(index_buffer, vertex_buffer)");
         const auto c = vertex_buffer_.size();
         if (std::ranges::any_of(index_buffer_, [c](std::uint32_t i) { return i >= c; })) {
             HUIRA_THROW_ERROR("Mesh::Mesh - index_buffer contains out-of-bounds indices.");
@@ -34,6 +37,7 @@ namespace huira {
         tangent_buffer_(std::move(tangent_buffer)),
         id_(next_id_++)
     {
+        HUIRA_TRACE_SCOPE("Mesh::Mesh(index_buffer, vertex_buffer, tangent_buffer)");
         const auto vertex_count = vertex_buffer_.size();
         if (std::ranges::any_of(index_buffer_, [vertex_count](std::uint32_t idx) {
             return idx >= vertex_count;
@@ -49,6 +53,7 @@ namespace huira {
     template <IsSpectral TSpectral>
     Mesh<TSpectral>::~Mesh()
     {
+        HUIRA_TRACE_SCOPE("Mesh::~Mesh");
         if (blas_) {
             rtcReleaseScene(blas_);
         }
@@ -128,10 +133,10 @@ namespace huira {
     template <IsSpectral TSpectral>
     void Mesh<TSpectral>::build_blas_() const
     {
-        RTCGeometry geom = rtcNewGeometry(device_, RTC_GEOMETRY_TYPE_TRIANGLE);
+        RTCGeometry geom = rtcNewGeometry(device_->get(), RTC_GEOMETRY_TYPE_TRIANGLE);
         if (!geom) {
             HUIRA_THROW_ERROR("Mesh::build_blas_ - Failed to create Embree geometry (error: "
-                + std::to_string(rtcGetDeviceError(device_)) + ").");
+                + std::to_string(rtcGetDeviceError(device_->get())) + ").");
         }
 
         rtcSetSharedGeometryBuffer(geom,
@@ -151,7 +156,7 @@ namespace huira {
             index_buffer_.size() / 3);
 
         // Check for errors after setting shared buffers (e.g. invalid stride, null pointer):
-        RTCError buffer_error = rtcGetDeviceError(device_);
+        RTCError buffer_error = rtcGetDeviceError(device_->get());
         if (buffer_error != RTC_ERROR_NONE) {
             rtcReleaseGeometry(geom);
             HUIRA_THROW_ERROR("Mesh::build_blas_ - Failed to set shared geometry buffers (error: "
@@ -160,11 +165,11 @@ namespace huira {
 
         rtcCommitGeometry(geom);
 
-        blas_ = rtcNewScene(device_);
+        blas_ = rtcNewScene(device_->get());
         if (!blas_) {
             rtcReleaseGeometry(geom);
             HUIRA_THROW_ERROR("Mesh::build_blas_ - Failed to create Embree BLAS scene (error: "
-                + std::to_string(rtcGetDeviceError(device_)) + ").");
+                + std::to_string(rtcGetDeviceError(device_->get())) + ").");
         }
 
         rtcAttachGeometry(blas_, geom);

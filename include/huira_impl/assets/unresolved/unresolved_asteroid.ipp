@@ -67,6 +67,8 @@ namespace huira {
         light_instance_{ light_instance.get() },
         albedo_{ albedo }
     {
+        HUIRA_LOG_INFO("UnresolvedAsteroid::UnresolvedAsteroid(H, G, light_instance, albedo)");
+
         const Instantiable<TSpectral>& asset = light_instance_->asset();
         auto* light_ptr = std::get_if<Light<TSpectral>*>(&asset);
         if (!light_ptr) {
@@ -107,6 +109,8 @@ namespace huira {
         light_instance_{ light_instance.get() },
         albedo_{ TSpectral{ albedo } }
     {
+        HUIRA_LOG_INFO("UnresolvedAsteroid::UnresolvedAsteroid(H, G, light_instance, albedo)");
+
         const Instantiable<TSpectral>& asset = light_instance_->asset();
         auto* light_ptr = std::get_if<Light<TSpectral>*>(&asset);
         if (!light_ptr) {
