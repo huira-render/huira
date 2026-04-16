@@ -1,3 +1,4 @@
+add_subdirectory(earth)
 add_subdirectory(jupiter_long_range)
 add_subdirectory(lunar_gateway)
 add_subdirectory(moon)

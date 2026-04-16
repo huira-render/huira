@@ -77,12 +77,14 @@ namespace huira {
             const std::vector<Transform<double>>& observer_transforms,
             const std::vector<Transform<double>>& observer_inverses, ObservationMode obs_mode);
 
+        void handle_asset_ptr_(Atmosphere<TSpectral>* atmosphere, const std::vector<Transform<float>>& instance_apparent_transforms);
         void handle_asset_ptr_(Mesh<TSpectral>* mesh, const std::vector<Transform<float>>& instance_apparent_transforms);
         void handle_asset_ptr_(Light<TSpectral>* light, const std::vector<Transform<float>>& instance_apparent_transforms);
         void handle_asset_ptr_(CameraModel<TSpectral>* camera, const std::vector<Transform<float>>& instance_apparent_transforms);
         void handle_asset_ptr_(UnresolvedObject<TSpectral>* light, const std::vector<Transform<float>>& instance_apparent_transforms);
         void handle_asset_ptr_(Model<TSpectral>* model, const std::vector<Transform<float>>& instance_apparent_transforms);
 
+        void add_atmosphere_instance_(std::shared_ptr<Atmosphere<TSpectral>> atmosphere, const std::vector<Transform<float>>& instance_apparent_transforms);
         void add_mesh_instance_(std::shared_ptr<Mesh<TSpectral>> mesh, const std::vector<Transform<float>>& instance_apparent_transforms);
         void add_light_instance_(std::shared_ptr<Light<TSpectral>> light, const std::vector<Transform<float>>& instance_apparent_transforms);
         void add_unresolved_instance_(std::shared_ptr<UnresolvedObject<TSpectral>> unresolved_object, const std::vector<Transform<float>>& instance_apparent_transforms);
@@ -91,6 +93,8 @@ namespace huira {
 
         std::shared_ptr<CameraModel<TSpectral>> camera_model_;
         std::vector<Transform<float>> camera_to_world_;
+
+        std::vector<AtmosphereInstance<TSpectral>> atmospheres_;
 
         std::vector<MeshBatch<TSpectral>> geometry_;
         std::unordered_map<const Mesh<TSpectral>*, std::size_t> batch_lookup_;

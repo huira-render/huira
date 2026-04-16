@@ -3,12 +3,14 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdint>
 #include <vector>
 
 #include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/core/types.hpp"
 #include "huira/core/units/units.hpp"
-#include "huira/logging/logger.hpp"
+#include "huira/scene/scene_object.hpp"
+#include "huira/util/logger.hpp"
 
 namespace huira {
     template <IsSpectral TSpectral>
@@ -123,19 +125,25 @@ namespace huira {
 
 
     template <IsSpectral TSpectral>
-    class Atmosphere {
+    class Atmosphere : public SceneObject<Atmosphere<TSpectral>> {
     public:
+        Atmosphere() : id_(next_id_++) {}
         explicit Atmosphere(AtmosphereParameters<TSpectral> parameters) :
             parameters_(std::move(parameters)),
             equatorial_radius_(parameters_.equatorial_radius.to_si_f()),
             polar_radius_(parameters_.polar_radius.to_si_f()),
-            max_height_(parameters_.max_height.to_si_f())
+            max_height_(parameters_.max_height.to_si_f()),
+            id_(next_id_++)
         {
             if (equatorial_radius_ <= 0.0f || polar_radius_ <= 0.0f || max_height_ <= 0.0f) {
                 HUIRA_THROW_ERROR("Atmosphere geometry parameters must be positive.");
             }
         }
 
+        Atmosphere(const Atmosphere&) = delete;
+        Atmosphere& operator=(const Atmosphere&) = delete;
+        Atmosphere(Atmosphere&&) noexcept = default;
+        Atmosphere& operator=(Atmosphere&&) noexcept = default;
 
         float calculate_altitude(const Vec3<float>& local_sample_pos) const {
             float r_sample = std::sqrt(local_sample_pos.x * local_sample_pos.x +
@@ -159,12 +167,18 @@ namespace huira {
             return parameters_;
         }
 
+        std::uint64_t id() const override { return id_; }
+        std::string type() const override { return "Atmosphere"; }
+
     private:
         AtmosphereParameters<TSpectral> parameters_;
 
         float equatorial_radius_;
         float polar_radius_;
         float max_height_;
+
+        std::uint64_t id_ = 0;
+        static inline std::uint64_t next_id_ = 0;
     };
 
     namespace atmosphere {

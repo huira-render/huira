@@ -414,6 +414,17 @@ namespace huira {
         }
     }
 
+    /**
+     * @brief Handle atmosphere asset pointer and add to atmosphere instances.
+     * @param atmosphere Atmosphere pointer
+     * @param instance_apparent_transforms Render transforms
+     */
+    template <IsSpectral TSpectral>
+    void SceneView<TSpectral>::handle_asset_ptr_(Atmosphere<TSpectral>* atmosphere, const std::vector<Transform<float>>& instance_apparent_transforms)
+    {
+        add_atmosphere_instance_(atmosphere->shared_from_this(), instance_apparent_transforms);
+    }
+
 
     /**
      * @brief Handle mesh asset pointer and add to geometry batch.
@@ -479,6 +490,21 @@ namespace huira {
         traverse_model_graph_(model_graph_ptr, instance_apparent_transforms);
     }
 
+
+    /**
+     * @brief Add an atmosphere instance to the atmospheres vector.
+     * @param atmosphere Atmosphere pointer
+     * @param render_transform Render transform
+     */
+    template <IsSpectral TSpectral>
+    void SceneView<TSpectral>::add_atmosphere_instance_(std::shared_ptr<Atmosphere<TSpectral>> atmosphere, const std::vector<Transform<float>>& instance_apparent_transforms)
+    {
+        AtmosphereInstance<TSpectral> instance;
+        instance.atmosphere = atmosphere;
+        instance.transforms = instance_apparent_transforms;
+    
+        atmospheres_.push_back(std::move(instance));
+    }
 
     /**
      * @brief Add a mesh instance to the geometry batch.
@@ -564,6 +590,9 @@ namespace huira {
         }
     }
 
+    /**
+     * @brief Builds the top-level acceleration structure (TLAS) for the scene.
+     */
     template <IsSpectral TSpectral>
     void SceneView<TSpectral>::build_tlas_()
     {
