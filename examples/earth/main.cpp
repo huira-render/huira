@@ -9,21 +9,27 @@ namespace fs = std::filesystem;
 
 using namespace huira::units::literals;
 
-using TSpectral = huira::Visible8;
+using TSpectral = huira::RGB;
 
-static fs::path parse_input_paths(int argc, char** argv) {
-    if (argc != 2) {
-        std::cerr << "Usage: earth <earth.glb_path>" << std::endl;
+static std::pair<fs::path, fs::path> parse_input_paths(int argc, char** argv) {
+    if (argc != 3) {
+        std::cerr << "Usage: earth <earth.glb_path> <kernel_path>" << std::endl;
         std::exit(1);
     }
     fs::path earth_path = argv[1];
-    return earth_path;
+    fs::path kernel_path = argv[2];
+    return { earth_path, kernel_path };
 }
 
 
 int main(int argc, char** argv) {
     // Parsing input paths
-    fs::path earth_path = parse_input_paths(argc, argv);
+    auto [earth_path, kernel_path] = parse_input_paths(argc, argv);
+
+    // Load the require SPICE kernels
+    huira::spice::furnsh(kernel_path / "spk/de440s.bsp");
+    huira::spice::furnsh(kernel_path / "pck/earth_latest_high_prec.bpc");
+    huira::spice::furnsh(kernel_path / "pck/earth_fixed.tf");
 
     // Create the scene
     huira::Scene<TSpectral> scene;
@@ -38,10 +44,10 @@ int main(int argc, char** argv) {
     camera_model.configure_sensor_from_size({ 1080, 1080 }, 6_mm);
 
     // Set camera exposure settings
-    camera_model.set_fstop(18);
-    camera_model.set_sensor_gain(0.8f);
+    camera_model.set_fstop(8);
+    camera_model.set_sensor_gain(1.f);
     camera_model.set_sensor_bit_depth(12);
-    camera_model.set_sensor_quantum_efficiency(0.6);
+    camera_model.set_sensor_quantum_efficiency(0.8);
     camera_model.set_sensor_full_well_capacity(20000);
 
     // Huira uses the OpenCV convention by default, which is
@@ -53,19 +59,20 @@ int main(int argc, char** argv) {
     // Create instance of the camera:
     auto eci = scene.root.new_spice_subframe("EARTH", "J2000");
     auto navcam = eci.new_instance(camera_model);
-    navcam.set_position(0_m, 10000_Km, 0_m);
-    navcam.set_euler_angles(90_deg, 0_deg, 180_deg);
-
-    // Load the Earth model
-    auto earth_model = scene.load_model(earth_path);
-
-    // Create an atmosphere:
-    auto earth_atmosphere = scene.new_earth_atmosphere();
+    navcam.set_position(100000_Km, 0_Km, 0_m);
+    navcam.set_euler_angles(90_deg, 0_deg, 90_deg);
 
     // Create the Earth frame:
     auto ecef = scene.root.new_spice_subframe("EARTH", "ITRF93");
-    ecef.new_instance(earth_model);
-    ecef.new_instance(earth_atmosphere);
+
+    // Load the Earth model
+    auto earth_model = scene.load_model(earth_path);
+    auto earth = ecef.new_instance(earth_model);
+    earth.set_scale(6371*1000);
+
+    // Create an atmosphere:
+    //auto earth_atmosphere = scene.new_earth_atmosphere();
+    //ecef.new_instance(earth_atmosphere);
 
     // Create the sun
     auto sun_light = scene.new_sun_light();

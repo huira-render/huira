@@ -167,6 +167,10 @@ namespace huira {
             return parameters_;
         }
 
+        units::Meter equatorial_radius() const { return units::Meter{equatorial_radius_}; }
+        units::Meter polar_radius() const { return units::Meter{polar_radius_}; }
+        units::Meter max_height() const { return units::Meter{max_height_}; }
+
         std::uint64_t id() const override { return id_; }
         std::string type() const override { return "Atmosphere"; }
 

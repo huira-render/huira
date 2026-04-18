@@ -25,6 +25,7 @@ namespace huira {
     class Renderer;
 
     enum class GeometryType {
+        Atmosphere,
         Mesh,
         Light
     };
@@ -117,9 +118,12 @@ namespace huira {
 
         struct InstanceMapping {
             GeometryType type;
-            std::size_t batch_index;    // Index into geometry_
-            std::size_t instance_index; // Index into geometry_[batch_index].instances
-            std::size_t light_index;    // Index into lights_ if type == Light
+            std::size_t batch_index;      // Index into geometry_ if type == Mesh
+            std::size_t instance_index;   // Index into geometry_[batch_index].instances if type == Mesh
+
+            std::size_t light_index;      // Index into lights_ if type == Light
+
+            std::size_t atmosphere_index; // Index into atmospheres_ if type == Atmosphere
         };
         std::vector<InstanceMapping> instance_mappings_;
 
