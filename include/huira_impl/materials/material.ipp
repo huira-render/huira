@@ -19,6 +19,10 @@ namespace huira {
             params.albedo = albedo_image_->sample_bilinear(uv.x, uv.y) * albedo_factor_ * isect.vertex_albedo;
         }
 
+        if (eval_alpha_) {
+            params.opacity = alpha_image_->sample_bilinear(uv.x, uv.y) * alpha_factor_;
+        }
+
         if (eval_metallic_) {
             params.metallic = metallic_image_->sample_bilinear(uv.x, uv.y) * metallic_factor_;
         }
@@ -118,6 +122,25 @@ namespace huira {
     }
 
     template <IsSpectral TSpectral>
+    void Material<TSpectral>::set_alpha(const Image<float>* alpha_image)
+    {
+        alpha_image_ = alpha_image;
+    }
+
+    template <IsSpectral TSpectral>
+    void Material<TSpectral>::set_alpha_factor(float alpha_factor)
+    {
+        alpha_factor_ = alpha_factor;
+    }
+
+    template <IsSpectral TSpectral>
+    void Material<TSpectral>::reset_alpha()
+    {
+        alpha_image_ = default_alpha_image_;
+        alpha_factor_ = 1.0f;
+    }
+
+    template <IsSpectral TSpectral>
     void Material<TSpectral>::set_metallic_image(const Image<float>* metallic_image)
     {
         metallic_image_ = metallic_image;
@@ -198,11 +221,13 @@ namespace huira {
     Material<TSpectral>::Material(
         const BSDF<TSpectral>& bsdf,
         const Image<TSpectral>* albedo_image,
+        const Image<float>* alpha_image,
         const Image<float>* metallic_image,
         const Image<float>* roughness_image,
         const Image<Vec3<float>>* normal_image,
         const Image<TSpectral>* emissive_image) :
         default_albedo_image_{ albedo_image },
+        default_alpha_image_{ alpha_image },
         default_metallic_image_{ metallic_image },
         default_roughness_image_{ roughness_image },
         default_normal_image_{ normal_image },
@@ -210,6 +235,7 @@ namespace huira {
         id_(next_id_++)
     {
         albedo_image_ = default_albedo_image_;
+        alpha_image_ = default_alpha_image_;
         metallic_image_ = default_metallic_image_;
         roughness_image_ = default_roughness_image_;
         normal_image_ = default_normal_image_;
