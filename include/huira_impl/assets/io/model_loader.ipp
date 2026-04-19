@@ -379,7 +379,7 @@ namespace huira {
                 material.set_albedo_factor(ctx.spectral_conversion(RGB{ base_color.r, base_color.g, base_color.b }));
             }
 
-            // Replace the separate roughness/metallic loading with:
+            // Load roughness and metallic from packed textures:
             if (ai_mat->GetTextureCount(aiTextureType_DIFFUSE_ROUGHNESS) > 0 ||
                 ai_mat->GetTextureCount(aiTextureType_METALNESS) > 0)
             {
@@ -406,6 +406,16 @@ namespace huira {
                     material.set_roughness_image(rough_handle);
                     material.set_metallic_image(metal_handle);
                 }
+            }
+
+            float roughness_factor = 1.0f;
+            if (ai_mat->Get(AI_MATKEY_ROUGHNESS_FACTOR, roughness_factor) == AI_SUCCESS) {
+                material.set_roughness_factor(roughness_factor);
+            }
+
+            float metallic_factor = 1.0f;
+            if (ai_mat->Get(AI_MATKEY_METALLIC_FACTOR, metallic_factor) == AI_SUCCESS) {
+                material.set_metallic_factor(metallic_factor);
             }
 
             // Assign normals:

@@ -33,6 +33,7 @@ int main(int argc, char** argv) {
 
     // Create the scene
     huira::Scene<TSpectral> scene;
+    scene.set_background_radiance(TSpectral{ 1.f, 1.f, 1.f });
 
     // Set the observation time
     huira::Time time("2019-02-06T10:27:00");
@@ -88,7 +89,7 @@ int main(int argc, char** argv) {
     huira::Renderer<TSpectral> renderer;
 
     // Create a scene view over the exposure interval
-    std::size_t num_blur_samples = 1;
+    std::size_t num_blur_samples = 100;
     auto scene_view = huira::SceneView<TSpectral>(scene, exposure_interval, navcam, huira::ObservationMode::ABERRATED_STATE, num_blur_samples);
 
     // Render the current scene view
