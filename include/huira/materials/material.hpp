@@ -110,6 +110,10 @@ namespace huira {
         const Image<Vec3<float>>* normal_image_;
         const Image<TSpectral>* emissive_image_;
 
+        float alpha_factor() const noexcept { return alpha_factor_; }
+        bool has_alpha() const noexcept { return has_alpha_; }
+        bool has_alpha_texture() const noexcept { return alpha_image_ != default_alpha_image_; }
+
     private:
         Material(
             const BSDF<TSpectral>& bsdf,
@@ -123,7 +127,7 @@ namespace huira {
         bool eval_albedo_ = true;
         const Image<TSpectral>* default_albedo_image_;
 
-        bool eval_alpha_ = true;
+        bool has_alpha_ = false;
         const Image<float>* default_alpha_image_;
 
         bool eval_metallic_ = true;

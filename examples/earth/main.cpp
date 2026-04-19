@@ -45,7 +45,7 @@ int main(int argc, char** argv) {
     camera_model.configure_sensor_from_size({ 1080, 1080 }, 6_mm);
 
     // Set camera exposure settings
-    camera_model.set_fstop(8);
+    camera_model.set_fstop(12);
     camera_model.set_sensor_gain(1.f);
     camera_model.set_sensor_bit_depth(12);
     camera_model.set_sensor_quantum_efficiency(0.8);
@@ -87,9 +87,11 @@ int main(int argc, char** argv) {
 
     // Create the renderer
     huira::Renderer<TSpectral> renderer;
+    renderer.set_max_bounces(3);
+    renderer.set_samples_per_pixel(100);
 
     // Create a scene view over the exposure interval
-    std::size_t num_blur_samples = 100;
+    std::size_t num_blur_samples = 1;
     auto scene_view = huira::SceneView<TSpectral>(scene, exposure_interval, navcam, huira::ObservationMode::ABERRATED_STATE, num_blur_samples);
 
     // Render the current scene view

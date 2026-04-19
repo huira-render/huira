@@ -19,9 +19,7 @@ namespace huira {
             params.albedo = albedo_image_->sample_bilinear(uv.x, uv.y) * albedo_factor_ * isect.vertex_albedo;
         }
 
-        if (eval_alpha_) {
-            params.opacity = alpha_image_->sample_bilinear(uv.x, uv.y) * alpha_factor_;
-        }
+        params.opacity = alpha_image_->sample_bilinear(uv.x, uv.y) * alpha_factor_;
 
         if (eval_metallic_) {
             params.metallic = metallic_image_->sample_bilinear(uv.x, uv.y) * metallic_factor_;
@@ -125,12 +123,16 @@ namespace huira {
     void Material<TSpectral>::set_alpha(const Image<float>* alpha_image)
     {
         alpha_image_ = alpha_image;
+        has_alpha_ = true;
     }
 
     template <IsSpectral TSpectral>
     void Material<TSpectral>::set_alpha_factor(float alpha_factor)
     {
         alpha_factor_ = alpha_factor;
+        if (alpha_factor_ < 1.0f) {
+            has_alpha_ = true;
+        }
     }
 
     template <IsSpectral TSpectral>
@@ -138,6 +140,7 @@ namespace huira {
     {
         alpha_image_ = default_alpha_image_;
         alpha_factor_ = 1.0f;
+        has_alpha_ = false;
     }
 
     template <IsSpectral TSpectral>
