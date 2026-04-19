@@ -160,6 +160,7 @@ namespace huira {
 
         // Default textures:
         std::unique_ptr<Image<TSpectral>>   default_albedo_image_;
+        std::unique_ptr<Image<float>>       default_alpha_image_;
         std::unique_ptr<Image<float>>       default_metallic_image_;
         std::unique_ptr<Image<float>>       default_roughness_image_;
         std::unique_ptr<Image<Vec3<float>>> default_normal_image_;

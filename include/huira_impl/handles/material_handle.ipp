@@ -25,6 +25,24 @@ namespace huira {
     }
 
     template <IsSpectral TSpectral>
+    void MaterialHandle<TSpectral>::set_alpha(const TextureHandle<float>& alpha_texture)
+    {
+        this->get_()->set_alpha(alpha_texture.image());
+    }
+
+    template <IsSpectral TSpectral>
+    void MaterialHandle<TSpectral>::set_alpha_factor(float alpha_factor)
+    {
+        this->get_()->set_alpha_factor(alpha_factor);
+    }
+
+    template <IsSpectral TSpectral>
+    void MaterialHandle<TSpectral>::reset_alpha()
+    {
+        this->get_()->reset_alpha();
+    }
+
+    template <IsSpectral TSpectral>
     void MaterialHandle<TSpectral>::set_metallic_image(const TextureHandle<float>& metallic_texture)
     {
         this->get_()->set_metallic_image(metallic_texture.image());

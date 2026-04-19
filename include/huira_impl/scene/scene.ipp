@@ -45,6 +45,7 @@ namespace huira {
 
         // Initialize default textures:
         default_albedo_image_ = std::make_unique<Image<TSpectral>>(1, 1, TSpectral{ 1 });
+        default_alpha_image_ = std::make_unique<Image<float>>(1, 1, 1.f);
         default_metallic_image_ = std::make_unique<Image<float>>(1, 1, 0.f);
         default_roughness_image_ = std::make_unique<Image<float>>(1, 1, 0.5f);
         default_normal_image_ = std::make_unique<Image<Vec3<float>>>(1, 1, Vec3<float>{0.f, 0.f, 1.0});
@@ -55,6 +56,7 @@ namespace huira {
             new Material<TSpectral>(
                 LambertBSDF<TSpectral>(),
                 default_albedo_image_.get(),
+                default_alpha_image_.get(),
                 default_metallic_image_.get(),
                 default_roughness_image_.get(),
                 default_normal_image_.get(),
@@ -630,6 +632,7 @@ namespace huira {
             new Material<TSpectral>(
             bsdf,
             default_albedo_image_.get(),
+            default_alpha_image_.get(),
             default_metallic_image_.get(),
             default_roughness_image_.get(),
             default_normal_image_.get(),

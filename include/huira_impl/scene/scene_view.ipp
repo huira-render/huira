@@ -696,6 +696,33 @@ namespace huira {
             const auto& batch = geometry_[batch_idx];
             RTCScene mesh_blas = batch.mesh->blas();
 
+            const auto* material = batch.mesh->material();
+            bool needs_alpha = material->has_alpha();
+
+            if (needs_alpha) {
+                RTCGeometry geom = rtcGetGeometry(mesh_blas, 0);
+
+                if (geom) {
+                    auto context = std::make_unique<AlphaFilterContext>();
+                    context->material = material;
+                    context->mesh = batch.mesh.get();
+
+                    rtcSetGeometryUserData(geom, context.get());
+                    rtcSetGeometryOccludedFilterFunction(geom, alpha_occlusion_filter_);
+                    rtcSetGeometryIntersectFilterFunction(geom, alpha_intersection_filter_);
+
+                    RTCError err = rtcGetDeviceError(device_->get());
+                    if (err != RTC_ERROR_NONE) {
+                        HUIRA_THROW_ERROR("Embree failed to set filter function. Error code: " + std::to_string(err));
+                    }
+
+                    rtcCommitGeometry(geom);
+                    rtcCommitScene(mesh_blas);
+
+                    filter_contexts_.push_back(std::move(context));
+                }
+            }
+
             for (std::size_t inst_idx = 0; inst_idx < batch.instances.size(); ++inst_idx) {
 
                 std::size_t N = batch.instances[inst_idx].size();
@@ -821,5 +848,61 @@ namespace huira {
         }
 
         rtcCommitScene(tlas_);
+    }
+
+    template <IsSpectral TSpectral>
+    void SceneView<TSpectral>::alpha_occlusion_filter_(const RTCFilterFunctionNArguments* args) {
+        if (args->N != 1) {
+            return;
+        }
+
+        int* valid = args->valid;
+        if (*valid == 0) {
+            return;
+        }
+
+        auto* context = static_cast<const AlphaFilterContext*>(args->geometryUserPtr);
+        const auto* material = context->material;
+        const auto* mesh = context->mesh;
+
+        // Retrieve UV coordinate for the hit point
+        unsigned int primID = RTCHitN_primID(args->hit, args->N, 0);
+        float u = RTCHitN_u(args->hit, args->N, 0);
+        float v = RTCHitN_v(args->hit, args->N, 0);
+        float w = 1.0f - u - v;
+
+        const auto& indices = mesh->index_buffer();
+        const auto& vertices = mesh->vertex_buffer();
+
+        uint32_t idx0 = indices[primID * 3 + 0];
+        uint32_t idx1 = indices[primID * 3 + 1];
+        uint32_t idx2 = indices[primID * 3 + 2];
+
+        const Vec2<float>& uv0 = vertices[idx0].uv;
+        const Vec2<float>& uv1 = vertices[idx1].uv;
+        const Vec2<float>& uv2 = vertices[idx2].uv;
+
+        Vec2<float> uv = uv0 * w + uv1 * u + uv2 * v;
+
+        float alpha = material->alpha_factor();
+        if (material->has_alpha_texture()) {
+            alpha *= material->alpha_image_->sample_bilinear(uv.x, uv.y);
+        }
+        
+        if (alpha < 1.0f) {
+            thread_local std::mt19937 generator(std::random_device{}());
+            thread_local std::uniform_real_distribution<float> distribution(0.0f, 1.0f);
+
+            float random_val = distribution(generator);
+
+            if (random_val > alpha) {
+                *valid = 0;
+            }
+        }
+    }
+
+    template <IsSpectral TSpectral>
+    void SceneView<TSpectral>::alpha_intersection_filter_(const RTCFilterFunctionNArguments* args) {
+        alpha_occlusion_filter_(args);
     }
 }

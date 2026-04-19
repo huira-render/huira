@@ -26,6 +26,10 @@ namespace huira {
         void set_albedo_factor(TSpectral albedo_factor);
         void reset_albedo();
 
+        void set_alpha(const TextureHandle<float>& alpha_texture);
+        void set_alpha_factor(float alpha_factor);
+        void reset_alpha();
+
         void set_metallic_image(const TextureHandle<float>& metallic_texture);
         void set_metallic_factor(float metallic_factor);
         void reset_metallic();

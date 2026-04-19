@@ -127,6 +127,15 @@ namespace huira {
         };
         std::vector<InstanceMapping> instance_mappings_;
 
+
+        struct AlphaFilterContext {
+            const Material<TSpectral>* material;
+            const Mesh<TSpectral>* mesh;
+        };
+        std::vector<std::unique_ptr<AlphaFilterContext>> filter_contexts_;
+        static void alpha_occlusion_filter_(const RTCFilterFunctionNArguments* args);
+        static void alpha_intersection_filter_(const RTCFilterFunctionNArguments* args);
+
         friend class Renderer<TSpectral>;
     };
 }
