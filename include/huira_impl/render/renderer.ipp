@@ -223,16 +223,29 @@ namespace huira {
 
                                         // Resolve full shading data:
                                         Interaction<TSpectral> isect = scene_view.resolve_hit(ray, hit);
-                                        Vec3<float> new_origin = offset_intersection_(
-                                            isect.position, isect.normal_g);
-                                        isect.position = new_origin;
 
                                         // Look up mesh material:
                                         const auto& batch = scene_view.geometry_[mapping.batch_index];
                                         const auto* material = batch.mesh->material();
 
-                                        // Evaluate material textures:
+                                        // Evaluate material textures to get the opacity parameter:
                                         auto [params, shading_isect] = material->evaluate(isect);
+
+                                        // Stochastic Alpha transparency
+                                        if (params.opacity < 1.0f) {
+                                            if (sampler.get_1d() > params.opacity) {
+                                                Vec3<float> pass_through_normal = (glm::dot(ray.direction(), isect.normal_g) < 0.0f)
+                                                    ? -isect.normal_g
+                                                    : isect.normal_g;
+                                                Vec3<float> pass_through_origin = offset_intersection_(isect.position, pass_through_normal);
+                                                ray = Ray<TSpectral>(pass_through_origin, ray.direction());
+                                                bounce--;
+                                                continue;
+                                            }
+                                        }
+
+                                        Vec3<float> new_origin = offset_intersection_(isect.position, isect.normal_g);
+                                        isect.position = new_origin;
 
                                         // Path regulatization
                                         if (bounce > 0) {

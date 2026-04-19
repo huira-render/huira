@@ -80,6 +80,10 @@ namespace huira {
         void set_albedo_factor(TSpectral albedo_factor);
         void reset_albedo();
 
+        void set_alpha(const Image<float>* alpha_image);
+        void set_alpha_factor(float alpha_factor);
+        void reset_alpha();
+
         void set_metallic_image(const Image<float>* metallic_image);
         void set_metallic_factor(float metallic_factor);
         void reset_metallic();
@@ -100,15 +104,21 @@ namespace huira {
         std::string type() const override { return "Material"; }
 
         const Image<TSpectral>* albedo_image_;
+        const Image<float>* alpha_image_;
         const Image<float>* metallic_image_;
         const Image<float>* roughness_image_;
         const Image<Vec3<float>>* normal_image_;
         const Image<TSpectral>* emissive_image_;
 
+        float alpha_factor() const noexcept { return alpha_factor_; }
+        bool has_alpha() const noexcept { return has_alpha_; }
+        bool has_alpha_texture() const noexcept { return alpha_image_ != default_alpha_image_; }
+
     private:
         Material(
             const BSDF<TSpectral>& bsdf,
             const Image<TSpectral>* albedo_image,
+            const Image<float>* alpha_image,
             const Image<float>* metallic_image,
             const Image<float>* roughness_image,
             const Image<Vec3<float>>* normal_image,
@@ -116,6 +126,9 @@ namespace huira {
 
         bool eval_albedo_ = true;
         const Image<TSpectral>* default_albedo_image_;
+
+        bool has_alpha_ = false;
+        const Image<float>* default_alpha_image_;
 
         bool eval_metallic_ = true;
         const Image<float>* default_metallic_image_;
@@ -131,6 +144,7 @@ namespace huira {
         std::unique_ptr<BSDF<TSpectral>> bsdf_;
         
         TSpectral albedo_factor_{ 1.0f };
+        float     alpha_factor_     = 1.0f;
         float     metallic_factor_  = 1.0f;
         float     roughness_factor_ = 1.0f;
         float     normal_factor_    = 1.0f;

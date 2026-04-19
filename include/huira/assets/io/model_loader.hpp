@@ -6,6 +6,7 @@
 #include <string>
 #include <tuple>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "assimp/Importer.hpp"
@@ -86,10 +87,11 @@ namespace huira {
         static void process_materials_(LoadContext& ctx);
 
         template <typename TPixel>
-        static std::optional<TextureHandle<TPixel>> load_material_texture_(
+        static std::pair<std::optional<TextureHandle<TPixel>>, std::optional<TextureHandle<float>>> load_material_texture_(
             const aiMaterial* ai_mat,
             aiTextureType tex_type,
             LoadContext& ctx,
+            bool read_alpha,
             bool is_normal_map = false);
 
         template <typename TPixel>
