@@ -7,7 +7,7 @@
 
 #include "huira/core/spectral_bins.hpp"
 #include "huira/images/image.hpp"
-#include "huira/images/io/color_space.hpp"
+#include "huira/images/io/convert_pixel.hpp"
 #include "huira/images/io/io_util.hpp"
 #include "huira/util/logger.hpp"
 
@@ -272,19 +272,18 @@ namespace huira {
      * @param data Pointer to the TGA data in memory
      * @param size Size of the data in bytes
      * @param read_alpha Whether to load the alpha channel if present (default: true)
-     * @return A pair containing the linear RGB image and an optional alpha image.
+     * @return An ImageBundle<RGB> containing the linear RGB image and an optional alpha image.
      */
-    inline std::pair<Image<RGB>, Image<float>> read_image_tga(const unsigned char* data, std::size_t size, bool read_alpha)
+    inline ImageBundle<RGB> read_image_tga(const unsigned char* data, std::size_t size, bool read_alpha)
     {
         auto tga_data = read_tga_raw_(data, size);
 
-        Image<RGB> image(tga_data.resolution);
-        Image<float> alpha_image(0, 0);
+        ImageBundle<RGB> bundle{ Image<RGB>(tga_data.resolution) };
 
         tga_data.has_alpha = read_alpha && tga_data.has_alpha;
 
         if (tga_data.has_alpha) {
-            alpha_image = Image<float>(tga_data.resolution, 1.0f);
+            bundle.alpha = Image<float>(tga_data.resolution, 1.0f);
         }
 
         for (int y = 0; y < tga_data.height; ++y) {
@@ -292,19 +291,19 @@ namespace huira {
                 std::size_t idx = (static_cast<std::size_t>(y) * static_cast<std::size_t>(tga_data.width)
                     + static_cast<std::size_t>(x)) * static_cast<std::size_t>(tga_data.channels);
 
-                float r = srgb_to_linear(static_cast<float>(tga_data.raw_data[idx + 0]) / 255.0f);
-                float g = srgb_to_linear(static_cast<float>(tga_data.raw_data[idx + 1]) / 255.0f);
-                float b = srgb_to_linear(static_cast<float>(tga_data.raw_data[idx + 2]) / 255.0f);
+                float r = integer_to_float<std::uint8_t>(tga_data.raw_data[idx + 0]);
+                float g = integer_to_float<std::uint8_t>(tga_data.raw_data[idx + 1]);
+                float b = integer_to_float<std::uint8_t>(tga_data.raw_data[idx + 2]);
 
-                image(x, y) = RGB{ r, g, b };
+                bundle.image(x, y) = RGB{ r, g, b };
 
                 if (tga_data.has_alpha) {
-                    alpha_image(x, y) = static_cast<float>(tga_data.raw_data[idx + 3]) / 255.0f;
+                    bundle.alpha(x, y) = integer_to_float<std::uint8_t>(tga_data.raw_data[idx + 3]);
                 }
             }
         }
 
-        return { std::move(image), std::move(alpha_image) };
+        return bundle;
     }
 
     /**
@@ -313,7 +312,7 @@ namespace huira {
      * Convenience overload that reads the file into memory and forwards
      * to the buffer-based implementation.
      */
-    inline std::pair<Image<RGB>, Image<float>> read_image_tga(const fs::path& filepath, bool read_alpha)
+    inline ImageBundle<RGB> read_image_tga(const fs::path& filepath, bool read_alpha)
     {
         auto file_data = read_file_to_buffer(filepath);
         return read_image_tga(file_data.data(), file_data.size(), read_alpha);
@@ -331,19 +330,18 @@ namespace huira {
      * @param data Pointer to the TGA data in memory
      * @param size Size of the data in bytes
      * @param read_alpha Whether to load the alpha channel if present (default: true)
-     * @return A pair containing the linear mono image and an optional alpha image.
+     * @return An ImageBundle<float> containing the linear mono image and an optional alpha image.
      */
-    inline std::pair<Image<float>, Image<float>> read_image_tga_mono(const unsigned char* data, std::size_t size, bool read_alpha)
+    inline ImageBundle<float> read_image_tga_mono(const unsigned char* data, std::size_t size, bool read_alpha)
     {
         auto tga_data = read_tga_raw_(data, size);
 
-        Image<float> image(tga_data.resolution);
-        Image<float> alpha_image(0, 0);
+        ImageBundle<float> bundle{ Image<float>(tga_data.resolution) };
 
         tga_data.has_alpha = read_alpha && tga_data.has_alpha;
 
         if (tga_data.has_alpha) {
-            alpha_image = Image<float>(tga_data.resolution, 1.0f);
+            bundle.alpha = Image<float>(tga_data.resolution, 1.0f);
         }
 
         for (int y = 0; y < tga_data.height; ++y) {
@@ -351,19 +349,19 @@ namespace huira {
                 std::size_t idx = (static_cast<std::size_t>(y) * static_cast<std::size_t>(tga_data.width)
                     + static_cast<std::size_t>(x)) * static_cast<std::size_t>(tga_data.channels);
 
-                float r = srgb_to_linear(static_cast<float>(tga_data.raw_data[idx + 0]) / 255.0f);
-                float g = srgb_to_linear(static_cast<float>(tga_data.raw_data[idx + 1]) / 255.0f);
-                float b = srgb_to_linear(static_cast<float>(tga_data.raw_data[idx + 2]) / 255.0f);
+                float r = integer_to_float<std::uint8_t>(tga_data.raw_data[idx + 0]);
+                float g = integer_to_float<std::uint8_t>(tga_data.raw_data[idx + 1]);
+                float b = integer_to_float<std::uint8_t>(tga_data.raw_data[idx + 2]);
 
-                image(x, y) = (r + g + b) / 3.0f;
+                bundle.image(x, y) = (r + g + b) / 3.0f;
 
                 if (tga_data.has_alpha) {
-                    alpha_image(x, y) = static_cast<float>(tga_data.raw_data[idx + 3]) / 255.0f;
+                    bundle.alpha(x, y) = integer_to_float<std::uint8_t>(tga_data.raw_data[idx + 3]);
                 }
             }
         }
 
-        return { std::move(image), std::move(alpha_image) };
+        return bundle;
     }
 
     /**
@@ -372,7 +370,7 @@ namespace huira {
      * Convenience overload that reads the file into memory and forwards
      * to the buffer-based implementation.
      */
-    inline std::pair<Image<float>, Image<float>> read_image_tga_mono(const fs::path& filepath, bool read_alpha)
+    inline ImageBundle<float> read_image_tga_mono(const fs::path& filepath, bool read_alpha)
     {
         auto file_data = read_file_to_buffer(filepath);
         return read_image_tga_mono(file_data.data(), file_data.size(), read_alpha);

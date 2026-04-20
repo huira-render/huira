@@ -14,6 +14,7 @@
 #include "huira/core/spectral_bins.hpp"
 #include "huira/images/image.hpp"
 #include "huira/images/io/color_space.hpp"
+#include "huira/images/io/convert_pixel.hpp"
 #include "huira/images/io/io_util.hpp"
 #include "huira/util/logger.hpp"
 
@@ -435,9 +436,9 @@ namespace huira {
      * @param data Pointer to the TIFF data in memory
      * @param size Size of the data in bytes
      * @param read_alpha If false, alpha channel is not extracted even if present
-     * @return A pair containing the linear RGB image and an optional alpha image.
+     * @return An ImageBundle<RGB> containing the linear RGB image and an optional alpha image.
      */
-    inline std::pair<Image<RGB>, Image<float>> read_image_tiff_rgb(const unsigned char* data, std::size_t size, bool read_alpha)
+    inline ImageBundle<RGB> read_image_tiff_rgb(const unsigned char* data, std::size_t size, bool read_alpha)
     {
         auto tiff_data = read_tiff_raw_(data, size);
 
@@ -450,11 +451,10 @@ namespace huira {
 
         bool extract_alpha = tiff_data.has_alpha && read_alpha;
 
-        Image<RGB> image(tiff_data.resolution);
-        Image<float> alpha_image(0, 0);
+        ImageBundle<RGB> bundle{ Image<RGB>(tiff_data.resolution) };
 
         if (extract_alpha) {
-            alpha_image = Image<float>(tiff_data.resolution, 1.0f);
+            bundle.alpha = Image<float>(tiff_data.resolution, 1.0f);
         }
 
         std::size_t num_pixels = static_cast<std::size_t>(tiff_data.width) * static_cast<std::size_t>(tiff_data.height);
@@ -464,14 +464,14 @@ namespace huira {
                 float v = tiff_data.channels[0][i];
                 int y = static_cast<int>(i / static_cast<std::size_t>(tiff_data.width));
                 int x = static_cast<int>(i % static_cast<std::size_t>(tiff_data.width));
-                image(x, y) = RGB{ v, v, v };
+                bundle.image(x, y) = RGB{ v, v, v };
             }
         }
         else {
             for (std::size_t i = 0; i < num_pixels; ++i) {
                 int y = static_cast<int>(i / static_cast<std::size_t>(tiff_data.width));
                 int x = static_cast<int>(i % static_cast<std::size_t>(tiff_data.width));
-                image(x, y) = RGB{
+                bundle.image(x, y) = RGB{
                     tiff_data.channels[0][i],
                     tiff_data.channels[1][i],
                     tiff_data.channels[2][i]
@@ -483,11 +483,11 @@ namespace huira {
             for (std::size_t i = 0; i < num_pixels; ++i) {
                 int y = static_cast<int>(i / static_cast<std::size_t>(tiff_data.width));
                 int x = static_cast<int>(i % static_cast<std::size_t>(tiff_data.width));
-                alpha_image(x, y) = tiff_data.channels[static_cast<std::size_t>(tiff_data.alpha_index)][i];
+                bundle.alpha(x, y) = tiff_data.channels[static_cast<std::size_t>(tiff_data.alpha_index)][i];
             }
         }
 
-        return { std::move(image), std::move(alpha_image) };
+        return bundle;
     }
 
     /**
@@ -496,7 +496,7 @@ namespace huira {
      * Convenience overload that reads the file into memory and forwards
      * to the buffer-based implementation.
      */
-    inline std::pair<Image<RGB>, Image<float>> read_image_tiff_rgb(const fs::path& filepath, bool read_alpha)
+    inline ImageBundle<RGB> read_image_tiff_rgb(const fs::path& filepath, bool read_alpha)
     {
         auto file_data = read_file_to_buffer(filepath);
         return read_image_tiff_rgb(file_data.data(), file_data.size(), read_alpha);
@@ -517,9 +517,9 @@ namespace huira {
      * @param data Pointer to the TIFF data in memory
      * @param size Size of the data in bytes
      * @param read_alpha If false, alpha channel is not extracted even if present
-     * @return A pair containing the linear mono image and an optional alpha image.
+     * @return An ImageBundle<float> containing the linear mono image and an optional alpha image.
      */
-    inline std::pair<Image<float>, Image<float>> read_image_tiff_mono(const unsigned char* data, std::size_t size, bool read_alpha)
+    inline ImageBundle<float> read_image_tiff_mono(const unsigned char* data, std::size_t size, bool read_alpha)
     {
         auto tiff_data = read_tiff_raw_(data, size);
 
@@ -532,11 +532,10 @@ namespace huira {
 
         bool extract_alpha = tiff_data.has_alpha && read_alpha;
 
-        Image<float> image(tiff_data.resolution);
-        Image<float> alpha_image(0, 0);
+        ImageBundle<float> bundle{ Image<float>(tiff_data.resolution) };
 
         if (extract_alpha) {
-            alpha_image = Image<float>(tiff_data.resolution, 1.0f);
+            bundle.alpha = Image<float>(tiff_data.resolution, 1.0f);
         }
 
         std::size_t num_pixels = static_cast<std::size_t>(tiff_data.width) * static_cast<std::size_t>(tiff_data.height);
@@ -545,14 +544,14 @@ namespace huira {
             for (std::size_t i = 0; i < num_pixels; ++i) {
                 int y = static_cast<int>(i / static_cast<std::size_t>(tiff_data.width));
                 int x = static_cast<int>(i % static_cast<std::size_t>(tiff_data.width));
-                image(x, y) = tiff_data.channels[0][i];
+                bundle.image(x, y) = tiff_data.channels[0][i];
             }
         }
         else {
             for (std::size_t i = 0; i < num_pixels; ++i) {
                 int y = static_cast<int>(i / static_cast<std::size_t>(tiff_data.width));
                 int x = static_cast<int>(i % static_cast<std::size_t>(tiff_data.width));
-                image(x, y) = (tiff_data.channels[0][i] + tiff_data.channels[1][i] + tiff_data.channels[2][i]) / 3.0f;
+                bundle.image(x, y) = (tiff_data.channels[0][i] + tiff_data.channels[1][i] + tiff_data.channels[2][i]) / 3.0f;
             }
         }
 
@@ -560,11 +559,11 @@ namespace huira {
             for (std::size_t i = 0; i < num_pixels; ++i) {
                 int y = static_cast<int>(i / static_cast<std::size_t>(tiff_data.width));
                 int x = static_cast<int>(i % static_cast<std::size_t>(tiff_data.width));
-                alpha_image(x, y) = tiff_data.channels[static_cast<std::size_t>(tiff_data.alpha_index)][i];
+                bundle.alpha(x, y) = tiff_data.channels[static_cast<std::size_t>(tiff_data.alpha_index)][i];
             }
         }
 
-        return { std::move(image), std::move(alpha_image) };
+        return bundle;
     }
 
     /**
@@ -573,7 +572,7 @@ namespace huira {
      * Convenience overload that reads the file into memory and forwards
      * to the buffer-based implementation.
      */
-    inline std::pair<Image<float>, Image<float>> read_image_tiff_mono(const fs::path& filepath, bool read_alpha)
+    inline ImageBundle<float> read_image_tiff_mono(const fs::path& filepath, bool read_alpha)
     {
         auto file_data = read_file_to_buffer(filepath);
         return read_image_tiff_mono(file_data.data(), file_data.size(), read_alpha);

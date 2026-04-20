@@ -1,6 +1,5 @@
 #include <cstddef>
 #include <filesystem>
-#include <utility>
 
 #include "huira/core/concepts/pixel_concepts.hpp"
 #include "huira/util/logger.hpp"
@@ -49,71 +48,73 @@ namespace huira {
         }
     }
 
-    inline std::pair<Image<RGB>, Image<float>> read_image(const fs::path& filepath, bool read_alpha)
+    inline ImageBundle<RGB> read_image(const fs::path& filepath, bool read_alpha)
     {
         ImageFormat fmt = detect_image_format(filepath);
+        auto file_data = read_file_to_buffer(filepath);
+        return read_image(fmt, file_data.data(), file_data.size(), read_alpha);
+    }
 
+    inline ImageBundle<RGB> read_image(ImageFormat fmt, const unsigned char* data, std::size_t size, bool read_alpha)
+    {
         if (fmt == ImageFormat::IMAGE_FORMAT_BMP) {
-            return read_image_bmp(filepath, read_alpha);
+            return read_image_bmp(data, size, read_alpha);
         }
         else if (fmt == ImageFormat::IMAGE_FORMAT_FITS) {
-            HUIRA_THROW_ERROR("read_image - FITS format does not support RGB images. Use read_image_mono instead: " + filepath.string());
-            //auto image = read_image_fits_rgb(filepath);
-            //return { std::move(image), Image<float>(0, 0) };
+            HUIRA_THROW_ERROR("read_image - FITS format is not currently supported.");
         }
         else if (fmt == ImageFormat::IMAGE_FORMAT_HDR) {
-            auto image = read_image_hdr(filepath);
-            return { std::move(image), Image<float>(0, 0) };
+            return read_image_hdr(data, size);
         }
         else if (fmt == ImageFormat::IMAGE_FORMAT_JPEG) {
-            auto image = read_image_jpeg(filepath);
-            return { std::move(image), Image<float>(0, 0) };
+            return read_image_jpeg(data, size);
         }
         else if (fmt == ImageFormat::IMAGE_FORMAT_PNG) {
-            return read_image_png(filepath, read_alpha);
+            return read_image_png(data, size, read_alpha);
         }
         else if (fmt == ImageFormat::IMAGE_FORMAT_TGA) {
-            return read_image_tga(filepath, read_alpha);
+            return read_image_tga(data, size, read_alpha);
         }
         else if (fmt == ImageFormat::IMAGE_FORMAT_TIFF) {
-            return read_image_tiff_rgb(filepath, read_alpha);
+            return read_image_tiff_rgb(data, size, read_alpha);
         }
         else {
-            HUIRA_THROW_ERROR("read_image - Unsupported or unknown image format for file: " + filepath.string());
+            HUIRA_THROW_ERROR("read_image - Unsupported or unknown image format.");
         }
     }
 
-    inline std::pair<Image<float>, Image<float>> read_image_mono(const fs::path& filepath, bool read_alpha)
+    inline ImageBundle<float> read_image_mono(const fs::path& filepath, bool read_alpha)
     {
         ImageFormat fmt = detect_image_format(filepath);
+        auto file_data = read_file_to_buffer(filepath);
+        return read_image_mono(fmt, file_data.data(), file_data.size(), read_alpha);
+    }
 
+    inline ImageBundle<float> read_image_mono(ImageFormat fmt, const unsigned char* data, std::size_t size, bool read_alpha)
+    {
         if (fmt == ImageFormat::IMAGE_FORMAT_BMP) {
-            return read_image_bmp_mono(filepath, read_alpha);
+            return read_image_bmp_mono(data, size, read_alpha);
         }
         else if (fmt == ImageFormat::IMAGE_FORMAT_FITS) {
-            HUIRA_THROW_ERROR("read_image_mono - FITS format is not currently supported for mono images: " + filepath.string());
-            //auto image = read_image_fits_mono(filepath);
-            //return { std::move(image), Image<float>(0, 0) };
+            HUIRA_THROW_ERROR("read_image - FITS format is not currently supported.");
         }
         else if (fmt == ImageFormat::IMAGE_FORMAT_HDR) {
-            auto image = read_image_hdr_mono(filepath);
-            return { std::move(image), Image<float>(0, 0) };
+            return read_image_hdr_mono(data, size);
         }
         else if (fmt == ImageFormat::IMAGE_FORMAT_JPEG) {
-            auto image = read_image_jpeg_mono(filepath);
-            return { std::move(image), Image<float>(0, 0) };
+            return read_image_jpeg_mono(data, size);
         }
         else if (fmt == ImageFormat::IMAGE_FORMAT_PNG) {
-            return read_image_png_mono(filepath, read_alpha);
+            return read_image_png_mono(data, size, read_alpha);
         }
         else if (fmt == ImageFormat::IMAGE_FORMAT_TGA) {
-            return read_image_tga_mono(filepath, read_alpha);
+            return read_image_tga_mono(data, size, read_alpha);
         }
         else if (fmt == ImageFormat::IMAGE_FORMAT_TIFF) {
-            return read_image_tiff_mono(filepath, read_alpha);
+            return read_image_tiff_mono(data, size, read_alpha);
         }
         else {
-            HUIRA_THROW_ERROR("read_image_mono - Unsupported or unknown image format for file: " + filepath.string());
+            HUIRA_THROW_ERROR("read_image - Unsupported or unknown image format.");
         }
     }
 }

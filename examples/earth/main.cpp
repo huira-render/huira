@@ -98,6 +98,6 @@ int main(int argc, char** argv) {
     renderer.render(scene_view, frame_buffer);
 
     // Save the results
-    huira::write_image_png("output/earth.png", frame_buffer.sensor_response(), 8);
-    huira::write_image_png("output/earth_normals.png", huira::normal_map(frame_buffer.camera_normals()), 8);
+    huira::write_image_png("output/earth.png", frame_buffer.sensor_response());
+    huira::write_image_png("output/earth_normals.png", huira::normal_map(frame_buffer.camera_normals()));
 }

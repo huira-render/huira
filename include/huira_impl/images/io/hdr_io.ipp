@@ -10,6 +10,7 @@
 #include "huira/core/spectral_bins.hpp"
 #include "huira/images/image.hpp"
 #include "huira/images/io/io_util.hpp"
+#include "huira/images/io/convert_pixel.hpp"
 #include "huira/util/logger.hpp"
 
 namespace fs = std::filesystem;
@@ -283,24 +284,23 @@ namespace huira {
      *
      * @param data Pointer to the HDR data in memory
      * @param size Size of the data in bytes
-     * @return The linear RGB image.
+     * @return An ImageBundle<RGB> containing the linear RGB image.
      */
-    inline Image<RGB> read_image_hdr(const unsigned char* data, std::size_t size)
+    inline ImageBundle<RGB> read_image_hdr(const unsigned char* data, std::size_t size)
     {
         auto hdr_data = read_hdr_raw_(data, size);
 
-        Image<RGB> image(hdr_data.resolution);
-
+        ImageBundle<RGB> bundle{ Image<RGB>(hdr_data.resolution) };
         for (int y = 0; y < hdr_data.height; ++y) {
             for (int x = 0; x < hdr_data.width; ++x) {
                 std::size_t idx = (static_cast<std::size_t>(y) * static_cast<std::size_t>(hdr_data.width)
                     + static_cast<std::size_t>(x)) * 3;
 
-                image(x, y) = RGB{ hdr_data.raw_data[idx], hdr_data.raw_data[idx + 1], hdr_data.raw_data[idx + 2] };
+                bundle.image(x, y) = RGB{ hdr_data.raw_data[idx], hdr_data.raw_data[idx + 1], hdr_data.raw_data[idx + 2] };
             }
         }
 
-        return image;
+        return bundle;
     }
 
     /**
@@ -310,9 +310,9 @@ namespace huira {
      * to the buffer-based implementation.
      *
      * @param filepath Path to the HDR file to read
-     * @return The linear RGB image.
+     * @return An ImageBundle<RGB> containing the linear RGB image.
      */
-    inline Image<RGB> read_image_hdr(const fs::path& filepath)
+    inline ImageBundle<RGB> read_image_hdr(const fs::path& filepath)
     {
         auto file_data = read_file_to_buffer(filepath);
         return read_image_hdr(file_data.data(), file_data.size());
@@ -329,24 +329,24 @@ namespace huira {
      *
      * @param data Pointer to the HDR data in memory
      * @param size Size of the data in bytes
-     * @return The linear mono image.
+     * @return An ImageBundle<float> containing the linear mono image.
      */
-    inline Image<float> read_image_hdr_mono(const unsigned char* data, std::size_t size)
+    inline ImageBundle<float> read_image_hdr_mono(const unsigned char* data, std::size_t size)
     {
         auto hdr_data = read_hdr_raw_(data, size);
 
-        Image<float> image(hdr_data.resolution);
+        ImageBundle<float> bundle{ Image<float>(hdr_data.resolution) };
 
         for (int y = 0; y < hdr_data.height; ++y) {
             for (int x = 0; x < hdr_data.width; ++x) {
                 std::size_t idx = (static_cast<std::size_t>(y) * static_cast<std::size_t>(hdr_data.width)
                     + static_cast<std::size_t>(x)) * 3;
 
-                image(x, y) = (hdr_data.raw_data[idx] + hdr_data.raw_data[idx + 1] + hdr_data.raw_data[idx + 2]) / 3.0f;
+                bundle.image(x, y) = (hdr_data.raw_data[idx] + hdr_data.raw_data[idx + 1] + hdr_data.raw_data[idx + 2]) / 3.0f;
             }
         }
 
-        return image;
+        return bundle;
     }
 
     /**
@@ -356,9 +356,9 @@ namespace huira {
      * to the buffer-based implementation.
      *
      * @param filepath Path to the HDR file to read
-     * @return The linear mono image.
+     * @return An ImageBundle<float> containing the linear mono image.
      */
-    inline Image<float> read_image_hdr_mono(const fs::path& filepath)
+    inline ImageBundle<float> read_image_hdr_mono(const fs::path& filepath)
     {
         auto file_data = read_file_to_buffer(filepath);
         return read_image_hdr_mono(file_data.data(), file_data.size());

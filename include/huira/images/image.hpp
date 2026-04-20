@@ -151,6 +151,44 @@ namespace huira {
         void convolve_fft_(const Image& kernel);
     };
 
+
+    // Used for loading image data:
+    enum class ColorSpaceHint { Linear, sRGB, Gamma, Unknown };
+
+    template<IsImagePixel PixelT>
+    struct ImageBundle {
+        Image<PixelT> image;
+        Image<float> alpha{};
+
+        ColorSpaceHint color_space = ColorSpaceHint::sRGB;
+        float gamma_value = 1.0f;
+
+        int bit_depth = 8;
+
+        ImageBundle() = default;
+
+        ImageBundle(Image<PixelT> img)
+            : image(std::move(img)),
+            color_space(ColorSpaceHint::sRGB),
+            bit_depth(8) {
+        }
+
+        ImageBundle(Image<PixelT> img, Image<float> alpha_copy)
+            : image(std::move(img)),
+            alpha(std::move(alpha_copy)),
+            color_space(ColorSpaceHint::sRGB),
+            bit_depth(8) {
+        }
+
+        template <typename OtherPixelT>
+        ImageBundle(const ImageBundle<OtherPixelT>& other_bundle, Image<PixelT> new_image)
+            : image(std::move(new_image)),
+            alpha(other_bundle.alpha),
+            color_space(other_bundle.color_space),
+            gamma_value(other_bundle.gamma_value),
+            bit_depth(other_bundle.bit_depth) {
+        }
+    };
 }
 
 #include "huira_impl/images/image.ipp"

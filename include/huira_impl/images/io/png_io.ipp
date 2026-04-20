@@ -78,27 +78,6 @@ namespace huira {
         return info;
     }
 
-    template <IsInteger T>
-    float linearize_png_pixel_(T encoded, const PngColorInfo& color_info)
-    {
-        float encoded_f = integer_to_float<T>(encoded, 0.f, 1.f);
-
-        switch (color_info.space) {
-        case PngColorSpace::LINEAR:
-            return encoded_f;
-        case PngColorSpace::SRGB:
-            return srgb_to_linear(encoded_f);
-        case PngColorSpace::ICC_PROFILE:
-            return srgb_to_linear(encoded_f);
-        case PngColorSpace::UNKNOWN:
-            return srgb_to_linear(encoded_f);
-        case PngColorSpace::GAMMA:
-            return gamma_to_linear(encoded_f, static_cast<float>(color_info.gamma));
-        default:
-            return srgb_to_linear(encoded_f);
-        }
-    }
-
     struct PNGData {
         Resolution resolution{ 0, 0 };
         png_uint_32 height;
@@ -279,6 +258,37 @@ namespace huira {
         return png_data;
     }
 
+    template <IsImagePixel PixelT>
+    void read_color_space(PngColorInfo color_info, ImageBundle<PixelT>& bundle)
+    {
+        switch (color_info.space) {
+        case PngColorSpace::LINEAR:
+            bundle.color_space = ColorSpaceHint::Linear;
+            break;
+
+        case PngColorSpace::SRGB:
+            bundle.color_space = ColorSpaceHint::sRGB;
+            break;
+
+        case PngColorSpace::ICC_PROFILE:
+            bundle.color_space = ColorSpaceHint::Unknown;
+            break;
+
+        case PngColorSpace::UNKNOWN:
+            bundle.color_space = ColorSpaceHint::Unknown;
+            break;
+
+        case PngColorSpace::GAMMA:
+            bundle.color_space = ColorSpaceHint::Gamma;
+            bundle.gamma_value = static_cast<float>(color_info.gamma);
+            break;
+
+        default:
+            bundle.color_space = ColorSpaceHint::Unknown;
+            break;
+        }
+    }
+
     // =========================================================================
     // RGB readers
     // =========================================================================
@@ -289,19 +299,20 @@ namespace huira {
      * @param data Pointer to the PNG data in memory
      * @param size Size of the data in bytes
      * @param read_alpha Whether to load the alpha channel if present (default: true)
-     * @return A pair containing the linear RGB image and an optional alpha image.
+     * @return An ImageBundle<RGB> containing the linear RGB image and an optional alpha image.
      */
-    inline std::pair<Image<RGB>, Image<float>> read_image_png(const unsigned char* data, std::size_t size, bool read_alpha)
+    inline ImageBundle<RGB> read_image_png(const unsigned char* data, std::size_t size, bool read_alpha)
     {
         auto png_data = read_png_raw_(data, size);
 
-        Image<RGB> image(png_data.resolution);
-        Image<float> alpha_image(0, 0);
+        ImageBundle<RGB> bundle{ Image<RGB>(png_data.resolution) };
+
+        read_color_space(png_data.color_info, bundle);
+        
 
         png_data.has_alpha = read_alpha && png_data.has_alpha;
-
         if (png_data.has_alpha) {
-            alpha_image = Image<float>(png_data.resolution, 1.0f);
+            bundle.alpha = Image<float>(png_data.resolution, 1.0f);
         }
 
         for (int y = 0; y < static_cast<int>(png_data.height); ++y) {
@@ -312,51 +323,51 @@ namespace huira {
                 if (png_data.final_bit_depth == 16) {
                     const png_byte* byte_ptr = png_data.raw_data.data() + y_u * png_data.row_bytes + x_u * png_data.channels * 2;
 
-                    auto read_u16 = [](const png_byte* p) -> uint16_t {
-                        uint16_t val;
-                        std::memcpy(&val, p, sizeof(uint16_t));
-                        return val;
+                    auto read_u16 = [](const png_byte* p) -> float {
+                        std::uint16_t val;
+                        std::memcpy(&val, p, sizeof(std::uint16_t));
+                        return integer_to_float<std::uint16_t>(val);
                     };
 
                     if (png_data.is_gray) {
-                        float mono = linearize_png_pixel_<uint16_t>(read_u16(byte_ptr), png_data.color_info);
-                        image(x, y) = RGB{ mono, mono, mono };
+                        float mono = read_u16(byte_ptr);
+                        bundle.image(x, y) = RGB{ mono, mono, mono };
                     }
                     else {
-                        float r = linearize_png_pixel_<uint16_t>(read_u16(byte_ptr), png_data.color_info);
-                        float g = linearize_png_pixel_<uint16_t>(read_u16(byte_ptr + 2), png_data.color_info);
-                        float b = linearize_png_pixel_<uint16_t>(read_u16(byte_ptr + 4), png_data.color_info);
-                        image(x, y) = RGB{ r, g, b };
+                        float r = read_u16(byte_ptr);
+                        float g = read_u16(byte_ptr + 2);
+                        float b = read_u16(byte_ptr + 4);
+                        bundle.image(x, y) = RGB{ r, g, b };
                     }
 
                     if (png_data.has_alpha) {
                         std::size_t alpha_byte_offset = static_cast<std::size_t>(png_data.is_gray ? 2 : 6);
-                        alpha_image(x, y) = static_cast<float>(read_u16(byte_ptr + alpha_byte_offset)) / 65535.0f;
+                        bundle.alpha(x, y) = read_u16(byte_ptr + alpha_byte_offset);
                     }
                 }
                 else {
                     const png_byte* ptr = png_data.raw_data.data() + y_u * png_data.row_bytes + x_u * png_data.channels;
 
                     if (png_data.is_gray) {
-                        float mono = linearize_png_pixel_<uint8_t>(ptr[0], png_data.color_info);
-                        image(x, y) = RGB{ mono, mono, mono };
+                        float mono = integer_to_float<std::uint8_t>(ptr[0]);
+                        bundle.image(x, y) = RGB{ mono, mono, mono };
                     }
                     else {
-                        float r = linearize_png_pixel_<uint8_t>(ptr[0], png_data.color_info);
-                        float g = linearize_png_pixel_<uint8_t>(ptr[1], png_data.color_info);
-                        float b = linearize_png_pixel_<uint8_t>(ptr[2], png_data.color_info);
-                        image(x, y) = RGB{ r, g, b };
+                        float r = integer_to_float<std::uint8_t>(ptr[0]);
+                        float g = integer_to_float<std::uint8_t>(ptr[1]);
+                        float b = integer_to_float<std::uint8_t>(ptr[2]);
+                        bundle.image(x, y) = RGB{ r, g, b };
                     }
 
                     if (png_data.has_alpha) {
                         std::size_t alpha_idx = static_cast<std::size_t>(png_data.is_gray ? 1 : 3);
-                        alpha_image(x, y) = static_cast<float>(ptr[alpha_idx]) / 255.0f;
+                        bundle.alpha(x, y) = integer_to_float<std::uint8_t>(ptr[alpha_idx]);
                     }
                 }
             }
         }
 
-        return { std::move(image), std::move(alpha_image) };
+        return bundle;
     }
 
     /**
@@ -365,7 +376,7 @@ namespace huira {
      * Convenience overload that reads the file into memory and forwards
      * to the buffer-based implementation.
      */
-    inline std::pair<Image<RGB>, Image<float>> read_image_png(const fs::path& filepath, bool read_alpha)
+    inline ImageBundle<RGB> read_image_png(const fs::path& filepath, bool read_alpha)
     {
         auto file_data = read_file_to_buffer(filepath);
         return read_image_png(file_data.data(), file_data.size(), read_alpha);
@@ -381,19 +392,20 @@ namespace huira {
      * @param data Pointer to the PNG data in memory
      * @param size Size of the data in bytes
      * @param read_alpha Whether to load the alpha channel if present (default: true)
-     * @return A pair containing the linear mono image and an optional alpha image.
+     * @return An ImageBundle<float> containing the linear mono image and an optional alpha image.
      */
-    inline std::pair<Image<float>, Image<float>> read_image_png_mono(const unsigned char* data, std::size_t size, bool read_alpha)
+    inline ImageBundle<float> read_image_png_mono(const unsigned char* data, std::size_t size, bool read_alpha)
     {
         auto png_data = read_png_raw_(data, size);
 
-        Image<float> image(png_data.resolution);
-        Image<float> alpha_image(0, 0);
+        ImageBundle<float> bundle{ Image<float>(png_data.resolution) };
+
+        read_color_space(png_data.color_info, bundle);
 
         png_data.has_alpha = read_alpha && png_data.has_alpha;
 
         if (png_data.has_alpha) {
-            alpha_image = Image<float>(png_data.resolution, 1.0f);
+            bundle.alpha = Image<float>(png_data.resolution, 1.0f);
         }
 
         for (int y = 0; y < static_cast<int>(png_data.height); ++y) {
@@ -404,51 +416,51 @@ namespace huira {
                 if (png_data.final_bit_depth == 16) {
                     const png_byte* byte_ptr = png_data.raw_data.data() + y_u * png_data.row_bytes + x_u * png_data.channels * 2;
 
-                    auto read_u16 = [](const png_byte* p) -> uint16_t {
-                        uint16_t val;
-                        std::memcpy(&val, p, sizeof(uint16_t));
-                        return val;
+                    auto read_u16 = [](const png_byte* p) -> float {
+                        std::uint16_t val;
+                        std::memcpy(&val, p, sizeof(std::uint16_t));
+                        return integer_to_float<std::uint16_t>(val);
                     };
 
                     if (png_data.is_gray) {
-                        float mono = linearize_png_pixel_<uint16_t>(read_u16(byte_ptr), png_data.color_info);
-                        image(x, y) = mono;
+                        float mono = read_u16(byte_ptr);
+                        bundle.image(x, y) = mono;
                     }
                     else {
-                        float r = linearize_png_pixel_<uint16_t>(read_u16(byte_ptr), png_data.color_info);
-                        float g = linearize_png_pixel_<uint16_t>(read_u16(byte_ptr + 2), png_data.color_info);
-                        float b = linearize_png_pixel_<uint16_t>(read_u16(byte_ptr + 4), png_data.color_info);
-                        image(x, y) = (r + g + b) / 3.f;
+                        float r = read_u16(byte_ptr);
+                        float g = read_u16(byte_ptr + 2);
+                        float b = read_u16(byte_ptr + 4);
+                        bundle.image(x, y) = (r + g + b) / 3.f;
                     }
 
                     if (png_data.has_alpha) {
                         std::size_t alpha_byte_offset = static_cast<std::size_t>(png_data.is_gray ? 2 : 6);
-                        alpha_image(x, y) = static_cast<float>(read_u16(byte_ptr + alpha_byte_offset)) / 65535.0f;
+                        bundle.alpha(x, y) = read_u16(byte_ptr + alpha_byte_offset);
                     }
                 }
                 else {
                     const png_byte* ptr = png_data.raw_data.data() + y_u * png_data.row_bytes + x_u * png_data.channels;
 
                     if (png_data.is_gray) {
-                        float mono = linearize_png_pixel_<uint8_t>(ptr[0], png_data.color_info);
-                        image(x, y) = mono;
+                        float mono = integer_to_float<std::uint8_t>(ptr[0]);
+                        bundle.image(x, y) = mono;
                     }
                     else {
-                        float r = linearize_png_pixel_<uint8_t>(ptr[0], png_data.color_info);
-                        float g = linearize_png_pixel_<uint8_t>(ptr[1], png_data.color_info);
-                        float b = linearize_png_pixel_<uint8_t>(ptr[2], png_data.color_info);
-                        image(x, y) = (r + g + b) / 3.f;
+                        float r = integer_to_float<std::uint8_t>(ptr[0]);
+                        float g = integer_to_float<std::uint8_t>(ptr[1]);
+                        float b = integer_to_float<std::uint8_t>(ptr[2]);
+                        bundle.image(x, y) = (r + g + b) / 3.f;
                     }
 
                     if (png_data.has_alpha) {
                         std::size_t alpha_idx = static_cast<std::size_t>(png_data.is_gray ? 1 : 3);
-                        alpha_image(x, y) = static_cast<float>(ptr[alpha_idx]) / 255.0f;
+                        bundle.alpha(x, y) = integer_to_float<std::uint8_t>(ptr[alpha_idx]);
                     }
                 }
             }
         }
 
-        return { std::move(image), std::move(alpha_image) };
+        return bundle;
     }
 
     /**
@@ -457,65 +469,47 @@ namespace huira {
      * Convenience overload that reads the file into memory and forwards
      * to the buffer-based implementation.
      */
-    inline std::pair<Image<float>, Image<float>> read_image_png_mono(const fs::path& filepath, bool read_alpha)
+    inline ImageBundle<float> read_image_png_mono(const fs::path& filepath, bool read_alpha)
     {
         auto file_data = read_file_to_buffer(filepath);
         return read_image_png_mono(file_data.data(), file_data.size(), read_alpha);
     }
 
+
+
     // =========================================================================
-    // Writers (file-only, unchanged)
+    // Writers
     // =========================================================================
-
-    inline void write_image_png(const fs::path& filepath, const Image<RGB>& image, int bit_depth)
+    inline void write_image_png(const fs::path& filepath, const ImageBundle<float>& output_image)
     {
-        Image<float> alpha(0, 0);
-        write_image_png(filepath, image, alpha, bit_depth);
-    }
-
-    inline void write_image_png(const fs::path& filepath, const Image<float>& image, int bit_depth)
-    {
-        Image<float> alpha(0, 0);
-
-        Image<RGB> image_rgb(image.width(), image.height());
-        for (std::size_t i = 0; i < image.size(); ++i) {
-            image_rgb[i] = RGB{ image[i], image[i], image[i] };
+        Image<RGB> rgb_pixels(output_image.image.resolution());
+        for (std::size_t i = 0; i < output_image.image.size(); ++i) {
+            float val = output_image.image[i];
+            rgb_pixels[i] = RGB{ val, val, val };
         }
-
-        write_image_png(filepath, image_rgb, alpha, bit_depth);
+        ImageBundle<RGB> output_image_rgb(output_image, std::move(rgb_pixels));
+        write_image_png(filepath, output_image_rgb);
     }
 
-    inline void write_image_png(const fs::path& filepath, const Image<float>& image,
-        const Image<float>& alpha, int bit_depth)
-    {
-        Image<RGB> image_rgb(image.width(), image.height());
-        for (std::size_t i = 0; i < image.size(); ++i) {
-            image_rgb[i] = RGB{ image[i], image[i], image[i] };
-        }
-
-        write_image_png(filepath, image_rgb, alpha, bit_depth);
-    }
-
-    inline void write_image_png(const fs::path& filepath, const Image<RGB>& image,
-        const Image<float>& alpha, int bit_depth)
+    inline void write_image_png(const fs::path& filepath, const ImageBundle<RGB>& output_image)
     {
         HUIRA_LOG_INFO("write_image_png - Writing to: " + filepath.string());
-        if (image.width() == 0 || image.height() == 0) {
+        if (output_image.image.width() == 0 || output_image.image.height() == 0) {
             HUIRA_THROW_ERROR("write_image_png - Cannot write empty image: " + filepath.string());
         }
 
-        bool has_alpha = (alpha.width() != 0 && alpha.height() != 0);
+        bool has_alpha = (output_image.alpha.width() != 0 && output_image.alpha.height() != 0);
         if (has_alpha) {
-            if (alpha.width() != image.width() || alpha.height() != image.height()) {
+            if (output_image.alpha.width() != output_image.image.width() || output_image.alpha.height() != output_image.image.height()) {
                 HUIRA_LOG_WARNING("write_image_png - image is [" +
-                    std::to_string(image.width()) + " x " + std::to_string(image.height()) + "], but alpha is [" +
-                    std::to_string(alpha.width()) + " x " + std::to_string(alpha.height()) + "]. The alpha mask will be ignored.");
+                    std::to_string(output_image.image.width()) + " x " + std::to_string(output_image.image.height()) + "], but alpha is [" +
+                    std::to_string(output_image.alpha.width()) + " x " + std::to_string(output_image.alpha.height()) + "]. The alpha mask will be ignored.");
                 has_alpha = false;
             }
         }
 
-        if (bit_depth != 8 && bit_depth != 16) {
-            HUIRA_THROW_ERROR("write_image_png - bit_depth must be 8 or 16, got: " + std::to_string(bit_depth));
+        if (output_image.bit_depth != 8 && output_image.bit_depth != 16) {
+            HUIRA_THROW_ERROR("write_image_png - bit_depth must be 8 or 16, got: " + std::to_string(output_image.bit_depth));
         }
 
         make_path(filepath);
@@ -523,8 +517,8 @@ namespace huira {
         int color_type = has_alpha ? PNG_COLOR_TYPE_RGB_ALPHA : PNG_COLOR_TYPE_RGB;
         unsigned int channels = has_alpha ? 4 : 3;
 
-        int width = image.width();
-        int height = image.height();
+        int width = output_image.image.width();
+        int height = output_image.image.height();
 
 #ifdef _MSC_VER
         FILE* fp = nullptr;
@@ -571,33 +565,51 @@ namespace huira {
         png_set_IHDR(png_ptr, info_ptr,
             static_cast<png_uint_32>(width),
             static_cast<png_uint_32>(height),
-            bit_depth,
+            output_image.bit_depth,
             color_type,
             PNG_INTERLACE_NONE,
             PNG_COMPRESSION_TYPE_DEFAULT,
             PNG_FILTER_TYPE_DEFAULT);
 
-        png_set_sRGB_gAMA_and_cHRM(png_ptr, info_ptr, PNG_sRGB_INTENT_PERCEPTUAL);
+        // Write the colorspace:
+        switch (output_image.color_space) {
+        case ColorSpaceHint::sRGB:
+            png_set_sRGB(png_ptr, info_ptr, PNG_sRGB_INTENT_PERCEPTUAL);
+            break;
+
+        case ColorSpaceHint::Linear:
+            png_set_gAMA(png_ptr, info_ptr, 1.0);
+            break;
+
+        case ColorSpaceHint::Gamma:
+            png_set_gAMA(png_ptr, info_ptr, 1.0 / output_image.gamma_value);
+            break;
+
+        case ColorSpaceHint::Unknown:
+        default:
+            break;
+        }
+
         png_write_info(png_ptr, info_ptr);
 
-        if (bit_depth == 16) {
+        if (output_image.bit_depth == 16) {
             png_set_swap(png_ptr);
         }
 
-        if (bit_depth == 16) {
-            std::vector<uint16_t> row_data(static_cast<std::size_t>(width) * channels);
+        if (output_image.bit_depth == 16) {
+            std::vector<std::uint16_t> row_data(static_cast<std::size_t>(width) * channels);
 
             for (int y = 0; y < height; ++y) {
                 for (int x = 0; x < width; ++x) {
                     std::size_t x_u = static_cast<std::size_t>(x);
-                    const RGB& pixel = image(x, y);
+                    const RGB& pixel = output_image.image(x, y);
 
-                    row_data[x_u * channels + 0] = float_to_integer<uint16_t>(linear_to_srgb(pixel[0]));
-                    row_data[x_u * channels + 1] = float_to_integer<uint16_t>(linear_to_srgb(pixel[1]));
-                    row_data[x_u * channels + 2] = float_to_integer<uint16_t>(linear_to_srgb(pixel[2]));
+                    row_data[x_u * channels + 0] = float_to_integer<std::uint16_t>(pixel[0]);
+                    row_data[x_u * channels + 1] = float_to_integer<std::uint16_t>(pixel[1]);
+                    row_data[x_u * channels + 2] = float_to_integer<std::uint16_t>(pixel[2]);
 
                     if (has_alpha) {
-                        row_data[x_u * channels + 3] = float_to_integer<uint16_t>(alpha(x, y));
+                        row_data[x_u * channels + 3] = float_to_integer<std::uint16_t>(output_image.alpha(x, y));
                     }
                 }
 
@@ -606,19 +618,19 @@ namespace huira {
             }
         }
         else {
-            std::vector<uint8_t> row_data(static_cast<std::size_t>(width) * channels);
+            std::vector<std::uint8_t> row_data(static_cast<std::size_t>(width) * channels);
 
             for (int y = 0; y < height; ++y) {
                 for (int x = 0; x < width; ++x) {
                     std::size_t x_u = static_cast<std::size_t>(x);
-                    const RGB& pixel = image(x, y);
+                    const RGB& pixel = output_image.image(x, y);
 
-                    row_data[x_u * channels + 0] = float_to_integer<uint8_t>(linear_to_srgb(pixel[0]));
-                    row_data[x_u * channels + 1] = float_to_integer<uint8_t>(linear_to_srgb(pixel[1]));
-                    row_data[x_u * channels + 2] = float_to_integer<uint8_t>(linear_to_srgb(pixel[2]));
+                    row_data[x_u * channels + 0] = float_to_integer<std::uint8_t>(pixel[0]);
+                    row_data[x_u * channels + 1] = float_to_integer<std::uint8_t>(pixel[1]);
+                    row_data[x_u * channels + 2] = float_to_integer<std::uint8_t>(pixel[2]);
 
                     if (has_alpha) {
-                        row_data[x_u * channels + 3] = float_to_integer<uint8_t>(alpha(x, y));
+                        row_data[x_u * channels + 3] = float_to_integer<std::uint8_t>(output_image.alpha(x, y));
                     }
                 }
 

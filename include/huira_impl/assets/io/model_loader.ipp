@@ -10,11 +10,7 @@
 #include "huira/core/types.hpp"
 #include "huira/util/logger.hpp"
 
-#include "huira/images/io/bmp_io.hpp"
-#include "huira/images/io/hdr_io.hpp"
-#include "huira/images/io/jpeg_io.hpp"
-#include "huira/images/io/png_io.hpp"
-#include "huira/images/io/tga_io.hpp"
+#include "huira/images/io/read_image.hpp"
 
 namespace huira {
     /**
@@ -463,44 +459,44 @@ namespace huira {
         return ImageFormat_::Unknown;
     }
 
-    inline std::pair<Image<RGB>, Image<float>> load_rgb_from_buffer_(
+    inline ImageBundle<RGB> load_rgb_from_buffer_(
         const unsigned char* data, std::size_t size, ImageFormat_ format, bool read_alpha = false)
     {
         switch (format) {
-        case ImageFormat_::PNG:  return read_image_png(data, size, read_alpha);
-        case ImageFormat_::JPEG: return { read_image_jpeg(data, size), Image<float>{} };
-        case ImageFormat_::TGA:  return read_image_tga(data, size, read_alpha);
-        case ImageFormat_::BMP:  return read_image_bmp(data, size, read_alpha);
-        case ImageFormat_::HDR:  return { read_image_hdr(data, size), Image<float>{} };
+        case ImageFormat_::PNG:  return read_image(ImageFormat::IMAGE_FORMAT_PNG, data, size, read_alpha);
+        case ImageFormat_::JPEG: return read_image(ImageFormat::IMAGE_FORMAT_JPEG, data, size, read_alpha);
+        case ImageFormat_::TGA:  return read_image(ImageFormat::IMAGE_FORMAT_TGA, data, size, read_alpha);
+        case ImageFormat_::BMP:  return read_image(ImageFormat::IMAGE_FORMAT_BMP, data, size, read_alpha);
+        case ImageFormat_::HDR:  return read_image(ImageFormat::IMAGE_FORMAT_HDR, data, size, read_alpha);
         case ImageFormat_::Unknown:
         default:
             HUIRA_THROW_ERROR("load_rgb_from_buffer_ - Unsupported image format");
         }
     }
 
-    inline std::pair<Image<float>, Image<float>> load_mono_from_buffer_(
+    inline ImageBundle<float> load_mono_from_buffer_(
         const unsigned char* data, std::size_t size, ImageFormat_ format, bool read_alpha = false)
     {
         switch (format) {
-        case ImageFormat_::PNG:  return read_image_png_mono(data, size, read_alpha);
-        case ImageFormat_::JPEG: return { read_image_jpeg_mono(data, size), Image<float>{} };
-        case ImageFormat_::TGA:  return read_image_tga_mono(data, size, read_alpha);
-        case ImageFormat_::BMP:  return read_image_bmp_mono(data, size, read_alpha);
-        case ImageFormat_::HDR:  return { read_image_hdr_mono(data, size), Image<float>{} };
+        case ImageFormat_::PNG:  return read_image_mono(ImageFormat::IMAGE_FORMAT_PNG, data, size, read_alpha);
+        case ImageFormat_::JPEG: return read_image_mono(ImageFormat::IMAGE_FORMAT_JPEG, data, size, read_alpha);
+        case ImageFormat_::TGA:  return read_image_mono(ImageFormat::IMAGE_FORMAT_TGA, data, size, read_alpha);
+        case ImageFormat_::BMP:  return read_image_mono(ImageFormat::IMAGE_FORMAT_BMP, data, size, read_alpha);
+        case ImageFormat_::HDR:  return read_image_mono(ImageFormat::IMAGE_FORMAT_HDR, data, size, read_alpha);
         case ImageFormat_::Unknown:
         default:
             HUIRA_THROW_ERROR("load_mono_from_buffer_ - Unsupported image format");
         }
     }
 
-    inline std::pair<Image<RGB>, Image<float>> load_rgb_from_file_(const fs::path& filepath, bool read_alpha = false) {
+    inline ImageBundle<RGB> load_rgb_from_file_(const fs::path& filepath, bool read_alpha = false) {
         ImageFormat_ format = detect_image_format_(filepath.extension().string());
         switch (format) {
         case ImageFormat_::PNG:  return read_image_png(filepath, read_alpha);
-        case ImageFormat_::JPEG: return { read_image_jpeg(filepath), Image<float>{} };
+        case ImageFormat_::JPEG: return read_image_jpeg(filepath);
         case ImageFormat_::TGA:  return read_image_tga(filepath, read_alpha);
         case ImageFormat_::BMP:  return read_image_bmp(filepath, read_alpha);
-        case ImageFormat_::HDR:  return { read_image_hdr(filepath), Image<float>{} };
+        case ImageFormat_::HDR:  return read_image_hdr(filepath);
         case ImageFormat_::Unknown:
         default:
             HUIRA_THROW_ERROR("load_rgb_from_file_ - Unsupported format: " +
@@ -508,14 +504,14 @@ namespace huira {
         }
     }
 
-    inline std::pair<Image<float>, Image<float>> load_mono_from_file_(const fs::path& filepath, bool read_alpha = false) {
+    inline ImageBundle<float> load_mono_from_file_(const fs::path& filepath, bool read_alpha = false) {
         ImageFormat_ format = detect_image_format_(filepath.extension().string());
         switch (format) {
         case ImageFormat_::PNG:  return read_image_png_mono(filepath, read_alpha);
-        case ImageFormat_::JPEG: return { read_image_jpeg_mono(filepath), Image<float>{} };
+        case ImageFormat_::JPEG: return read_image_jpeg_mono(filepath);
         case ImageFormat_::TGA:  return read_image_tga_mono(filepath, read_alpha);
         case ImageFormat_::BMP:  return read_image_bmp_mono(filepath, read_alpha);
-        case ImageFormat_::HDR:  return { read_image_hdr_mono(filepath), Image<float>{} };
+        case ImageFormat_::HDR:  return read_image_hdr_mono(filepath);
         case ImageFormat_::Unknown:
         default:
             HUIRA_THROW_ERROR("load_mono_from_file_ - Unsupported format: " +
@@ -661,8 +657,7 @@ namespace huira {
             return { main_handle, alpha_handle };
         }
 
-        Image<TPixel> image;
-        Image<float> alpha_image;
+        ImageBundle<TPixel> bundle;
         bool loaded = false;
         bool has_alpha = false;
 
@@ -681,24 +676,25 @@ namespace huira {
 
                 try {
                     if constexpr (std::is_same_v<TPixel, TSpectral>) {
-                        auto [rgb, alpha] = load_rgb_from_buffer_(data, size, format, read_alpha);
-                        image = Image<TSpectral>(rgb.width(), rgb.height());
-                        for (int y = 0; y < rgb.height(); ++y) {
-                            for (int x = 0; x < rgb.width(); ++x) {
-                                image(x, y) = ctx.spectral_conversion(rgb(x, y));
+                        ImageBundle<RGB> bundle_rgb = load_rgb_from_buffer_(data, size, format, read_alpha);
+                        bundle.image = Image<TSpectral>(bundle_rgb.image.width(), bundle_rgb.image.height());
+                        for (int y = 0; y < bundle_rgb.image.height(); ++y) {
+                            for (int x = 0; x < bundle_rgb.image.width(); ++x) {
+                                bundle.image(x, y) = ctx.spectral_conversion(bundle_rgb.image(x, y));
                             }
                         }
-                        if (read_alpha && alpha.width() > 0) {
-                            alpha_image = std::move(alpha);
+                        
+                        if (read_alpha && bundle_rgb.alpha.width() > 0) {
+                            bundle.alpha = bundle_rgb.alpha;
                             has_alpha = true;
                         }
                     }
                     else if constexpr (std::is_same_v<TPixel, float>) {
-                        image = load_mono_from_buffer_(data, size, format);
+                        bundle = load_mono_from_buffer_(data, size, format);
                     }
                     else if constexpr (std::is_same_v<TPixel, Vec3<float>>) {
-                        auto [rgb, _] = load_rgb_from_buffer_(data, size, format, false);
-                        image = rgb_to_vec3_(rgb);
+                        ImageBundle<RGB> bundle_rgb = load_rgb_from_buffer_(data, size, format, false);
+                        bundle.image = rgb_to_vec3_(bundle_rgb.image);
                     }
                     loaded = true;
                 }
@@ -710,9 +706,9 @@ namespace huira {
             else {
                 try {
                     auto [raw_img, raw_alpha] = convert_embedded_raw_<TSpectral, TPixel>(embedded, ctx.spectral_conversion, read_alpha);
-                    image = std::move(raw_img);
+                    bundle.image = std::move(raw_img);
                     if (read_alpha && raw_alpha.width() > 0) {
-                        alpha_image = std::move(raw_alpha);
+                        bundle.alpha = std::move(raw_alpha);
                         has_alpha = true;
                     }
                     loaded = true;
@@ -736,24 +732,24 @@ namespace huira {
 
             try {
                 if constexpr (std::is_same_v<TPixel, TSpectral>) {
-                    auto [rgb, alpha] = load_rgb_from_file_(resolved_path, read_alpha);
-                    image = Image<TSpectral>(rgb.width(), rgb.height());
-                    for (int y = 0; y < rgb.height(); ++y) {
-                        for (int x = 0; x < rgb.width(); ++x) {
-                            image(x, y) = ctx.spectral_conversion(rgb(x, y));
+                    ImageBundle<RGB> bundle_rgb = load_rgb_from_file_(resolved_path, read_alpha);
+                    bundle.image = Image<TSpectral>(bundle_rgb.image.width(), bundle_rgb.image.height());
+                    for (int y = 0; y < bundle_rgb.image.height(); ++y) {
+                        for (int x = 0; x < bundle_rgb.image.width(); ++x) {
+                            bundle.image(x, y) = ctx.spectral_conversion(bundle_rgb.image(x, y));
                         }
                     }
-                    if (read_alpha && alpha.width() > 0) {
-                        alpha_image = std::move(alpha);
+                    if (read_alpha && bundle_rgb.alpha.width() > 0) {
+                        bundle.alpha = bundle_rgb.alpha;
                         has_alpha = true;
                     }
                 }
                 else if constexpr (std::is_same_v<TPixel, float>) {
-                    image = load_mono_from_file_(resolved_path);
+                    bundle = load_mono_from_file_(resolved_path);
                 }
                 else if constexpr (std::is_same_v<TPixel, Vec3<float>>) {
-                    auto [rgb, _] = load_rgb_from_file_(resolved_path, false);
-                    image = rgb_to_vec3_(rgb);
+                    ImageBundle<RGB> bundle_rgb = load_rgb_from_file_(resolved_path, false);
+                    bundle.image = rgb_to_vec3_(bundle_rgb.image);
                 }
                 loaded = true;
             }
@@ -773,17 +769,17 @@ namespace huira {
         TextureHandle<TPixel> handle = [&]() {
             if constexpr (std::is_same_v<TPixel, Vec3<float>>) {
                 if (is_normal_map) {
-                    return ctx.scene->add_normal_texture(std::move(image), tex_name);
+                    return ctx.scene->add_normal_texture(std::move(bundle.image), tex_name);
                 }
             }
-            return ctx.scene->add_texture(std::move(image), tex_name);
+            return ctx.scene->add_texture(std::move(bundle.image), tex_name);
             }();
         cache.emplace(tex_path_str, handle);
         main_handle = handle;
 
         // Register Alpha Texture
         if (has_alpha) {
-            auto a_handle = ctx.scene->add_texture(std::move(alpha_image), tex_name + "_alpha");
+            auto a_handle = ctx.scene->add_texture(std::move(bundle.alpha), tex_name + "_alpha");
             ctx.mono_texture_cache.emplace(tex_path_str + "_alpha", a_handle);
             alpha_handle = a_handle;
         }

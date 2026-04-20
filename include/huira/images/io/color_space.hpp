@@ -3,6 +3,12 @@
 #include <cmath>
 
 namespace huira {
+    enum class ColorSpace {
+        Linear,
+        sRGB,
+        Gamma
+    };
+
     inline float srgb_to_linear(float s)
     {
         if (s <= 0.04045f) {
@@ -26,6 +32,5 @@ namespace huira {
         }
         return 1.055f * std::pow(linear, 1.0f / 2.4f) - 0.055f;
     }
-
 
 }
