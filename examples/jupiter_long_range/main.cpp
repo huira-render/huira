@@ -97,6 +97,6 @@ int main(int argc, char** argv) {
     renderer.render(scene_view, frame_buffer);
 
     // Save the results
-    huira::write_image_png("output/jupiter_long_range.png", frame_buffer.sensor_response(), 8);
+    huira::write_image_png("output/jupiter_long_range.png", frame_buffer.sensor_response());
     
 }
