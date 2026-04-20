@@ -148,7 +148,7 @@ namespace huira {
         float     metallic_factor_  = 1.0f;
         float     roughness_factor_ = 1.0f;
         float     normal_factor_    = 1.0f;
-        TSpectral emissive_factor_{ 1.0f };
+        TSpectral emissive_factor_{ 0.0f };
 
         std::uint64_t id_ = 0;
         static inline std::uint64_t next_id_ = 0;
