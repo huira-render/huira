@@ -367,7 +367,7 @@ namespace huira {
             MaterialHandle<TSpectral> material = ctx.scene->new_material(CookTorranceBSDF<TSpectral>(), name);
 
             // Assign albedos:
-            if (auto [tex, alpha] = load_material_texture_<TSpectral>(ai_mat, aiTextureType_BASE_COLOR, ctx, true); tex) {
+            if (auto [tex, alpha] = load_material_texture_<TSpectral>(ai_mat, aiTextureType_BASE_COLOR, ctx, true, true); tex) {
                 material.set_albedo(tex.value());
                 if (alpha.has_value()) {
                     material.set_alpha(alpha.value());
@@ -388,7 +388,7 @@ namespace huira {
                     ? aiTextureType_DIFFUSE_ROUGHNESS
                     : aiTextureType_METALNESS;
 
-                if (auto [tex, _] = load_material_texture_<Vec3<float>>(ai_mat, packed_type, ctx, false); tex) {
+                if (auto [tex, _] = load_material_texture_<Vec3<float>>(ai_mat, packed_type, ctx, false, false); tex) {
                     const Image<Vec3<float>>& packed = *tex.value().get()->image();
 
                     // Extract channels: green = roughness, blue = metallic
@@ -419,12 +419,12 @@ namespace huira {
             }
 
             // Assign normals:
-            if (auto [tex, _] = load_material_texture_<Vec3<float>>(ai_mat, aiTextureType_NORMALS, ctx, false, true); tex) {
+            if (auto [tex, _] = load_material_texture_<Vec3<float>>(ai_mat, aiTextureType_NORMALS, ctx, false, false); tex) {
                 material.set_normal_image(tex.value());
             }
 
             // Assign emissive:
-            if (auto [tex, _] = load_material_texture_<TSpectral>(ai_mat, aiTextureType_EMISSION_COLOR, ctx, false); tex) {
+            if (auto [tex, _] = load_material_texture_<TSpectral>(ai_mat, aiTextureType_EMISSION_COLOR, ctx, false, false); tex) {
                 material.set_emissive_image(tex.value());
             }
             aiColor3D emissive;
@@ -622,7 +622,7 @@ namespace huira {
         aiTextureType tex_type,
         LoadContext& ctx,
         bool read_alpha,
-        bool is_normal_map)
+        bool is_color_data)
     {
         if (ai_mat->GetTextureCount(tex_type) == 0) {
             return { std::nullopt, std::nullopt };
@@ -733,6 +733,16 @@ namespace huira {
             try {
                 if constexpr (std::is_same_v<TPixel, TSpectral>) {
                     ImageBundle<RGB> bundle_rgb = load_rgb_from_file_(resolved_path, read_alpha);
+
+                    if (is_color_data && bundle_rgb.color_space == ColorSpaceHint::sRGB) {
+                        for (std::size_t i = 0; i < bundle_rgb.image.size(); ++i) {
+                            bundle_rgb.image[i][0] = srgb_to_linear(bundle_rgb.image[i][0]);
+                            bundle_rgb.image[i][1] = srgb_to_linear(bundle_rgb.image[i][1]);
+                            bundle_rgb.image[i][2] = srgb_to_linear(bundle_rgb.image[i][2]);
+                        }
+                        bundle_rgb.color_space = ColorSpaceHint::Linear;
+                    }
+
                     bundle.image = Image<TSpectral>(bundle_rgb.image.width(), bundle_rgb.image.height());
                     for (int y = 0; y < bundle_rgb.image.height(); ++y) {
                         for (int x = 0; x < bundle_rgb.image.width(); ++x) {
@@ -768,7 +778,7 @@ namespace huira {
         // Register Main Texture
         TextureHandle<TPixel> handle = [&]() {
             if constexpr (std::is_same_v<TPixel, Vec3<float>>) {
-                if (is_normal_map) {
+                if (tex_type == aiTextureType_NORMALS) {
                     return ctx.scene->add_normal_texture(std::move(bundle.image), tex_name);
                 }
             }

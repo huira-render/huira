@@ -92,7 +92,7 @@ namespace huira {
             aiTextureType tex_type,
             LoadContext& ctx,
             bool read_alpha,
-            bool is_normal_map = false);
+            bool is_color_data);
 
         template <typename TPixel>
         static auto& get_texture_cache_(LoadContext& ctx);
