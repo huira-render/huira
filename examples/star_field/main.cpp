@@ -71,5 +71,5 @@ int main(int argc, char** argv) {
     renderer.render(scene_view, frame_buffer);
 
     // Save the results
-    huira::write_image_png("output/starfield.png", frame_buffer.sensor_response());
+    huira::write_image_png("output/starfield.png", huira::linear_to_srgb(frame_buffer.sensor_response()));
 }

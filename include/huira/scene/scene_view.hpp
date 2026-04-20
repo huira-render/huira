@@ -133,8 +133,8 @@ namespace huira {
             const Mesh<TSpectral>* mesh;
         };
         std::vector<std::unique_ptr<AlphaFilterContext>> filter_contexts_;
-        static void alpha_occlusion_filter_(const RTCFilterFunctionNArguments* args);
-        static void alpha_intersection_filter_(const RTCFilterFunctionNArguments* args);
+        static void alpha_occlusion_filter_(const RTCFilterFunctionNArguments* args) noexcept;
+        static void alpha_intersection_filter_(const RTCFilterFunctionNArguments* args) noexcept;
 
         friend class Renderer<TSpectral>;
     };

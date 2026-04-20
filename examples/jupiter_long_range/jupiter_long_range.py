@@ -35,7 +35,7 @@ def main():
     camera_model = scene.new_camera_model()
     camera_model.set_focal_length(mm(125))
     camera_model.set_fstop(3.30)
-    camera_model.configure_sensor_from_pitch((1920, 1080), um(8.5), um(8.5))
+    camera_model.configure_sensor_from_pitch((1920, 1080), um(8.5))
     camera_model.set_sensor_bit_depth(12)
     camera_model.use_aperture_psf(64, 16)
     
@@ -102,7 +102,7 @@ def main():
     renderer.render(scene_view, frame_buffer)
     
     # Save the results
-    huira.write_png("output/jupiter_long_range.png", frame_buffer.sensor_response, 8)
+    huira.write_png("output/jupiter_long_range.png", huira.linear_to_srgb(frame_buffer.sensor_response))
 
 if __name__ == "__main__":
     main()

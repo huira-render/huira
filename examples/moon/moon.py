@@ -35,7 +35,7 @@ def main():
     # Configure a camera model
     camera_model = scene.new_camera_model()
     camera_model.set_focal_length(mm(25))
-    camera_model.configure_sensor_from_size((1080, 1080), mm(6), mm(6))
+    camera_model.configure_sensor_from_size((1080, 1080), mm(6))
 
     # Set camera exposure settings
     camera_model.set_fstop(18)
@@ -93,8 +93,8 @@ def main():
     renderer.render(scene_view, frame_buffer)
     
     # Save the results to PNGs
-    huira.write_png("output/moon_render.png", frame_buffer.sensor_response, 8)
-    huira.write_png("output/moon_albedo.png", frame_buffer.albedo.get_channel(0), 8)
+    huira.write_png("output/moon_render.png", huira.linear_to_srgb(frame_buffer.sensor_response))
+    huira.write_png("output/moon_albedo.png", huira.linear_to_srgb(frame_buffer.albedo.get_channel(0)))
 
     # Save the results to CSVs
     np.savetxt("output/moon_render.csv", frame_buffer.sensor_response.get_channel(0), delimiter=",")

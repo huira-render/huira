@@ -586,20 +586,18 @@ namespace huira {
      * @brief Writes an RGB image to a TIFF file with optional metadata.
      *
      * @param filepath Output file path
-     * @param image RGB image to write
-     * @param bit_depth Bit depth per channel (8 or 16)
+     * @param An ImageBundle<RGB> containing the image to write
      * @param description Optional image description metadata
      * @param artist Optional artist metadata
      */
     inline void write_image_tiff(const fs::path& filepath,
-                                  const Image<RGB>& image,
-                                  int bit_depth,
-                                  const std::string& description,
-                                  const std::string& artist)
+                                 const ImageBundle<RGB>& bundle,
+                                 const std::string& description,
+                                 const std::string& artist)
     {
         HUIRA_LOG_INFO("write_image_tiff - Writing RGB TIFF to " + filepath.string());
         
-        if (bit_depth != 8 && bit_depth != 16) {
+        if (bundle.bit_depth != 8 && bundle. bit_depth != 16) {
             HUIRA_THROW_ERROR("write_image_tiff - Bit depth must be 8 or 16");
         }
 
@@ -610,13 +608,13 @@ namespace huira {
             HUIRA_THROW_ERROR("write_image_tiff - Failed to open file for writing: " + filepath.string());
         }
         
-        uint32_t width = static_cast<uint32_t>(image.width());
-        uint32_t height = static_cast<uint32_t>(image.height());
+        uint32_t width = static_cast<uint32_t>(bundle.image.width());
+        uint32_t height = static_cast<uint32_t>(bundle.image.height());
         
         TIFFSetField(tif.get(), TIFFTAG_IMAGEWIDTH, width);
         TIFFSetField(tif.get(), TIFFTAG_IMAGELENGTH, height);
         TIFFSetField(tif.get(), TIFFTAG_SAMPLESPERPIXEL, 3);
-        TIFFSetField(tif.get(), TIFFTAG_BITSPERSAMPLE, static_cast<uint16_t>(bit_depth));
+        TIFFSetField(tif.get(), TIFFTAG_BITSPERSAMPLE, static_cast<uint16_t>(bundle.bit_depth));
         TIFFSetField(tif.get(), TIFFTAG_ORIENTATION, ORIENTATION_TOPLEFT);
         TIFFSetField(tif.get(), TIFFTAG_PLANARCONFIG, PLANARCONFIG_CONTIG);
         TIFFSetField(tif.get(), TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_RGB);
@@ -630,16 +628,16 @@ namespace huira {
             TIFFSetField(tif.get(), TIFFTAG_ARTIST, artist.c_str());
         }
         
-        std::size_t bytes_per_sample = static_cast<std::size_t>(bit_depth) / 8;
+        std::size_t bytes_per_sample = static_cast<std::size_t>(bundle.bit_depth) / 8;
         std::size_t scanline_size = width * 3 * bytes_per_sample;
         std::vector<unsigned char> scanline(scanline_size);
         
         for (uint32_t y = 0; y < height; ++y) {
             for (uint32_t x = 0; x < width; ++x) {
-                RGB pixel = image(static_cast<int>(x), static_cast<int>(y));
+                RGB pixel = bundle.image(static_cast<int>(x), static_cast<int>(y));
                 std::size_t offset = x * 3 * bytes_per_sample;
                 
-                if (bit_depth == 8) {
+                if (bundle.bit_depth == 8) {
                     scanline[offset + 0] = static_cast<uint8_t>(std::clamp(pixel[0] * 255.0f, 0.0f, 255.0f));
                     scanline[offset + 1] = static_cast<uint8_t>(std::clamp(pixel[1] * 255.0f, 0.0f, 255.0f));
                     scanline[offset + 2] = static_cast<uint8_t>(std::clamp(pixel[2] * 255.0f, 0.0f, 255.0f));
@@ -662,14 +660,13 @@ namespace huira {
      * @brief Writes a monochrome float image to a TIFF file with optional metadata.
      */
     inline void write_image_tiff(const fs::path& filepath,
-                                  const Image<float>& image,
-                                  int bit_depth,
+                                  const ImageBundle<float>& bundle,
                                   const std::string& description,
                                   const std::string& artist)
     {
         HUIRA_LOG_INFO("write_image_tiff - Writing mono TIFF to " + filepath.string());
         
-        if (bit_depth != 8 && bit_depth != 16) {
+        if (bundle.bit_depth != 8 && bundle.bit_depth != 16) {
             HUIRA_THROW_ERROR("write_image_tiff - Bit depth must be 8 or 16");
         }
 
@@ -680,13 +677,13 @@ namespace huira {
             HUIRA_THROW_ERROR("write_image_tiff - Failed to open file for writing: " + filepath.string());
         }
         
-        uint32_t width = static_cast<uint32_t>(image.width());
-        uint32_t height = static_cast<uint32_t>(image.height());
+        uint32_t width = static_cast<uint32_t>(bundle.image.width());
+        uint32_t height = static_cast<uint32_t>(bundle.image.height());
         
         TIFFSetField(tif.get(), TIFFTAG_IMAGEWIDTH, width);
         TIFFSetField(tif.get(), TIFFTAG_IMAGELENGTH, height);
         TIFFSetField(tif.get(), TIFFTAG_SAMPLESPERPIXEL, 1);
-        TIFFSetField(tif.get(), TIFFTAG_BITSPERSAMPLE, static_cast<uint16_t>(bit_depth));
+        TIFFSetField(tif.get(), TIFFTAG_BITSPERSAMPLE, static_cast<uint16_t>(bundle.bit_depth));
         TIFFSetField(tif.get(), TIFFTAG_ORIENTATION, ORIENTATION_TOPLEFT);
         TIFFSetField(tif.get(), TIFFTAG_PLANARCONFIG, PLANARCONFIG_CONTIG);
         TIFFSetField(tif.get(), TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_MINISBLACK);
@@ -700,15 +697,15 @@ namespace huira {
             TIFFSetField(tif.get(), TIFFTAG_ARTIST, artist.c_str());
         }
         
-        std::size_t bytes_per_sample = static_cast<std::size_t>(bit_depth) / 8;
+        std::size_t bytes_per_sample = static_cast<std::size_t>(bundle.bit_depth) / 8;
         std::size_t scanline_size = width * bytes_per_sample;
         std::vector<unsigned char> scanline(scanline_size);
         
         for (uint32_t y = 0; y < height; ++y) {
             for (uint32_t x = 0; x < width; ++x) {
-                float pixel = image(static_cast<int>(x), static_cast<int>(y));
+                float pixel = bundle.image(static_cast<int>(x), static_cast<int>(y));
                 
-                if (bit_depth == 8) {
+                if (bundle.bit_depth == 8) {
                     scanline[x] = static_cast<uint8_t>(std::clamp(pixel * 255.0f, 0.0f, 255.0f));
                 } else {
                     uint16_t value = static_cast<uint16_t>(std::clamp(pixel * 65535.0f, 0.0f, 65535.0f));
@@ -727,19 +724,18 @@ namespace huira {
      */
     template <IsSpectral TSpectral>
     inline void write_image_tiff(const fs::path& filepath,
-                                  const Image<TSpectral>& image,
-                                  int bit_depth,
+                                  const ImageBundle<TSpectral>& bundle,
                                   const std::string& description,
                                   const std::string& artist)
     {
         // Convert spectral to mono by taking the average of channels
-        Image<float> mono_image(image.resolution());
-        for (int y = 0; y < image.height(); ++y) {
-            for (int x = 0; x < image.width(); ++x) {
-                mono_image(x, y) = image(x, y).total() / static_cast<float>(TSpectral::size());
+        Image<float> mono_image(bundle.image.resolution());
+        for (int y = 0; y < bundle.image.height(); ++y) {
+            for (int x = 0; x < bundle.image.width(); ++x) {
+                mono_image(x, y) = bundle.image(x, y).total() / static_cast<float>(TSpectral::size());
             }
         }
         
-        write_image_tiff(filepath, mono_image, bit_depth, description, artist);
+        write_image_tiff(filepath, mono_image, bundle.bit_depth, description, artist);
     }
 }
