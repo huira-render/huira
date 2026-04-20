@@ -216,7 +216,7 @@ namespace huira {
     void Material<TSpectral>::reset_emissive()
     {
         emissive_image_ = default_emissive_image_;
-        emissive_factor_ = TSpectral{ 1.0f };
+        emissive_factor_ = TSpectral{ 0.0f };
     }
 
     template <IsSpectral TSpectral>
