@@ -48,7 +48,6 @@ If there are features you wish to see, that you don't see listed here, please fe
 - Desktop application (GUI)
 
 ## Known Bugs and Limitations
-- Normal maps are not currently supported (see [issue](https://github.com/huira-render/huira/issues/32))
 - NaNs are appearing in some render outputs with motion blur (see [issue](https://github.com/huira-render/huira/issues/33))
 - Severe lack of formal testing
 
