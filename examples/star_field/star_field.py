@@ -40,7 +40,7 @@ def main():
     camera_model.set_focal_length(mm(125))
     camera_model.set_fstop(3.30)
     camera_model.set_sensor_rotation(deg(90))
-    camera_model.configure_sensor_from_pitch((1920, 1080), um(8.5), um(8.5))
+    camera_model.configure_sensor_from_pitch((1920, 1080), um(8.5))
     camera_model.use_aperture_psf(32, 16)
     camera_model.set_sensor_bit_depth(14)
     
@@ -69,7 +69,7 @@ def main():
     renderer.render(scene_view, frame_buffer)
     
     # Save the results
-    huira.write_png("output/starfield.png", frame_buffer.sensor_response, 8)
+    huira.write_png("output/starfield.png", huira.linear_to_srgb(frame_buffer.sensor_response))
 
 if __name__ == "__main__":
     main()
