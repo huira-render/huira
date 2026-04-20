@@ -34,7 +34,7 @@ def main():
     camera_model = scene.new_camera_model()
     camera_model.use_blender_convention()
     camera_model.set_focal_length(mm(50))
-    camera_model.configure_sensor_from_size((1920, 1080), mm(36), mm(36))
+    camera_model.configure_sensor_from_size((1920, 1080), mm(36))
     camera_model.set_fstop(16)
 
     # Create an instance of the camera
@@ -72,7 +72,7 @@ def main():
     renderer.render(scene_view, frame_buffer)
     
     # Save the results
-    huira.write_png("output/gateway_render.png", frame_buffer.sensor_response, 8)
+    huira.write_png("output/gateway_render.png", huira.linear_to_srgb(frame_buffer.sensor_response))
 
 if __name__ == "__main__":
     main()

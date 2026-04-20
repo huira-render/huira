@@ -116,8 +116,8 @@ int main(int argc, char** argv) {
     renderer.render(scene_view, frame_buffer);
 
     // Save the results to PNGs
-    huira::write_image_png("output/moon_render.png", frame_buffer.sensor_response());
-    huira::write_image_png("output/moon_albedo.png", frame_buffer.albedo().get_channel(0));
+    huira::write_image_png("output/moon_render.png", huira::linear_to_srgb(frame_buffer.sensor_response()));
+    huira::write_image_png("output/moon_albedo.png", huira::linear_to_srgb(frame_buffer.albedo().get_channel(0)));
 
     // Save the results to CSVs:  THIS ONLY WORKS FOR MONO IMAGES
     write_image_csv("output/moon_render.csv", frame_buffer.sensor_response().get_channel(0));

@@ -10,8 +10,10 @@
 #include "pybind11/stl.h"
 
 #include "huira/images/image.hpp"
-#include "huira/images/io/png_io.hpp"
+#include "huira/images/io/color_space.hpp"
 #include "huira/images/io/jpeg_io.hpp"
+#include "huira/images/io/png_io.hpp"
+#include "huira/images/io/read_image.hpp"
 #include "huira/images/io/tiff_io.hpp"
 
 namespace py = pybind11;
@@ -205,107 +207,186 @@ namespace huira {
         // =============== //
         // === PNG I/O === //
         // =============== //
-        m.def("read_png", [](const std::string& path) {
-            auto [img, alpha] = read_image_png(fs::path(path));
-            return py::make_tuple(std::move(img), std::move(alpha));
-            }, py::arg("filepath"), "Read a PNG as an RGB image");
+        m.def("read_png", [](const std::string& path, bool read_alpha) {
+            return read_image_png(fs::path(path), read_alpha);
+            }, py::arg("filepath"), py::arg("read_alpha") = true, "Read a PNG into an RGB Bundle");
 
-        m.def("read_png_mono", [](const std::string& path) {
-            auto [img, alpha] = read_image_png_mono(fs::path(path));
-            return py::make_tuple(std::move(img), std::move(alpha));
-            }, py::arg("filepath"), "Read a PNG as a mono image");
+        m.def("read_png_mono", [](const std::string& path, bool read_alpha) {
+            return read_image_png_mono(fs::path(path), read_alpha);
+            }, py::arg("filepath"), py::arg("read_alpha") = true, "Read a PNG into a Float Bundle");
 
-        m.def("write_png",
-            [](const std::string& p, const Image<float>& img, int bd) {
-                write_image_png(fs::path(p), img, bd);
-            },
-            py::arg("filepath"), py::arg("image"), py::arg("bit_depth") = 8);
+        // Thanks to implicitly_convertible, this ONE binding accepts both:
+        // huira.write_png("out.png", my_bundle) AND huira.write_png("out.png", my_image)
+        m.def("write_png", [](const std::string& p, const ImageBundle<float>& bundle) {
+            write_image_png(fs::path(p), bundle);
+            }, py::arg("filepath"), py::arg("bundle"));
 
-        m.def("write_png",
-            [](const std::string& p, const Image<RGB>& img, int bd) {
-                write_image_png(fs::path(p), img, bd);
-            },
-            py::arg("filepath"), py::arg("image"), py::arg("bit_depth") = 8);
-
-        m.def("write_png",
-            [](const std::string& p, const Image<float>& img,
-                const Image<float>& alpha, int bd) {
-                    write_image_png(fs::path(p), img, alpha, bd);
-            },
-            py::arg("filepath"), py::arg("image"),
-            py::arg("alpha"), py::arg("bit_depth") = 8);
-
-        m.def("write_png",
-            [](const std::string& p, const Image<RGB>& img,
-                const Image<float>& alpha, int bd) {
-                    write_image_png(fs::path(p), img, alpha, bd);
-            },
-            py::arg("filepath"), py::arg("image"),
-            py::arg("alpha"), py::arg("bit_depth") = 8);
+        m.def("write_png", [](const std::string& p, const ImageBundle<RGB>& bundle) {
+            write_image_png(fs::path(p), bundle);
+            }, py::arg("filepath"), py::arg("bundle"));
 
 
         // ================ //
         // === JPEG I/O === //
         // ================ //
         m.def("read_jpeg", [](const std::string& path) {
-            auto img = read_image_jpeg(fs::path(path));
-            return img;
-            }, py::arg("filepath"), "Read a JPEG as an RGB image");
+            return read_image_jpeg(fs::path(path));
+            }, py::arg("filepath"), "Read a JPEG into an RGB Bundle");
 
         m.def("read_jpeg_mono", [](const std::string& path) {
-            auto img = read_image_jpeg_mono(fs::path(path));
-            return img;
-            }, py::arg("filepath"), "Read a JPEG as a mono image");
+            return read_image_jpeg_mono(fs::path(path));
+            }, py::arg("filepath"), "Read a JPEG into a Float Bundle");
 
-        m.def("write_jpeg",
-            [](const std::string& p, const Image<float>& img, int q) {
-                write_image_jpeg(fs::path(p), img, q);
-            },
-            py::arg("filepath"), py::arg("image"), py::arg("quality") = 95);
+        m.def("write_jpeg", [](const std::string& p, const ImageBundle<float>& bundle, int quality) {
+            write_image_jpeg(fs::path(p), bundle, quality);
+            }, py::arg("filepath"), py::arg("bundle"), py::arg("quality") = 95);
 
-        m.def("write_jpeg",
-            [](const std::string& p, const Image<RGB>& img, int q) {
-                write_image_jpeg(fs::path(p), img, q);
-            },
-            py::arg("filepath"), py::arg("image"), py::arg("quality") = 95);
+        m.def("write_jpeg", [](const std::string& p, const ImageBundle<RGB>& bundle, int quality) {
+            write_image_jpeg(fs::path(p), bundle, quality);
+            }, py::arg("filepath"), py::arg("bundle"), py::arg("quality") = 95);
 
         
         // ================ //
         // === TIFF I/O === //
         // ================ //
-        // Read RGB (File)
         m.def("read_tiff", [](const std::string& path, bool read_alpha) {
-            auto [img, alpha] = read_image_tiff_rgb(fs::path(path), read_alpha);
-            return py::make_tuple(std::move(img), std::move(alpha));
-            }, py::arg("filepath"), py::arg("read_alpha") = true, "Read a TIFF as an RGB image from file");
+            return read_image_tiff_rgb(fs::path(path), read_alpha);
+            }, py::arg("filepath"), py::arg("read_alpha") = true, "Read a TIFF into an RGB Bundle");
 
-        // Read Mono (File)
         m.def("read_tiff_mono", [](const std::string& path, bool read_alpha) {
-            auto [img, alpha] = read_image_tiff_mono(fs::path(path), read_alpha);
-            return py::make_tuple(std::move(img), std::move(alpha));
-            }, py::arg("filepath"), py::arg("read_alpha") = true, "Read a TIFF as a mono image from file");
+            return read_image_tiff_mono(fs::path(path), read_alpha);
+            }, py::arg("filepath"), py::arg("read_alpha") = true, "Read a TIFF into a Float Bundle");
 
-        // Write Float (Mono)
-        m.def("write_tiff",
-            [](const std::string& p, const Image<float>& img, int bd, const std::string& desc, const std::string& artist) {
-                write_image_tiff(fs::path(p), img, bd, desc, artist);
-            },
-            py::arg("filepath"), py::arg("image"), py::arg("bit_depth") = 8,
-            py::arg("description") = "", py::arg("artist") = "");
+        m.def("write_tiff", [](const std::string& p, const ImageBundle<float>& bundle,
+            const std::string& desc, const std::string& artist) {
+                write_image_tiff(fs::path(p), bundle, desc, artist);
+            }, py::arg("filepath"), py::arg("bundle"),
+                py::arg("description") = "", py::arg("artist") = "",
+                "Write a Float Bundle to a TIFF file");
 
-        // Write RGB
-        m.def("write_tiff",
-            [](const std::string& p, const Image<RGB>& img, int bd, const std::string& desc, const std::string& artist) {
-                write_image_tiff(fs::path(p), img, bd, desc, artist);
-            },
-            py::arg("filepath"), py::arg("image"), py::arg("bit_depth") = 8,
-            py::arg("description") = "", py::arg("artist") = "");
+        m.def("write_tiff", [](const std::string& p, const ImageBundle<RGB>& bundle,
+            const std::string& desc, const std::string& artist) {
+                write_image_tiff(fs::path(p), bundle, desc, artist);
+            }, py::arg("filepath"), py::arg("bundle"),
+                py::arg("description") = "", py::arg("artist") = "",
+                "Write an RGB Bundle to a TIFF file");
+
+
+        // ========================================== //
+        // === Generic Image I/O (Format Agnostic) === //
+        // ========================================== //
+        
+        m.def("read_image", [](const std::string& path, bool read_alpha) {
+            return read_image(fs::path(path), read_alpha);
+            }, py::arg("filepath"), py::arg("read_alpha") = true,
+                "Read an image from disk into an RGB Bundle, auto-detecting format");
+
+        m.def("read_image_mono", [](const std::string& path, bool read_alpha) {
+            return read_image_mono(fs::path(path), read_alpha);
+            }, py::arg("filepath"), py::arg("read_alpha") = true,
+                "Read an image from disk into a Float Bundle, auto-detecting format");
+
+
+        // ======================================================== //
+        // === Color Space Conversions (Direct Image Overloads) === //
+        // ======================================================== //
+
+        // Linear -> sRGB (Accepting a raw RGB Image reference)
+        m.def("linear_to_srgb", [](const Image<RGB>& img) {
+            Image<RGB> srgb_image(img.width(), img.height());
+            for (int y = 0; y < img.height(); ++y) {
+                for (int x = 0; x < img.width(); ++x) {
+                    const RGB& linear_pixel = img(x, y);
+                    srgb_image(x, y) = RGB{
+                        linear_to_srgb(linear_pixel[0]),
+                        linear_to_srgb(linear_pixel[1]),
+                        linear_to_srgb(linear_pixel[2])
+                    };
+                }
+            }
+            ImageBundle<RGB> output_bundle(std::move(srgb_image));
+            output_bundle.color_space = ColorSpaceHint::sRGB;
+            return output_bundle;
+            }, py::arg("image"), "Convert a raw linear RGB image reference directly to an sRGB bundle");
+
+        // Linear -> sRGB (Accepting a raw Float Image reference)
+        m.def("linear_to_srgb", [](const Image<float>& img) {
+            Image<float> srgb_image(img.width(), img.height());
+            for (int y = 0; y < img.height(); ++y) {
+                for (int x = 0; x < img.width(); ++x) {
+                    const float& linear_pixel = img(x, y);
+                    srgb_image(x, y) = linear_to_srgb(linear_pixel);
+                }
+            }
+            ImageBundle<float> output_bundle(std::move(srgb_image));
+            output_bundle.color_space = ColorSpaceHint::sRGB;
+            return output_bundle;
+            }, py::arg("image"), "Convert a raw linear float image reference directly to an sRGB bundle");
+
+        // sRGB -> Linear (Accepting a raw RGB Image reference)
+        m.def("srgb_to_linear", [](const Image<RGB>& img) {
+            Image<RGB> linear_image(img.width(), img.height());
+            for (int y = 0; y < img.height(); ++y) {
+                for (int x = 0; x < img.width(); ++x) {
+                    const RGB& srgb_pixel = img(x, y);
+                    linear_image(x, y) = RGB{
+                        srgb_to_linear(srgb_pixel[0]),
+                        srgb_to_linear(srgb_pixel[1]),
+                        srgb_to_linear(srgb_pixel[2])
+                    };
+                }
+            }
+            ImageBundle<RGB> output_bundle(std::move(linear_image));
+            output_bundle.color_space = ColorSpaceHint::Linear;
+            return output_bundle;
+            }, py::arg("image"), "Convert a raw sRGB image reference directly to a linear bundle");
+
+        // sRGB -> Linear (Accepting a raw Float Image reference)
+        m.def("srgb_to_linear", [](const Image<float>& img) {
+            Image<float> linear_image(img.width(), img.height());
+            for (int y = 0; y < img.height(); ++y) {
+                for (int x = 0; x < img.width(); ++x) {
+                    const float& srgb_pixel = img(x, y);
+                    linear_image(x, y) = srgb_to_linear(srgb_pixel);
+                }
+            }
+            ImageBundle<float> output_bundle(std::move(linear_image));
+            output_bundle.color_space = ColorSpaceHint::Linear;
+            return output_bundle;
+            }, py::arg("image"), "Convert a raw sRGB float image reference directly to a linear bundle");
+    }
+
+    template <IsImagePixel PixelT>
+    void bind_image_bundle(py::module_& m, const std::string& class_name) {
+        using Bundle = ImageBundle<PixelT>;
+        using Img = Image<PixelT>;
+
+        py::class_<Bundle>(m, class_name.c_str())
+            // Expose the constructors
+            .def(py::init<Img>(), py::arg("image"))
+            .def(py::init<Img, Image<float>>(), py::arg("image"), py::arg("alpha"))
+
+            // Expose the metadata fields
+            .def_readwrite("image", &Bundle::image)
+            .def_readwrite("alpha", &Bundle::alpha)
+            .def_readwrite("color_space", &Bundle::color_space)
+            .def_readwrite("gamma_value", &Bundle::gamma_value)
+            .def_readwrite("bit_depth", &Bundle::bit_depth);
+
+        py::implicitly_convertible<Img, Bundle>();
     }
 
     // ---------------------------------------------------------------------------
     // bind_all_images  --  call this once from PYBIND11_MODULE
     // ---------------------------------------------------------------------------
     inline void bind_common_images(py::module_& m) {
+        py::enum_<ColorSpaceHint>(m, "ColorSpaceHint")
+            .value("Linear", ColorSpaceHint::Linear)
+            .value("sRGB", ColorSpaceHint::sRGB)
+            .value("Gamma", ColorSpaceHint::Gamma)
+            .value("Unknown", ColorSpaceHint::Unknown)
+            .export_values();
+
         // Scalar images
         bind_image<float>(m, "Image_f32");
         bind_image<double>(m, "Image_f64");
@@ -315,6 +396,15 @@ namespace huira {
         bind_image<uint64_t>(m, "Image_u64");
 
         bind_image<Vec3<float>>(m, "Image_Vec3f");
+
+        bind_image_bundle<float>(m, "ImageBundle_f32");
+        bind_image_bundle<double>(m, "ImageBundle_f64");
+        bind_image_bundle<uint8_t>(m, "ImageBundle_u8");
+        bind_image_bundle<uint16_t>(m, "ImageBundle_u16");
+        bind_image_bundle<uint32_t>(m, "ImageBundle_u32");
+        bind_image_bundle<uint64_t>(m, "ImageBundle_u64");
+
+        bind_image_bundle<Vec3<float>>(m, "ImageBundle_Vec3f");
 
         // IO functions
         bind_image_io(m);

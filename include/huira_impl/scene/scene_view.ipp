@@ -851,7 +851,7 @@ namespace huira {
     }
 
     template <IsSpectral TSpectral>
-    void SceneView<TSpectral>::alpha_occlusion_filter_(const RTCFilterFunctionNArguments* args) {
+    void SceneView<TSpectral>::alpha_occlusion_filter_(const RTCFilterFunctionNArguments* args) noexcept {
         if (args->N != 1) {
             return;
         }
@@ -902,7 +902,7 @@ namespace huira {
     }
 
     template <IsSpectral TSpectral>
-    void SceneView<TSpectral>::alpha_intersection_filter_(const RTCFilterFunctionNArguments* args) {
+    void SceneView<TSpectral>::alpha_intersection_filter_(const RTCFilterFunctionNArguments* args) noexcept {
         alpha_occlusion_filter_(args);
     }
 }
