@@ -37,7 +37,7 @@ namespace huira {
      * @return Raw decoded data with resolution and pixel buffer
      * @throws std::runtime_error if the data cannot be decoded
      */
-    inline JPEGData read_jpeg_raw_(const unsigned char* data, std::size_t size)
+    inline JPEGData read_jpeg_raw_(const unsigned char* data, std::size_t size, bool force_gray = false)
     {
         HUIRA_LOG_INFO("read_jpeg_raw_ - Reading JPEG from memory (" + std::to_string(size) + " bytes)");
 
@@ -58,11 +58,10 @@ namespace huira {
             tjDestroy(decompressor);
             HUIRA_THROW_ERROR("read_jpeg_raw_ - Failed to read JPEG header (" + tj_err + ")");
         }
-
-        // Always decompress to RGB — TurboJPEG handles grayscale promotion
-        constexpr int pixel_format = TJPF_RGB;
-        constexpr int channels = 3;
-        std::vector<unsigned char> raw_data(static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * channels);
+        
+        int pixel_format = force_gray ? TJPF_GRAY : TJPF_RGB;
+        int channels = force_gray ? 1 : 3;
+        std::vector<unsigned char> raw_data(static_cast<std::size_t>(width * height * channels));
 
         if (tjDecompress2(decompressor, data,
                 static_cast<unsigned long>(size),
@@ -95,13 +94,13 @@ namespace huira {
      *
      * @param data Pointer to the JPEG data in memory
      * @param size Size of the data in bytes
-     * @return The linear RGB image.
+     * @return An ImageBundle<RGB> containing the linear RGB image.
      */
-    inline Image<RGB> read_image_jpeg(const unsigned char* data, std::size_t size)
+    inline ImageBundle<RGB> read_image_jpeg(const unsigned char* data, std::size_t size)
     {
         auto jpeg_data = read_jpeg_raw_(data, size);
 
-        Image<RGB> image(jpeg_data.resolution);
+        ImageBundle<RGB> bundle{ Image<RGB>(jpeg_data.resolution) };
 
         constexpr int channels = 3;
 
@@ -110,15 +109,15 @@ namespace huira {
                 std::size_t idx = (static_cast<std::size_t>(y) * static_cast<std::size_t>(jpeg_data.width)
                     + static_cast<std::size_t>(x)) * channels;
 
-                float r = srgb_to_linear(static_cast<float>(jpeg_data.raw_data[idx + 0]) / 255.0f);
-                float g = srgb_to_linear(static_cast<float>(jpeg_data.raw_data[idx + 1]) / 255.0f);
-                float b = srgb_to_linear(static_cast<float>(jpeg_data.raw_data[idx + 2]) / 255.0f);
+                float r = integer_to_float<std::uint8_t>(jpeg_data.raw_data[idx + 0]);
+                float g = integer_to_float<std::uint8_t>(jpeg_data.raw_data[idx + 1]);
+                float b = integer_to_float<std::uint8_t>(jpeg_data.raw_data[idx + 2]);
 
-                image(x, y) = RGB{ r, g, b };
+                bundle.image(x, y) = RGB{ r, g, b };
             }
         }
 
-        return image;
+        return bundle;
     }
 
     /**
@@ -128,9 +127,9 @@ namespace huira {
      * to the buffer-based implementation.
      *
      * @param filepath Path to the JPEG file to read
-     * @return The linear RGB image.
+     * @return An ImageBundle<RGB> containing the linear RGB image.
      */
-    inline Image<RGB> read_image_jpeg(const fs::path& filepath)
+    inline ImageBundle<RGB> read_image_jpeg(const fs::path& filepath)
     {
         auto file_data = read_file_to_buffer(filepath);
         return read_image_jpeg(file_data.data(), file_data.size());
@@ -147,30 +146,19 @@ namespace huira {
      *
      * @param data Pointer to the JPEG data in memory
      * @param size Size of the data in bytes
-     * @return The linear mono image.
+     * @return An ImageBundle<float> containing the linear mono image.
      */
-    inline Image<float> read_image_jpeg_mono(const unsigned char* data, std::size_t size)
+    inline ImageBundle<float> read_image_jpeg_mono(const unsigned char* data, std::size_t size)
     {
-        auto jpeg_data = read_jpeg_raw_(data, size);
+        auto jpeg_data = read_jpeg_raw_(data, size, true);
 
-        Image<float> image(jpeg_data.resolution);
+        ImageBundle<float> bundle{ Image<float>(jpeg_data.resolution) };
 
-        constexpr int channels = 3;
-
-        for (int y = 0; y < jpeg_data.height; ++y) {
-            for (int x = 0; x < jpeg_data.width; ++x) {
-                std::size_t idx = (static_cast<std::size_t>(y) * static_cast<std::size_t>(jpeg_data.width)
-                    + static_cast<std::size_t>(x)) * channels;
-
-                float r = srgb_to_linear(static_cast<float>(jpeg_data.raw_data[idx + 0]) / 255.0f);
-                float g = srgb_to_linear(static_cast<float>(jpeg_data.raw_data[idx + 1]) / 255.0f);
-                float b = srgb_to_linear(static_cast<float>(jpeg_data.raw_data[idx + 2]) / 255.0f);
-
-                image(x, y) = (r + g + b) / 3.0f;
-            }
+        for (std::size_t i = 0; i < static_cast<std::size_t>(jpeg_data.width * jpeg_data.height); ++i) {
+            bundle.image[i] = integer_to_float<std::uint8_t>(jpeg_data.raw_data[i]);
         }
 
-        return image;
+        return bundle;
     }
 
     /**
@@ -180,9 +168,9 @@ namespace huira {
      * to the buffer-based implementation.
      *
      * @param filepath Path to the JPEG file to read
-     * @return The linear mono image.
+     * @return An ImageBundle<float> containing the linear mono image.
      */
-    inline Image<float> read_image_jpeg_mono(const fs::path& filepath)
+    inline ImageBundle<float> read_image_jpeg_mono(const fs::path& filepath)
     {
         auto file_data = read_file_to_buffer(filepath);
         return read_image_jpeg_mono(file_data.data(), file_data.size());
@@ -199,16 +187,16 @@ namespace huira {
      * using TurboJPEG. The function automatically creates necessary directories.
      *
      * @param filepath Path where the JPEG file will be written
-     * @param image The linear RGB image to write
+     * @param image An ImageBundle<RGB> with the linear RGB image to write
      * @param quality JPEG compression quality (1-100, default 95)
      * @throws std::runtime_error if the file cannot be created, the image is empty,
      *         quality is invalid, or if any error occurs during writing
      */
-    inline void write_image_jpeg(const fs::path& filepath, const Image<RGB>& image, int quality)
+    inline void write_image_jpeg(const fs::path& filepath, const ImageBundle<RGB>& output_image, int quality)
     {
         HUIRA_LOG_INFO("write_image_jpeg - Writing to: " + filepath.string());
 
-        if (image.width() == 0 || image.height() == 0) {
+        if (output_image.image.width() == 0 || output_image.image.height() == 0) {
             HUIRA_THROW_ERROR("write_image_jpeg - Cannot write empty image: " + filepath.string());
         }
 
@@ -218,8 +206,8 @@ namespace huira {
 
         make_path(filepath);
 
-        int width = image.width();
-        int height = image.height();
+        int width = output_image.image.width();
+        int height = output_image.image.height();
 
         // Convert linear RGB to sRGB 8-bit
         constexpr int channels = 3;
@@ -229,11 +217,11 @@ namespace huira {
             for (int x = 0; x < width; ++x) {
                 std::size_t idx = (static_cast<std::size_t>(y) * static_cast<std::size_t>(width)
                     + static_cast<std::size_t>(x)) * channels;
-                const RGB& pixel = image(x, y);
+                const RGB& pixel = output_image.image(x, y);
 
-                srgb_data[idx + 0] = float_to_integer<uint8_t>(linear_to_srgb(pixel[0]));
-                srgb_data[idx + 1] = float_to_integer<uint8_t>(linear_to_srgb(pixel[1]));
-                srgb_data[idx + 2] = float_to_integer<uint8_t>(linear_to_srgb(pixel[2]));
+                srgb_data[idx + 0] = float_to_integer<uint8_t>(pixel[0]);
+                srgb_data[idx + 1] = float_to_integer<uint8_t>(pixel[1]);
+                srgb_data[idx + 2] = float_to_integer<uint8_t>(pixel[2]);
             }
         }
 
@@ -247,15 +235,10 @@ namespace huira {
         unsigned long jpeg_size = 0;
 
         if (tjCompress2(compressor, srgb_data.data(), width, 0, height,
-                TJPF_RGB, &jpeg_buf, &jpeg_size, TJSAMP_444, quality,
-                TJFLAG_NOREALLOC) != 0) {
-            // TJFLAG_NOREALLOC may fail if initial buffer is too small; retry without it
-            if (tjCompress2(compressor, srgb_data.data(), width, 0, height,
-                    TJPF_RGB, &jpeg_buf, &jpeg_size, TJSAMP_444, quality, 0) != 0) {
-                std::string tj_err = tjGetErrorStr2(compressor);
-                tjDestroy(compressor);
-                HUIRA_THROW_ERROR("write_image_jpeg - Failed to compress JPEG: " + filepath.string() + " (" + tj_err + ")");
-            }
+                TJPF_RGB, &jpeg_buf, &jpeg_size, TJSAMP_444, quality, 0) != 0) {
+            std::string tj_err = tjGetErrorStr2(compressor);
+            tjDestroy(compressor);
+            HUIRA_THROW_ERROR("write_image_jpeg - Failed to compress JPEG: " + filepath.string() + " (" + tj_err + ")");
         }
 
         tjDestroy(compressor);
@@ -291,17 +274,18 @@ namespace huira {
      * Convenience overload that promotes a mono image to RGB before writing.
      *
      * @param filepath Path where the JPEG file will be written
-     * @param image The linear mono image to write
+     * @param image An ImageBundle<float> with the linear mono image to write
      * @param quality JPEG compression quality (1-100, default 95)
      */
-    inline void write_image_jpeg(const fs::path& filepath, const Image<float>& image, int quality)
+    inline void write_image_jpeg(const fs::path& filepath, const ImageBundle<float>& output_image, int quality)
     {
-        Image<RGB> image_rgb(image.width(), image.height());
-        for (std::size_t i = 0; i < image.size(); ++i) {
-            image_rgb[i] = RGB{ image[i], image[i], image[i] };
+        Image<RGB> image_rgb(output_image.image.width(), output_image.image.height());
+        for (std::size_t i = 0; i < output_image.image.size(); ++i) {
+            float val = output_image.image[i];
+            image_rgb[i] = RGB{ val, val, val };
         }
-
-        write_image_jpeg(filepath, image_rgb, quality);
+        ImageBundle<RGB> output_bundle(output_image, std::move(image_rgb));
+        write_image_jpeg(filepath, output_bundle, quality);
     }
 
 }
