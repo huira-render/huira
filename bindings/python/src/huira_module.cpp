@@ -43,6 +43,7 @@
 #include "huira/scene/scene_view_py.ipp"
 
 #include "huira/util/paths_py.ipp"
+#include "huira/util/logger_py.ipp"
 
 namespace py = pybind11;
 
@@ -95,6 +96,7 @@ PYBIND11_MODULE(_huira, m) {
     huira::bind_rotation(m);
 
     huira::bind_paths(m);
+    huira::bind_logger(m);
 
     huira::spice::bind_spice(m);
 

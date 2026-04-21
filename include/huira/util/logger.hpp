@@ -82,23 +82,23 @@ namespace huira {
         Logger(Logger&&) = delete;
         Logger& operator=(Logger&&) = delete;
 
-        void set_level(LogLevel level);
-        LogLevel get_level() const;
-        void set_buffer_size(size_t size);
-        size_t get_buffer_size() const;
-        void set_custom_sink(CustomSink sink);
-        void clear_custom_sink();
-        void log(LogLevel level, const std::string& message);
-        std::string dump_to_file(const std::string& filepath = "");
-        void enable_crash_handler(bool enable = true);
+        static void set_level(LogLevel level);
+        static LogLevel get_level();
+        static void set_buffer_size(size_t size);
+        static size_t get_buffer_size();
+        static void set_custom_sink(CustomSink sink);
+        static void clear_custom_sink();
+        static void log(LogLevel level, const std::string& message);
+        static std::string dump_to_file(const std::string& filepath = "");
+        static void enable_crash_handler(bool enable = true);
 
         // Console output configuration
-        void enable_console_debug(bool enable = true);
-        void enable_console_info(bool enable = true);
-        void enable_console_warning(bool enable = true);
-        bool is_console_debug_enabled() const;
-        bool is_console_info_enabled() const;
-        bool is_console_warning_enabled() const;
+        static void enable_console_debug(bool enable = true);
+        static void enable_console_info(bool enable = true);
+        static void enable_console_warning(bool enable = true);
+        static bool is_console_debug_enabled();
+        static bool is_console_info_enabled();
+        static bool is_console_warning_enabled();
 
     private:
         Logger();
@@ -301,16 +301,23 @@ namespace huira {
 
 
 namespace huira {
+    std::vector<const char*>& get_thread_scope_stack() {
+        thread_local std::vector<const char*> scope_stack;
+        return scope_stack;
+    }
+
     class ScopeLogger {
     private:
-        std::string scope_name;
+        const char* scope_name;
     public:
-        ScopeLogger(std::string name) : scope_name(std::move(name)) {
-            HUIRA_LOG_INFO("[START] " + scope_name);
+        ScopeLogger(const char* name) : scope_name(name) {
+            get_thread_scope_stack().push_back(scope_name);
         }
 
         ~ScopeLogger() {
-            HUIRA_LOG_INFO("[DONE ] " + scope_name);
+            if (!get_thread_scope_stack().empty()) {
+                get_thread_scope_stack().pop_back();
+            }
         }
     };
 }

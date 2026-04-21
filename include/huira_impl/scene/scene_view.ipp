@@ -35,8 +35,10 @@ namespace huira {
         : exposure_interval_{ exposure_interval },
         device_{ scene.device_ }
     {
-        HUIRA_TRACE_SCOPE("SceneView::SceneView - Created over interval [" + std::to_string(exposure_interval.start.et()) +
-            ",  " + std::to_string(exposure_interval.end.et()) + "]");
+        HUIRA_TRACE_SCOPE("SceneView::SceneView");
+        HUIRA_LOG_INFO("Created over interval [" +
+            std::to_string(exposure_interval.start.et()) + ",  " +
+            std::to_string(exposure_interval.end.et()) + "]");
 
         // Create the temporal samples:
         if (num_temporal_samples < 1) {

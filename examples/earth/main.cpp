@@ -23,6 +23,8 @@ static std::pair<fs::path, fs::path> parse_input_paths(int argc, char** argv) {
 
 
 int main(int argc, char** argv) {
+    huira::Logger::enable_console_debug();
+
     // Parsing input paths
     auto [earth_path, kernel_path] = parse_input_paths(argc, argv);
 
@@ -33,7 +35,6 @@ int main(int argc, char** argv) {
 
     // Create the scene
     huira::Scene<TSpectral> scene;
-    scene.set_background_radiance(TSpectral{ 1.f, 1.f, 1.f });
 
     // Set the observation time
     huira::Time time("2019-02-06T10:27:00");
@@ -45,7 +46,7 @@ int main(int argc, char** argv) {
     camera_model.configure_sensor_from_size({ 1080, 1080 }, 6_mm);
 
     // Set camera exposure settings
-    camera_model.set_fstop(12);
+    camera_model.set_fstop(10);
     camera_model.set_sensor_gain(1.f);
     camera_model.set_sensor_bit_depth(12);
     camera_model.set_sensor_quantum_efficiency(0.8);
@@ -88,7 +89,7 @@ int main(int argc, char** argv) {
     // Create the renderer
     huira::Renderer<TSpectral> renderer;
     renderer.set_max_bounces(3);
-    renderer.set_samples_per_pixel(100);
+    renderer.set_samples_per_pixel(10);
 
     // Create a scene view over the exposure interval
     std::size_t num_blur_samples = 1;
@@ -100,4 +101,6 @@ int main(int argc, char** argv) {
     // Save the results
     huira::write_image_png("output/earth.png", huira::linear_to_srgb(frame_buffer.sensor_response()));
     huira::write_image_png("output/earth_normals.png", huira::normal_map(frame_buffer.camera_normals()));
+
+    huira::Logger::dump_to_file("output/earth_render_log.txt");
 }

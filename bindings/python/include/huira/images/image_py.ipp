@@ -11,6 +11,7 @@
 
 #include "huira/images/image.hpp"
 #include "huira/images/io/color_space.hpp"
+#include "huira/images/color_map.hpp"
 #include "huira/images/io/jpeg_io.hpp"
 #include "huira/images/io/png_io.hpp"
 #include "huira/images/io/read_image.hpp"
@@ -356,6 +357,17 @@ namespace huira {
             }, py::arg("image"), "Convert a raw sRGB float image reference directly to a linear bundle");
     }
 
+    // ---------------------------------------------------------------------------
+    // bind_image_utils  --  visualization and map conversion tools
+    // ---------------------------------------------------------------------------
+    inline void bind_image_utils(py::module_& m) {
+        m.def("normal_map", &normal_map, py::arg("normals"),
+            "Convert a normal map (Image_Vec3f) into an RGB visualization image mapped to.");
+
+        m.def("depth_map", &depth_map, py::arg("depth"),
+            "Convert a depth map (Image_f32) into an auto-normalized RGB visualization image.");
+    }
+
     template <IsImagePixel PixelT>
     void bind_image_bundle(py::module_& m, const std::string& class_name) {
         using Bundle = ImageBundle<PixelT>;
@@ -408,6 +420,9 @@ namespace huira {
 
         // IO functions
         bind_image_io(m);
+
+        // Utility functions
+        bind_image_utils(m);
     }
 
 }
