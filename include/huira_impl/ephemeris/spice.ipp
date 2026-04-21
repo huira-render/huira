@@ -146,9 +146,7 @@ namespace huira::spice {
             if (failed_c()) {
                 reset_c();
                 // No LSK loaded - load our default
-                std::string message = "Loading default LSK from: " + get_default_lsk_path().string();
-                std::cout << "\n" + message + "\n";
-                HUIRA_LOG_INFO(message);
+                HUIRA_LOG_INFO("Loading default LSK from: " + get_default_lsk_path().string());
                 furnsh_c(get_default_lsk_path().string().c_str());
                 if (failed_c()) {
                     SpiceChar msg[1841];

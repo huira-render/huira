@@ -88,8 +88,9 @@ namespace huira {
         , console_info_(false)
         , console_warning_(true)  // Warning is on by default
         , custom_sink_(nullptr) {
-        // Automatically enable crash handler
-        enable_crash_handler(true);
+        
+        crash_handler_enabled_.store(true, std::memory_order_relaxed);
+        install_crash_handlers();
     }
 
     /**
@@ -105,7 +106,7 @@ namespace huira {
      * @param level Minimum severity level to log
      */
     void Logger::set_level(LogLevel level) {
-        min_level_.store(level, std::memory_order_relaxed);
+        instance().min_level_.store(level, std::memory_order_relaxed);
     }
 
     /**
@@ -113,8 +114,8 @@ namespace huira {
      * 
      * @return LogLevel Current minimum log level
      */
-    LogLevel Logger::get_level() const {
-        return min_level_.load(std::memory_order_relaxed);
+    LogLevel Logger::get_level() {
+        return instance().min_level_.load(std::memory_order_relaxed);
     }
 
     /**
@@ -130,17 +131,17 @@ namespace huira {
         std::vector<LogEntry> new_buffer(size);
 
         // Copy existing entries
-        size_t current_write = write_index_.load(std::memory_order_relaxed);
-        size_t old_size = buffer_.size();
+        size_t current_write = instance().write_index_.load(std::memory_order_relaxed);
+        size_t old_size = instance().buffer_.size();
         size_t entries_to_copy = std::min(current_write, std::min(old_size, size));
 
         for (size_t i = 0; i < entries_to_copy; ++i) {
             size_t old_idx = (current_write - entries_to_copy + i) % old_size;
-            new_buffer[i] = buffer_[old_idx];
+            new_buffer[i] = instance().buffer_[old_idx];
         }
 
-        buffer_ = std::move(new_buffer);
-        write_index_.store(entries_to_copy, std::memory_order_relaxed);
+        instance().buffer_ = std::move(new_buffer);
+        instance().write_index_.store(entries_to_copy, std::memory_order_relaxed);
     }
 
     /**
@@ -148,8 +149,8 @@ namespace huira {
      * 
      * @return size_t Number of log entries that can be stored
      */
-    size_t Logger::get_buffer_size() const {
-        return buffer_.size();
+    size_t Logger::get_buffer_size() {
+        return instance().buffer_.size();
     }
 
     /**
@@ -161,14 +162,14 @@ namespace huira {
      * @param sink Callback function to receive log entries
      */
     void Logger::set_custom_sink(CustomSink sink) {
-        custom_sink_ = std::move(sink);
+        instance().custom_sink_ = std::move(sink);
     }
 
     /**
      * @brief Clear the custom output sink.
      */
     void Logger::clear_custom_sink() {
-        custom_sink_ = nullptr;
+        instance().custom_sink_ = nullptr;
     }
 
     /**
@@ -181,7 +182,7 @@ namespace huira {
      * @param message Message to log
      */
     void Logger::log(LogLevel level, const std::string& message) {
-        if (level < min_level_.load(std::memory_order_relaxed)) {
+        if (level < instance().min_level_.load(std::memory_order_relaxed)) {
             return;
         }
 
@@ -193,13 +194,13 @@ namespace huira {
         };
 
         // Add to circular buffer
-        size_t index = write_index_.fetch_add(1, std::memory_order_relaxed) % buffer_.size();
-        buffer_[index] = entry;
+        size_t index = instance().write_index_.fetch_add(1, std::memory_order_relaxed) % instance().buffer_.size();
+        instance().buffer_[index] = entry;
 
         // Call custom sink if set
-        if (custom_sink_) {
+        if (instance().custom_sink_) {
             try {
-                custom_sink_(entry);
+                instance().custom_sink_(entry);
             } catch (...) {
                 // Ignore exceptions from custom sink to prevent logging from crashing
             }
@@ -243,15 +244,15 @@ namespace huira {
         file << "=========\n\n";
         file << "Platform: " << platform_str << " | Compiler: " << compiler_str << "\n\n";
 
-        size_t current_write = write_index_.load(std::memory_order_relaxed);
-        size_t total_entries = std::min(current_write, buffer_.size());
-        size_t start_index = (current_write > buffer_.size())
-            ? current_write % buffer_.size()
+        size_t current_write = instance().write_index_.load(std::memory_order_relaxed);
+        size_t total_entries = std::min(current_write, instance().buffer_.size());
+        size_t start_index = (current_write > instance().buffer_.size())
+            ? current_write % instance().buffer_.size()
             : 0;
 
         for (size_t i = 0; i < total_entries; ++i) {
-            size_t index = (start_index + i) % buffer_.size();
-            const auto& entry = buffer_[index];
+            size_t index = (start_index + i) % instance().buffer_.size();
+            const auto& entry = instance().buffer_[index];
             if (!entry.message.empty()) {
                 file << entry.to_string() << '\n';
             }
@@ -270,9 +271,9 @@ namespace huira {
      * @param enable True to enable crash handling
      */
     void Logger::enable_crash_handler(bool enable) {
-        crash_handler_enabled_.store(enable, std::memory_order_relaxed);
+        instance().crash_handler_enabled_.store(enable, std::memory_order_relaxed);
         if (enable) {
-            install_crash_handlers();
+            instance().install_crash_handlers();
         }
     }
 
@@ -284,11 +285,11 @@ namespace huira {
      * @param enable True to enable debug console output
      */
     void Logger::enable_console_debug(bool enable) {
-        console_debug_.store(enable, std::memory_order_relaxed);
+        instance().console_debug_.store(enable, std::memory_order_relaxed);
         if (enable) {
             // If DEBUG is on, INFO and WARNING must also be on
-            console_info_.store(true, std::memory_order_relaxed);
-            console_warning_.store(true, std::memory_order_relaxed);
+            instance().console_info_.store(true, std::memory_order_relaxed);
+            instance().console_warning_.store(true, std::memory_order_relaxed);
         }
     }
 
@@ -301,13 +302,13 @@ namespace huira {
      * @param enable True to enable info console output
      */
     void Logger::enable_console_info(bool enable) {
-        console_info_.store(enable, std::memory_order_relaxed);
+        instance().console_info_.store(enable, std::memory_order_relaxed);
         if (enable) {
             // If INFO is on, WARNING must also be on
-            console_warning_.store(true, std::memory_order_relaxed);
+            instance().console_warning_.store(true, std::memory_order_relaxed);
         } else {
             // If INFO is off, DEBUG must also be off
-            console_debug_.store(false, std::memory_order_relaxed);
+            instance().console_debug_.store(false, std::memory_order_relaxed);
         }
     }
 
@@ -319,11 +320,11 @@ namespace huira {
      * @param enable True to enable warning console output
      */
     void Logger::enable_console_warning(bool enable) {
-        console_warning_.store(enable, std::memory_order_relaxed);
+        instance().console_warning_.store(enable, std::memory_order_relaxed);
         if (!enable) {
             // If WARNING is off, INFO and DEBUG must also be off
-            console_info_.store(false, std::memory_order_relaxed);
-            console_debug_.store(false, std::memory_order_relaxed);
+            instance().console_info_.store(false, std::memory_order_relaxed);
+            instance().console_debug_.store(false, std::memory_order_relaxed);
         }
     }
 
@@ -332,8 +333,8 @@ namespace huira {
      * 
      * @return bool True if debug console output is enabled
      */
-    bool Logger::is_console_debug_enabled() const {
-        return console_debug_.load(std::memory_order_relaxed);
+    bool Logger::is_console_debug_enabled() {
+        return instance().console_debug_.load(std::memory_order_relaxed);
     }
 
     /**
@@ -341,8 +342,8 @@ namespace huira {
      * 
      * @return bool True if info console output is enabled
      */
-    bool Logger::is_console_info_enabled() const {
-        return console_info_.load(std::memory_order_relaxed);
+    bool Logger::is_console_info_enabled() {
+        return instance().console_info_.load(std::memory_order_relaxed);
     }
 
     /**
@@ -350,8 +351,8 @@ namespace huira {
      * 
      * @return bool True if warning console output is enabled
      */
-    bool Logger::is_console_warning_enabled() const {
-        return console_warning_.load(std::memory_order_relaxed);
+    bool Logger::is_console_warning_enabled() {
+        return instance().console_warning_.load(std::memory_order_relaxed);
     }
 
     /**
@@ -396,6 +397,16 @@ namespace huira {
             return;
         }
         logger.log(LogLevel::Error, "Crash detected with signal: " + std::to_string(signal));
+
+        auto& scopes = get_thread_scope_stack();
+        if (!scopes.empty()) {
+            logger.log(LogLevel::Error, std::string("Crash inside scope: ") + scopes.back());
+            logger.log(LogLevel::Error, "Scope trace:");
+            for (const char* scope : scopes) {
+                logger.log(LogLevel::Error, std::string(" -> ") + scope);
+            }
+        }
+
         std::string log_path = logger.dump_to_file();
         output_crash_report(log_path);
 
