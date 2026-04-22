@@ -7,6 +7,7 @@
 #include "huira/core/types.hpp"
 #include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/render/trajectory_arc.hpp"
+#include "huira/geometry/vertex.hpp"
 
 namespace huira {
     /**

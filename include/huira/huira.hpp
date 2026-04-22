@@ -46,7 +46,7 @@
 #include "huira/render/frame_buffer.hpp"
 #include "huira/render/interaction.hpp"
 #include "huira/render/renderer.hpp"
-#include "huira/render/ray.hpp"
+#include "huira/geometry/ray.hpp"
 //#include "huira/render/sampler.hpp"        // Not part of the public API
 
 // Scene management

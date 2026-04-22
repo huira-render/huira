@@ -35,27 +35,24 @@ namespace huira {
         Texture& operator=(const Texture&) = delete;
 
         explicit Texture(Image<TPixel>&& image)
-            : image_{ std::move(image) }
+            : image_{ std::make_shared<Image<TPixel>>(std::move(image)) }
             , id_{ next_id_++ }
-        {
-        }
+        {}
 
         explicit Texture(const TPixel& constant_value)
-            : image_{ 1, 1, constant_value }
+            : image_{ std::make_shared<Image<TPixel>>(1, 1, constant_value) }
             , id_{ next_id_++ }
-        {
-        }
+        {}
 
-        [[nodiscard]] Image<TPixel>* image() noexcept { return &image_; }
-        [[nodiscard]] const Image<TPixel>* image() const noexcept { return &image_; }
+        [[nodiscard]] std::shared_ptr<Image<TPixel>> shared_image() const { return image_; }
 
-        [[nodiscard]] Resolution resolution() const noexcept { return image_.resolution(); }
+        [[nodiscard]] Resolution resolution() const noexcept { return image_->resolution(); }
         
         [[nodiscard]] std::uint64_t id() const override { return id_; }
         [[nodiscard]] std::string type() const override { return "Texture"; }
 
     private:
-        Image<TPixel> image_;
+        std::shared_ptr<Image<TPixel>> image_;
 
         std::uint64_t id_ = 0;
         static inline std::uint64_t next_id_ = 0;

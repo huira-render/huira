@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-#include "huira/assets/mesh.hpp"
+#include "huira/geometry/mesh.hpp"
 #include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/handles/material_handle.hpp"
 #include "huira/scene/frame_node.hpp"

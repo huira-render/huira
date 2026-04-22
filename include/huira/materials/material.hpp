@@ -53,6 +53,15 @@ namespace huira {
     template <IsSpectral TSpectral>
     class Material : public SceneObject<Material<TSpectral>> {
     public:
+        Material(
+            const BSDF<TSpectral>& bsdf,
+            std::shared_ptr<Image<TSpectral>> albedo_image,
+            std::shared_ptr<Image<float>> alpha_image,
+            std::shared_ptr<Image<float>> metallic_image,
+            std::shared_ptr<Image<float>> roughness_image,
+            std::shared_ptr<Image<Vec3<float>>> normal_image,
+            std::shared_ptr<Image<TSpectral>> emissive_image);
+
         Material(const Material&) = delete;
         Material& operator=(const Material&) = delete;
 
@@ -76,70 +85,63 @@ namespace huira {
         void set_bsdf(const BSDF<TSpectral>& bsdf);
         
 
-        void set_albedo(const Image<TSpectral>* albedo_image);
+        void set_albedo(std::shared_ptr<Image<TSpectral>> albedo_image);
         void set_albedo_factor(TSpectral albedo_factor);
         void reset_albedo();
 
-        void set_alpha(const Image<float>* alpha_image);
+        void set_alpha(std::shared_ptr<Image<float>> alpha_image);
         void set_alpha_factor(float alpha_factor);
         void reset_alpha();
 
-        void set_metallic_image(const Image<float>* metallic_image);
+        void set_metallic_image(std::shared_ptr<Image<float>> metallic_image);
         void set_metallic_factor(float metallic_factor);
         void reset_metallic();
 
-        void set_roughness_image(const Image<float>* roughness_image);
+        void set_roughness_image(std::shared_ptr<Image<float>> roughness_image);
         void set_roughness_factor(float roughness_factor);
         void reset_roughness();
 
-        void set_normal_image(const Image<Vec3<float>>* normal_image);
+        void set_normal_image(std::shared_ptr<Image<Vec3<float>>> normal_image);
         void set_normal_factor(float normal_factor);
         void reset_normal();
 
-        void set_emissive_image(const Image<TSpectral>* emissive_image);
+        void set_emissive_image(std::shared_ptr<Image<TSpectral>> emissive_image);
         void set_emissive_factor(TSpectral emissive_factor);
         void reset_emissive();
 
         std::uint64_t id() const override { return id_; }
         std::string type() const override { return "Material"; }
 
-        const Image<TSpectral>* albedo_image_;
-        const Image<float>* alpha_image_;
-        const Image<float>* metallic_image_;
-        const Image<float>* roughness_image_;
-        const Image<Vec3<float>>* normal_image_;
-        const Image<TSpectral>* emissive_image_;
+        // TODO Move this to private (access data only!)
+        std::shared_ptr<Image<TSpectral>> albedo_image_;
+        std::shared_ptr<Image<float>> alpha_image_;
+        std::shared_ptr<Image<float>> metallic_image_;
+        std::shared_ptr<Image<float>> roughness_image_;
+        std::shared_ptr<Image<Vec3<float>>> normal_image_;
+        std::shared_ptr<Image<TSpectral>> emissive_image_;
 
         float alpha_factor() const noexcept { return alpha_factor_; }
         bool has_alpha() const noexcept { return has_alpha_; }
         bool has_alpha_texture() const noexcept { return alpha_image_ != default_alpha_image_; }
 
     private:
-        Material(
-            const BSDF<TSpectral>& bsdf,
-            const Image<TSpectral>* albedo_image,
-            const Image<float>* alpha_image,
-            const Image<float>* metallic_image,
-            const Image<float>* roughness_image,
-            const Image<Vec3<float>>* normal_image,
-            const Image<TSpectral>* emissive_image);
 
         bool eval_albedo_ = true;
-        const Image<TSpectral>* default_albedo_image_;
+        std::shared_ptr<Image<TSpectral>> default_albedo_image_;
 
         bool has_alpha_ = false;
-        const Image<float>* default_alpha_image_;
+        std::shared_ptr<Image<float>> default_alpha_image_;
 
         bool eval_metallic_ = true;
-        const Image<float>* default_metallic_image_;
+        std::shared_ptr<Image<float>> default_metallic_image_;
 
         bool eval_roughness_ = true;
-        const Image<float>* default_roughness_image_;
+        std::shared_ptr<Image<float>> default_roughness_image_;
 
         bool eval_normal_ = true;
-        const Image<Vec3<float>>* default_normal_image_;
+        std::shared_ptr<Image<Vec3<float>>> default_normal_image_;
 
-        const Image<TSpectral>* default_emissive_image_;
+        std::shared_ptr<Image<TSpectral>> default_emissive_image_;
 
         std::unique_ptr<BSDF<TSpectral>> bsdf_;
         

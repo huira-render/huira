@@ -15,16 +15,10 @@ namespace huira {
     class Light;
 
     template <IsSpectral TSpectral>
-    class Mesh;
+    class Primitive;
 
     template <IsSpectral TSpectral>
     class UnresolvedObject;
-
-    template <IsSpectral TSpectral>
-    struct AtmosphereInstance {
-        std::shared_ptr<Atmosphere<TSpectral>> atmosphere;
-        std::vector<Transform<float>> transforms; // Transform at N times
-    };
 
     /**
      * @brief Instance of a light in a scene view.
@@ -51,8 +45,8 @@ namespace huira {
      * @tparam TSpectral Spectral type
      */
     template <IsSpectral TSpectral>
-    struct MeshBatch {
-        std::shared_ptr<Mesh<TSpectral>> mesh;
+    struct PrimitiveBatch {
+        std::shared_ptr<Primitive<TSpectral>> primitive;
         std::vector<std::vector<Transform<float>>> instances; // Instances Transforms at N times
     };
 }

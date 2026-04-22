@@ -80,13 +80,12 @@ namespace huira {
                 // Peek inside the variant
                 const auto& asset = instance->asset();
 
-                if (std::holds_alternative<Mesh<TSpectral>*>(asset)) {
-                    Mesh<TSpectral>* mesh = std::get<Mesh<TSpectral>*>(asset);
+                if (std::holds_alternative<Primitive<TSpectral>*>(asset)) {
+                    Primitive<TSpectral>* prim = std::get<Primitive<TSpectral>*>(asset);
 
                     // Does it have a material, and does the ID match?
-                    if (mesh && mesh->material() && mesh->material()->id() == material_id) {
-                        auto* non_const_mat = const_cast<Material<TSpectral>*>(mesh->material());
-                        return MaterialHandle<TSpectral>{ non_const_mat->weak_from_this() };
+                    if (prim && prim->material && prim->material->id() == material_id) {
+                        return MaterialHandle<TSpectral>{ prim->material };
                     }
                 }
             }
@@ -125,11 +124,12 @@ namespace huira {
             if (auto instance = dynamic_cast<Instance<TSpectral>*>(current)) {
                 // Peek inside the variant
                 const auto& asset = instance->asset();
-                if (std::holds_alternative<Mesh<TSpectral>*>(asset)) {
-                    Mesh<TSpectral>* mesh = std::get<Mesh<TSpectral>*>(asset);
-                    // If it has a material, set the BSDF
-                    if (mesh && mesh->material()) {
-                        mesh->material()->set_bsdf(bsdf);
+                if (std::holds_alternative<Primitive<TSpectral>*>(asset)) {
+                    Primitive<TSpectral>* prim = std::get<Primitive<TSpectral>*>(asset);
+
+                    // Route the BSDF update through the Primitive's shared material
+                    if (prim && prim->material) {
+                        prim->material->set_bsdf(bsdf);
                     }
                 }
             }

@@ -8,14 +8,14 @@
 #include "embree4/rtcore.h"
 
 #include "huira/assets/lights/light.hpp"
-#include "huira/assets/mesh.hpp"
+#include "huira/assets/primitive.hpp"
 #include "huira/assets/unresolved/unresolved_object.hpp"
 #include "huira/core/units/units.hpp"
 #include "huira/core/interval.hpp"
 #include "huira/core/transform.hpp"
+#include "huira/geometry/ray.hpp"
 #include "huira/handles/camera_handle.hpp"
 #include "huira/render/interaction.hpp"
-#include "huira/render/ray.hpp"
 #include "huira/scene/scene.hpp"
 #include "huira/scene/scene_view_types.hpp"
 
@@ -25,8 +25,7 @@ namespace huira {
     class Renderer;
 
     enum class GeometryType {
-        Atmosphere,
-        Mesh,
+        Primitive,
         Light
     };
 
@@ -78,15 +77,14 @@ namespace huira {
             const std::vector<Transform<double>>& observer_transforms,
             const std::vector<Transform<double>>& observer_inverses, ObservationMode obs_mode);
 
-        void handle_asset_ptr_(Atmosphere<TSpectral>* atmosphere, const std::vector<Transform<float>>& instance_apparent_transforms);
-        void handle_asset_ptr_(Mesh<TSpectral>* mesh, const std::vector<Transform<float>>& instance_apparent_transforms);
+        void handle_asset_ptr_(Primitive<TSpectral>* primitive, const std::vector<Transform<float>>& instance_apparent_transforms);
         void handle_asset_ptr_(Light<TSpectral>* light, const std::vector<Transform<float>>& instance_apparent_transforms);
         void handle_asset_ptr_(CameraModel<TSpectral>* camera, const std::vector<Transform<float>>& instance_apparent_transforms);
         void handle_asset_ptr_(UnresolvedObject<TSpectral>* light, const std::vector<Transform<float>>& instance_apparent_transforms);
         void handle_asset_ptr_(Model<TSpectral>* model, const std::vector<Transform<float>>& instance_apparent_transforms);
 
         void add_atmosphere_instance_(std::shared_ptr<Atmosphere<TSpectral>> atmosphere, const std::vector<Transform<float>>& instance_apparent_transforms);
-        void add_mesh_instance_(std::shared_ptr<Mesh<TSpectral>> mesh, const std::vector<Transform<float>>& instance_apparent_transforms);
+        void add_primitive_instance_(std::shared_ptr<Primitive<TSpectral>> primitive, const std::vector<Transform<float>>& instance_apparent_transforms);
         void add_light_instance_(std::shared_ptr<Light<TSpectral>> light, const std::vector<Transform<float>>& instance_apparent_transforms);
         void add_unresolved_instance_(std::shared_ptr<UnresolvedObject<TSpectral>> unresolved_object, const std::vector<Transform<float>>& instance_apparent_transforms);
 
@@ -95,10 +93,8 @@ namespace huira {
         std::shared_ptr<CameraModel<TSpectral>> camera_model_;
         std::vector<Transform<float>> camera_to_world_;
 
-        std::vector<AtmosphereInstance<TSpectral>> atmospheres_;
-
-        std::vector<MeshBatch<TSpectral>> geometry_;
-        std::unordered_map<const Mesh<TSpectral>*, std::size_t> batch_lookup_;
+        std::vector<PrimitiveBatch<TSpectral>> primitives_;
+        std::unordered_map<const Primitive<TSpectral>*, std::size_t> batch_lookup_;
 
         std::vector<LightInstance<TSpectral>> lights_;
 
@@ -118,19 +114,16 @@ namespace huira {
 
         struct InstanceMapping {
             GeometryType type;
-            std::size_t batch_index;      // Index into geometry_ if type == Mesh
-            std::size_t instance_index;   // Index into geometry_[batch_index].instances if type == Mesh
+            std::size_t batch_index;      // Index into geometry_ if type == Primitive
+            std::size_t instance_index;   // Index into geometry_[batch_index].instances if type == Primitive
 
             std::size_t light_index;      // Index into lights_ if type == Light
-
-            std::size_t atmosphere_index; // Index into atmospheres_ if type == Atmosphere
         };
         std::vector<InstanceMapping> instance_mappings_;
 
 
         struct AlphaFilterContext {
-            const Material<TSpectral>* material;
-            const Mesh<TSpectral>* mesh;
+            const Primitive<TSpectral>* primitive;
         };
         std::vector<std::unique_ptr<AlphaFilterContext>> filter_contexts_;
         static void alpha_occlusion_filter_(const RTCFilterFunctionNArguments* args) noexcept;

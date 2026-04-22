@@ -8,9 +8,11 @@
 
 #include "huira/core/types.hpp"
 #include "huira/core/concepts/spectral_concepts.hpp"
+#include "huira/geometry/geometry.hpp"
+#include "huira/geometry/ray.hpp"
+#include "huira/geometry/vertex.hpp"
 #include "huira/materials/material.hpp"
-#include "huira/scene/embree_device.hpp"
-#include "huira/scene/scene_object.hpp"
+#include "huira/render/interaction.hpp"
 
 namespace huira {
     /**
@@ -29,9 +31,9 @@ namespace huira {
      * @tparam TSpectral The spectral representation type.
      */
     template <IsSpectral TSpectral>
-    class Mesh : public SceneObject<Mesh<TSpectral>> {
+    class Mesh : public  Geometry<TSpectral> {
     public:
-        Mesh() : id_(next_id_++) {}
+        Mesh() = default;
         Mesh(IndexBuffer index_buffer, VertexBuffer<TSpectral> vertex_buffer);
         Mesh(IndexBuffer index_buffer, VertexBuffer<TSpectral> vertex_buffer, TangentBuffer tangent_buffer);
         ~Mesh() override;
@@ -42,11 +44,7 @@ namespace huira {
         Mesh(Mesh&& other) noexcept;
         Mesh& operator=(Mesh&& other) noexcept;
 
-        void set_device(std::shared_ptr<EmbreeDevice> device) noexcept { device_ = device; }
-
-        void set_material(Material<TSpectral>* material);
-        [[nodiscard]] Material<TSpectral>* material() const noexcept { return material_; }
-
+        // Mesh specific data
         std::size_t index_count() const noexcept;
         std::size_t vertex_count() const noexcept;
         std::size_t triangle_count() const noexcept;
@@ -57,9 +55,10 @@ namespace huira {
 
         [[nodiscard]] bool has_tangents() const noexcept { return !tangent_buffer_.empty(); }
 
-        [[nodiscard]] RTCScene blas() const;
-
-        std::uint64_t id() const override { return id_; }
+        // Geometry overrides
+        [[nodiscard]] RTCScene blas() const override;
+        void compute_surface_interaction(const HitRecord& hit, Interaction<TSpectral>& isect) const override;
+        Vec2<float> compute_uv(const HitRecord& hit) const override;
         std::string type() const override { return "Mesh"; }
 
     private:
@@ -67,17 +66,11 @@ namespace huira {
 
         IndexBuffer index_buffer_;
         VertexBuffer<TSpectral> vertex_buffer_;
-
-        Material<TSpectral>* material_ = nullptr;
         TangentBuffer tangent_buffer_;
 
-        std::shared_ptr<EmbreeDevice> device_ = nullptr;
         mutable RTCScene blas_ = nullptr;
-
-        std::uint64_t id_ = 0;
-        static inline std::uint64_t next_id_ = 0;
     };
 
 }
 
-#include "huira_impl/assets/mesh.ipp"
+#include "huira_impl/geometry/mesh.ipp"

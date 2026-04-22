@@ -132,7 +132,7 @@ namespace huira {
                             TSpectral pixel_radiance{ 0 };
 
                             float closest_depth = std::numeric_limits<float>::infinity();
-                            std::size_t mesh_id = std::numeric_limits<std::size_t>::max();
+                            std::size_t geometry_id = std::numeric_limits<std::size_t>::max();
                             TSpectral albedo_total{ 0 };
                             Vec3<float> camera_normals{ 0 };
 
@@ -218,15 +218,15 @@ namespace huira {
                                     else {
 
                                         if (s == 0) {
-                                            mesh_id = hit.geom_id;
+                                            geometry_id = hit.geom_id;
                                         }
 
                                         // Resolve full shading data:
                                         Interaction<TSpectral> isect = scene_view.resolve_hit(ray, hit);
 
                                         // Look up mesh material:
-                                        const auto& batch = scene_view.geometry_[mapping.batch_index];
-                                        const auto* material = batch.mesh->material();
+                                        const auto& batch = scene_view.primitives_[mapping.batch_index];
+                                        const auto* material = batch.primitive->material.get();
 
                                         // Evaluate material textures to get the opacity parameter:
                                         auto [params, shading_isect] = material->evaluate(isect);
@@ -386,8 +386,8 @@ namespace huira {
                                 frame_buffer.albedo()(x, y) = albedo_total * inv_spp;
                             }
 
-                            if (frame_buffer.has_mesh_ids()) {
-                                frame_buffer.mesh_ids()(x, y) = mesh_id;
+                            if (frame_buffer.has_geometry_ids()) {
+                                frame_buffer.geometry_ids()(x, y) = geometry_id;
                             }
 
                             if (frame_buffer.has_camera_normals()) {
