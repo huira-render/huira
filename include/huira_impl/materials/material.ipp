@@ -100,7 +100,7 @@ namespace huira {
     }
 
     template <IsSpectral TSpectral>
-    void Material<TSpectral>::set_albedo(const Image<TSpectral>* albedo_image)
+    void Material<TSpectral>::set_albedo(std::shared_ptr<Image<TSpectral>> albedo_image)
     {
         albedo_image_ = albedo_image;
     }
@@ -119,7 +119,7 @@ namespace huira {
     }
 
     template <IsSpectral TSpectral>
-    void Material<TSpectral>::set_alpha(const Image<float>* alpha_image)
+    void Material<TSpectral>::set_alpha(std::shared_ptr<Image<float>> alpha_image)
     {
         alpha_image_ = alpha_image;
         has_alpha_ = true;
@@ -143,7 +143,7 @@ namespace huira {
     }
 
     template <IsSpectral TSpectral>
-    void Material<TSpectral>::set_metallic_image(const Image<float>* metallic_image)
+    void Material<TSpectral>::set_metallic_image(std::shared_ptr<Image<float>> metallic_image)
     {
         metallic_image_ = metallic_image;
     }
@@ -162,7 +162,7 @@ namespace huira {
     }
 
     template <IsSpectral TSpectral>
-    void Material<TSpectral>::set_roughness_image(const Image<float>* roughness_image)
+    void Material<TSpectral>::set_roughness_image(std::shared_ptr<Image<float>> roughness_image)
     {
         roughness_image_ = roughness_image;
     }
@@ -181,7 +181,7 @@ namespace huira {
     }
 
     template <IsSpectral TSpectral>
-    void Material<TSpectral>::set_normal_image(const Image<Vec3<float>>* normal_image)
+    void Material<TSpectral>::set_normal_image(std::shared_ptr<Image<Vec3<float>>> normal_image)
     {
         normal_image_ = normal_image;
     }
@@ -201,7 +201,7 @@ namespace huira {
 
     template <IsSpectral TSpectral>
 
-    void Material<TSpectral>::set_emissive_image(const Image<TSpectral>* emissive_image)
+    void Material<TSpectral>::set_emissive_image(std::shared_ptr<Image<TSpectral>> emissive_image)
     {
         emissive_image_ = emissive_image;
     }
@@ -222,12 +222,12 @@ namespace huira {
     template <IsSpectral TSpectral>
     Material<TSpectral>::Material(
         const BSDF<TSpectral>& bsdf,
-        const Image<TSpectral>* albedo_image,
-        const Image<float>* alpha_image,
-        const Image<float>* metallic_image,
-        const Image<float>* roughness_image,
-        const Image<Vec3<float>>* normal_image,
-        const Image<TSpectral>* emissive_image) :
+        std::shared_ptr<Image<TSpectral>> albedo_image,
+        std::shared_ptr<Image<float>> alpha_image,
+        std::shared_ptr<Image<float>> metallic_image,
+        std::shared_ptr<Image<float>> roughness_image,
+        std::shared_ptr<Image<Vec3<float>>> normal_image,
+        std::shared_ptr<Image<TSpectral>> emissive_image) :
         default_albedo_image_{ albedo_image },
         default_alpha_image_{ alpha_image },
         default_metallic_image_{ metallic_image },

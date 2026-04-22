@@ -15,11 +15,8 @@ namespace huira {
     class SceneView;
 
     template <IsSpectral TSpectral>
-    class Atmosphere;
-
-    template <IsSpectral TSpectral>
-    class Mesh;
-
+    class Primitive;
+    
     template <IsSpectral TSpectral>
     class Light;
 
@@ -34,8 +31,7 @@ namespace huira {
 
     template <IsSpectral TSpectral>
     using Instantiable = std::variant<
-        Atmosphere<TSpectral>*,
-        Mesh<TSpectral>*,
+        Primitive<TSpectral>*,
         Light<TSpectral>*,
         UnresolvedObject<TSpectral>*,
         CameraModel<TSpectral>*,

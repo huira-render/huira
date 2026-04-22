@@ -3,7 +3,7 @@
 #include "huira/core/concepts/spectral_concepts.hpp"
 
 #include "huira/assets/lights/light.hpp"
-#include "huira/assets/mesh.hpp"
+#include "huira/geometry/mesh.hpp"
 
 namespace huira {
 

@@ -8,7 +8,10 @@
 
 #include "huira/core/rotation.hpp"
 #include "huira/core/types.hpp"
+#include "huira/geometry/vertex.hpp"
 #include "huira/util/logger.hpp"
+
+#include "huira/handles/geometry_handle.hpp"
 
 #include "huira/images/io/read_image.hpp"
 
@@ -102,12 +105,12 @@ namespace huira {
         // Also handle any meshes directly attached to the root node
         for (unsigned int i = 0; i < ai_scene->mRootNode->mNumMeshes; ++i) {
             unsigned int mesh_index = ai_scene->mRootNode->mMeshes[i];
-            auto it = ctx.mesh_map.find(mesh_index);
-            if (it != ctx.mesh_map.end()) {
-                MeshHandle<TSpectral> mesh_handle = it->second;
-                shared_model->root_node_->new_instance(mesh_handle.get_shared().get());
+            auto it = ctx.primitive_map.find(mesh_index);
+            if (it != ctx.primitive_map.end()) {
+                PrimitiveHandle<TSpectral> primitive_handle = it->second;
+                shared_model->root_node_->new_instance(primitive_handle.get_shared().get());
             } else {
-                HUIRA_LOG_ERROR("ModelLoader::load - Mesh index " + std::to_string(mesh_index) + " not found in mesh map");
+                HUIRA_LOG_ERROR("ModelLoader::load - Mesh index " + std::to_string(mesh_index) + " not found in primitive map");
             }
         }
 
@@ -128,8 +131,8 @@ namespace huira {
         for (unsigned int i = 0; i < ctx.ai_scene->mNumMeshes; ++i) {
             const aiMesh* ai_mesh = ctx.ai_scene->mMeshes[i];
 
-            auto mesh_handle = convert_mesh_(ai_mesh, ctx);
-            ctx.mesh_map.emplace(i, mesh_handle);
+            auto primitive_handle = convert_mesh_(ai_mesh, ctx);
+            ctx.primitive_map.emplace(i, primitive_handle);
 
             HUIRA_LOG_DEBUG("ModelLoader::process_meshes_ - Processed mesh " + std::to_string(i) + ": " +
                            std::string(ai_mesh->mName.C_Str()) +
@@ -148,7 +151,7 @@ namespace huira {
      * @return Mesh handle for the converted mesh
      */
     template <IsSpectral TSpectral>
-    MeshHandle<TSpectral> ModelLoader<TSpectral>::convert_mesh_(
+    PrimitiveHandle<TSpectral> ModelLoader<TSpectral>::convert_mesh_(
         const aiMesh* ai_mesh,
         LoadContext& ctx)
     {
@@ -216,21 +219,23 @@ namespace huira {
         }
 
         auto mesh = Mesh<TSpectral>(std::move(indices), std::move(vertices), std::move(tangent_buffer));
-        auto mesh_handle = ctx.scene->add_mesh(std::move(mesh), std::string(ai_mesh->mName.C_Str()));
+        auto geom_handle = ctx.scene->add_geometry(std::move(mesh), std::string(ai_mesh->mName.C_Str()));
 
         // Assign material
         unsigned int material_index = ai_mesh->mMaterialIndex;
         auto mat_it = ctx.material_map.find(material_index);
-        if (mat_it != ctx.material_map.end()) {
-            mesh_handle.get()->set_material(mat_it->second.get().get());
-        }
-        else {
+
+        MaterialHandle<TSpectral> mat_handle = (mat_it != ctx.material_map.end())
+            ? mat_it->second
+            : MaterialHandle<TSpectral>{ std::weak_ptr<Material<TSpectral>>{} };
+
+        if (mat_it == ctx.material_map.end()) {
             HUIRA_LOG_WARNING("ModelLoader::convert_mesh_ - No material found for mesh " +
                 std::string(ai_mesh->mName.C_Str()) + " (material index " +
-                std::to_string(material_index) + ")");
+                std::to_string(material_index) + "). Using default.");
         }
 
-        return mesh_handle;
+        return ctx.scene->add_primitive(geom_handle, mat_handle, std::string(ai_mesh->mName.C_Str()));
     }
 
     /**
@@ -266,17 +271,18 @@ namespace huira {
         // Create instances for any meshes attached to this node
         for (unsigned int i = 0; i < ai_node->mNumMeshes; ++i) {
             unsigned int mesh_index = ai_node->mMeshes[i];
-            auto it = ctx.mesh_map.find(mesh_index);
-            if (it != ctx.mesh_map.end()) {
-                MeshHandle<TSpectral> mesh_handle = it->second;
-                Mesh<TSpectral>* mesh_ptr = mesh_handle.get_shared().get();
-                if (mesh_ptr) {
-                    child->new_instance(mesh_ptr);
+
+            auto it = ctx.primitive_map.find(mesh_index);
+            if (it != ctx.primitive_map.end()) {
+                PrimitiveHandle<TSpectral> primitive_handle = it->second;
+                Primitive<TSpectral>* primitive_ptr = primitive_handle.get_shared().get();
+                if (primitive_ptr) {
+                    child->new_instance(primitive_ptr);
                 } else {
-                    HUIRA_THROW_ERROR("ModelLoader::process_node_ - MeshHandle for mesh index " + std::to_string(mesh_index) + " is invalid");
+                    HUIRA_THROW_ERROR("ModelLoader::process_node_ - PrimitiveHandle for mesh index " + std::to_string(mesh_index) + " is invalid");
                 }
             } else {
-                HUIRA_THROW_ERROR("ModelLoader::process_node_ - Mesh index " + std::to_string(mesh_index) + " not found in mesh map");
+                HUIRA_THROW_ERROR("ModelLoader::process_node_ - Mesh index " + std::to_string(mesh_index) + " not found in primitive map");
             }
         }
 
@@ -389,22 +395,44 @@ namespace huira {
                     : aiTextureType_METALNESS;
 
                 if (auto [tex, _] = load_material_texture_<Vec3<float>>(ai_mat, packed_type, ctx, false, false); tex) {
-                    const Image<Vec3<float>>& packed = *tex.value().get()->image();
+                    TextureHandle<Vec3<float>> packed_handle = tex.value();
+                    
+                    std::string rough_cache_key = "split_rough_" + std::to_string(packed_handle.id());
+                    std::string metal_cache_key = "split_metal_" + std::to_string(packed_handle.id());
 
-                    // Extract channels: green = roughness, blue = metallic
-                    Image<float> roughness_img(packed.width(), packed.height());
-                    Image<float> metallic_img(packed.width(), packed.height());
-                    for (int y = 0; y < packed.height(); ++y) {
-                        for (int x = 0; x < packed.width(); ++x) {
-                            roughness_img(x, y) = packed(x, y).y; // green
-                            metallic_img(x, y) = packed(x, y).z;  // blue
-                        }
+                    std::optional<TextureHandle<float>> rough_handle;
+                    std::optional<TextureHandle<float>> metal_handle;
+                    
+                    auto rough_it = ctx.mono_texture_cache.find(rough_cache_key);
+                    auto metal_it = ctx.mono_texture_cache.find(metal_cache_key);
+
+                    if (rough_it != ctx.mono_texture_cache.end() && metal_it != ctx.mono_texture_cache.end()) {
+                        rough_handle = rough_it->second;
+                        metal_handle = metal_it->second;
                     }
+                    else {
+                        std::shared_ptr<Image<Vec3<float>>> packed_ptr = packed_handle.shared_image();
+                        const Image<Vec3<float>>& packed = *packed_ptr;
 
-                    auto rough_handle = ctx.scene->add_texture(std::move(roughness_img), name + "_roughness");
-                    auto metal_handle = ctx.scene->add_texture(std::move(metallic_img), name + "_metallic");
-                    material.set_roughness_image(rough_handle);
-                    material.set_metallic_image(metal_handle);
+                        Image<float> roughness_img(packed.width(), packed.height());
+                        Image<float> metallic_img(packed.width(), packed.height());
+
+                        for (int y = 0; y < packed.height(); ++y) {
+                            for (int x = 0; x < packed.width(); ++x) {
+                                roughness_img(x, y) = packed(x, y).y; // green
+                                metallic_img(x, y) = packed(x, y).z;  // blue
+                            }
+                        }
+                        
+                        rough_handle = ctx.scene->add_texture(std::move(roughness_img), rough_cache_key);
+                        metal_handle = ctx.scene->add_texture(std::move(metallic_img), metal_cache_key);
+
+                        ctx.mono_texture_cache.emplace(rough_cache_key, rough_handle.value());
+                        ctx.mono_texture_cache.emplace(metal_cache_key, metal_handle.value());
+                    }
+                    
+                    material.set_roughness_image(rough_handle.value());
+                    material.set_metallic_image(metal_handle.value());
                 }
             }
 

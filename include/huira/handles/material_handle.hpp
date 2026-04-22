@@ -6,6 +6,10 @@
 #include "huira/materials/material.hpp"
 
 namespace huira {
+    // Forward Declarations
+    template <IsSpectral TSpectral>
+    class Scene;
+
     /**
      * @brief Handle for manipulating a Material in a scene.
      *
@@ -45,6 +49,11 @@ namespace huira {
         void set_emissive_image(const TextureHandle<TSpectral>& emissive_texture);
         void set_emissive_factor(TSpectral emissive_factor);
         void reset_emissive();
+
+    private:
+        std::shared_ptr<Material<TSpectral>> get_shared() const { return this->get_(); }
+
+        friend class Scene<TSpectral>;
     };
 }
 

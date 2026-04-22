@@ -8,7 +8,6 @@
 #include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/assets/io/model_loader.hpp"
 #include "huira/assets/atmosphere.hpp"
-#include "huira/handles/atmosphere_handle.hpp"
 #include "huira/handles/model_handle.hpp"
 #include "huira/handles/frame_handle.hpp"
 #include "huira/util/logger.hpp"
@@ -44,24 +43,22 @@ namespace huira {
         root_node_->set_spice("SOLAR SYSTEM BARYCENTER", "J2000");
 
         // Initialize default textures:
-        default_albedo_image_ = std::make_unique<Image<TSpectral>>(1, 1, TSpectral{ 1 });
-        default_alpha_image_ = std::make_unique<Image<float>>(1, 1, 1);
-        default_metallic_image_ = std::make_unique<Image<float>>(1, 1, 1);
-        default_roughness_image_ = std::make_unique<Image<float>>(1, 1, 1);
-        default_normal_image_ = std::make_unique<Image<Vec3<float>>>(1, 1, Vec3<float>{0, 0, 1});
-        default_emission_image_ = std::make_unique<Image<TSpectral>>(1, 1, TSpectral{ 1 });
+        default_albedo_image_ = std::make_shared<Image<TSpectral>>(1, 1, TSpectral{ 1 });
+        default_alpha_image_ = std::make_shared<Image<float>>(1, 1, 1);
+        default_metallic_image_ = std::make_shared<Image<float>>(1, 1, 1);
+        default_roughness_image_ = std::make_shared<Image<float>>(1, 1, 1);
+        default_normal_image_ = std::make_shared<Image<Vec3<float>>>(1, 1, Vec3<float>{0, 0, 1});
+        default_emission_image_ = std::make_shared<Image<TSpectral>>(1, 1, TSpectral{ 1 });
 
         // Initialize default material:
-        default_material_ = std::unique_ptr<Material<TSpectral>>(
-            new Material<TSpectral>(
-                LambertBSDF<TSpectral>(),
-                default_albedo_image_.get(),
-                default_alpha_image_.get(),
-                default_metallic_image_.get(),
-                default_roughness_image_.get(),
-                default_normal_image_.get(),
-                default_emission_image_.get()
-            )
+        default_material_ = std::make_shared<Material<TSpectral>>(
+            LambertBSDF<TSpectral>(),
+            default_albedo_image_,
+            default_alpha_image_,
+            default_metallic_image_,
+            default_roughness_image_,
+            default_normal_image_,
+            default_emission_image_
         );
 
         // Create the Embree RTC Device:
@@ -87,13 +84,13 @@ namespace huira {
      * @return MeshHandle<TSpectral> Handle to the added mesh
      */
     template <IsSpectral TSpectral>
-    MeshHandle<TSpectral> Scene<TSpectral>::add_mesh(Mesh<TSpectral>&& mesh, std::string name)
+    template <typename TGeometry>
+    GeometryHandle<TSpectral> Scene<TSpectral>::add_geometry(TGeometry&& geom, std::string name)
     {
-        auto mesh_shared = std::make_shared<Mesh<TSpectral>>(std::move(mesh));
-        mesh_shared->set_material(default_material_.get());
-        mesh_shared->set_device(device_);
-        meshes_.add(mesh_shared, name);
-        return MeshHandle<TSpectral>{ mesh_shared };
+        auto concrete_shared = std::make_shared<std::decay_t<TGeometry>>(std::forward<TGeometry>(geom));
+        concrete_shared->set_device(device_);
+        geometries_.add(concrete_shared, name);
+        return GeometryHandle<TSpectral>{ concrete_shared };
     };
 
     /**
@@ -102,9 +99,9 @@ namespace huira {
      * @param name New name
      */
     template <IsSpectral TSpectral>
-    void Scene<TSpectral>::set_name(const MeshHandle<TSpectral>& mesh_handle, const std::string& name)
+    void Scene<TSpectral>::set_name(const GeometryHandle<TSpectral>& geom_handle, const std::string& name)
     {
-        meshes_.set_name(mesh_handle.get(), name);
+        geometries_.set_name(geom_handle.get(), name);
     };
 
     /**
@@ -113,96 +110,96 @@ namespace huira {
      * @return MeshHandle<TSpectral> Handle to the mesh
      */
     template <IsSpectral TSpectral>
-    MeshHandle<TSpectral> Scene<TSpectral>::get_mesh(const std::string& name)
-    {
-        return MeshHandle<TSpectral>{ meshes_.lookup(name) };
+    GeometryHandle<TSpectral> Scene<TSpectral>::get_geometry(const std::string& name) const {
+        return GeometryHandle<TSpectral>{ geometries_.lookup(name) };
     }
 
     /**
      * @brief Deletes a mesh from the scene.
-     * @param mesh_handle Handle to the mesh
+     * @param geometry_handle Handle to the geometry
      */
     template <IsSpectral TSpectral>
-    void Scene<TSpectral>::delete_mesh(const MeshHandle<TSpectral>& mesh_handle)
+    void Scene<TSpectral>::delete_geometry(const GeometryHandle<TSpectral>& geom_handle)
     {
-        auto mesh_shared = mesh_handle.get();
-        prune_graph_references_(mesh_shared.get());
-        meshes_.remove(mesh_shared);
-    }
-
-
-    /**
-     * @brief Creates a new Earth atmosphere.
-     * @param name Optional name
-     * @return AtmosphereHandle<TSpectral> Handle to the new atmosphere
-     */
-    template <IsSpectral TSpectral>
-    AtmosphereHandle<TSpectral> Scene<TSpectral>::new_earth_atmosphere(std::string name)
-    {
-        AtmosphereParameters<TSpectral> parameters;
-        Atmosphere<TSpectral> earth_atmosphere(parameters);
-        return this->add_atmosphere(std::move(earth_atmosphere), name);
-    }
-
-    /**
-     * @brief Creates a new Mars atmosphere.
-     * @param name Optional name
-     * @return AtmosphereHandle<TSpectral> Handle to the new atmosphere
-     */
-    template <IsSpectral TSpectral>
-    AtmosphereHandle<TSpectral> Scene<TSpectral>::new_mars_atmosphere(std::string name)
-    {
-        AtmosphereParameters<TSpectral> parameters;
-        Atmosphere<TSpectral> mars_atmosphere(parameters);
-        return this->add_atmosphere(std::move(mars_atmosphere), name);
+        auto geom_shared = geom_handle.get_shared();
+        if (!geom_shared) return;
+        
+        Geometry<TSpectral>* target_ptr = geom_shared.get();
+        
+        std::vector<std::shared_ptr<Primitive<TSpectral>>> primitives_to_purge;
+        
+        for (const auto& prim_ptr : primitives_) {
+            if (prim_ptr->geometry.get() == target_ptr) {
+                primitives_to_purge.push_back(prim_ptr);
+            }
+        }
+        
+        for (auto& prim_shared : primitives_to_purge) {
+            delete_primitive(PrimitiveHandle<TSpectral>{ prim_shared });
+        }
+        
+        geometries_.remove(geom_shared);
     }
 
     /**
-     * @brief Adds an atmosphere to the scene.
-     * @param atmosphere Atmosphere to add (moved)
-     * @param name Optional name for the atmosphere
-     * @return AtmosphereHandle<TSpectral> Handle to the added atmosphere
+     * @brief Adds a primitive to the scene.
+     * @param primitive Primitive to add (moved)
+     * @param name Optional name for the primitive
+     * @return PrimitiveHandle<TSpectral> Handle to the added primitive
      */
     template <IsSpectral TSpectral>
-    AtmosphereHandle<TSpectral> Scene<TSpectral>::add_atmosphere(Atmosphere<TSpectral>&& atmosphere, std::string name)
+    PrimitiveHandle<TSpectral> Scene<TSpectral>::add_primitive(const GeometryHandle<TSpectral>& geom_handle,
+        const MaterialHandle<TSpectral>& mat_handle, std::string name)
     {
-        auto atmosphere_shared = std::make_shared<Atmosphere<TSpectral>>(std::move(atmosphere));
-        atmospheres_.add(atmosphere_shared, name);
-        return AtmosphereHandle<TSpectral>{ atmosphere_shared };
+        if (!geom_handle.valid()) {
+            HUIRA_THROW_ERROR("Cannot create Primitive: Invalid Geometry Handle.");
+        }
+
+        auto primitive_shared = std::make_shared<Primitive<TSpectral>>();
+        primitive_shared->geometry = geom_handle.get_shared();
+        if (mat_handle.valid()) {
+            primitive_shared->material = mat_handle.get_shared();
+        } else {
+            primitive_shared->material = default_material_;
+        }
+        primitives_.add(primitive_shared, name);
+        
+        return PrimitiveHandle<TSpectral>{ primitive_shared };
     }
 
     /**
-     * @brief Sets the name for an atmosphere asset.
-     * @param atmosphere_handle Handle to the atmosphere
+     * @brief Sets the name for a primitive asset.
+     * @param primitive_handle Handle to the primitive
      * @param name New name
      */
     template <IsSpectral TSpectral>
-    void Scene<TSpectral>::set_name(const AtmosphereHandle<TSpectral>& atmosphere_handle, const std::string& name)
+    void Scene<TSpectral>::set_name(const PrimitiveHandle<TSpectral>& primitive_handle, const std::string& name)
     {
-        atmospheres_.set_name(atmosphere_handle.get(), name);
+        primitives_.set_name(primitive_handle.get(), name);
     }
 
     /**
-     * @brief Retrieves an atmosphere by name.
-     * @param name Name of the atmosphere
-     * @return AtmosphereHandle<TSpectral> Handle to the atmosphere
+     * @brief Retrieves a primitive by name.
+     * @param name Name of the primitive
+     * @return PrimitiveHandle<TSpectral> Handle to the primitive
      */
     template <IsSpectral TSpectral>
-    AtmosphereHandle<TSpectral> Scene<TSpectral>::get_atmosphere(const std::string& name)
+    PrimitiveHandle<TSpectral> Scene<TSpectral>::get_primitive(const std::string& name) const
     {
-        return AtmosphereHandle<TSpectral>{ atmospheres_.lookup(name) };
+        return PrimitiveHandle<TSpectral>{ primitives_.lookup(name) };
     }
 
     /**
-     * @brief Deletes an atmosphere from the scene.
-     * @param atmosphere_handle Handle to the atmosphere
+     * @brief Deletes a primitive from the scene.
+     * @param primitive_handle Handle to the primitive
      */
     template <IsSpectral TSpectral>
-    void Scene<TSpectral>::delete_atmosphere(const AtmosphereHandle<TSpectral>& atmosphere_handle)
+    void Scene<TSpectral>::delete_primitive(const PrimitiveHandle<TSpectral>& primitive_handle)
     {
-        auto atmosphere_shared = atmosphere_handle.get();
-        prune_graph_references_(atmosphere_shared.get());
-        atmospheres_.remove(atmosphere_shared);
+        auto primitive_shared = primitive_handle.get();
+        if (!primitive_shared) { return; }
+        prune_graph_references_(primitive_shared.get());
+        primitives_.remove(primitive_shared);
     }
 
 
@@ -295,7 +292,7 @@ namespace huira {
      * @return LightHandle<TSpectral> Handle to the light
      */
     template <IsSpectral TSpectral>
-    LightHandle<TSpectral> Scene<TSpectral>::get_light(const std::string& name)
+    LightHandle<TSpectral> Scene<TSpectral>::get_light(const std::string& name) const
     {
         return LightHandle<TSpectral>{ lights_.lookup(name) };
     }
@@ -510,7 +507,7 @@ namespace huira {
      * @return UnresolvedObjectHandle<TSpectral> Handle to the unresolved object
      */
     template <IsSpectral TSpectral>
-    UnresolvedObjectHandle<TSpectral> Scene<TSpectral>::get_unresolved_object(const std::string& name)
+    UnresolvedObjectHandle<TSpectral> Scene<TSpectral>::get_unresolved_object(const std::string& name) const
     {
         return UnresolvedObjectHandle<TSpectral>{ unresolved_objects_.lookup(name) };
     }
@@ -558,7 +555,7 @@ namespace huira {
      * @return CameraModelHandle<TSpectral> Handle to the camera model
      */
     template <IsSpectral TSpectral>
-    CameraModelHandle<TSpectral> Scene<TSpectral>::get_camera_model(const std::string& name)
+    CameraModelHandle<TSpectral> Scene<TSpectral>::get_camera_model(const std::string& name) const
     {
         return CameraModelHandle<TSpectral>{ camera_models_.lookup(name) };
     }
@@ -608,7 +605,7 @@ namespace huira {
      * @return ModelHandle<TSpectral> Handle to the model
      */
     template <IsSpectral TSpectral>
-    ModelHandle<TSpectral> Scene<TSpectral>::get_model(const std::string& name)
+    ModelHandle<TSpectral> Scene<TSpectral>::get_model(const std::string& name) const
     {
         return ModelHandle<TSpectral>{ models_.lookup(name) };
     }
@@ -631,12 +628,12 @@ namespace huira {
         auto material = std::shared_ptr<Material<TSpectral>>(
             new Material<TSpectral>(
             bsdf,
-            default_albedo_image_.get(),
-            default_alpha_image_.get(),
-            default_metallic_image_.get(),
-            default_roughness_image_.get(),
-            default_normal_image_.get(),
-            default_emission_image_.get()
+            default_albedo_image_,
+            default_alpha_image_,
+            default_metallic_image_,
+            default_roughness_image_,
+            default_normal_image_,
+            default_emission_image_
             )
         );
         return this->add_material(material, name);
@@ -876,8 +873,8 @@ namespace huira {
      */
     template <IsSpectral TSpectral>
     void Scene<TSpectral>::print_meshes() const {
-        std::cout << green("Meshes: " + std::to_string(meshes_.size()) + " loaded") << "\n";
-        for (const auto& mesh : meshes_) {
+        std::cout << green("Meshes: " + std::to_string(geometries_.size()) + " loaded") << "\n";
+        for (const auto& mesh : geometries_) {
             std::cout << " - " << mesh->get_info();
         }
     }
@@ -952,7 +949,7 @@ namespace huira {
         std::cout << "Scene Contents:\n";
         std::cout << " - " << "Stars: " << std::to_string(stars_.size()) << " loaded\n";
         std::cout << " - " << blue("CameraModels: " + std::to_string(camera_models_.size()) + " loaded") << "\n";
-        std::cout << " - " << green("Meshes: " + std::to_string(meshes_.size()) + " loaded") << "\n";
+        std::cout << " - " << green("Meshes: " + std::to_string(geometries_.size()) + " loaded") << "\n";
         std::cout << "    - " << green("Materials: " + std::to_string(materials_.size()) + " loaded") << "\n";
         std::cout << "    - " << green("Textures: " + std::to_string(num_textures) + " loaded") << "\n";
         std::cout << " - " << yellow("Lights: " + std::to_string(lights_.size()) + " loaded") << "\n";

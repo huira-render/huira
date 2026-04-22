@@ -1,5 +1,8 @@
 #pragma once
 
+#include <cstdint>
+#include <memory>
+
 #include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/handles/handle.hpp"
 #include "huira/materials/texture.hpp"
@@ -19,8 +22,11 @@ namespace huira {
         TextureHandle() = delete;
         using Handle<Texture<TPixel>>::Handle;
 
-        Image<TPixel>* image() noexcept { return this->get_()->image(); }
-        const Image<TPixel>* image() const noexcept { return this->get_()->image(); }
+        std::shared_ptr<Image<TPixel>> shared_image() const {
+            return this->get_()->shared_image();
+        }
+
+        std::uint64_t id() const { return this->get_()->id(); }
 
         Resolution resolution() const noexcept { return this->get_()->resolution(); }
     };

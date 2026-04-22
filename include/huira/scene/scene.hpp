@@ -8,15 +8,15 @@
 #include <vector>
 
 #include "huira/assets/atmosphere.hpp"
-#include "huira/assets/mesh.hpp"
+#include "huira/geometry/mesh.hpp"
 #include "huira/assets/model.hpp"
 #include "huira/assets/io/model_loader.hpp"
 #include "huira/core/concepts/spectral_concepts.hpp"
-#include "huira/handles/atmosphere_handle.hpp"
 #include "huira/handles/model_handle.hpp"
 #include "huira/handles/root_frame_handle.hpp"
 #include "huira/handles/material_handle.hpp"
-#include "huira/handles/mesh_handle.hpp"
+#include "huira/handles/primitive_handle.hpp"
+#include "huira/handles/geometry_handle.hpp"
 #include "huira/handles/texture_handle.hpp"
 #include "huira/images/image.hpp"
 #include "huira/materials/material.hpp"
@@ -36,7 +36,7 @@ namespace huira {
     /**
      * @brief Scene graph and asset manager for a rendered world.
      *
-     * The Scene class manages all assets (meshes, lights, unresolved objects, camera models, models, stars)
+     * The Scene class manages all assets (geometries, materials, lights, unresolved objects, camera models, models, stars)
      * and the scene graph (root node, child nodes, instances, etc.). It provides methods for adding, removing,
      * and querying assets, as well as for loading star catalogs and models. The scene graph is rooted at a
      * FrameNode and supports hierarchical relationships between nodes and assets. Scene is non-copyable.
@@ -56,18 +56,18 @@ namespace huira {
         ~Scene();
 
         RootFrameHandle<TSpectral> root;
-        
-        MeshHandle<TSpectral> add_mesh(Mesh<TSpectral>&& mesh, std::string name = "");
-        void set_name(const MeshHandle<TSpectral>& mesh_handle, const std::string& name);
-        MeshHandle<TSpectral> get_mesh(const std::string& name);
-        void delete_mesh(const MeshHandle<TSpectral>& mesh_handle);
 
-        AtmosphereHandle<TSpectral> new_earth_atmosphere(std::string name = "");
-        AtmosphereHandle<TSpectral> new_mars_atmosphere(std::string name = "");
-        AtmosphereHandle<TSpectral> add_atmosphere(Atmosphere<TSpectral>&& atmosphere, std::string name = "");
-        void set_name(const AtmosphereHandle<TSpectral>& atmosphere_handle, const std::string& name);
-        AtmosphereHandle<TSpectral> get_atmosphere(const std::string& name);
-        void delete_atmosphere(const AtmosphereHandle<TSpectral>& atmosphere_handle);
+        template <typename TGeometry>
+        GeometryHandle<TSpectral> add_geometry(TGeometry&& geom, std::string name = "");
+        void set_name(const GeometryHandle<TSpectral>& geom_handle, const std::string& name);
+        GeometryHandle<TSpectral> get_geometry(const std::string& name) const;
+        void delete_geometry(const GeometryHandle<TSpectral>& geom_handle);
+
+        PrimitiveHandle<TSpectral> add_primitive(const GeometryHandle<TSpectral>& geom, 
+            const MaterialHandle<TSpectral>& mat, std::string name = "");
+        void set_name(const PrimitiveHandle<TSpectral>& primitive_handle, const std::string& name);
+        PrimitiveHandle<TSpectral> get_primitive(const std::string& name) const;
+        void delete_primitive(const PrimitiveHandle<TSpectral>& primitive_handle);
 
         LightHandle<TSpectral> new_sphere_light(const units::Meter& radius, const units::SpectralWattsPerMeterSquaredSteradian<TSpectral>& spectral_radiance, std::string name = "");
         LightHandle<TSpectral> new_sphere_light(const units::Meter& radius, const units::SpectralWatts<TSpectral>& spectral_power, std::string name = "");
@@ -76,7 +76,7 @@ namespace huira {
         LightHandle<TSpectral> add_light(std::shared_ptr<Light<TSpectral>> light, std::string name = "");
 
         void set_name(const LightHandle<TSpectral>& light_handle, const std::string& name);
-        LightHandle<TSpectral> get_light(const std::string& name);
+        LightHandle<TSpectral> get_light(const std::string& name) const;
         void delete_light(const LightHandle<TSpectral>& light_handle);
         
         UnresolvedObjectHandle<TSpectral> new_unresolved_object(const units::SpectralWattsPerMeterSquared<TSpectral>& spectral_irradiance, std::string name = "");
@@ -94,12 +94,12 @@ namespace huira {
         UnresolvedObjectHandle<TSpectral> add_unresolved_object(std::shared_ptr<UnresolvedObject<TSpectral>> unresolved_object, std::string name = "");
 
         void set_name(const UnresolvedObjectHandle<TSpectral>& unresolved_object_handle, const std::string& name);
-        UnresolvedObjectHandle<TSpectral> get_unresolved_object(const std::string& name);
+        UnresolvedObjectHandle<TSpectral> get_unresolved_object(const std::string& name) const;
         void delete_unresolved_object(const UnresolvedObjectHandle<TSpectral>& unresolved_object_handle);
 
         CameraModelHandle<TSpectral> new_camera_model(std::string name = "");
         void set_name(const CameraModelHandle<TSpectral>& camera_model_handle, const std::string& name);
-        CameraModelHandle<TSpectral> get_camera_model(const std::string& name);
+        CameraModelHandle<TSpectral> get_camera_model(const std::string& name) const;
         void delete_camera_model(const CameraModelHandle<TSpectral>& camera_model_handle);
 
 
@@ -109,7 +109,7 @@ namespace huira {
             unsigned int post_process_flags = ModelLoader<TSpectral>::DEFAULT_POST_PROCESS_FLAGS
         );
         void set_name(const ModelHandle<TSpectral>& model_handle, const std::string& name);
-        ModelHandle<TSpectral> get_model(const std::string& name);
+        ModelHandle<TSpectral> get_model(const std::string& name) const;
         void delete_model(const ModelHandle<TSpectral>& model_handle);
 
         MaterialHandle<TSpectral> new_material(const BSDF<TSpectral>& bsdf, std::string name = "");
@@ -142,8 +142,8 @@ namespace huira {
 
     private:
         // Assets:
-        NameRegistry<Atmosphere<TSpectral>> atmospheres_;
-        NameRegistry<Mesh<TSpectral>> meshes_;
+        NameRegistry<Geometry<TSpectral>> geometries_;
+        NameRegistry<Primitive<TSpectral>> primitives_;
         NameRegistry<Light<TSpectral>> lights_;
         NameRegistry<UnresolvedObject<TSpectral>> unresolved_objects_;
         NameRegistry<CameraModel<TSpectral>> camera_models_;
@@ -156,15 +156,15 @@ namespace huira {
         NameRegistry<Texture<Vec3<float>>> vec3_textures_;
 
         // Default material:
-        std::unique_ptr<Material<TSpectral>> default_material_;
+        std::shared_ptr<Material<TSpectral>> default_material_;
 
         // Default textures:
-        std::unique_ptr<Image<TSpectral>>   default_albedo_image_;
-        std::unique_ptr<Image<float>>       default_alpha_image_;
-        std::unique_ptr<Image<float>>       default_metallic_image_;
-        std::unique_ptr<Image<float>>       default_roughness_image_;
-        std::unique_ptr<Image<Vec3<float>>> default_normal_image_;
-        std::unique_ptr<Image<TSpectral>>   default_emission_image_;
+        std::shared_ptr<Image<TSpectral>>   default_albedo_image_;
+        std::shared_ptr<Image<float>>       default_alpha_image_;
+        std::shared_ptr<Image<float>>       default_metallic_image_;
+        std::shared_ptr<Image<float>>       default_roughness_image_;
+        std::shared_ptr<Image<Vec3<float>>> default_normal_image_;
+        std::shared_ptr<Image<TSpectral>>   default_emission_image_;
 
         std::shared_ptr<Image<TSpectral>> background_;
 

@@ -9,7 +9,7 @@ namespace huira {
     template <IsSpectral TSpectral>
     void MaterialHandle<TSpectral>::set_albedo(const TextureHandle<TSpectral>& albedo_texture)
     {
-        this->get_()->set_albedo(albedo_texture.image());
+        this->get_()->set_albedo(albedo_texture.shared_image());
     }
 
     template <IsSpectral TSpectral>
@@ -27,7 +27,7 @@ namespace huira {
     template <IsSpectral TSpectral>
     void MaterialHandle<TSpectral>::set_alpha(const TextureHandle<float>& alpha_texture)
     {
-        this->get_()->set_alpha(alpha_texture.image());
+        this->get_()->set_alpha(alpha_texture.shared_image());
     }
 
     template <IsSpectral TSpectral>
@@ -45,7 +45,7 @@ namespace huira {
     template <IsSpectral TSpectral>
     void MaterialHandle<TSpectral>::set_metallic_image(const TextureHandle<float>& metallic_texture)
     {
-        this->get_()->set_metallic_image(metallic_texture.image());
+        this->get_()->set_metallic_image(metallic_texture.shared_image());
     }
 
     template <IsSpectral TSpectral>
@@ -63,7 +63,7 @@ namespace huira {
     template <IsSpectral TSpectral>
     void MaterialHandle<TSpectral>::set_roughness_image(const TextureHandle<float>& roughness_texture)
     {
-        this->get_()->set_roughness_image(roughness_texture.image());
+        this->get_()->set_roughness_image(roughness_texture.shared_image());
     }
 
     template <IsSpectral TSpectral>
@@ -81,7 +81,7 @@ namespace huira {
     template <IsSpectral TSpectral>
     void MaterialHandle<TSpectral>::set_normal_image(const TextureHandle<Vec3<float>>& normal_texture)
     {
-        this->get_()->set_normal_image(normal_texture.image());
+        this->get_()->set_normal_image(normal_texture.shared_image());
     }
 
     template <IsSpectral TSpectral>
@@ -99,7 +99,7 @@ namespace huira {
     template <IsSpectral TSpectral>
     void MaterialHandle<TSpectral>::set_emissive_image(const TextureHandle<TSpectral>& emissive_texture)
     {
-        this->get_()->set_emissive_image(emissive_texture.image());
+        this->get_()->set_emissive_image(emissive_texture.shared_image());
     }
 
     template <IsSpectral TSpectral>

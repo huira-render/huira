@@ -64,33 +64,16 @@ namespace huira {
         }
     }
 
+
     /**
-     * @brief Create a new Instance leaf node for an atmosphere and attach it to this FrameNode.
-     * @param atmosphere Atmosphere pointer
+     * @brief Create a new Instance leaf node for a primitive and attach it to this FrameNode.
+     * @param primitive Primitive pointer
      * @return std::weak_ptr<Instance<TSpectral>> Weak pointer to new instance
      */
     template <IsSpectral TSpectral>
-    std::weak_ptr<Instance<TSpectral>> FrameNode<TSpectral>::new_instance(Atmosphere<TSpectral>* atmosphere)
+    std::weak_ptr<Instance<TSpectral>> FrameNode<TSpectral>::new_instance(Primitive<TSpectral>* primitive)
     {
-        auto child = std::make_shared<Instance<TSpectral>>(this->scene_, atmosphere);
-        child->set_parent_(this);
-
-        HUIRA_LOG_INFO(this->get_info() + " - Added: " + child->get_info());
-
-        children_.push_back(child);
-        return child;
-    }
-
-
-    /**
-     * @brief Create a new Instance leaf node for a mesh and attach it to this FrameNode.
-     * @param mesh Mesh pointer
-     * @return std::weak_ptr<Instance<TSpectral>> Weak pointer to new instance
-     */
-    template <IsSpectral TSpectral>
-    std::weak_ptr<Instance<TSpectral>> FrameNode<TSpectral>::new_instance(Mesh<TSpectral>* mesh)
-    {
-        auto child = std::make_shared<Instance<TSpectral>>(this->scene_, mesh);
+        auto child = std::make_shared<Instance<TSpectral>>(this->scene_, primitive);
         child->set_parent_(this);
 
         HUIRA_LOG_INFO(this->get_info() + " - Added: " + child->get_info());

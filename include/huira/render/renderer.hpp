@@ -41,7 +41,7 @@ namespace huira {
         virtual Image<TSpectral> render_unresolved_(SceneView<TSpectral>& scene_view, FrameBuffer<TSpectral>& frame_buffer);
 
         std::shared_ptr<CameraModel<TSpectral>> get_camera(SceneView<TSpectral>& scene_view) const { return scene_view.camera_model_; }
-        std::vector<MeshBatch<TSpectral>> get_meshes(SceneView<TSpectral>& scene_view) const { return scene_view.geometry_; }
+        std::vector<PrimitiveBatch<TSpectral>> get_primitives(SceneView<TSpectral>& scene_view) const { return scene_view.primitives_; }
         std::vector<LightInstance<TSpectral>> get_lights(SceneView<TSpectral>& scene_view) const { return scene_view.lights_; }
 
         RandomSampler<float> sampler_;

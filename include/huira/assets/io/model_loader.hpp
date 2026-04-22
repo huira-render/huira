@@ -13,11 +13,11 @@
 #include "assimp/postprocess.h"
 #include "assimp/scene.h"
 
-#include "huira/assets/mesh.hpp"
+#include "huira/geometry/mesh.hpp"
 #include "huira/assets/model.hpp"
 #include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/core/types.hpp"
-#include "huira/handles/mesh_handle.hpp"
+#include "huira/handles/primitive_handle.hpp"
 #include "huira/handles/material_handle.hpp"
 #include "huira/scene/frame_node.hpp"
 #include "huira/scene/instance.hpp"
@@ -62,8 +62,8 @@ namespace huira {
 
             std::function<TSpectral(RGB)> spectral_conversion;
 
-            // Maps ASSIMP mesh index to our Mesh pointer
-            std::unordered_map<unsigned int, MeshHandle<TSpectral>> mesh_map;
+            // Maps ASSIMP mesh index to our Primitive pointer
+            std::unordered_map<unsigned int, PrimitiveHandle<TSpectral>> primitive_map;
 
             // Maps ASSIMP material index to our Material pointer
             std::unordered_map<unsigned int, MaterialHandle<TSpectral>> material_map;
@@ -76,7 +76,7 @@ namespace huira {
         
         static void process_meshes_(LoadContext& ctx);
 
-        static MeshHandle<TSpectral> convert_mesh_(const aiMesh* ai_mesh, LoadContext& ctx);
+        static PrimitiveHandle<TSpectral> convert_mesh_(const aiMesh* ai_mesh, LoadContext& ctx);
 
         static void process_node_(const aiNode* ai_node, FrameNode<TSpectral>* parent_frame, LoadContext& ctx);
 

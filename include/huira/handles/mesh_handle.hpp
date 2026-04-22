@@ -3,7 +3,7 @@
 #include <cstddef>
 
 #include "huira/handles/handle.hpp"
-#include "huira/assets/mesh.hpp"
+#include "huira/geometry/mesh.hpp"
 #include "huira/core/concepts/spectral_concepts.hpp"
 
 namespace huira {

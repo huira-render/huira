@@ -2,6 +2,7 @@
 
 #include "embree4/rtcore.h"
 
+#include "huira/geometry/vertex.hpp"
 #include "huira/util/logger.hpp"
 
 namespace huira {
@@ -20,8 +21,7 @@ namespace huira {
     template <IsSpectral TSpectral>
     Mesh<TSpectral>::Mesh(IndexBuffer index_buffer, VertexBuffer<TSpectral> vertex_buffer)
         : index_buffer_(std::move(index_buffer)),
-        vertex_buffer_(std::move(vertex_buffer)),
-        id_(next_id_++)
+        vertex_buffer_(std::move(vertex_buffer))
     {
         HUIRA_TRACE_SCOPE("Mesh::Mesh(index_buffer, vertex_buffer)");
         const auto c = vertex_buffer_.size();
@@ -34,8 +34,7 @@ namespace huira {
     Mesh<TSpectral>::Mesh(IndexBuffer index_buffer, VertexBuffer<TSpectral> vertex_buffer, TangentBuffer tangent_buffer)
         : index_buffer_(std::move(index_buffer)),
         vertex_buffer_(std::move(vertex_buffer)),
-        tangent_buffer_(std::move(tangent_buffer)),
-        id_(next_id_++)
+        tangent_buffer_(std::move(tangent_buffer))
     {
         HUIRA_TRACE_SCOPE("Mesh::Mesh(index_buffer, vertex_buffer, tangent_buffer)");
         const auto vertex_count = vertex_buffer_.size();
@@ -61,16 +60,12 @@ namespace huira {
 
     template <IsSpectral TSpectral>
     Mesh<TSpectral>::Mesh(Mesh&& other) noexcept
-        : index_buffer_(std::move(other.index_buffer_)),
+        : Geometry<TSpectral>(std::move(other)),
+        index_buffer_(std::move(other.index_buffer_)),
         vertex_buffer_(std::move(other.vertex_buffer_)),
-        material_(other.material_),
         tangent_buffer_(std::move(other.tangent_buffer_)),
-        device_(other.device_),
-        blas_(other.blas_),
-        id_(other.id_)
+        blas_(other.blas_)
     {
-        other.material_ = nullptr;
-        other.device_ = nullptr;
         other.blas_ = nullptr;
     }
 
@@ -78,20 +73,17 @@ namespace huira {
     Mesh<TSpectral>& Mesh<TSpectral>::operator=(Mesh&& other) noexcept
     {
         if (this != &other) {
+            Geometry<TSpectral>::operator=(std::move(other));
+
             if (blas_) {
                 rtcReleaseScene(blas_);
             }
-
+            
             index_buffer_ = std::move(other.index_buffer_);
             vertex_buffer_ = std::move(other.vertex_buffer_);
-            material_ = other.material_;
             tangent_buffer_ = std::move(other.tangent_buffer_);
-            device_ = other.device_;
             blas_ = other.blas_;
-            id_ = other.id_;
-
-            other.material_ = nullptr;
-            other.device_ = nullptr;
+            
             other.blas_ = nullptr;
         }
         return *this;
@@ -110,13 +102,65 @@ namespace huira {
     RTCScene Mesh<TSpectral>::blas() const
     {
         if (!blas_) {
-            if (!device_) {
+            if (!this->device_) {
                 HUIRA_THROW_ERROR("Mesh::blas - Cannot build BLAS: no RTCDevice assigned. "
                     "Ensure the mesh has been added to a Scene via add_mesh().");
             }
             build_blas_();
         }
         return blas_;
+    }
+
+    template <IsSpectral TSpectral>
+    void Mesh<TSpectral>::compute_surface_interaction(const HitRecord& hit, Interaction<TSpectral>& isect) const
+    {
+        std::uint32_t idx0 = index_buffer_[hit.prim_id * 3 + 0];
+        std::uint32_t idx1 = index_buffer_[hit.prim_id * 3 + 1];
+        std::uint32_t idx2 = index_buffer_[hit.prim_id * 3 + 2];
+
+        float w = 1.0f - hit.u - hit.v;
+
+        isect.position = w * vertex_buffer_[idx0].position
+            + hit.u * vertex_buffer_[idx1].position
+            + hit.v * vertex_buffer_[idx2].position;
+
+        isect.normal_s = w * vertex_buffer_[idx0].normal
+            + hit.u * vertex_buffer_[idx1].normal
+            + hit.v * vertex_buffer_[idx2].normal;
+
+        isect.uv = w * vertex_buffer_[idx0].uv
+            + hit.u * vertex_buffer_[idx1].uv
+            + hit.v * vertex_buffer_[idx2].uv;
+
+        isect.vertex_albedo = w * vertex_buffer_[idx0].albedo
+            + hit.u * vertex_buffer_[idx1].albedo
+            + hit.v * vertex_buffer_[idx2].albedo;
+
+        // Interpolate tangent frame:
+        isect.tangent = Vec3<float>{ 0.0f };
+        isect.bitangent = Vec3<float>{ 0.0f };
+        if (has_tangents()) {
+            isect.tangent = w * tangent_buffer_[idx0].tangent
+                + hit.u * tangent_buffer_[idx1].tangent
+                + hit.v * tangent_buffer_[idx2].tangent;
+            isect.bitangent = w * tangent_buffer_[idx0].bitangent
+                + hit.u * tangent_buffer_[idx1].bitangent
+                + hit.v * tangent_buffer_[idx2].bitangent;
+        }
+    }
+
+    template <IsSpectral TSpectral>
+    Vec2<float> Mesh<TSpectral>::compute_uv(const HitRecord& hit) const
+    {
+        std::uint32_t idx0 = index_buffer_[hit.prim_id * 3 + 0];
+        std::uint32_t idx1 = index_buffer_[hit.prim_id * 3 + 1];
+        std::uint32_t idx2 = index_buffer_[hit.prim_id * 3 + 2];
+
+        float w = 1.0f - hit.u - hit.v;
+
+        return w * vertex_buffer_[idx0].uv
+            + hit.u * vertex_buffer_[idx1].uv
+            + hit.v * vertex_buffer_[idx2].uv;
     }
 
     /**
@@ -133,10 +177,10 @@ namespace huira {
     template <IsSpectral TSpectral>
     void Mesh<TSpectral>::build_blas_() const
     {
-        RTCGeometry geom = rtcNewGeometry(device_->get(), RTC_GEOMETRY_TYPE_TRIANGLE);
+        RTCGeometry geom = rtcNewGeometry(this->device_->get(), RTC_GEOMETRY_TYPE_TRIANGLE);
         if (!geom) {
             HUIRA_THROW_ERROR("Mesh::build_blas_ - Failed to create Embree geometry (error: "
-                + std::to_string(static_cast<int>(rtcGetDeviceError(device_->get()))) + ").");
+                + std::to_string(static_cast<int>(rtcGetDeviceError(this->device_->get()))) + ").");
         }
 
         rtcSetSharedGeometryBuffer(geom,
@@ -156,7 +200,7 @@ namespace huira {
             index_buffer_.size() / 3);
 
         // Check for errors after setting shared buffers (e.g. invalid stride, null pointer):
-        RTCError buffer_error = rtcGetDeviceError(device_->get());
+        RTCError buffer_error = rtcGetDeviceError(this->device_->get());
         if (buffer_error != RTC_ERROR_NONE) {
             rtcReleaseGeometry(geom);
             HUIRA_THROW_ERROR("Mesh::build_blas_ - Failed to set shared geometry buffers (error: "
@@ -165,11 +209,11 @@ namespace huira {
 
         rtcCommitGeometry(geom);
 
-        blas_ = rtcNewScene(device_->get());
+        blas_ = rtcNewScene(this->device_->get());
         if (!blas_) {
             rtcReleaseGeometry(geom);
             HUIRA_THROW_ERROR("Mesh::build_blas_ - Failed to create Embree BLAS scene (error: "
-                + std::to_string(static_cast<int>(rtcGetDeviceError(device_->get()))) + ").");
+                + std::to_string(static_cast<int>(rtcGetDeviceError(this->device_->get()))) + ").");
         }
 
         rtcAttachGeometry(blas_, geom);
@@ -177,15 +221,9 @@ namespace huira {
 
         rtcCommitScene(blas_);
 
-        HUIRA_LOG_INFO("Built BLAS for Mesh " + std::to_string(id_) +
+        HUIRA_LOG_INFO("Built BLAS for Mesh " + std::to_string(this->id()) +
             " (vertices: " + std::to_string(vertex_buffer_.size()) +
             ", triangles: " + std::to_string(index_buffer_.size() / 3) + ")");
-    }
-
-    template <IsSpectral TSpectral>
-    void Mesh<TSpectral>::set_material(Material<TSpectral>* material)
-    {
-        material_ = material;
     }
 
     template <IsSpectral TSpectral>

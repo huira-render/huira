@@ -5,7 +5,7 @@
 #include "embree4/rtcore.h"
 
 #include "huira/assets/lights/light.hpp"
-#include "huira/assets/mesh.hpp"
+#include "huira/geometry/mesh.hpp"
 
 #include "huira/core/physics.hpp"
 #include "huira/core/time.hpp"
@@ -73,14 +73,14 @@ namespace huira {
 
         // Collect geometry and lights by traversing the scene graph:
         traverse_and_collect_(scene.root_node_, observer_transforms, observer_inverses, obs_mode);
-        HUIRA_LOG_INFO("SceneView collected " + std::to_string(geometry_.size()) + " unique mesh batches and " +
+        HUIRA_LOG_INFO("SceneView collected " + std::to_string(primitives_.size()) + " unique primitive batches and " +
             std::to_string(lights_.size()) + " light instances.");
 
         // Check for unlinked objects:
-        for (auto& mesh : scene.meshes_) {
-            auto* key = mesh.get();
+        for (auto& primitive : scene.primitives_) {
+            auto* key = primitive.get();
             if (batch_lookup_.find(key) == batch_lookup_.end()) {
-                HUIRA_LOG_WARNING("Mesh[" + std::to_string(mesh->id()) + "] '" + mesh->name() +
+                HUIRA_LOG_WARNING("Primitive[" + std::to_string(primitive->id()) + "] '" + primitive->name() +
                     "' is unlinked in the scene graph and will not be rendered.");
             }
         }
@@ -240,72 +240,26 @@ namespace huira {
 
         // Look up which mesh and instance this hit corresponds to:
         const auto& mapping = instance_mappings_[hit.inst_id];
-        const auto& batch = geometry_[mapping.batch_index];
-        const auto& mesh = batch.mesh;
-        const auto& indices = mesh->index_buffer();
-        const auto& vertices = mesh->vertex_buffer();
+        const auto& batch = primitives_[mapping.batch_index];
 
-        // Triangle vertex indices:
-        std::uint32_t idx0 = indices[hit.prim_id * 3 + 0];
-        std::uint32_t idx1 = indices[hit.prim_id * 3 + 1];
-        std::uint32_t idx2 = indices[hit.prim_id * 3 + 2];
-
-        // Embree barycentric convention: P = (1-u-v)*V0 + u*V1 + v*V2
-        float w = 1.0f - hit.u - hit.v;
-
+        // Get the hit:
+        batch.primitive->geometry->compute_surface_interaction(hit, isect);
+        isect.wo = -ray.direction();
         const auto& instance_transforms = batch.instances[mapping.instance_index];
         const Transform<float>& xf = instance_transforms[0];
 
-        // Hit position via interpolation (more accurate than using the ray origin):
-        isect.position = w * vertices[idx0].position
-            + hit.u * vertices[idx1].position
-            + hit.v * vertices[idx2].position;
-        isect.wo = -ray.direction();
-
         isect.position = xf.apply_to_point(isect.position);
         isect.normal_g = glm::normalize(xf.apply_to_direction(hit.Ng));
-
-
-        // Interpolate shading normal:
-        Vec3<float> n0 = vertices[idx0].normal;
-        Vec3<float> n1 = vertices[idx1].normal;
-        Vec3<float> n2 = vertices[idx2].normal;
-        Vec3<float> ns_object = w * n0 + hit.u * n1 + hit.v * n2;
-        isect.normal_s = glm::normalize(xf.apply_to_direction(ns_object));
-
         isect.normal_g = glm::dot(ray.direction(), isect.normal_g) < 0.0f ? isect.normal_g : -isect.normal_g;
+        isect.normal_s = glm::normalize(xf.apply_to_direction(isect.normal_s)); // TODO Do we need to invert this as well?
         if (glm::dot(isect.normal_s, isect.normal_g) < 0.0f) {
             isect.normal_s = -isect.normal_s;
         }
 
-        // Interpolate UVs (transform-independent):
-        isect.uv = w * vertices[idx0].uv
-            + hit.u * vertices[idx1].uv
-            + hit.v * vertices[idx2].uv;
-
-        // Interpolate vertex albedo:
-        isect.vertex_albedo = w * vertices[idx0].albedo
-            + hit.u * vertices[idx1].albedo
-            + hit.v * vertices[idx2].albedo;
-
-        // Interpolate tangent frame:
-        isect.tangent = Vec3<float>{ 0.0f };
-        isect.bitangent = Vec3<float>{ 0.0f };
-        if (mesh->has_tangents()) {
-            const auto& tangents = mesh->tangent_buffer();
-            Vec3<float> t_object = w * tangents[idx0].tangent
-                + hit.u * tangents[idx1].tangent
-                + hit.v * tangents[idx2].tangent;
-            Vec3<float> bt_object = w * tangents[idx0].bitangent
-                + hit.u * tangents[idx1].bitangent
-                + hit.v * tangents[idx2].bitangent;
-
-            isect.tangent = glm::normalize(xf.apply_to_direction(t_object));
-            isect.bitangent = glm::normalize(xf.apply_to_direction(bt_object));
-
-            if (glm::dot(glm::cross(isect.tangent, isect.bitangent), isect.normal_s) < 0.0f) {
-                isect.bitangent = -isect.bitangent;
-            }
+        isect.tangent = glm::normalize(xf.apply_to_direction(isect.tangent));
+        isect.bitangent = glm::normalize(xf.apply_to_direction(isect.bitangent));
+        if (glm::dot(glm::cross(isect.tangent, isect.bitangent), isect.normal_s) < 0.0f) {
+            isect.bitangent = -isect.bitangent;
         }
 
         return isect;
@@ -416,27 +370,16 @@ namespace huira {
         }
     }
 
-    /**
-     * @brief Handle atmosphere asset pointer and add to atmosphere instances.
-     * @param atmosphere Atmosphere pointer
-     * @param instance_apparent_transforms Render transforms
-     */
-    template <IsSpectral TSpectral>
-    void SceneView<TSpectral>::handle_asset_ptr_(Atmosphere<TSpectral>* atmosphere, const std::vector<Transform<float>>& instance_apparent_transforms)
-    {
-        add_atmosphere_instance_(atmosphere->shared_from_this(), instance_apparent_transforms);
-    }
-
 
     /**
-     * @brief Handle mesh asset pointer and add to geometry batch.
-     * @param mesh Mesh pointer
+     * @brief Handle primitive asset pointer and add to geometry batch.
+     * @param primitive Primitive pointer
      * @param xf Render transform
      */
     template <IsSpectral TSpectral>
-    void SceneView<TSpectral>::handle_asset_ptr_(Mesh<TSpectral>* mesh, const std::vector<Transform<float>>& instance_apparent_transforms)
+    void SceneView<TSpectral>::handle_asset_ptr_(Primitive<TSpectral>* primitive, const std::vector<Transform<float>>& instance_apparent_transforms)
     {
-        add_mesh_instance_(mesh->shared_from_this(), instance_apparent_transforms);
+        add_primitive_instance_(primitive->shared_from_this(), instance_apparent_transforms);
     }
 
 
@@ -491,46 +434,29 @@ namespace huira {
         std::shared_ptr<FrameNode<TSpectral>> model_graph_ptr = model->root_node_;
         traverse_model_graph_(model_graph_ptr, instance_apparent_transforms);
     }
-
-
-    /**
-     * @brief Add an atmosphere instance to the atmospheres vector.
-     * @param atmosphere Atmosphere pointer
-     * @param render_transform Render transform
-     */
-    template <IsSpectral TSpectral>
-    void SceneView<TSpectral>::add_atmosphere_instance_(std::shared_ptr<Atmosphere<TSpectral>> atmosphere, const std::vector<Transform<float>>& instance_apparent_transforms)
-    {
-        AtmosphereInstance<TSpectral> instance;
-        instance.atmosphere = atmosphere;
-        instance.transforms = instance_apparent_transforms;
     
-        atmospheres_.push_back(std::move(instance));
-    }
-
     /**
-     * @brief Add a mesh instance to the geometry batch.
-     * @param mesh Mesh pointer
+     * @brief Add a primitive instance to the geometry batch.
+     * @param primitive Primitive pointer
      * @param render_transform Render transform
      */
     template <IsSpectral TSpectral>
-    void SceneView<TSpectral>::add_mesh_instance_(std::shared_ptr<Mesh<TSpectral>> mesh, const std::vector<Transform<float>>& instance_apparent_transforms)
+    void SceneView<TSpectral>::add_primitive_instance_(std::shared_ptr<Primitive<TSpectral>> primitive, const std::vector<Transform<float>>& instance_apparent_transforms)
     {
-        auto* key = mesh.get();
+        auto* key = primitive.get();
         auto it = batch_lookup_.find(key);
 
         if (it != batch_lookup_.end()) {
             size_t index = it->second;
-            geometry_[index].instances.push_back(instance_apparent_transforms);
+            primitives_[index].instances.push_back(instance_apparent_transforms);
         }
         else {
-            MeshBatch<TSpectral> batch;
-            batch.mesh = mesh;
+            PrimitiveBatch<TSpectral> batch;
+            batch.primitive = primitive;
             batch.instances.push_back(instance_apparent_transforms);
 
-            geometry_.push_back(std::move(batch));
-
-            batch_lookup_[key] = geometry_.size() - 1;
+            primitives_.push_back(std::move(batch));
+            batch_lookup_[key] = primitives_.size() - 1;
         }
     }
 
@@ -604,110 +530,20 @@ namespace huira {
             rtcSetSceneFlags(tlas_, RTC_SCENE_FLAG_DYNAMIC);
         }
 
-        // Add Atmospheres
-        for (std::size_t a_idx = 0; a_idx < atmospheres_.size(); ++a_idx) {
-            const auto& atmosphere_inst = atmospheres_[a_idx];
+        // Add Primitives
+        for (std::size_t batch_idx = 0; batch_idx < primitives_.size(); ++batch_idx) {
+            const auto& batch = primitives_[batch_idx];
+            RTCScene blas = batch.primitive->geometry->blas();
 
-            std::size_t N = atmosphere_inst.transforms.size();
-            if (N == 0) {
-                continue;
-            }
-
-            // Create a BLAS containing a single static sphere at the origin
-            RTCScene sphere_blas = rtcNewScene(device_->get());
-            RTCGeometry geom = rtcNewGeometry(device_->get(), RTC_GEOMETRY_TYPE_SPHERE_POINT);
-            rtcSetGeometryMask(geom, MASK_GEOMETRY_);
-
-            if (!geom) {
-                RTCError err = rtcGetDeviceError(device_->get());
-                HUIRA_THROW_ERROR("Embree failed to create SPHERE_POINT. Ensure EMBREE_GEOMETRY_SPHERE is enabled in your build. Error: " +
-                    std::to_string(static_cast<int>(err)));
-            }
-
-            float* vertex = static_cast<float*>(rtcSetNewGeometryBuffer(geom,
-                RTC_BUFFER_TYPE_VERTEX, 0, RTC_FORMAT_FLOAT4, 4 * sizeof(float), 1));
-
-            if (!vertex) {
-                RTCError err = rtcGetDeviceError(device_->get());
-                HUIRA_THROW_ERROR("Embree failed to allocate sphere buffer. Error: " +
-                    std::to_string(static_cast<int>(err)));
-            }
-
-            // The sphere itself sits statically at the origin
-            float xy_radius = atmosphere_inst.atmosphere->equatorial_radius().to_si_f();
-            float z_radius = atmosphere_inst.atmosphere->polar_radius().to_si_f();
-            float height = atmosphere_inst.atmosphere->max_height().to_si_f();
-            
-            float xy_scale = xy_radius / z_radius;
-
-            vertex[0] = 0.0f;
-            vertex[1] = 0.0f;
-            vertex[2] = 0.0f;
-            vertex[3] = z_radius + height;
-
-            rtcCommitGeometry(geom);
-            rtcAttachGeometry(sphere_blas, geom);
-            rtcReleaseGeometry(geom);
-            rtcCommitScene(sphere_blas);
-
-
-            // Instance the sphere BLAS into the TLAS
-            RTCGeometry inst_geom = rtcNewGeometry(device_->get(), RTC_GEOMETRY_TYPE_INSTANCE);
-            rtcSetGeometryInstancedScene(inst_geom, sphere_blas);
-            rtcSetGeometryTimeStepCount(inst_geom, static_cast<unsigned int>(N));
-
-            if (N > 1) {
-                rtcSetGeometryTimeRange(inst_geom, 0.0f, 1.0f);
-            }
-
-            for (std::size_t t_idx = 0; t_idx < N; ++t_idx) {
-                Mat4<float> m = static_cast<Mat4<float>>(atmosphere_inst.transforms[t_idx].to_matrix());
-
-                m[0][0] *= xy_scale; m[0][1] *= xy_scale; m[0][2] *= xy_scale;
-                m[1][0] *= xy_scale; m[1][1] *= xy_scale; m[1][2] *= xy_scale;
-
-                rtcSetGeometryTransform(inst_geom,
-                    static_cast<unsigned int>(t_idx),
-                    RTC_FORMAT_FLOAT4X4_COLUMN_MAJOR,
-                    &m[0][0]);
-            }
-
-            rtcSetGeometryMask(inst_geom, MASK_GEOMETRY_);
-            rtcCommitGeometry(inst_geom);
-            unsigned int geom_id = rtcAttachGeometry(tlas_, inst_geom);
-            rtcReleaseGeometry(inst_geom);
-
-            // Embree reference counts scenes; the instance holds a reference, so we release ours.
-            rtcReleaseScene(sphere_blas);
-
-            // Map geom_id back to lights array
-            if (geom_id >= instance_mappings_.size()) {
-                instance_mappings_.resize(geom_id + 1);
-            }
-
-            InstanceMapping mapping;
-            mapping.type = GeometryType::Atmosphere;
-            mapping.batch_index = 0;
-            mapping.instance_index = 0;
-            mapping.atmosphere_index = a_idx;
-            instance_mappings_[geom_id] = mapping;
-        }
-
-        // Add Meshes
-        for (std::size_t batch_idx = 0; batch_idx < geometry_.size(); ++batch_idx) {
-            const auto& batch = geometry_[batch_idx];
-            RTCScene mesh_blas = batch.mesh->blas();
-
-            const auto* material = batch.mesh->material();
+            const auto* material = batch.primitive->material.get();
             bool needs_alpha = material->has_alpha();
 
             if (needs_alpha) {
-                RTCGeometry geom = rtcGetGeometry(mesh_blas, 0);
+                RTCGeometry geom = rtcGetGeometry(blas, 0);
 
                 if (geom) {
                     auto context = std::make_unique<AlphaFilterContext>();
-                    context->material = material;
-                    context->mesh = batch.mesh.get();
+                    context->primitive = batch.primitive.get();
 
                     rtcSetGeometryUserData(geom, context.get());
                     rtcSetGeometryOccludedFilterFunction(geom, alpha_occlusion_filter_);
@@ -719,7 +555,7 @@ namespace huira {
                     }
 
                     rtcCommitGeometry(geom);
-                    rtcCommitScene(mesh_blas);
+                    rtcCommitScene(blas);
 
                     filter_contexts_.push_back(std::move(context));
                 }
@@ -730,7 +566,7 @@ namespace huira {
                 std::size_t N = batch.instances[inst_idx].size();
 
                 RTCGeometry inst_geom = rtcNewGeometry(device_->get(), RTC_GEOMETRY_TYPE_INSTANCE);
-                rtcSetGeometryInstancedScene(inst_geom, mesh_blas);
+                rtcSetGeometryInstancedScene(inst_geom, blas);
                 rtcSetGeometryTimeStepCount(inst_geom, static_cast<unsigned int>(N));
 
                 if (motion_blur) {
@@ -756,7 +592,7 @@ namespace huira {
 
                 // Explicitly label this as a Mesh hit
                 InstanceMapping mapping;
-                mapping.type = GeometryType::Mesh;
+                mapping.type = GeometryType::Primitive;
                 mapping.batch_index = batch_idx;
                 mapping.instance_index = inst_idx;
                 mapping.light_index = 0;
@@ -854,38 +690,22 @@ namespace huira {
 
     template <IsSpectral TSpectral>
     void SceneView<TSpectral>::alpha_occlusion_filter_(const RTCFilterFunctionNArguments* args) noexcept {
-        if (args->N != 1) {
-            return;
-        }
+        if (args->N != 1) return;
 
         int* valid = args->valid;
-        if (*valid == 0) {
-            return;
-        }
+        if (*valid == 0) return;
 
         auto* context = static_cast<const AlphaFilterContext*>(args->geometryUserPtr);
-        const auto* material = context->material;
-        const auto* mesh = context->mesh;
-
-        // Retrieve UV coordinate for the hit point
-        unsigned int primID = RTCHitN_primID(args->hit, args->N, 0);
-        float u = RTCHitN_u(args->hit, args->N, 0);
-        float v = RTCHitN_v(args->hit, args->N, 0);
-        float w = 1.0f - u - v;
-
-        const auto& indices = mesh->index_buffer();
-        const auto& vertices = mesh->vertex_buffer();
-
-        uint32_t idx0 = indices[primID * 3 + 0];
-        uint32_t idx1 = indices[primID * 3 + 1];
-        uint32_t idx2 = indices[primID * 3 + 2];
-
-        const Vec2<float>& uv0 = vertices[idx0].uv;
-        const Vec2<float>& uv1 = vertices[idx1].uv;
-        const Vec2<float>& uv2 = vertices[idx2].uv;
-
-        Vec2<float> uv = uv0 * w + uv1 * u + uv2 * v;
-
+        const auto* material = context->primitive->material.get();
+        const auto* geometry = context->primitive->geometry.get();
+        
+        HitRecord temp_hit;
+        temp_hit.prim_id = RTCHitN_primID(args->hit, args->N, 0);
+        temp_hit.u = RTCHitN_u(args->hit, args->N, 0);
+        temp_hit.v = RTCHitN_v(args->hit, args->N, 0);
+        
+        Vec2<float> uv = geometry->compute_uv(temp_hit);
+        
         float alpha = material->alpha_factor();
         if (material->has_alpha_texture()) {
             alpha *= material->alpha_image_->sample_bilinear(uv.x, uv.y);
@@ -895,9 +715,7 @@ namespace huira {
             thread_local std::mt19937 generator(std::random_device{}());
             thread_local std::uniform_real_distribution<float> distribution(0.0f, 1.0f);
 
-            float random_val = distribution(generator);
-
-            if (random_val > alpha) {
+            if (distribution(generator) > alpha) {
                 *valid = 0;
             }
         }
