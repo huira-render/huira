@@ -4,6 +4,8 @@
 
 #include "embree4/rtcore.h"
 
+#include "huira/util/logger.hpp"
+
 namespace huira {
     class EmbreeDevice {
     public:

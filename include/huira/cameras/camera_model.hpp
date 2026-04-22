@@ -18,7 +18,7 @@
 #include "huira/cameras/sensors/sensor_model.hpp"
 #include "huira/render/frame_buffer.hpp"
 #include "huira/render/frustum.hpp"
-#include "huira/render/ray.hpp"
+#include "huira/geometry/ray.hpp"
 #include "huira/render/sampler.hpp"
 #include "huira/scene/node.hpp"
 #include "huira/scene/scene_object.hpp"

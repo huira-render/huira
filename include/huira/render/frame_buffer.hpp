@@ -30,9 +30,9 @@ namespace huira {
         bool has_albedo() const { return has_(albedo_); }
 
 
-        void enable_mesh_ids(bool enable = true) { enable_(mesh_ids_, uint64_t{ 0 }, enable); }
-        Image<uint64_t>& mesh_ids() { return mesh_ids_; }
-        bool has_mesh_ids() const { return has_(mesh_ids_); }
+        void enable_geometry_ids(bool enable = true) { enable_(geometry_ids_, uint64_t{ 0 }, enable); }
+        Image<uint64_t>& geometry_ids() { return geometry_ids_; }
+        bool has_geometry_ids() const { return has_(geometry_ids_); }
 
 
         void enable_camera_normals(bool enable = true) { enable_(camera_normals_, Vec3<float>{0, 0, 0}, enable); }
@@ -71,8 +71,8 @@ namespace huira {
             if (has_albedo()) {
                 albedo_.fill(TSpectral{ 0 });
             }
-            if (has_mesh_ids()) {
-                mesh_ids_.fill(uint64_t{ 0 });
+            if (has_geometry_ids()) {
+                geometry_ids_.fill(uint64_t{ 0 });
             }
             if (has_camera_normals()) {
                 camera_normals_.fill(Vec3<float>{ 0, 0, 0 });
@@ -97,7 +97,7 @@ namespace huira {
 
         Image<float> depth_;
         Image<TSpectral> albedo_;
-        Image<uint64_t> mesh_ids_;
+        Image<uint64_t> geometry_ids_;
         Image<Vec3<float>> camera_normals_;
         Image<Vec3<float>> world_normals_;
 

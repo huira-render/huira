@@ -3,7 +3,7 @@
 
 #include "huira/assets/lights/sphere_light.hpp"
 
-#include "huira/assets/mesh.hpp"
+#include "huira/geometry/mesh.hpp"
 #include "huira/assets/model.hpp"
 #include "huira/assets/unresolved/unresolved_object.hpp"
 
@@ -49,7 +49,7 @@
 #include "huira/render/frame_buffer.hpp"
 #include "huira/render/interaction.hpp"
 #include "huira/render/renderer.hpp"
-#include "huira/render/ray.hpp"
+#include "huira/geometry/ray.hpp"
 #include "huira/render/sampler.hpp"
 
 // scene/
