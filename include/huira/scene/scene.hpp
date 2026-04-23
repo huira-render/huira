@@ -12,11 +12,13 @@
 #include "huira/assets/model.hpp"
 #include "huira/assets/io/model_loader.hpp"
 #include "huira/core/concepts/spectral_concepts.hpp"
-#include "huira/handles/model_handle.hpp"
-#include "huira/handles/root_frame_handle.hpp"
+#include "huira/handles/assets/model_handle.hpp"
+#include "huira/handles/scene/root_frame_handle.hpp"
 #include "huira/handles/material_handle.hpp"
-#include "huira/handles/primitive_handle.hpp"
-#include "huira/handles/geometry_handle.hpp"
+#include "huira/handles/assets/primitive_handle.hpp"
+#include "huira/handles/geometry/geometry_handle.hpp"
+#include "huira/handles/geometry/mesh_handle.hpp"
+#include "huira/handles/geometry/ellipsoid_handle.hpp"
 #include "huira/handles/texture_handle.hpp"
 #include "huira/images/image.hpp"
 #include "huira/materials/material.hpp"
@@ -57,6 +59,9 @@ namespace huira {
 
         RootFrameHandle<TSpectral> root;
 
+        MeshHandle<TSpectral> add_mesh(const IndexBuffer& index_buffer, const VertexBuffer<TSpectral>& vertex_buffer, std::string name = "");
+        MeshHandle<TSpectral> add_mesh(const IndexBuffer& index_buffer, const VertexBuffer<TSpectral>& vertex_buffer, const TangentBuffer& tangent_buffer, std::string name = "");
+        EllipsoidHandle<TSpectral> add_ellipsoid(const units::Meter& x, const units::Meter& y, const units::Meter& z, std::string name = "");
         template <typename TGeometry>
         GeometryHandle<TSpectral> add_geometry(TGeometry&& geom, std::string name = "");
         void set_name(const GeometryHandle<TSpectral>& geom_handle, const std::string& name);

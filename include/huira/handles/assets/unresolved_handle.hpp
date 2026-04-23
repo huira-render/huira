@@ -32,4 +32,4 @@ namespace huira {
     };
 }
 
-#include "huira_impl/handles/unresolved_handle.ipp"
+#include "huira_impl/handles/assets/unresolved_handle.ipp"

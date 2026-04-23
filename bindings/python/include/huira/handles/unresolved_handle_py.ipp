@@ -3,7 +3,7 @@
 #include "pybind11/pybind11.h"
 #include "pybind11/stl.h"
 
-#include "huira/handles/unresolved_handle.hpp"
+#include "huira/handles/assets/unresolved_handle.hpp"
 #include "huira/core/units/units_py.ipp"
 
 namespace py = pybind11;
