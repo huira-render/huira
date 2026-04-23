@@ -8,8 +8,8 @@
 #include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/assets/io/model_loader.hpp"
 #include "huira/assets/atmosphere.hpp"
-#include "huira/handles/model_handle.hpp"
-#include "huira/handles/frame_handle.hpp"
+#include "huira/handles/assets/model_handle.hpp"
+#include "huira/handles/scene/frame_handle.hpp"
 #include "huira/util/logger.hpp"
 #include "huira/util/colorful_text.hpp"
 #include "huira/stars/io/star_catalog.hpp"
@@ -19,6 +19,9 @@
 #include "huira/assets/unresolved/unresolved_sphere.hpp"
 #include "huira/assets/unresolved/unresolved_asteroid.hpp"
 #include "huira/assets/unresolved/unresolved_emitter.hpp"
+
+#include "huira/geometry/mesh.hpp"
+#include "huira/geometry/ellipsoid.hpp"
 
 #include "huira/materials/bsdfs/lambert_bsdf.hpp"
 #include "huira/materials/bsdfs/cook_torrance_bsdf.hpp"
@@ -76,6 +79,28 @@ namespace huira {
 #ifdef _MSC_VER
 #pragma warning(pop)
 #endif
+
+    template <IsSpectral TSpectral>
+    MeshHandle<TSpectral> Scene<TSpectral>::add_mesh(const IndexBuffer& index_buffer, const VertexBuffer<TSpectral>& vertex_buffer, std::string name)
+    {
+        auto base_handle = add_geometry(Mesh<TSpectral>{ index_buffer, vertex_buffer }, std::move(name));
+        return MeshHandle<TSpectral>{ base_handle.get_shared() };
+    }
+
+    template <IsSpectral TSpectral>
+    MeshHandle<TSpectral> Scene<TSpectral>::add_mesh(const IndexBuffer& index_buffer, const VertexBuffer<TSpectral>& vertex_buffer, const TangentBuffer& tangent_buffer, std::string name)
+    {
+        auto base_handle = add_geometry(Mesh<TSpectral>{ index_buffer, vertex_buffer, tangent_buffer }, std::move(name));
+        return MeshHandle<TSpectral>{ base_handle.get_shared() };
+    }
+
+    template <IsSpectral TSpectral>
+    EllipsoidHandle<TSpectral> Scene<TSpectral>::add_ellipsoid(const units::Meter& x, const units::Meter& y, const units::Meter& z, std::string name)
+    {
+        auto base_handle = add_geometry(Ellipsoid<TSpectral>{ x, y, z }, std::move(name));
+        return EllipsoidHandle<TSpectral>{ base_handle.get_shared() };
+    }
+
 
     /**
      * @brief Adds a mesh to the scene.

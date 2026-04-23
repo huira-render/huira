@@ -4,12 +4,12 @@
 #include "huira/core/concepts/spectral_concepts.hpp"
 
 #include "huira/handles/camera_handle.hpp"
-#include "huira/handles/node_handle.hpp"
-#include "huira/handles/light_handle.hpp"
-#include "huira/handles/unresolved_handle.hpp"
-#include "huira/handles/instance_handle.hpp"
-#include "huira/handles/model_handle.hpp"
-#include "huira/handles/mesh_handle.hpp"
+#include "huira/handles/scene/node_handle.hpp"
+#include "huira/handles/assets/light_handle.hpp"
+#include "huira/handles/assets/unresolved_handle.hpp"
+#include "huira/handles/scene/instance_handle.hpp"
+#include "huira/handles/assets/model_handle.hpp"
+#include "huira/handles/geometry/mesh_handle.hpp"
 #include "huira/scene/frame_node.hpp"
 
 namespace huira {
@@ -42,4 +42,4 @@ namespace huira {
     };
 }
 
-#include "huira_impl/handles/frame_handle.ipp"
+#include "huira_impl/handles/scene/frame_handle.ipp"

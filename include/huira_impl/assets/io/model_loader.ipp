@@ -11,7 +11,7 @@
 #include "huira/geometry/vertex.hpp"
 #include "huira/util/logger.hpp"
 
-#include "huira/handles/geometry_handle.hpp"
+#include "huira/handles/geometry/geometry_handle.hpp"
 
 #include "huira/images/io/read_image.hpp"
 

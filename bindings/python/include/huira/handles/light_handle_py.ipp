@@ -2,7 +2,7 @@
 
 #include "pybind11/pybind11.h"
 
-#include "huira/handles/light_handle.hpp"
+#include "huira/handles/assets/light_handle.hpp"
 
 namespace py = pybind11;
 

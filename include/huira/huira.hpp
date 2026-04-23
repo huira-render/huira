@@ -21,15 +21,15 @@
 
 // Handles for various scene elements
 #include "huira/handles/camera_handle.hpp"
-#include "huira/handles/frame_handle.hpp"
+#include "huira/handles/scene/frame_handle.hpp"
 //#include "huira/handles/handle.hpp"            // Not part of public API
-#include "huira/handles/instance_handle.hpp"
-#include "huira/handles/light_handle.hpp"
-#include "huira/handles/mesh_handle.hpp"
-#include "huira/handles/model_handle.hpp"
-//#include "huira/handles/node_handle.hpp"       // Not part of public API
+#include "huira/handles/scene/instance_handle.hpp"
+#include "huira/handles/assets/light_handle.hpp"
+#include "huira/handles/geometry/mesh_handle.hpp"
+#include "huira/handles/assets/model_handle.hpp"
+//#include "huira/handles/scene/node_handle.hpp"       // Not part of public API
 //#include "huira/handles/root_frame_handle.hpp" // Not part of public API
-#include "huira/handles/unresolved_handle.hpp"
+#include "huira/handles/assets/unresolved_handle.hpp"
 
 // Image interfaces
 #include "huira/images/image.hpp"
