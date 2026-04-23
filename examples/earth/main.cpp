@@ -36,6 +36,10 @@ int main(int argc, char** argv) {
     // Create the scene
     huira::Scene<TSpectral> scene;
 
+    // Create the refernce frames:
+    auto eci = scene.root.new_spice_subframe("EARTH", "J2000");
+    auto ecef = scene.root.new_spice_subframe("EARTH", "ITRF93");
+
     // Set the observation time
     huira::Time time("2019-02-06T10:27:00");
     huira::Interval exposure_interval{ time, time + 0.00025_s };
@@ -57,24 +61,24 @@ int main(int argc, char** argv) {
     // This flag allows you to match Blender's for easier
     // comparison with blender generated images.
     camera_model.use_blender_convention();
+
+    auto earth_ellipsoid = scene.add_ellipsoid(6371_Km, 6371_Km, 6371_Km);
+    auto earth_primitive = scene.add_primitive(earth_ellipsoid);
+    eci.new_instance(earth_primitive);
     
     // Create instance of the camera:
-    auto eci = scene.root.new_spice_subframe("EARTH", "J2000");
     auto navcam = eci.new_instance(camera_model);
     navcam.set_position(100000_Km, 0_Km, 0_m);
     navcam.set_euler_angles(90_deg, 0_deg, 90_deg);
 
-    // Create the Earth frame:
-    auto ecef = scene.root.new_spice_subframe("EARTH", "ITRF93");
-
     // Load the Earth model
-    auto earth_model = scene.load_model(earth_path);
-    auto earth = ecef.new_instance(earth_model);
-    earth.set_scale(6371*1000);
+    //auto earth_model = scene.load_model(earth_path);
+    //auto earth = ecef.new_instance(earth_model);
+    //earth.set_scale(6371*1000);
 
     // Create an atmosphere:
-    //auto earth_atmosphere = scene.new_earth_atmosphere();
-    //ecef.new_instance(earth_atmosphere);
+    // auto earth_atmosphere = scene.new_earth_atmosphere();
+    // ecef.new_instance(earth_atmosphere);
 
     // Create the sun
     auto sun_light = scene.new_sun_light();

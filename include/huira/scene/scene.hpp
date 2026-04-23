@@ -7,7 +7,6 @@
 #include <unordered_map>
 #include <vector>
 
-#include "huira/assets/atmosphere.hpp"
 #include "huira/geometry/mesh.hpp"
 #include "huira/assets/model.hpp"
 #include "huira/assets/io/model_loader.hpp"
@@ -68,6 +67,7 @@ namespace huira {
         GeometryHandle<TSpectral> get_geometry(const std::string& name) const;
         void delete_geometry(const GeometryHandle<TSpectral>& geom_handle);
 
+        PrimitiveHandle<TSpectral> add_primitive(const GeometryHandle<TSpectral>& geom, std::string name = "");
         PrimitiveHandle<TSpectral> add_primitive(const GeometryHandle<TSpectral>& geom, 
             const MaterialHandle<TSpectral>& mat, std::string name = "");
         void set_name(const PrimitiveHandle<TSpectral>& primitive_handle, const std::string& name);

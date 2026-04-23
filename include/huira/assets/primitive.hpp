@@ -15,6 +15,13 @@ namespace huira {
     class Primitive : public SceneObject<Primitive<TSpectral>> {
     public:
         Primitive() : id_(next_id_++) {}
+        ~Primitive() override = default;
+
+        Primitive(const Primitive&) = delete;
+        Primitive& operator=(const Primitive&) = delete;
+
+        Primitive(Primitive&&) = default;
+        Primitive& operator=(Primitive&&) = default;
 
         std::shared_ptr<Geometry<TSpectral>> geometry;
         std::shared_ptr<Material<TSpectral>> material;

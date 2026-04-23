@@ -7,7 +7,6 @@
 
 #include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/assets/io/model_loader.hpp"
-#include "huira/assets/atmosphere.hpp"
 #include "huira/handles/assets/model_handle.hpp"
 #include "huira/handles/scene/frame_handle.hpp"
 #include "huira/util/logger.hpp"
@@ -47,9 +46,9 @@ namespace huira {
 
         // Initialize default textures:
         default_albedo_image_ = std::make_shared<Image<TSpectral>>(1, 1, TSpectral{ 1 });
-        default_alpha_image_ = std::make_shared<Image<float>>(1, 1, 1);
-        default_metallic_image_ = std::make_shared<Image<float>>(1, 1, 1);
-        default_roughness_image_ = std::make_shared<Image<float>>(1, 1, 1);
+        default_alpha_image_ = std::make_shared<Image<float>>(1, 1, 1.f);
+        default_metallic_image_ = std::make_shared<Image<float>>(1, 1, 1.f);
+        default_roughness_image_ = std::make_shared<Image<float>>(1, 1, 1.f);
         default_normal_image_ = std::make_shared<Image<Vec3<float>>>(1, 1, Vec3<float>{0, 0, 1});
         default_emission_image_ = std::make_shared<Image<TSpectral>>(1, 1, TSpectral{ 1 });
 
@@ -167,8 +166,30 @@ namespace huira {
     }
 
     /**
+     * @brief Adds a primitive to the scene with default material.
+     * @param geometry GeometryHandle for the primitive's geometry
+     * @param name Optional name for the primitive
+     * @return PrimitiveHandle<TSpectral> Handle to the added primitive
+     */
+    template <IsSpectral TSpectral>
+    PrimitiveHandle<TSpectral> Scene<TSpectral>::add_primitive(const GeometryHandle<TSpectral>& geom_handle, std::string name)
+    {
+        if (!geom_handle.valid()) {
+            HUIRA_THROW_ERROR("Cannot create Primitive: Invalid Geometry Handle.");
+        }
+
+        auto primitive_shared = std::make_shared<Primitive<TSpectral>>();
+        primitive_shared->geometry = geom_handle.get_shared();
+        primitive_shared->material = default_material_;
+        primitives_.add(primitive_shared, name);
+        
+        return PrimitiveHandle<TSpectral>{ primitive_shared };
+    }
+
+    /**
      * @brief Adds a primitive to the scene.
-     * @param primitive Primitive to add (moved)
+     * @param geometry GeometryHandle for the primitive's geometry
+     * @param material MaterialHandle for the primitive's material
      * @param name Optional name for the primitive
      * @return PrimitiveHandle<TSpectral> Handle to the added primitive
      */
@@ -179,14 +200,13 @@ namespace huira {
         if (!geom_handle.valid()) {
             HUIRA_THROW_ERROR("Cannot create Primitive: Invalid Geometry Handle.");
         }
+        if (!mat_handle.valid()) {
+            HUIRA_THROW_ERROR("Invalid Material Handle provided. Using default material.");
+        } 
 
         auto primitive_shared = std::make_shared<Primitive<TSpectral>>();
         primitive_shared->geometry = geom_handle.get_shared();
-        if (mat_handle.valid()) {
-            primitive_shared->material = mat_handle.get_shared();
-        } else {
-            primitive_shared->material = default_material_;
-        }
+        primitive_shared->material = mat_handle.get_shared();
         primitives_.add(primitive_shared, name);
         
         return PrimitiveHandle<TSpectral>{ primitive_shared };

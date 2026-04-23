@@ -18,6 +18,7 @@
         "geometry-instance",
         "geometry-point",
         "geometry-triangle",
+        "geometry-user",
         "ray-mask",
         "tasking-tbb"
       ]
