@@ -7,7 +7,6 @@
 #include <unordered_map>
 #include <vector>
 
-#include "huira/assets/atmosphere.hpp"
 #include "huira/geometry/mesh.hpp"
 #include "huira/assets/model.hpp"
 #include "huira/assets/io/model_loader.hpp"
@@ -68,6 +67,7 @@ namespace huira {
         GeometryHandle<TSpectral> get_geometry(const std::string& name) const;
         void delete_geometry(const GeometryHandle<TSpectral>& geom_handle);
 
+        PrimitiveHandle<TSpectral> add_primitive(const GeometryHandle<TSpectral>& geom, std::string name = "");
         PrimitiveHandle<TSpectral> add_primitive(const GeometryHandle<TSpectral>& geom, 
             const MaterialHandle<TSpectral>& mat, std::string name = "");
         void set_name(const PrimitiveHandle<TSpectral>& primitive_handle, const std::string& name);
@@ -124,10 +124,11 @@ namespace huira {
         void set_background_radiance(TSpectral background);
         void set_background_radiance(float background);
 
-        TextureHandle<TSpectral> add_texture(Image<TSpectral> image, std::string name = "");
-        TextureHandle<float> add_texture(Image<float> image, std::string name = "");
-        TextureHandle<Vec3<float>> add_texture(Image<Vec3<float>> image, std::string name = "");
-        TextureHandle<Vec3<float>> add_normal_texture(Image<Vec3<float>> image, std::string name = "");
+        TextureHandle<TSpectral> add_texture(Image<TSpectral>&& image, std::string name = "");
+        TextureHandle<float> add_texture(Image<float>&& image, std::string name = "");
+        TextureHandle<Vec3<float>> add_texture(Image<Vec3<float>>&& image, std::string name = "");
+        TextureHandle<Vec3<float>> add_normal_texture(Image<Vec3<float>>&& image, std::string name = "");
+        TextureHandle<Vec3<float>> add_normal_texture(Image<RGB>&& image, std::string name = "");
 
         void set_stars(const std::vector<Star<TSpectral>>& stars);
         void load_stars(const fs::path& star_catalog_path, const Time& time, float min_magnitude = 100.f);
