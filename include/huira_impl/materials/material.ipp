@@ -19,7 +19,9 @@ namespace huira {
             params.albedo = albedo_image_->sample_bilinear(uv.x, uv.y) * albedo_factor_ * isect.vertex_albedo;
         }
 
-        params.opacity = alpha_image_->sample_bilinear(uv.x, uv.y) * alpha_factor_;
+        //if (has_alpha_) {
+            params.opacity = alpha_image_->sample_bilinear(uv.x, uv.y) * alpha_factor_;
+        //}
 
         if (eval_metallic_) {
             params.metallic = metallic_image_->sample_bilinear(uv.x, uv.y) * metallic_factor_;

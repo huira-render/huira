@@ -7,7 +7,7 @@ namespace huira {
     
 
     template <IsSpectral TSpectral>
-    void MaterialHandle<TSpectral>::set_albedo(const TextureHandle<TSpectral>& albedo_texture)
+    void MaterialHandle<TSpectral>::set_albedo_image(const TextureHandle<TSpectral>& albedo_texture)
     {
         this->get_()->set_albedo(albedo_texture.shared_image());
     }
@@ -25,7 +25,7 @@ namespace huira {
     }
 
     template <IsSpectral TSpectral>
-    void MaterialHandle<TSpectral>::set_alpha(const TextureHandle<float>& alpha_texture)
+    void MaterialHandle<TSpectral>::set_alpha_image(const TextureHandle<float>& alpha_texture)
     {
         this->get_()->set_alpha(alpha_texture.shared_image());
     }

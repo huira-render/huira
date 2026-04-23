@@ -38,9 +38,9 @@ namespace huira {
 
         void build_blas_() const;
         
-        static void bounds_callback(const RTCBoundsFunctionArguments* args);
-        static void intersect_callback(const RTCIntersectFunctionNArguments* args);
-        static void occluded_callback(const RTCOccludedFunctionNArguments* args);
+        static void bounds_callback(const RTCBoundsFunctionArguments* args) noexcept;
+        static void intersect_callback(const RTCIntersectFunctionNArguments* args) noexcept;
+        static void occluded_callback(const RTCOccludedFunctionNArguments* args) noexcept;
     };
 
 }

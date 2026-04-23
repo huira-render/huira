@@ -26,11 +26,11 @@ namespace huira {
 
         void set_bsdf(const BSDF<TSpectral>& bsdf);
 
-        void set_albedo(const TextureHandle<TSpectral>& albedo_texture);
+        void set_albedo_image(const TextureHandle<TSpectral>& albedo_texture);
         void set_albedo_factor(TSpectral albedo_factor);
         void reset_albedo();
 
-        void set_alpha(const TextureHandle<float>& alpha_texture);
+        void set_alpha_image(const TextureHandle<float>& alpha_texture);
         void set_alpha_factor(float alpha_factor);
         void reset_alpha();
 

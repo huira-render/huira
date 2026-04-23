@@ -21,6 +21,8 @@ namespace huira {
     public:
         using GeometryHandle<TSpectral>::GeometryHandle;
 
+        MeshHandle() = delete;
+
         std::size_t get_vertex_count() const {
             return this->get_mesh_()->vertex_buffer().size();
         }

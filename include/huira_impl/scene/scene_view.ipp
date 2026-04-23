@@ -538,29 +538,6 @@ namespace huira {
             const auto* material = batch.primitive->material.get();
             bool needs_alpha = material->has_alpha();
 
-            if (needs_alpha) {
-                RTCGeometry geom = rtcGetGeometry(blas, 0);
-
-                if (geom) {
-                    auto context = std::make_unique<AlphaFilterContext>();
-                    context->primitive = batch.primitive.get();
-
-                    rtcSetGeometryUserData(geom, context.get());
-                    rtcSetGeometryOccludedFilterFunction(geom, alpha_occlusion_filter_);
-                    rtcSetGeometryIntersectFilterFunction(geom, alpha_intersection_filter_);
-
-                    RTCError err = rtcGetDeviceError(device_->get());
-                    if (err != RTC_ERROR_NONE) {
-                        HUIRA_THROW_ERROR("Embree failed to set filter function. Error code: " + std::to_string(err));
-                    }
-
-                    rtcCommitGeometry(geom);
-                    rtcCommitScene(blas);
-
-                    filter_contexts_.push_back(std::move(context));
-                }
-            }
-
             for (std::size_t inst_idx = 0; inst_idx < batch.instances.size(); ++inst_idx) {
 
                 std::size_t N = batch.instances[inst_idx].size();
@@ -581,8 +558,19 @@ namespace huira {
                 }
 
                 rtcSetGeometryMask(inst_geom, MASK_GEOMETRY_);
-                rtcCommitGeometry(inst_geom);
 
+                if (needs_alpha) {
+                    auto context = std::make_unique<AlphaFilterContext>();
+                    context->primitive = batch.primitive.get();
+
+                    rtcSetGeometryUserData(inst_geom, context.get());
+                    rtcSetGeometryOccludedFilterFunction(inst_geom, alpha_occlusion_filter_);
+                    rtcSetGeometryIntersectFilterFunction(inst_geom, alpha_intersection_filter_);
+
+                    filter_contexts_.push_back(std::move(context));
+                }
+
+                rtcCommitGeometry(inst_geom);
                 unsigned int geom_id = rtcAttachGeometry(tlas_, inst_geom);
                 rtcReleaseGeometry(inst_geom);
 

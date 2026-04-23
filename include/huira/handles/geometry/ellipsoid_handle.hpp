@@ -8,6 +8,7 @@ namespace huira {
     template <IsSpectral TSpectral>
     class EllipsoidHandle : public GeometryHandle<TSpectral> {
     public:
+        EllipsoidHandle() = delete;
         using GeometryHandle<TSpectral>::GeometryHandle;
 
         std::shared_ptr<Ellipsoid<TSpectral>> get_ellipsoid_shared() const {

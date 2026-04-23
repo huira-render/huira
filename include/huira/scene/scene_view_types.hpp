@@ -9,9 +9,6 @@
 namespace huira {
     // Forward declarations
     template <IsSpectral TSpectral>
-    class Atmosphere;
-
-    template <IsSpectral TSpectral>
     class Light;
 
     template <IsSpectral TSpectral>

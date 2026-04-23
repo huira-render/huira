@@ -5,6 +5,7 @@
 #include "glm/glm.hpp"
 
 #include "huira/core/types.hpp"
+#include "huira/core/constants.hpp"
 #include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/util/logger.hpp"
 
@@ -36,8 +37,8 @@ namespace huira {
     void Ellipsoid<TSpectral>::compute_surface_interaction(const HitRecord& hit, Interaction<TSpectral>& isect) const
     {
         // Compute local position
-        float phi = hit.u * 2.0f * std::numbers::pi_v<float> -std::numbers::pi_v<float>;
-        float theta = hit.v * std::numbers::pi_v<float>;
+        float phi = hit.u * 2.0f * PI<float>() - PI<float>();
+        float theta = hit.v * PI<float>();
 
         float sin_phi = std::sin(phi);
         float cos_phi = std::cos(phi);
@@ -45,24 +46,25 @@ namespace huira {
         float cos_theta = std::cos(theta);
         isect.position = {
             radii_.x * sin_theta * cos_phi,
-            radii_.y * cos_theta,
-            radii_.z * sin_theta * sin_phi
+            radii_.y * sin_theta * sin_phi,
+            radii_.z * cos_theta
         };
         isect.uv = { hit.u, hit.v };
 
         // Compute Normal
+        float r_max = std::max({ radii_.x, radii_.y, radii_.z });
         isect.normal_g = glm::normalize(Vec3<float>{
-            isect.position.x / (radii_.x * radii_.x),
-                isect.position.y / (radii_.y * radii_.y),
-                isect.position.z / (radii_.z * radii_.z)
+            (sin_theta* cos_phi)* (r_max / radii_.x),
+                (sin_theta* sin_phi)* (r_max / radii_.y),
+                (cos_theta)* (r_max / radii_.z)
         });
         isect.normal_s = isect.normal_g;
 
         // Compute Tangent Frame using partials
         Vec3<float> dpdu = {
             -radii_.x * sin_theta * sin_phi,
-             0.0f,
-             radii_.z * sin_theta * cos_phi
+             radii_.y * sin_theta * cos_phi,
+             0.0f
         };
 
         // Handle singularity at the poles
@@ -71,8 +73,6 @@ namespace huira {
         }
 
         isect.tangent = glm::normalize(dpdu);
-
-        // Ensure tangent space is orthonormal
         isect.bitangent = glm::normalize(glm::cross(isect.normal_g, isect.tangent));
     }
 
@@ -105,7 +105,7 @@ namespace huira {
     }
 
     template <IsSpectral TSpectral>
-    void Ellipsoid<TSpectral>::bounds_callback(const RTCBoundsFunctionArguments* args)
+    void Ellipsoid<TSpectral>::bounds_callback(const RTCBoundsFunctionArguments* args) noexcept
     {
         const auto* ellipsoid = static_cast<const Ellipsoid<TSpectral>*>(args->geometryUserPtr);
 
@@ -122,7 +122,7 @@ namespace huira {
     }
 
     template <IsSpectral TSpectral>
-    void Ellipsoid<TSpectral>::intersect_callback(const RTCIntersectFunctionNArguments* args)
+    void Ellipsoid<TSpectral>::intersect_callback(const RTCIntersectFunctionNArguments* args) noexcept
     {
         int* valid = args->valid;
         if (!valid) {
@@ -131,15 +131,12 @@ namespace huira {
 
         const auto* ellipsoid = static_cast<const Ellipsoid<TSpectral>*>(args->geometryUserPtr);
         Vec3<float> r = ellipsoid->radii_;
-
-        // Cache the inverse radii to scale the ray
         Vec3<float> inv_r = { 1.0f / r.x, 1.0f / r.y, 1.0f / r.z };
 
         RTCRayHitN* rayhit = args->rayhit;
         RTCRayN* ray = RTCRayHitN_RayN(rayhit, args->N);
         RTCHitN* hit = RTCRayHitN_HitN(rayhit, args->N);
-
-        // Unpack the ray from Embree
+        
         Vec3<float> O = {
             RTCRayN_org_x(ray, args->N, 0),
             RTCRayN_org_y(ray, args->N, 0),
@@ -150,24 +147,36 @@ namespace huira {
             RTCRayN_dir_y(ray, args->N, 0),
             RTCRayN_dir_z(ray, args->N, 0)
         };
+
         float tnear = RTCRayN_tnear(ray, args->N, 0);
         float tfar = RTCRayN_tfar(ray, args->N, 0);
         
-        Vec3<float> O_scaled = O * inv_r;
-        Vec3<float> D_scaled = D * inv_r;
+        Vec3<float> O_s = O * inv_r;
+        Vec3<float> D_s = D * inv_r;
 
-        float A = glm::dot(D_scaled, D_scaled);
-        float B = 2.0f * glm::dot(O_scaled, D_scaled);
-        float C = glm::dot(O_scaled, O_scaled) - 1.0f;
-        float discriminant = B * B - 4.0f * A * C;
+        float L = glm::length(D_s);
+        Vec3<float> D_u = D_s / L;
+        
+        float B = 2.0f * glm::dot(O_s, D_u);
+        float C = glm::dot(O_s, O_s) - 1.0f;
+        float discriminant = B * B - 4.0f * C;
 
         if (discriminant < 0.0f) {
             return;
         }
 
         float sqrt_disc = std::sqrt(discriminant);
-        float t0 = (-B - sqrt_disc) / (2.0f * A);
-        float t1 = (-B + sqrt_disc) / (2.0f * A);
+
+        float q = -0.5f * (B + std::copysign(sqrt_disc, B));
+        float t0_u = q;
+        float t1_u = C / q;
+
+        if (t0_u > t1_u) {
+            std::swap(t0_u, t1_u);
+        }
+
+        float t0 = t0_u / L;
+        float t1 = t1_u / L;
 
         float t = t0;
         if (t < tnear || t > tfar) {
@@ -176,33 +185,32 @@ namespace huira {
                 return;
             }
         }
-
-        // Pack the Hit Data back into Embree
+        
         RTCRayN_tfar(ray, args->N, 0) = t;
-        Vec3<float> P = O + t * D;
-        Vec3<float> normal = {
-            P.x * inv_r.x * inv_r.x,
-            P.y * inv_r.y * inv_r.y,
-            P.z * inv_r.z * inv_r.z
-        };
+
+        float t_u = t * L;
+        Vec3<float> P_s = O_s + t_u * D_u;
+        float r_max = std::max({ r.x, r.y, r.z });
+        Vec3<float> normal = (P_s * inv_r) * r_max;
 
         RTCHitN_Ng_x(hit, args->N, 0) = normal.x;
         RTCHitN_Ng_y(hit, args->N, 0) = normal.y;
         RTCHitN_Ng_z(hit, args->N, 0) = normal.z;
 
         // Compute UV coordinates using spherical mapping of the unit sphere:
-        Vec3<float> P_unit = glm::normalize(O_scaled + t * D_scaled);
-        float u = (std::atan2(P_unit.z, P_unit.x) + std::numbers::pi_v<float>) / (2.0f * std::numbers::pi_v<float>);
-        float v = std::acos(P_unit.y) / std::numbers::pi_v<float>;
+        Vec3<float> P_unit = glm::normalize(O_s + t_u * D_u);
+        float u = (std::atan2(P_unit.y, P_unit.x) + PI<float>()) / (2.0f * PI<float>());
+        float v = std::acos(P_unit.z) / PI<float>();
         RTCHitN_u(hit, args->N, 0) = u;
         RTCHitN_v(hit, args->N, 0) = v;
 
         RTCHitN_geomID(hit, args->N, 0) = args->geomID;
         RTCHitN_primID(hit, args->N, 0) = args->primID;
+        RTCHitN_instID(hit, args->N, 0, 0) = args->context->instID[0];
     }
 
     template <IsSpectral TSpectral>
-    void Ellipsoid<TSpectral>::occluded_callback(const RTCOccludedFunctionNArguments* args)
+    void Ellipsoid<TSpectral>::occluded_callback(const RTCOccludedFunctionNArguments* args) noexcept
     {
         int* valid = args->valid;
         if (!valid) {
@@ -225,26 +233,38 @@ namespace huira {
             RTCRayN_dir_y(ray, args->N, 0),
             RTCRayN_dir_z(ray, args->N, 0)
         };
+
         float tnear = RTCRayN_tnear(ray, args->N, 0);
         float tfar = RTCRayN_tfar(ray, args->N, 0);
 
-        Vec3<float> O_scaled = O * inv_r;
-        Vec3<float> D_scaled = D * inv_r;
-
-        float A = glm::dot(D_scaled, D_scaled);
-        float B = 2.0f * glm::dot(O_scaled, D_scaled);
-        float C = glm::dot(O_scaled, O_scaled) - 1.0f;
-        float discriminant = B * B - 4.0f * A * C;
+        Vec3<float> O_s = O * inv_r;
+        Vec3<float> D_s = D * inv_r;
+        
+        float L = glm::length(D_s);
+        Vec3<float> D_u = D_s / L;
+        
+        float B = 2.0f * glm::dot(O_s, D_u);
+        float C = glm::dot(O_s, O_s) - 1.0f;
+        float discriminant = B * B - 4.0f * C;
 
         if (discriminant < 0.0f) {
             return;
         }
 
         float sqrt_disc = std::sqrt(discriminant);
-        float t0 = (-B - sqrt_disc) / (2.0f * A);
-        float t1 = (-B + sqrt_disc) / (2.0f * A);
         
-        if ((t0 > tnear && t0 < tfar) || (t1 > tnear && t1 < tfar)) {
+        float q = -0.5f * (B + std::copysign(sqrt_disc, B));
+        float t0_u = q;
+        float t1_u = C / q;
+
+        if (t0_u > t1_u) {
+            std::swap(t0_u, t1_u);
+        }
+        
+        float t0 = t0_u / L;
+        float t1 = t1_u / L;
+        
+        if ((t0 >= tnear && t0 <= tfar) || (t1 >= tnear && t1 <= tfar)) {
             RTCRayN_tfar(ray, args->N, 0) = -std::numeric_limits<float>::infinity();
         }
     }

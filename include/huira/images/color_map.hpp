@@ -2,9 +2,11 @@
 
 #include <cmath>
 #include <cstddef>
+#include <functional>
 #include <limits>
 
 #include "huira/images/image.hpp"
+#include "huira/core/spectral_bins.hpp"
 
 namespace huira {
     inline Image<huira::RGB> normal_map(Image<Vec3<float>> normals)
@@ -44,5 +46,20 @@ namespace huira {
             output[i] = huira::RGB{ d, d, d };
         }
         return output;
+    }
+
+    template <IsSpectral TSpectral>
+    Image<TSpectral> rgb_to_spectral(Image<RGB> rgb_image, std::function<TSpectral(RGB)> spectral_conversion = convert_rgb_to_spectral<TSpectral>)
+    {
+        if constexpr (std::same_as<TSpectral, RGB>) {
+            return rgb_image;
+        }
+        else {
+            Image<TSpectral> output(rgb_image.resolution());
+            for (std::size_t i = 0; i < rgb_image.size(); ++i) {
+                output[i] = spectral_conversion(rgb_image[i]);
+            }
+            return output;
+        }
     }
 }
