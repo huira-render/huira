@@ -3,10 +3,10 @@
 #include "pybind11/pybind11.h"
 #include "pybind11/stl.h"
 
-#include "huira/handles/frame_handle.hpp"
-#include "huira/handles/light_handle.hpp"
-#include "huira/handles/unresolved_handle.hpp"
-#include "huira/handles/model_handle.hpp"
+#include "huira/handles/scene/frame_handle.hpp"
+#include "huira/handles/assets/light_handle.hpp"
+#include "huira/handles/assets/unresolved_handle.hpp"
+#include "huira/handles/assets/model_handle.hpp"
 
 #include "huira/handles/node_handle_py.ipp"
 

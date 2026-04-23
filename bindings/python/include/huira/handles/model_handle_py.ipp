@@ -3,7 +3,7 @@
 #include "pybind11/pybind11.h"
 #include "pybind11/stl.h"
 
-#include "huira/handles/model_handle.hpp"
+#include "huira/handles/assets/model_handle.hpp"
 
 namespace py = pybind11;
 

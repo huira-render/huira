@@ -77,4 +77,4 @@ namespace huira {
     };
 }
 
-#include "huira_impl/handles/node_handle.ipp"
+#include "huira_impl/handles/scene/node_handle.ipp"

@@ -17,6 +17,12 @@ namespace huira {
         {}
         ~Ellipsoid() override;
 
+        Ellipsoid(const Ellipsoid&) = delete;
+        Ellipsoid& operator=(const Ellipsoid&) = delete;
+        
+        Ellipsoid(Ellipsoid&&) noexcept = default;
+        Ellipsoid& operator=(Ellipsoid&&) noexcept = default;
+
         // Geometry overrides
         [[nodiscard]] RTCScene blas() const override;
         void compute_surface_interaction(const HitRecord& hit, Interaction<TSpectral>& isect) const override;

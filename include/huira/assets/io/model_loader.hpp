@@ -17,7 +17,7 @@
 #include "huira/assets/model.hpp"
 #include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/core/types.hpp"
-#include "huira/handles/primitive_handle.hpp"
+#include "huira/handles/assets/primitive_handle.hpp"
 #include "huira/handles/material_handle.hpp"
 #include "huira/scene/frame_node.hpp"
 #include "huira/scene/instance.hpp"

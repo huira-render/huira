@@ -10,6 +10,15 @@
 
 namespace huira {
     template <IsSpectral TSpectral>
+    Ellipsoid<TSpectral>::~Ellipsoid()
+    {
+        HUIRA_TRACE_SCOPE("Mesh::~Mesh");
+        if (blas_) {
+            rtcReleaseScene(blas_);
+        }
+    }
+
+    template <IsSpectral TSpectral>
     RTCScene Ellipsoid<TSpectral>::blas() const
     {
         if (!blas_) {
@@ -80,7 +89,7 @@ namespace huira {
 
         rtcSetGeometryUserPrimitiveCount(geom, 1);
 
-        rtcSetGeometryUserData(geom, (void*)this);
+        rtcSetGeometryUserData(geom, const_cast<Ellipsoid<TSpectral>*>(this));
         
         rtcSetGeometryBoundsFunction(geom, bounds_callback, nullptr);
         rtcSetGeometryIntersectFunction(geom, intersect_callback);
