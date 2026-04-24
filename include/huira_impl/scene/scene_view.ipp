@@ -155,6 +155,10 @@ namespace huira {
         }
     }
 
+    template <IsSpectral TSpectral>
+    struct RayContext : public RTCRayQueryContext {
+        const SceneView<TSpectral>* scene_view;
+    };
 
     /**
      * @brief Intersect a ray with the scene and return the hit record.
@@ -180,7 +184,19 @@ namespace huira {
         rayhit.hit.geomID = RTC_INVALID_GEOMETRY_ID;
         rayhit.hit.instID[0] = RTC_INVALID_GEOMETRY_ID;
 
-        rtcIntersect1(tlas_, &rayhit);
+
+        // Setup custom context
+        RayContext<TSpectral> context;
+        rtcInitRayQueryContext(&context); // Pass &context directly
+        context.scene_view = this;
+
+        // Wrap in Embree 4 arguments
+        RTCIntersectArguments args;
+        rtcInitIntersectArguments(&args);
+        args.context = &context;          // Pass &context directly
+
+        // Pass the args into the trace call
+        rtcIntersect1(tlas_, &rayhit, &args);
 
         HitRecord rec;
         if (rayhit.hit.geomID != RTC_INVALID_GEOMETRY_ID) {
@@ -218,7 +234,18 @@ namespace huira {
         rtc_ray.mask = MASK_GEOMETRY_;
         rtc_ray.flags = 0;
 
-        rtcOccluded1(tlas_, &rtc_ray);
+        // Setup custom context
+        RayContext<TSpectral> context;
+        rtcInitRayQueryContext(&context); // Pass &context directly
+        context.scene_view = this;
+
+        // Wrap in Embree 4 arguments
+        RTCOccludedArguments args;
+        rtcInitOccludedArguments(&args);
+        args.context = &context;          // Pass &context directly
+
+        // Pass the args into the trace call
+        rtcOccluded1(tlas_, &rtc_ray, &args);
 
         // Embree sets tfar to -inf on occlusion:
         return rtc_ray.tfar < 0.0f;
@@ -538,8 +565,24 @@ namespace huira {
             const auto* material = batch.primitive->material.get();
             bool needs_alpha = material->has_alpha();
 
-            for (std::size_t inst_idx = 0; inst_idx < batch.instances.size(); ++inst_idx) {
+            // Register the alpha filter on the BLAS geometry (once per primitive).
+            if (needs_alpha) {
+                RTCGeometry geom = rtcGetGeometry(blas, 0);
+                if (geom) {
+                    rtcSetGeometryOccludedFilterFunction(geom, alpha_occlusion_filter_);
+                    rtcSetGeometryIntersectFilterFunction(geom, alpha_intersection_filter_);
 
+                    RTCError err = rtcGetDeviceError(device_->get());
+                    if (err != RTC_ERROR_NONE) {
+                        HUIRA_THROW_ERROR("Embree failed to set filter function. Error code: " + std::to_string(err));
+                    }
+
+                    rtcCommitGeometry(geom);
+                    rtcCommitScene(blas);
+                }
+            }
+
+            for (std::size_t inst_idx = 0; inst_idx < batch.instances.size(); ++inst_idx) {
                 std::size_t N = batch.instances[inst_idx].size();
 
                 RTCGeometry inst_geom = rtcNewGeometry(device_->get(), RTC_GEOMETRY_TYPE_INSTANCE);
@@ -558,17 +601,6 @@ namespace huira {
                 }
 
                 rtcSetGeometryMask(inst_geom, MASK_GEOMETRY_);
-
-                if (needs_alpha) {
-                    auto context = std::make_unique<AlphaFilterContext>();
-                    context->primitive = batch.primitive.get();
-
-                    rtcSetGeometryUserData(inst_geom, context.get());
-                    rtcSetGeometryOccludedFilterFunction(inst_geom, alpha_occlusion_filter_);
-                    rtcSetGeometryIntersectFilterFunction(inst_geom, alpha_intersection_filter_);
-
-                    filter_contexts_.push_back(std::move(context));
-                }
 
                 rtcCommitGeometry(inst_geom);
                 unsigned int geom_id = rtcAttachGeometry(tlas_, inst_geom);
@@ -678,14 +710,24 @@ namespace huira {
 
     template <IsSpectral TSpectral>
     void SceneView<TSpectral>::alpha_occlusion_filter_(const RTCFilterFunctionNArguments* args) noexcept {
-        if (args->N != 1) return;
+        if (args->N != 1) {
+            return;
+        }
 
         int* valid = args->valid;
-        if (*valid == 0) return;
+        if (*valid == 0) {
+            return;
+        }
 
-        auto* context = static_cast<const AlphaFilterContext*>(args->geometryUserPtr);
-        const auto* material = context->primitive->material.get();
-        const auto* geometry = context->primitive->geometry.get();
+        auto* ctx = static_cast<RayContext<TSpectral>*>(args->context);
+        const auto* scene_view = ctx->scene_view;
+
+        unsigned int inst_id = RTCHitN_instID(args->hit, args->N, 0, 0);
+        const auto& mapping = scene_view->instance_mappings_[inst_id];
+        const auto& batch = scene_view->primitives_[mapping.batch_index];
+        
+        const auto* material = batch.primitive->material.get();
+        const auto* geometry = batch.primitive->geometry.get();
         
         HitRecord temp_hit;
         temp_hit.prim_id = RTCHitN_primID(args->hit, args->N, 0);

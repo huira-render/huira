@@ -137,36 +137,24 @@ namespace huira {
         RTCRayN* ray = RTCRayHitN_RayN(rayhit, args->N);
         RTCHitN* hit = RTCRayHitN_HitN(rayhit, args->N);
         
-        Vec3<float> O = {
-            RTCRayN_org_x(ray, args->N, 0),
-            RTCRayN_org_y(ray, args->N, 0),
-            RTCRayN_org_z(ray, args->N, 0)
-        };
-        Vec3<float> D = {
-            RTCRayN_dir_x(ray, args->N, 0),
-            RTCRayN_dir_y(ray, args->N, 0),
-            RTCRayN_dir_z(ray, args->N, 0)
-        };
+        Vec3<float> O = { RTCRayN_org_x(ray, args->N, 0), RTCRayN_org_y(ray, args->N, 0), RTCRayN_org_z(ray, args->N, 0) };
+        Vec3<float> D = { RTCRayN_dir_x(ray, args->N, 0), RTCRayN_dir_y(ray, args->N, 0), RTCRayN_dir_z(ray, args->N, 0) };
 
-        float tnear = RTCRayN_tnear(ray, args->N, 0);
-        float tfar = RTCRayN_tfar(ray, args->N, 0);
-        
         Vec3<float> O_s = O * inv_r;
         Vec3<float> D_s = D * inv_r;
 
         float L = glm::length(D_s);
         Vec3<float> D_u = D_s / L;
-        
+
         float B = 2.0f * glm::dot(O_s, D_u);
         float C = glm::dot(O_s, O_s) - 1.0f;
-        float discriminant = B * B - 4.0f * C;
 
+        float discriminant = B * B - 4.0f * C;
         if (discriminant < 0.0f) {
             return;
         }
 
         float sqrt_disc = std::sqrt(discriminant);
-
         float q = -0.5f * (B + std::copysign(sqrt_disc, B));
         float t0_u = q;
         float t1_u = C / q;
@@ -178,35 +166,59 @@ namespace huira {
         float t0 = t0_u / L;
         float t1 = t1_u / L;
 
-        float t = t0;
-        if (t < tnear || t > tfar) {
-            t = t1;
-            if (t < tnear || t > tfar) {
-                return;
+        // A lambda allows us to cleanly test t0, and if rejected by alpha, test t1
+        auto test_hit = [&](float t_candidate) -> bool {
+            if (t_candidate < RTCRayN_tnear(ray, args->N, 0) || t_candidate > RTCRayN_tfar(ray, args->N, 0)) {
+                return false;
             }
+
+            // Save original tfar in case the filter rejects this hit
+            float old_tfar = RTCRayN_tfar(ray, args->N, 0);
+            RTCRayN_tfar(ray, args->N, 0) = t_candidate;
+
+            float t_u = t_candidate * L;
+            Vec3<float> P_s = O_s + t_u * D_u;
+            float r_max = std::max({ r.x, r.y, r.z });
+            Vec3<float> normal = (P_s * inv_r) * r_max;
+            
+            RTCHitN_Ng_x(hit, args->N, 0) = normal.x;
+            RTCHitN_Ng_y(hit, args->N, 0) = normal.y;
+            RTCHitN_Ng_z(hit, args->N, 0) = normal.z;
+
+            Vec3<float> P_unit = glm::normalize(O_s + t_u * D_u);
+            float u = (std::atan2(P_unit.y, P_unit.x) + PI<float>()) / (2.0f * PI<float>());
+            float v = std::acos(P_unit.z) / PI<float>();
+            
+            RTCHitN_u(hit, args->N, 0) = u;
+            RTCHitN_v(hit, args->N, 0) = v;
+            RTCHitN_geomID(hit, args->N, 0) = args->geomID;
+            RTCHitN_primID(hit, args->N, 0) = args->primID;
+            RTCHitN_instID(hit, args->N, 0, 0) = args->context->instID[0];
+            
+            int filter_valid = valid[0];
+
+            // Map properties into an Embree filter argument structure
+            RTCFilterFunctionNArguments fargs;
+            fargs.valid           = &filter_valid;
+            fargs.geometryUserPtr = args->geometryUserPtr;
+            fargs.context         = args->context;
+            fargs.ray             = ray;
+            fargs.hit             = hit;
+            fargs.N               = args->N;
+
+            rtcInvokeIntersectFilterFromGeometry(args, &fargs);
+            
+            if (filter_valid == 0) {
+                RTCRayN_tfar(ray, args->N, 0) = old_tfar; // Restore ray extent
+                return false;
+            }
+            return true;
+        };
+
+        // If the ray hits transparency on the front face, let it attempt to hit the back face
+        if (!test_hit(t0)) {
+            test_hit(t1);
         }
-        
-        RTCRayN_tfar(ray, args->N, 0) = t;
-
-        float t_u = t * L;
-        Vec3<float> P_s = O_s + t_u * D_u;
-        float r_max = std::max({ r.x, r.y, r.z });
-        Vec3<float> normal = (P_s * inv_r) * r_max;
-
-        RTCHitN_Ng_x(hit, args->N, 0) = normal.x;
-        RTCHitN_Ng_y(hit, args->N, 0) = normal.y;
-        RTCHitN_Ng_z(hit, args->N, 0) = normal.z;
-
-        // Compute UV coordinates using spherical mapping of the unit sphere:
-        Vec3<float> P_unit = glm::normalize(O_s + t_u * D_u);
-        float u = (std::atan2(P_unit.y, P_unit.x) + PI<float>()) / (2.0f * PI<float>());
-        float v = std::acos(P_unit.z) / PI<float>();
-        RTCHitN_u(hit, args->N, 0) = u;
-        RTCHitN_v(hit, args->N, 0) = v;
-
-        RTCHitN_geomID(hit, args->N, 0) = args->geomID;
-        RTCHitN_primID(hit, args->N, 0) = args->primID;
-        RTCHitN_instID(hit, args->N, 0, 0) = args->context->instID[0];
     }
 
     template <IsSpectral TSpectral>
@@ -222,20 +234,9 @@ namespace huira {
         Vec3<float> inv_r = { 1.0f / r.x, 1.0f / r.y, 1.0f / r.z };
 
         RTCRayN* ray = args->ray;
-
-        Vec3<float> O = {
-            RTCRayN_org_x(ray, args->N, 0),
-            RTCRayN_org_y(ray, args->N, 0),
-            RTCRayN_org_z(ray, args->N, 0)
-        };
-        Vec3<float> D = {
-            RTCRayN_dir_x(ray, args->N, 0),
-            RTCRayN_dir_y(ray, args->N, 0),
-            RTCRayN_dir_z(ray, args->N, 0)
-        };
-
-        float tnear = RTCRayN_tnear(ray, args->N, 0);
-        float tfar = RTCRayN_tfar(ray, args->N, 0);
+        
+        Vec3<float> O = { RTCRayN_org_x(ray, args->N, 0), RTCRayN_org_y(ray, args->N, 0), RTCRayN_org_z(ray, args->N, 0) };
+        Vec3<float> D = { RTCRayN_dir_x(ray, args->N, 0), RTCRayN_dir_y(ray, args->N, 0), RTCRayN_dir_z(ray, args->N, 0) };
 
         Vec3<float> O_s = O * inv_r;
         Vec3<float> D_s = D * inv_r;
@@ -245,18 +246,17 @@ namespace huira {
         
         float B = 2.0f * glm::dot(O_s, D_u);
         float C = glm::dot(O_s, O_s) - 1.0f;
+        
         float discriminant = B * B - 4.0f * C;
-
         if (discriminant < 0.0f) {
             return;
         }
 
         float sqrt_disc = std::sqrt(discriminant);
-        
         float q = -0.5f * (B + std::copysign(sqrt_disc, B));
         float t0_u = q;
         float t1_u = C / q;
-
+        
         if (t0_u > t1_u) {
             std::swap(t0_u, t1_u);
         }
@@ -264,8 +264,47 @@ namespace huira {
         float t0 = t0_u / L;
         float t1 = t1_u / L;
         
-        if ((t0 >= tnear && t0 <= tfar) || (t1 >= tnear && t1 <= tfar)) {
-            RTCRayN_tfar(ray, args->N, 0) = -std::numeric_limits<float>::infinity();
+        auto test_occlusion = [&](float t_candidate) -> bool {
+            if (t_candidate < RTCRayN_tnear(ray, args->N, 0) || t_candidate > RTCRayN_tfar(ray, args->N, 0)) {
+                return false;
+            }
+
+            // Create a temporary hit to pass into the filter
+            RTCRayHit temp_rayhit;
+            RTCHitN* hit = RTCRayHitN_HitN(reinterpret_cast<RTCRayHitN*>(&temp_rayhit), args->N);
+            
+            float t_u = t_candidate * L;
+            Vec3<float> P_unit = glm::normalize(O_s + t_u * D_u);
+            float u = (std::atan2(P_unit.y, P_unit.x) + PI<float>()) / (2.0f * PI<float>());
+            float v = std::acos(P_unit.z) / PI<float>();
+            
+            RTCHitN_u(hit, args->N, 0) = u;
+            RTCHitN_v(hit, args->N, 0) = v;
+            RTCHitN_geomID(hit, args->N, 0) = args->geomID;
+            RTCHitN_primID(hit, args->N, 0) = args->primID;
+            RTCHitN_instID(hit, args->N, 0, 0) = args->context->instID[0];
+
+            int filter_valid = valid[0];
+            RTCFilterFunctionNArguments fargs;
+            fargs.valid           = &filter_valid;
+            fargs.geometryUserPtr = args->geometryUserPtr;
+            fargs.context         = args->context;
+            fargs.ray             = ray;
+            fargs.hit             = hit;
+            fargs.N               = args->N;
+
+            rtcInvokeOccludedFilterFromGeometry(args, &fargs);
+
+            if (filter_valid != 0) {
+                // Hit was accepted by filter (it's opaque). The ray is firmly occluded.
+                RTCRayN_tfar(ray, args->N, 0) = -std::numeric_limits<float>::infinity();
+                return true;
+            }
+            return false;
+        };
+
+        if (!test_occlusion(t0)) {
+            test_occlusion(t1);
         }
     }
     

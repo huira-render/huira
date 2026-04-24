@@ -119,12 +119,7 @@ namespace huira {
             std::size_t light_index;      // Index into lights_ if type == Light
         };
         std::vector<InstanceMapping> instance_mappings_;
-
-
-        struct AlphaFilterContext {
-            const Primitive<TSpectral>* primitive;
-        };
-        std::vector<std::unique_ptr<AlphaFilterContext>> filter_contexts_;
+        
         static void alpha_occlusion_filter_(const RTCFilterFunctionNArguments* args) noexcept;
         static void alpha_intersection_filter_(const RTCFilterFunctionNArguments* args) noexcept;
 

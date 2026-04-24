@@ -7,8 +7,8 @@
 #include "tbb/parallel_for.h"
 
 /// DEBUGGING
-//#include "tbb/global_control.h"
-//static tbb::global_control debug_single_thread_control(tbb::global_control::max_allowed_parallelism, 1);
+// #include "tbb/global_control.h"
+// static tbb::global_control debug_single_thread_control(tbb::global_control::max_allowed_parallelism, 1);
 
 
 #include "huira_impl/render/psf_lut.ipp"
