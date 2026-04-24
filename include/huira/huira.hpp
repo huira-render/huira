@@ -40,6 +40,16 @@
 #include "huira/images/io/fits_io.hpp"
 #include "huira/images/io/tiff_io.hpp"
 
+// Materials and BSDFs:
+#include "huira/materials/bsdfs/bsdf.hpp"
+#include "huira/materials/bsdfs/cook_torrance_bsdf.hpp"
+#include "huira/materials/bsdfs/hapke_bsdf.hpp"
+#include "huira/materials/bsdfs/lambert_bsdf.hpp"
+#include "huira/materials/bsdfs/lommel_seeliger_bsdf.hpp"
+#include "huira/materials/bsdfs/mcewen_bsdf.hpp"
+#include "huira/materials/bsdfs/null_bsdf.hpp"
+#include "huira/materials/bsdfs/oren_nayar_bsdf.hpp"
+
 // platform/ is not part of the public API
 
 // Rendering interfaces:
