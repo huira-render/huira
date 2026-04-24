@@ -40,7 +40,6 @@ namespace huira {
         
         static void bounds_callback(const RTCBoundsFunctionArguments* args) noexcept;
         static void intersect_callback(const RTCIntersectFunctionNArguments* args) noexcept;
-        static void occluded_callback(const RTCOccludedFunctionNArguments* args) noexcept;
     };
 
 }

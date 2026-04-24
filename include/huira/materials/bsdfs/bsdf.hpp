@@ -30,6 +30,8 @@ namespace huira {
         TSpectral   value;      ///< f(wo, wi) * |cos(theta_i)| / pdf
         float       pdf = 0.0f; ///< Probability density of the sampled direction
 
+        bool        is_delta = false;
+
         [[nodiscard]] bool is_valid() const noexcept { return pdf > 0.0f; }
     };
 

@@ -7,8 +7,8 @@
 #include "tbb/parallel_for.h"
 
 /// DEBUGGING
-//#include "tbb/global_control.h"
-//static tbb::global_control debug_single_thread_control(tbb::global_control::max_allowed_parallelism, 1);
+// #include "tbb/global_control.h"
+// static tbb::global_control debug_single_thread_control(tbb::global_control::max_allowed_parallelism, 1);
 
 
 #include "huira_impl/render/psf_lut.ipp"
@@ -237,21 +237,18 @@ namespace huira {
                                         // Evaluate material textures to get the opacity parameter:
                                         auto [params, shading_isect] = material->evaluate(isect);
 
-                                        // Stochastic Alpha transparency
                                         if (params.opacity < 1.0f) {
                                             if (sampler.get_1d() > params.opacity) {
-                                                Vec3<float> pass_through_normal = (glm::dot(ray.direction(), isect.normal_g) < 0.0f)
-                                                    ? -isect.normal_g
-                                                    : isect.normal_g;
+                                                Vec3<float> pass_through_normal = (glm::dot(ray.direction(), isect.normal_g) < 0.0f) ?
+                                                    -isect.normal_g : isect.normal_g;
                                                 Vec3<float> pass_through_origin = offset_intersection_(isect.position, pass_through_normal);
+
                                                 ray = Ray<TSpectral>(pass_through_origin, ray.direction());
-                                                bounce--;
+                                                
+                                                bounce--; // Don't count this towards bounce counts
                                                 continue;
                                             }
                                         }
-
-                                        Vec3<float> new_origin = offset_intersection_(isect.position, isect.normal_g);
-                                        isect.position = new_origin;
 
                                         // Path regulatization
                                         if (bounce > 0) {
@@ -280,23 +277,28 @@ namespace huira {
                                             float light_dist = sample->distance;
 
                                             // Shadow test:
-                                            Ray<TSpectral> shadow_ray(new_origin, ls.wi);
-                                            if (scene_view.occluded(shadow_ray, light_dist, time)) {
+                                            if (params.transmission.max() <= 0.0f && glm::dot(ls.wi, isect.normal_g) <= 0.0f) {
+                                                continue;
+                                            }
+                                            Vec3<float> shadow_normal = (glm::dot(ls.wi, isect.normal_g) < 0.0f) ? -isect.normal_g : isect.normal_g;
+                                            Vec3<float> shadow_origin = offset_intersection_(isect.position, shadow_normal);
+                                            Ray<TSpectral> shadow_ray(shadow_origin, ls.wi);
+                                            TSpectral transmittance = scene_view.evaluate_transmittance(shadow_ray, light_dist, sampler, time);
+                                            if (transmittance.max() <= 0.0f) {
                                                 continue;
                                             }
                                             
 
                                             // Evaluate BSDF:
-                                            TSpectral f = material->bsdf_eval(
-                                                isect.wo, ls.wi, { params, shading_isect });
-                                            float cos_theta = std::max(0.0f,
-                                                glm::dot(shading_isect.normal_s, ls.wi));
+                                            TSpectral f = material->bsdf_eval(isect.wo, ls.wi, { params, shading_isect });
+                                            float cos_theta = std::max(0.0f, glm::dot(shading_isect.normal_s, ls.wi));
 
                                             float mis_weight = 1.0f;
                                             float bsdf_pdf = material->bsdf_pdf(isect.wo, ls.wi, { params, shading_isect });
                                             mis_weight = power_heuristic(ls.pdf, bsdf_pdf);
 
-                                            TSpectral Ld = throughput * (ls.Li / ls.pdf) * f * cos_theta * mis_weight;
+                                            // Multiply the final direct lighting by the transmittance
+                                            TSpectral Ld = throughput * (ls.Li / ls.pdf) * f * cos_theta * mis_weight * transmittance;
                                             if (bounce == 0) {
                                                 direct_radiance += Ld;
                                             }
@@ -316,7 +318,12 @@ namespace huira {
                                             break;
                                         }
 
-                                        prev_bsdf_pdf = bs.pdf;
+                                        Vec3<float> bounce_normal = (glm::dot(bs.wi, isect.normal_g) < 0.0f)
+                                            ? -isect.normal_g
+                                            : isect.normal_g;
+                                        Vec3<float> bounce_origin = offset_intersection_(isect.position, bounce_normal);
+
+                                        prev_bsdf_pdf = bs.is_delta ? 0.0f : bs.pdf;
                                         prev_isect = shading_isect;
 
                                         throughput = throughput * bs.value;
@@ -331,7 +338,7 @@ namespace huira {
                                         }
 
                                         // Spawn next ray:
-                                        ray = Ray<TSpectral>(new_origin, bs.wi);
+                                        ray = Ray<TSpectral>(bounce_origin, bs.wi);
                                     }
                                 }
 

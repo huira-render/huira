@@ -47,17 +47,15 @@ namespace huira {
 
         ~SceneView();
 
-        [[nodiscard]] HitRecord intersect(const Ray<TSpectral>& ray, float time = 0.5f) const;
+        [[nodiscard]] HitRecord intersect(const Ray<TSpectral>& ray, float time = 0.5f, unsigned int mask = 0xFFFFFFFF) const;
 
-        [[nodiscard]] bool occluded(const Ray<TSpectral>& ray, float t_far, float time = 0.5f) const;
+        [[nodiscard]] TSpectral evaluate_transmittance(const Ray<TSpectral>& shadow_ray, float t_far, RandomSampler<float>& sampler, float time = 0.5f) const;
 
         [[nodiscard]] Interaction<TSpectral> resolve_hit(
             const Ray<TSpectral>& ray,
             const HitRecord& hit) const;
 
         [[nodiscard]] std::vector<HitRecord> intersect(const std::vector<Ray<TSpectral>>& rays, float time = 0.5f) const;
-
-        [[nodiscard]] std::vector<bool> occluded(const std::vector<Ray<TSpectral>>& rays, float t_far, float time = 0.5f) const;
 
         [[nodiscard]] std::vector<Interaction<TSpectral>> resolve_hits(
             const std::vector<Ray<TSpectral>>& rays,
@@ -119,13 +117,7 @@ namespace huira {
             std::size_t light_index;      // Index into lights_ if type == Light
         };
         std::vector<InstanceMapping> instance_mappings_;
-
-
-        struct AlphaFilterContext {
-            const Primitive<TSpectral>* primitive;
-        };
-        std::vector<std::unique_ptr<AlphaFilterContext>> filter_contexts_;
-        static void alpha_occlusion_filter_(const RTCFilterFunctionNArguments* args) noexcept;
+        
         static void alpha_intersection_filter_(const RTCFilterFunctionNArguments* args) noexcept;
 
         friend class Renderer<TSpectral>;

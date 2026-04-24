@@ -9,11 +9,10 @@
 #include "huira/core/rotation.hpp"
 #include "huira/core/types.hpp"
 #include "huira/geometry/vertex.hpp"
-#include "huira/util/logger.hpp"
-
 #include "huira/handles/geometry/geometry_handle.hpp"
-
 #include "huira/images/io/read_image.hpp"
+#include "huira/materials/bsdfs/cook_torrance_bsdf.hpp"
+#include "huira/util/logger.hpp"
 
 namespace huira {
     /**
