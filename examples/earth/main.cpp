@@ -62,9 +62,37 @@ int main(int argc, char** argv) {
     // comparison with blender generated images.
     camera_model.use_blender_convention();
 
-    auto earth_ellipsoid = scene.add_ellipsoid(6371_Km, 6371_Km, 6371_Km);
-    auto earth_primitive = scene.add_primitive(earth_ellipsoid);
+    // Create the Earth material:
+    auto earth_material = scene.new_material(huira::CookTorranceBSDF<TSpectral>());
+
+    auto earth_albedo_rgb = huira::read_image("C:/Users/chris/huira_data/models/earth/8k_earth_daymap.jpg");
+    auto earth_albedo_spec = huira::rgb_to_spectral<TSpectral>(earth_albedo_rgb.image);
+    auto earth_albedo_tex = scene.add_texture(std::move(earth_albedo_spec));
+    earth_material.set_albedo_image(earth_albedo_tex);
+
+    auto earth_roughness = huira::read_image_mono("C:/Users/chris/huira_data/models/earth/8k_earth_roughness_map.tif");
+    auto earth_roughness_tex = scene.add_texture(std::move(earth_roughness.image));
+    earth_material.set_roughness_image(earth_roughness_tex);
+    earth_material.set_metallic_factor(0.f);
+
+    auto earth_normal = huira::read_image("C:/Users/chris/huira_data/models/earth/8k_earth_normal_map.tif");
+    auto earth_normal_tex = scene.add_normal_texture(std::move(earth_normal.image));
+    earth_material.set_normal_image(earth_normal_tex);
+
+    auto R_e = 6378.137_Km;
+    auto earth_ellipsoid = scene.add_ellipsoid(R_e, R_e, R_e);
+    auto earth_primitive = scene.add_primitive(earth_ellipsoid, earth_material);
     eci.new_instance(earth_primitive);
+
+    auto earth_cloud_alpha = huira::read_image_mono("C:/Users/chris/huira_data/models/earth/8k_earth_clouds.jpg");
+    auto earth_clouds_material = scene.new_material(huira::LambertBSDF<TSpectral>());
+    auto earth_clouds_tex = scene.add_texture(std::move(earth_cloud_alpha.image));
+    earth_clouds_material.set_alpha_image(earth_clouds_tex);
+
+    auto alt_clouds = 60_Km;
+    auto earth_clouds_ellipsoid = scene.add_ellipsoid(R_e + alt_clouds, R_e + alt_clouds, R_e + alt_clouds);
+    auto earth_clouds_primitive = scene.add_primitive(earth_clouds_ellipsoid, earth_clouds_material);
+    //eci.new_instance(earth_clouds_primitive);
     
     // Create instance of the camera:
     auto navcam = eci.new_instance(camera_model);

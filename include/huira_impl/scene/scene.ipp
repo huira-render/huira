@@ -710,10 +710,8 @@ namespace huira {
         background_ = std::make_shared<Image<TSpectral>>(1, 1, TSpectral::from_total(background));
     }
 
-
-
     template <IsSpectral TSpectral>
-    TextureHandle<TSpectral> Scene<TSpectral>::add_texture(Image<TSpectral> image, std::string name)
+    TextureHandle<TSpectral> Scene<TSpectral>::add_texture(Image<TSpectral>&& image, std::string name)
     {
         auto texture = std::make_shared<Texture<TSpectral>>(std::move(image));
         spectral_textures_.add(texture, name);
@@ -721,7 +719,7 @@ namespace huira {
     }
     
     template <IsSpectral TSpectral>
-    TextureHandle<float> Scene<TSpectral>::add_texture(Image<float> image, std::string name)
+    TextureHandle<float> Scene<TSpectral>::add_texture(Image<float>&& image, std::string name)
     {
         auto texture = std::make_shared<Texture<float>>(std::move(image));
         mono_textures_.add(texture, name);
@@ -729,7 +727,7 @@ namespace huira {
     }
     
     template <IsSpectral TSpectral>
-    TextureHandle<Vec3<float>> Scene<TSpectral>::add_texture(Image<Vec3<float>> image, std::string name)
+    TextureHandle<Vec3<float>> Scene<TSpectral>::add_texture(Image<Vec3<float>>&& image, std::string name)
     {
         auto texture = std::make_shared<Texture<Vec3<float>>>(std::move(image));
         vec3_textures_.add(texture, name);
@@ -737,13 +735,24 @@ namespace huira {
     }
 
     template <IsSpectral TSpectral>
-    TextureHandle<Vec3<float>> Scene<TSpectral>::add_normal_texture(Image<Vec3<float>> image, std::string name)
+    TextureHandle<Vec3<float>> Scene<TSpectral>::add_normal_texture(Image<Vec3<float>>&& image, std::string name)
     {
         for (std::size_t i = 0; i < image.size(); ++i) {
             image[i] = glm::normalize(image[i] * 2.0f - Vec3<float>{1.0f});
         }
         return add_texture(std::move(image), name);
     }
+
+    template <IsSpectral TSpectral>
+    TextureHandle<Vec3<float>> Scene<TSpectral>::add_normal_texture(Image<RGB>&& image, std::string name)
+    {
+        Image<Vec3<float>> image_vec3(image.width(), image.height());
+        for (std::size_t i = 0; i < image.size(); ++i) {
+            image_vec3[i] = Vec3<float>{ image[i][0], image[i][1], image[i][2] };
+        }
+        return add_normal_texture(std::move(image_vec3), name);
+    }
+
 
     /**
      * @brief Sets the stars in the scene.

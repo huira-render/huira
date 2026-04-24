@@ -151,6 +151,41 @@ namespace huira {
 
         TIFFSetWarningHandler(nullptr);
 
+        TIFFSetErrorHandlerExt([](thandle_t, const char* module, const char* fmt, va_list ap) noexcept {
+            char tiff_msg_buffer;
+
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wformat-nonliteral"
+#elif defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma diagnostic ignored "-Wformat-nonliteral"
+#elif defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4774)
+#endif
+            std::vsnprintf(&tiff_msg_buffer, sizeof(tiff_msg_buffer), fmt, ap);
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#elif defined(__GNUC__)
+#pragma GCC diagnostic pop
+#elif defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+            try {
+                std::string err_str = "LIBTIFF FATAL: ";
+                if (module) {
+                    err_str += module;
+                    err_str += " - ";
+                }
+                err_str += tiff_msg_buffer;
+
+                HUIRA_LOG_INFO(err_str);
+            }
+            catch (...) {
+            }
+            });
+
         TiffMemState_ mem_state{ data, static_cast<tsize_t>(size), 0 };
 
         ScopedTIFF tif(TIFFClientOpen(

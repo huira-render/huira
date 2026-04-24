@@ -28,10 +28,7 @@
     "libjpeg-turbo",
     "libpng",
     "tbb",
-    {
-      "name": "tiff",
-      "default-features": false
-    },
+    "tiff",
     {
       "name": "vcpkg-cmake",
       "host": true

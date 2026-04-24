@@ -124,10 +124,11 @@ namespace huira {
         void set_background_radiance(TSpectral background);
         void set_background_radiance(float background);
 
-        TextureHandle<TSpectral> add_texture(Image<TSpectral> image, std::string name = "");
-        TextureHandle<float> add_texture(Image<float> image, std::string name = "");
-        TextureHandle<Vec3<float>> add_texture(Image<Vec3<float>> image, std::string name = "");
-        TextureHandle<Vec3<float>> add_normal_texture(Image<Vec3<float>> image, std::string name = "");
+        TextureHandle<TSpectral> add_texture(Image<TSpectral>&& image, std::string name = "");
+        TextureHandle<float> add_texture(Image<float>&& image, std::string name = "");
+        TextureHandle<Vec3<float>> add_texture(Image<Vec3<float>>&& image, std::string name = "");
+        TextureHandle<Vec3<float>> add_normal_texture(Image<Vec3<float>>&& image, std::string name = "");
+        TextureHandle<Vec3<float>> add_normal_texture(Image<RGB>&& image, std::string name = "");
 
         void set_stars(const std::vector<Star<TSpectral>>& stars);
         void load_stars(const fs::path& star_catalog_path, const Time& time, float min_magnitude = 100.f);

@@ -374,9 +374,9 @@ namespace huira {
 
             // Assign albedos:
             if (auto [tex, alpha] = load_material_texture_<TSpectral>(ai_mat, aiTextureType_BASE_COLOR, ctx, true, true); tex) {
-                material.set_albedo(tex.value());
+                material.set_albedo_image(tex.value());
                 if (alpha.has_value()) {
-                    material.set_alpha(alpha.value());
+                    material.set_alpha_image(alpha.value());
                 }
             }
             aiColor4D base_color;
