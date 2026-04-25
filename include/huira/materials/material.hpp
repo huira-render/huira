@@ -10,13 +10,6 @@
 #include "huira/render/interaction.hpp"
 #include "huira/scene/scene_object.hpp"
 
-#include "huira/materials/bsdfs/cook_torrance_bsdf.hpp"
-#include "huira/materials/bsdfs/hapke_bsdf.hpp"
-#include "huira/materials/bsdfs/lambert_bsdf.hpp"
-#include "huira/materials/bsdfs/lommel_seeliger_bsdf.hpp"
-#include "huira/materials/bsdfs/mcewen_bsdf.hpp"
-#include "huira/materials/bsdfs/oren_nayar_bsdf.hpp"
-
 namespace huira {
     // Forward Declare
     template <IsSpectral TSpectral>

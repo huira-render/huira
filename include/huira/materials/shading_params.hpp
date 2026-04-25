@@ -31,6 +31,8 @@ namespace huira {
         /// Opacity in [0, 1]. 1 = fully opaque.
         float opacity = 1.0f;
 
+        TSpectral transmission{ 0 };
+
         TSpectral emission{ 0 };
     };
 

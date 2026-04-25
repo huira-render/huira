@@ -167,7 +167,7 @@ namespace huira {
      * @return The hit record.
      */
     template <IsSpectral TSpectral>
-    HitRecord SceneView<TSpectral>::intersect(const Ray<TSpectral>& ray, float time) const
+    HitRecord SceneView<TSpectral>::intersect(const Ray<TSpectral>& ray, float time, unsigned int mask) const
     {
         RTCRayHit rayhit{};
         rayhit.ray.org_x = ray.origin().x;
@@ -179,7 +179,7 @@ namespace huira {
         rayhit.ray.tnear = 0.f;
         rayhit.ray.tfar = std::numeric_limits<float>::infinity();
         rayhit.ray.time = time;
-        rayhit.ray.mask = 0xFFFFFFFF;
+        rayhit.ray.mask = mask;
         rayhit.ray.flags = 0;
         rayhit.hit.geomID = RTC_INVALID_GEOMETRY_ID;
         rayhit.hit.instID[0] = RTC_INVALID_GEOMETRY_ID;
@@ -212,43 +212,56 @@ namespace huira {
     }
 
     /**
-     * @brief Test if a ray is occluded by any geometry in the scene.
-     * @param ray The ray to test for occlusion.
-     * @param t_far The maximum distance to check for occlusion.
+     * @brief Evaluate transmission along a ray
+     * @param ray The ray to intersect.
      * @param time The time for motion blur.
-     * @return True if the ray is occluded, false otherwise.
+     * @return The spectral transmission
      */
     template <IsSpectral TSpectral>
-    bool SceneView<TSpectral>::occluded(const Ray<TSpectral>& ray, float t_far, float time) const
+    TSpectral SceneView<TSpectral>::evaluate_transmittance(const Ray<TSpectral>& ray, float t_far, RandomSampler<float>& sampler, float time) const
     {
-        RTCRay rtc_ray{};
-        rtc_ray.org_x = ray.origin().x;
-        rtc_ray.org_y = ray.origin().y;
-        rtc_ray.org_z = ray.origin().z;
-        rtc_ray.dir_x = ray.direction().x;
-        rtc_ray.dir_y = ray.direction().y;
-        rtc_ray.dir_z = ray.direction().z;
-        rtc_ray.tnear = 0.f;
-        rtc_ray.tfar = t_far;
-        rtc_ray.time = time;
-        rtc_ray.mask = MASK_GEOMETRY_;
-        rtc_ray.flags = 0;
+        TSpectral transmittance{ 1.0f };
+        Ray<TSpectral> current_ray = ray;
+        float distance_remaining = t_far;
 
-        // Setup custom context
-        RayContext<TSpectral> context;
-        rtcInitRayQueryContext(&context); // Pass &context directly
-        context.scene_view = this;
+        while (distance_remaining > 0.0f) {
+            HitRecord hit = this->intersect(current_ray, time, MASK_GEOMETRY_);
+            
+            if (!hit.hit() || hit.t >= distance_remaining) {
+                break;
+            }
+            
+            Interaction<TSpectral> isect = this->resolve_hit(current_ray, hit);
+            const auto& mapping = instance_mappings_[hit.inst_id];
+            const auto& batch = primitives_[mapping.batch_index];
+            const auto* material = batch.primitive->material.get();
 
-        // Wrap in Embree 4 arguments
-        RTCOccludedArguments args;
-        rtcInitOccludedArguments(&args);
-        args.context = &context;          // Pass &context directly
+            auto [params, shading_isect] = material->evaluate(isect);
 
-        // Pass the args into the trace call
-        rtcOccluded1(tlas_, &rtc_ray, &args);
+            if (params.opacity < 1.0f) {
+                if (sampler.get_1d() > params.opacity) {
+                    Vec3<float> bounce_normal = (glm::dot(current_ray.direction(), isect.normal_g) < 0.0f) ? -isect.normal_g : isect.normal_g;
+                    current_ray = Ray<TSpectral>(offset_intersection_(isect.position, bounce_normal), current_ray.direction());
+                    distance_remaining -= hit.t;
+                    continue;
+                }
+            }
+            
+            TSpectral surface_transmission = params.transmission;
 
-        // Embree sets tfar to -inf on occlusion:
-        return rtc_ray.tfar < 0.0f;
+            if (surface_transmission.max() <= 0.0f) {
+                transmittance = TSpectral{ 0.0f };
+                break;
+            }
+            
+            transmittance *= surface_transmission;
+            
+            Vec3<float> bounce_normal = (glm::dot(current_ray.direction(), isect.normal_g) < 0.0f) ? -isect.normal_g : isect.normal_g;
+            current_ray = Ray<TSpectral>(offset_intersection_(isect.position, bounce_normal), current_ray.direction());
+            distance_remaining -= hit.t;
+        }
+
+        return transmittance;
     }
 
 
@@ -309,26 +322,6 @@ namespace huira {
                 }
             });
         return hits;
-    }
-
-    /**
-     * @brief Test if a batch of rays are occluded by any geometry in the scene.
-     * @param rays The rays to test for occlusion.
-     * @param t_far The maximum distance to check for occlusion.
-     * @param time The time for motion blur.
-     * @return A vector of booleans indicating occlusion for each ray.
-     */
-    template <IsSpectral TSpectral>
-    std::vector<bool> SceneView<TSpectral>::occluded(const std::vector<Ray<TSpectral>>& rays, float t_far, float time) const
-    {
-        std::vector<bool> occlusion_results(rays.size());
-        tbb::parallel_for(tbb::blocked_range<size_t>(0, rays.size()),
-            [&](const tbb::blocked_range<size_t>& range) {
-                for (size_t i = range.begin(); i < range.end(); ++i) {
-                    occlusion_results[i] = occluded(rays[i], t_far, time);
-                }
-            });
-        return occlusion_results;
     }
 
     /**
@@ -562,26 +555,6 @@ namespace huira {
             const auto& batch = primitives_[batch_idx];
             RTCScene blas = batch.primitive->geometry->blas();
 
-            const auto* material = batch.primitive->material.get();
-            bool needs_alpha = material->has_alpha();
-
-            // Register the alpha filter on the BLAS geometry (once per primitive).
-            if (needs_alpha) {
-                RTCGeometry geom = rtcGetGeometry(blas, 0);
-                if (geom) {
-                    rtcSetGeometryOccludedFilterFunction(geom, alpha_occlusion_filter_);
-                    rtcSetGeometryIntersectFilterFunction(geom, alpha_intersection_filter_);
-
-                    RTCError err = rtcGetDeviceError(device_->get());
-                    if (err != RTC_ERROR_NONE) {
-                        HUIRA_THROW_ERROR("Embree failed to set filter function. Error code: " + std::to_string(err));
-                    }
-
-                    rtcCommitGeometry(geom);
-                    rtcCommitScene(blas);
-                }
-            }
-
             for (std::size_t inst_idx = 0; inst_idx < batch.instances.size(); ++inst_idx) {
                 std::size_t N = batch.instances[inst_idx].size();
 
@@ -706,53 +679,5 @@ namespace huira {
         }
 
         rtcCommitScene(tlas_);
-    }
-
-    template <IsSpectral TSpectral>
-    void SceneView<TSpectral>::alpha_occlusion_filter_(const RTCFilterFunctionNArguments* args) noexcept {
-        if (args->N != 1) {
-            return;
-        }
-
-        int* valid = args->valid;
-        if (*valid == 0) {
-            return;
-        }
-
-        auto* ctx = static_cast<RayContext<TSpectral>*>(args->context);
-        const auto* scene_view = ctx->scene_view;
-
-        unsigned int inst_id = RTCHitN_instID(args->hit, args->N, 0, 0);
-        const auto& mapping = scene_view->instance_mappings_[inst_id];
-        const auto& batch = scene_view->primitives_[mapping.batch_index];
-        
-        const auto* material = batch.primitive->material.get();
-        const auto* geometry = batch.primitive->geometry.get();
-        
-        HitRecord temp_hit;
-        temp_hit.prim_id = RTCHitN_primID(args->hit, args->N, 0);
-        temp_hit.u = RTCHitN_u(args->hit, args->N, 0);
-        temp_hit.v = RTCHitN_v(args->hit, args->N, 0);
-        
-        Vec2<float> uv = geometry->compute_uv(temp_hit);
-        
-        float alpha = material->alpha_factor();
-        if (material->has_alpha_texture()) {
-            alpha *= material->alpha_image_->sample_bilinear(uv.x, uv.y);
-        }
-        
-        if (alpha < 1.0f) {
-            thread_local std::mt19937 generator(std::random_device{}());
-            thread_local std::uniform_real_distribution<float> distribution(0.0f, 1.0f);
-
-            if (distribution(generator) > alpha) {
-                *valid = 0;
-            }
-        }
-    }
-
-    template <IsSpectral TSpectral>
-    void SceneView<TSpectral>::alpha_intersection_filter_(const RTCFilterFunctionNArguments* args) noexcept {
-        alpha_occlusion_filter_(args);
     }
 }
