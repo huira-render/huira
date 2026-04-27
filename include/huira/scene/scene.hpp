@@ -170,6 +170,7 @@ namespace huira {
         std::shared_ptr<Image<float>>       default_metallic_image_;
         std::shared_ptr<Image<float>>       default_roughness_image_;
         std::shared_ptr<Image<Vec3<float>>> default_normal_image_;
+        std::shared_ptr<Image<TSpectral>>   default_transmission_image_;
         std::shared_ptr<Image<TSpectral>>   default_emission_image_;
 
         std::shared_ptr<Image<TSpectral>> background_;

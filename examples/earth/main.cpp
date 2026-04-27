@@ -99,8 +99,9 @@ int main(int argc, char** argv) {
     auto alt_atmosphere = 100_Km;
     auto atmosphere_ellipsoid = scene.add_ellipsoid(R_e + alt_atmosphere, R_e + alt_atmosphere, R_e + alt_atmosphere);
     auto atmosphere_material = scene.new_material(huira::NullBSDF<TSpectral>());
+    atmosphere_material.set_transmission_factor(TSpectral{ 1.f });
     auto atmosphere_primitive = scene.add_primitive(atmosphere_ellipsoid, atmosphere_material);
-    //eci.new_instance(atmosphere_primitive);
+    eci.new_instance(atmosphere_primitive);
     
     // Create instance of the camera:
     auto navcam = eci.new_instance(camera_model);

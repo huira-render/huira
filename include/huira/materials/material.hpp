@@ -53,6 +53,7 @@ namespace huira {
             std::shared_ptr<Image<float>> metallic_image,
             std::shared_ptr<Image<float>> roughness_image,
             std::shared_ptr<Image<Vec3<float>>> normal_image,
+            std::shared_ptr<Image<TSpectral>> transmission_image,
             std::shared_ptr<Image<TSpectral>> emissive_image);
 
         Material(const Material&) = delete;
@@ -98,6 +99,10 @@ namespace huira {
         void set_normal_factor(float normal_factor);
         void reset_normal();
 
+        void set_transmission_image(std::shared_ptr<Image<TSpectral>> transmission_image);
+        void set_transmission_factor(TSpectral transmission_factor);
+        void reset_transmission();
+
         void set_emissive_image(std::shared_ptr<Image<TSpectral>> emissive_image);
         void set_emissive_factor(TSpectral emissive_factor);
         void reset_emissive();
@@ -111,6 +116,7 @@ namespace huira {
         std::shared_ptr<Image<float>> metallic_image_;
         std::shared_ptr<Image<float>> roughness_image_;
         std::shared_ptr<Image<Vec3<float>>> normal_image_;
+        std::shared_ptr<Image<TSpectral>> transmission_image_;
         std::shared_ptr<Image<TSpectral>> emissive_image_;
 
         float alpha_factor() const noexcept { return alpha_factor_; }
@@ -134,15 +140,18 @@ namespace huira {
         bool eval_normal_ = true;
         std::shared_ptr<Image<Vec3<float>>> default_normal_image_;
 
+        std::shared_ptr<Image<TSpectral>> default_transmission_image_;
+
         std::shared_ptr<Image<TSpectral>> default_emissive_image_;
 
         std::unique_ptr<BSDF<TSpectral>> bsdf_;
         
         TSpectral albedo_factor_{ 1.0f };
-        float     alpha_factor_     = 1.0f;
-        float     metallic_factor_  = 1.0f;
-        float     roughness_factor_ = 1.0f;
-        float     normal_factor_    = 1.0f;
+        float     alpha_factor_        = 1.0f;
+        float     metallic_factor_     = 0.0f;
+        float     roughness_factor_    = 1.0f;
+        float     normal_factor_       = 1.0f;
+        TSpectral transmission_factor_{ 0.0f };
         TSpectral emissive_factor_{ 0.0f };
 
         std::uint64_t id_ = 0;

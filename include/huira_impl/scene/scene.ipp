@@ -50,6 +50,7 @@ namespace huira {
         default_metallic_image_ = std::make_shared<Image<float>>(1, 1, 1.f);
         default_roughness_image_ = std::make_shared<Image<float>>(1, 1, 1.f);
         default_normal_image_ = std::make_shared<Image<Vec3<float>>>(1, 1, Vec3<float>{0, 0, 1});
+        default_transmission_image_ = std::make_shared<Image<TSpectral>>(1, 1, TSpectral{ 1.f });
         default_emission_image_ = std::make_shared<Image<TSpectral>>(1, 1, TSpectral{ 1 });
 
         // Initialize default material:
@@ -60,6 +61,7 @@ namespace huira {
             default_metallic_image_,
             default_roughness_image_,
             default_normal_image_,
+            default_transmission_image_,
             default_emission_image_
         );
 
@@ -678,6 +680,7 @@ namespace huira {
             default_metallic_image_,
             default_roughness_image_,
             default_normal_image_,
+            default_transmission_image_,
             default_emission_image_
             )
         );

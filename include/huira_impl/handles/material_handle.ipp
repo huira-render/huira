@@ -97,6 +97,24 @@ namespace huira {
     }
 
     template <IsSpectral TSpectral>
+    void MaterialHandle<TSpectral>::set_transmission_image(const TextureHandle<TSpectral>& transmission_texture)
+    {
+        this->get_()->set_transmission_image(transmission_texture.shared_image());
+    }
+
+    template <IsSpectral TSpectral>
+    void MaterialHandle<TSpectral>::set_transmission_factor(TSpectral transmission_factor)
+    {
+        this->get_()->set_transmission_factor(transmission_factor);
+    }
+
+    template <IsSpectral TSpectral>
+    void MaterialHandle<TSpectral>::reset_transmission()
+    {
+        this->get_()->reset_transmission();
+    }
+
+    template <IsSpectral TSpectral>
     void MaterialHandle<TSpectral>::set_emissive_image(const TextureHandle<TSpectral>& emissive_texture)
     {
         this->get_()->set_emissive_image(emissive_texture.shared_image());

@@ -31,6 +31,8 @@ namespace huira {
             params.roughness = roughness_image_->sample_bilinear(uv.x, uv.y) * roughness_factor_;
         }
 
+        params.transmission = transmission_image_->sample_bilinear(uv.x, uv.y) * transmission_factor_;
+
         params.emission = emissive_image_->sample_bilinear(uv.x, uv.y) * emissive_factor_;
 
         Interaction<TSpectral> shading_isect = isect;
@@ -148,6 +150,9 @@ namespace huira {
     void Material<TSpectral>::set_metallic_image(std::shared_ptr<Image<float>> metallic_image)
     {
         metallic_image_ = metallic_image;
+        if (metallic_factor_ == 0.f) {
+            metallic_factor_ = 1.f;
+        }
     }
 
     template <IsSpectral TSpectral>
@@ -160,7 +165,7 @@ namespace huira {
     void Material<TSpectral>::reset_metallic()
     {
         metallic_image_ = default_metallic_image_;
-        metallic_factor_ = 1.0f;
+        metallic_factor_ = 0.0f;
     }
 
     template <IsSpectral TSpectral>
@@ -202,10 +207,34 @@ namespace huira {
     }
 
     template <IsSpectral TSpectral>
+    void Material<TSpectral>::set_transmission_image(std::shared_ptr<Image<TSpectral>> transmission_image)
+    {
+        transmission_image_ = transmission_image;
+        if (transmission_factor_ == TSpectral{ 0.f }) {
+            transmission_factor_ = TSpectral{ 1.f };
+        }
+    }
 
+    template <IsSpectral TSpectral>
+    void Material<TSpectral>::set_transmission_factor(TSpectral transmission_factor)
+    {
+        transmission_factor_ = transmission_factor;
+    }
+
+    template <IsSpectral TSpectral>
+    void Material<TSpectral>::reset_transmission()
+    {
+        transmission_image_ = default_transmission_image_;
+        transmission_factor_ = TSpectral{ 0.0f };
+    }
+
+    template <IsSpectral TSpectral>
     void Material<TSpectral>::set_emissive_image(std::shared_ptr<Image<TSpectral>> emissive_image)
     {
         emissive_image_ = emissive_image;
+        if (emissive_factor_ == TSpectral{ 0.f }) {
+            emissive_factor_ = TSpectral{ 1.f };
+        }
     }
 
     template <IsSpectral TSpectral>
@@ -229,12 +258,14 @@ namespace huira {
         std::shared_ptr<Image<float>> metallic_image,
         std::shared_ptr<Image<float>> roughness_image,
         std::shared_ptr<Image<Vec3<float>>> normal_image,
+        std::shared_ptr<Image<TSpectral>> transmission_image,
         std::shared_ptr<Image<TSpectral>> emissive_image) :
         default_albedo_image_{ albedo_image },
         default_alpha_image_{ alpha_image },
         default_metallic_image_{ metallic_image },
         default_roughness_image_{ roughness_image },
         default_normal_image_{ normal_image },
+        default_transmission_image_{ transmission_image },
         default_emissive_image_{ emissive_image },
         id_(next_id_++)
     {
@@ -243,6 +274,7 @@ namespace huira {
         metallic_image_ = default_metallic_image_;
         roughness_image_ = default_roughness_image_;
         normal_image_ = default_normal_image_;
+        transmission_image_ = default_transmission_image_;
         emissive_image_ = default_emissive_image_;
 
         set_bsdf(bsdf);
