@@ -46,6 +46,10 @@ namespace huira {
         void set_normal_factor(float normal_factor);
         void reset_normal();
 
+        void set_transmission_image(const TextureHandle<TSpectral>& transmission_texture);
+        void set_transmission_factor(TSpectral normal_factor);
+        void reset_transmission();
+
         void set_emissive_image(const TextureHandle<TSpectral>& emissive_texture);
         void set_emissive_factor(TSpectral emissive_factor);
         void reset_emissive();
