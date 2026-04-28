@@ -323,6 +323,55 @@ namespace huira {
         use_aperture_psf_ = false;
     }
 
+    /**
+     * @brief Set the veiling glare alpha value.
+     * @param alpha Veiling glare alpha (0 to 1)
+     */
+    template <IsSpectral TSpectral>
+    void CameraModel<TSpectral>::set_veiling_glare(float alpha) {
+        if (alpha < 0.f || alpha > 1.f || std::isnan(alpha)) {
+            HUIRA_THROW_ERROR("CameraModel::set_veiling_glare - Alpha must be in the range [0, 1]: " + std::to_string(alpha));
+        }
+        veiling_alpha_ = alpha;
+        veiling_glare_enabled_ = (alpha > 0.f);
+    }
+    
+    /**
+     * @brief Disable veiling glare effects.
+     */
+    template <IsSpectral TSpectral>
+    void CameraModel<TSpectral>::disable_veiling_glare() {
+        veiling_alpha_ = 0.f;
+        veiling_glare_enabled_ = false;
+    }
+
+    /**
+     * @brief Set Harvey-Shack scatter parameters.
+     * @param scatter_fraction Fraction of light scattered (0 to 1)
+     * @param falloff_exponent Exponent for scatter falloff (typically > 1)
+     * @param r0 Radius at which scatter fraction is measured (default 0.5)
+     * @param radius Maximum scatter radius in pixels (default 0, meaning infinite)
+     */
+    template <IsSpectral TSpectral>
+    void CameraModel<TSpectral>::set_harvey_shack_scatter(float scatter_fraction, float falloff_exponent, float r0, float radius) {
+        scatter_fraction_ = scatter_fraction;
+        scatter_falloff_exponent_ = falloff_exponent;
+        r0_ = r0;
+        scatter_radius_ = radius;
+        scatter_enabled_ = true;
+    }
+
+    /**
+     * @brief Disable Harvey-Shack scatter effects.
+     */
+    template <IsSpectral TSpectral>
+    void CameraModel<TSpectral>::disable_harvey_shack_scatter() {
+        scatter_fraction_ = 0.f;
+        scatter_falloff_exponent_ = 2.f;
+        r0_ = 0.5f;
+        scatter_radius_ = 0.f;
+        scatter_enabled_ = false;
+    }
 
     /**
      * @brief Set the focus distance for depth of field calculations.

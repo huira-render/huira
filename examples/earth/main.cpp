@@ -42,7 +42,7 @@ int main(int argc, char** argv) {
 
     // Set the observation time
     huira::Time time("2019-02-06T10:27:00");
-    huira::Interval exposure_interval{ time, time + 0.00025_s };
+    huira::Interval exposure_interval{ time, time + 0.025_s };
 
     // Configure a camera model
     auto camera_model = scene.new_camera_model();
@@ -55,6 +55,9 @@ int main(int argc, char** argv) {
     camera_model.set_sensor_bit_depth(12);
     camera_model.set_sensor_quantum_efficiency(0.8);
     camera_model.set_sensor_full_well_capacity(20000);
+    camera_model.set_veiling_glare(0.01f);
+    camera_model.use_aperture_psf(64, 16);
+    camera_model.enable_psf_convolution(true);
 
     // Huira uses the OpenCV convention by default, which is
     // +z forward, +y down.  Blender uses -z forward, +y up.
@@ -65,8 +68,8 @@ int main(int argc, char** argv) {
     // Create the Earth material:
     auto earth_material = scene.new_material(huira::CookTorranceBSDF<TSpectral>());
 
-    //fs::path huira_data = "/Users/chrisgnam/huira_data";
-    fs::path huira_data = "C:/Users/chris/huira_data";
+    fs::path huira_data = "/Users/chrisgnam/huira_data";
+    // fs::path huira_data = "C:/Users/chris/huira_data";
     auto earth_albedo_rgb = huira::read_image(huira_data / "models/earth/8k_earth_daymap.jpg");
     auto earth_albedo_spec = huira::rgb_to_spectral<TSpectral>(earth_albedo_rgb.image);
     auto earth_albedo_tex = scene.add_texture(std::move(earth_albedo_spec));

@@ -96,6 +96,11 @@ namespace huira {
         void enable_psf_convolution(bool convolve_psf = true) const;
         void delete_psf() const;
 
+        void set_veiling_glare(float alpha) const;
+        void disable_veiling_glare() const;
+        void set_harvey_shack_scatter(float scatter_fraction, float falloff_exponent, float r0 = 0.5f, float radius = 0.f) const;
+        void disable_harvey_shack_scatter() const;
+
         void enable_depth_of_field(bool depth_of_field = true) const;
         void set_focus_distance(units::Meter focus_distance) const;
         units::Meter get_focus_distance() const;
