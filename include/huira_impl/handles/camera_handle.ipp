@@ -390,6 +390,47 @@ namespace huira {
         this->get_()->delete_psf();
     }
 
+    /**
+     * @brief Set the veiling glare alpha value.
+     * @param alpha Veiling glare alpha (0 to 1)
+     */
+    template <IsSpectral TSpectral>
+    void CameraModelHandle<TSpectral>::set_veiling_glare(float alpha) const
+    {
+        this->get_()->set_veiling_glare(alpha);
+    }
+
+    /**
+     * @brief Disable veiling glare effects.
+     */
+    template <IsSpectral TSpectral>
+    void CameraModelHandle<TSpectral>::disable_veiling_glare() const
+    {
+        this->get_()->disable_veiling_glare();
+    }
+
+    /**
+     * @brief Set Harvey-Shack scatter parameters.
+     * @param scatter_fraction Fraction of light scattered (0 to 1)
+     * @param falloff_exponent Exponent for scatter falloff (typically > 1)
+     * @param r0 Radius at which scatter fraction is measured (default 0.5)
+     * @param radius Maximum scatter radius in pixels (default 0, meaning infinite)
+     */
+    template <IsSpectral TSpectral>
+    void CameraModelHandle<TSpectral>::set_harvey_shack_scatter(float scatter_fraction, float falloff_exponent, float r0, float radius) const
+    {
+        this->get_()->set_harvey_shack_scatter(scatter_fraction, falloff_exponent, r0, radius);
+    }
+
+    /**
+     * @brief Disable Harvey-Shack scatter effects.
+     */
+    template <IsSpectral TSpectral>
+    void CameraModelHandle<TSpectral>::disable_harvey_shack_scatter() const
+    {
+        this->get_()->disable_harvey_shack_scatter();
+    }
+
 
     /**
      * @brief Enable or disable depth of field effects.

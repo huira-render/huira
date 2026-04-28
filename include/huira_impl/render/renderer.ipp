@@ -38,6 +38,20 @@ namespace huira {
             frame_buffer.received_power() = ray_traced_power + star_power;
         }
 
+        // Apply Veiling Glare
+        if (camera->veiling_glare_enabled_) {
+            float unveiled = 1.f - camera->veiling_alpha_;
+            TSpectral total_power{ 0.f };
+            for (std::size_t i = 0; i < frame_buffer.received_power().size(); ++i) {
+                total_power += frame_buffer.received_power()[i];
+            }
+            TSpectral veiling_bias = camera->veiling_alpha_ * total_power / static_cast<float>(frame_buffer.received_power().size());
+
+            for (std::size_t i = 0; i < frame_buffer.received_power().size(); ++i) {
+                frame_buffer.received_power()[i] = (frame_buffer.received_power()[i] * unveiled) + veiling_bias;
+            }
+        }
+
         this->get_camera(scene_view)->readout(frame_buffer, scene_view.duration());
     }
 

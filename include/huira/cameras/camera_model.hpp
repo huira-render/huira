@@ -96,6 +96,11 @@ namespace huira {
         void enable_psf_convolution(bool convolve_psf = true) { convolve_psf_ = convolve_psf; }
         void delete_psf();
 
+        void set_veiling_glare(float alpha);
+        void disable_veiling_glare();
+        void set_harvey_shack_scatter(float scatter_fraction, float falloff_exponent, float r0 = 0.5f, float radius = 0.f);
+        void disable_harvey_shack_scatter();
+
         bool has_psf() const { return psf_ != nullptr; }
         const Image<TSpectral>& get_psf_kernel(float u, float v) const { return psf_->get_kernel(u, v); }
         int get_psf_radius() const { return psf_->get_radius(); }
@@ -144,6 +149,15 @@ namespace huira {
 
         bool use_aperture_psf_ = false;
         float d_ = std::numeric_limits<float>::infinity();
+
+        float veiling_alpha_ = 0.f;
+        bool veiling_glare_enabled_ = false;
+
+        float scatter_fraction_ = 0.f;
+        float scatter_falloff_exponent_ = 2.f;
+        float r0_ = 0.5f;
+        float scatter_radius_ = 0.f;
+        bool scatter_enabled_ = false;
 
         std::uint64_t id_ = 0;
         static inline std::uint64_t next_id_ = 0;
