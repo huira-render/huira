@@ -25,6 +25,7 @@ namespace huira {
 
         std::shared_ptr<Geometry<TSpectral>> geometry;
         std::shared_ptr<Material<TSpectral>> material;
+        std::shared_ptr<Medium<TSpectral>> medium;
 
         std::uint64_t id() const override { return id_; }
         std::string type() const override { return "Primitive"; }
