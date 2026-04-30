@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string>
+
 #include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/core/constants.hpp"
 #include "huira/core/types.hpp"
@@ -33,6 +35,8 @@ namespace huira {
             
             return { wi, evaluate(Vec3<float>{}, wi) }; 
         }
+
+        std::string type() const override { return "IsotropicPhaseFunction"; }
     };
 
 }

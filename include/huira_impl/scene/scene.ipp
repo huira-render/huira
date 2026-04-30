@@ -849,6 +849,55 @@ namespace huira {
 
 
     template <IsSpectral TSpectral>
+    DensityFieldHandle<TSpectral> Scene<TSpectral>::new_vacuum_density_field(std::string name)
+    {
+        auto density_field = std::make_shared<VacuumDensityField<TSpectral>>();
+        return add_density_field(density_field, name);
+    }
+
+    template <IsSpectral TSpectral>
+    DensityFieldHandle<TSpectral> Scene<TSpectral>::add_density_field(
+        std::shared_ptr<DensityField<TSpectral>> density_field, std::string name)
+    {
+        density_fields_.add(density_field, name);
+        return DensityFieldHandle<TSpectral>{ density_field };
+    }
+
+    template <IsSpectral TSpectral>
+    PhaseFunctionHandle<TSpectral> Scene<TSpectral>::new_isotropic_phase_function(std::string name)
+    {
+        auto phase_function = std::make_shared<IsotropicPhaseFunction<TSpectral>>();
+        return add_phase_function(phase_function, name);
+    }
+
+    template <IsSpectral TSpectral>
+    PhaseFunctionHandle<TSpectral> Scene<TSpectral>::add_phase_function(
+        std::shared_ptr<PhaseFunction<TSpectral>> phase_function, std::string name)
+    {
+        phase_functions_.add(phase_function, name);
+        return PhaseFunctionHandle<TSpectral>{ phase_function };
+    }
+
+
+    template <IsSpectral TSpectral>
+    MediumHandle<TSpectral> Scene<TSpectral>::new_medium(
+        DensityFieldHandle<TSpectral> density_field_handle,
+        PhaseFunctionHandle<TSpectral> phase_function_handle,
+        std::string name)
+    {
+        auto medium = std::make_shared<Medium<TSpectral>>(density_field_handle.get(), phase_function_handle.get());
+        return add_medium(medium, name);
+    }
+
+    template <IsSpectral TSpectral>
+    MediumHandle<TSpectral> Scene<TSpectral>::add_medium(std::shared_ptr<Medium<TSpectral>> medium, 
+                                                         std::string name)
+    {
+        volumes_.add(medium, name);
+        return MediumHandle<TSpectral>{ medium };
+    }
+
+    template <IsSpectral TSpectral>
     void Scene<TSpectral>::set_background_radiance(Image<TSpectral> background)
     {
         background_ = std::make_shared<Image<TSpectral>>(std::move(background));

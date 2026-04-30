@@ -1,8 +1,12 @@
 #pragma once
 
+#include <cstdint>
+#include <string>
+
 #include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/core/types.hpp"
 #include "huira/render/sampler.hpp"
+#include "huira/scene/scene_object.hpp"
 
 namespace huira {
     
@@ -12,14 +16,21 @@ namespace huira {
     };
 
     template <IsSpectral TSpectral>
-    class PhaseFunction {
+    class PhaseFunction : public SceneObject<PhaseFunction<TSpectral>> {
     public:
         PhaseFunction() = default;
-        virtual ~PhaseFunction() = default;
+        virtual ~PhaseFunction() override = default;
         
         [[nodiscard]] virtual float evaluate(const Vec3<float>& wo, const Vec3<float>& wi) const = 0;
 
         [[nodiscard]] virtual PhaseSample sample(const Vec3<float>& wo, RandomSampler<float>& sampler) const = 0;
+
+        std::uint64_t id() const override { return id_; }
+        virtual std::string type() const override = 0;
+
+    private:
+        std::uint64_t id_ = 0;
+        static inline std::uint64_t next_id_ = 0;
     };
 
 }
