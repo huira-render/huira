@@ -266,8 +266,7 @@ namespace huira {
         default_roughness_image_{ roughness_image },
         default_normal_image_{ normal_image },
         default_transmission_image_{ transmission_image },
-        default_emissive_image_{ emissive_image },
-        id_(next_id_++)
+        default_emissive_image_{ emissive_image }
     {
         albedo_image_ = default_albedo_image_;
         alpha_image_ = default_alpha_image_;

@@ -1,6 +1,5 @@
 #pragma once
 
-#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
@@ -46,7 +45,7 @@ namespace huira {
     template <IsSpectral TSpectral>
     class Light : public SceneObject<Light<TSpectral>> {
     public:
-        Light() : id_(next_id_++) {}
+        Light() = default;
 
         Light(const Light&) = delete;
         Light& operator=(const Light&) = delete;
@@ -74,10 +73,6 @@ namespace huira {
 
         virtual LightType get_type() const = 0;
 
-        std::uint64_t id() const override { return id_; }
-
-    protected:
-        std::uint64_t id_ = 0;
-        static inline std::uint64_t next_id_ = 0;
+        virtual std::string type() const override { return "Light"; }
     };
 }

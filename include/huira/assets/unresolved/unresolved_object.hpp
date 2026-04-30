@@ -1,6 +1,5 @@
 #pragma once
 
-#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -43,13 +42,9 @@ namespace huira {
             const std::vector<LightInstance<TSpectral>>& lights
         );
         
-        std::uint64_t id() const override { return id_; }
         virtual std::string type() const override { return "UnresolvedObject"; }
 
     protected:
-        std::uint64_t id_ = 0;
-        static inline std::uint64_t next_id_ = 0;
-
         TSpectral irradiance_{ 0 };
     };
 }

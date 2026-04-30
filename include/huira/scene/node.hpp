@@ -1,6 +1,5 @@
 #pragma once
 
-#include <cstdint>
 #include <memory>
 #include <span>
 #include <stdexcept>
@@ -108,7 +107,6 @@ namespace huira {
         void set_custom_state_callback(Args&&... args);
 
 
-        std::uint64_t id() const override { return id_; }
         virtual std::string type() const override { return "Node"; }
 
         TransformMode get_position_mode() const { return position_mode_; }
@@ -151,9 +149,6 @@ namespace huira {
         std::unique_ptr<PositionCallback> position_callback_;
         std::unique_ptr<RotationCallback> rotation_callback_;
         std::unique_ptr<StateCallback> transform_callback_;
-
-        std::uint64_t id_ = 0;
-        static inline std::uint64_t next_id_ = 0;
 
         Scene<TSpectral>* scene_;
         Node<TSpectral>* parent_ = nullptr;

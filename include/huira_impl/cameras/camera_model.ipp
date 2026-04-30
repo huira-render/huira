@@ -13,7 +13,7 @@ namespace huira {
      * The aperture diameter is set based on the focal length and a default f-stop of 2.8.
      */
     template <IsSpectral TSpectral>
-    CameraModel<TSpectral>::CameraModel() : id_(next_id_++)
+    CameraModel<TSpectral>::CameraModel()
     {
         HUIRA_TRACE_SCOPE("CameraModel::CameraModel()");
         units::Meter diameter(this->focal_length_ / 2.8f);

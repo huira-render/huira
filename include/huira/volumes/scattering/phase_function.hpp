@@ -24,13 +24,8 @@ namespace huira {
         [[nodiscard]] virtual float evaluate(const Vec3<float>& wo, const Vec3<float>& wi) const = 0;
 
         [[nodiscard]] virtual PhaseSample sample(const Vec3<float>& wo, RandomSampler<float>& sampler) const = 0;
-
-        std::uint64_t id() const override { return id_; }
+        
         virtual std::string type() const override = 0;
-
-    private:
-        std::uint64_t id_ = 0;
-        static inline std::uint64_t next_id_ = 0;
     };
 
 }

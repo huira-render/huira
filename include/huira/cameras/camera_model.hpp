@@ -130,7 +130,6 @@ namespace huira {
 
         Resolution resolution() const { return sensor_->resolution(); }
 
-        std::uint64_t id() const override { return id_; }
         std::string type() const override { return "CameraModel"; }
 
         FrameBuffer<TSpectral> make_frame_buffer() const { return FrameBuffer<TSpectral>(resolution()); }
@@ -158,9 +157,6 @@ namespace huira {
         float r0_ = 0.5f;
         float scatter_radius_ = 0.f;
         bool scatter_enabled_ = false;
-
-        std::uint64_t id_ = 0;
-        static inline std::uint64_t next_id_ = 0;
 
         float fx_;
         float fy_;
