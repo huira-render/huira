@@ -30,6 +30,9 @@
 #include "huira/materials/bsdfs/null_bsdf.hpp"
 #include "huira/materials/bsdfs/oren_nayar_bsdf.hpp"
 
+#include "huira/volumes/density/vacuum.hpp"
+#include "huira/volumes/scattering/isotropic_scatter.hpp"
+
 namespace huira {
     // Suppressing C4355: 'this' is passed to FrameNode constructor, but FrameNode only stores
     // the pointer without calling back into the incomplete Scene object.
@@ -81,6 +84,10 @@ namespace huira {
             default_emission_image_
         );
 
+        default_medium_ = std::make_shared<Medium<TSpectral>>(
+            std::make_shared<VacuumDensityField<TSpectral>>(),
+            std::make_shared<IsotropicPhaseFunction<TSpectral>>()
+        );
 
         // Create the Embree RTC Device:
         device_ = std::make_shared<EmbreeDevice>(nullptr);

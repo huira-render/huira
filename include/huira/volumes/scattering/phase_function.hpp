@@ -12,7 +12,7 @@ namespace huira {
     };
 
     template <IsSpectral TSpectral>
-    class PhaseFunction<TSpectral> {
+    class PhaseFunction {
     public:
         PhaseFunction() = default;
         virtual ~PhaseFunction() = default;
