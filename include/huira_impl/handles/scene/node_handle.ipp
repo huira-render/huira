@@ -1,5 +1,5 @@
-#include "huira/core/concepts/numeric_concepts.hpp"
-#include "huira/core/concepts/spectral_concepts.hpp"
+#include "huira/concepts/numeric_concepts.hpp"
+#include "huira/concepts/spectral_concepts.hpp"
 #include "huira/core/types.hpp"
 
 namespace huira {

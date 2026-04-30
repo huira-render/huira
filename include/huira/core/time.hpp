@@ -30,7 +30,7 @@
 
 #include <string>
 
-#include "huira/core/units/units.hpp"
+#include "huira/units/units.hpp"
 
 namespace huira {
 

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "huira/assets/model.hpp"
-#include "huira/core/concepts/spectral_concepts.hpp"
+#include "huira/concepts/spectral_concepts.hpp"
 #include "huira/handles/handle.hpp"
 #include "huira/handles/materials/material_handle.hpp"
 #include "huira/handles/materials/bsdf_handle.hpp"

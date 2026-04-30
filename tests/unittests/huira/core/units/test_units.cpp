@@ -2,7 +2,7 @@
 
 #include "catch2/catch_test_macros.hpp"
 
-#include "huira/core/units/units.hpp"
+#include "huira/units/units.hpp"
 #include "huira/core/constants.hpp"
 
 using namespace huira;

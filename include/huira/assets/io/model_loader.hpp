@@ -15,7 +15,7 @@
 
 #include "huira/geometry/mesh.hpp"
 #include "huira/assets/model.hpp"
-#include "huira/core/concepts/spectral_concepts.hpp"
+#include "huira/concepts/spectral_concepts.hpp"
 #include "huira/core/types.hpp"
 #include "huira/handles/assets/primitive_handle.hpp"
 #include "huira/handles/materials/material_handle.hpp"

@@ -2,8 +2,8 @@
 
 #include <ratio>
 
-#include "huira/core/units/quantity.hpp"
-#include "huira/core/units/spectral_quantity.hpp"
+#include "huira/units/quantity.hpp"
+#include "huira/units/spectral_quantity.hpp"
 
 /**
  * @file units.hpp

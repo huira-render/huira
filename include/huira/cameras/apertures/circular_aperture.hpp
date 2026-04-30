@@ -3,8 +3,8 @@
 #include <memory>
 
 #include "huira/cameras/apertures/aperture.hpp"
-#include "huira/core/concepts/spectral_concepts.hpp"
-#include "huira/core/units/units.hpp"
+#include "huira/concepts/spectral_concepts.hpp"
+#include "huira/units/units.hpp"
 #include "huira/render/sampler.hpp"
 
 namespace huira {

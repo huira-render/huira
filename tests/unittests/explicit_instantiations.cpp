@@ -19,7 +19,7 @@
 
 
 // core/
-#include "huira/core/units/units.hpp"
+#include "huira/units/units.hpp"
 
 #include "huira/core/rotation.hpp"
 #include "huira/core/spectral_bins.hpp"
@@ -28,7 +28,7 @@
 #include "huira/core/types.hpp"
 
 // ephemeris/
-#include "huira/ephemeris/spice.hpp"
+#include "huira/core/spice.hpp"
 
 // handles/
 #include "huira/handles/camera_handle.hpp"

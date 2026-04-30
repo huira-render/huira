@@ -2,7 +2,7 @@
 
 #include "glm/glm.hpp"
 
-#include "huira/core/concepts/spectral_concepts.hpp"
+#include "huira/concepts/spectral_concepts.hpp"
 #include "huira/core/types.hpp"
 #include "huira/core/time.hpp"
 #include "huira/core/physics.hpp"

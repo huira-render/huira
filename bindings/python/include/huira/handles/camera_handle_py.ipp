@@ -4,7 +4,7 @@
 #include "pybind11/stl.h"
 
 #include "huira/handles/camera_handle.hpp"
-#include "huira/core/units/units_py.ipp"
+#include "huira/units/units_py.ipp"
 
 namespace py = pybind11;
 

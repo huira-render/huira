@@ -5,7 +5,7 @@
 #include "glm/glm.hpp"
 
 #include "huira/assets/lights/light.hpp"
-#include "huira/core/concepts/spectral_concepts.hpp"
+#include "huira/concepts/spectral_concepts.hpp"
 #include "huira/core/constants.hpp"
 #include "huira/core/physics.hpp"
 #include "huira/core/types.hpp"

@@ -4,7 +4,7 @@
 #include <optional>
 #include <string>
 
-#include "huira/core/concepts/spectral_concepts.hpp"
+#include "huira/concepts/spectral_concepts.hpp"
 #include "huira/core/types.hpp"
 #include "huira/geometry/ray.hpp"
 #include "huira/render/sampler.hpp"

@@ -5,7 +5,7 @@
 #include <type_traits>
 
 #include "huira/core/types.hpp"
-#include "huira/core/concepts/numeric_concepts.hpp"
+#include "huira/concepts/numeric_concepts.hpp"
 
 namespace huira {
     /**

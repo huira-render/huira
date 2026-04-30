@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-#include "huira/core/concepts/spectral_concepts.hpp"
+#include "huira/concepts/spectral_concepts.hpp"
 
 #include "huira/scene/instance.hpp"
 #include "huira/scene/node.hpp"

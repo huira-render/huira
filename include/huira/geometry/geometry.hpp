@@ -2,7 +2,7 @@
 
 #include <memory>
 
-#include "huira/core/concepts/spectral_concepts.hpp"
+#include "huira/concepts/spectral_concepts.hpp"
 #include "huira/geometry/ray.hpp"
 #include "huira/render/interaction.hpp"
 #include "huira/scene/embree_device.hpp"

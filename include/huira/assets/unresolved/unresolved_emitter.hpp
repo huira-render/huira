@@ -5,8 +5,8 @@
 
 #include "huira/assets/lights/light.hpp"
 #include "huira/assets/unresolved/unresolved_object.hpp"
-#include "huira/core/concepts/spectral_concepts.hpp"
-#include "huira/core/units/units.hpp"
+#include "huira/concepts/spectral_concepts.hpp"
+#include "huira/units/units.hpp"
 #include "huira/scene/scene_view_types.hpp"
 
 namespace huira {

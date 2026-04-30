@@ -7,7 +7,7 @@
 #include <type_traits>
 #include <variant>
 
-#include "huira/core/concepts/spectral_concepts.hpp"
+#include "huira/concepts/spectral_concepts.hpp"
 #include "huira/core/types.hpp"
 
 namespace huira {

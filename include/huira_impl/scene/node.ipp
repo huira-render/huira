@@ -3,8 +3,8 @@
 
 #include "glm/glm.hpp"
 
-#include "huira/core/concepts/spectral_concepts.hpp"
-#include "huira/ephemeris/spice.hpp"
+#include "huira/concepts/spectral_concepts.hpp"
+#include "huira/core/spice.hpp"
 #include "huira/core/physics.hpp"
 #include "huira/core/time.hpp"
 #include "huira/core/transform.hpp"

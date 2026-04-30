@@ -4,9 +4,9 @@
 #include <string>
 #include <type_traits>
 
-#include "huira/core/concepts/spectral_concepts.hpp"
-#include "huira/core/units/dimensionality.hpp"
-#include "huira/core/units/quantity.hpp"
+#include "huira/concepts/spectral_concepts.hpp"
+#include "huira/units/dimensionality.hpp"
+#include "huira/units/quantity.hpp"
 
 namespace huira::units {
 
@@ -99,4 +99,4 @@ namespace huira::units {
 
 }
 
-#include "huira_impl/core/units/spectral_quantity.ipp"
+#include "huira_impl/units/spectral_quantity.ipp"

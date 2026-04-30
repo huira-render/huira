@@ -3,7 +3,7 @@
 #include <memory>
 
 #include "huira/core/types.hpp"
-#include "huira/core/concepts/spectral_concepts.hpp"
+#include "huira/concepts/spectral_concepts.hpp"
 #include "huira/materials/shading_params.hpp"
 #include "huira/materials/bsdfs/bsdf.hpp"
 #include "huira/render/interaction.hpp"

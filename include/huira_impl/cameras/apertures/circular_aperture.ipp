@@ -4,9 +4,9 @@
 
 #include "huira/cameras/apertures/aperture.hpp"
 #include "huira/cameras/psfs/airy_disk.hpp"
-#include "huira/core/concepts/spectral_concepts.hpp"
+#include "huira/concepts/spectral_concepts.hpp"
 #include "huira/core/constants.hpp"
-#include "huira/core/units/units.hpp"
+#include "huira/units/units.hpp"
 
 namespace huira {
 

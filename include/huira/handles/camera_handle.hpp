@@ -3,8 +3,8 @@
 
 #include <optional>
 
-#include "huira/core/concepts/spectral_concepts.hpp"
-#include "huira/core/units/units.hpp"
+#include "huira/concepts/spectral_concepts.hpp"
+#include "huira/units/units.hpp"
 
 #include "huira/cameras/camera_model.hpp"
 #include "huira/cameras/distortion/brown_distortion.hpp"

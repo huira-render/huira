@@ -10,7 +10,7 @@
 #include "glm/gtx/io.hpp"
 #include <glm/gtx/string_cast.hpp>
 
-#include "huira/core/concepts/numeric_concepts.hpp"
+#include "huira/concepts/numeric_concepts.hpp"
 
 namespace huira {
     template <int N, IsFloatingPoint T>

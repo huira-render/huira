@@ -6,7 +6,7 @@
 #include "pybind11/operators.h"
 
 #include "huira/core/rotation.hpp"
-#include "huira/core/units/units_py.ipp"
+#include "huira/units/units_py.ipp"
 
 namespace py = pybind11;
 

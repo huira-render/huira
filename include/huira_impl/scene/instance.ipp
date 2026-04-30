@@ -1,6 +1,6 @@
 #include <string>
 
-#include "huira/core/concepts/spectral_concepts.hpp"
+#include "huira/concepts/spectral_concepts.hpp"
 
 #include "huira/assets/lights/light.hpp"
 #include "huira/geometry/mesh.hpp"

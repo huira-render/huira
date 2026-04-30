@@ -3,7 +3,7 @@
 #include "pybind11/pybind11.h"
 #include "pybind11/stl/filesystem.h"
 
-#include "huira/ephemeris/spice.hpp"
+#include "huira/core/spice.hpp"
 
 namespace py = pybind11;
 

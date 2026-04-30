@@ -1,9 +1,9 @@
 #pragma once
 
 #include "huira/assets/unresolved/unresolved_object.hpp"
-#include "huira/core/concepts/spectral_concepts.hpp"
+#include "huira/concepts/spectral_concepts.hpp"
 #include "huira/core/time.hpp"
-#include "huira/core/units/units.hpp"
+#include "huira/units/units.hpp"
 #include "huira/handles/handle.hpp"
 
 namespace huira {
