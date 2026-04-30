@@ -1,6 +1,5 @@
 #pragma once
 
-#include <cstdint>
 #include <filesystem>
 #include <string>
 
@@ -36,26 +35,20 @@ namespace huira {
 
         explicit Texture(Image<TPixel>&& image)
             : image_{ std::make_shared<Image<TPixel>>(std::move(image)) }
-            , id_{ next_id_++ }
         {}
 
         explicit Texture(const TPixel& constant_value)
             : image_{ std::make_shared<Image<TPixel>>(1, 1, constant_value) }
-            , id_{ next_id_++ }
         {}
 
         [[nodiscard]] std::shared_ptr<Image<TPixel>> shared_image() const { return image_; }
 
         [[nodiscard]] Resolution resolution() const noexcept { return image_->resolution(); }
         
-        [[nodiscard]] std::uint64_t id() const override { return id_; }
         [[nodiscard]] std::string type() const override { return "Texture"; }
 
     private:
         std::shared_ptr<Image<TPixel>> image_;
-
-        std::uint64_t id_ = 0;
-        static inline std::uint64_t next_id_ = 0;
     };
 
 }

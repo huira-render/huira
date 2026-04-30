@@ -1,6 +1,5 @@
 #pragma once
 
-#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
@@ -27,8 +26,7 @@ namespace huira {
         Medium(std::shared_ptr<DensityField<TSpectral>> density_field,
             std::shared_ptr<PhaseFunction<TSpectral>> phase_function)
             : density_field_(std::move(density_field)),
-            phase_function_(std::move(phase_function)),
-            id_(next_id_++) {}
+            phase_function_(std::move(phase_function)) {}
 
         virtual ~Medium() override = default;
 
@@ -65,16 +63,12 @@ namespace huira {
         // Returns the distance 't' and the sampled optical properties, or std::nullopt if the ray escapes.
         [[nodiscard]] std::optional<MediumInteraction<TSpectral>> sample_free_path(
             const Ray<TSpectral>& ray, RandomSampler<float>& sampler) const;
-
-        std::uint64_t id() const override { return id_; }
+        
         std::string type() const override { return "Medium"; }
 
     private:
         std::shared_ptr<DensityField<TSpectral>> density_field_;
         std::shared_ptr<PhaseFunction<TSpectral>> phase_function_;
-
-        std::uint64_t id_ = 0;
-        static inline std::uint64_t next_id_ = 0;
     };
 
 }

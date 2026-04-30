@@ -1,6 +1,5 @@
 #pragma once
 
-#include <cstdint>
 #include <filesystem>
 #include <memory>
 #include <string>
@@ -36,7 +35,7 @@ namespace huira {
     template <IsSpectral TSpectral>
     class Model : public SceneObject<Model<TSpectral>> {
     public:
-        Model() : id_(next_id_++) {}
+        Model() = default;
         ~Model() override { HUIRA_LOG_INFO("Model::~Model()"); }
 
         Model(const Model&) = delete;
@@ -46,7 +45,6 @@ namespace huira {
 
         const fs::path& source_path() const noexcept { return source_path_; }
 
-        std::uint64_t id() const override { return id_; }
         std::string type() const override { return "Model"; }
 
         void print_graph() const;
@@ -56,8 +54,6 @@ namespace huira {
         void set_all_bsdfs(const BSDFHandle<TSpectral>& bsdf_handle);
 
     private:
-        std::uint64_t id_ = 0;
-        static inline std::uint64_t next_id_ = 0;
         
         fs::path source_path_;
         

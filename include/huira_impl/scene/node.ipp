@@ -23,7 +23,7 @@ namespace huira {
      */
     template <IsSpectral TSpectral>
     Node<TSpectral>::Node(Scene<TSpectral>* scene)
-        : id_(next_id_++), scene_(scene)
+        : scene_(scene)
     {
     }
 

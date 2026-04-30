@@ -1,6 +1,5 @@
 #pragma once
 
-#include <cstdint>
 #include <memory>
 
 #include "huira/core/types.hpp"
@@ -57,7 +56,7 @@ namespace huira {
     template <IsSpectral TSpectral>
     class BSDF : public SceneObject<BSDF<TSpectral>> {
     public:
-        BSDF() : id_(next_id_++) {}
+        BSDF() = default;
         virtual ~BSDF() override = default;
         
         BSDF(const BSDF&) = delete;
@@ -121,13 +120,7 @@ namespace huira {
             const Interaction<TSpectral>& isect,
             const ShadingParams<TSpectral>& params) const = 0;
 
-        std::uint64_t id() const override { return id_; }
         virtual std::string type() const override = 0;
-
-    private:
-        std::uint64_t id_ = 0;
-        static inline std::uint64_t next_id_ = 0;
-
     };
 
 }

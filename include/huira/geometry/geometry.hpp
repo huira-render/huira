@@ -1,6 +1,5 @@
 #pragma once
 
-#include <cstdint>
 #include <memory>
 
 #include "huira/core/concepts/spectral_concepts.hpp"
@@ -17,7 +16,7 @@ namespace huira {
     template <IsSpectral TSpectral>
     class Geometry : public SceneObject<Geometry<TSpectral>> {
     public:
-        Geometry() : id_(next_id_++) {}
+        Geometry() = default;
         virtual ~Geometry() override = default;
         
         Geometry(const Geometry&) = delete;
@@ -28,8 +27,7 @@ namespace huira {
 
         virtual void compute_surface_interaction(const HitRecord& hit, Interaction<TSpectral>& isect) const = 0;
         virtual Vec2<float> compute_uv(const HitRecord& hit) const = 0;
-
-        std::uint64_t id() const override { return id_; }
+        
         std::string type() const override = 0;
 
     protected:
@@ -50,10 +48,6 @@ namespace huira {
             }
             return blas_.get();
         }
-
-    private:
-        std::uint64_t id_ = 0;
-        static inline std::uint64_t next_id_ = 0;
 
         friend class Scene<TSpectral>;
         friend class SceneView<TSpectral>;

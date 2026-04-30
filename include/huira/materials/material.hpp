@@ -1,7 +1,6 @@
 #pragma once
 
 #include <memory>
-#include <cstdint>
 
 #include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/images/image.hpp"
@@ -106,8 +105,7 @@ namespace huira {
         void set_emissive_image(std::shared_ptr<Image<TSpectral>> emissive_image);
         void set_emissive_factor(TSpectral emissive_factor);
         void reset_emissive();
-
-        std::uint64_t id() const override { return id_; }
+        
         std::string type() const override { return "Material"; }
 
         // TODO Move this to private (access data only!)
@@ -153,9 +151,6 @@ namespace huira {
         float     normal_factor_       = 1.0f;
         TSpectral transmission_factor_{ 0.0f };
         TSpectral emissive_factor_{ 0.0f };
-
-        std::uint64_t id_ = 0;
-        static inline std::uint64_t next_id_ = 0;
 
         friend class Scene<TSpectral>;
     };

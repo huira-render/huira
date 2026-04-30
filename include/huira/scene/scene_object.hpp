@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <cstdint>
 #include <memory>
 #include <string>
 
@@ -25,7 +26,7 @@ namespace huira {
     template <typename TDerived>
     class SceneObject : public std::enable_shared_from_this<TDerived> {
     public:
-        SceneObject() = default;
+        SceneObject() : id_(next_id_++) {}
 
         virtual ~SceneObject() = default;
 
@@ -65,7 +66,7 @@ namespace huira {
          * @brief Get the object's unique ID.
          * @return std::uint64_t ID
          */
-        virtual std::uint64_t id() const = 0;
+        virtual std::uint64_t id() const { return id_; }
 
         /**
          * @brief Get the object's type string.
@@ -86,6 +87,9 @@ namespace huira {
         std::atomic<bool> scene_owned_{ true }; // Only scene should modify this
 
         std::string name_ = ""; // Only NameRegistry should modify this
+
+        std::uint64_t id_ = 0;
+        static inline std::uint64_t next_id_ = 0;
         
         friend class NameRegistry<TDerived>;
     };

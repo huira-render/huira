@@ -1,6 +1,5 @@
 #pragma once
 
-#include <cstdint>
 #include <memory>
 #include <string>
 
@@ -15,7 +14,7 @@ namespace huira {
     template <IsSpectral TSpectral>
     class Primitive : public SceneObject<Primitive<TSpectral>> {
     public:
-        Primitive() : id_(next_id_++) {}
+        Primitive() = default;
         ~Primitive() override = default;
 
         Primitive(const Primitive&) = delete;
@@ -28,11 +27,6 @@ namespace huira {
         std::shared_ptr<Material<TSpectral>> material;
         std::shared_ptr<Medium<TSpectral>> medium;
 
-        std::uint64_t id() const override { return id_; }
         std::string type() const override { return "Primitive"; }
-
-    private:
-        std::uint64_t id_ = 0;
-        static inline std::uint64_t next_id_ = 0;
     };
 }
