@@ -7,6 +7,7 @@
 namespace huira {
     template <IsSpectral TSpectral>
     class DensityField {
+    public:
         DensityField() = default;
         virtual ~DensityField() = default;
 

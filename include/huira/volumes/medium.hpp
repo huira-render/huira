@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <memory>
 #include <optional>
 
@@ -8,6 +9,7 @@
 #include "huira/geometry/ray.hpp"
 #include "huira/render/sampler.hpp"
 #include "huira/scene/scene_object.hpp"
+#include "huira/volumes/medium_interaction.hpp"
 #include "huira/volumes/medium_properties.hpp"
 #include "huira/volumes/density/density_field.hpp"
 #include "huira/volumes/scattering/phase_function.hpp"
@@ -24,9 +26,10 @@ namespace huira {
         Medium(std::shared_ptr<DensityField<TSpectral>> density_field,
             std::shared_ptr<PhaseFunction<TSpectral>> phase_function)
             : density_field_(std::move(density_field)),
-            phase_function_(std::move(phase_function)) {}
+            phase_function_(std::move(phase_function)),
+            id_(next_id_++) {}
 
-        virtual ~Medium() = default;
+        virtual ~Medium() override = default;
 
         // Prevent copying due to unique_ptr ownership
         Medium(const Medium&) = delete;
@@ -49,16 +52,28 @@ namespace huira {
         // Returns transmittance along a segment (could be analytical for constant media, 
         // or delegated to an integrator/marching utility for heterogeneous media)
         [[nodiscard]] TSpectral evaluate_transmittance(const Ray<TSpectral>& ray,
-            RandomSampler<float>& sampler) const;
+            RandomSampler<float>& sampler) const
+        {
+            // TODO Implement
+            (void)ray;
+            (void)sampler;
+            return TSpectral{ 0.f };
+        }
 
         // Samples a distance along the ray to determine if/where a scattering event occurs.
         // Returns the distance 't' and the sampled optical properties, or std::nullopt if the ray escapes.
         [[nodiscard]] std::optional<MediumInteraction<TSpectral>> sample_free_path(
             const Ray<TSpectral>& ray, RandomSampler<float>& sampler) const;
 
+        std::uint64_t id() const override { return id_; }
+        std::string type() const override { return "Medium"; }
+
     private:
         std::shared_ptr<DensityField<TSpectral>> density_field_;
         std::shared_ptr<PhaseFunction<TSpectral>> phase_function_;
+
+        std::uint64_t id_ = 0;
+        static inline std::uint64_t next_id_ = 0;
     };
 
 }

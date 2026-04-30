@@ -60,10 +60,10 @@ namespace huira {
         BSDF() : id_(next_id_++) {}
         virtual ~BSDF() override = default;
         
-        BSDF(const BSDF&) = default;
-        BSDF(BSDF&&) = default;
-        BSDF& operator=(const BSDF&) = default;
-        BSDF& operator=(BSDF&&) = default;
+        BSDF(const BSDF&) = delete;
+        BSDF& operator=(const BSDF&) = delete;
+        BSDF(BSDF&&) = delete;
+        BSDF& operator=(BSDF&&) = delete;
 
 
         /**

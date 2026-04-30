@@ -27,6 +27,7 @@
 #include "huira/stars/star.hpp"
 #include "huira/stars/io/star_data.hpp"
 #include "huira/scene/name_registry.hpp"
+#include "huira/volumes/medium.hpp"
 
 namespace fs = std::filesystem;
 
@@ -200,6 +201,7 @@ namespace huira {
         NameRegistry<Texture<TSpectral>> spectral_textures_;
         NameRegistry<Texture<float>> mono_textures_;
         NameRegistry<Texture<Vec3<float>>> vec3_textures_;
+        NameRegistry<Medium<TSpectral>> volumes_;
 
         // Default textures:
         std::shared_ptr<Image<TSpectral>>   default_albedo_image_;
@@ -213,6 +215,7 @@ namespace huira {
         // Default materials and volumes:
         std::shared_ptr<Material<TSpectral>> default_material_;
         std::shared_ptr<Material<TSpectral>> default_null_material_;
+        std::shared_ptr<Medium<TSpectral>> default_medium_;
 
         std::shared_ptr<Image<TSpectral>> background_;
 

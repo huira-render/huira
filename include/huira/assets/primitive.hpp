@@ -9,6 +9,7 @@
 
 #include "huira/geometry/geometry.hpp"
 #include "huira/materials/material.hpp"
+#include "huira/volumes/medium.hpp"
 
 namespace huira {
     template <IsSpectral TSpectral>

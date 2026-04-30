@@ -117,8 +117,6 @@ namespace huira {
             std::size_t light_index;      // Index into lights_ if type == Light
         };
         std::vector<InstanceMapping> instance_mappings_;
-        
-        static void alpha_intersection_filter_(const RTCFilterFunctionNArguments* args) noexcept;
 
         friend class Renderer<TSpectral>;
     };

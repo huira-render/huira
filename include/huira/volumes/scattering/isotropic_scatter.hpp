@@ -4,7 +4,7 @@
 #include "huira/core/constants.hpp"
 #include "huira/core/types.hpp"
 #include "huira/render/sampler.hpp"
-#include "huira/scene/phase_function.hpp"
+#include "huira/volumes/scattering/phase_function.hpp"
 
 namespace huira {
 
@@ -23,7 +23,7 @@ namespace huira {
         [[nodiscard]] PhaseSample sample(const Vec3<float>& wo, RandomSampler<float>& sampler) const override {
             (void)wo;
             
-            Vec2<float> u = sampler.next_2d();
+            Vec2<float> u = sampler.get_2d();
             
             float z = 1.0f - 2.0f * u.x;
             float r = std::sqrt(std::max(0.0f, 1.0f - z * z));
