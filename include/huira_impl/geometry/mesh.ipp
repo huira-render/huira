@@ -50,68 +50,6 @@ namespace huira {
     }
 
     template <IsSpectral TSpectral>
-    Mesh<TSpectral>::~Mesh()
-    {
-        HUIRA_TRACE_SCOPE("Mesh::~Mesh");
-        if (blas_) {
-            rtcReleaseScene(blas_);
-        }
-    }
-
-    template <IsSpectral TSpectral>
-    Mesh<TSpectral>::Mesh(Mesh&& other) noexcept
-        : Geometry<TSpectral>(std::move(other)),
-        index_buffer_(std::move(other.index_buffer_)),
-        vertex_buffer_(std::move(other.vertex_buffer_)),
-        tangent_buffer_(std::move(other.tangent_buffer_)),
-        blas_(other.blas_)
-    {
-        other.blas_ = nullptr;
-    }
-
-    template <IsSpectral TSpectral>
-    Mesh<TSpectral>& Mesh<TSpectral>::operator=(Mesh&& other) noexcept
-    {
-        if (this != &other) {
-            Geometry<TSpectral>::operator=(std::move(other));
-
-            if (blas_) {
-                rtcReleaseScene(blas_);
-            }
-            
-            index_buffer_ = std::move(other.index_buffer_);
-            vertex_buffer_ = std::move(other.vertex_buffer_);
-            tangent_buffer_ = std::move(other.tangent_buffer_);
-            blas_ = other.blas_;
-            
-            other.blas_ = nullptr;
-        }
-        return *this;
-    }
-
-    /**
-     * @brief Returns the Embree BLAS scene for this mesh, building it if necessary.
-     *
-     * On first call, constructs the BLAS using shared buffers (zero-copy) over
-     * the mesh's vertex and index data. Subsequent calls return the cached BLAS.
-     * Requires that set_device() has been called (typically by Scene::add_mesh()).
-     *
-     * @return The committed RTCScene containing the triangle geometry.
-     */
-    template <IsSpectral TSpectral>
-    RTCScene Mesh<TSpectral>::blas() const
-    {
-        if (!blas_) {
-            if (!this->device_) {
-                HUIRA_THROW_ERROR("Mesh::blas - Cannot build BLAS: no RTCDevice assigned. "
-                    "Ensure the mesh has been added to a Scene via add_mesh().");
-            }
-            build_blas_();
-        }
-        return blas_;
-    }
-
-    template <IsSpectral TSpectral>
     void Mesh<TSpectral>::compute_surface_interaction(const HitRecord& hit, Interaction<TSpectral>& isect) const
     {
         std::uint32_t idx0 = index_buffer_[hit.prim_id * 3 + 0];
@@ -209,17 +147,17 @@ namespace huira {
 
         rtcCommitGeometry(geom);
 
-        blas_ = rtcNewScene(this->device_->get());
-        if (!blas_) {
+        this->blas_.reset(rtcNewScene(this->device_->get()));
+        if (!this->blas_) {
             rtcReleaseGeometry(geom);
             HUIRA_THROW_ERROR("Mesh::build_blas_ - Failed to create Embree BLAS scene (error: "
                 + std::to_string(static_cast<int>(rtcGetDeviceError(this->device_->get()))) + ").");
         }
 
-        rtcAttachGeometry(blas_, geom);
+        rtcAttachGeometry(this->blas_.get(), geom);
         rtcReleaseGeometry(geom);
 
-        rtcCommitScene(blas_);
+        rtcCommitScene(this->blas_.get());
 
         HUIRA_LOG_INFO("Built BLAS for Mesh " + std::to_string(this->id()) +
             " (vertices: " + std::to_string(vertex_buffer_.size()) +

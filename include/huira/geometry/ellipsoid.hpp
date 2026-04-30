@@ -15,7 +15,7 @@ namespace huira {
         Ellipsoid(const units::Meter& x, const units::Meter& y, const units::Meter& z) :
             radii_{ x.to_si_f(), y.to_si_f(), z.to_si_f() }
         {}
-        ~Ellipsoid() override;
+        ~Ellipsoid() override = default;
 
         Ellipsoid(const Ellipsoid&) = delete;
         Ellipsoid& operator=(const Ellipsoid&) = delete;
@@ -24,7 +24,6 @@ namespace huira {
         Ellipsoid& operator=(Ellipsoid&&) noexcept = default;
 
         // Geometry overrides
-        [[nodiscard]] RTCScene blas() const override;
         void compute_surface_interaction(const HitRecord& hit, Interaction<TSpectral>& isect) const override;
         Vec2<float> compute_uv(const HitRecord& hit) const override;
 
@@ -34,9 +33,8 @@ namespace huira {
 
     private:
         Vec3<float> radii_;
-        mutable RTCScene blas_ = nullptr;
 
-        void build_blas_() const;
+        void build_blas_() const override;
         
         static void bounds_callback(const RTCBoundsFunctionArguments* args) noexcept;
         static void intersect_callback(const RTCIntersectFunctionNArguments* args) noexcept;

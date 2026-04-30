@@ -36,13 +36,13 @@ namespace huira {
         Mesh() = default;
         Mesh(IndexBuffer index_buffer, VertexBuffer<TSpectral> vertex_buffer);
         Mesh(IndexBuffer index_buffer, VertexBuffer<TSpectral> vertex_buffer, TangentBuffer tangent_buffer);
-        ~Mesh() override;
+        ~Mesh() override = default;
 
         Mesh(const Mesh&) = delete;
         Mesh& operator=(const Mesh&) = delete;
 
-        Mesh(Mesh&& other) noexcept;
-        Mesh& operator=(Mesh&& other) noexcept;
+        Mesh(Mesh&& other)= default;
+        Mesh& operator=(Mesh&& other)= default;
 
         // Mesh specific data
         std::size_t index_count() const noexcept;
@@ -56,19 +56,16 @@ namespace huira {
         [[nodiscard]] bool has_tangents() const noexcept { return !tangent_buffer_.empty(); }
 
         // Geometry overrides
-        [[nodiscard]] RTCScene blas() const override;
         void compute_surface_interaction(const HitRecord& hit, Interaction<TSpectral>& isect) const override;
         Vec2<float> compute_uv(const HitRecord& hit) const override;
         std::string type() const override { return "Mesh"; }
 
     private:
-        void build_blas_() const;
+        void build_blas_() const override;
 
         IndexBuffer index_buffer_;
         VertexBuffer<TSpectral> vertex_buffer_;
         TangentBuffer tangent_buffer_;
-
-        mutable RTCScene blas_ = nullptr;
     };
 
 }
