@@ -191,8 +191,7 @@ namespace huira {
         MaterialHandle<TSpectral> add_material(std::shared_ptr<Material<TSpectral>> material, 
                                                std::string name = "");
 
-        
-        DensityFieldHandle<TSpectral> new_vacuum_density_field(std::string name = "");
+        DensityFieldHandle<TSpectral> new_constant_density_field(TSpectral absorption, TSpectral scattering, std::string name = "");
         DensityFieldHandle<TSpectral> add_density_field(
             std::shared_ptr<DensityField<TSpectral>> density_field, std::string name = "");
 

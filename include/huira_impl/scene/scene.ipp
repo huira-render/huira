@@ -30,7 +30,7 @@
 #include "huira/materials/bsdfs/null_bsdf.hpp"
 #include "huira/materials/bsdfs/oren_nayar_bsdf.hpp"
 
-#include "huira/volumes/density/vacuum.hpp"
+#include "huira/volumes/density/constant_density_field.hpp"
 #include "huira/volumes/scattering/isotropic_scatter.hpp"
 
 namespace huira {
@@ -85,7 +85,7 @@ namespace huira {
         );
 
         default_medium_ = std::make_shared<Medium<TSpectral>>(
-            std::make_shared<VacuumDensityField<TSpectral>>(),
+            std::make_shared<ConstantDensityField<TSpectral>>(TSpectral{ 0.f }, TSpectral{ 0.f }),
             std::make_shared<IsotropicPhaseFunction<TSpectral>>()
         );
 
@@ -849,9 +849,9 @@ namespace huira {
 
 
     template <IsSpectral TSpectral>
-    DensityFieldHandle<TSpectral> Scene<TSpectral>::new_vacuum_density_field(std::string name)
+    DensityFieldHandle<TSpectral> Scene<TSpectral>::new_constant_density_field(TSpectral absorption, TSpectral scattering, std::string name)
     {
-        auto density_field = std::make_shared<VacuumDensityField<TSpectral>>();
+        auto density_field = std::make_shared<ConstantDensityField<TSpectral>>(absorption, scattering);
         return add_density_field(density_field, name);
     }
 

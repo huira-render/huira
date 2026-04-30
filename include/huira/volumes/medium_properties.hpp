@@ -5,8 +5,11 @@
 namespace huira {
     template <IsSpectral TSpectral>
     struct MediumProperties {
-        TSpectral sigma_a; // Absorption coefficient
-        TSpectral sigma_s; // Scattering coefficient
-        TSpectral sigma_t; // Attenuation (Extinction) coefficient = sigma_a + sigma_s
+        TSpectral absorption = TSpectral{ 0 };
+        TSpectral scattering = TSpectral{ 0 };
+        
+        [[nodiscard]] TSpectral extinction() const {
+            return absorption + scattering;
+        }
     };
 }
