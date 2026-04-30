@@ -2,7 +2,7 @@
 
 #include "huira/scene/instance.hpp"
 #include "huira/handles/handle.hpp"
-#include "huira/core/concepts/spectral_concepts.hpp"
+#include "huira/concepts/spectral_concepts.hpp"
 
 namespace huira {
     template <IsSpectral TSpectral>

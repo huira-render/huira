@@ -3,8 +3,8 @@
 #include <cstddef>
 #include <vector>
 
-#include "huira/core/concepts/numeric_concepts.hpp"
-#include "huira/core/concepts/pixel_concepts.hpp"
+#include "huira/concepts/numeric_concepts.hpp"
+#include "huira/concepts/pixel_concepts.hpp"
 #include "huira/core/spectral_bins.hpp"
 #include "huira/core/types.hpp"
 

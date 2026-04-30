@@ -5,7 +5,7 @@
 
 #include "embree4/rtcore.h"
 
-#include "huira/core/concepts/numeric_concepts.hpp"
+#include "huira/concepts/numeric_concepts.hpp"
 #include "huira/core/rotation.hpp"
 #include "huira/core/types.hpp"
 

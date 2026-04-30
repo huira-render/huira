@@ -10,7 +10,7 @@
 #include "huira/geometry/mesh.hpp"
 #include "huira/assets/model.hpp"
 #include "huira/assets/io/model_loader.hpp"
-#include "huira/core/concepts/spectral_concepts.hpp"
+#include "huira/concepts/spectral_concepts.hpp"
 #include "huira/handles/assets/model_handle.hpp"
 #include "huira/handles/assets/primitive_handle.hpp"
 #include "huira/handles/geometry/geometry_handle.hpp"

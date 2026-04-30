@@ -2,9 +2,9 @@
 
 #include <array>
 
-#include "huira/ephemeris/spice.hpp"
+#include "huira/core/spice.hpp"
 
-#include "huira/core/units/units.hpp"
+#include "huira/units/units.hpp"
 #include "huira/core/time.hpp"
 #include "huira/scene/state_callbacks/state_callbacks.hpp"
 

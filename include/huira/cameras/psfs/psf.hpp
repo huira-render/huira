@@ -3,7 +3,7 @@
 
 #include <vector>
 
-#include "huira/core/concepts/spectral_concepts.hpp"
+#include "huira/concepts/spectral_concepts.hpp"
 #include "huira/images/image.hpp"
 
 namespace huira {

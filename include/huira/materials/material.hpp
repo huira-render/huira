@@ -2,7 +2,7 @@
 
 #include <memory>
 
-#include "huira/core/concepts/spectral_concepts.hpp"
+#include "huira/concepts/spectral_concepts.hpp"
 #include "huira/images/image.hpp"
 #include "huira/materials/bsdfs/bsdf.hpp"
 #include "huira/materials/shading_params.hpp"

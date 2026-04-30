@@ -1,7 +1,7 @@
 #pragma once
 
 #include "huira/core/types.hpp"
-#include "huira/core/concepts/spectral_concepts.hpp"
+#include "huira/concepts/spectral_concepts.hpp"
 
 namespace huira {
 

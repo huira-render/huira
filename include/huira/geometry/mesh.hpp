@@ -7,7 +7,7 @@
 #include "embree4/rtcore.h"
 
 #include "huira/core/types.hpp"
-#include "huira/core/concepts/spectral_concepts.hpp"
+#include "huira/concepts/spectral_concepts.hpp"
 #include "huira/geometry/geometry.hpp"
 #include "huira/geometry/ray.hpp"
 #include "huira/geometry/vertex.hpp"

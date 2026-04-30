@@ -17,7 +17,7 @@
 #include "huira/core/types.hpp"
 
 // Ephemeris interfaces:
-#include "huira/ephemeris/spice.hpp"
+#include "huira/core/spice.hpp"
 
 // Handles for various scene elements
 #include "huira/handles/camera_handle.hpp"
@@ -71,6 +71,6 @@
 //#include "huira/stars/tycho_processor.hpp"
 
 // Units:
-#include "huira/core/units/units.hpp"
+#include "huira/units/units.hpp"
 
 // util/ is not part of the public API

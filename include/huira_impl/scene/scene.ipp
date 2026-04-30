@@ -5,7 +5,7 @@
 #include "tbb/blocked_range.h"
 #include "embree4/rtcore.h"
 
-#include "huira/core/concepts/spectral_concepts.hpp"
+#include "huira/concepts/spectral_concepts.hpp"
 #include "huira/assets/io/model_loader.hpp"
 #include "huira/handles/assets/model_handle.hpp"
 #include "huira/handles/scene/frame_handle.hpp"

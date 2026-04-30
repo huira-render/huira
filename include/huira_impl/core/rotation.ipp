@@ -8,9 +8,9 @@
 #include "glm/gtx/quaternion.hpp"
 #include "glm/gtx/string_cast.hpp"
 
-#include "huira/core/concepts/numeric_concepts.hpp"
+#include "huira/concepts/numeric_concepts.hpp"
 #include "huira/core/types.hpp"
-#include "huira/core/units/units.hpp"
+#include "huira/units/units.hpp"
 #include "huira/util/logger.hpp"
 
 namespace huira {

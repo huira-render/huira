@@ -2,7 +2,7 @@
 #include <memory>
 #include <string>
 
-#include "huira/core/concepts/spectral_concepts.hpp"
+#include "huira/concepts/spectral_concepts.hpp"
 #include "huira/util/logger.hpp"
 
 #include "huira/assets/lights/sphere_light.hpp"

@@ -10,7 +10,7 @@
 #include "huira/assets/lights/light.hpp"
 #include "huira/assets/primitive.hpp"
 #include "huira/assets/unresolved/unresolved_object.hpp"
-#include "huira/core/units/units.hpp"
+#include "huira/units/units.hpp"
 #include "huira/core/interval.hpp"
 #include "huira/core/transform.hpp"
 #include "huira/geometry/ray.hpp"

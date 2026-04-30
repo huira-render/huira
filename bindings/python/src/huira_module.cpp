@@ -4,11 +4,11 @@
 #include "pybind11/pybind11.h"
 #include "pybind11/stl.h"
 
-#include "huira/core/concepts/spectral_concepts.hpp"
+#include "huira/concepts/spectral_concepts.hpp"
 
 #include "huira/cameras/distortion_coeffs_py.ipp"
 
-#include "huira/core/units/units_py.ipp"
+#include "huira/units/units_py.ipp"
 #include "huira/core/interval_py.ipp"
 #include "huira/core/rotation_py.ipp"
 #include "huira/core/spectral_bin_py.ipp"
@@ -16,7 +16,7 @@
 #include "huira/core/time_py.ipp"
 #include "huira/core/types_py.ipp"
 
-#include "huira/ephemeris/spice_py.ipp"
+#include "huira/core/spice_py.ipp"
 
 #include "huira/handles/camera_handle_py.ipp"
 #include "huira/handles/frame_handle_py.ipp"

@@ -1,5 +1,5 @@
 Units
 =====
 
-.. doxygenfile:: huira/core/units/units.hpp
+.. doxygenfile:: huira/units/units.hpp
    :sections: briefdescription detaileddescription

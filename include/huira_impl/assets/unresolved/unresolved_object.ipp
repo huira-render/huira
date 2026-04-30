@@ -1,6 +1,6 @@
 #include <vector>
 
-#include "huira/core/concepts/spectral_concepts.hpp"
+#include "huira/concepts/spectral_concepts.hpp"
 #include "huira/core/transform.hpp"
 #include "huira/scene/scene_view_types.hpp"
 #include "huira/util/logger.hpp"

@@ -1,5 +1,5 @@
-#include "huira/ephemeris/spice.hpp"
-#include "huira/core/units/units.hpp"
+#include "huira/core/spice.hpp"
+#include "huira/units/units.hpp"
 
 namespace huira {
     inline constexpr double SECONDS_PER_DAY = 86400.0;

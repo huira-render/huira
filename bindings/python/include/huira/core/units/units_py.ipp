@@ -6,10 +6,10 @@
 #include "pybind11/stl.h"
 #include "pybind11/operators.h"
 
-#include "huira/core/concepts/numeric_concepts.hpp"
-#include "huira/core/units/units.hpp"
-#include "huira/core/units/quantity.hpp"
-#include "huira/core/units/spectral_quantity.hpp"
+#include "huira/concepts/numeric_concepts.hpp"
+#include "huira/units/units.hpp"
+#include "huira/units/quantity.hpp"
+#include "huira/units/spectral_quantity.hpp"
 
 namespace py = pybind11;
 

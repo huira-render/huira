@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <memory>
 
-#include "huira/core/concepts/spectral_concepts.hpp"
+#include "huira/concepts/spectral_concepts.hpp"
 #include "huira/handles/handle.hpp"
 #include "huira/materials/texture.hpp"
 

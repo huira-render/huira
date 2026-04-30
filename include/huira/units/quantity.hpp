@@ -7,9 +7,9 @@
 #include <type_traits>
 
 #include "huira/core/constants.hpp"
-#include "huira/core/units/dimensionality.hpp"
+#include "huira/units/dimensionality.hpp"
 
-#include "huira/core/concepts/unit_concepts.hpp"
+#include "huira/concepts/unit_concepts.hpp"
 #include "huira/util/validate.hpp"
 
 namespace huira::units {
@@ -545,4 +545,4 @@ namespace huira::units {
     };
 }
 
-#include "huira_impl/core/units/quantity.ipp"
+#include "huira_impl/units/quantity.ipp"

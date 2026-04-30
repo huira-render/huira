@@ -3,9 +3,9 @@
 #include <ostream>
 #include <string>
 
-#include "huira/core/concepts/numeric_concepts.hpp"
+#include "huira/concepts/numeric_concepts.hpp"
 #include "huira/core/types.hpp"
-#include "huira/core/units/units.hpp"
+#include "huira/units/units.hpp"
 
 namespace huira {
     /**
