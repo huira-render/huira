@@ -5,10 +5,6 @@
 #include "huira/volumes/medium.hpp"
 
 namespace huira {
-    // Forward Declarations
-    template <IsSpectral TSpectral>
-    class Scene;
-
     /**
      * @brief Handle for manipulating a Medium in a scene.
      */

@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <string>
 
 #include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/core/types.hpp"

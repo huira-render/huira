@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string>
+
 #include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/core/types.hpp"
 #include "huira/volumes/medium_properties.hpp"
@@ -16,6 +18,8 @@ namespace huira {
             (void)p;
             return { TSpectral{0}, TSpectral{0}, TSpectral{0} };
         }
+
+        std::string type() const override { return "VacuumDensityField"; }
     };
 
 }

@@ -107,9 +107,12 @@ int main(int argc, char** argv) {
     auto null_bsdf = scene.new_bsdf_null();
     auto atmosphere_material = scene.new_material(null_bsdf);
     atmosphere_material.set_transmission_factor(TSpectral{ 1.f });
-    //auto atmosphere_medium = scene.new_medium();
-    //auto atmosphere_primitive = scene.add_primitive(atmosphere_ellipsoid, atmosphere_material, atmosphere_medium);
-    //eci.new_instance(atmosphere_primitive);
+
+    auto vacuum_density_field = scene.new_vacuum_density_field();
+    auto isotropic_phase_function = scene.new_isotropic_phase_function();
+    auto atmosphere_medium = scene.new_medium(vacuum_density_field, isotropic_phase_function);
+    auto atmosphere_primitive = scene.add_primitive(atmosphere_ellipsoid, atmosphere_material, atmosphere_medium);
+    eci.new_instance(atmosphere_primitive);
     
     // Create instance of the camera:
     auto navcam = eci.new_instance(camera_model);

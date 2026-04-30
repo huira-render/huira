@@ -20,7 +20,9 @@
 #include "huira/handles/materials/material_handle.hpp"
 #include "huira/handles/materials/texture_handle.hpp"
 #include "huira/handles/scene/root_frame_handle.hpp"
+#include "huira/handles/volumes/density_field_handle.hpp"
 #include "huira/handles/volumes/medium_handle.hpp"
+#include "huira/handles/volumes/phase_function_handle.hpp"
 #include "huira/images/image.hpp"
 #include "huira/materials/material.hpp"
 #include "huira/materials/texture.hpp"
@@ -39,10 +41,11 @@ namespace huira {
     /**
      * @brief Scene graph and asset manager for a rendered world.
      *
-     * The Scene class manages all assets (geometries, materials, lights, unresolved objects, camera models, models, stars)
-     * and the scene graph (root node, child nodes, instances, etc.). It provides methods for adding, removing,
-     * and querying assets, as well as for loading star catalogs and models. The scene graph is rooted at a
-     * FrameNode and supports hierarchical relationships between nodes and assets. Scene is non-copyable.
+     * The Scene class manages all assets (geometries, materials, lights, unresolved objects, camera
+     * models, models, stars) and the scene graph (root node, child nodes, instances, etc.). It 
+     * provides methods for adding, removing, and querying assets, as well as for loading star 
+     * catalogs and models. The scene graph is rooted at a FrameNode and supports hierarchical 
+     * relationships between nodes and assets. Scene is non-copyable.
      *
      * @tparam TSpectral Spectral type used for asset spectral properties
      */
@@ -113,26 +116,52 @@ namespace huira {
         LightHandle<TSpectral> get_light(const std::string& name) const;
         void delete_light(const LightHandle<TSpectral>& light_handle);
         
-        UnresolvedObjectHandle<TSpectral> new_unresolved_object(const units::SpectralWattsPerMeterSquared<TSpectral>& spectral_irradiance, std::string name = "");
-        UnresolvedObjectHandle<TSpectral> new_unresolved_object(const units::WattsPerMeterSquared& irradiance, std::string name = "");
-        UnresolvedObjectHandle<TSpectral> new_unresolved_object_from_magnitude(double visual_magnitude, std::string name = "");
-        UnresolvedObjectHandle<TSpectral> new_unresolved_object_from_magnitude(double visual_magnitude, TSpectral albedo, std::string name = "");
-        UnresolvedObjectHandle<TSpectral> new_unresolved_emitter(const units::SpectralWatts<TSpectral>& spectral_power, std::string name = "");
-        UnresolvedObjectHandle<TSpectral> new_unresolved_emitter(const units::Watt& power, std::string name = "");
-        UnresolvedObjectHandle<TSpectral> new_unresolved_sphere(units::Meter radius, InstanceHandle<TSpectral> sun, std::string name = "");
-        UnresolvedObjectHandle<TSpectral> new_unresolved_sphere(units::Meter radius, InstanceHandle<TSpectral> sun, TSpectral albedo, std::string name = "");
-        UnresolvedObjectHandle<TSpectral> new_unresolved_sphere(units::Meter radius, InstanceHandle<TSpectral> sun, float albedo, std::string name = "");
-        UnresolvedObjectHandle<TSpectral> new_unresolved_asteroid(double H, double G, InstanceHandle<TSpectral> sun, std::string name = "");
-        UnresolvedObjectHandle<TSpectral> new_unresolved_asteroid(double H, double G, InstanceHandle<TSpectral> sun, TSpectral albedo, std::string name = "");
-        UnresolvedObjectHandle<TSpectral> new_unresolved_asteroid(double H, double G, InstanceHandle<TSpectral> sun, float albedo, std::string name = "");
-        UnresolvedObjectHandle<TSpectral> add_unresolved_object(std::shared_ptr<UnresolvedObject<TSpectral>> unresolved_object, std::string name = "");
+        UnresolvedObjectHandle<TSpectral> new_unresolved_object(
+            const units::SpectralWattsPerMeterSquared<TSpectral>& spectral_irradiance, 
+            std::string name = "");
+        UnresolvedObjectHandle<TSpectral> new_unresolved_object(
+            const units::WattsPerMeterSquared& irradiance, std::string name = "");
+        UnresolvedObjectHandle<TSpectral> new_unresolved_object_from_magnitude(
+            double visual_magnitude, std::string name = "");
+        UnresolvedObjectHandle<TSpectral> new_unresolved_object_from_magnitude(
+            double visual_magnitude, TSpectral albedo, std::string name = "");
+        UnresolvedObjectHandle<TSpectral> new_unresolved_emitter(
+            const units::SpectralWatts<TSpectral>& spectral_power, std::string name = "");
+        UnresolvedObjectHandle<TSpectral> new_unresolved_emitter(const units::Watt& power, 
+                                                                 std::string name = "");
+        UnresolvedObjectHandle<TSpectral> new_unresolved_sphere(units::Meter radius, 
+                                                                InstanceHandle<TSpectral> sun, 
+                                                                std::string name = "");
+        UnresolvedObjectHandle<TSpectral> new_unresolved_sphere(units::Meter radius, 
+                                                                InstanceHandle<TSpectral> sun, 
+                                                                TSpectral albedo, 
+                                                                std::string name = "");
+        UnresolvedObjectHandle<TSpectral> new_unresolved_sphere(units::Meter radius, 
+                                                                InstanceHandle<TSpectral> sun, 
+                                                                float albedo, 
+                                                                std::string name = "");
+        UnresolvedObjectHandle<TSpectral> new_unresolved_asteroid(double H, double G, 
+                                                                  InstanceHandle<TSpectral> sun, 
+                                                                  std::string name = "");
+        UnresolvedObjectHandle<TSpectral> new_unresolved_asteroid(double H, double G, 
+                                                                  InstanceHandle<TSpectral> sun, 
+                                                                  TSpectral albedo, 
+                                                                  std::string name = "");
+        UnresolvedObjectHandle<TSpectral> new_unresolved_asteroid(double H, double G, 
+                                                                  InstanceHandle<TSpectral> sun, 
+                                                                  float albedo, 
+                                                                  std::string name = "");
+        UnresolvedObjectHandle<TSpectral> add_unresolved_object(
+            std::shared_ptr<UnresolvedObject<TSpectral>> unresolved_object, std::string name = "");
 
-        void set_name(const UnresolvedObjectHandle<TSpectral>& unresolved_object_handle, const std::string& name);
+        void set_name(const UnresolvedObjectHandle<TSpectral>& unresolved_object_handle, 
+                      const std::string& name);
         UnresolvedObjectHandle<TSpectral> get_unresolved_object(const std::string& name) const;
         void delete_unresolved_object(const UnresolvedObjectHandle<TSpectral>& unresolved_object_handle);
 
         CameraModelHandle<TSpectral> new_camera_model(std::string name = "");
-        void set_name(const CameraModelHandle<TSpectral>& camera_model_handle, const std::string& name);
+        void set_name(const CameraModelHandle<TSpectral>& camera_model_handle, 
+                      const std::string& name);
         CameraModelHandle<TSpectral> get_camera_model(const std::string& name) const;
         void delete_camera_model(const CameraModelHandle<TSpectral>& camera_model_handle);
 
@@ -157,8 +186,26 @@ namespace huira {
         BSDFHandle<TSpectral> add_bsdf(std::shared_ptr<BSDF<TSpectral>> bsdf,
                                        std::string name = "");
 
-        MaterialHandle<TSpectral> new_material(const BSDFHandle<TSpectral>& bsdf, std::string name = "");
-        MaterialHandle<TSpectral> add_material(std::shared_ptr<Material<TSpectral>> material, std::string name = "");
+        MaterialHandle<TSpectral> new_material(const BSDFHandle<TSpectral>& bsdf, 
+                                               std::string name = "");
+        MaterialHandle<TSpectral> add_material(std::shared_ptr<Material<TSpectral>> material, 
+                                               std::string name = "");
+
+        
+        DensityFieldHandle<TSpectral> new_vacuum_density_field(std::string name = "");
+        DensityFieldHandle<TSpectral> add_density_field(
+            std::shared_ptr<DensityField<TSpectral>> density_field, std::string name = "");
+
+        PhaseFunctionHandle<TSpectral> new_isotropic_phase_function(std::string name = "");
+        PhaseFunctionHandle<TSpectral> add_phase_function(
+            std::shared_ptr<PhaseFunction<TSpectral>> phase_function, std::string name = "");
+
+        MediumHandle<TSpectral> new_medium(
+            DensityFieldHandle<TSpectral> density_field_handle,
+            PhaseFunctionHandle<TSpectral> phase_function_handle,
+            std::string name = "");
+        MediumHandle<TSpectral> add_medium(std::shared_ptr<Medium<TSpectral>> medium, 
+                                           std::string name = "");
 
         void set_background_radiance(Image<TSpectral> background);
         void set_background_radiance(TSpectral background);
@@ -195,12 +242,16 @@ namespace huira {
         NameRegistry<CameraModel<TSpectral>> camera_models_;
         NameRegistry<Model<TSpectral>> models_;
 
-        // Material and Volume Assets:
+        // Material Assets:
         NameRegistry<BSDF<TSpectral>> bsdfs_;
         NameRegistry<Material<TSpectral>> materials_;
         NameRegistry<Texture<TSpectral>> spectral_textures_;
         NameRegistry<Texture<float>> mono_textures_;
         NameRegistry<Texture<Vec3<float>>> vec3_textures_;
+
+        // Volume Assets:
+        NameRegistry<DensityField<TSpectral>> density_fields_;
+        NameRegistry<PhaseFunction<TSpectral>> phase_functions_;
         NameRegistry<Medium<TSpectral>> volumes_;
 
         // Default textures:
