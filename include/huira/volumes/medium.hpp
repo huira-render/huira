@@ -62,7 +62,31 @@ namespace huira {
         // Samples a distance along the ray to determine if/where a scattering event occurs.
         // Returns the distance 't' and the sampled optical properties, or std::nullopt if the ray escapes.
         [[nodiscard]] std::optional<MediumInteraction<TSpectral>> sample_free_path(
-            const Ray<TSpectral>& ray, RandomSampler<float>& sampler) const;
+            const Ray<TSpectral>& ray, RandomSampler<float>& sampler) const
+        {
+            // Query properties at the ray origin (perfect for our ConstantDensityField)
+            MediumProperties<TSpectral> props = get_properties(ray.origin());
+            TSpectral ext = props.extinction();
+            
+            // Compute scalar average extinction for sampling
+            float avg_ext = 0.0f;
+            for (std::size_t c = 0; c < TSpectral::size(); ++c) {
+                avg_ext += ext[c];
+            }
+            avg_ext /= static_cast<float>(TSpectral::size());
+
+            // If the medium is practically a vacuum, the ray escapes infinitely
+            if (avg_ext <= 1e-6f) {
+                return std::nullopt; 
+            }
+
+            // Inverse Beer-Lambert sampling
+            float t = -std::log(1.0f - sampler.get_1d()) / avg_ext;
+            
+            return MediumInteraction<TSpectral>(
+                ray.at(t), t, -ray.direction(), props, phase_function_.get()
+            );
+        }
         
         std::string type() const override { return "Medium"; }
 
