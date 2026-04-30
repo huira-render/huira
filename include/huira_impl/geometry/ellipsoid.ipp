@@ -9,30 +9,7 @@
 #include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/util/logger.hpp"
 
-namespace huira {
-    template <IsSpectral TSpectral>
-    Ellipsoid<TSpectral>::~Ellipsoid()
-    {
-        HUIRA_TRACE_SCOPE("Mesh::~Mesh");
-        if (blas_) {
-            rtcReleaseScene(blas_);
-        }
-    }
-
-    template <IsSpectral TSpectral>
-    RTCScene Ellipsoid<TSpectral>::blas() const
-    {
-        if (!blas_) {
-            if (!this->device_) {
-                HUIRA_THROW_ERROR("Ellipsoid::blas - Cannot build BLAS: no RTCDevice assigned. "
-                    "Ensure the geometry has been added to a Scene.");
-            }
-            build_blas_();
-        }
-        return blas_;
-
-    }
-
+namespace huira {    
     template <IsSpectral TSpectral>
     void Ellipsoid<TSpectral>::compute_surface_interaction(const HitRecord& hit, Interaction<TSpectral>& isect) const
     {
@@ -95,12 +72,12 @@ namespace huira {
         rtcSetGeometryIntersectFunction(geom, intersect_callback);
 
         rtcCommitGeometry(geom);
-        
-        blas_ = rtcNewScene(this->device_->get());
-        rtcAttachGeometry(blas_, geom);
+
+        this->blas_.reset(rtcNewScene(this->device_->get()));
+        rtcAttachGeometry(this->blas_.get(), geom);
         rtcReleaseGeometry(geom);
 
-        rtcCommitScene(blas_);
+        rtcCommitScene(this->blas_.get());
     }
 
     template <IsSpectral TSpectral>
