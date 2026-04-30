@@ -12,20 +12,21 @@
 #include "huira/assets/io/model_loader.hpp"
 #include "huira/core/concepts/spectral_concepts.hpp"
 #include "huira/handles/assets/model_handle.hpp"
-#include "huira/handles/scene/root_frame_handle.hpp"
-#include "huira/handles/material_handle.hpp"
 #include "huira/handles/assets/primitive_handle.hpp"
 #include "huira/handles/geometry/geometry_handle.hpp"
 #include "huira/handles/geometry/mesh_handle.hpp"
 #include "huira/handles/geometry/ellipsoid_handle.hpp"
-#include "huira/handles/texture_handle.hpp"
+#include "huira/handles/materials/bsdf_handle.hpp"
+#include "huira/handles/materials/material_handle.hpp"
+#include "huira/handles/materials/texture_handle.hpp"
+#include "huira/handles/scene/root_frame_handle.hpp"
+#include "huira/handles/volumes/medium_handle.hpp"
 #include "huira/images/image.hpp"
 #include "huira/materials/material.hpp"
 #include "huira/materials/texture.hpp"
 #include "huira/stars/star.hpp"
 #include "huira/stars/io/star_data.hpp"
 #include "huira/scene/name_registry.hpp"
-#include "huira/assets/io/model_loader.hpp"
 
 namespace fs = std::filesystem;
 
@@ -58,27 +59,54 @@ namespace huira {
 
         RootFrameHandle<TSpectral> root;
 
-        MeshHandle<TSpectral> add_mesh(const IndexBuffer& index_buffer, const VertexBuffer<TSpectral>& vertex_buffer, std::string name = "");
-        MeshHandle<TSpectral> add_mesh(const IndexBuffer& index_buffer, const VertexBuffer<TSpectral>& vertex_buffer, const TangentBuffer& tangent_buffer, std::string name = "");
-        EllipsoidHandle<TSpectral> add_ellipsoid(const units::Meter& x, const units::Meter& y, const units::Meter& z, std::string name = "");
-        template <typename TGeometry>
-        GeometryHandle<TSpectral> add_geometry(TGeometry&& geom, std::string name = "");
-        void set_name(const GeometryHandle<TSpectral>& geom_handle, const std::string& name);
+        MeshHandle<TSpectral> add_mesh(const IndexBuffer& index_buffer,
+                                       const VertexBuffer<TSpectral>& vertex_buffer,
+                                       std::string name = "");
+        MeshHandle<TSpectral> add_mesh(const IndexBuffer& index_buffer,
+                                       const VertexBuffer<TSpectral>& vertex_buffer,
+                                       const TangentBuffer& tangent_buffer,
+                                       std::string name = "");
+        EllipsoidHandle<TSpectral> add_ellipsoid(const units::Meter& x,
+                                                 const units::Meter& y,
+                                                 const units::Meter& z,
+                                                 std::string name = "");
+        GeometryHandle<TSpectral> add_geometry(std::shared_ptr<Geometry<TSpectral>> geom,
+                                               std::string name = "");
+        void set_name(const GeometryHandle<TSpectral>& geom_handle,
+                      const std::string& name);
         GeometryHandle<TSpectral> get_geometry(const std::string& name) const;
         void delete_geometry(const GeometryHandle<TSpectral>& geom_handle);
 
-        PrimitiveHandle<TSpectral> add_primitive(const GeometryHandle<TSpectral>& geom, std::string name = "");
+        PrimitiveHandle<TSpectral> add_primitive(const GeometryHandle<TSpectral>& geom,
+                                                 std::string name = "");
         PrimitiveHandle<TSpectral> add_primitive(const GeometryHandle<TSpectral>& geom, 
-            const MaterialHandle<TSpectral>& mat, std::string name = "");
+                                                 const MaterialHandle<TSpectral>& mat,
+                                                 std::string name = "");
+        PrimitiveHandle<TSpectral> add_primitive(const GeometryHandle<TSpectral>& geom,
+                                                 const MediumHandle<TSpectral>& medium,
+                                                 std::string name = "");
+        PrimitiveHandle<TSpectral> add_primitive(const GeometryHandle<TSpectral>& geom, 
+                                                 const MaterialHandle<TSpectral>& mat,
+                                                  const MediumHandle<TSpectral>& medium,
+                                                  std::string name = "");
         void set_name(const PrimitiveHandle<TSpectral>& primitive_handle, const std::string& name);
         PrimitiveHandle<TSpectral> get_primitive(const std::string& name) const;
         void delete_primitive(const PrimitiveHandle<TSpectral>& primitive_handle);
 
-        LightHandle<TSpectral> new_sphere_light(const units::Meter& radius, const units::SpectralWattsPerMeterSquaredSteradian<TSpectral>& spectral_radiance, std::string name = "");
-        LightHandle<TSpectral> new_sphere_light(const units::Meter& radius, const units::SpectralWatts<TSpectral>& spectral_power, std::string name = "");
-        LightHandle<TSpectral> new_sphere_light(const units::Meter& radius, const units::Watt& total_power, std::string name = "");
+        LightHandle<TSpectral> new_sphere_light(
+            const units::Meter& radius,
+            const units::SpectralWattsPerMeterSquaredSteradian<TSpectral>& spectral_radiance,
+            std::string name = "");
+        LightHandle<TSpectral> new_sphere_light(
+            const units::Meter& radius,
+            const units::SpectralWatts<TSpectral>& spectral_power,
+            std::string name = "");
+        LightHandle<TSpectral> new_sphere_light(const units::Meter& radius,
+                                                const units::Watt& total_power,
+                                                std::string name = "");
         LightHandle<TSpectral> new_sun_light();
-        LightHandle<TSpectral> add_light(std::shared_ptr<Light<TSpectral>> light, std::string name = "");
+        LightHandle<TSpectral> add_light(std::shared_ptr<Light<TSpectral>> light,
+                                         std::string name = "");
 
         void set_name(const LightHandle<TSpectral>& light_handle, const std::string& name);
         LightHandle<TSpectral> get_light(const std::string& name) const;
@@ -117,7 +145,18 @@ namespace huira {
         ModelHandle<TSpectral> get_model(const std::string& name) const;
         void delete_model(const ModelHandle<TSpectral>& model_handle);
 
-        MaterialHandle<TSpectral> new_material(const BSDF<TSpectral>& bsdf, std::string name = "");
+        BSDFHandle<TSpectral> new_bsdf_cook_torrance(std::string name = "");
+        BSDFHandle<TSpectral> new_bsdf_hapke(float h, float B0, float b, float c,
+                                             std::string name = "");
+        BSDFHandle<TSpectral> new_bsdf_lambertian(std::string name = "");
+        BSDFHandle<TSpectral> new_bsdf_lommel_seeliger(std::string name = "");
+        BSDFHandle<TSpectral> new_bsdf_mcewen(std::string name = "");
+        BSDFHandle<TSpectral> new_bsdf_null(std::string name = "");
+        BSDFHandle<TSpectral> new_bsdf_oren_nayar(std::string name = "");
+        BSDFHandle<TSpectral> add_bsdf(std::shared_ptr<BSDF<TSpectral>> bsdf,
+                                       std::string name = "");
+
+        MaterialHandle<TSpectral> new_material(const BSDFHandle<TSpectral>& bsdf, std::string name = "");
         MaterialHandle<TSpectral> add_material(std::shared_ptr<Material<TSpectral>> material, std::string name = "");
 
         void set_background_radiance(Image<TSpectral> background);
@@ -155,14 +194,12 @@ namespace huira {
         NameRegistry<CameraModel<TSpectral>> camera_models_;
         NameRegistry<Model<TSpectral>> models_;
 
-        // Material Assets:
+        // Material and Volume Assets:
+        NameRegistry<BSDF<TSpectral>> bsdfs_;
         NameRegistry<Material<TSpectral>> materials_;
         NameRegistry<Texture<TSpectral>> spectral_textures_;
         NameRegistry<Texture<float>> mono_textures_;
         NameRegistry<Texture<Vec3<float>>> vec3_textures_;
-
-        // Default material:
-        std::shared_ptr<Material<TSpectral>> default_material_;
 
         // Default textures:
         std::shared_ptr<Image<TSpectral>>   default_albedo_image_;
@@ -172,6 +209,10 @@ namespace huira {
         std::shared_ptr<Image<Vec3<float>>> default_normal_image_;
         std::shared_ptr<Image<TSpectral>>   default_transmission_image_;
         std::shared_ptr<Image<TSpectral>>   default_emission_image_;
+
+        // Default materials and volumes:
+        std::shared_ptr<Material<TSpectral>> default_material_;
+        std::shared_ptr<Material<TSpectral>> default_null_material_;
 
         std::shared_ptr<Image<TSpectral>> background_;
 

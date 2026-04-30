@@ -83,7 +83,8 @@ int main(int argc, char** argv) {
 
     // Load the moon model
     auto moon_model = scene.load_model(moon_path);
-    moon_model.set_all_bsdfs(huira::McEwenBSDF<TSpectral>());
+    auto mcewen_bsdf = scene.new_bsdf_mcewen();
+    moon_model.set_all_bsdfs(mcewen_bsdf);
     //moon_model.set_all_bsdfs(huira::LambertianBSDF<TSpectral>());
 
     // Add moon model to the scene:

@@ -107,7 +107,7 @@ namespace huira {
             auto it = ctx.primitive_map.find(mesh_index);
             if (it != ctx.primitive_map.end()) {
                 PrimitiveHandle<TSpectral> primitive_handle = it->second;
-                shared_model->root_node_->new_instance(primitive_handle.get_shared().get());
+                shared_model->root_node_->new_instance(primitive_handle.get().get());
             } else {
                 HUIRA_LOG_ERROR("ModelLoader::load - Mesh index " + std::to_string(mesh_index) + " not found in primitive map");
             }
@@ -217,8 +217,8 @@ namespace huira {
             vertices.push_back(vertex);
         }
 
-        auto mesh = Mesh<TSpectral>(std::move(indices), std::move(vertices), std::move(tangent_buffer));
-        auto geom_handle = ctx.scene->add_geometry(std::move(mesh), std::string(ai_mesh->mName.C_Str()));
+        auto mesh = std::make_shared<Mesh<TSpectral>>(std::move(indices), std::move(vertices), std::move(tangent_buffer));
+        auto geom_handle = ctx.scene->add_geometry(mesh, std::string(ai_mesh->mName.C_Str()));
 
         // Assign material
         unsigned int material_index = ai_mesh->mMaterialIndex;
@@ -274,7 +274,7 @@ namespace huira {
             auto it = ctx.primitive_map.find(mesh_index);
             if (it != ctx.primitive_map.end()) {
                 PrimitiveHandle<TSpectral> primitive_handle = it->second;
-                Primitive<TSpectral>* primitive_ptr = primitive_handle.get_shared().get();
+                Primitive<TSpectral>* primitive_ptr = primitive_handle.get().get();
                 if (primitive_ptr) {
                     child->new_instance(primitive_ptr);
                 } else {
@@ -366,10 +366,11 @@ namespace huira {
 
     template <IsSpectral TSpectral>
     void ModelLoader<TSpectral>::process_materials_(LoadContext& ctx) {
+        auto ct_bsdf = ctx.scene->new_bsdf_cook_torrance();
         for (unsigned int i = 0; i < ctx.ai_scene->mNumMaterials; ++i) {
             const aiMaterial* ai_mat = ctx.ai_scene->mMaterials[i];
             std::string name = std::string(ai_mat->GetName().C_Str());
-            MaterialHandle<TSpectral> material = ctx.scene->new_material(CookTorranceBSDF<TSpectral>(), name);
+            MaterialHandle<TSpectral> material = ctx.scene->new_material(ct_bsdf, name);
 
             // Assign albedos:
             if (auto [tex, alpha] = load_material_texture_<TSpectral>(ai_mat, aiTextureType_BASE_COLOR, ctx, true, true); tex) {

@@ -44,7 +44,7 @@
 #include "huira/materials/bsdfs/bsdf.hpp"
 #include "huira/materials/bsdfs/cook_torrance_bsdf.hpp"
 #include "huira/materials/bsdfs/hapke_bsdf.hpp"
-#include "huira/materials/bsdfs/lambert_bsdf.hpp"
+#include "huira/materials/bsdfs/lambertian_bsdf.hpp"
 #include "huira/materials/bsdfs/lommel_seeliger_bsdf.hpp"
 #include "huira/materials/bsdfs/mcewen_bsdf.hpp"
 #include "huira/materials/bsdfs/null_bsdf.hpp"

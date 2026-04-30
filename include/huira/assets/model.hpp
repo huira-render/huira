@@ -8,7 +8,8 @@
 
 #include "huira/geometry/mesh.hpp"
 #include "huira/core/concepts/spectral_concepts.hpp"
-#include "huira/handles/material_handle.hpp"
+#include "huira/handles/materials/material_handle.hpp"
+#include "huira/handles/materials/bsdf_handle.hpp"
 #include "huira/scene/frame_node.hpp"
 #include "huira/scene/scene_object.hpp"
 
@@ -51,8 +52,8 @@ namespace huira {
         void print_graph() const;
 
         MaterialHandle<TSpectral> get_material_by_id(std::uint64_t material_id) const;
-
-        void set_all_bsdfs(const BSDF<TSpectral>& bsdf);
+        
+        void set_all_bsdfs(const BSDFHandle<TSpectral>& bsdf_handle);
 
     private:
         std::uint64_t id_ = 0;

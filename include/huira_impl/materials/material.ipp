@@ -91,9 +91,9 @@ namespace huira {
     }
 
     template <IsSpectral TSpectral>
-    void Material<TSpectral>::set_bsdf(const BSDF<TSpectral>& bsdf)
+    void Material<TSpectral>::set_bsdf(std::shared_ptr<BSDF<TSpectral>> bsdf)
     {
-        bsdf_ = bsdf.clone();
+        bsdf_ = bsdf;
 
         // Cache the flags flat in the material memory layout
         auto reqs = bsdf_->requirements();
@@ -252,7 +252,7 @@ namespace huira {
 
     template <IsSpectral TSpectral>
     Material<TSpectral>::Material(
-        const BSDF<TSpectral>& bsdf,
+        std::shared_ptr<BSDF<TSpectral>> bsdf,
         std::shared_ptr<Image<TSpectral>> albedo_image,
         std::shared_ptr<Image<float>> alpha_image,
         std::shared_ptr<Image<float>> metallic_image,

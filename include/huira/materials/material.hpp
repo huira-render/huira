@@ -47,7 +47,7 @@ namespace huira {
     class Material : public SceneObject<Material<TSpectral>> {
     public:
         Material(
-            const BSDF<TSpectral>& bsdf,
+            std::shared_ptr<BSDF<TSpectral>> bsdf,
             std::shared_ptr<Image<TSpectral>> albedo_image,
             std::shared_ptr<Image<float>> alpha_image,
             std::shared_ptr<Image<float>> metallic_image,
@@ -76,7 +76,7 @@ namespace huira {
             const Vec3<float>& wi,
             const MaterialEval<TSpectral>& eval) const;
 
-        void set_bsdf(const BSDF<TSpectral>& bsdf);
+        void set_bsdf(std::shared_ptr<BSDF<TSpectral>> bsdf);
         
 
         void set_albedo(std::shared_ptr<Image<TSpectral>> albedo_image);
@@ -144,7 +144,7 @@ namespace huira {
 
         std::shared_ptr<Image<TSpectral>> default_emissive_image_;
 
-        std::unique_ptr<BSDF<TSpectral>> bsdf_;
+        std::shared_ptr<BSDF<TSpectral>> bsdf_;
         
         TSpectral albedo_factor_{ 1.0f };
         float     alpha_factor_        = 1.0f;

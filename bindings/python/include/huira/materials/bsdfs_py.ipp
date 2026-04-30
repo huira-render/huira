@@ -17,7 +17,7 @@ namespace huira {
         py::class_<CookTorranceBSDF<TSpectral>, BSDF<TSpectral>>(m, "CookTorranceBSDF")
             .def(py::init<>(), "Create a Cook-Torrance microfacet BSDF");
 
-        py::class_<LambertBSDF<TSpectral>, BSDF<TSpectral>>(m, "LambertBSDF")
+        py::class_<LambertianBSDF<TSpectral>, BSDF<TSpectral>>(m, "LambertianBSDF")
             .def(py::init<>(), "Create a Lambertian (perfectly diffuse) BSDF");
 
         py::class_<LommelSeeligerBSDF<TSpectral>, BSDF<TSpectral>>(m, "LommelSeeligerBSDF")

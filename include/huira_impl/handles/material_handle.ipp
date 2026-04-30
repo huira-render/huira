@@ -1,6 +1,6 @@
 namespace huira {
     template <IsSpectral TSpectral>
-    void MaterialHandle<TSpectral>::set_bsdf(const BSDF<TSpectral>& bsdf)
+    void MaterialHandle<TSpectral>::set_bsdf(std::shared_ptr<BSDF<TSpectral>> bsdf)
     {
         this->get_()->set_bsdf(bsdf);
     }
