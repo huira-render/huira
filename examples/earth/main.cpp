@@ -55,9 +55,9 @@ int main(int argc, char** argv) {
     camera_model.set_sensor_bit_depth(12);
     camera_model.set_sensor_quantum_efficiency(0.8);
     camera_model.set_sensor_full_well_capacity(20000);
-    camera_model.set_veiling_glare(0.001f);
-    camera_model.use_aperture_psf(64, 16);
-    camera_model.enable_psf_convolution(true);
+    // camera_model.set_veiling_glare(0.001f);
+    // camera_model.use_aperture_psf(64, 16);
+    // camera_model.enable_psf_convolution(true);
     camera_model.set_sensor_simulate_noise(false);
 
     // Huira uses the OpenCV convention by default, which is
@@ -102,13 +102,13 @@ int main(int argc, char** argv) {
     auto earth_clouds_primitive = scene.add_primitive(earth_clouds_ellipsoid, earth_clouds_material);
     eci.new_instance(earth_clouds_primitive);
 
-    auto alt_atmosphere = 100_Km;
+    auto alt_atmosphere = 60_Km;
     auto atmosphere_ellipsoid = scene.add_ellipsoid(R_e + alt_atmosphere, R_e + alt_atmosphere, R_e + alt_atmosphere);
     auto null_bsdf = scene.new_bsdf_null();
     auto atmosphere_material = scene.new_material(null_bsdf);
     atmosphere_material.set_transmission_factor(TSpectral{ 1.f });
 
-    auto constant_density_field = scene.new_constant_density_field(TSpectral{ 0.01f }, TSpectral{ 0.1f });
+    auto constant_density_field = scene.new_constant_density_field(TSpectral{ 0.000002f, 0.000002f, 0.0000005f }, TSpectral{ 0.0000002f, 0.0000008f, 0.000001f });
     auto isotropic_phase_function = scene.new_isotropic_phase_function();
     auto atmosphere_medium = scene.new_medium(constant_density_field, isotropic_phase_function);
     auto atmosphere_primitive = scene.add_primitive(atmosphere_ellipsoid, atmosphere_material, atmosphere_medium);
@@ -124,7 +124,7 @@ int main(int argc, char** argv) {
     //auto earth = ecef.new_instance(earth_model);
     //earth.set_scale(6371*1000);
 
-    scene.load_stars(huira_data / "tycho2/tycho2.hrsc", time);
+    // scene.load_stars(huira_data / "tycho2/tycho2.hrsc", time);
 
     // Create the sun
     auto sun_light = scene.new_sun_light();
@@ -139,7 +139,7 @@ int main(int argc, char** argv) {
     // Create the renderer
     huira::Renderer<TSpectral> renderer;
     renderer.set_max_bounces(3);
-    renderer.set_samples_per_pixel(10);
+    renderer.set_samples_per_pixel(100);
 
     // Create a scene view over the exposure interval
     std::size_t num_blur_samples = 1;

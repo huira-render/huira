@@ -15,6 +15,7 @@
 
 #include "huira/concepts/spectral_concepts.hpp"
 #include "huira/core/types.hpp"
+#include "huira/volumes/medium.hpp"
 
 namespace huira {
 
@@ -183,8 +184,81 @@ namespace huira {
                                 float prev_bsdf_pdf = 1.0f;
                                 Interaction<TSpectral> prev_isect;
 
+                                const Medium<TSpectral>* current_medium = nullptr;
+
                                 for (int bounce = 0; bounce < max_bounces_; ++bounce) {
                                     HitRecord hit = scene_view.intersect(ray, time);
+
+                                    if (current_medium != nullptr) {
+                                        auto opt_mi = current_medium->sample_free_path(ray, sampler);
+                                        auto props = current_medium->get_properties(ray.origin());
+                                        TSpectral ext = props.extinction();
+                                        
+                                        float avg_ext = 0.0f;
+                                        for(std::size_t c = 0; c < TSpectral::size(); ++c) avg_ext += ext[c];
+                                        avg_ext /= static_cast<float>(TSpectral::size());
+
+                                        if (opt_mi && opt_mi->t < hit.t) {
+                                            float t = opt_mi->t;
+                                            TSpectral Tr{0.f};
+                                            for(std::size_t c = 0; c < TSpectral::size(); ++c) {
+                                                Tr[c] = std::exp(-ext[c] * t);
+                                            }
+                                            float pdf = avg_ext * std::exp(-avg_ext * t);
+                                            throughput = throughput * props.scattering * Tr * (1.0f / pdf);
+
+                                            Interaction<TSpectral> vol_isect;
+                                            vol_isect.position = opt_mi->p;
+                                            vol_isect.wo = opt_mi->wo;
+                                            vol_isect.normal_g = Vec3<float>{0.f};
+                                            vol_isect.normal_s = Vec3<float>{0.f};
+
+                                            for (const auto& light_instance : lights) {
+                                                Transform<float> current_transform = interpolate_transform(light_instance.transforms, time);
+                                                
+                                                auto sample = light_instance.light->sample_li(
+                                                    vol_isect, current_transform, this->sampler_);
+
+                                                if (!sample) continue;
+                                                
+                                                const auto& ls = *sample;
+                                                
+                                                Ray<TSpectral> shadow_ray(opt_mi->p, ls.wi);
+                                                TSpectral shadow_transmittance = scene_view.evaluate_transmittance(
+                                                    shadow_ray, ls.distance, sampler, time);
+                                                
+                                                if (shadow_transmittance.max() <= 0.0f) {
+                                                    continue;
+                                                }
+                                                float phase_val = opt_mi->phase_function->evaluate(opt_mi->wo, ls.wi);
+                                                
+                                                TSpectral Ld = throughput * (ls.Li / ls.pdf) * phase_val * shadow_transmittance;
+                                                
+                                                if (bounce == 0) {
+                                                    direct_radiance += Ld;
+                                                } else {
+                                                    indirect_radiance += Ld;
+                                                }
+                                            }
+
+                                            PhaseSample ps = opt_mi->phase_function->sample(opt_mi->wo, sampler);
+
+                                            float phase_eval = opt_mi->phase_function->evaluate(opt_mi->wo, ps.wi);
+                                            throughput = throughput * (phase_eval / ps.p);
+                                            
+                                            ray = Ray<TSpectral>(opt_mi->p, ps.wi);
+                                            prev_bsdf_pdf = ps.p;
+                                            continue;
+                                            
+                                        } else {
+                                            TSpectral Tr{0.f};
+                                            for(std::size_t c = 0; c < TSpectral::size(); ++c) {
+                                                Tr[c] = std::exp(-ext[c] * hit.t);
+                                            }
+                                            float pdf = std::exp(-avg_ext * hit.t);
+                                            throughput = throughput * Tr * (1.0f / pdf);
+                                        }
+                                    }
 
                                     if (!hit.hit()) {
                                         // Sample environment map using ray direction
@@ -353,6 +427,12 @@ namespace huira {
 
                                         // Spawn next ray:
                                         ray = Ray<TSpectral>(bounce_origin, bs.wi);
+
+                                        if (glm::dot(bs.wi, isect.normal_g) < 0.0f) {
+                                            current_medium = batch.primitive->medium.get();
+                                        } else {
+                                            current_medium = nullptr; 
+                                        }
                                     }
                                 }
 
