@@ -66,7 +66,8 @@ int main(int argc, char** argv) {
     camera_model.use_blender_convention();
 
     // Create the Earth material:
-    auto earth_material = scene.new_material(huira::CookTorranceBSDF<TSpectral>());
+    auto ct_bsdf = scene.new_bsdf_cook_torrance();
+    auto earth_material = scene.new_material(ct_bsdf);
 
     fs::path huira_data = "/Users/chrisgnam/huira_data";
     // fs::path huira_data = "C:/Users/chris/huira_data";
@@ -90,7 +91,8 @@ int main(int argc, char** argv) {
     eci.new_instance(earth_primitive);
 
     auto earth_cloud_alpha = huira::read_image_mono(huira_data / "models/earth/8k_earth_clouds.jpg");
-    auto earth_clouds_material = scene.new_material(huira::LambertBSDF<TSpectral>());
+    auto lam_bsdf = scene.new_bsdf_lambertian();
+    auto earth_clouds_material = scene.new_material(lam_bsdf);
     auto earth_clouds_tex = scene.add_texture(std::move(earth_cloud_alpha.image));
     earth_clouds_material.set_alpha_image(earth_clouds_tex);
 
@@ -101,10 +103,12 @@ int main(int argc, char** argv) {
 
     auto alt_atmosphere = 100_Km;
     auto atmosphere_ellipsoid = scene.add_ellipsoid(R_e + alt_atmosphere, R_e + alt_atmosphere, R_e + alt_atmosphere);
-    auto atmosphere_material = scene.new_material(huira::NullBSDF<TSpectral>());
+    auto null_bsdf = scene.new_bsdf_null();
+    auto atmosphere_material = scene.new_material(null_bsdf);
     atmosphere_material.set_transmission_factor(TSpectral{ 1.f });
-    auto atmosphere_primitive = scene.add_primitive(atmosphere_ellipsoid, atmosphere_material);
-    eci.new_instance(atmosphere_primitive);
+    //auto atmosphere_medium = scene.new_medium();
+    //auto atmosphere_primitive = scene.add_primitive(atmosphere_ellipsoid, atmosphere_material, atmosphere_medium);
+    //eci.new_instance(atmosphere_primitive);
     
     // Create instance of the camera:
     auto navcam = eci.new_instance(camera_model);
@@ -116,6 +120,7 @@ int main(int argc, char** argv) {
     //auto earth = ecef.new_instance(earth_model);
     //earth.set_scale(6371*1000);
 
+    scene.load_stars(huira_data / "tycho2/tycho2.hrsc", time);
 
     // Create the sun
     auto sun_light = scene.new_sun_light();

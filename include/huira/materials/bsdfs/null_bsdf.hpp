@@ -25,10 +25,6 @@ namespace huira {
 
         [[nodiscard]] BSDFRequirements requirements() const override;
 
-        [[nodiscard]] std::unique_ptr<BSDF<TSpectral>> clone() const override {
-            return std::make_unique<NullBSDF<TSpectral>>(*this);
-        }
-
         [[nodiscard]] TSpectral eval(
             const Vec3<float>& wo,
             const Vec3<float>& wi,
@@ -46,6 +42,9 @@ namespace huira {
             const Vec3<float>& wi,
             const Interaction<TSpectral>& isect,
             const ShadingParams<TSpectral>& params) const override;
+
+        std::string type() const override { return "NullBSDF"; }
+
     };
 
 }

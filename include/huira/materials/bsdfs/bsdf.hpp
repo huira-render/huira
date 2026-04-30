@@ -55,10 +55,10 @@ namespace huira {
      * @tparam TSpectral The spectral type used in the rendering pipeline
      */
     template <IsSpectral TSpectral>
-    class BSDF {
+    class BSDF : public SceneObject<BSDF<TSpectral>> {
     public:
-        BSDF() = default;
-        virtual ~BSDF() = default;
+        BSDF() : id_(next_id_++) {}
+        virtual ~BSDF() override = default;
         
         BSDF(const BSDF&) = default;
         BSDF(BSDF&&) = default;
@@ -72,14 +72,6 @@ namespace huira {
          * @return BSDFRequirements indicating which shading parameters are needed
          */
         [[nodiscard]] virtual BSDFRequirements requirements() const = 0;
-
-        /**
-         * @brief Clone the BSDF instance.
-         *
-         * @return A unique_ptr to a new BSDF instance that is a copy of this one.
-         */
-        [[nodiscard]] virtual std::unique_ptr<BSDF<TSpectral>> clone() const = 0;
-
 
         /**
          * @brief Evaluate the BSDF: f(wo, wi).
@@ -128,6 +120,14 @@ namespace huira {
             const Vec3<float>& wi,
             const Interaction<TSpectral>& isect,
             const ShadingParams<TSpectral>& params) const = 0;
+
+        std::uint64_t id() const override { return id_; }
+        virtual std::string type() const override = 0;
+
+    private:
+        std::uint64_t id_ = 0;
+        static inline std::uint64_t next_id_ = 0;
+
     };
 
 }

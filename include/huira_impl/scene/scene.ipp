@@ -22,8 +22,13 @@
 #include "huira/geometry/mesh.hpp"
 #include "huira/geometry/ellipsoid.hpp"
 
-#include "huira/materials/bsdfs/lambert_bsdf.hpp"
 #include "huira/materials/bsdfs/cook_torrance_bsdf.hpp"
+#include "huira/materials/bsdfs/hapke_bsdf.hpp"
+#include "huira/materials/bsdfs/lambertian_bsdf.hpp"
+#include "huira/materials/bsdfs/lommel_seeliger_bsdf.hpp"
+#include "huira/materials/bsdfs/mcewen_bsdf.hpp"
+#include "huira/materials/bsdfs/null_bsdf.hpp"
+#include "huira/materials/bsdfs/oren_nayar_bsdf.hpp"
 
 namespace huira {
     // Suppressing C4355: 'this' is passed to FrameNode constructor, but FrameNode only stores
@@ -55,7 +60,7 @@ namespace huira {
 
         // Initialize default material:
         default_material_ = std::make_shared<Material<TSpectral>>(
-            LambertBSDF<TSpectral>(),
+            std::make_shared<LambertianBSDF<TSpectral>>(),
             default_albedo_image_,
             default_alpha_image_,
             default_metallic_image_,
@@ -64,6 +69,18 @@ namespace huira {
             default_transmission_image_,
             default_emission_image_
         );
+
+        default_null_material_ = std::make_shared<Material<TSpectral>>(
+            std::make_shared<NullBSDF<TSpectral>>(),
+            default_albedo_image_,
+            default_alpha_image_,
+            default_metallic_image_,
+            default_roughness_image_,
+            default_normal_image_,
+            default_transmission_image_,
+            default_emission_image_
+        );
+
 
         // Create the Embree RTC Device:
         device_ = std::make_shared<EmbreeDevice>(nullptr);
@@ -81,74 +98,110 @@ namespace huira {
 #pragma warning(pop)
 #endif
 
+    /**
+     * @brief Adds a mesh to the scene.
+     * @param index_buffer The index buffer for the mesh.
+     * @param vertex_buffer The vertex buffer for the mesh.
+     * @param name Optional name for the mesh.
+     */
     template <IsSpectral TSpectral>
-    MeshHandle<TSpectral> Scene<TSpectral>::add_mesh(const IndexBuffer& index_buffer, const VertexBuffer<TSpectral>& vertex_buffer, std::string name)
+    MeshHandle<TSpectral> Scene<TSpectral>::add_mesh(const IndexBuffer& index_buffer,
+                                                     const VertexBuffer<TSpectral>& vertex_buffer, 
+                                                      std::string name)
     {
-        auto base_handle = add_geometry(Mesh<TSpectral>{ index_buffer, vertex_buffer }, std::move(name));
-        return MeshHandle<TSpectral>{ base_handle.get_shared() };
+        auto mesh_shared = std::make_shared<Mesh<TSpectral>>(index_buffer, vertex_buffer);
+        add_geometry(mesh_shared, std::move(name));
+        return MeshHandle<TSpectral>{ mesh_shared };
     }
-
-    template <IsSpectral TSpectral>
-    MeshHandle<TSpectral> Scene<TSpectral>::add_mesh(const IndexBuffer& index_buffer, const VertexBuffer<TSpectral>& vertex_buffer, const TangentBuffer& tangent_buffer, std::string name)
-    {
-        auto base_handle = add_geometry(Mesh<TSpectral>{ index_buffer, vertex_buffer, tangent_buffer }, std::move(name));
-        return MeshHandle<TSpectral>{ base_handle.get_shared() };
-    }
-
-    template <IsSpectral TSpectral>
-    EllipsoidHandle<TSpectral> Scene<TSpectral>::add_ellipsoid(const units::Meter& x, const units::Meter& y, const units::Meter& z, std::string name)
-    {
-        auto base_handle = add_geometry(Ellipsoid<TSpectral>{ x, y, z }, std::move(name));
-        return EllipsoidHandle<TSpectral>{ base_handle.get_shared() };
-    }
-
 
     /**
      * @brief Adds a mesh to the scene.
-     * @param mesh Mesh to add (moved)
-     * @param name Optional name for the mesh
-     * @return MeshHandle<TSpectral> Handle to the added mesh
+     * @param index_buffer The index buffer for the mesh.
+     * @param vertex_buffer The vertex buffer for the mesh.
+     * @param tangent_buffer The tangent buffer for the mesh.
+     * @param name Optional name for the mesh.
      */
     template <IsSpectral TSpectral>
-    template <typename TGeometry>
-    GeometryHandle<TSpectral> Scene<TSpectral>::add_geometry(TGeometry&& geom, std::string name)
+    MeshHandle<TSpectral> Scene<TSpectral>::add_mesh(const IndexBuffer& index_buffer,
+                                                     const VertexBuffer<TSpectral>& vertex_buffer,
+                                                     const TangentBuffer& tangent_buffer,
+                                                     std::string name)
     {
-        auto concrete_shared = std::make_shared<std::decay_t<TGeometry>>(std::forward<TGeometry>(geom));
-        concrete_shared->set_device(device_);
-        geometries_.add(concrete_shared, name);
-        return GeometryHandle<TSpectral>{ concrete_shared };
-    };
+        auto mesh_shared = std::make_shared<Mesh<TSpectral>>(index_buffer, vertex_buffer,
+                                                             tangent_buffer);
+        add_geometry(mesh_shared, std::move(name));
+        return MeshHandle<TSpectral>{ mesh_shared };
+    }
 
     /**
-     * @brief Sets the name for a mesh asset.
-     * @param mesh_handle Handle to the mesh
+     * @brief Adds an ellipsoid to the scene.
+     * @param x Semi-axis length along the x-axis.
+     * @param y Semi-axis length along the y-axis.
+     * @param z Semi-axis length along the z-axis.
+     * @param name Optional name for the mesh.
+     */
+    template <IsSpectral TSpectral>
+    EllipsoidHandle<TSpectral> Scene<TSpectral>::add_ellipsoid(const units::Meter& x,
+                                                               const units::Meter& y,
+                                                               const units::Meter& z,
+                                                               std::string name)
+    {
+        auto ellipsoid_shared = std::make_shared<Ellipsoid<TSpectral>>(x, y, z);
+        add_geometry(ellipsoid_shared, std::move(name));
+        return EllipsoidHandle<TSpectral>{ ellipsoid_shared };
+    }
+
+
+    /**
+     * @brief Adds a geometry to the scene.
+     * @param geometry std::shared_ptr to the Geometry object
+     * @param name Optional name for the geometry
+     * @return GeometryHandle<TSpectral> Handle to the added geometry
+     */
+    template <IsSpectral TSpectral>
+    GeometryHandle<TSpectral> Scene<TSpectral>::add_geometry(
+        std::shared_ptr<Geometry<TSpectral>> geometry,
+        std::string name)
+    {
+        geometry->set_device(device_);
+        geometries_.add(geometry, name);
+        return GeometryHandle<TSpectral>{ geometry };
+    }
+
+    /**
+     * @brief Sets the name for a geometry asset.
+     * @param geom_handle Handle to the geometry
      * @param name New name
      */
     template <IsSpectral TSpectral>
-    void Scene<TSpectral>::set_name(const GeometryHandle<TSpectral>& geom_handle, const std::string& name)
+    void Scene<TSpectral>::set_name(const GeometryHandle<TSpectral>& geom_handle,
+                                    const std::string& name)
     {
         geometries_.set_name(geom_handle.get(), name);
-    };
+    }
 
     /**
-     * @brief Retrieves a mesh by name.
-     * @param name Name of the mesh
-     * @return MeshHandle<TSpectral> Handle to the mesh
+     * @brief Retrieves a geometry by name.
+     * @param name Name of the geometry
+     * @return GeometryHandle<TSpectral> Handle to the mesh
      */
     template <IsSpectral TSpectral>
-    GeometryHandle<TSpectral> Scene<TSpectral>::get_geometry(const std::string& name) const {
+    GeometryHandle<TSpectral> Scene<TSpectral>::get_geometry(const std::string& name) const
+    {
         return GeometryHandle<TSpectral>{ geometries_.lookup(name) };
     }
 
     /**
-     * @brief Deletes a mesh from the scene.
+     * @brief Deletes a geometry from the scene.
      * @param geometry_handle Handle to the geometry
      */
     template <IsSpectral TSpectral>
     void Scene<TSpectral>::delete_geometry(const GeometryHandle<TSpectral>& geom_handle)
     {
-        auto geom_shared = geom_handle.get_shared();
-        if (!geom_shared) return;
+        auto geom_shared = geom_handle.get();
+        if (!geom_shared) {
+            return;
+        }
         
         Geometry<TSpectral>* target_ptr = geom_shared.get();
         
@@ -169,46 +222,81 @@ namespace huira {
 
     /**
      * @brief Adds a primitive to the scene with default material.
-     * @param geometry GeometryHandle for the primitive's geometry
+     * @param geometry_handle GeometryHandle for the primitive's geometry
      * @param name Optional name for the primitive
      * @return PrimitiveHandle<TSpectral> Handle to the added primitive
      */
     template <IsSpectral TSpectral>
-    PrimitiveHandle<TSpectral> Scene<TSpectral>::add_primitive(const GeometryHandle<TSpectral>& geom_handle, std::string name)
+    PrimitiveHandle<TSpectral> Scene<TSpectral>::add_primitive(
+        const GeometryHandle<TSpectral>& geometry_handle,
+        std::string name)
     {
-        if (!geom_handle.valid()) {
-            HUIRA_THROW_ERROR("Cannot create Primitive: Invalid Geometry Handle.");
-        }
-
-        auto primitive_shared = std::make_shared<Primitive<TSpectral>>();
-        primitive_shared->geometry = geom_handle.get_shared();
-        primitive_shared->material = default_material_;
-        primitives_.add(primitive_shared, name);
-        
-        return PrimitiveHandle<TSpectral>{ primitive_shared };
+        MaterialHandle<TSpectral> default_material_handle{ default_material_ };
+        MediumHandle<TSpectral> default_medium_handle{ default_medium_ };
+        return add_primitive(geometry_handle, default_material_handle, default_medium_handle, name);
     }
 
     /**
      * @brief Adds a primitive to the scene.
-     * @param geometry GeometryHandle for the primitive's geometry
-     * @param material MaterialHandle for the primitive's material
+     * @param geometry_handle GeometryHandle for the primitive's geometry
+     * @param material_handle MaterialHandle for the primitive's material
      * @param name Optional name for the primitive
      * @return PrimitiveHandle<TSpectral> Handle to the added primitive
      */
     template <IsSpectral TSpectral>
-    PrimitiveHandle<TSpectral> Scene<TSpectral>::add_primitive(const GeometryHandle<TSpectral>& geom_handle,
-        const MaterialHandle<TSpectral>& mat_handle, std::string name)
+    PrimitiveHandle<TSpectral> Scene<TSpectral>::add_primitive(
+        const GeometryHandle<TSpectral>& geometry_handle,
+        const MaterialHandle<TSpectral>& material_handle, std::string name)
     {
-        if (!geom_handle.valid()) {
+        MediumHandle<TSpectral> default_medium_handle{ default_medium_ };
+        return add_primitive(geometry_handle, material_handle, default_medium_handle, name);
+    }
+
+    /**
+     * @brief Adds a primitive to the scene.
+     * @param geometry_handle GeometryHandle for the primitive's geometry
+     * @param medium_handle MediumHandle for the primitive's medium
+     * @param name Optional name for the primitive
+     * @return PrimitiveHandle<TSpectral> Handle to the added primitive
+     */
+    template <IsSpectral TSpectral>
+    PrimitiveHandle<TSpectral> Scene<TSpectral>::add_primitive(
+        const GeometryHandle<TSpectral>& geometry_handle,
+        const MediumHandle<TSpectral>& medium_handle, std::string name)
+    {
+        MaterialHandle<TSpectral> default_material_handle{ default_material_ };
+        return add_primitive(geometry_handle, default_material_handle, medium_handle, name);
+    }
+
+    /**
+     * @brief Adds a primitive to the scene.
+     * @param geometry_handle GeometryHandle for the primitive's geometry
+     * @param material_handle MaterialHandle for the primitive's material
+     * @param medium_handle MediumHandle for the primitive's medium
+     * @param name Optional name for the primitive
+     * @return PrimitiveHandle<TSpectral> Handle to the added primitive
+     */
+    template <IsSpectral TSpectral>
+    PrimitiveHandle<TSpectral> Scene<TSpectral>::add_primitive(
+        const GeometryHandle<TSpectral>& geometry_handle, 
+        const MaterialHandle<TSpectral>& material_handle,
+        const MediumHandle<TSpectral>& medium_handle,
+        std::string name)
+    {
+        if (!geometry_handle.valid()) {
             HUIRA_THROW_ERROR("Cannot create Primitive: Invalid Geometry Handle.");
         }
-        if (!mat_handle.valid()) {
+        if (!material_handle.valid()) {
             HUIRA_THROW_ERROR("Invalid Material Handle provided. Using default material.");
         } 
+        if (!medium_handle.valid()) {
+            HUIRA_THROW_ERROR("Invalid Medium Handle provided. Using default medium.");
+        }
 
         auto primitive_shared = std::make_shared<Primitive<TSpectral>>();
-        primitive_shared->geometry = geom_handle.get_shared();
-        primitive_shared->material = mat_handle.get_shared();
+        primitive_shared->geometry = geometry_handle.get();
+        primitive_shared->material = material_handle.get();
+        primitive_shared->medium = medium_handle.get();
         primitives_.add(primitive_shared, name);
         
         return PrimitiveHandle<TSpectral>{ primitive_shared };
@@ -220,7 +308,8 @@ namespace huira {
      * @param name New name
      */
     template <IsSpectral TSpectral>
-    void Scene<TSpectral>::set_name(const PrimitiveHandle<TSpectral>& primitive_handle, const std::string& name)
+    void Scene<TSpectral>::set_name(const PrimitiveHandle<TSpectral>& primitive_handle,
+        const std::string& name)
     {
         primitives_.set_name(primitive_handle.get(), name);
     }
@@ -670,11 +759,68 @@ namespace huira {
     }
 
     template <IsSpectral TSpectral>
-    MaterialHandle<TSpectral> Scene<TSpectral>::new_material(const BSDF<TSpectral>& bsdf, std::string name)
+    BSDFHandle<TSpectral> Scene<TSpectral>::new_bsdf_cook_torrance(std::string name)
+    {
+        auto bsdf_shared = std::make_shared<CookTorranceBSDF<TSpectral>>();
+        return add_bsdf(bsdf_shared, name);
+    }
+
+    template <IsSpectral TSpectral>
+    BSDFHandle<TSpectral> Scene<TSpectral>::new_bsdf_hapke(float h, float B0, float b, float c,
+        std::string name)
+    {
+        auto bsdf_shared = std::make_shared<HapkeBSDF<TSpectral>>(h, B0, b, c);
+        return add_bsdf(bsdf_shared, name);
+    }
+
+    template <IsSpectral TSpectral>
+    BSDFHandle<TSpectral> Scene<TSpectral>::new_bsdf_lambertian(std::string name)
+    {
+        auto bsdf_shared = std::make_shared<LambertianBSDF<TSpectral>>();
+        return add_bsdf(bsdf_shared, name);
+    }
+
+    template <IsSpectral TSpectral>
+    BSDFHandle<TSpectral> Scene<TSpectral>::new_bsdf_lommel_seeliger(std::string name)
+    {
+        auto bsdf_shared = std::make_shared<LommelSeeligerBSDF<TSpectral>>();
+        return add_bsdf(bsdf_shared, name);
+    }
+
+    template <IsSpectral TSpectral>
+    BSDFHandle<TSpectral> Scene<TSpectral>::new_bsdf_mcewen(std::string name)
+    {
+        auto bsdf_shared = std::make_shared<McEwenBSDF<TSpectral>>();
+        return add_bsdf(bsdf_shared, name);
+    }
+
+    template <IsSpectral TSpectral>
+    BSDFHandle<TSpectral> Scene<TSpectral>::new_bsdf_null(std::string name)
+    {
+        auto bsdf_shared = std::make_shared<NullBSDF<TSpectral>>();
+        return add_bsdf(bsdf_shared, name);
+    }
+
+    template <IsSpectral TSpectral>
+    BSDFHandle<TSpectral> Scene<TSpectral>::new_bsdf_oren_nayar(std::string name)
+    {
+        auto bsdf_shared = std::make_shared<OrenNayarBSDF<TSpectral>>();
+        return add_bsdf(bsdf_shared, name);
+    }
+
+    template <IsSpectral TSpectral>
+    BSDFHandle<TSpectral> Scene<TSpectral>::add_bsdf(std::shared_ptr<BSDF<TSpectral>> bsdf, std::string name)
+    {
+        bsdfs_.add(bsdf, name);
+        return BSDFHandle<TSpectral>{ bsdf };
+    }
+
+    template <IsSpectral TSpectral>
+    MaterialHandle<TSpectral> Scene<TSpectral>::new_material(const BSDFHandle<TSpectral>& bsdf_handle, std::string name)
     {
         auto material = std::shared_ptr<Material<TSpectral>>(
             new Material<TSpectral>(
-            bsdf,
+            bsdf_handle.get(),
             default_albedo_image_,
             default_alpha_image_,
             default_metallic_image_,

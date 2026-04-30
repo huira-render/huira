@@ -3,7 +3,7 @@
 
 namespace huira {
     template <IsSpectral TSpectral>
-    BSDFRequirements LambertBSDF<TSpectral>::requirements() const
+    BSDFRequirements LambertianBSDF<TSpectral>::requirements() const
     {
         BSDFRequirements reqs{};
         reqs.needs_albedo = true;
@@ -14,7 +14,7 @@ namespace huira {
     }
 
     template <IsSpectral TSpectral>
-    TSpectral LambertBSDF<TSpectral>::eval(
+    TSpectral LambertianBSDF<TSpectral>::eval(
         const Vec3<float>& wo,
         const Vec3<float>& wi,
         const Interaction<TSpectral>& isect,
@@ -30,7 +30,7 @@ namespace huira {
     }
 
     template <IsSpectral TSpectral>
-    BSDFSample<TSpectral> LambertBSDF<TSpectral>::sample(
+    BSDFSample<TSpectral> LambertianBSDF<TSpectral>::sample(
         const Vec3<float>& wo,
         const Interaction<TSpectral>& isect,
         const ShadingParams<TSpectral>& params,
@@ -60,7 +60,7 @@ namespace huira {
     }
 
     template <IsSpectral TSpectral>
-    float LambertBSDF<TSpectral>::pdf(
+    float LambertianBSDF<TSpectral>::pdf(
         const Vec3<float>& wo,
         const Vec3<float>& wi,
         const Interaction<TSpectral>& isect,

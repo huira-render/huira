@@ -104,11 +104,11 @@ namespace huira {
     /**
      * @brief Sets the given BSDF on all materials used by meshes in the model.
      *
-     * @param bsdf The BSDF to set on all materials. The BSDF will be cloned for each material.
+     * @param bsdf The BSDFHandle to set on all materials.
      * @throws std::runtime_error if the model has no root node.
      */
     template <IsSpectral TSpectral>
-    void Model<TSpectral>::set_all_bsdfs(const BSDF<TSpectral>& bsdf)
+    void Model<TSpectral>::set_all_bsdfs(const BSDFHandle<TSpectral>& bsdf_handle)
     {
         if (!root_node_) {
             HUIRA_THROW_ERROR("Model has no root node.");
@@ -129,7 +129,7 @@ namespace huira {
 
                     // Route the BSDF update through the Primitive's shared material
                     if (prim && prim->material) {
-                        prim->material->set_bsdf(bsdf);
+                        prim->material->set_bsdf(bsdf_handle.get());
                     }
                 }
             }

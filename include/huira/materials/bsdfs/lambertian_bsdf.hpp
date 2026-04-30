@@ -16,16 +16,12 @@ namespace huira {
      * @tparam TSpectral The spectral type used in the rendering pipeline
      */
     template <IsSpectral TSpectral>
-    class LambertBSDF final : public BSDF<TSpectral> {
+    class LambertianBSDF : public BSDF<TSpectral> {
     public:
-        LambertBSDF() noexcept = default;
+        LambertianBSDF() noexcept = default;
+        ~LambertianBSDF() override = default;
 
         [[nodiscard]] BSDFRequirements requirements() const override;
-
-        [[nodiscard]] std::unique_ptr<BSDF<TSpectral>> clone() const override {
-            // Calls the default copy constructor and wraps it in a unique_ptr
-            return std::make_unique<LambertBSDF<TSpectral>>(*this);
-        }
 
         [[nodiscard]] TSpectral eval(
             const Vec3<float>& wo,
@@ -44,8 +40,10 @@ namespace huira {
             const Vec3<float>& wi,
             const Interaction<TSpectral>& isect,
             const ShadingParams<TSpectral>& params) const override;
+
+        std::string type() const override { return "LambertianBSDF"; }
     };
 
 }
 
-#include "huira_impl/materials/bsdfs/lambert_bsdf.ipp"
+#include "huira_impl/materials/bsdfs/lambertian_bsdf.ipp"
