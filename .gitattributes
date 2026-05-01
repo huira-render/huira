@@ -2,15 +2,15 @@
 * text=auto
 
 # Explicitly declare text files you want to always be normalized and converted
-# to native line endings on checkout
-*.c text
-*.cpp text
-*.cxx text
-*.cc text
-*.h text
-*.hpp text
-*.hxx text
-*.cmake text
+# to LF line endings on checkout to prevent clang-format CI failures
+*.c text eol=lf
+*.cpp text eol=lf
+*.cxx text eol=lf
+*.cc text eol=lf
+*.h text eol=lf
+*.hpp text eol=lf
+*.hxx text eol=lf
+*.cmake text eol=lf
 *.txt text
 *.md text
 *.sh text eol=lf

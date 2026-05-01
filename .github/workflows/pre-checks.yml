@@ -13,12 +13,12 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install clang-format
-        run: python3 -m pip install clang-format==17.0.6
-
+        run: python3 -m pip install clang-format
+    
       - name: Run Formatting Check
         run: |
           echo "Checking formatting for .cpp, .hpp, .cc, .h, and .ipp files..."
-          find . -type f \( -name "*.cpp" -o -name "*.hpp" -o -name "*.cc" -o -name "*.h" -o -name "*.ipp" \) -exec clang-format --style=file --dry-run --Werror {} +
+          find examples include apps tests bindings -type f \( -name "*.cpp" -o -name "*.hpp" -o -name "*.cc" -o -name "*.h" -o -name "*.ipp" \) -exec clang-format --style=file --dry-run --Werror --verbose {} +
 
   version-check:
     name: Version Check
