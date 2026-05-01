@@ -20,12 +20,12 @@ permissions:
   id-token: write
 
 jobs:
-  version-check:
-    name: Version Check
-    uses: ./.github/workflows/version-check.yml
+  pre-checks:
+    name: Pre-Checks
+    uses: ./.github/workflows/pre-checks.yml
 
   build-linux:
-    needs: version-check
+    needs: pre-checks
     runs-on: ubuntu-22.04
     name: Build
 
@@ -181,7 +181,7 @@ jobs:
     name: Linux CI
     if: always()
     needs:
-      - version-check
+      - pre-checks
       - build-linux
       - test
       - docs

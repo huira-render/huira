@@ -16,12 +16,12 @@ permissions:
   actions: read
 
 jobs:
-  version-check:
-    name: Version Check
-    uses: ./.github/workflows/version-check.yml
+  pre-checks:
+    name: Pre-Checks
+    uses: ./.github/workflows/pre-checks.yml
 
   vcpkg-build:
-    needs: version-check
+    needs: pre-checks
     strategy:
       fail-fast: false
       matrix:
@@ -114,7 +114,7 @@ jobs:
     name: vcpkg CI
     if: always()
     needs:
-      - version-check
+      - pre-checks
       - vcpkg-build
     runs-on: ubuntu-22.04
     steps:

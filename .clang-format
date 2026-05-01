@@ -1,0 +1,49 @@
+---
+BasedOnStyle: LLVM
+
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+
+ColumnLimit: 100
+InsertNewlineAtEOF: true
+
+AlwaysBreakTemplateDeclarations: Yes
+
+# Sort and group header includes
+SortIncludes: true
+IncludeBlocks: Regroup
+IncludeCategories:
+  - Regex:           '^<([a-zA-Z0-9_]+|sys/.*|arpa/.*)>$'
+    Priority:        1
+  - Regex:           '^<.*>'
+    Priority:        2
+  - Regex:           '.*'
+    Priority:        3
+
+PointerAlignment: Left
+
+
+# Use Custom brace wrapping to mix-and-match styles
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterFunction: true
+  
+  AfterClass: false
+  AfterStruct: false
+  AfterEnum: false
+  
+  AfterControlStatement: Never
+  BeforeElse: false
+  BeforeCatch: false
+
+AllowShortFunctionsOnASingleLine: Inline
+BinPackArguments: false # If one argument gets pushed to a new line, ALL arguments get a new line
+BinPackParameters: false
+AlignAfterOpenBracket: Align
+
+# Strictly forbid keeping short statements on a single line
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AllowShortBlocksOnASingleLine: Never
+InsertBraces: true

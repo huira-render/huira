@@ -16,12 +16,12 @@ permissions:
   actions: read
 
 jobs:
-  version-check:
-    name: Version Check
-    uses: ./.github/workflows/version-check.yml
+  pre-checks:
+    name: Pre-Checks
+    uses: ./.github/workflows/pre-checks.yml
 
   conda-build:
-    needs: version-check
+    needs: pre-checks
     strategy:
       fail-fast: false
       matrix:
@@ -99,7 +99,7 @@ jobs:
     name: Conda CI
     if: always()
     needs:
-      - version-check
+      - pre-checks
       - conda-build
       - conda-test
     runs-on: ubuntu-22.04
