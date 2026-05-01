@@ -8,51 +8,52 @@
 
 namespace huira {
 
-    /**
-     * @brief Abstract base class for point spread functions (PSF).
-     *
-     * Defines the interface and cache management for all PSF types, supporting polyphase kernel generation.
-     *
-     * @tparam TSpectral The spectral representation type.
-     */
-    template <IsSpectral TSpectral>
-    class PSF {
-    public:
-        PSF() = default;
-        virtual ~PSF() = default;
+/**
+ * @brief Abstract base class for point spread functions (PSF).
+ *
+ * Defines the interface and cache management for all PSF types, supporting polyphase kernel
+ * generation.
+ *
+ * @tparam TSpectral The spectral representation type.
+ */
+template <IsSpectral TSpectral>
+class PSF {
+  public:
+    PSF() = default;
+    virtual ~PSF() = default;
 
-        virtual TSpectral evaluate(float x, float y) = 0;
+    virtual TSpectral evaluate(float x, float y) = 0;
 
-        void build_polyphase_cache(int radius, int banks);
+    void build_polyphase_cache(int radius, int banks);
 
-        const Image<TSpectral>& get_kernel(float u, float v) const;
-        std::vector<Image<TSpectral>> get_all_kernels() const { return cache_.kernels; }
+    const Image<TSpectral>& get_kernel(float u, float v) const;
+    std::vector<Image<TSpectral>> get_all_kernels() const { return cache_.kernels; }
 
-        int get_radius() const { return cache_.radius; }
-        int get_banks() const { return cache_.banks; }
+    int get_radius() const { return cache_.radius; }
+    int get_banks() const { return cache_.banks; }
 
-    protected:
-        struct PolyphaseCache {
-            int radius = 0;
-            int dim = 0;
-            int banks = 0;
-            std::vector<Image<TSpectral>> kernels;
-        } cache_;
+  protected:
+    struct PolyphaseCache {
+        int radius = 0;
+        int dim = 0;
+        int banks = 0;
+        std::vector<Image<TSpectral>> kernels;
+    } cache_;
 
-    private:
-        void generate_polyphase_data_();
-        void normalize_kernel_(Image<TSpectral>& kernel, const TSpectral& total_energy);
-    };
+  private:
+    void generate_polyphase_data_();
+    void normalize_kernel_(Image<TSpectral>& kernel, const TSpectral& total_energy);
+};
 
-    template <typename T>
-    struct is_psf : std::false_type {};
+template <typename T>
+struct is_psf : std::false_type {};
 
-    template <template <typename> class Derived, typename TSpectral>
-        requires std::derived_from<Derived<TSpectral>, PSF<TSpectral>>
-    struct is_psf<Derived<TSpectral>> : std::true_type {};
+template <template <typename> class Derived, typename TSpectral>
+    requires std::derived_from<Derived<TSpectral>, PSF<TSpectral>>
+struct is_psf<Derived<TSpectral>> : std::true_type {};
 
-    template <typename T>
-    concept IsPSF = is_psf<T>::value;
-}
+template <typename T>
+concept IsPSF = is_psf<T>::value;
+} // namespace huira
 
 #include "huira_impl/cameras/psfs/psf.ipp"

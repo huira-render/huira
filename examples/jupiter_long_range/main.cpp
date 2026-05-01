@@ -1,8 +1,8 @@
-#include "huira/huira.hpp"
-
 #include <filesystem>
 #include <iostream>
 #include <utility>
+
+#include "huira/huira.hpp"
 
 namespace fs = std::filesystem;
 
@@ -10,17 +10,19 @@ using namespace huira::units::literals;
 
 using TSpectral = huira::Visible8;
 
-static std::pair<fs::path, fs::path> parse_input_paths(int argc, char** argv) {
+static std::pair<fs::path, fs::path> parse_input_paths(int argc, char** argv)
+{
     if (argc != 3) {
         std::cerr << "Usage: jupiter_long_range <tycho2.hrsc_path> <kernel_path>" << std::endl;
         std::exit(1);
     }
     fs::path star_catalog_path = argv[1];
     fs::path kernel_path = argv[2];
-    return { star_catalog_path, kernel_path };
+    return {star_catalog_path, kernel_path};
 }
 
-int main(int argc, char** argv) {
+int main(int argc, char** argv)
+{
     // Parsing input paths
     auto [star_catalog_path, kernel_path] = parse_input_paths(argc, argv);
 
@@ -35,10 +37,10 @@ int main(int argc, char** argv) {
     auto camera_model = scene.new_camera_model();
     camera_model.set_focal_length(125_mm);
     camera_model.set_fstop(3.30f);
-    camera_model.configure_sensor_from_pitch({ 1920, 1080 }, 8.5_um, 8.5_um);
+    camera_model.configure_sensor_from_pitch({1920, 1080}, 8.5_um, 8.5_um);
     camera_model.set_sensor_bit_depth(12);
     camera_model.use_aperture_psf(64, 16);
-    
+
     huira::Time time("2016-09-19T16:22:05.728");
     huira::Interval exposure_interval = huira::Interval::from_centered(time, 1_s);
 
@@ -51,9 +53,9 @@ int main(int argc, char** argv) {
     sun.set_spice_origin("SUN");
 
     // Create unresolved objects for Jupiter and its moons
-    //auto jupiter_model = scene.new_unresolved_sphere(69911000_m, sun, TSpectral{ 0.5f });
+    // auto jupiter_model = scene.new_unresolved_sphere(69911000_m, sun, TSpectral{ 0.5f });
     auto jupiter_model = scene.new_unresolved_object_from_magnitude(-1.44, "Jupiter");
-    //auto jupiter_model = scene.new_unresolved_object(TSpectral{ 1e-8 });
+    // auto jupiter_model = scene.new_unresolved_object(TSpectral{ 1e-8 });
     auto io_model = scene.new_unresolved_object_from_magnitude(5.02);
     auto europa_model = scene.new_unresolved_object_from_magnitude(5.29);
     auto ganymede_model = scene.new_unresolved_object_from_magnitude(4.61);
@@ -81,7 +83,7 @@ int main(int argc, char** argv) {
 
     auto quat = huira::Quaternion<double>(0.50865, -0.50865, 0.491198, 0.491198);
     navcam.set_rotation(huira::Rotation<double>::from_parent_to_local(quat));
-    
+
     // Configure the render buffers
     auto frame_buffer = camera_model.make_frame_buffer();
     frame_buffer.enable_sensor_response();
@@ -91,12 +93,16 @@ int main(int argc, char** argv) {
 
     // Create a scene view over the exposure interval
     std::size_t num_blur_samples = 1;
-    auto scene_view = huira::SceneView<TSpectral>(scene, exposure_interval, navcam, huira::ObservationMode::ABERRATED_STATE, num_blur_samples);
+    auto scene_view = huira::SceneView<TSpectral>(scene,
+                                                  exposure_interval,
+                                                  navcam,
+                                                  huira::ObservationMode::ABERRATED_STATE,
+                                                  num_blur_samples);
 
     // Render the current scene view
     renderer.render(scene_view, frame_buffer);
 
     // Save the results
-    huira::write_image_png("output/jupiter_long_range.png", huira::linear_to_srgb(frame_buffer.sensor_response()));
-    
+    huira::write_image_png("output/jupiter_long_range.png",
+                           huira::linear_to_srgb(frame_buffer.sensor_response()));
 }

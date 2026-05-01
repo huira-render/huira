@@ -11,18 +11,19 @@ using namespace huira::units::literals;
 
 using TSpectral = huira::RGB;
 
-static std::pair<fs::path, fs::path> parse_input_paths(int argc, char** argv) {
+static std::pair<fs::path, fs::path> parse_input_paths(int argc, char** argv)
+{
     if (argc != 3) {
         std::cerr << "Usage: earth <earth.glb_path> <kernel_path>" << std::endl;
         std::exit(1);
     }
     fs::path earth_path = argv[1];
     fs::path kernel_path = argv[2];
-    return { earth_path, kernel_path };
+    return {earth_path, kernel_path};
 }
 
-
-int main(int argc, char** argv) {
+int main(int argc, char** argv)
+{
     huira::Logger::enable_console_debug();
 
     // Parsing input paths
@@ -42,12 +43,12 @@ int main(int argc, char** argv) {
 
     // Set the observation time
     huira::Time time("2019-02-06T10:27:00");
-    huira::Interval exposure_interval{ time, time + 0.00005_s };
+    huira::Interval exposure_interval{time, time + 0.00005_s};
 
     // Configure a camera model
     auto camera_model = scene.new_camera_model();
     camera_model.set_focal_length(25_mm);
-    camera_model.configure_sensor_from_size({ 1080, 1080 }, 6_mm);
+    camera_model.configure_sensor_from_size({1080, 1080}, 6_mm);
 
     // Set camera exposure settings
     camera_model.set_fstop(5);
@@ -77,7 +78,8 @@ int main(int argc, char** argv) {
     auto earth_albedo_tex = scene.add_texture(std::move(earth_albedo_spec));
     earth_material.set_albedo_image(earth_albedo_tex);
 
-    auto earth_roughness = huira::read_image_mono(huira_data / "models/earth/8k_earth_roughness_map.tif");
+    auto earth_roughness =
+        huira::read_image_mono(huira_data / "models/earth/8k_earth_roughness_map.tif");
     auto earth_roughness_tex = scene.add_texture(std::move(earth_roughness.image));
     earth_material.set_roughness_image(earth_roughness_tex);
     earth_material.set_metallic_factor(0.f);
@@ -91,38 +93,44 @@ int main(int argc, char** argv) {
     auto earth_primitive = scene.add_primitive(earth_ellipsoid, earth_material);
     eci.new_instance(earth_primitive);
 
-    auto earth_cloud_alpha = huira::read_image_mono(huira_data / "models/earth/8k_earth_clouds.jpg");
+    auto earth_cloud_alpha =
+        huira::read_image_mono(huira_data / "models/earth/8k_earth_clouds.jpg");
     auto lam_bsdf = scene.new_bsdf_lambertian();
     auto earth_clouds_material = scene.new_material(lam_bsdf);
     auto earth_clouds_tex = scene.add_texture(std::move(earth_cloud_alpha.image));
     earth_clouds_material.set_alpha_image(earth_clouds_tex);
 
     auto alt_clouds = 6_Km;
-    auto earth_clouds_ellipsoid = scene.add_ellipsoid(R_e + alt_clouds, R_e + alt_clouds, R_e + alt_clouds);
-    auto earth_clouds_primitive = scene.add_primitive(earth_clouds_ellipsoid, earth_clouds_material);
+    auto earth_clouds_ellipsoid =
+        scene.add_ellipsoid(R_e + alt_clouds, R_e + alt_clouds, R_e + alt_clouds);
+    auto earth_clouds_primitive =
+        scene.add_primitive(earth_clouds_ellipsoid, earth_clouds_material);
     eci.new_instance(earth_clouds_primitive);
 
     auto alt_atmosphere = 60_Km;
-    auto atmosphere_ellipsoid = scene.add_ellipsoid(R_e + alt_atmosphere, R_e + alt_atmosphere, R_e + alt_atmosphere);
+    auto atmosphere_ellipsoid =
+        scene.add_ellipsoid(R_e + alt_atmosphere, R_e + alt_atmosphere, R_e + alt_atmosphere);
     auto null_bsdf = scene.new_bsdf_null();
     auto atmosphere_material = scene.new_material(null_bsdf);
-    atmosphere_material.set_transmission_factor(TSpectral{ 1.f });
+    atmosphere_material.set_transmission_factor(TSpectral{1.f});
 
-    auto constant_density_field = scene.new_constant_density_field(TSpectral{ 0.000002f, 0.000002f, 0.0000005f }, TSpectral{ 0.0000002f, 0.0000008f, 0.000001f });
+    auto constant_density_field = scene.new_constant_density_field(
+        TSpectral{0.000002f, 0.000002f, 0.0000005f}, TSpectral{0.0000002f, 0.0000008f, 0.000001f});
     auto isotropic_phase_function = scene.new_isotropic_phase_function();
     auto atmosphere_medium = scene.new_medium(constant_density_field, isotropic_phase_function);
-    auto atmosphere_primitive = scene.add_primitive(atmosphere_ellipsoid, atmosphere_material, atmosphere_medium);
+    auto atmosphere_primitive =
+        scene.add_primitive(atmosphere_ellipsoid, atmosphere_material, atmosphere_medium);
     eci.new_instance(atmosphere_primitive);
-    
+
     // Create instance of the camera:
     auto navcam = eci.new_instance(camera_model);
     navcam.set_position(100000_Km, 0_Km, 0_m);
     navcam.set_euler_angles(90_deg, 0_deg, 90_deg);
 
-    //Load the Earth model
-    //auto earth_model = scene.load_model(earth_path);
-    //auto earth = ecef.new_instance(earth_model);
-    //earth.set_scale(6371*1000);
+    // Load the Earth model
+    // auto earth_model = scene.load_model(earth_path);
+    // auto earth = ecef.new_instance(earth_model);
+    // earth.set_scale(6371*1000);
 
     // scene.load_stars(huira_data / "tycho2/tycho2.hrsc", time);
 
@@ -143,14 +151,20 @@ int main(int argc, char** argv) {
 
     // Create a scene view over the exposure interval
     std::size_t num_blur_samples = 1;
-    auto scene_view = huira::SceneView<TSpectral>(scene, exposure_interval, navcam, huira::ObservationMode::ABERRATED_STATE, num_blur_samples);
+    auto scene_view = huira::SceneView<TSpectral>(scene,
+                                                  exposure_interval,
+                                                  navcam,
+                                                  huira::ObservationMode::ABERRATED_STATE,
+                                                  num_blur_samples);
 
     // Render the current scene view
     renderer.render(scene_view, frame_buffer);
 
     // Save the results
-    huira::write_image_png("output/earth.png", huira::linear_to_srgb(frame_buffer.sensor_response()));
-    huira::write_image_png("output/earth_normals.png", huira::normal_map(frame_buffer.camera_normals()));
+    huira::write_image_png("output/earth.png",
+                           huira::linear_to_srgb(frame_buffer.sensor_response()));
+    huira::write_image_png("output/earth_normals.png",
+                           huira::normal_map(frame_buffer.camera_normals()));
 
     huira::Logger::dump_to_file("output/earth_render_log.txt");
 }

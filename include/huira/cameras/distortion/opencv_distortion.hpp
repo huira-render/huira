@@ -8,73 +8,83 @@
 
 namespace huira {
 
+/**
+ * @brief Coefficients for OpenCV lens distortion model.
+ *
+ * Holds the radial, tangential, and thin prism distortion coefficients for the OpenCV model.
+ */
+struct OpenCVCoefficients : public DistortionCoefficients {
+    // Radial distortion coefficients
+    double k1 = 0;
+    double k2 = 0;
+    double k3 = 0;
+    double k4 = 0;
+    double k5 = 0;
+    double k6 = 0;
 
-    /**
-     * @brief Coefficients for OpenCV lens distortion model.
-     *
-     * Holds the radial, tangential, and thin prism distortion coefficients for the OpenCV model.
-     */
-    struct OpenCVCoefficients : public DistortionCoefficients {
-        // Radial distortion coefficients
-        double k1 = 0;
-        double k2 = 0;
-        double k3 = 0;
-        double k4 = 0;
-        double k5 = 0;
-        double k6 = 0;
+    // Tangential distortion coefficients
+    double p1 = 0;
+    double p2 = 0;
 
-        // Tangential distortion coefficients
-        double p1 = 0;
-        double p2 = 0;
+    // Thin prism distortion coefficients
+    double s1 = 0;
+    double s2 = 0;
+    double s3 = 0;
+    double s4 = 0;
 
-        // Thin prism distortion coefficients
-        double s1 = 0;
-        double s2 = 0;
-        double s3 = 0;
-        double s4 = 0;
+    OpenCVCoefficients() = default;
 
-        OpenCVCoefficients() = default;
+    constexpr OpenCVCoefficients(double k1_val,
+                                 double k2_val,
+                                 double k3_val,
+                                 double k4_val,
+                                 double k5_val,
+                                 double k6_val,
+                                 double p1_val,
+                                 double p2_val,
+                                 double s1_val,
+                                 double s2_val,
+                                 double s3_val,
+                                 double s4_val)
+        : k1(k1_val), k2(k2_val), k3(k3_val), k4(k4_val), k5(k5_val), k6(k6_val), p1(p1_val),
+          p2(p2_val), s1(s1_val), s2(s2_val), s3(s3_val), s4(s4_val)
+    {
+    }
+};
 
-        constexpr OpenCVCoefficients(double k1_val, double k2_val, double k3_val,
-            double k4_val, double k5_val, double k6_val,
-            double p1_val, double p2_val,
-            double s1_val, double s2_val,
-            double s3_val, double s4_val)
-            : k1(k1_val), k2(k2_val), k3(k3_val), k4(k4_val), k5(k5_val), k6(k6_val),
-            p1(p1_val), p2(p2_val), s1(s1_val), s2(s2_val), s3(s3_val), s4(s4_val) {
-        }
-    };
+/**
+ * @brief OpenCV lens distortion model.
+ *
+ * Implements the OpenCV distortion model with rational radial, tangential, and thin prism
+ * coefficients.
+ *
+ * @tparam TSpectral The spectral representation type.
+ */
+template <IsSpectral TSpectral>
+class OpenCVDistortion : public Distortion<TSpectral> {
+  public:
+    OpenCVDistortion() = default;
+    explicit OpenCVDistortion(OpenCVCoefficients coefficients);
 
+    [[nodiscard]] Pixel distort(Pixel homogeneous_coords) const override;
+    [[nodiscard]] Pixel undistort(Pixel homogeneous_coords) const override;
 
-    /**
-     * @brief OpenCV lens distortion model.
-     *
-     * Implements the OpenCV distortion model with rational radial, tangential, and thin prism coefficients.
-     *
-     * @tparam TSpectral The spectral representation type.
-     */
-    template <IsSpectral TSpectral>
-    class OpenCVDistortion : public Distortion<TSpectral> {
-    public:
-        OpenCVDistortion() = default;
-        explicit OpenCVDistortion(OpenCVCoefficients coefficients);
+    [[nodiscard]] std::string get_type_name() const override { return "OpenCV"; }
+    DistortionCoefficients* get_coefficients() override { return &coefficients_; }
+    [[nodiscard]] const DistortionCoefficients* get_coefficients() const override
+    {
+        return &coefficients_;
+    }
 
-        [[nodiscard]] Pixel distort(Pixel homogeneous_coords) const override;
-        [[nodiscard]] Pixel undistort(Pixel homogeneous_coords) const override;
+  private:
+    OpenCVCoefficients coefficients_{};
 
-        [[nodiscard]] std::string get_type_name() const override { return "OpenCV"; }
-        DistortionCoefficients* get_coefficients() override { return &coefficients_; }
-        [[nodiscard]] const DistortionCoefficients* get_coefficients() const override { return &coefficients_; }
+    template <IsFloatingPoint TFloat>
+    [[nodiscard]] BasePixel<TFloat> compute_delta_(BasePixel<TFloat> homogeneous_coords) const;
 
-    private:
-        OpenCVCoefficients coefficients_{};
+    static constexpr double kMinDenominator = 1e-10;
+};
 
-        template <IsFloatingPoint TFloat>
-        [[nodiscard]] BasePixel<TFloat> compute_delta_(BasePixel<TFloat> homogeneous_coords) const;
-        
-        static constexpr double kMinDenominator = 1e-10;
-    };
-
-}
+} // namespace huira
 
 #include "huira_impl/cameras/distortion/opencv_distortion.ipp"

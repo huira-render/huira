@@ -1,5 +1,6 @@
 #include "huira_cli/cli.hpp"
 
-int main(int argc, char** argv) {
+int main(int argc, char** argv)
+{
     return huira::cli::Registry::instance().dispatch(argc, argv);
 }

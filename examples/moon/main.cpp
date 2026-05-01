@@ -11,7 +11,8 @@ using namespace huira::units::literals;
 
 using TSpectral = huira::Visible8;
 
-static fs::path parse_input_paths(int argc, char** argv) {
+static fs::path parse_input_paths(int argc, char** argv)
+{
     if (argc != 2) {
         std::cerr << "Usage: moon <moon.glb_path>" << std::endl;
         std::exit(1);
@@ -20,8 +21,8 @@ static fs::path parse_input_paths(int argc, char** argv) {
     return moon_path;
 }
 
-
-static void write_image_csv(const std::string& filename, const huira::Image<float>& image) {
+static void write_image_csv(const std::string& filename, const huira::Image<float>& image)
+{
     std::ofstream file(filename);
     if (!file.is_open()) {
         std::cerr << "Failed to open file: " << filename << std::endl;
@@ -40,8 +41,8 @@ static void write_image_csv(const std::string& filename, const huira::Image<floa
     file.close();
 }
 
-
-int main(int argc, char** argv) {
+int main(int argc, char** argv)
+{
     // Parsing input paths
     fs::path moon_path = parse_input_paths(argc, argv);
 
@@ -50,13 +51,12 @@ int main(int argc, char** argv) {
 
     // Set the observation time
     huira::Time time("2019-02-06T10:27:00");
-    huira::Interval exposure_interval{ time, time + 0.00025_s };
-
+    huira::Interval exposure_interval{time, time + 0.00025_s};
 
     // Configure a camera model
     auto camera_model = scene.new_camera_model();
     camera_model.set_focal_length(25_mm);
-    camera_model.configure_sensor_from_size({ 1080, 1080 }, 6_mm);
+    camera_model.configure_sensor_from_size({1080, 1080}, 6_mm);
 
     // Set camera exposure settings
     camera_model.set_fstop(18);
@@ -80,12 +80,11 @@ int main(int argc, char** argv) {
     navcam.set_position(0_m, 10_m, 0_m);
     navcam.set_euler_angles(90_deg, 0_deg, 180_deg);
 
-
     // Load the moon model
     auto moon_model = scene.load_model(moon_path);
     auto mcewen_bsdf = scene.new_bsdf_mcewen();
     moon_model.set_all_bsdfs(mcewen_bsdf);
-    //moon_model.set_all_bsdfs(huira::LambertianBSDF<TSpectral>());
+    // moon_model.set_all_bsdfs(huira::LambertianBSDF<TSpectral>());
 
     // Add moon model to the scene:
     auto moon = scene.root.new_instance(moon_model);
@@ -95,10 +94,8 @@ int main(int argc, char** argv) {
     auto sun = scene.root.new_instance(sun_light);
     sun.set_position(1_au, 0_m, 0_m);
 
-    
     // Print the scene contents
     scene.print_contents();
-    
 
     // Configure the render buffers
     auto frame_buffer = camera_model.make_frame_buffer();
@@ -111,14 +108,17 @@ int main(int argc, char** argv) {
     renderer.set_samples_per_pixel(100);
 
     // Create a scene view over the exposure interval
-    auto scene_view = huira::SceneView<TSpectral>(scene, exposure_interval, navcam, huira::ObservationMode::GEOMETRIC_STATE, 1);
+    auto scene_view = huira::SceneView<TSpectral>(
+        scene, exposure_interval, navcam, huira::ObservationMode::GEOMETRIC_STATE, 1);
 
     // Render the current scene view
     renderer.render(scene_view, frame_buffer);
 
     // Save the results to PNGs
-    huira::write_image_png("output/moon_render.png", huira::linear_to_srgb(frame_buffer.sensor_response()));
-    huira::write_image_png("output/moon_albedo.png", huira::linear_to_srgb(frame_buffer.albedo().get_channel(0)));
+    huira::write_image_png("output/moon_render.png",
+                           huira::linear_to_srgb(frame_buffer.sensor_response()));
+    huira::write_image_png("output/moon_albedo.png",
+                           huira::linear_to_srgb(frame_buffer.albedo().get_channel(0)));
 
     // Save the results to CSVs:  THIS ONLY WORKS FOR MONO IMAGES
     write_image_csv("output/moon_render.csv", frame_buffer.sensor_response().get_channel(0));

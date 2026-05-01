@@ -8,58 +8,59 @@
 
 namespace huira {
 
+/**
+ * @brief Coefficients for Owen lens distortion model.
+ *
+ * Holds the coefficients for the Owen distortion model, including both coordinate-aligned and
+ * rotated terms.
+ */
+struct OwenCoefficients : public DistortionCoefficients {
+    double e1 = 0;
+    double e2 = 0;
+    double e3 = 0;
+    double e4 = 0;
+    double e5 = 0;
+    double e6 = 0;
 
-    /**
-     * @brief Coefficients for Owen lens distortion model.
-     *
-     * Holds the coefficients for the Owen distortion model, including both coordinate-aligned and rotated terms.
-     */
-    struct OwenCoefficients : public DistortionCoefficients {
-        double e1 = 0;
-        double e2 = 0;
-        double e3 = 0;
-        double e4 = 0;
-        double e5 = 0;
-        double e6 = 0;
+    OwenCoefficients() = default;
 
-        OwenCoefficients() = default;
+    constexpr OwenCoefficients(
+        double e1_val, double e2_val, double e3_val, double e4_val, double e5_val, double e6_val)
+        : e1(e1_val), e2(e2_val), e3(e3_val), e4(e4_val), e5(e5_val), e6(e6_val)
+    {
+    }
+};
 
-        constexpr OwenCoefficients(double e1_val, double e2_val, double e3_val,
-            double e4_val, double e5_val, double e6_val)
-            : e1(e1_val), e2(e2_val), e3(e3_val), e4(e4_val), e5(e5_val), e6(e6_val) {
-        }
-    };
+/**
+ * @brief Owen lens distortion model.
+ *
+ * Implements the Owen distortion model with both coordinate-aligned and rotated terms.
+ *
+ * @tparam TSpectral The spectral representation type.
+ */
+template <IsSpectral TSpectral>
+class OwenDistortion : public Distortion<TSpectral> {
+  public:
+    OwenDistortion() = default;
+    explicit OwenDistortion(OwenCoefficients coefficients);
 
-    
+    [[nodiscard]] Pixel distort(Pixel homogeneous_coords) const override;
+    [[nodiscard]] Pixel undistort(Pixel homogeneous_coords) const override;
 
-    /**
-     * @brief Owen lens distortion model.
-     *
-     * Implements the Owen distortion model with both coordinate-aligned and rotated terms.
-     *
-     * @tparam TSpectral The spectral representation type.
-     */
-    template <IsSpectral TSpectral>
-    class OwenDistortion : public Distortion<TSpectral> {
-    public:
-        OwenDistortion() = default;
-        explicit OwenDistortion(OwenCoefficients coefficients);
+    [[nodiscard]] std::string get_type_name() const override { return "Owen"; }
+    DistortionCoefficients* get_coefficients() override { return &coefficients_; }
+    [[nodiscard]] const DistortionCoefficients* get_coefficients() const override
+    {
+        return &coefficients_;
+    }
 
-        [[nodiscard]] Pixel distort(Pixel homogeneous_coords) const override;
-        [[nodiscard]] Pixel undistort(Pixel homogeneous_coords) const override;
+  private:
+    OwenCoefficients coefficients_{};
 
-        [[nodiscard]] std::string get_type_name() const override { return "Owen"; }
-        DistortionCoefficients* get_coefficients() override { return &coefficients_; }
-        [[nodiscard]] const DistortionCoefficients* get_coefficients() const override { return &coefficients_; }
+    template <IsFloatingPoint TFloat>
+    [[nodiscard]] BasePixel<TFloat> compute_delta_(BasePixel<TFloat> homogeneous_coords) const;
+};
 
-    private:
-        OwenCoefficients coefficients_{};
-
-        template <IsFloatingPoint TFloat>
-        [[nodiscard]] BasePixel<TFloat> compute_delta_(BasePixel<TFloat> homogeneous_coords) const;
-    };
-
-}
+} // namespace huira
 
 #include "huira_impl/cameras/distortion/owen_distortion.ipp"
-

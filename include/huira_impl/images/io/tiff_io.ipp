@@ -9,150 +9,158 @@
 #include <utility>
 #include <vector>
 
-#include "tiffio.h"
-
 #include "huira/core/spectral_bins.hpp"
 #include "huira/images/image.hpp"
 #include "huira/images/io/color_space.hpp"
 #include "huira/images/io/convert_pixel.hpp"
 #include "huira/images/io/io_util.hpp"
 #include "huira/util/logger.hpp"
+#include "tiffio.h"
 
 namespace fs = std::filesystem;
 
 namespace huira {
 
-    // Add a RAII wrapper for TIFF* to ensure proper cleanup
-    struct TIFFDeleter {
-        void operator()(TIFF* tif) const {
-            if (tif) {
-                TIFFClose(tif);
-            }
+// Add a RAII wrapper for TIFF* to ensure proper cleanup
+struct TIFFDeleter {
+    void operator()(TIFF* tif) const
+    {
+        if (tif) {
+            TIFFClose(tif);
         }
-    };
-
-    using ScopedTIFF = std::unique_ptr<TIFF, TIFFDeleter>;
-
-    struct TIFFData {
-        Resolution resolution{ 0, 0 };
-        int width = 0;
-        int height = 0;
-
-        std::vector<std::vector<float>> channels;
-        std::size_t num_channels = 0;
-
-        uint16_t photometric = PHOTOMETRIC_MINISBLACK;
-        bool has_alpha = false;
-        int alpha_index = -1;
-    };
-
-    // =========================================================================
-    // TIFFClientOpen memory I/O callbacks
-    // =========================================================================
-
-    /**
-     * @brief State for libtiff custom memory I/O callbacks.
-     *
-     * Used with TIFFClientOpen to provide read/seek access over a memory buffer.
-     */
-    struct TiffMemState_ {
-        const unsigned char* data;
-        tsize_t size;
-        toff_t pos;
-    };
-
-    /**
-     * @brief libtiff read callback — reads bytes from the memory buffer.
-     */
-    inline tsize_t tiff_mem_read_(thandle_t handle, tdata_t buf, tsize_t n) noexcept
-    {
-        auto* state = reinterpret_cast<TiffMemState_*>(handle);
-        tsize_t available = state->size - static_cast<tsize_t>(state->pos);
-        tsize_t to_read = (n < available) ? n : available;
-        if (to_read > 0) {
-            std::memcpy(buf, state->data + state->pos, static_cast<std::size_t>(to_read));
-            state->pos += static_cast<toff_t>(to_read);
-        }
-        return to_read;
     }
+};
 
-    /**
-     * @brief libtiff write callback — not supported for read-only access.
-     */
-    inline tsize_t tiff_mem_write_(thandle_t, tdata_t, tsize_t) noexcept
-    {
-        return 0;
+using ScopedTIFF = std::unique_ptr<TIFF, TIFFDeleter>;
+
+struct TIFFData {
+    Resolution resolution{0, 0};
+    int width = 0;
+    int height = 0;
+
+    std::vector<std::vector<float>> channels;
+    std::size_t num_channels = 0;
+
+    uint16_t photometric = PHOTOMETRIC_MINISBLACK;
+    bool has_alpha = false;
+    int alpha_index = -1;
+};
+
+// =========================================================================
+// TIFFClientOpen memory I/O callbacks
+// =========================================================================
+
+/**
+ * @brief State for libtiff custom memory I/O callbacks.
+ *
+ * Used with TIFFClientOpen to provide read/seek access over a memory buffer.
+ */
+struct TiffMemState_ {
+    const unsigned char* data;
+    tsize_t size;
+    toff_t pos;
+};
+
+/**
+ * @brief libtiff read callback — reads bytes from the memory buffer.
+ */
+inline tsize_t tiff_mem_read_(thandle_t handle, tdata_t buf, tsize_t n) noexcept
+{
+    auto* state = reinterpret_cast<TiffMemState_*>(handle);
+    tsize_t available = state->size - static_cast<tsize_t>(state->pos);
+    tsize_t to_read = (n < available) ? n : available;
+    if (to_read > 0) {
+        std::memcpy(buf, state->data + state->pos, static_cast<std::size_t>(to_read));
+        state->pos += static_cast<toff_t>(to_read);
     }
+    return to_read;
+}
 
-    /**
-     * @brief libtiff seek callback — repositions the read cursor.
-     */
-    inline toff_t tiff_mem_seek_(thandle_t handle, toff_t offset, int whence) noexcept
-    {
-        auto* state = reinterpret_cast<TiffMemState_*>(handle);
-        toff_t new_pos;
-        switch (whence) {
-        case SEEK_SET: new_pos = offset; break;
-        case SEEK_CUR: new_pos = state->pos + offset; break;
-        case SEEK_END: new_pos = static_cast<toff_t>(state->size) + offset; break;
-        default: return static_cast<toff_t>(-1);
-        }
-        if (new_pos > static_cast<toff_t>(state->size)) {
-            return static_cast<toff_t>(-1);
-        }
-        state->pos = new_pos;
-        return new_pos;
+/**
+ * @brief libtiff write callback — not supported for read-only access.
+ */
+inline tsize_t tiff_mem_write_(thandle_t, tdata_t, tsize_t) noexcept
+{
+    return 0;
+}
+
+/**
+ * @brief libtiff seek callback — repositions the read cursor.
+ */
+inline toff_t tiff_mem_seek_(thandle_t handle, toff_t offset, int whence) noexcept
+{
+    auto* state = reinterpret_cast<TiffMemState_*>(handle);
+    toff_t new_pos;
+    switch (whence) {
+    case SEEK_SET:
+        new_pos = offset;
+        break;
+    case SEEK_CUR:
+        new_pos = state->pos + offset;
+        break;
+    case SEEK_END:
+        new_pos = static_cast<toff_t>(state->size) + offset;
+        break;
+    default:
+        return static_cast<toff_t>(-1);
     }
-
-    /**
-     * @brief libtiff close callback — no-op for memory buffers.
-     */
-    inline int tiff_mem_close_(thandle_t) noexcept
-    {
-        return 0;
+    if (new_pos > static_cast<toff_t>(state->size)) {
+        return static_cast<toff_t>(-1);
     }
+    state->pos = new_pos;
+    return new_pos;
+}
 
-    /**
-     * @brief libtiff size callback — returns the total buffer size.
-     */
-    inline toff_t tiff_mem_size_(thandle_t handle) noexcept
-    {
-        auto* state = reinterpret_cast<TiffMemState_*>(handle);
-        return static_cast<toff_t>(state->size);
-    }
+/**
+ * @brief libtiff close callback — no-op for memory buffers.
+ */
+inline int tiff_mem_close_(thandle_t) noexcept
+{
+    return 0;
+}
 
-    // =========================================================================
-    // Raw TIFF decoder
-    // =========================================================================
+/**
+ * @brief libtiff size callback — returns the total buffer size.
+ */
+inline toff_t tiff_mem_size_(thandle_t handle) noexcept
+{
+    auto* state = reinterpret_cast<TiffMemState_*>(handle);
+    return static_cast<toff_t>(state->size);
+}
 
-    /**
-     * @brief Decodes a TIFF from an in-memory buffer into raw per-channel float data.
-     *
-     * Uses libtiff via TIFFClientOpen with custom memory I/O callbacks. Extracts
-     * all channels as separate floating-point arrays. Handles the following:
-     *   - Sample formats: uint8, uint16, uint32, float32
-     *   - Photometric interpretations: MinIsBlack, MinIsWhite, RGB, Palette, Separated (CMYK)
-     *   - Storage: both stripped and tiled TIFFs
-     *   - Planar configurations: chunky (interleaved) and separate (planar)
-     *   - Extra samples: detects associated/unassociated alpha
-     *
-     * MinIsWhite images are inverted so that output is always in MinIsBlack convention.
-     * Palette images are expanded to RGB(A) via TIFFReadRGBAImageOriented.
-     * Signed integer TIFFs are rejected (not supported for texture loading).
-     *
-     * @param data Pointer to the TIFF data in memory
-     * @param size Size of the data in bytes
-     * @return Raw decoded data with per-channel float buffers
-     * @throws std::runtime_error if the data is not a valid or supported TIFF
-     */
-    inline TIFFData read_tiff_raw_(const unsigned char* data, std::size_t size)
-    {
-        HUIRA_LOG_INFO("read_tiff_raw_ - Reading TIFF from memory (" + std::to_string(size) + " bytes)");
+// =========================================================================
+// Raw TIFF decoder
+// =========================================================================
 
-        TIFFSetWarningHandler(nullptr);
+/**
+ * @brief Decodes a TIFF from an in-memory buffer into raw per-channel float data.
+ *
+ * Uses libtiff via TIFFClientOpen with custom memory I/O callbacks. Extracts
+ * all channels as separate floating-point arrays. Handles the following:
+ *   - Sample formats: uint8, uint16, uint32, float32
+ *   - Photometric interpretations: MinIsBlack, MinIsWhite, RGB, Palette, Separated (CMYK)
+ *   - Storage: both stripped and tiled TIFFs
+ *   - Planar configurations: chunky (interleaved) and separate (planar)
+ *   - Extra samples: detects associated/unassociated alpha
+ *
+ * MinIsWhite images are inverted so that output is always in MinIsBlack convention.
+ * Palette images are expanded to RGB(A) via TIFFReadRGBAImageOriented.
+ * Signed integer TIFFs are rejected (not supported for texture loading).
+ *
+ * @param data Pointer to the TIFF data in memory
+ * @param size Size of the data in bytes
+ * @return Raw decoded data with per-channel float buffers
+ * @throws std::runtime_error if the data is not a valid or supported TIFF
+ */
+inline TIFFData read_tiff_raw_(const unsigned char* data, std::size_t size)
+{
+    HUIRA_LOG_INFO("read_tiff_raw_ - Reading TIFF from memory (" + std::to_string(size) +
+                   " bytes)");
 
-        TIFFSetErrorHandlerExt([](thandle_t, const char* module, const char* fmt, va_list ap) noexcept {
-            char tiff_msg_buffer;
+    TIFFSetWarningHandler(nullptr);
+
+    TIFFSetErrorHandlerExt([](thandle_t, const char* module, const char* fmt, va_list ap) noexcept {
+        char tiff_msg_buffer;
 
 #if defined(__clang__)
 #pragma clang diagnostic push
@@ -164,7 +172,7 @@ namespace huira {
 #pragma warning(push)
 #pragma warning(disable : 4774)
 #endif
-            std::vsnprintf(&tiff_msg_buffer, sizeof(tiff_msg_buffer), fmt, ap);
+        std::vsnprintf(&tiff_msg_buffer, sizeof(tiff_msg_buffer), fmt, ap);
 #if defined(__clang__)
 #pragma clang diagnostic pop
 #elif defined(__GNUC__)
@@ -172,605 +180,622 @@ namespace huira {
 #elif defined(_MSC_VER)
 #pragma warning(pop)
 #endif
-            try {
-                std::string err_str = "LIBTIFF FATAL: ";
-                if (module) {
-                    err_str += module;
-                    err_str += " - ";
-                }
-                err_str += tiff_msg_buffer;
-
-                HUIRA_LOG_INFO(err_str);
+        try {
+            std::string err_str = "LIBTIFF FATAL: ";
+            if (module) {
+                err_str += module;
+                err_str += " - ";
             }
-            catch (...) {
-            }
-            });
+            err_str += tiff_msg_buffer;
 
-        TiffMemState_ mem_state{ data, static_cast<tsize_t>(size), 0 };
-
-        ScopedTIFF tif(TIFFClientOpen(
-            "memory", "r",
-            reinterpret_cast<thandle_t>(&mem_state),
-            tiff_mem_read_,
-            tiff_mem_write_,
-            tiff_mem_seek_,
-            tiff_mem_close_,
-            tiff_mem_size_,
-            nullptr, nullptr));
-
-        if (!tif) {
-            HUIRA_THROW_ERROR("read_tiff_raw_ - Failed to open TIFF from memory buffer");
+            HUIRA_LOG_INFO(err_str);
+        } catch (...) {
         }
+    });
 
-        uint32_t width = 0, height = 0;
-        uint16_t samples_per_pixel = 1;
-        uint16_t bits_per_sample = 8;
-        uint16_t sample_format = SAMPLEFORMAT_UINT;
-        uint16_t photometric = PHOTOMETRIC_MINISBLACK;
-        uint16_t planar_config = PLANARCONFIG_CONTIG;
+    TiffMemState_ mem_state{data, static_cast<tsize_t>(size), 0};
 
-        TIFFGetField(tif.get(), TIFFTAG_IMAGEWIDTH, &width);
-        TIFFGetField(tif.get(), TIFFTAG_IMAGELENGTH, &height);
-        TIFFGetFieldDefaulted(tif.get(), TIFFTAG_SAMPLESPERPIXEL, &samples_per_pixel);
-        TIFFGetFieldDefaulted(tif.get(), TIFFTAG_BITSPERSAMPLE, &bits_per_sample);
-        TIFFGetFieldDefaulted(tif.get(), TIFFTAG_SAMPLEFORMAT, &sample_format);
-        TIFFGetFieldDefaulted(tif.get(), TIFFTAG_PHOTOMETRIC, &photometric);
-        TIFFGetFieldDefaulted(tif.get(), TIFFTAG_PLANARCONFIG, &planar_config);
+    ScopedTIFF tif(TIFFClientOpen("memory",
+                                  "r",
+                                  reinterpret_cast<thandle_t>(&mem_state),
+                                  tiff_mem_read_,
+                                  tiff_mem_write_,
+                                  tiff_mem_seek_,
+                                  tiff_mem_close_,
+                                  tiff_mem_size_,
+                                  nullptr,
+                                  nullptr));
 
-        if (width == 0 || height == 0) {
-            HUIRA_THROW_ERROR("read_tiff_raw_ - Invalid dimensions (" +
-                std::to_string(width) + " x " + std::to_string(height) + ")");
-        }
+    if (!tif) {
+        HUIRA_THROW_ERROR("read_tiff_raw_ - Failed to open TIFF from memory buffer");
+    }
 
-        // Validate sample format
-        bool is_float = (sample_format == SAMPLEFORMAT_IEEEFP);
+    uint32_t width = 0, height = 0;
+    uint16_t samples_per_pixel = 1;
+    uint16_t bits_per_sample = 8;
+    uint16_t sample_format = SAMPLEFORMAT_UINT;
+    uint16_t photometric = PHOTOMETRIC_MINISBLACK;
+    uint16_t planar_config = PLANARCONFIG_CONTIG;
 
-        if (sample_format == SAMPLEFORMAT_INT) {
-            HUIRA_THROW_ERROR("read_tiff_raw_ - Unsupported signed integer sample format");
-        }
+    TIFFGetField(tif.get(), TIFFTAG_IMAGEWIDTH, &width);
+    TIFFGetField(tif.get(), TIFFTAG_IMAGELENGTH, &height);
+    TIFFGetFieldDefaulted(tif.get(), TIFFTAG_SAMPLESPERPIXEL, &samples_per_pixel);
+    TIFFGetFieldDefaulted(tif.get(), TIFFTAG_BITSPERSAMPLE, &bits_per_sample);
+    TIFFGetFieldDefaulted(tif.get(), TIFFTAG_SAMPLEFORMAT, &sample_format);
+    TIFFGetFieldDefaulted(tif.get(), TIFFTAG_PHOTOMETRIC, &photometric);
+    TIFFGetFieldDefaulted(tif.get(), TIFFTAG_PLANARCONFIG, &planar_config);
 
-        if (!is_float && sample_format != SAMPLEFORMAT_UINT) {
-            HUIRA_THROW_ERROR("read_tiff_raw_ - Unsupported sample format (" +
-                std::to_string(static_cast<int>(sample_format)) + ")");
-        }
+    if (width == 0 || height == 0) {
+        HUIRA_THROW_ERROR("read_tiff_raw_ - Invalid dimensions (" + std::to_string(width) + " x " +
+                          std::to_string(height) + ")");
+    }
 
-        if (!is_float && bits_per_sample != 8 && bits_per_sample != 16 && bits_per_sample != 32) {
-            HUIRA_THROW_ERROR("read_tiff_raw_ - Unsupported bits per sample (" +
-                std::to_string(static_cast<int>(bits_per_sample)) + ")");
-        }
+    // Validate sample format
+    bool is_float = (sample_format == SAMPLEFORMAT_IEEEFP);
 
-        if (is_float && bits_per_sample != 32) {
-            HUIRA_THROW_ERROR("read_tiff_raw_ - Unsupported float bit depth (" +
-                std::to_string(static_cast<int>(bits_per_sample)) + "), only 32-bit float supported");
-        }
+    if (sample_format == SAMPLEFORMAT_INT) {
+        HUIRA_THROW_ERROR("read_tiff_raw_ - Unsupported signed integer sample format");
+    }
 
-        // Handle palette images via RGBA fallback
-        if (photometric == PHOTOMETRIC_PALETTE) {
-            std::size_t num_pixels = static_cast<std::size_t>(width) * static_cast<std::size_t>(height);
-            std::vector<uint32_t> rgba_data(num_pixels);
+    if (!is_float && sample_format != SAMPLEFORMAT_UINT) {
+        HUIRA_THROW_ERROR("read_tiff_raw_ - Unsupported sample format (" +
+                          std::to_string(static_cast<int>(sample_format)) + ")");
+    }
 
-            if (!TIFFReadRGBAImageOriented(tif.get(), width, height, rgba_data.data(), ORIENTATION_TOPLEFT, 0)) {
-                HUIRA_THROW_ERROR("read_tiff_raw_ - Failed to read palette TIFF via RGBA");
-            }
+    if (!is_float && bits_per_sample != 8 && bits_per_sample != 16 && bits_per_sample != 32) {
+        HUIRA_THROW_ERROR("read_tiff_raw_ - Unsupported bits per sample (" +
+                          std::to_string(static_cast<int>(bits_per_sample)) + ")");
+    }
 
-            TIFFData tiff_data{};
-            tiff_data.resolution = Resolution{ static_cast<int>(width), static_cast<int>(height) };
-            tiff_data.width = static_cast<int>(width);
-            tiff_data.height = static_cast<int>(height);
-            tiff_data.num_channels = 4;
-            tiff_data.photometric = PHOTOMETRIC_RGB;
-            tiff_data.has_alpha = true;
-            tiff_data.alpha_index = 3;
+    if (is_float && bits_per_sample != 32) {
+        HUIRA_THROW_ERROR("read_tiff_raw_ - Unsupported float bit depth (" +
+                          std::to_string(static_cast<int>(bits_per_sample)) +
+                          "), only 32-bit float supported");
+    }
 
-            tiff_data.channels.resize(4);
-            for (std::size_t ch = 0; ch < 4; ++ch) {
-                tiff_data.channels[ch].resize(num_pixels);
-            }
-
-            for (std::size_t i = 0; i < num_pixels; ++i) {
-                uint32_t pixel = rgba_data[i];
-                tiff_data.channels[0][i] = static_cast<float>(TIFFGetR(pixel)) / 255.0f;
-                tiff_data.channels[1][i] = static_cast<float>(TIFFGetG(pixel)) / 255.0f;
-                tiff_data.channels[2][i] = static_cast<float>(TIFFGetB(pixel)) / 255.0f;
-                tiff_data.channels[3][i] = static_cast<float>(TIFFGetA(pixel)) / 255.0f;
-            }
-
-            return tiff_data;
-        }
-
-        // Detect alpha channel via extra samples
-        uint16_t extra_samples_count = 0;
-        uint16_t* extra_samples = nullptr;
-        TIFFGetFieldDefaulted(tif.get(), TIFFTAG_EXTRASAMPLES, &extra_samples_count, &extra_samples);
-
-        bool has_alpha = false;
-        int alpha_index = -1;
-
-        if (extra_samples_count > 0 && extra_samples != nullptr) {
-            if (extra_samples[0] == EXTRASAMPLE_ASSOCALPHA ||
-                extra_samples[0] == EXTRASAMPLE_UNASSALPHA) {
-                has_alpha = true;
-                alpha_index = static_cast<int>(samples_per_pixel) - 1;
-            }
-        }
-
-        // Prepare output channels
-        std::size_t num_channels = static_cast<std::size_t>(samples_per_pixel);
+    // Handle palette images via RGBA fallback
+    if (photometric == PHOTOMETRIC_PALETTE) {
         std::size_t num_pixels = static_cast<std::size_t>(width) * static_cast<std::size_t>(height);
+        std::vector<uint32_t> rgba_data(num_pixels);
 
-        std::vector<std::vector<float>> channels(num_channels);
-        for (std::size_t ch = 0; ch < num_channels; ++ch) {
-            channels[ch].resize(num_pixels);
+        if (!TIFFReadRGBAImageOriented(
+                tif.get(), width, height, rgba_data.data(), ORIENTATION_TOPLEFT, 0)) {
+            HUIRA_THROW_ERROR("read_tiff_raw_ - Failed to read palette TIFF via RGBA");
         }
 
-        // Lambda to convert a raw sample value to float
-        auto sample_to_float = [&](const unsigned char* ptr, int byte_offset) -> float {
-            if (is_float) {
-                float val;
-                std::memcpy(&val, ptr + byte_offset, sizeof(float));
-                return val;
+        TIFFData tiff_data{};
+        tiff_data.resolution = Resolution{static_cast<int>(width), static_cast<int>(height)};
+        tiff_data.width = static_cast<int>(width);
+        tiff_data.height = static_cast<int>(height);
+        tiff_data.num_channels = 4;
+        tiff_data.photometric = PHOTOMETRIC_RGB;
+        tiff_data.has_alpha = true;
+        tiff_data.alpha_index = 3;
+
+        tiff_data.channels.resize(4);
+        for (std::size_t ch = 0; ch < 4; ++ch) {
+            tiff_data.channels[ch].resize(num_pixels);
+        }
+
+        for (std::size_t i = 0; i < num_pixels; ++i) {
+            uint32_t pixel = rgba_data[i];
+            tiff_data.channels[0][i] = static_cast<float>(TIFFGetR(pixel)) / 255.0f;
+            tiff_data.channels[1][i] = static_cast<float>(TIFFGetG(pixel)) / 255.0f;
+            tiff_data.channels[2][i] = static_cast<float>(TIFFGetB(pixel)) / 255.0f;
+            tiff_data.channels[3][i] = static_cast<float>(TIFFGetA(pixel)) / 255.0f;
+        }
+
+        return tiff_data;
+    }
+
+    // Detect alpha channel via extra samples
+    uint16_t extra_samples_count = 0;
+    uint16_t* extra_samples = nullptr;
+    TIFFGetFieldDefaulted(tif.get(), TIFFTAG_EXTRASAMPLES, &extra_samples_count, &extra_samples);
+
+    bool has_alpha = false;
+    int alpha_index = -1;
+
+    if (extra_samples_count > 0 && extra_samples != nullptr) {
+        if (extra_samples[0] == EXTRASAMPLE_ASSOCALPHA ||
+            extra_samples[0] == EXTRASAMPLE_UNASSALPHA) {
+            has_alpha = true;
+            alpha_index = static_cast<int>(samples_per_pixel) - 1;
+        }
+    }
+
+    // Prepare output channels
+    std::size_t num_channels = static_cast<std::size_t>(samples_per_pixel);
+    std::size_t num_pixels = static_cast<std::size_t>(width) * static_cast<std::size_t>(height);
+
+    std::vector<std::vector<float>> channels(num_channels);
+    for (std::size_t ch = 0; ch < num_channels; ++ch) {
+        channels[ch].resize(num_pixels);
+    }
+
+    // Lambda to convert a raw sample value to float
+    auto sample_to_float = [&](const unsigned char* ptr, int byte_offset) -> float {
+        if (is_float) {
+            float val;
+            std::memcpy(&val, ptr + byte_offset, sizeof(float));
+            return val;
+        } else if (bits_per_sample == 8) {
+            return static_cast<float>(ptr[byte_offset]) / 255.0f;
+        } else if (bits_per_sample == 16) {
+            uint16_t val;
+            std::memcpy(&val, ptr + byte_offset, sizeof(uint16_t));
+            return static_cast<float>(val) / 65535.0f;
+        } else { // 32-bit integer
+            uint32_t val;
+            std::memcpy(&val, ptr + byte_offset, sizeof(uint32_t));
+            return static_cast<float>(static_cast<double>(val) /
+                                      static_cast<double>(std::numeric_limits<uint32_t>::max()));
+        }
+    };
+
+    std::size_t bytes_per_sample = static_cast<std::size_t>(bits_per_sample) / 8;
+
+    bool is_tiled = TIFFIsTiled(tif.get()) != 0;
+
+    if (is_tiled) {
+        uint32_t tile_width = 0, tile_height = 0;
+        TIFFGetField(tif.get(), TIFFTAG_TILEWIDTH, &tile_width);
+        TIFFGetField(tif.get(), TIFFTAG_TILELENGTH, &tile_height);
+
+        tsize_t tile_size = TIFFTileSize(tif.get());
+        std::vector<unsigned char> tile_buf(static_cast<std::size_t>(tile_size));
+
+        if (planar_config == PLANARCONFIG_CONTIG) {
+            for (uint32_t ty = 0; ty < height; ty += tile_height) {
+                for (uint32_t tx = 0; tx < width; tx += tile_width) {
+                    TIFFReadTile(tif.get(), tile_buf.data(), tx, ty, 0, 0);
+
+                    uint32_t eff_tw = std::min(tile_width, width - tx);
+                    uint32_t eff_th = std::min(tile_height, height - ty);
+
+                    for (uint32_t row = 0; row < eff_th; ++row) {
+                        for (uint32_t col = 0; col < eff_tw; ++col) {
+                            std::size_t tile_pixel_offset =
+                                (static_cast<std::size_t>(row) * tile_width +
+                                 static_cast<std::size_t>(col)) *
+                                samples_per_pixel * bytes_per_sample;
+                            std::size_t dst_pixel =
+                                static_cast<std::size_t>(ty + row) * width + (tx + col);
+
+                            for (std::size_t ch = 0; ch < num_channels; ++ch) {
+                                channels[ch][dst_pixel] = sample_to_float(
+                                    tile_buf.data(),
+                                    static_cast<int>(tile_pixel_offset + ch * bytes_per_sample));
+                            }
+                        }
+                    }
+                }
             }
-            else if (bits_per_sample == 8) {
-                return static_cast<float>(ptr[byte_offset]) / 255.0f;
-            }
-            else if (bits_per_sample == 16) {
-                uint16_t val;
-                std::memcpy(&val, ptr + byte_offset, sizeof(uint16_t));
-                return static_cast<float>(val) / 65535.0f;
-            }
-            else {  // 32-bit integer
-                uint32_t val;
-                std::memcpy(&val, ptr + byte_offset, sizeof(uint32_t));
-                return static_cast<float>(static_cast<double>(val) / static_cast<double>(std::numeric_limits<uint32_t>::max()));
-            }
-        };
-
-        std::size_t bytes_per_sample = static_cast<std::size_t>(bits_per_sample) / 8;
-
-        bool is_tiled = TIFFIsTiled(tif.get()) != 0;
-
-        if (is_tiled) {
-            uint32_t tile_width = 0, tile_height = 0;
-            TIFFGetField(tif.get(), TIFFTAG_TILEWIDTH, &tile_width);
-            TIFFGetField(tif.get(), TIFFTAG_TILELENGTH, &tile_height);
-
-            tsize_t tile_size = TIFFTileSize(tif.get());
-            std::vector<unsigned char> tile_buf(static_cast<std::size_t>(tile_size));
-
-            if (planar_config == PLANARCONFIG_CONTIG) {
+        } else {
+            // PLANARCONFIG_SEPARATE: one tile set per channel
+            for (uint16_t ch = 0; ch < samples_per_pixel; ++ch) {
                 for (uint32_t ty = 0; ty < height; ty += tile_height) {
                     for (uint32_t tx = 0; tx < width; tx += tile_width) {
-                        TIFFReadTile(tif.get(), tile_buf.data(), tx, ty, 0, 0);
+                        TIFFReadTile(tif.get(), tile_buf.data(), tx, ty, 0, ch);
 
                         uint32_t eff_tw = std::min(tile_width, width - tx);
                         uint32_t eff_th = std::min(tile_height, height - ty);
 
                         for (uint32_t row = 0; row < eff_th; ++row) {
                             for (uint32_t col = 0; col < eff_tw; ++col) {
-                                std::size_t tile_pixel_offset = (static_cast<std::size_t>(row) * tile_width
-                                    + static_cast<std::size_t>(col)) * samples_per_pixel * bytes_per_sample;
-                                std::size_t dst_pixel = static_cast<std::size_t>(ty + row) * width + (tx + col);
+                                std::size_t tile_offset =
+                                    (static_cast<std::size_t>(row) * tile_width +
+                                     static_cast<std::size_t>(col)) *
+                                    bytes_per_sample;
+                                std::size_t dst_pixel =
+                                    static_cast<std::size_t>(ty + row) * width + (tx + col);
 
-                                for (std::size_t ch = 0; ch < num_channels; ++ch) {
-                                    channels[ch][dst_pixel] = sample_to_float(
-                                        tile_buf.data(),
-                                        static_cast<int>(tile_pixel_offset + ch * bytes_per_sample));
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            else {
-                // PLANARCONFIG_SEPARATE: one tile set per channel
-                for (uint16_t ch = 0; ch < samples_per_pixel; ++ch) {
-                    for (uint32_t ty = 0; ty < height; ty += tile_height) {
-                        for (uint32_t tx = 0; tx < width; tx += tile_width) {
-                            TIFFReadTile(tif.get(), tile_buf.data(), tx, ty, 0, ch);
-
-                            uint32_t eff_tw = std::min(tile_width, width - tx);
-                            uint32_t eff_th = std::min(tile_height, height - ty);
-
-                            for (uint32_t row = 0; row < eff_th; ++row) {
-                                for (uint32_t col = 0; col < eff_tw; ++col) {
-                                    std::size_t tile_offset = (static_cast<std::size_t>(row) * tile_width
-                                        + static_cast<std::size_t>(col)) * bytes_per_sample;
-                                    std::size_t dst_pixel = static_cast<std::size_t>(ty + row) * width + (tx + col);
-
-                                    channels[ch][dst_pixel] = sample_to_float(
-                                        tile_buf.data(), static_cast<int>(tile_offset));
-                                }
+                                channels[ch][dst_pixel] =
+                                    sample_to_float(tile_buf.data(), static_cast<int>(tile_offset));
                             }
                         }
                     }
                 }
             }
         }
-        else {
-            // Stripped storage
-            tsize_t scanline_size = TIFFScanlineSize(tif.get());
-            std::vector<unsigned char> scanline_buf(static_cast<std::size_t>(scanline_size));
+    } else {
+        // Stripped storage
+        tsize_t scanline_size = TIFFScanlineSize(tif.get());
+        std::vector<unsigned char> scanline_buf(static_cast<std::size_t>(scanline_size));
 
-            if (planar_config == PLANARCONFIG_CONTIG) {
+        if (planar_config == PLANARCONFIG_CONTIG) {
+            for (uint32_t y = 0; y < height; ++y) {
+                if (TIFFReadScanline(tif.get(), scanline_buf.data(), y) < 0) {
+                    HUIRA_THROW_ERROR("read_tiff_raw_ - Failed to read scanline " +
+                                      std::to_string(y));
+                }
+
+                for (uint32_t x = 0; x < width; ++x) {
+                    std::size_t pixel_offset =
+                        static_cast<std::size_t>(x) * samples_per_pixel * bytes_per_sample;
+                    std::size_t dst_pixel = static_cast<std::size_t>(y) * width + x;
+
+                    for (std::size_t ch = 0; ch < num_channels; ++ch) {
+                        channels[ch][dst_pixel] =
+                            sample_to_float(scanline_buf.data(),
+                                            static_cast<int>(pixel_offset + ch * bytes_per_sample));
+                    }
+                }
+            }
+        } else {
+            // PLANARCONFIG_SEPARATE: one set of scanlines per channel
+            for (uint16_t ch = 0; ch < samples_per_pixel; ++ch) {
                 for (uint32_t y = 0; y < height; ++y) {
-                    if (TIFFReadScanline(tif.get(), scanline_buf.data(), y) < 0) {
-                        HUIRA_THROW_ERROR("read_tiff_raw_ - Failed to read scanline " + std::to_string(y));
+                    if (TIFFReadScanline(tif.get(), scanline_buf.data(), y, ch) < 0) {
+                        HUIRA_THROW_ERROR("read_tiff_raw_ - Failed to read scanline " +
+                                          std::to_string(y) + " channel " +
+                                          std::to_string(static_cast<int>(ch)));
                     }
 
                     for (uint32_t x = 0; x < width; ++x) {
-                        std::size_t pixel_offset = static_cast<std::size_t>(x) * samples_per_pixel * bytes_per_sample;
+                        std::size_t sample_offset = static_cast<std::size_t>(x) * bytes_per_sample;
                         std::size_t dst_pixel = static_cast<std::size_t>(y) * width + x;
 
-                        for (std::size_t ch = 0; ch < num_channels; ++ch) {
-                            channels[ch][dst_pixel] = sample_to_float(
-                                scanline_buf.data(),
-                                static_cast<int>(pixel_offset + ch * bytes_per_sample));
-                        }
-                    }
-                }
-            }
-            else {
-                // PLANARCONFIG_SEPARATE: one set of scanlines per channel
-                for (uint16_t ch = 0; ch < samples_per_pixel; ++ch) {
-                    for (uint32_t y = 0; y < height; ++y) {
-                        if (TIFFReadScanline(tif.get(), scanline_buf.data(), y, ch) < 0) {
-                            HUIRA_THROW_ERROR("read_tiff_raw_ - Failed to read scanline " +
-                                std::to_string(y) + " channel " + std::to_string(static_cast<int>(ch)));
-                        }
-
-                        for (uint32_t x = 0; x < width; ++x) {
-                            std::size_t sample_offset = static_cast<std::size_t>(x) * bytes_per_sample;
-                            std::size_t dst_pixel = static_cast<std::size_t>(y) * width + x;
-
-                            channels[ch][dst_pixel] = sample_to_float(
-                                scanline_buf.data(), static_cast<int>(sample_offset));
-                        }
+                        channels[ch][dst_pixel] =
+                            sample_to_float(scanline_buf.data(), static_cast<int>(sample_offset));
                     }
                 }
             }
         }
-
-        // Invert MinIsWhite so output is always MinIsBlack convention
-        if (photometric == PHOTOMETRIC_MINISWHITE) {
-            for (std::size_t ch = 0; ch < num_channels; ++ch) {
-                if (ch == static_cast<std::size_t>(alpha_index)) {
-                    continue;
-                }
-                for (std::size_t i = 0; i < num_pixels; ++i) {
-                    channels[ch][i] = 1.0f - channels[ch][i];
-                }
-            }
-        }
-
-        TIFFData tiff_data{};
-        tiff_data.resolution = Resolution{ static_cast<int>(width), static_cast<int>(height) };
-        tiff_data.width = static_cast<int>(width);
-        tiff_data.height = static_cast<int>(height);
-        tiff_data.channels = std::move(channels);
-        tiff_data.num_channels = num_channels;
-        tiff_data.photometric = photometric;
-        tiff_data.has_alpha = has_alpha;
-        tiff_data.alpha_index = alpha_index;
-
-        return tiff_data;
     }
 
-    // =========================================================================
-    // RGB readers
-    // =========================================================================
-
-    /**
-     * @brief Reads a TIFF from an in-memory buffer and returns linear RGB + optional alpha data.
-     *
-     * Interprets the TIFF data as RGB color:
-     *   - 1-channel: promoted to RGB (equal values in all channels)
-     *   - 3-channel: interpreted as RGB directly
-     *   - 4-channel with alpha: RGB + separate alpha
-     *   - Other channel counts: throws an error
-     *
-     * @param data Pointer to the TIFF data in memory
-     * @param size Size of the data in bytes
-     * @param read_alpha If false, alpha channel is not extracted even if present
-     * @return An ImageBundle<RGB> containing the linear RGB image and an optional alpha image.
-     */
-    inline ImageBundle<RGB> read_image_tiff_rgb(const unsigned char* data, std::size_t size, bool read_alpha)
-    {
-        auto tiff_data = read_tiff_raw_(data, size);
-
-        std::size_t color_channels = tiff_data.has_alpha ? tiff_data.num_channels - 1 : tiff_data.num_channels;
-
-        if (color_channels != 1 && color_channels != 3) {
-            HUIRA_THROW_ERROR("read_image_tiff_rgb - Cannot interpret " +
-                std::to_string(color_channels) + "-channel TIFF as RGB");
-        }
-
-        bool extract_alpha = tiff_data.has_alpha && read_alpha;
-
-        ImageBundle<RGB> bundle{ Image<RGB>(tiff_data.resolution) };
-
-        if (extract_alpha) {
-            bundle.alpha = Image<float>(tiff_data.resolution, 1.0f);
-        }
-
-        std::size_t num_pixels = static_cast<std::size_t>(tiff_data.width) * static_cast<std::size_t>(tiff_data.height);
-
-        if (color_channels == 1) {
+    // Invert MinIsWhite so output is always MinIsBlack convention
+    if (photometric == PHOTOMETRIC_MINISWHITE) {
+        for (std::size_t ch = 0; ch < num_channels; ++ch) {
+            if (ch == static_cast<std::size_t>(alpha_index)) {
+                continue;
+            }
             for (std::size_t i = 0; i < num_pixels; ++i) {
-                float v = tiff_data.channels[0][i];
-                int y = static_cast<int>(i / static_cast<std::size_t>(tiff_data.width));
-                int x = static_cast<int>(i % static_cast<std::size_t>(tiff_data.width));
-                bundle.image(x, y) = RGB{ v, v, v };
-            }
-        }
-        else {
-            for (std::size_t i = 0; i < num_pixels; ++i) {
-                int y = static_cast<int>(i / static_cast<std::size_t>(tiff_data.width));
-                int x = static_cast<int>(i % static_cast<std::size_t>(tiff_data.width));
-                bundle.image(x, y) = RGB{
-                    tiff_data.channels[0][i],
-                    tiff_data.channels[1][i],
-                    tiff_data.channels[2][i]
-                };
-            }
-        }
-
-        if (extract_alpha) {
-            for (std::size_t i = 0; i < num_pixels; ++i) {
-                int y = static_cast<int>(i / static_cast<std::size_t>(tiff_data.width));
-                int x = static_cast<int>(i % static_cast<std::size_t>(tiff_data.width));
-                bundle.alpha(x, y) = tiff_data.channels[static_cast<std::size_t>(tiff_data.alpha_index)][i];
-            }
-        }
-
-        return bundle;
-    }
-
-    /**
-     * @brief Reads a TIFF file and returns linear RGB + optional alpha data.
-     *
-     * Convenience overload that reads the file into memory and forwards
-     * to the buffer-based implementation.
-     */
-    inline ImageBundle<RGB> read_image_tiff_rgb(const fs::path& filepath, bool read_alpha)
-    {
-        auto file_data = read_file_to_buffer(filepath);
-        return read_image_tiff_rgb(file_data.data(), file_data.size(), read_alpha);
-    }
-
-    // =========================================================================
-    // Mono readers
-    // =========================================================================
-
-    /**
-     * @brief Reads a TIFF from an in-memory buffer and returns linear mono + optional alpha data.
-     *
-     * Interprets the TIFF data as single-channel:
-     *   - 1-channel: returned directly
-     *   - 3-channel: averaged to mono
-     *   - Other channel counts (excluding alpha): throws an error
-     *
-     * @param data Pointer to the TIFF data in memory
-     * @param size Size of the data in bytes
-     * @param read_alpha If false, alpha channel is not extracted even if present
-     * @return An ImageBundle<float> containing the linear mono image and an optional alpha image.
-     */
-    inline ImageBundle<float> read_image_tiff_mono(const unsigned char* data, std::size_t size, bool read_alpha)
-    {
-        auto tiff_data = read_tiff_raw_(data, size);
-
-        std::size_t color_channels = tiff_data.has_alpha ? tiff_data.num_channels - 1 : tiff_data.num_channels;
-
-        if (color_channels != 1 && color_channels != 3) {
-            HUIRA_THROW_ERROR("read_image_tiff_mono - Cannot interpret " +
-                std::to_string(color_channels) + "-channel TIFF as mono");
-        }
-
-        bool extract_alpha = tiff_data.has_alpha && read_alpha;
-
-        ImageBundle<float> bundle{ Image<float>(tiff_data.resolution) };
-
-        if (extract_alpha) {
-            bundle.alpha = Image<float>(tiff_data.resolution, 1.0f);
-        }
-
-        std::size_t num_pixels = static_cast<std::size_t>(tiff_data.width) * static_cast<std::size_t>(tiff_data.height);
-
-        if (color_channels == 1) {
-            for (std::size_t i = 0; i < num_pixels; ++i) {
-                int y = static_cast<int>(i / static_cast<std::size_t>(tiff_data.width));
-                int x = static_cast<int>(i % static_cast<std::size_t>(tiff_data.width));
-                bundle.image(x, y) = tiff_data.channels[0][i];
-            }
-        }
-        else {
-            for (std::size_t i = 0; i < num_pixels; ++i) {
-                int y = static_cast<int>(i / static_cast<std::size_t>(tiff_data.width));
-                int x = static_cast<int>(i % static_cast<std::size_t>(tiff_data.width));
-                bundle.image(x, y) = (tiff_data.channels[0][i] + tiff_data.channels[1][i] + tiff_data.channels[2][i]) / 3.0f;
-            }
-        }
-
-        if (extract_alpha) {
-            for (std::size_t i = 0; i < num_pixels; ++i) {
-                int y = static_cast<int>(i / static_cast<std::size_t>(tiff_data.width));
-                int x = static_cast<int>(i % static_cast<std::size_t>(tiff_data.width));
-                bundle.alpha(x, y) = tiff_data.channels[static_cast<std::size_t>(tiff_data.alpha_index)][i];
-            }
-        }
-
-        return bundle;
-    }
-
-    /**
-     * @brief Reads a TIFF file and returns linear mono + optional alpha data.
-     *
-     * Convenience overload that reads the file into memory and forwards
-     * to the buffer-based implementation.
-     */
-    inline ImageBundle<float> read_image_tiff_mono(const fs::path& filepath, bool read_alpha)
-    {
-        auto file_data = read_file_to_buffer(filepath);
-        return read_image_tiff_mono(file_data.data(), file_data.size(), read_alpha);
-    }
-
-    // =========================================================================
-    // TIFF Writers
-    // =========================================================================
-
-    /**
-     * @brief Writes an RGB image to a TIFF file with optional metadata.
-     *
-     * @param filepath Output file path
-     * @param An ImageBundle<RGB> containing the image to write
-     * @param description Optional image description metadata
-     * @param artist Optional artist metadata
-     */
-    inline void write_image_tiff(const fs::path& filepath,
-                                 const ImageBundle<RGB>& bundle,
-                                 const std::string& description,
-                                 const std::string& artist)
-    {
-        HUIRA_LOG_INFO("write_image_tiff - Writing RGB TIFF to " + filepath.string());
-        
-        if (bundle.bit_depth != 8 && bundle. bit_depth != 16) {
-            HUIRA_THROW_ERROR("write_image_tiff - Bit depth must be 8 or 16");
-        }
-
-        make_path(filepath);
-        
-        ScopedTIFF tif(TIFFOpen(filepath.string().c_str(), "w"));
-        if (!tif) {
-            HUIRA_THROW_ERROR("write_image_tiff - Failed to open file for writing: " + filepath.string());
-        }
-        
-        uint32_t width = static_cast<uint32_t>(bundle.image.width());
-        uint32_t height = static_cast<uint32_t>(bundle.image.height());
-        
-        TIFFSetField(tif.get(), TIFFTAG_IMAGEWIDTH, width);
-        TIFFSetField(tif.get(), TIFFTAG_IMAGELENGTH, height);
-        TIFFSetField(tif.get(), TIFFTAG_SAMPLESPERPIXEL, 3);
-        TIFFSetField(tif.get(), TIFFTAG_BITSPERSAMPLE, static_cast<uint16_t>(bundle.bit_depth));
-        TIFFSetField(tif.get(), TIFFTAG_ORIENTATION, ORIENTATION_TOPLEFT);
-        TIFFSetField(tif.get(), TIFFTAG_PLANARCONFIG, PLANARCONFIG_CONTIG);
-        TIFFSetField(tif.get(), TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_RGB);
-        TIFFSetField(tif.get(), TIFFTAG_SAMPLEFORMAT, SAMPLEFORMAT_UINT);
-        TIFFSetField(tif.get(), TIFFTAG_SOFTWARE, "Huira Image Library");
-        
-        if (!description.empty()) {
-            TIFFSetField(tif.get(), TIFFTAG_IMAGEDESCRIPTION, description.c_str());
-        }
-        if (!artist.empty()) {
-            TIFFSetField(tif.get(), TIFFTAG_ARTIST, artist.c_str());
-        }
-        
-        std::size_t bytes_per_sample = static_cast<std::size_t>(bundle.bit_depth) / 8;
-        std::size_t scanline_size = width * 3 * bytes_per_sample;
-        std::vector<unsigned char> scanline(scanline_size);
-        
-        for (uint32_t y = 0; y < height; ++y) {
-            for (uint32_t x = 0; x < width; ++x) {
-                RGB pixel = bundle.image(static_cast<int>(x), static_cast<int>(y));
-                std::size_t offset = x * 3 * bytes_per_sample;
-                
-                if (bundle.bit_depth == 8) {
-                    scanline[offset + 0] = static_cast<uint8_t>(std::clamp(pixel[0] * 255.0f, 0.0f, 255.0f));
-                    scanline[offset + 1] = static_cast<uint8_t>(std::clamp(pixel[1] * 255.0f, 0.0f, 255.0f));
-                    scanline[offset + 2] = static_cast<uint8_t>(std::clamp(pixel[2] * 255.0f, 0.0f, 255.0f));
-                } else {
-                    uint16_t r = static_cast<uint16_t>(std::clamp(pixel[0] * 65535.0f, 0.0f, 65535.0f));
-                    uint16_t g = static_cast<uint16_t>(std::clamp(pixel[1] * 65535.0f, 0.0f, 65535.0f));
-                    uint16_t b = static_cast<uint16_t>(std::clamp(pixel[2] * 65535.0f, 0.0f, 65535.0f));
-                    std::memcpy(&scanline[offset + 0], &r, 2);
-                    std::memcpy(&scanline[offset + 2], &g, 2);
-                    std::memcpy(&scanline[offset + 4], &b, 2);
-                }
-            }
-            
-            if (TIFFWriteScanline(tif.get(), scanline.data(), y) < 0) {
-                HUIRA_THROW_ERROR("write_image_tiff - Failed to write scanline " + std::to_string(y));
-            }
-        }
-    }
-    /**
-     * @brief Writes a monochrome float image to a TIFF file with optional metadata.
-     */
-    inline void write_image_tiff(const fs::path& filepath,
-                                  const ImageBundle<float>& bundle,
-                                  const std::string& description,
-                                  const std::string& artist)
-    {
-        HUIRA_LOG_INFO("write_image_tiff - Writing mono TIFF to " + filepath.string());
-        
-        if (bundle.bit_depth != 8 && bundle.bit_depth != 16) {
-            HUIRA_THROW_ERROR("write_image_tiff - Bit depth must be 8 or 16");
-        }
-
-        make_path(filepath);
-        
-        ScopedTIFF tif(TIFFOpen(filepath.string().c_str(), "w"));
-        if (!tif) {
-            HUIRA_THROW_ERROR("write_image_tiff - Failed to open file for writing: " + filepath.string());
-        }
-        
-        uint32_t width = static_cast<uint32_t>(bundle.image.width());
-        uint32_t height = static_cast<uint32_t>(bundle.image.height());
-        
-        TIFFSetField(tif.get(), TIFFTAG_IMAGEWIDTH, width);
-        TIFFSetField(tif.get(), TIFFTAG_IMAGELENGTH, height);
-        TIFFSetField(tif.get(), TIFFTAG_SAMPLESPERPIXEL, 1);
-        TIFFSetField(tif.get(), TIFFTAG_BITSPERSAMPLE, static_cast<uint16_t>(bundle.bit_depth));
-        TIFFSetField(tif.get(), TIFFTAG_ORIENTATION, ORIENTATION_TOPLEFT);
-        TIFFSetField(tif.get(), TIFFTAG_PLANARCONFIG, PLANARCONFIG_CONTIG);
-        TIFFSetField(tif.get(), TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_MINISBLACK);
-        TIFFSetField(tif.get(), TIFFTAG_SAMPLEFORMAT, SAMPLEFORMAT_UINT);
-        TIFFSetField(tif.get(), TIFFTAG_SOFTWARE, "Huira Image Library");
-        
-        if (!description.empty()) {
-            TIFFSetField(tif.get(), TIFFTAG_IMAGEDESCRIPTION, description.c_str());
-        }
-        if (!artist.empty()) {
-            TIFFSetField(tif.get(), TIFFTAG_ARTIST, artist.c_str());
-        }
-        
-        std::size_t bytes_per_sample = static_cast<std::size_t>(bundle.bit_depth) / 8;
-        std::size_t scanline_size = width * bytes_per_sample;
-        std::vector<unsigned char> scanline(scanline_size);
-        
-        for (uint32_t y = 0; y < height; ++y) {
-            for (uint32_t x = 0; x < width; ++x) {
-                float pixel = bundle.image(static_cast<int>(x), static_cast<int>(y));
-                
-                if (bundle.bit_depth == 8) {
-                    scanline[x] = static_cast<uint8_t>(std::clamp(pixel * 255.0f, 0.0f, 255.0f));
-                } else {
-                    uint16_t value = static_cast<uint16_t>(std::clamp(pixel * 65535.0f, 0.0f, 65535.0f));
-                    std::memcpy(&scanline[x * 2], &value, 2);
-                }
-            }
-            
-            if (TIFFWriteScanline(tif.get(), scanline.data(), y) < 0) {
-                HUIRA_THROW_ERROR("write_image_tiff - Failed to write scanline " + std::to_string(y));
+                channels[ch][i] = 1.0f - channels[ch][i];
             }
         }
     }
 
-    /**
-     * @brief Writes a spectral image to a TIFF file by converting to mono.
-     */
-    template <IsSpectral TSpectral>
-    inline void write_image_tiff(const fs::path& filepath,
-                                  const ImageBundle<TSpectral>& bundle,
-                                  const std::string& description,
-                                  const std::string& artist)
-    {
-        // Convert spectral to mono by taking the average of channels
-        Image<float> mono_image(bundle.image.resolution());
-        for (int y = 0; y < bundle.image.height(); ++y) {
-            for (int x = 0; x < bundle.image.width(); ++x) {
-                mono_image(x, y) = bundle.image(x, y).total() / static_cast<float>(TSpectral::size());
+    TIFFData tiff_data{};
+    tiff_data.resolution = Resolution{static_cast<int>(width), static_cast<int>(height)};
+    tiff_data.width = static_cast<int>(width);
+    tiff_data.height = static_cast<int>(height);
+    tiff_data.channels = std::move(channels);
+    tiff_data.num_channels = num_channels;
+    tiff_data.photometric = photometric;
+    tiff_data.has_alpha = has_alpha;
+    tiff_data.alpha_index = alpha_index;
+
+    return tiff_data;
+}
+
+// =========================================================================
+// RGB readers
+// =========================================================================
+
+/**
+ * @brief Reads a TIFF from an in-memory buffer and returns linear RGB + optional alpha data.
+ *
+ * Interprets the TIFF data as RGB color:
+ *   - 1-channel: promoted to RGB (equal values in all channels)
+ *   - 3-channel: interpreted as RGB directly
+ *   - 4-channel with alpha: RGB + separate alpha
+ *   - Other channel counts: throws an error
+ *
+ * @param data Pointer to the TIFF data in memory
+ * @param size Size of the data in bytes
+ * @param read_alpha If false, alpha channel is not extracted even if present
+ * @return An ImageBundle<RGB> containing the linear RGB image and an optional alpha image.
+ */
+inline ImageBundle<RGB>
+read_image_tiff_rgb(const unsigned char* data, std::size_t size, bool read_alpha)
+{
+    auto tiff_data = read_tiff_raw_(data, size);
+
+    std::size_t color_channels =
+        tiff_data.has_alpha ? tiff_data.num_channels - 1 : tiff_data.num_channels;
+
+    if (color_channels != 1 && color_channels != 3) {
+        HUIRA_THROW_ERROR("read_image_tiff_rgb - Cannot interpret " +
+                          std::to_string(color_channels) + "-channel TIFF as RGB");
+    }
+
+    bool extract_alpha = tiff_data.has_alpha && read_alpha;
+
+    ImageBundle<RGB> bundle{Image<RGB>(tiff_data.resolution)};
+
+    if (extract_alpha) {
+        bundle.alpha = Image<float>(tiff_data.resolution, 1.0f);
+    }
+
+    std::size_t num_pixels =
+        static_cast<std::size_t>(tiff_data.width) * static_cast<std::size_t>(tiff_data.height);
+
+    if (color_channels == 1) {
+        for (std::size_t i = 0; i < num_pixels; ++i) {
+            float v = tiff_data.channels[0][i];
+            int y = static_cast<int>(i / static_cast<std::size_t>(tiff_data.width));
+            int x = static_cast<int>(i % static_cast<std::size_t>(tiff_data.width));
+            bundle.image(x, y) = RGB{v, v, v};
+        }
+    } else {
+        for (std::size_t i = 0; i < num_pixels; ++i) {
+            int y = static_cast<int>(i / static_cast<std::size_t>(tiff_data.width));
+            int x = static_cast<int>(i % static_cast<std::size_t>(tiff_data.width));
+            bundle.image(x, y) =
+                RGB{tiff_data.channels[0][i], tiff_data.channels[1][i], tiff_data.channels[2][i]};
+        }
+    }
+
+    if (extract_alpha) {
+        for (std::size_t i = 0; i < num_pixels; ++i) {
+            int y = static_cast<int>(i / static_cast<std::size_t>(tiff_data.width));
+            int x = static_cast<int>(i % static_cast<std::size_t>(tiff_data.width));
+            bundle.alpha(x, y) =
+                tiff_data.channels[static_cast<std::size_t>(tiff_data.alpha_index)][i];
+        }
+    }
+
+    return bundle;
+}
+
+/**
+ * @brief Reads a TIFF file and returns linear RGB + optional alpha data.
+ *
+ * Convenience overload that reads the file into memory and forwards
+ * to the buffer-based implementation.
+ */
+inline ImageBundle<RGB> read_image_tiff_rgb(const fs::path& filepath, bool read_alpha)
+{
+    auto file_data = read_file_to_buffer(filepath);
+    return read_image_tiff_rgb(file_data.data(), file_data.size(), read_alpha);
+}
+
+// =========================================================================
+// Mono readers
+// =========================================================================
+
+/**
+ * @brief Reads a TIFF from an in-memory buffer and returns linear mono + optional alpha data.
+ *
+ * Interprets the TIFF data as single-channel:
+ *   - 1-channel: returned directly
+ *   - 3-channel: averaged to mono
+ *   - Other channel counts (excluding alpha): throws an error
+ *
+ * @param data Pointer to the TIFF data in memory
+ * @param size Size of the data in bytes
+ * @param read_alpha If false, alpha channel is not extracted even if present
+ * @return An ImageBundle<float> containing the linear mono image and an optional alpha image.
+ */
+inline ImageBundle<float>
+read_image_tiff_mono(const unsigned char* data, std::size_t size, bool read_alpha)
+{
+    auto tiff_data = read_tiff_raw_(data, size);
+
+    std::size_t color_channels =
+        tiff_data.has_alpha ? tiff_data.num_channels - 1 : tiff_data.num_channels;
+
+    if (color_channels != 1 && color_channels != 3) {
+        HUIRA_THROW_ERROR("read_image_tiff_mono - Cannot interpret " +
+                          std::to_string(color_channels) + "-channel TIFF as mono");
+    }
+
+    bool extract_alpha = tiff_data.has_alpha && read_alpha;
+
+    ImageBundle<float> bundle{Image<float>(tiff_data.resolution)};
+
+    if (extract_alpha) {
+        bundle.alpha = Image<float>(tiff_data.resolution, 1.0f);
+    }
+
+    std::size_t num_pixels =
+        static_cast<std::size_t>(tiff_data.width) * static_cast<std::size_t>(tiff_data.height);
+
+    if (color_channels == 1) {
+        for (std::size_t i = 0; i < num_pixels; ++i) {
+            int y = static_cast<int>(i / static_cast<std::size_t>(tiff_data.width));
+            int x = static_cast<int>(i % static_cast<std::size_t>(tiff_data.width));
+            bundle.image(x, y) = tiff_data.channels[0][i];
+        }
+    } else {
+        for (std::size_t i = 0; i < num_pixels; ++i) {
+            int y = static_cast<int>(i / static_cast<std::size_t>(tiff_data.width));
+            int x = static_cast<int>(i % static_cast<std::size_t>(tiff_data.width));
+            bundle.image(x, y) =
+                (tiff_data.channels[0][i] + tiff_data.channels[1][i] + tiff_data.channels[2][i]) /
+                3.0f;
+        }
+    }
+
+    if (extract_alpha) {
+        for (std::size_t i = 0; i < num_pixels; ++i) {
+            int y = static_cast<int>(i / static_cast<std::size_t>(tiff_data.width));
+            int x = static_cast<int>(i % static_cast<std::size_t>(tiff_data.width));
+            bundle.alpha(x, y) =
+                tiff_data.channels[static_cast<std::size_t>(tiff_data.alpha_index)][i];
+        }
+    }
+
+    return bundle;
+}
+
+/**
+ * @brief Reads a TIFF file and returns linear mono + optional alpha data.
+ *
+ * Convenience overload that reads the file into memory and forwards
+ * to the buffer-based implementation.
+ */
+inline ImageBundle<float> read_image_tiff_mono(const fs::path& filepath, bool read_alpha)
+{
+    auto file_data = read_file_to_buffer(filepath);
+    return read_image_tiff_mono(file_data.data(), file_data.size(), read_alpha);
+}
+
+// =========================================================================
+// TIFF Writers
+// =========================================================================
+
+/**
+ * @brief Writes an RGB image to a TIFF file with optional metadata.
+ *
+ * @param filepath Output file path
+ * @param An ImageBundle<RGB> containing the image to write
+ * @param description Optional image description metadata
+ * @param artist Optional artist metadata
+ */
+inline void write_image_tiff(const fs::path& filepath,
+                             const ImageBundle<RGB>& bundle,
+                             const std::string& description,
+                             const std::string& artist)
+{
+    HUIRA_LOG_INFO("write_image_tiff - Writing RGB TIFF to " + filepath.string());
+
+    if (bundle.bit_depth != 8 && bundle.bit_depth != 16) {
+        HUIRA_THROW_ERROR("write_image_tiff - Bit depth must be 8 or 16");
+    }
+
+    make_path(filepath);
+
+    ScopedTIFF tif(TIFFOpen(filepath.string().c_str(), "w"));
+    if (!tif) {
+        HUIRA_THROW_ERROR("write_image_tiff - Failed to open file for writing: " +
+                          filepath.string());
+    }
+
+    uint32_t width = static_cast<uint32_t>(bundle.image.width());
+    uint32_t height = static_cast<uint32_t>(bundle.image.height());
+
+    TIFFSetField(tif.get(), TIFFTAG_IMAGEWIDTH, width);
+    TIFFSetField(tif.get(), TIFFTAG_IMAGELENGTH, height);
+    TIFFSetField(tif.get(), TIFFTAG_SAMPLESPERPIXEL, 3);
+    TIFFSetField(tif.get(), TIFFTAG_BITSPERSAMPLE, static_cast<uint16_t>(bundle.bit_depth));
+    TIFFSetField(tif.get(), TIFFTAG_ORIENTATION, ORIENTATION_TOPLEFT);
+    TIFFSetField(tif.get(), TIFFTAG_PLANARCONFIG, PLANARCONFIG_CONTIG);
+    TIFFSetField(tif.get(), TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_RGB);
+    TIFFSetField(tif.get(), TIFFTAG_SAMPLEFORMAT, SAMPLEFORMAT_UINT);
+    TIFFSetField(tif.get(), TIFFTAG_SOFTWARE, "Huira Image Library");
+
+    if (!description.empty()) {
+        TIFFSetField(tif.get(), TIFFTAG_IMAGEDESCRIPTION, description.c_str());
+    }
+    if (!artist.empty()) {
+        TIFFSetField(tif.get(), TIFFTAG_ARTIST, artist.c_str());
+    }
+
+    std::size_t bytes_per_sample = static_cast<std::size_t>(bundle.bit_depth) / 8;
+    std::size_t scanline_size = width * 3 * bytes_per_sample;
+    std::vector<unsigned char> scanline(scanline_size);
+
+    for (uint32_t y = 0; y < height; ++y) {
+        for (uint32_t x = 0; x < width; ++x) {
+            RGB pixel = bundle.image(static_cast<int>(x), static_cast<int>(y));
+            std::size_t offset = x * 3 * bytes_per_sample;
+
+            if (bundle.bit_depth == 8) {
+                scanline[offset + 0] =
+                    static_cast<uint8_t>(std::clamp(pixel[0] * 255.0f, 0.0f, 255.0f));
+                scanline[offset + 1] =
+                    static_cast<uint8_t>(std::clamp(pixel[1] * 255.0f, 0.0f, 255.0f));
+                scanline[offset + 2] =
+                    static_cast<uint8_t>(std::clamp(pixel[2] * 255.0f, 0.0f, 255.0f));
+            } else {
+                uint16_t r = static_cast<uint16_t>(std::clamp(pixel[0] * 65535.0f, 0.0f, 65535.0f));
+                uint16_t g = static_cast<uint16_t>(std::clamp(pixel[1] * 65535.0f, 0.0f, 65535.0f));
+                uint16_t b = static_cast<uint16_t>(std::clamp(pixel[2] * 65535.0f, 0.0f, 65535.0f));
+                std::memcpy(&scanline[offset + 0], &r, 2);
+                std::memcpy(&scanline[offset + 2], &g, 2);
+                std::memcpy(&scanline[offset + 4], &b, 2);
             }
         }
-        
-        write_image_tiff(filepath, mono_image, bundle.bit_depth, description, artist);
+
+        if (TIFFWriteScanline(tif.get(), scanline.data(), y) < 0) {
+            HUIRA_THROW_ERROR("write_image_tiff - Failed to write scanline " + std::to_string(y));
+        }
     }
 }
+/**
+ * @brief Writes a monochrome float image to a TIFF file with optional metadata.
+ */
+inline void write_image_tiff(const fs::path& filepath,
+                             const ImageBundle<float>& bundle,
+                             const std::string& description,
+                             const std::string& artist)
+{
+    HUIRA_LOG_INFO("write_image_tiff - Writing mono TIFF to " + filepath.string());
+
+    if (bundle.bit_depth != 8 && bundle.bit_depth != 16) {
+        HUIRA_THROW_ERROR("write_image_tiff - Bit depth must be 8 or 16");
+    }
+
+    make_path(filepath);
+
+    ScopedTIFF tif(TIFFOpen(filepath.string().c_str(), "w"));
+    if (!tif) {
+        HUIRA_THROW_ERROR("write_image_tiff - Failed to open file for writing: " +
+                          filepath.string());
+    }
+
+    uint32_t width = static_cast<uint32_t>(bundle.image.width());
+    uint32_t height = static_cast<uint32_t>(bundle.image.height());
+
+    TIFFSetField(tif.get(), TIFFTAG_IMAGEWIDTH, width);
+    TIFFSetField(tif.get(), TIFFTAG_IMAGELENGTH, height);
+    TIFFSetField(tif.get(), TIFFTAG_SAMPLESPERPIXEL, 1);
+    TIFFSetField(tif.get(), TIFFTAG_BITSPERSAMPLE, static_cast<uint16_t>(bundle.bit_depth));
+    TIFFSetField(tif.get(), TIFFTAG_ORIENTATION, ORIENTATION_TOPLEFT);
+    TIFFSetField(tif.get(), TIFFTAG_PLANARCONFIG, PLANARCONFIG_CONTIG);
+    TIFFSetField(tif.get(), TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_MINISBLACK);
+    TIFFSetField(tif.get(), TIFFTAG_SAMPLEFORMAT, SAMPLEFORMAT_UINT);
+    TIFFSetField(tif.get(), TIFFTAG_SOFTWARE, "Huira Image Library");
+
+    if (!description.empty()) {
+        TIFFSetField(tif.get(), TIFFTAG_IMAGEDESCRIPTION, description.c_str());
+    }
+    if (!artist.empty()) {
+        TIFFSetField(tif.get(), TIFFTAG_ARTIST, artist.c_str());
+    }
+
+    std::size_t bytes_per_sample = static_cast<std::size_t>(bundle.bit_depth) / 8;
+    std::size_t scanline_size = width * bytes_per_sample;
+    std::vector<unsigned char> scanline(scanline_size);
+
+    for (uint32_t y = 0; y < height; ++y) {
+        for (uint32_t x = 0; x < width; ++x) {
+            float pixel = bundle.image(static_cast<int>(x), static_cast<int>(y));
+
+            if (bundle.bit_depth == 8) {
+                scanline[x] = static_cast<uint8_t>(std::clamp(pixel * 255.0f, 0.0f, 255.0f));
+            } else {
+                uint16_t value =
+                    static_cast<uint16_t>(std::clamp(pixel * 65535.0f, 0.0f, 65535.0f));
+                std::memcpy(&scanline[x * 2], &value, 2);
+            }
+        }
+
+        if (TIFFWriteScanline(tif.get(), scanline.data(), y) < 0) {
+            HUIRA_THROW_ERROR("write_image_tiff - Failed to write scanline " + std::to_string(y));
+        }
+    }
+}
+
+/**
+ * @brief Writes a spectral image to a TIFF file by converting to mono.
+ */
+template <IsSpectral TSpectral>
+inline void write_image_tiff(const fs::path& filepath,
+                             const ImageBundle<TSpectral>& bundle,
+                             const std::string& description,
+                             const std::string& artist)
+{
+    // Convert spectral to mono by taking the average of channels
+    Image<float> mono_image(bundle.image.resolution());
+    for (int y = 0; y < bundle.image.height(); ++y) {
+        for (int x = 0; x < bundle.image.width(); ++x) {
+            mono_image(x, y) = bundle.image(x, y).total() / static_cast<float>(TSpectral::size());
+        }
+    }
+
+    write_image_tiff(filepath, mono_image, bundle.bit_depth, description, artist);
+}
+} // namespace huira

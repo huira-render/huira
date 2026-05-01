@@ -5,12 +5,10 @@
 #include "huira/materials/bsdfs/bsdf.hpp"
 
 namespace huira {
-    template <IsSpectral TSpectral>
-    class BSDFHandle : public Handle<BSDF<TSpectral>> {
-    public:
-        BSDFHandle() = delete;
-        using Handle<BSDF<TSpectral>>::Handle;
-
-        
-    };
-}
+template <IsSpectral TSpectral>
+class BSDFHandle : public Handle<BSDF<TSpectral>> {
+  public:
+    BSDFHandle() = delete;
+    using Handle<BSDF<TSpectral>>::Handle;
+};
+} // namespace huira

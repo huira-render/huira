@@ -1,8 +1,8 @@
-#include "huira/huira.hpp"
-
 #include <filesystem>
 #include <iostream>
 #include <utility>
+
+#include "huira/huira.hpp"
 
 namespace fs = std::filesystem;
 
@@ -10,7 +10,8 @@ using namespace huira::units::literals;
 
 using TSpectral = huira::RGB;
 
-static std::pair<fs::path, fs::path> parse_input_paths(int argc, char** argv) {
+static std::pair<fs::path, fs::path> parse_input_paths(int argc, char** argv)
+{
     if (argc != 3) {
         std::cerr << "Usage: star_field <tycho2.hrsc_path> <kernel_path>" << std::endl;
         std::exit(1);
@@ -20,7 +21,8 @@ static std::pair<fs::path, fs::path> parse_input_paths(int argc, char** argv) {
     return {star_catalog_path, kernel_path};
 }
 
-int main(int argc, char** argv) {
+int main(int argc, char** argv)
+{
     // Parsing input paths
     auto [star_catalog_path, kernel_path] = parse_input_paths(argc, argv);
 
@@ -41,13 +43,13 @@ int main(int argc, char** argv) {
     camera_model.set_focal_length(125_mm);
     camera_model.set_fstop(3.30f);
     camera_model.set_sensor_rotation(90_deg);
-    camera_model.configure_sensor_from_pitch({ 1024, 1024 }, 8.5_um, 8.5_um);
+    camera_model.configure_sensor_from_pitch({1024, 1024}, 8.5_um, 8.5_um);
     camera_model.use_aperture_psf(32, 16);
     camera_model.set_sensor_bit_depth(14);
 
     // Set the observation time
     huira::Time time("2016-09-19T16:22:05.728");
-    huira::Interval exposure_interval = huira::Interval::from_centered(time, 30*9.984285275_s);
+    huira::Interval exposure_interval = huira::Interval::from_centered(time, 30 * 9.984285275_s);
 
     // Load stars
     scene.load_stars(star_catalog_path, time);
@@ -55,7 +57,7 @@ int main(int argc, char** argv) {
     // Create an instance of the camera using SPICE configuration
     auto mapcam = scene.root.new_instance(camera_model);
     mapcam.set_spice("ORX_OCAMS_MAPCAM", "ORX_OCAMS_MAPCAM");
-    
+
     // Configure the render buffers
     auto frame_buffer = camera_model.make_frame_buffer();
     frame_buffer.enable_sensor_response();
@@ -65,11 +67,13 @@ int main(int argc, char** argv) {
     huira::Renderer<TSpectral> renderer;
 
     //  Create a scene view over the exposure interval
-    auto scene_view = huira::SceneView<TSpectral>(scene, exposure_interval, mapcam, huira::ObservationMode::ABERRATED_STATE, 3);
+    auto scene_view = huira::SceneView<TSpectral>(
+        scene, exposure_interval, mapcam, huira::ObservationMode::ABERRATED_STATE, 3);
 
     // Render the current scene view
     renderer.render(scene_view, frame_buffer);
 
     // Save the results
-    huira::write_image_png("output/starfield.png", huira::linear_to_srgb(frame_buffer.sensor_response()));
+    huira::write_image_png("output/starfield.png",
+                           huira::linear_to_srgb(frame_buffer.sensor_response()));
 }
