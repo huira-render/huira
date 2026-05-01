@@ -100,6 +100,36 @@ Huira is a complete rewrite providing similar functionality to the [vira](https:
 
 Vira is still maintained on a [personal fork by the original author](https://github.com/crgnam/vira).  However it is recommended to use this project moving forward.
 
+***
+# Contributing to Huira
+
+We welcome contributions! To keep the codebase clean, highly readable, and consistent, we enforce a strict style guide using `clang-format`. 
+
+## Code Formatting
+Huira uses a custom `.clang-format` file located in the root of the repository. Before submitting a pull request, please ensure your code is formatted.
+
+*NOTE: Most modern IDEs (Visual Studio, VS Code, CLion) will automatically detect and apply this file when you format your document.*
+
+If you prefer the command line, you can format your changes using:
+
+```bash
+clang-format -i path/to/your/file.cpp
+```
+
+### Key Rules
+* **Line Length:** Maximum 100 characters per line.
+* **Indentation:** 4 spaces (no tabs).
+* **Brace Style:** Modified Stroustrup/K&R style. 
+  * Classes, structs, and control statements keep their opening brace on the same line.
+  * Function definitions drop their opening brace to the next line to separate complex signatures from logic.
+* **Control Statements:** Single-statement `if` or `while` blocks must always be wrapped in braces. 
+* **Includes:** Includes are automatically sorted alphabetically into three groups: System headers, Third-party headers, and huira headers.
+
+### Naming Conventions
+* **Classes and Structs:** `PascalCase`
+* **Functions:** `snake_case`
+* **Variables:** `snake_case`
+* **Private Members:** `snake_case` with a trailing underscore
 
 ***
 
