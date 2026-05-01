@@ -8,960 +8,999 @@
 
 /// DEBUGGING
 // #include "tbb/global_control.h"
-// static tbb::global_control debug_single_thread_control(tbb::global_control::max_allowed_parallelism, 1);
-
-
-#include "huira_impl/render/psf_lut.ipp"
+// static tbb::global_control
+// debug_single_thread_control(tbb::global_control::max_allowed_parallelism, 1);
 
 #include "huira/concepts/spectral_concepts.hpp"
 #include "huira/core/types.hpp"
 #include "huira/volumes/medium.hpp"
+#include "huira_impl/render/psf_lut.ipp"
 
 namespace huira {
 
-    template <IsSpectral TSpectral>
-    void Renderer<TSpectral>::render(SceneView<TSpectral>& scene_view, FrameBuffer<TSpectral>& frame_buffer)
-    {
-        auto& camera = scene_view.camera_model_;
-        const int fb_width = frame_buffer.width();
-        const int fb_height = frame_buffer.height();
-        if (camera->resolution().width != fb_width || camera->resolution().height != fb_height) {
-            HUIRA_THROW_ERROR("Renderer::render - Frame buffer resolution does not match camera resolution.");
-        }
-
-        frame_buffer.clear();
-
-        Image<TSpectral> ray_traced_power = this->path_trace_(scene_view, frame_buffer);
-
-        Image<TSpectral> star_power = this->render_unresolved_(scene_view, frame_buffer);
-
-        if (frame_buffer.has_received_power()) {
-            frame_buffer.received_power() = ray_traced_power + star_power;
-        }
-
-        // Apply Veiling Glare
-        if (camera->veiling_glare_enabled_) {
-            float unveiled = 1.f - camera->veiling_alpha_;
-            TSpectral total_power{ 0.f };
-            for (std::size_t i = 0; i < frame_buffer.received_power().size(); ++i) {
-                total_power += frame_buffer.received_power()[i];
-            }
-            TSpectral veiling_bias = camera->veiling_alpha_ * total_power / static_cast<float>(frame_buffer.received_power().size());
-
-            for (std::size_t i = 0; i < frame_buffer.received_power().size(); ++i) {
-                frame_buffer.received_power()[i] = (frame_buffer.received_power()[i] * unveiled) + veiling_bias;
-            }
-        }
-
-        this->get_camera(scene_view)->readout(frame_buffer, scene_view.duration());
+template <IsSpectral TSpectral>
+void Renderer<TSpectral>::render(SceneView<TSpectral>& scene_view,
+                                 FrameBuffer<TSpectral>& frame_buffer)
+{
+    auto& camera = scene_view.camera_model_;
+    const int fb_width = frame_buffer.width();
+    const int fb_height = frame_buffer.height();
+    if (camera->resolution().width != fb_width || camera->resolution().height != fb_height) {
+        HUIRA_THROW_ERROR(
+            "Renderer::render - Frame buffer resolution does not match camera resolution.");
     }
 
+    frame_buffer.clear();
 
-    inline float power_heuristic(float f_pdf, float g_pdf) {
-        if (std::isinf(f_pdf * f_pdf)) return 1.0f;
-        float f2 = f_pdf * f_pdf;
-        float g2 = g_pdf * g_pdf;
-        return f2 / (f2 + g2);
+    Image<TSpectral> ray_traced_power = this->path_trace_(scene_view, frame_buffer);
+
+    Image<TSpectral> star_power = this->render_unresolved_(scene_view, frame_buffer);
+
+    if (frame_buffer.has_received_power()) {
+        frame_buffer.received_power() = ray_traced_power + star_power;
     }
 
-    inline Transform<float> interpolate_transform(const std::vector<Transform<float>>& transforms, float t) {
-        if (transforms.empty()) {
-            return Transform<float>{};
+    // Apply Veiling Glare
+    if (camera->veiling_glare_enabled_) {
+        float unveiled = 1.f - camera->veiling_alpha_;
+        TSpectral total_power{0.f};
+        for (std::size_t i = 0; i < frame_buffer.received_power().size(); ++i) {
+            total_power += frame_buffer.received_power()[i];
         }
-        if (transforms.size() == 1) {
-            return transforms[0];
+        TSpectral veiling_bias = camera->veiling_alpha_ * total_power /
+                                 static_cast<float>(frame_buffer.received_power().size());
+
+        for (std::size_t i = 0; i < frame_buffer.received_power().size(); ++i) {
+            frame_buffer.received_power()[i] =
+                (frame_buffer.received_power()[i] * unveiled) + veiling_bias;
         }
-
-        float scaled_t = t * static_cast<float>(transforms.size() - 1);
-        std::size_t idx = static_cast<std::size_t>(std::floor(scaled_t));
-        idx = std::min(idx, transforms.size() - 2);
-        float frac = scaled_t - static_cast<float>(idx);
-
-        Transform<float> result;
-        // Linearly interpolate position
-        result.position = transforms[idx].position * (1.0f - frac) +
-            transforms[idx + 1].position * frac;
-
-        // Slerp rotation (assuming you are using glm::quat for rotations)
-        auto quat = transforms[idx].rotation.local_to_parent_quaternion();
-        auto next_quat = transforms[idx + 1].rotation.local_to_parent_quaternion();
-        result.rotation.from_local_to_parent(glm::slerp(quat, next_quat, frac));
-
-        // Scale interpolation
-        //result.scale = transforms[idx].scale * (1.0f - frac) + transforms[idx + 1].scale * frac;
-
-        return result;
     }
 
-    /**
-     * @brief Path trace a scene view into a frame buffer.
-     *
-     * Traces camera rays through each pixel, evaluating direct lighting with
-     * shadow rays and indirect illumination via recursive path tracing with
-     * Russian roulette termination.
-     *
-     * The rendering is parallelized over tiles using TBB. Each tile accumulates
-     * results from multiple samples per pixel (spp_) into the frame buffer.
-     *
-     * @tparam TSpectral Spectral type for the rendering pipeline
-     * @param scene_view The scene view containing geometry, lights, and environment
-     * @param frame_buffer The frame buffer to render into
-     */
-    template <IsSpectral TSpectral>
-    Image<TSpectral> Renderer<TSpectral>::path_trace_(
-        SceneView<TSpectral>& scene_view,
-        FrameBuffer<TSpectral>& frame_buffer)
-    {
-        auto& camera = scene_view.camera_model_;
-        const int fb_width = frame_buffer.width();
-        const int fb_height = frame_buffer.height();
-        const auto& lights = scene_view.lights_;
-        const auto& background = scene_view.background_;
+    this->get_camera(scene_view)->readout(frame_buffer, scene_view.duration());
+}
 
-        Image<TSpectral> received_power(0, 0, TSpectral{ 0 });
-        if (frame_buffer.has_received_power()) {
-            received_power = Image<TSpectral>(fb_width, fb_height, TSpectral{ 0 });
-        }
+inline float power_heuristic(float f_pdf, float g_pdf)
+{
+    if (std::isinf(f_pdf * f_pdf)) {
+        return 1.0f;
+    }
+    float f2 = f_pdf * f_pdf;
+    float g2 = g_pdf * g_pdf;
+    return f2 / (f2 + g2);
+}
 
-        // Tile-based parallel rendering:
-        constexpr int TILE_SIZE = 16;
-        int tiles_x = (fb_width + TILE_SIZE - 1) / TILE_SIZE;
-        int tiles_y = (fb_height + TILE_SIZE - 1) / TILE_SIZE;
-        int num_tiles = tiles_x * tiles_y;
-        float time = 0.f;
-        const bool has_motion_blur = scene_view.temporal_samples_.size() > 1;
+inline Transform<float> interpolate_transform(const std::vector<Transform<float>>& transforms,
+                                              float t)
+{
+    if (transforms.empty()) {
+        return Transform<float>{};
+    }
+    if (transforms.size() == 1) {
+        return transforms[0];
+    }
 
-        tbb::parallel_for(tbb::blocked_range<int>(0, num_tiles),
-            [&](const tbb::blocked_range<int>& range) {
-                for (int tile_idx = range.begin(); tile_idx < range.end(); ++tile_idx) {
-                    int tile_y = tile_idx / tiles_x;
-                    int tile_x = tile_idx % tiles_x;
+    float scaled_t = t * static_cast<float>(transforms.size() - 1);
+    std::size_t idx = static_cast<std::size_t>(std::floor(scaled_t));
+    idx = std::min(idx, transforms.size() - 2);
+    float frac = scaled_t - static_cast<float>(idx);
 
-                    int x0 = tile_x * TILE_SIZE;
-                    int y0 = tile_y * TILE_SIZE;
-                    int x1 = std::min(x0 + TILE_SIZE, fb_width);
-                    int y1 = std::min(y0 + TILE_SIZE, fb_height);
+    Transform<float> result;
+    // Linearly interpolate position
+    result.position =
+        transforms[idx].position * (1.0f - frac) + transforms[idx + 1].position * frac;
 
-                    // Per-tile RNG seeded from tile index for reproducibility:
-                    RandomSampler<float> sampler(static_cast<unsigned int>(tile_idx));
+    // Slerp rotation (assuming you are using glm::quat for rotations)
+    auto quat = transforms[idx].rotation.local_to_parent_quaternion();
+    auto next_quat = transforms[idx + 1].rotation.local_to_parent_quaternion();
+    result.rotation.from_local_to_parent(glm::slerp(quat, next_quat, frac));
 
-                    for (int y = y0; y < y1; ++y) {
-                        for (int x = x0; x < x1; ++x) {
+    // Scale interpolation
+    // result.scale = transforms[idx].scale * (1.0f - frac) + transforms[idx + 1].scale * frac;
 
-                            TSpectral pixel_direct_radiance{ 0 };
-                            TSpectral pixel_indirect_radiance{ 0 };
-                            TSpectral pixel_radiance{ 0 };
+    return result;
+}
 
-                            float closest_depth = std::numeric_limits<float>::infinity();
-                            std::size_t geometry_id = std::numeric_limits<std::size_t>::max();
-                            TSpectral albedo_total{ 0 };
-                            Vec3<float> camera_normals{ 0 };
+/**
+ * @brief Path trace a scene view into a frame buffer.
+ *
+ * Traces camera rays through each pixel, evaluating direct lighting with
+ * shadow rays and indirect illumination via recursive path tracing with
+ * Russian roulette termination.
+ *
+ * The rendering is parallelized over tiles using TBB. Each tile accumulates
+ * results from multiple samples per pixel (spp_) into the frame buffer.
+ *
+ * @tparam TSpectral Spectral type for the rendering pipeline
+ * @param scene_view The scene view containing geometry, lights, and environment
+ * @param frame_buffer The frame buffer to render into
+ */
+template <IsSpectral TSpectral>
+Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_view,
+                                                  FrameBuffer<TSpectral>& frame_buffer)
+{
+    auto& camera = scene_view.camera_model_;
+    const int fb_width = frame_buffer.width();
+    const int fb_height = frame_buffer.height();
+    const auto& lights = scene_view.lights_;
+    const auto& background = scene_view.background_;
 
-                            TSpectral mean{ 0 };
-                            TSpectral M2{ 0 };   // sum of squared deviations
-                            int samples_taken = 0;
-                            float inv_samples = 0.0f;
+    Image<TSpectral> received_power(0, 0, TSpectral{0});
+    if (frame_buffer.has_received_power()) {
+        received_power = Image<TSpectral>(fb_width, fb_height, TSpectral{0});
+    }
 
-                            for (int s = 0; s < spp_; ++s) {
-                                // Jittered sub-pixel sample:
-                                float sx = static_cast<float>(x) + sampler.get_1d();
-                                float sy = static_cast<float>(y) + sampler.get_1d();
+    // Tile-based parallel rendering:
+    constexpr int TILE_SIZE = 16;
+    int tiles_x = (fb_width + TILE_SIZE - 1) / TILE_SIZE;
+    int tiles_y = (fb_height + TILE_SIZE - 1) / TILE_SIZE;
+    int num_tiles = tiles_x * tiles_y;
+    float time = 0.f;
+    const bool has_motion_blur = scene_view.temporal_samples_.size() > 1;
 
-                                // Generate camera ray from pixel coordinates:
-                                Ray<TSpectral> ray = camera->cast_ray(Pixel{ sx, sy }, sampler);
+    tbb::parallel_for(
+        tbb::blocked_range<int>(0, num_tiles), [&](const tbb::blocked_range<int>& range) {
+            for (int tile_idx = range.begin(); tile_idx < range.end(); ++tile_idx) {
+                int tile_y = tile_idx / tiles_x;
+                int tile_x = tile_idx % tiles_x;
 
-                                // Motion blur: randomize time sample per ray
-                                if (has_motion_blur) {
-                                    time = sampler.get_1d();  // [0, 1] maps to shutter interval
-                                }
+                int x0 = tile_x * TILE_SIZE;
+                int y0 = tile_y * TILE_SIZE;
+                int x1 = std::min(x0 + TILE_SIZE, fb_width);
+                int y1 = std::min(y0 + TILE_SIZE, fb_height);
 
-                                TSpectral throughput{ 1 };
-                                TSpectral direct_radiance{ 0 };
-                                TSpectral indirect_radiance{ 0 };
+                // Per-tile RNG seeded from tile index for reproducibility:
+                RandomSampler<float> sampler(static_cast<unsigned int>(tile_idx));
 
-                                float prev_roughness = 0.0f;
+                for (int y = y0; y < y1; ++y) {
+                    for (int x = x0; x < x1; ++x) {
 
-                                float prev_bsdf_pdf = 1.0f;
-                                Interaction<TSpectral> prev_isect;
+                        TSpectral pixel_direct_radiance{0};
+                        TSpectral pixel_indirect_radiance{0};
+                        TSpectral pixel_radiance{0};
 
-                                const Medium<TSpectral>* current_medium = nullptr;
+                        float closest_depth = std::numeric_limits<float>::infinity();
+                        std::size_t geometry_id = std::numeric_limits<std::size_t>::max();
+                        TSpectral albedo_total{0};
+                        Vec3<float> camera_normals{0};
 
-                                for (int bounce = 0; bounce < max_bounces_; ++bounce) {
-                                    HitRecord hit = scene_view.intersect(ray, time);
+                        TSpectral mean{0};
+                        TSpectral M2{0}; // sum of squared deviations
+                        int samples_taken = 0;
+                        float inv_samples = 0.0f;
 
-                                    if (current_medium != nullptr) {
-                                        auto opt_mi = current_medium->sample_free_path(ray, sampler);
-                                        auto props = current_medium->get_properties(ray.origin());
-                                        TSpectral ext = props.extinction();
-                                        
-                                        float avg_ext = 0.0f;
-                                        for(std::size_t c = 0; c < TSpectral::size(); ++c) avg_ext += ext[c];
-                                        avg_ext /= static_cast<float>(TSpectral::size());
+                        for (int s = 0; s < spp_; ++s) {
+                            // Jittered sub-pixel sample:
+                            float sx = static_cast<float>(x) + sampler.get_1d();
+                            float sy = static_cast<float>(y) + sampler.get_1d();
 
-                                        if (opt_mi && opt_mi->t < hit.t) {
-                                            float t = opt_mi->t;
-                                            TSpectral Tr{0.f};
-                                            for(std::size_t c = 0; c < TSpectral::size(); ++c) {
-                                                Tr[c] = std::exp(-ext[c] * t);
-                                            }
-                                            float pdf = avg_ext * std::exp(-avg_ext * t);
-                                            throughput = throughput * props.scattering * Tr * (1.0f / pdf);
+                            // Generate camera ray from pixel coordinates:
+                            Ray<TSpectral> ray = camera->cast_ray(Pixel{sx, sy}, sampler);
 
-                                            Interaction<TSpectral> vol_isect;
-                                            vol_isect.position = opt_mi->p;
-                                            vol_isect.wo = opt_mi->wo;
-                                            vol_isect.normal_g = Vec3<float>{0.f};
-                                            vol_isect.normal_s = Vec3<float>{0.f};
+                            // Motion blur: randomize time sample per ray
+                            if (has_motion_blur) {
+                                time = sampler.get_1d(); // [0, 1] maps to shutter interval
+                            }
 
-                                            for (const auto& light_instance : lights) {
-                                                Transform<float> current_transform = interpolate_transform(light_instance.transforms, time);
-                                                
-                                                auto sample = light_instance.light->sample_li(
-                                                    vol_isect, current_transform, this->sampler_);
+                            TSpectral throughput{1};
+                            TSpectral direct_radiance{0};
+                            TSpectral indirect_radiance{0};
 
-                                                if (!sample) continue;
-                                                
-                                                const auto& ls = *sample;
-                                                
-                                                Ray<TSpectral> shadow_ray(opt_mi->p, ls.wi);
-                                                TSpectral shadow_transmittance = scene_view.evaluate_transmittance(
-                                                    shadow_ray, ls.distance, sampler, time);
-                                                
-                                                if (shadow_transmittance.max() <= 0.0f) {
-                                                    continue;
-                                                }
-                                                float phase_val = opt_mi->phase_function->evaluate(opt_mi->wo, ls.wi);
-                                                
-                                                TSpectral Ld = throughput * (ls.Li / ls.pdf) * phase_val * shadow_transmittance;
-                                                
-                                                if (bounce == 0) {
-                                                    direct_radiance += Ld;
-                                                } else {
-                                                    indirect_radiance += Ld;
-                                                }
-                                            }
+                            float prev_roughness = 0.0f;
 
-                                            PhaseSample ps = opt_mi->phase_function->sample(opt_mi->wo, sampler);
+                            float prev_bsdf_pdf = 1.0f;
+                            Interaction<TSpectral> prev_isect;
 
-                                            float phase_eval = opt_mi->phase_function->evaluate(opt_mi->wo, ps.wi);
-                                            throughput = throughput * (phase_eval / ps.p);
-                                            
-                                            ray = Ray<TSpectral>(opt_mi->p, ps.wi);
-                                            prev_bsdf_pdf = ps.p;
-                                            continue;
-                                            
-                                        } else {
-                                            TSpectral Tr{0.f};
-                                            for(std::size_t c = 0; c < TSpectral::size(); ++c) {
-                                                Tr[c] = std::exp(-ext[c] * hit.t);
-                                            }
-                                            float pdf = std::exp(-avg_ext * hit.t);
-                                            throughput = throughput * Tr * (1.0f / pdf);
-                                        }
+                            const Medium<TSpectral>* current_medium = nullptr;
+
+                            for (int bounce = 0; bounce < max_bounces_; ++bounce) {
+                                HitRecord hit = scene_view.intersect(ray, time);
+
+                                if (current_medium != nullptr) {
+                                    auto opt_mi = current_medium->sample_free_path(ray, sampler);
+                                    auto props = current_medium->get_properties(ray.origin());
+                                    TSpectral ext = props.extinction();
+
+                                    float avg_ext = 0.0f;
+                                    for (std::size_t c = 0; c < TSpectral::size(); ++c) {
+                                        avg_ext += ext[c];
                                     }
+                                    avg_ext /= static_cast<float>(TSpectral::size());
 
-                                    if (!hit.hit()) {
-                                        // Sample environment map using ray direction
-                                        Vec3<float> d = glm::normalize(ray.direction());
-                                        float u = 0.5f + std::atan2(d.z, d.x) * (0.5f * INV_PI<float>());
-                                        float v = 0.5f - std::asin(std::clamp(d.y, -1.0f, 1.0f)) * INV_PI<float>();
-
-                                        TSpectral env_radiance = background->sample_bilinear(u, v);
-
-                                        if (bounce == 0) {
-                                            direct_radiance += throughput * env_radiance;
+                                    if (opt_mi && opt_mi->t < hit.t) {
+                                        float t = opt_mi->t;
+                                        TSpectral Tr{0.f};
+                                        for (std::size_t c = 0; c < TSpectral::size(); ++c) {
+                                            Tr[c] = std::exp(-ext[c] * t);
                                         }
-                                        else {
-                                            indirect_radiance += throughput * env_radiance;
-                                        }
-                                        break;
-                                    }
+                                        float pdf = avg_ext * std::exp(-avg_ext * t);
+                                        throughput =
+                                            throughput * props.scattering * Tr * (1.0f / pdf);
 
-                                    const auto& mapping = scene_view.instance_mappings_[hit.inst_id];
+                                        Interaction<TSpectral> vol_isect;
+                                        vol_isect.position = opt_mi->p;
+                                        vol_isect.wo = opt_mi->wo;
+                                        vol_isect.normal_g = Vec3<float>{0.f};
+                                        vol_isect.normal_s = Vec3<float>{0.f};
 
-                                    if (mapping.type == GeometryType::Light) {
-                                        const auto& light_instance = lights[mapping.light_index];
-
-                                        Vec3<float> hit_p = ray.origin() + ray.direction() * hit.t;
-                                        Vec3<float> emission_dir = -ray.direction();
-                                        TSpectral Le = light_instance.light->radiance(hit_p, emission_dir);
-
-                                        float mis_weight = 1.0f;
-
-                                        // Only apply MIS weighting if this wasn't the first camera ray,
-                                        // and if it wasn't a perfect mirror reflection (delta BSDF).
-                                        if (bounce > 0) {
-                                            Transform<float> current_transform = interpolate_transform(light_instance.transforms, time);
-
-                                            float light_pdf = light_instance.light->pdf_li(prev_isect, current_transform, ray.direction());
-                                            mis_weight = power_heuristic(prev_bsdf_pdf, light_pdf);
-                                        }
-
-                                        TSpectral final_radiance = throughput * Le * mis_weight;
-
-                                        if (bounce == 0) {
-                                            direct_radiance += final_radiance;
-                                        }
-                                        else {
-                                            indirect_radiance += final_radiance;
-                                        }
-
-                                        // Terminate for hitting light:
-                                        break;
-                                    }
-                                    else {
-
-                                        if (s == 0) {
-                                            geometry_id = hit.geom_id;
-                                        }
-
-                                        // Resolve full shading data:
-                                        Interaction<TSpectral> isect = scene_view.resolve_hit(ray, hit);
-
-                                        // Look up mesh material:
-                                        const auto& batch = scene_view.primitives_[mapping.batch_index];
-                                        const auto* material = batch.primitive->material.get();
-
-                                        // Evaluate material textures to get the opacity parameter:
-                                        auto [params, shading_isect] = material->evaluate(isect);
-
-                                        if (params.opacity < 1.0f) {
-                                            if (sampler.get_1d() > params.opacity) {
-                                                Vec3<float> pass_through_normal = (glm::dot(ray.direction(), isect.normal_g) < 0.0f) ?
-                                                    -isect.normal_g : isect.normal_g;
-                                                Vec3<float> pass_through_origin = offset_intersection_(isect.position, pass_through_normal);
-
-                                                ray = Ray<TSpectral>(pass_through_origin, ray.direction());
-                                                
-                                                bounce--; // Don't count this towards bounce counts
-                                                continue;
-                                            }
-                                        }
-
-                                        // Path regulatization
-                                        if (bounce > 0) {
-                                            params.roughness = std::max(params.roughness, prev_roughness);
-                                        }
-                                        prev_roughness = params.roughness;
-
-                                        // Record primary ray info:
-                                        if (bounce == 0) {
-                                            closest_depth = std::min(closest_depth, hit.t);
-                                            camera_normals += shading_isect.normal_s;
-                                            albedo_total += params.albedo;
-                                        }
-
-                                        // Direct lighting (next event estimation)
                                         for (const auto& light_instance : lights) {
-                                            Transform<float> current_transform = interpolate_transform(light_instance.transforms, time);
+                                            Transform<float> current_transform =
+                                                interpolate_transform(light_instance.transforms,
+                                                                      time);
 
                                             auto sample = light_instance.light->sample_li(
-                                                isect, current_transform, this->sampler_);
+                                                vol_isect, current_transform, this->sampler_);
 
                                             if (!sample) {
                                                 continue;
                                             }
+
                                             const auto& ls = *sample;
-                                            float light_dist = sample->distance;
 
-                                            // Shadow test:
-                                            if (params.transmission.max() <= 0.0f && glm::dot(ls.wi, isect.normal_g) <= 0.0f) {
+                                            Ray<TSpectral> shadow_ray(opt_mi->p, ls.wi);
+                                            TSpectral shadow_transmittance =
+                                                scene_view.evaluate_transmittance(
+                                                    shadow_ray, ls.distance, sampler, time);
+
+                                            if (shadow_transmittance.max() <= 0.0f) {
                                                 continue;
                                             }
-                                            Vec3<float> shadow_normal = (glm::dot(ls.wi, isect.normal_g) < 0.0f) ? -isect.normal_g : isect.normal_g;
-                                            Vec3<float> shadow_origin = offset_intersection_(isect.position, shadow_normal);
-                                            Ray<TSpectral> shadow_ray(shadow_origin, ls.wi);
-                                            TSpectral transmittance = scene_view.evaluate_transmittance(shadow_ray, light_dist, sampler, time);
-                                            if (transmittance.max() <= 0.0f) {
-                                                continue;
-                                            }
-                                            
+                                            float phase_val =
+                                                opt_mi->phase_function->evaluate(opt_mi->wo, ls.wi);
 
-                                            // Evaluate BSDF:
-                                            TSpectral f = material->bsdf_eval(isect.wo, ls.wi, { params, shading_isect });
-                                            float cos_theta = std::max(0.0f, glm::dot(shading_isect.normal_s, ls.wi));
+                                            TSpectral Ld = throughput * (ls.Li / ls.pdf) *
+                                                           phase_val * shadow_transmittance;
 
-                                            float mis_weight = 1.0f;
-                                            float bsdf_pdf = material->bsdf_pdf(isect.wo, ls.wi, { params, shading_isect });
-                                            mis_weight = power_heuristic(ls.pdf, bsdf_pdf);
-
-                                            // Multiply the final direct lighting by the transmittance
-                                            TSpectral Ld = throughput * (ls.Li / ls.pdf) * f * cos_theta * mis_weight * transmittance;
                                             if (bounce == 0) {
                                                 direct_radiance += Ld;
-                                            }
-                                            else {
+                                            } else {
                                                 indirect_radiance += Ld;
                                             }
                                         }
 
-                                        // Sample the BSDF:
-                                        float u1 = sampler.get_1d();
-                                        float u2 = sampler.get_1d();
+                                        PhaseSample ps =
+                                            opt_mi->phase_function->sample(opt_mi->wo, sampler);
 
-                                        BSDFSample<TSpectral> bs = material->bsdf_sample(
-                                            isect.wo, { params, shading_isect }, u1, u2);
+                                        float phase_eval =
+                                            opt_mi->phase_function->evaluate(opt_mi->wo, ps.wi);
+                                        throughput = throughput * (phase_eval / ps.p);
 
-                                        if (!bs.is_valid()) {
-                                            break;
+                                        ray = Ray<TSpectral>(opt_mi->p, ps.wi);
+                                        prev_bsdf_pdf = ps.p;
+                                        continue;
+
+                                    } else {
+                                        TSpectral Tr{0.f};
+                                        for (std::size_t c = 0; c < TSpectral::size(); ++c) {
+                                            Tr[c] = std::exp(-ext[c] * hit.t);
+                                        }
+                                        float pdf = std::exp(-avg_ext * hit.t);
+                                        throughput = throughput * Tr * (1.0f / pdf);
+                                    }
+                                }
+
+                                if (!hit.hit()) {
+                                    // Sample environment map using ray direction
+                                    Vec3<float> d = glm::normalize(ray.direction());
+                                    float u =
+                                        0.5f + std::atan2(d.z, d.x) * (0.5f * INV_PI<float>());
+                                    float v = 0.5f - std::asin(std::clamp(d.y, -1.0f, 1.0f)) *
+                                                         INV_PI<float>();
+
+                                    TSpectral env_radiance = background->sample_bilinear(u, v);
+
+                                    if (bounce == 0) {
+                                        direct_radiance += throughput * env_radiance;
+                                    } else {
+                                        indirect_radiance += throughput * env_radiance;
+                                    }
+                                    break;
+                                }
+
+                                const auto& mapping = scene_view.instance_mappings_[hit.inst_id];
+
+                                if (mapping.type == GeometryType::Light) {
+                                    const auto& light_instance = lights[mapping.light_index];
+
+                                    Vec3<float> hit_p = ray.origin() + ray.direction() * hit.t;
+                                    Vec3<float> emission_dir = -ray.direction();
+                                    TSpectral Le =
+                                        light_instance.light->radiance(hit_p, emission_dir);
+
+                                    float mis_weight = 1.0f;
+
+                                    // Only apply MIS weighting if this wasn't the first camera ray,
+                                    // and if it wasn't a perfect mirror reflection (delta BSDF).
+                                    if (bounce > 0) {
+                                        Transform<float> current_transform =
+                                            interpolate_transform(light_instance.transforms, time);
+
+                                        float light_pdf = light_instance.light->pdf_li(
+                                            prev_isect, current_transform, ray.direction());
+                                        mis_weight = power_heuristic(prev_bsdf_pdf, light_pdf);
+                                    }
+
+                                    TSpectral final_radiance = throughput * Le * mis_weight;
+
+                                    if (bounce == 0) {
+                                        direct_radiance += final_radiance;
+                                    } else {
+                                        indirect_radiance += final_radiance;
+                                    }
+
+                                    // Terminate for hitting light:
+                                    break;
+                                } else {
+
+                                    if (s == 0) {
+                                        geometry_id = hit.geom_id;
+                                    }
+
+                                    // Resolve full shading data:
+                                    Interaction<TSpectral> isect = scene_view.resolve_hit(ray, hit);
+
+                                    // Look up mesh material:
+                                    const auto& batch = scene_view.primitives_[mapping.batch_index];
+                                    const auto* material = batch.primitive->material.get();
+
+                                    // Evaluate material textures to get the opacity parameter:
+                                    auto [params, shading_isect] = material->evaluate(isect);
+
+                                    if (params.opacity < 1.0f) {
+                                        if (sampler.get_1d() > params.opacity) {
+                                            Vec3<float> pass_through_normal =
+                                                (glm::dot(ray.direction(), isect.normal_g) < 0.0f)
+                                                    ? -isect.normal_g
+                                                    : isect.normal_g;
+                                            Vec3<float> pass_through_origin = offset_intersection_(
+                                                isect.position, pass_through_normal);
+
+                                            ray = Ray<TSpectral>(pass_through_origin,
+                                                                 ray.direction());
+
+                                            bounce--; // Don't count this towards bounce counts
+                                            continue;
+                                        }
+                                    }
+
+                                    // Path regulatization
+                                    if (bounce > 0) {
+                                        params.roughness =
+                                            std::max(params.roughness, prev_roughness);
+                                    }
+                                    prev_roughness = params.roughness;
+
+                                    // Record primary ray info:
+                                    if (bounce == 0) {
+                                        closest_depth = std::min(closest_depth, hit.t);
+                                        camera_normals += shading_isect.normal_s;
+                                        albedo_total += params.albedo;
+                                    }
+
+                                    // Direct lighting (next event estimation)
+                                    for (const auto& light_instance : lights) {
+                                        Transform<float> current_transform =
+                                            interpolate_transform(light_instance.transforms, time);
+
+                                        auto sample = light_instance.light->sample_li(
+                                            isect, current_transform, this->sampler_);
+
+                                        if (!sample) {
+                                            continue;
+                                        }
+                                        const auto& ls = *sample;
+                                        float light_dist = sample->distance;
+
+                                        // Shadow test:
+                                        if (params.transmission.max() <= 0.0f &&
+                                            glm::dot(ls.wi, isect.normal_g) <= 0.0f) {
+                                            continue;
+                                        }
+                                        Vec3<float> shadow_normal =
+                                            (glm::dot(ls.wi, isect.normal_g) < 0.0f)
+                                                ? -isect.normal_g
+                                                : isect.normal_g;
+                                        Vec3<float> shadow_origin =
+                                            offset_intersection_(isect.position, shadow_normal);
+                                        Ray<TSpectral> shadow_ray(shadow_origin, ls.wi);
+                                        TSpectral transmittance = scene_view.evaluate_transmittance(
+                                            shadow_ray, light_dist, sampler, time);
+                                        if (transmittance.max() <= 0.0f) {
+                                            continue;
                                         }
 
-                                        Vec3<float> bounce_normal = (glm::dot(bs.wi, isect.normal_g) < 0.0f)
-                                            ? -isect.normal_g
-                                            : isect.normal_g;
-                                        Vec3<float> bounce_origin = offset_intersection_(isect.position, bounce_normal);
+                                        // Evaluate BSDF:
+                                        TSpectral f = material->bsdf_eval(
+                                            isect.wo, ls.wi, {params, shading_isect});
+                                        float cos_theta =
+                                            std::max(0.0f, glm::dot(shading_isect.normal_s, ls.wi));
 
-                                        prev_bsdf_pdf = bs.is_delta ? 0.0f : bs.pdf;
-                                        prev_isect = shading_isect;
+                                        float mis_weight = 1.0f;
+                                        float bsdf_pdf = material->bsdf_pdf(
+                                            isect.wo, ls.wi, {params, shading_isect});
+                                        mis_weight = power_heuristic(ls.pdf, bsdf_pdf);
 
-                                        throughput = throughput * bs.value;
-
-                                        // Russian roulette (after a few bounces):
-                                        if (bounce >= 3) {
-                                            float p_continue = std::min(0.95f, throughput.max());
-                                            if (sampler.get_1d() > p_continue) {
-                                                break;
-                                            }
-                                            throughput = throughput / p_continue;
-                                        }
-
-                                        // Spawn next ray:
-                                        ray = Ray<TSpectral>(bounce_origin, bs.wi);
-
-                                        if (glm::dot(bs.wi, isect.normal_g) < 0.0f) {
-                                            current_medium = batch.primitive->medium.get();
+                                        // Multiply the final direct lighting by the transmittance
+                                        TSpectral Ld = throughput * (ls.Li / ls.pdf) * f *
+                                                       cos_theta * mis_weight * transmittance;
+                                        if (bounce == 0) {
+                                            direct_radiance += Ld;
                                         } else {
-                                            current_medium = nullptr; 
+                                            indirect_radiance += Ld;
                                         }
                                     }
-                                }
 
-                                // Indirect radiance clamping:
-                                float current_indirect_max = indirect_radiance.max();
-                                if (current_indirect_max > indirect_clamp_threshold_) {
-                                    indirect_radiance *= (indirect_clamp_threshold_ / current_indirect_max);
-                                }
+                                    // Sample the BSDF:
+                                    float u1 = sampler.get_1d();
+                                    float u2 = sampler.get_1d();
 
-                                TSpectral sample_radiance = direct_radiance + indirect_radiance;
+                                    BSDFSample<TSpectral> bs = material->bsdf_sample(
+                                        isect.wo, {params, shading_isect}, u1, u2);
 
-                                if (std::isnan(sample_radiance[0])) {
-                                    continue;
-                                }
+                                    if (!bs.is_valid()) {
+                                        break;
+                                    }
 
-                                samples_taken++;
+                                    Vec3<float> bounce_normal =
+                                        (glm::dot(bs.wi, isect.normal_g) < 0.0f) ? -isect.normal_g
+                                                                                 : isect.normal_g;
+                                    Vec3<float> bounce_origin =
+                                        offset_intersection_(isect.position, bounce_normal);
 
+                                    prev_bsdf_pdf = bs.is_delta ? 0.0f : bs.pdf;
+                                    prev_isect = shading_isect;
 
-                                // Welford's online mean/variance update:
-                                TSpectral delta = sample_radiance - mean;
-                                inv_samples = (1.0f / static_cast<float>(samples_taken));
-                                mean += delta * inv_samples;
-                                TSpectral delta2 = sample_radiance - mean;
-                                M2 += delta * delta2;
+                                    throughput = throughput * bs.value;
 
-                                pixel_direct_radiance += direct_radiance;
-                                pixel_indirect_radiance += indirect_radiance;
-                                pixel_radiance += sample_radiance;
-
-                                // Early exit check (only after min_spp samples):
-                                if (dynamic_sampling_) {
-                                    if (s >= min_spp_ - 1) {
-                                        TSpectral variance = M2 * inv_samples;
-                                        // Normalize variance relative to mean luminance to avoid
-                                        // over-sampling dark regions:
-                                        float rel_variance = variance.max() / (mean.max() + 1e-4f);
-                                        if (rel_variance < variance_threshold_) {
+                                    // Russian roulette (after a few bounces):
+                                    if (bounce >= 3) {
+                                        float p_continue = std::min(0.95f, throughput.max());
+                                        if (sampler.get_1d() > p_continue) {
                                             break;
                                         }
+                                        throughput = throughput / p_continue;
+                                    }
+
+                                    // Spawn next ray:
+                                    ray = Ray<TSpectral>(bounce_origin, bs.wi);
+
+                                    if (glm::dot(bs.wi, isect.normal_g) < 0.0f) {
+                                        current_medium = batch.primitive->medium.get();
+                                    } else {
+                                        current_medium = nullptr;
                                     }
                                 }
                             }
-                            float inv_spp = 1.0f / static_cast<float>(samples_taken);
 
-                            // Average over samples and write to frame buffer:
-                            TSpectral avg_radiance = pixel_radiance * inv_spp;
-                            TSpectral direct_radiance = pixel_direct_radiance * inv_spp;
-                            TSpectral indirect_radiance = pixel_indirect_radiance * inv_spp;
-                            Vec3<float> avg_camera_normals = glm::normalize(camera_normals * inv_spp);
+                            // Indirect radiance clamping:
+                            float current_indirect_max = indirect_radiance.max();
+                            if (current_indirect_max > indirect_clamp_threshold_) {
+                                indirect_radiance *=
+                                    (indirect_clamp_threshold_ / current_indirect_max);
+                            }
 
-                            if (frame_buffer.has_depth()) {
-                                if (closest_depth < std::numeric_limits<float>::infinity()) {
-                                    frame_buffer.depth()(x, y) = closest_depth;
+                            TSpectral sample_radiance = direct_radiance + indirect_radiance;
+
+                            if (std::isnan(sample_radiance[0])) {
+                                continue;
+                            }
+
+                            samples_taken++;
+
+                            // Welford's online mean/variance update:
+                            TSpectral delta = sample_radiance - mean;
+                            inv_samples = (1.0f / static_cast<float>(samples_taken));
+                            mean += delta * inv_samples;
+                            TSpectral delta2 = sample_radiance - mean;
+                            M2 += delta * delta2;
+
+                            pixel_direct_radiance += direct_radiance;
+                            pixel_indirect_radiance += indirect_radiance;
+                            pixel_radiance += sample_radiance;
+
+                            // Early exit check (only after min_spp samples):
+                            if (dynamic_sampling_) {
+                                if (s >= min_spp_ - 1) {
+                                    TSpectral variance = M2 * inv_samples;
+                                    // Normalize variance relative to mean luminance to avoid
+                                    // over-sampling dark regions:
+                                    float rel_variance = variance.max() / (mean.max() + 1e-4f);
+                                    if (rel_variance < variance_threshold_) {
+                                        break;
+                                    }
                                 }
                             }
+                        }
+                        float inv_spp = 1.0f / static_cast<float>(samples_taken);
 
-                            if (frame_buffer.has_albedo()) {
-                                frame_buffer.albedo()(x, y) = albedo_total * inv_spp;
-                            }
+                        // Average over samples and write to frame buffer:
+                        TSpectral avg_radiance = pixel_radiance * inv_spp;
+                        TSpectral direct_radiance = pixel_direct_radiance * inv_spp;
+                        TSpectral indirect_radiance = pixel_indirect_radiance * inv_spp;
+                        Vec3<float> avg_camera_normals = glm::normalize(camera_normals * inv_spp);
 
-                            if (frame_buffer.has_geometry_ids()) {
-                                frame_buffer.geometry_ids()(x, y) = geometry_id;
+                        if (frame_buffer.has_depth()) {
+                            if (closest_depth < std::numeric_limits<float>::infinity()) {
+                                frame_buffer.depth()(x, y) = closest_depth;
                             }
+                        }
 
-                            if (frame_buffer.has_camera_normals()) {
-                                frame_buffer.camera_normals()(x, y) = avg_camera_normals;
-                            }
+                        if (frame_buffer.has_albedo()) {
+                            frame_buffer.albedo()(x, y) = albedo_total * inv_spp;
+                        }
 
-                            if (frame_buffer.has_world_normals()) {
-                                frame_buffer.world_normals()(x, y) = scene_view.camera_to_world_[0].apply_to_direction(avg_camera_normals);
-                            }
+                        if (frame_buffer.has_geometry_ids()) {
+                            frame_buffer.geometry_ids()(x, y) = geometry_id;
+                        }
 
-                            if (frame_buffer.has_received_direct_power()) {
-                                frame_buffer.received_direct_power()(x, y) = camera->pixel_radiance_to_power(x, y) * direct_radiance;
-                            }
+                        if (frame_buffer.has_camera_normals()) {
+                            frame_buffer.camera_normals()(x, y) = avg_camera_normals;
+                        }
 
-                            if (frame_buffer.has_received_indirect_power()) {
-                                frame_buffer.received_indirect_power()(x, y) = camera->pixel_radiance_to_power(x, y) * indirect_radiance;
-                            }
+                        if (frame_buffer.has_world_normals()) {
+                            frame_buffer.world_normals()(x, y) =
+                                scene_view.camera_to_world_[0].apply_to_direction(
+                                    avg_camera_normals);
+                        }
 
-                            if (frame_buffer.has_received_power()) {
-                                received_power(x, y) = camera->pixel_radiance_to_power(x, y) * avg_radiance;
-                            }
+                        if (frame_buffer.has_received_direct_power()) {
+                            frame_buffer.received_direct_power()(x, y) =
+                                camera->pixel_radiance_to_power(x, y) * direct_radiance;
+                        }
+
+                        if (frame_buffer.has_received_indirect_power()) {
+                            frame_buffer.received_indirect_power()(x, y) =
+                                camera->pixel_radiance_to_power(x, y) * indirect_radiance;
+                        }
+
+                        if (frame_buffer.has_received_power()) {
+                            received_power(x, y) =
+                                camera->pixel_radiance_to_power(x, y) * avg_radiance;
                         }
                     }
                 }
-            });
+            }
+        });
 
-        if (frame_buffer.has_received_power() && camera->convolve_psf_) {
-            const Image<TSpectral>& psf = camera->get_psf_kernel(0.0f, 0.0f);
-            received_power.convolve(psf);
+    if (frame_buffer.has_received_power() && camera->convolve_psf_) {
+        const Image<TSpectral>& psf = camera->get_psf_kernel(0.0f, 0.0f);
+        received_power.convolve(psf);
+    }
+
+    return received_power;
+}
+
+template <IsSpectral TSpectral>
+struct RenderItem {
+    RenderItem(TrajectoryArc set_arc,
+               std::vector<TSpectral> set_irradiance,
+               int set_effective_radius)
+        : arc(std::move(set_arc)), irradiance(std::move(set_irradiance)),
+          effective_radius(set_effective_radius)
+    {
+    }
+
+    TrajectoryArc arc;
+    std::vector<TSpectral> irradiance;
+    int effective_radius;
+
+    TSpectral interpolate_irradiances(float t) const
+    {
+        if (irradiance.size() == 1) {
+            return irradiance[0];
         }
 
+        float scaled = t * static_cast<float>(irradiance.size() - 1);
+        std::size_t lo = static_cast<std::size_t>(std::floor(scaled));
+        lo = std::min(lo, irradiance.size() - 2);
+        float frac = scaled - static_cast<float>(lo);
+
+        return irradiance[lo] + frac * (irradiance[lo + 1] - irradiance[lo]);
+    }
+
+    float max_irradiance() const
+    {
+        float max_irr = 0.f;
+        for (const TSpectral& irr : irradiance) {
+            max_irr = std::max(max_irr, irr.max());
+        }
+        return max_irr;
+    }
+};
+
+/**
+ * @brief Render unresolved point sources (stars and unresolved objects) into the frame buffer.
+ *
+ * This method implements an optimized pipeline for rendering point sources that cannot be
+ * resolved into visible geometry. It supports both delta-function (no PSF) and spatially-
+ * distributed PSF rendering with adaptive radius culling for performance.
+ *
+ * The rendering pipeline:
+ * 1. Collects all stars and unresolved objects into a unified list
+ * 2. Builds a radius LUT and assigns per-source effective PSF radii based on irradiance
+ * 3. Projects sources to screen space and bins them into tiles
+ * 4. Renders each tile in parallel into local buffers
+ * 5. Combines tile buffers into the final frame buffer
+ *
+ * Performance optimizations:
+ * - Adaptive PSF radius: dim sources use smaller kernels
+ * - Tiled rendering: parallel processing with minimal synchronization
+ * - Depth occlusion testing: skip sources behind resolved geometry
+ *
+ * @tparam TSpectral Spectral type for the rendering pipeline
+ * @param scene_view The scene view containing stars and unresolved objects
+ * @param frame_buffer The frame buffer to render into
+ */
+template <IsSpectral TSpectral>
+Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& scene_view,
+                                                         FrameBuffer<TSpectral>& frame_buffer)
+{
+    auto& camera = scene_view.camera_model_;
+    const int fb_width = frame_buffer.width();
+    const int fb_height = frame_buffer.height();
+
+    Image<TSpectral> received_power(0, 0, TSpectral{0});
+    if (frame_buffer.has_received_power()) {
+        received_power = Image<TSpectral>(fb_width, fb_height, TSpectral{0});
+    } else {
         return received_power;
     }
 
+    // Determine the stamp radius based on camera settings:
+    bool use_defocus = camera->aperture_->has_defocus();
+    bool use_psf_direct = camera->has_psf() && !use_defocus;
+    int stamp_radius = 0;
+    if (use_defocus) {
+        stamp_radius = camera->aperture_->get_defocus_half_extent();
+    } else if (use_psf_direct) {
+        stamp_radius = camera->get_psf_radius();
+    }
 
+    // Collect all unresolved points (stars + UnresolvedObjects) in a single list for processing:
+    std::vector<RenderItem<TSpectral>> items;
+    items.reserve(scene_view.stars_.size() + scene_view.unresolved_objects_.size());
 
-    template <IsSpectral TSpectral>
-    struct RenderItem {
-        RenderItem(TrajectoryArc set_arc, std::vector<TSpectral> set_irradiance, int set_effective_radius)
-            : arc(std::move(set_arc)), irradiance(std::move(set_irradiance)), effective_radius(set_effective_radius) {}
+    const auto& times = scene_view.temporal_samples_;
 
-        TrajectoryArc arc;
-        std::vector<TSpectral> irradiance;
-        int effective_radius;
-
-        TSpectral interpolate_irradiances(float t) const
-        {
-            if (irradiance.size() == 1) {
-                return irradiance[0];
-            }
-
-            float scaled = t * static_cast<float>(irradiance.size() - 1);
-            std::size_t lo = static_cast<std::size_t>(std::floor(scaled));
-            lo = std::min(lo, irradiance.size() - 2);
-            float frac = scaled - static_cast<float>(lo);
-
-            return irradiance[lo] + frac * (irradiance[lo + 1] - irradiance[lo]);
+    for (const auto& star : scene_view.stars_) {
+        std::vector<Vec3<float>> directions(star.size());
+        std::vector<TSpectral> irradiances(star.size());
+        for (std::size_t i = 0; i < star.size(); ++i) {
+            directions[i] = star[i].get_direction();
+            irradiances[i] = star[i].get_irradiance();
         }
-
-        float max_irradiance() const
-        {
-            float max_irr = 0.f;
-            for (const TSpectral& irr : irradiance) {
-                max_irr = std::max(max_irr, irr.max());
-            }
-            return max_irr;
+        TrajectoryArc arc(directions);
+        items.push_back({arc, irradiances, stamp_radius});
+    }
+    for (const auto& instance : scene_view.unresolved_objects_) {
+        std::vector<Vec3<float>> directions(instance.transforms.size());
+        std::vector<TSpectral> irradiances(instance.transforms.size());
+        for (std::size_t i = 0; i < instance.transforms.size(); ++i) {
+            directions[i] = glm::normalize(instance.transforms[i].position);
+            irradiances[i] = instance.unresolved_object->get_irradiance(times[i]);
         }
+        TrajectoryArc arc(directions);
+        items.push_back({arc, irradiances, stamp_radius});
+    }
+
+    if (items.empty()) {
+        return received_power;
+    }
+
+    // Build radius LUT and assign per-star radii:
+    if (use_psf_direct && stamp_radius > 1) {
+        const Image<TSpectral>& center_kernel = camera->get_psf_kernel(0.0f, 0.0f);
+
+        // On-axis area is conservative:
+        float representative_area =
+            camera->get_projected_aperture_area(Vec3<float>{0.f, 0.f, -1.f});
+
+        // Per-channel photon energies:
+        TSpectral photon_energies = TSpectral::photon_energies();
+
+        RadiusLUTConfig config;
+        std::vector<RadiusLUTEntry> radius_lut = build_radius_lut(
+            center_kernel, stamp_radius, representative_area, photon_energies, config);
+
+        // Per-star lookup - just a scalar comparison, no kernel traversal.
+        for (auto& item : items) {
+            item.effective_radius =
+                lookup_effective_radius(radius_lut, item.max_irradiance(), config.min_radius);
+        }
+    }
+
+    // Create the screens-pace tiles for parallel rendering:
+    constexpr int TILE_SIZE = 64;
+
+    int tiles_x = (fb_width + TILE_SIZE - 1) / TILE_SIZE;
+    int tiles_y = (fb_height + TILE_SIZE - 1) / TILE_SIZE;
+    int num_tiles = tiles_x * tiles_y;
+
+    float res_x = static_cast<float>(camera->resolution().x);
+    float res_y = static_cast<float>(camera->resolution().y);
+
+    // Process arcs into tiles:
+    struct ProjectedItem {
+        std::size_t item_idx;
+        Pixel projected;
+        float weight;
+        TSpectral irradiance;
+        Vec3<float> direction;
     };
 
-    /**
-     * @brief Render unresolved point sources (stars and unresolved objects) into the frame buffer.
-     * 
-     * This method implements an optimized pipeline for rendering point sources that cannot be
-     * resolved into visible geometry. It supports both delta-function (no PSF) and spatially-
-     * distributed PSF rendering with adaptive radius culling for performance.
-     * 
-     * The rendering pipeline:
-     * 1. Collects all stars and unresolved objects into a unified list
-     * 2. Builds a radius LUT and assigns per-source effective PSF radii based on irradiance
-     * 3. Projects sources to screen space and bins them into tiles
-     * 4. Renders each tile in parallel into local buffers
-     * 5. Combines tile buffers into the final frame buffer
-     * 
-     * Performance optimizations:
-     * - Adaptive PSF radius: dim sources use smaller kernels
-     * - Tiled rendering: parallel processing with minimal synchronization
-     * - Depth occlusion testing: skip sources behind resolved geometry
-     * 
-     * @tparam TSpectral Spectral type for the rendering pipeline
-     * @param scene_view The scene view containing stars and unresolved objects
-     * @param frame_buffer The frame buffer to render into
-     */
-    template <IsSpectral TSpectral>
-    Image<TSpectral> Renderer<TSpectral>::render_unresolved_(
-        SceneView<TSpectral>& scene_view,
-        FrameBuffer<TSpectral>& frame_buffer)
-    {
-        auto& camera = scene_view.camera_model_;
-        const int fb_width = frame_buffer.width();
-        const int fb_height = frame_buffer.height();
+    std::vector<std::vector<ProjectedItem>> tile_bins(static_cast<std::size_t>(num_tiles));
 
-        Image<TSpectral> received_power(0, 0, TSpectral{ 0 });
-        if (frame_buffer.has_received_power()) {
-            received_power = Image<TSpectral>(fb_width, fb_height, TSpectral{ 0 });
-        }
-        else {
-            return received_power;
+    float max_pixel_step = 0.75f; // TODO Make this configurable
+    for (std::size_t i = 0; i < items.size(); ++i) {
+        const auto& item = items[i];
+        const auto& arc = item.arc;
+
+        // Clip arc to frustum:
+        auto visible_intervals = camera->view_frustum().clip_arc(arc);
+        if (visible_intervals.empty()) {
+            continue;
         }
 
-        // Determine the stamp radius based on camera settings:
-        bool use_defocus = camera->aperture_->has_defocus();
-        bool use_psf_direct = camera->has_psf() && !use_defocus;
-        int stamp_radius = 0;
-        if (use_defocus) {
-            stamp_radius = camera->aperture_->get_defocus_half_extent();
-        }
-        else if (use_psf_direct) {
-            stamp_radius = camera->get_psf_radius();
-        }
-        
-        // Collect all unresolved points (stars + UnresolvedObjects) in a single list for processing:
-        std::vector<RenderItem<TSpectral>> items;
-        items.reserve(scene_view.stars_.size() + scene_view.unresolved_objects_.size());
+        // For each visible interval, adaptively sample in pixel space:
+        for (const auto& [t_start, t_end] : visible_intervals) {
 
-        const auto& times = scene_view.temporal_samples_;
-        
-        for (const auto& star : scene_view.stars_) {
-            std::vector<Vec3<float>> directions(star.size());
-            std::vector<TSpectral> irradiances(star.size());
-            for (std::size_t i = 0; i < star.size(); ++i) {
-                directions[i] = star[i].get_direction();
-                irradiances[i] = star[i].get_irradiance();
+            // Start with the original sample parameter values that fall within
+            // this visible interval. For N input samples, these are at
+            // t = 0, 1/(N-1), 2/(N-1), ..., 1
+            std::vector<float> params;
+            params.push_back(t_start);
+            std::size_t N = arc.sample_count();
+            for (std::size_t k = 0; k < N; ++k) {
+                float t_k = (N == 1) ? 0.0f : static_cast<float>(k) / static_cast<float>(N - 1);
+                if (t_k > t_start && t_k < t_end) {
+                    params.push_back(t_k);
+                }
             }
-            TrajectoryArc arc(directions);
-            items.push_back({ arc, irradiances, stamp_radius });
-        }
-        for (const auto& instance : scene_view.unresolved_objects_) {
-            std::vector<Vec3<float>> directions(instance.transforms.size());
-            std::vector<TSpectral> irradiances(instance.transforms.size());
-            for (std::size_t i = 0; i < instance.transforms.size(); ++i) {
-                directions[i] = glm::normalize(instance.transforms[i].position);
-                irradiances[i] = instance.unresolved_object->get_irradiance(times[i]);
+            params.push_back(t_end);
+
+            // Project initial points to pixel space:
+            std::vector<Pixel> pixels(params.size());
+            for (std::size_t k = 0; k < params.size(); ++k) {
+                Vec3<float> dir = arc.evaluate(params[k]);
+                pixels[k] = camera->project_point(dir);
             }
-            TrajectoryArc arc(directions);
-            items.push_back({ arc, irradiances, stamp_radius});
-        }
-        
-        if (items.empty()) {
-            return received_power;
-        }
-        
-        // Build radius LUT and assign per-star radii:
-        if (use_psf_direct && stamp_radius > 1) {
-            const Image<TSpectral>& center_kernel =
-                camera->get_psf_kernel(0.0f, 0.0f);
-        
-            // On-axis area is conservative:
-            float representative_area =
-                camera->get_projected_aperture_area(Vec3<float>{0.f, 0.f, -1.f});
-        
-            // Per-channel photon energies:
-            TSpectral photon_energies = TSpectral::photon_energies();
-        
-            RadiusLUTConfig config;
-            std::vector<RadiusLUTEntry> radius_lut =
-                build_radius_lut(center_kernel, stamp_radius,
-                    representative_area,
-                    photon_energies, config);
-        
-            // Per-star lookup - just a scalar comparison, no kernel traversal.
-            for (auto& item : items) {
-                item.effective_radius =
-                    lookup_effective_radius(radius_lut, item.max_irradiance(),
-                        config.min_radius);
-            }
-        }
-        
-        // Create the screens-pace tiles for parallel rendering:
-        constexpr int TILE_SIZE = 64;
-        
-        int tiles_x = (fb_width + TILE_SIZE - 1) / TILE_SIZE;
-        int tiles_y = (fb_height + TILE_SIZE - 1) / TILE_SIZE;
-        int num_tiles = tiles_x * tiles_y;
-        
-        float res_x = static_cast<float>(camera->resolution().x);
-        float res_y = static_cast<float>(camera->resolution().y);
 
-        // Process arcs into tiles:
-        struct ProjectedItem {
-            std::size_t item_idx;
-            Pixel       projected;
-            float       weight;
-            TSpectral   irradiance;
-            Vec3<float> direction;
-        };
+            // Adaptive subdivision: bisect intervals where pixel distance > threshold
+            // Process from back to front so insertions don't invalidate indices
+            constexpr int MAX_SUBDIVISIONS = 12; // safety limit
+            for (int pass = 0; pass < MAX_SUBDIVISIONS; ++pass) {
+                bool subdivided = false;
+                for (std::size_t k = params.size() - 1; k > 0; --k) {
+                    float dx = pixels[k].x - pixels[k - 1].x;
+                    float dy = pixels[k].y - pixels[k - 1].y;
+                    float dist = std::sqrt(dx * dx + dy * dy);
 
+                    if (dist > max_pixel_step) {
+                        float t_mid = (params[k - 1] + params[k]) / 2.0f;
+                        Vec3<float> dir_mid = arc.evaluate(t_mid);
+                        Pixel p_mid = camera->project_point(dir_mid);
 
-        std::vector<std::vector<ProjectedItem>> tile_bins(
-            static_cast<std::size_t>(num_tiles));
-
-        float max_pixel_step = 0.75f; // TODO Make this configurable
-        for (std::size_t i = 0; i < items.size(); ++i) {
-            const auto& item = items[i];
-            const auto& arc = item.arc;
-
-            // Clip arc to frustum:
-            auto visible_intervals = camera->view_frustum().clip_arc(arc);
-            if (visible_intervals.empty()) continue;
-
-            // For each visible interval, adaptively sample in pixel space:
-            for (const auto& [t_start, t_end] : visible_intervals) {
-
-                // Start with the original sample parameter values that fall within
-                // this visible interval. For N input samples, these are at
-                // t = 0, 1/(N-1), 2/(N-1), ..., 1
-                std::vector<float> params;
-                params.push_back(t_start);
-                std::size_t N = arc.sample_count();
-                for (std::size_t k = 0; k < N; ++k) {
-                    float t_k = (N == 1) ? 0.0f : static_cast<float>(k) / static_cast<float>(N - 1);
-                    if (t_k > t_start && t_k < t_end) {
-                        params.push_back(t_k);
+                        params.insert(params.begin() +
+                                          static_cast<decltype(params)::difference_type>(k),
+                                      t_mid);
+                        pixels.insert(pixels.begin() +
+                                          static_cast<decltype(params)::difference_type>(k),
+                                      p_mid);
+                        subdivided = true;
                     }
                 }
-                params.push_back(t_end);
+                if (!subdivided) {
+                    break;
+                }
+            }
 
-                // Project initial points to pixel space:
-                std::vector<Pixel> pixels(params.size());
-                for (std::size_t k = 0; k < params.size(); ++k) {
-                    Vec3<float> dir = arc.evaluate(params[k]);
-                    pixels[k] = camera->project_point(dir);
+            // Compute weights (proportional to parameter interval around each sample):
+            // Each sample represents the midpoint of its surrounding interval.
+            std::size_t num_samples = params.size();
+            for (std::size_t k = 0; k < num_samples; ++k) {
+                float dt;
+                if (num_samples == 1) {
+                    dt = t_end - t_start;
+                } else if (k == 0) {
+                    dt = (params[1] - params[0]) / 2.0f;
+                } else if (k == num_samples - 1) {
+                    dt = (params[k] - params[k - 1]) / 2.0f;
+                } else {
+                    dt = (params[k + 1] - params[k - 1]) / 2.0f;
+                }
+                float weight = dt / (t_end - t_start); // normalize so weights sum to ~1
+
+                // Interpolate irradiance at this parameter value:
+                TSpectral irrad = item.interpolate_irradiances(params[k]);
+                Vec3<float> dir = arc.evaluate(params[k]);
+                const Pixel& p = pixels[k];
+                if (p.x < 0.f || p.x > res_x || p.y < 0.f || p.y > res_y) {
+                    continue;
                 }
 
-                // Adaptive subdivision: bisect intervals where pixel distance > threshold
-                // Process from back to front so insertions don't invalidate indices
-                constexpr int MAX_SUBDIVISIONS = 12;  // safety limit
-                for (int pass = 0; pass < MAX_SUBDIVISIONS; ++pass) {
-                    bool subdivided = false;
-                    for (std::size_t k = params.size() - 1; k > 0; --k) {
-                        float dx = pixels[k].x - pixels[k - 1].x;
-                        float dy = pixels[k].y - pixels[k - 1].y;
-                        float dist = std::sqrt(dx * dx + dy * dy);
+                int tx = std::clamp(static_cast<int>(p.x) / TILE_SIZE, 0, tiles_x - 1);
+                int ty = std::clamp(static_cast<int>(p.y) / TILE_SIZE, 0, tiles_y - 1);
 
-                        if (dist > max_pixel_step) {
-                            float t_mid = (params[k - 1] + params[k]) / 2.0f;
-                            Vec3<float> dir_mid = arc.evaluate(t_mid);
-                            Pixel p_mid = camera->project_point(dir_mid);
+                tile_bins[static_cast<std::size_t>(ty * tiles_x + tx)].push_back(
+                    {i, p, weight, irrad, dir});
+            }
+        }
+    }
 
-                            params.insert(params.begin() + static_cast<decltype(params)::difference_type>(k), t_mid);
-                            pixels.insert(pixels.begin() + static_cast<decltype(params)::difference_type>(k), p_mid);
-                            subdivided = true;
+    // Render tiles in parallel:
+    const auto& depth_buffer = frame_buffer.depth();
+    bool has_depth = frame_buffer.has_depth();
+
+    int margin = stamp_radius;
+
+    struct TileBuffer {
+        Image<TSpectral> buf;
+        int origin_x = 0;
+        int origin_y = 0;
+        int local_w = 0;
+        int local_h = 0;
+    };
+
+    std::vector<TileBuffer> tile_buffers(static_cast<std::size_t>(num_tiles));
+
+    tbb::parallel_for(
+        tbb::blocked_range<int>(0, num_tiles), [&](const tbb::blocked_range<int>& range) {
+            for (int tile_idx = range.begin(); tile_idx < range.end(); ++tile_idx) {
+                const auto& bin = tile_bins[static_cast<std::size_t>(tile_idx)];
+                if (bin.empty()) {
+                    continue;
+                }
+
+                int tile_y = tile_idx / tiles_x;
+                int tile_x = tile_idx % tiles_x;
+
+                int tile_x0 = tile_x * TILE_SIZE;
+                int tile_y0 = tile_y * TILE_SIZE;
+
+                int local_x0 = std::max(0, tile_x0 - margin);
+                int local_y0 = std::max(0, tile_y0 - margin);
+                int local_x1 = std::min(fb_width, tile_x0 + TILE_SIZE + margin);
+                int local_y1 = std::min(fb_height, tile_y0 + TILE_SIZE + margin);
+
+                int local_w = local_x1 - local_x0;
+                int local_h = local_y1 - local_y0;
+
+                Image<TSpectral> local_buf(local_w, local_h);
+
+                for (const auto& proj : bin) {
+                    const auto& item = items[proj.item_idx];
+                    const Pixel& star_p = proj.projected;
+
+                    bool unobstructed = true;
+                    if (has_depth) {
+                        if (!std::isinf(depth_buffer(star_p))) {
+                            unobstructed = false;
                         }
                     }
-                    if (!subdivided) break;
-                }
-
-                // Compute weights (proportional to parameter interval around each sample):
-                // Each sample represents the midpoint of its surrounding interval.
-                std::size_t num_samples = params.size();
-                for (std::size_t k = 0; k < num_samples; ++k) {
-                    float dt;
-                    if (num_samples == 1) {
-                        dt = t_end - t_start;
-                    }
-                    else if (k == 0) {
-                        dt = (params[1] - params[0]) / 2.0f;
-                    }
-                    else if (k == num_samples - 1) {
-                        dt = (params[k] - params[k - 1]) / 2.0f;
-                    }
-                    else {
-                        dt = (params[k + 1] - params[k - 1]) / 2.0f;
-                    }
-                    float weight = dt / (t_end - t_start);  // normalize so weights sum to ~1
-
-                    // Interpolate irradiance at this parameter value:
-                    TSpectral irrad = item.interpolate_irradiances(params[k]);
-                    Vec3<float> dir = arc.evaluate(params[k]);
-                    const Pixel& p = pixels[k];
-                    if (p.x < 0.f || p.x > res_x || p.y < 0.f || p.y > res_y) continue;
-
-                    int tx = std::clamp(static_cast<int>(p.x) / TILE_SIZE, 0, tiles_x - 1);
-                    int ty = std::clamp(static_cast<int>(p.y) / TILE_SIZE, 0, tiles_y - 1);
-
-                    tile_bins[static_cast<std::size_t>(ty * tiles_x + tx)].push_back({
-                        i, p, weight, irrad, dir
-                        });
-                }
-            }
-        }
-
-        
-        // Render tiles in parallel:
-        const auto& depth_buffer = frame_buffer.depth();
-        bool has_depth = frame_buffer.has_depth();
-        
-        int margin = stamp_radius;
-        
-        struct TileBuffer {
-            Image<TSpectral> buf;
-            int origin_x = 0;
-            int origin_y = 0;
-            int local_w = 0;
-            int local_h = 0;
-        };
-        
-        std::vector<TileBuffer> tile_buffers(static_cast<std::size_t>(num_tiles));
-        
-        tbb::parallel_for(tbb::blocked_range<int>(0, num_tiles),
-            [&](const tbb::blocked_range<int>& range) {
-                for (int tile_idx = range.begin(); tile_idx < range.end(); ++tile_idx) {
-                    const auto& bin = tile_bins[static_cast<std::size_t>(tile_idx)];
-                    if (bin.empty()) {
+                    if (!unobstructed) {
                         continue;
                     }
-        
-                    int tile_y = tile_idx / tiles_x;
-                    int tile_x = tile_idx % tiles_x;
-        
-                    int tile_x0 = tile_x * TILE_SIZE;
-                    int tile_y0 = tile_y * TILE_SIZE;
-        
-                    int local_x0 = std::max(0, tile_x0 - margin);
-                    int local_y0 = std::max(0, tile_y0 - margin);
-                    int local_x1 = std::min(fb_width, tile_x0 + TILE_SIZE + margin);
-                    int local_y1 = std::min(fb_height, tile_y0 + TILE_SIZE + margin);
-        
-                    int local_w = local_x1 - local_x0;
-                    int local_h = local_y1 - local_y0;
-        
-                    Image<TSpectral> local_buf(local_w, local_h);
-        
-                    for (const auto& proj : bin) {
-                        const auto& item = items[proj.item_idx];
-                        const Pixel& star_p = proj.projected;
-        
-                        bool unobstructed = true;
-                        if (has_depth) {
-                            if (!std::isinf(depth_buffer(star_p))) {
-                                unobstructed = false;
-                            }
-                        }
-                        if (!unobstructed) {
-                            continue;
-                        }
-        
-                        float projected_area =
-                            camera->get_projected_aperture_area(proj.direction);
-                        TSpectral power = proj.weight * proj.irradiance * projected_area;
-        
-                        if (stamp_radius > 0) {
-                            float floor_x = std::floor(star_p.x);
-                            float floor_y = std::floor(star_p.y);
-                            float frac_x = star_p.x - floor_x;
-                            float frac_y = star_p.y - floor_y;
 
-                            int eff_r = item.effective_radius;
+                    float projected_area = camera->get_projected_aperture_area(proj.direction);
+                    TSpectral power = proj.weight * proj.irradiance * projected_area;
 
-                            if (use_defocus) {
-                                const Image<float>& kernel =
-                                    camera->aperture_->get_defocus_kernel(frac_x, frac_y);
+                    if (stamp_radius > 0) {
+                        float floor_x = std::floor(star_p.x);
+                        float floor_y = std::floor(star_p.y);
+                        float frac_x = star_p.x - floor_x;
+                        float frac_y = star_p.y - floor_y;
 
-                                int k_offset = camera->aperture_->get_defocus_half_extent() - eff_r;
-                                int crop_dim = 2 * eff_r + 1;
-                                int start_x = static_cast<int>(floor_x) - eff_r;
-                                int start_y = static_cast<int>(floor_y) - eff_r;
+                        int eff_r = item.effective_radius;
 
-                                // Clamp to local tile bounds
-                                int kx_begin = std::max(0, local_x0 - start_x);
-                                int kx_end = std::min(crop_dim, local_x1 - start_x);
-                                int ky_begin = std::max(0, local_y0 - start_y);
-                                int ky_end = std::min(crop_dim, local_y1 - start_y);
+                        if (use_defocus) {
+                            const Image<float>& kernel =
+                                camera->aperture_->get_defocus_kernel(frac_x, frac_y);
 
-                                for (int ky = ky_begin; ky < ky_end; ++ky) {
-                                    int ly = start_y + ky - local_y0;
-                                    for (int kx = kx_begin; kx < kx_end; ++kx) {
-                                        int lx = start_x + kx - local_x0;
-                                        // Note: scalar kernel * spectral power
-                                        local_buf(lx, ly) +=
-                                            power * kernel(kx + k_offset, ky + k_offset);
-                                    }
+                            int k_offset = camera->aperture_->get_defocus_half_extent() - eff_r;
+                            int crop_dim = 2 * eff_r + 1;
+                            int start_x = static_cast<int>(floor_x) - eff_r;
+                            int start_y = static_cast<int>(floor_y) - eff_r;
+
+                            // Clamp to local tile bounds
+                            int kx_begin = std::max(0, local_x0 - start_x);
+                            int kx_end = std::min(crop_dim, local_x1 - start_x);
+                            int ky_begin = std::max(0, local_y0 - start_y);
+                            int ky_end = std::min(crop_dim, local_y1 - start_y);
+
+                            for (int ky = ky_begin; ky < ky_end; ++ky) {
+                                int ly = start_y + ky - local_y0;
+                                for (int kx = kx_begin; kx < kx_end; ++kx) {
+                                    int lx = start_x + kx - local_x0;
+                                    // Note: scalar kernel * spectral power
+                                    local_buf(lx, ly) +=
+                                        power * kernel(kx + k_offset, ky + k_offset);
                                 }
                             }
-                            else {
-                                const Image<TSpectral>& kernel =
-                                    camera->get_psf_kernel(frac_x, frac_y);
+                        } else {
+                            const Image<TSpectral>& kernel = camera->get_psf_kernel(frac_x, frac_y);
 
-                                int k_offset = stamp_radius - eff_r;
-                                int crop_dim = 2 * eff_r + 1;
+                            int k_offset = stamp_radius - eff_r;
+                            int crop_dim = 2 * eff_r + 1;
 
-                                int start_x = static_cast<int>(floor_x) - eff_r;
-                                int start_y = static_cast<int>(floor_y) - eff_r;
+                            int start_x = static_cast<int>(floor_x) - eff_r;
+                            int start_y = static_cast<int>(floor_y) - eff_r;
 
-                                int kx_begin = std::max(0, local_x0 - start_x);
-                                int kx_end = std::min(crop_dim, local_x1 - start_x);
+                            int kx_begin = std::max(0, local_x0 - start_x);
+                            int kx_end = std::min(crop_dim, local_x1 - start_x);
 
-                                int ky_begin = std::max(0, local_y0 - start_y);
-                                int ky_end = std::min(crop_dim, local_y1 - start_y);
+                            int ky_begin = std::max(0, local_y0 - start_y);
+                            int ky_end = std::min(crop_dim, local_y1 - start_y);
 
-                                for (int ky = ky_begin; ky < ky_end; ++ky) {
-                                    int img_y = start_y + ky;
-                                    int ly = img_y - local_y0;
+                            for (int ky = ky_begin; ky < ky_end; ++ky) {
+                                int img_y = start_y + ky;
+                                int ly = img_y - local_y0;
 
-                                    for (int kx = kx_begin; kx < kx_end; ++kx) {
-                                        int img_x = start_x + kx;
-                                        int lx = img_x - local_x0;
+                                for (int kx = kx_begin; kx < kx_end; ++kx) {
+                                    int img_x = start_x + kx;
+                                    int lx = img_x - local_x0;
 
-                                        local_buf(lx, ly) +=
-                                            power * kernel(kx + k_offset, ky + k_offset);
-                                    }
+                                    local_buf(lx, ly) +=
+                                        power * kernel(kx + k_offset, ky + k_offset);
                                 }
                             }
                         }
-                        else {
-                            int px = static_cast<int>(std::round(star_p.x));
-                            int py = static_cast<int>(std::round(star_p.y));
-                            if (px >= local_x0 && px < local_x1 &&
-                                py >= local_y0 && py < local_y1) {
-                                local_buf(px - local_x0, py - local_y0) += power;
-                            }
+                    } else {
+                        int px = static_cast<int>(std::round(star_p.x));
+                        int py = static_cast<int>(std::round(star_p.y));
+                        if (px >= local_x0 && px < local_x1 && py >= local_y0 && py < local_y1) {
+                            local_buf(px - local_x0, py - local_y0) += power;
                         }
                     }
-        
-                    auto& tb = tile_buffers[static_cast<std::size_t>(tile_idx)];
-                    tb.buf = std::move(local_buf);
-                    tb.origin_x = local_x0;
-                    tb.origin_y = local_y0;
-                    tb.local_w = local_w;
-                    tb.local_h = local_h;
                 }
-            });
-        
-        // Combine all Tiles:
-        std::vector<std::vector<int>> row_tiles(static_cast<std::size_t>(fb_height));
-        for (int t = 0; t < num_tiles; ++t) {
-            const auto& tb = tile_buffers[static_cast<std::size_t>(t)];
-            if (tb.local_w == 0) continue;
-            for (int y = tb.origin_y; y < tb.origin_y + tb.local_h; ++y) {
-                row_tiles[static_cast<std::size_t>(y)].push_back(t);
+
+                auto& tb = tile_buffers[static_cast<std::size_t>(tile_idx)];
+                tb.buf = std::move(local_buf);
+                tb.origin_x = local_x0;
+                tb.origin_y = local_y0;
+                tb.local_w = local_w;
+                tb.local_h = local_h;
             }
-        }
-        
-        tbb::parallel_for(tbb::blocked_range<int>(0, fb_height),
-            [&](const tbb::blocked_range<int>& range) {
-                for (int y = range.begin(); y < range.end(); ++y) {
-                    for (int t : row_tiles[static_cast<std::size_t>(y)]) {
-                        const auto& tb = tile_buffers[static_cast<std::size_t>(t)];
-                        int ly = y - tb.origin_y;
-                        for (int lx = 0; lx < tb.local_w; ++lx) {
-                            const TSpectral& val = tb.buf(lx, ly);
-                            bool nonzero = false;
-                            for (std::size_t c = 0; c < TSpectral::size(); ++c) {
-                                if (val[c] != 0.0f) { nonzero = true; break; }
-                            }
-                            if (nonzero) {
-                                received_power(tb.origin_x + lx, y) += val;
-                            }
-                        }
-                    }
-                }
-            });
+        });
 
-        if (use_defocus && camera->convolve_psf_) {
-            const Image<TSpectral>& psf = camera->get_psf_kernel(0.0f, 0.0f);
-            received_power.convolve(psf);
+    // Combine all Tiles:
+    std::vector<std::vector<int>> row_tiles(static_cast<std::size_t>(fb_height));
+    for (int t = 0; t < num_tiles; ++t) {
+        const auto& tb = tile_buffers[static_cast<std::size_t>(t)];
+        if (tb.local_w == 0) {
+            continue;
         }
-
-        return received_power;
+        for (int y = tb.origin_y; y < tb.origin_y + tb.local_h; ++y) {
+            row_tiles[static_cast<std::size_t>(y)].push_back(t);
+        }
     }
+
+    tbb::parallel_for(tbb::blocked_range<int>(0, fb_height),
+                      [&](const tbb::blocked_range<int>& range) {
+                          for (int y = range.begin(); y < range.end(); ++y) {
+                              for (int t : row_tiles[static_cast<std::size_t>(y)]) {
+                                  const auto& tb = tile_buffers[static_cast<std::size_t>(t)];
+                                  int ly = y - tb.origin_y;
+                                  for (int lx = 0; lx < tb.local_w; ++lx) {
+                                      const TSpectral& val = tb.buf(lx, ly);
+                                      bool nonzero = false;
+                                      for (std::size_t c = 0; c < TSpectral::size(); ++c) {
+                                          if (val[c] != 0.0f) {
+                                              nonzero = true;
+                                              break;
+                                          }
+                                      }
+                                      if (nonzero) {
+                                          received_power(tb.origin_x + lx, y) += val;
+                                      }
+                                  }
+                              }
+                          }
+                      });
+
+    if (use_defocus && camera->convolve_psf_) {
+        const Image<TSpectral>& psf = camera->get_psf_kernel(0.0f, 0.0f);
+        received_power.convolve(psf);
+    }
+
+    return received_power;
 }
+} // namespace huira

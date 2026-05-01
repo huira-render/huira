@@ -9,7 +9,7 @@
 // Core components:
 // #include "huira/core/constants.hpp"    // Not part of public API
 #include "huira/core/interval.hpp"
-//#include "huira/core/physics.hpp"       // Not part of publci API
+// #include "huira/core/physics.hpp"       // Not part of publci API
 #include "huira/core/rotation.hpp"
 #include "huira/core/spectral_bins.hpp"
 #include "huira/core/time.hpp"
@@ -22,22 +22,22 @@
 // Handles for various scene elements
 #include "huira/handles/camera_handle.hpp"
 #include "huira/handles/scene/frame_handle.hpp"
-//#include "huira/handles/handle.hpp"            // Not part of public API
-#include "huira/handles/scene/instance_handle.hpp"
+// #include "huira/handles/handle.hpp"            // Not part of public API
 #include "huira/handles/assets/light_handle.hpp"
-#include "huira/handles/geometry/mesh_handle.hpp"
 #include "huira/handles/assets/model_handle.hpp"
-//#include "huira/handles/scene/node_handle.hpp"       // Not part of public API
-//#include "huira/handles/root_frame_handle.hpp" // Not part of public API
+#include "huira/handles/geometry/mesh_handle.hpp"
+#include "huira/handles/scene/instance_handle.hpp"
+// #include "huira/handles/scene/node_handle.hpp"       // Not part of public API
+// #include "huira/handles/root_frame_handle.hpp" // Not part of public API
 #include "huira/handles/assets/unresolved_handle.hpp"
 
 // Image interfaces
-#include "huira/images/image.hpp"
 #include "huira/images/color_map.hpp"
-#include "huira/images/io/read_image.hpp"
-#include "huira/images/io/png_io.hpp"
-#include "huira/images/io/jpeg_io.hpp"
+#include "huira/images/image.hpp"
 #include "huira/images/io/fits_io.hpp"
+#include "huira/images/io/jpeg_io.hpp"
+#include "huira/images/io/png_io.hpp"
+#include "huira/images/io/read_image.hpp"
 #include "huira/images/io/tiff_io.hpp"
 
 // Materials and BSDFs:
@@ -53,22 +53,22 @@
 // platform/ is not part of the public API
 
 // Rendering interfaces:
+#include "huira/geometry/ray.hpp"
 #include "huira/render/frame_buffer.hpp"
 #include "huira/render/interaction.hpp"
 #include "huira/render/renderer.hpp"
-#include "huira/geometry/ray.hpp"
-//#include "huira/render/sampler.hpp"        // Not part of the public API
+// #include "huira/render/sampler.hpp"        // Not part of the public API
 
 // Scene management
-//#include "huira/scene/frame_node.hpp"  // Not part of the public API
-//#include "huira/scene/instance.hpp"    // Not part of the public API
-//#include "huira/scene/node.hpp"        // Not part of the public API
+// #include "huira/scene/frame_node.hpp"  // Not part of the public API
+// #include "huira/scene/instance.hpp"    // Not part of the public API
+// #include "huira/scene/node.hpp"        // Not part of the public API
 #include "huira/scene/scene.hpp"
 #include "huira/scene/scene_view.hpp"
 
 // Stars Interfaces:
-//#include "huira/stars/star.hpp"
-//#include "huira/stars/tycho_processor.hpp"
+// #include "huira/stars/star.hpp"
+// #include "huira/stars/tycho_processor.hpp"
 
 // Units:
 #include "huira/units/units.hpp"

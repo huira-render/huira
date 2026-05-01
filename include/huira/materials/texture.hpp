@@ -10,45 +10,47 @@ namespace fs = std::filesystem;
 
 namespace huira {
 
-    template <IsSpectral TSpectral>
-    class Scene;
+template <IsSpectral TSpectral>
+class Scene;
 
-    /**
-     * @brief Scene-managed wrapper around an Image.
-     *
-     * Texture is a SceneObject that provides scene ownership, naming, and
-     * lifetime management for Image data. It exists in the scene management
-     * layer and is accessed by users through TextureHandle.
-     *
-     * During rendering, Materials hold raw Image<TPixel>* pointers for
-     * direct access without indirection through this wrapper. Texture is
-     * not involved in the rendering hot path.
-     *
-     * @tparam TPixel The pixel type of the underlying Image (e.g., TSpectral,
-     *                float, Vec3<float>)
-     */
-    template <typename TPixel>
-    class Texture : public SceneObject<Texture<TPixel>> {
-    public:
-        Texture(const Texture&) = delete;
-        Texture& operator=(const Texture&) = delete;
+/**
+ * @brief Scene-managed wrapper around an Image.
+ *
+ * Texture is a SceneObject that provides scene ownership, naming, and
+ * lifetime management for Image data. It exists in the scene management
+ * layer and is accessed by users through TextureHandle.
+ *
+ * During rendering, Materials hold raw Image<TPixel>* pointers for
+ * direct access without indirection through this wrapper. Texture is
+ * not involved in the rendering hot path.
+ *
+ * @tparam TPixel The pixel type of the underlying Image (e.g., TSpectral,
+ *                float, Vec3<float>)
+ */
+template <typename TPixel>
+class Texture : public SceneObject<Texture<TPixel>> {
+  public:
+    Texture(const Texture&) = delete;
+    Texture& operator=(const Texture&) = delete;
 
-        explicit Texture(Image<TPixel>&& image)
-            : image_{ std::make_shared<Image<TPixel>>(std::move(image)) }
-        {}
+    explicit Texture(Image<TPixel>&& image)
+        : image_{std::make_shared<Image<TPixel>>(std::move(image))}
+    {
+    }
 
-        explicit Texture(const TPixel& constant_value)
-            : image_{ std::make_shared<Image<TPixel>>(1, 1, constant_value) }
-        {}
+    explicit Texture(const TPixel& constant_value)
+        : image_{std::make_shared<Image<TPixel>>(1, 1, constant_value)}
+    {
+    }
 
-        [[nodiscard]] std::shared_ptr<Image<TPixel>> shared_image() const { return image_; }
+    [[nodiscard]] std::shared_ptr<Image<TPixel>> shared_image() const { return image_; }
 
-        [[nodiscard]] Resolution resolution() const noexcept { return image_->resolution(); }
-        
-        [[nodiscard]] std::string type() const override { return "Texture"; }
+    [[nodiscard]] Resolution resolution() const noexcept { return image_->resolution(); }
 
-    private:
-        std::shared_ptr<Image<TPixel>> image_;
-    };
+    [[nodiscard]] std::string type() const override { return "Texture"; }
 
-}
+  private:
+    std::shared_ptr<Image<TPixel>> image_;
+};
+
+} // namespace huira

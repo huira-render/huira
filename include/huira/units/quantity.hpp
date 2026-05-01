@@ -6,543 +6,577 @@
 #include <string>
 #include <type_traits>
 
+#include "huira/concepts/unit_concepts.hpp"
 #include "huira/core/constants.hpp"
 #include "huira/units/dimensionality.hpp"
-
-#include "huira/concepts/unit_concepts.hpp"
 #include "huira/util/validate.hpp"
 
 namespace huira::units {
-    /**
-     * @brief Primary template for representing physical quantities with dimensions and scale
-     *
-     * @tparam Dim The dimensionality of the quantity (e.g., Length, Time, Mass)
-     * @tparam Scale The scale/ratio for unit conversion (e.g., std::kilo, std::milli) or a unit tag
-     *
-     * This class template provides type-safe representation of physical quantities with
-     * automatic unit conversion, dimensional analysis, and arithmetic operations.
-     * It stores values internally and provides conversion to SI units through the scale parameter.
-     */
-    template<IsDimensionality Dim, IsRatioOrTag Scale>
-    class Quantity {
-    public:
-        using dimension_type = Dim;
-        using scale_type = Scale;
+/**
+ * @brief Primary template for representing physical quantities with dimensions and scale
+ *
+ * @tparam Dim The dimensionality of the quantity (e.g., Length, Time, Mass)
+ * @tparam Scale The scale/ratio for unit conversion (e.g., std::kilo, std::milli) or a unit tag
+ *
+ * This class template provides type-safe representation of physical quantities with
+ * automatic unit conversion, dimensional analysis, and arithmetic operations.
+ * It stores values internally and provides conversion to SI units through the scale parameter.
+ */
+template <IsDimensionality Dim, IsRatioOrTag Scale>
+class Quantity {
+  public:
+    using dimension_type = Dim;
+    using scale_type = Scale;
 
-        template<IsNumeric T>
-        explicit constexpr Quantity(T value)
-            requires std::is_arithmetic_v<T>
+    template <IsNumeric T>
+    explicit constexpr Quantity(T value)
+        requires std::is_arithmetic_v<T>
         : value_(static_cast<double>(value))
-        {
-            if (std::isnan(value_)) {
-                HUIRA_THROW_ERROR("Unit[" + Dim::to_si_string() + "] - Cannot be NaN");
-            }
-        }
-
-        template<IsRatioOrTag OtherScale>
-        constexpr Quantity(const Quantity<Dim, OtherScale>& other)
-        {
-            value_ = this->from_si(other.to_si());
-        }
-
-        // Default constructor
-        constexpr Quantity() : value_(0.0) {}
-
-        // Copy constructor
-        constexpr Quantity(const Quantity& other) : value_(other.value_) {}
-
-        // Assignment operator
-        constexpr Quantity& operator=(const Quantity& other) {
-            value_ = other.value_;
-            return *this;
-        }
-
-        constexpr operator double() const
-            requires std::is_same_v<Dim, Dimensionless>
-        {
-            return to_si();
-        }
-
-        double to_si() const;
-
-        float to_si_f() const;
-
-        double value() const;
-
-        double raw_value() const;
-
-        template<IsRatioOrTag NewScale>
-        Quantity<Dim, NewScale> as() const {
-            return Quantity<Dim, NewScale>(*this);
-        }
-
-        template<typename QuantityType>
-            requires requires { typename QuantityType::dimension_type; typename QuantityType::scale_type; }
-        auto as() const {
-            using NewScale = typename QuantityType::scale_type;
-            return Quantity<Dim, NewScale>(*this);
-        }
-
-        std::string to_string() const;
-
-        // Addition (same dimension and scale)
-        constexpr Quantity operator+(const Quantity& other) const {
-            return Quantity(value_ + other.value_);
-        }
-
-        // Subtraction (same dimension and scale)
-        constexpr Quantity operator-(const Quantity& other) const {
-            return Quantity(value_ - other.value_);
-        }
-
-        // Addition assignment
-        constexpr Quantity& operator+=(const Quantity& other) {
-            value_ += other.value_;
-            return *this;
-        }
-
-        // Subtraction assignment
-        constexpr Quantity& operator-=(const Quantity& other) {
-            value_ -= other.value_;
-            return *this;
-        }
-
-        // Scalar multiplication
-        template <IsNumeric T>
-        constexpr Quantity operator*(T scalar) const {
-            return Quantity(value_ * static_cast<double>(scalar));
-        }
-
-        // Scalar division
-        template <IsNumeric T>
-        constexpr Quantity operator/(T scalar) const {
-            return Quantity(value_ / static_cast<double>(scalar));
-        }
-
-        // Scalar multiplication assignment
-        template <IsNumeric T>
-        constexpr Quantity& operator*=(T scalar) {
-            value_ *= static_cast<double>(scalar);
-            return *this;
-        }
-
-        // Scalar division assignment
-        template <IsNumeric T>
-        constexpr Quantity& operator/=(T scalar) {
-            value_ /= static_cast<double>(scalar);
-            return *this;
-        }
-
-        // Comparison operators
-        constexpr bool operator==(const Quantity& other) const {
-            return value_ == other.value_;
-        }
-
-        constexpr bool operator!=(const Quantity& other) const {
-            return value_ != other.value_;
-        }
-
-        constexpr bool operator<(const Quantity& other) const {
-            return value_ < other.value_;
-        }
-
-        constexpr bool operator>(const Quantity& other) const {
-            return value_ > other.value_;
-        }
-
-        constexpr bool operator<=(const Quantity& other) const {
-            return value_ <= other.value_;
-        }
-
-        constexpr bool operator>=(const Quantity& other) const {
-            return value_ >= other.value_;
-        }
-
-        constexpr Quantity operator-() const {
-            return Quantity(-value_);
-        }
-
-        friend std::ostream& operator<<(std::ostream& os, const Quantity& quantity) {
-            os << quantity.to_string();
-            return os;
-        }
-
-    private:
-        double value_;
-
-        constexpr double get_ratio() const
-        {
-            return static_cast<double>(Scale::num) / static_cast<double>(Scale::den);
-        }
-
-        constexpr double from_si(double value_si) const
-        {
-            return value_si / this->get_ratio();
-        }
-
-        constexpr double to_si(double value) const
-        {
-            return value * this->get_ratio();
-        }
-    };
-
-    /**
-     * @brief Helper struct for multiplying two ratio types
-     *
-     * @tparam R1 First ratio type
-     * @tparam R2 Second ratio type
-     */
-    template<typename R1, typename R2>
-    struct ratio_multiply_impl {
-        using type = std::ratio_multiply<R1, R2>;
-    };
-
-    template<typename R1, typename R2>
-    using ratio_multiply = typename ratio_multiply_impl<R1, R2>::type;
-
-    /**
-     * @brief Helper struct for dividing two ratio types
-     *
-     * @tparam R1 Numerator ratio type
-     * @tparam R2 Denominator ratio type
-     */
-    template<typename R1, typename R2>
-    struct ratio_divide_impl {
-        using type = std::ratio_divide<R1, R2>;
-    };
-
-    template<typename R1, typename R2>
-    using ratio_divide = typename ratio_divide_impl<R1, R2>::type;
-
-    template<IsUnitTag Tag>
-    struct ratio_divide_impl<Tag, Tag> {
-        using type = std::ratio<1, 1>;
-    };
-
-    template<IsUnitTag Tag, IsRatio Ratio>
-    struct ratio_multiply_impl<Tag, Ratio> {
-        using type = std::ratio<1, 1>;
-    };
-
-    template<IsRatio Ratio, IsUnitTag Tag>
-    struct ratio_multiply_impl<Ratio, Tag> {
-        using type = std::ratio<1, 1>;
-    };
-
-    template<IsUnitTag Tag, IsRatio Ratio>
-    struct ratio_divide_impl<Tag, Ratio> {
-        using type = std::ratio<1, 1>;
-    };
-
-    template<IsRatio Ratio, IsUnitTag Tag>
-    struct ratio_divide_impl<Ratio, Tag> {
-        using type = std::ratio<1, 1>;
-    };
-
-    template<IsUnitTag Tag1, IsUnitTag Tag2>
-    struct ratio_multiply_impl<Tag1, Tag2> {
-        using type = std::ratio<1, 1>;
-    };
-
-    template<IsUnitTag Tag1, IsUnitTag Tag2>
-    struct ratio_divide_impl<Tag1, Tag2> {
-        using type = std::ratio<1, 1>;
-    };
-
-    template<typename S1, typename S2>
-    constexpr bool involves_tag_v = is_unit_tag<S1>::value || is_unit_tag<S2>::value;
-
-    template<IsDimensionality Dim1, IsRatioOrTag Scale1, IsDimensionality Dim2, IsRatioOrTag Scale2>
-    constexpr auto operator*(const Quantity<Dim1, Scale1>& lhs, const Quantity<Dim2, Scale2>& rhs) {
-        using ResultDim = decltype(Dim1{}* Dim2{});
-        if constexpr (involves_tag_v<Scale1, Scale2>) {
-            return Quantity<ResultDim, std::ratio<1, 1>>(lhs.to_si() * rhs.to_si());
-        }
-        else {
-            using ResultScale = ratio_multiply<Scale1, Scale2>;
-            return Quantity<ResultDim, ResultScale>(lhs.raw_value() * rhs.raw_value());
+    {
+        if (std::isnan(value_)) {
+            HUIRA_THROW_ERROR("Unit[" + Dim::to_si_string() + "] - Cannot be NaN");
         }
     }
 
-    template<IsDimensionality Dim1, IsRatioOrTag Scale1, IsDimensionality Dim2, IsRatioOrTag Scale2>
-    constexpr auto operator/(const Quantity<Dim1, Scale1>& lhs, const Quantity<Dim2, Scale2>& rhs) {
-        using ResultDim = decltype(Dim1{} / Dim2{});
-        if constexpr (involves_tag_v<Scale1, Scale2>) {
-            return Quantity<ResultDim, std::ratio<1, 1>>(lhs.to_si() / rhs.to_si());
-        }
-        else {
-            using ResultScale = ratio_divide<Scale1, Scale2>;
-            return Quantity<ResultDim, ResultScale>(lhs.raw_value() / rhs.raw_value());
-        }
+    template <IsRatioOrTag OtherScale>
+    constexpr Quantity(const Quantity<Dim, OtherScale>& other)
+    {
+        value_ = this->from_si(other.to_si());
     }
 
-    template<IsNumeric T, IsDimensionality Dim, IsRatioOrTag Scale>
-    constexpr auto operator*(T scalar, const Quantity<Dim, Scale>& quantity) {
-        return Quantity<Dim, Scale>(static_cast<double>(scalar) * quantity.raw_value());
+    // Default constructor
+    constexpr Quantity() : value_(0.0) {}
+
+    // Copy constructor
+    constexpr Quantity(const Quantity& other) : value_(other.value_) {}
+
+    // Assignment operator
+    constexpr Quantity& operator=(const Quantity& other)
+    {
+        value_ = other.value_;
+        return *this;
     }
 
-    template<IsNumeric T, IsDimensionality Dim, IsRatioOrTag Scale>
-    constexpr auto operator/(T scalar, const Quantity<Dim, Scale>& quantity) {
-        using ReciprocalDim = decltype(Dimensionless{} / Dim{});
-        if constexpr (is_std_ratio_v<Scale>) {
-            using ReciprocalScale = ratio_divide<std::ratio<1, 1>, Scale>;
-            return Quantity<ReciprocalDim, ReciprocalScale>(static_cast<double>(scalar) / quantity.raw_value());
-        }
-        else {
-            return Quantity<ReciprocalDim, std::ratio<1, 1>>(static_cast<double>(scalar) / quantity.to_si());
-        }
+    constexpr operator double() const
+        requires std::is_same_v<Dim, Dimensionless>
+    {
+        return to_si();
     }
 
-    template<IsDimensionality Dim, IsRatioOrTag Scale1, IsRatioOrTag Scale2>
-    constexpr auto operator+(const Quantity<Dim, Scale1>& lhs, const Quantity<Dim, Scale2>& rhs)
-        -> Quantity<Dim, Scale1> {
-        Quantity<Dim, Scale1> rhs_converted(rhs);
-        return Quantity<Dim, Scale1>(lhs.raw_value() + rhs_converted.raw_value());
+    double to_si() const;
+
+    float to_si_f() const;
+
+    double value() const;
+
+    double raw_value() const;
+
+    template <IsRatioOrTag NewScale>
+    Quantity<Dim, NewScale> as() const
+    {
+        return Quantity<Dim, NewScale>(*this);
     }
 
-    template<IsDimensionality Dim, IsRatioOrTag Scale1, IsRatioOrTag Scale2>
-    constexpr auto operator-(const Quantity<Dim, Scale1>& lhs, const Quantity<Dim, Scale2>& rhs)
-        -> Quantity<Dim, Scale1> {
-        Quantity<Dim, Scale1> rhs_converted(rhs);
-        return Quantity<Dim, Scale1>(lhs.raw_value() - rhs_converted.raw_value());
+    template <typename QuantityType>
+        requires requires {
+            typename QuantityType::dimension_type;
+            typename QuantityType::scale_type;
+        }
+    auto as() const
+    {
+        using NewScale = typename QuantityType::scale_type;
+        return Quantity<Dim, NewScale>(*this);
     }
 
-    template<IsDimensionality Dim, IsRatioOrTag Scale1, IsRatioOrTag Scale2>
-    constexpr bool operator==(const Quantity<Dim, Scale1>& lhs, const Quantity<Dim, Scale2>& rhs) {
-        return lhs.to_si() == rhs.to_si();
+    std::string to_string() const;
+
+    // Addition (same dimension and scale)
+    constexpr Quantity operator+(const Quantity& other) const
+    {
+        return Quantity(value_ + other.value_);
     }
 
-    template<IsDimensionality Dim, IsRatioOrTag Scale1, IsRatioOrTag Scale2>
-    constexpr bool operator!=(const Quantity<Dim, Scale1>& lhs, const Quantity<Dim, Scale2>& rhs) {
-        return lhs.to_si() != rhs.to_si();
+    // Subtraction (same dimension and scale)
+    constexpr Quantity operator-(const Quantity& other) const
+    {
+        return Quantity(value_ - other.value_);
     }
 
-    template<IsDimensionality Dim, IsRatioOrTag Scale1, IsRatioOrTag Scale2>
-    constexpr bool operator<(const Quantity<Dim, Scale1>& lhs, const Quantity<Dim, Scale2>& rhs) {
-        return lhs.to_si() < rhs.to_si();
+    // Addition assignment
+    constexpr Quantity& operator+=(const Quantity& other)
+    {
+        value_ += other.value_;
+        return *this;
     }
 
-    template<IsDimensionality Dim, IsRatioOrTag Scale1, IsRatioOrTag Scale2>
-    constexpr bool operator>(const Quantity<Dim, Scale1>& lhs, const Quantity<Dim, Scale2>& rhs) {
-        return lhs.to_si() > rhs.to_si();
+    // Subtraction assignment
+    constexpr Quantity& operator-=(const Quantity& other)
+    {
+        value_ -= other.value_;
+        return *this;
     }
 
-    template<IsDimensionality Dim, IsRatioOrTag Scale1, IsRatioOrTag Scale2>
-    constexpr bool operator<=(const Quantity<Dim, Scale1>& lhs, const Quantity<Dim, Scale2>& rhs) {
-        return lhs.to_si() <= rhs.to_si();
+    // Scalar multiplication
+    template <IsNumeric T>
+    constexpr Quantity operator*(T scalar) const
+    {
+        return Quantity(value_ * static_cast<double>(scalar));
     }
 
-    template<IsDimensionality Dim, IsRatioOrTag Scale1, IsRatioOrTag Scale2>
-    constexpr bool operator>=(const Quantity<Dim, Scale1>& lhs, const Quantity<Dim, Scale2>& rhs) {
-        return lhs.to_si() >= rhs.to_si();
+    // Scalar division
+    template <IsNumeric T>
+    constexpr Quantity operator/(T scalar) const
+    {
+        return Quantity(value_ / static_cast<double>(scalar));
     }
 
-    // Unit tag declarations and specializations
-    struct SiderealDayTag {};
-    template<> struct is_unit_tag<SiderealDayTag> : std::true_type {};
-    template<>
-    constexpr double Quantity<Time, SiderealDayTag>::get_ratio() const { return 86164.0905; }
-
-    struct DegreeTag {};
-    template<> struct is_unit_tag<DegreeTag> : std::true_type {};
-    template<>
-    constexpr double Quantity<Angle, DegreeTag>::get_ratio() const { return PI<double>() / 180.0; }
-
-    template<>
-    constexpr double Quantity<AngularVelocity, DegreeTag>::get_ratio() const { return PI<double>() / 180.0; }
-
-    struct ArcMinuteTag {};
-    template<> struct is_unit_tag<ArcMinuteTag> : std::true_type {};
-    template<>
-    constexpr double Quantity<Angle, ArcMinuteTag>::get_ratio() const { return PI<double>() / 10800.0; }
-
-    struct ArcSecondTag {};
-    template<> struct is_unit_tag<ArcSecondTag> : std::true_type {};
-    template<>
-    constexpr double Quantity<Angle, ArcSecondTag>::get_ratio() const { return PI<double>() / 648000.0; }
-
-    struct SquareDegreeTag {};
-    template<> struct is_unit_tag<SquareDegreeTag> : std::true_type {};
-    template<>
-    constexpr double Quantity<SolidAngle, SquareDegreeTag>::get_ratio() const {
-        return (PI<double>() / 180.0) * (PI<double>() / 180.0);
+    // Scalar multiplication assignment
+    template <IsNumeric T>
+    constexpr Quantity& operator*=(T scalar)
+    {
+        value_ *= static_cast<double>(scalar);
+        return *this;
     }
 
-    struct CelsiusTag {};
-    template<> struct is_unit_tag<CelsiusTag> : std::true_type {};
-    template<>
-    constexpr double Quantity<Temperature, CelsiusTag>::to_si(double value) const {
-        return value + 273.15;
+    // Scalar division assignment
+    template <IsNumeric T>
+    constexpr Quantity& operator/=(T scalar)
+    {
+        value_ /= static_cast<double>(scalar);
+        return *this;
     }
 
-    template<>
-    constexpr double Quantity<Temperature, CelsiusTag>::from_si(double value_si) const {
-        return value_si - 273.15;
+    // Comparison operators
+    constexpr bool operator==(const Quantity& other) const { return value_ == other.value_; }
+
+    constexpr bool operator!=(const Quantity& other) const { return value_ != other.value_; }
+
+    constexpr bool operator<(const Quantity& other) const { return value_ < other.value_; }
+
+    constexpr bool operator>(const Quantity& other) const { return value_ > other.value_; }
+
+    constexpr bool operator<=(const Quantity& other) const { return value_ <= other.value_; }
+
+    constexpr bool operator>=(const Quantity& other) const { return value_ >= other.value_; }
+
+    constexpr Quantity operator-() const { return Quantity(-value_); }
+
+    friend std::ostream& operator<<(std::ostream& os, const Quantity& quantity)
+    {
+        os << quantity.to_string();
+        return os;
     }
 
-    struct FahrenheitTag {};
-    template<> struct is_unit_tag<FahrenheitTag> : std::true_type {};
-    template <>
-    constexpr double Quantity<Temperature, FahrenheitTag>::to_si(double value) const {
-        return (value + 459.67) * (5. / 9.);
+  private:
+    double value_;
+
+    constexpr double get_ratio() const
+    {
+        return static_cast<double>(Scale::num) / static_cast<double>(Scale::den);
     }
 
-    template <>
-    constexpr double Quantity<Temperature, FahrenheitTag>::from_si(double value_si) const {
-        return value_si * (9. / 5.) - 459.67;
+    constexpr double from_si(double value_si) const { return value_si / this->get_ratio(); }
+
+    constexpr double to_si(double value) const { return value * this->get_ratio(); }
+};
+
+/**
+ * @brief Helper struct for multiplying two ratio types
+ *
+ * @tparam R1 First ratio type
+ * @tparam R2 Second ratio type
+ */
+template <typename R1, typename R2>
+struct ratio_multiply_impl {
+    using type = std::ratio_multiply<R1, R2>;
+};
+
+template <typename R1, typename R2>
+using ratio_multiply = typename ratio_multiply_impl<R1, R2>::type;
+
+/**
+ * @brief Helper struct for dividing two ratio types
+ *
+ * @tparam R1 Numerator ratio type
+ * @tparam R2 Denominator ratio type
+ */
+template <typename R1, typename R2>
+struct ratio_divide_impl {
+    using type = std::ratio_divide<R1, R2>;
+};
+
+template <typename R1, typename R2>
+using ratio_divide = typename ratio_divide_impl<R1, R2>::type;
+
+template <IsUnitTag Tag>
+struct ratio_divide_impl<Tag, Tag> {
+    using type = std::ratio<1, 1>;
+};
+
+template <IsUnitTag Tag, IsRatio Ratio>
+struct ratio_multiply_impl<Tag, Ratio> {
+    using type = std::ratio<1, 1>;
+};
+
+template <IsRatio Ratio, IsUnitTag Tag>
+struct ratio_multiply_impl<Ratio, Tag> {
+    using type = std::ratio<1, 1>;
+};
+
+template <IsUnitTag Tag, IsRatio Ratio>
+struct ratio_divide_impl<Tag, Ratio> {
+    using type = std::ratio<1, 1>;
+};
+
+template <IsRatio Ratio, IsUnitTag Tag>
+struct ratio_divide_impl<Ratio, Tag> {
+    using type = std::ratio<1, 1>;
+};
+
+template <IsUnitTag Tag1, IsUnitTag Tag2>
+struct ratio_multiply_impl<Tag1, Tag2> {
+    using type = std::ratio<1, 1>;
+};
+
+template <IsUnitTag Tag1, IsUnitTag Tag2>
+struct ratio_divide_impl<Tag1, Tag2> {
+    using type = std::ratio<1, 1>;
+};
+
+template <typename S1, typename S2>
+constexpr bool involves_tag_v = is_unit_tag<S1>::value || is_unit_tag<S2>::value;
+
+template <IsDimensionality Dim1, IsRatioOrTag Scale1, IsDimensionality Dim2, IsRatioOrTag Scale2>
+constexpr auto operator*(const Quantity<Dim1, Scale1>& lhs, const Quantity<Dim2, Scale2>& rhs)
+{
+    using ResultDim = decltype(Dim1{} * Dim2{});
+    if constexpr (involves_tag_v<Scale1, Scale2>) {
+        return Quantity<ResultDim, std::ratio<1, 1>>(lhs.to_si() * rhs.to_si());
+    } else {
+        using ResultScale = ratio_multiply<Scale1, Scale2>;
+        return Quantity<ResultDim, ResultScale>(lhs.raw_value() * rhs.raw_value());
     }
-
-    struct ElectronVoltTag {};
-    template<> struct is_unit_tag<ElectronVoltTag> : std::true_type {};
-    template <>
-    constexpr double Quantity<Energy, ElectronVoltTag>::get_ratio() const { return 1.602176634e-19; }
-
-    /**
-     * @brief Partial specialization of Quantity for dimensionless quantities
-     *
-     * @tparam Scale The scale/ratio for the dimensionless quantity
-     *
-     * This specialization handles dimensionless quantities (ratios, percentages, etc.)
-     * and provides implicit conversion to double for convenience.
-     */
-    template<IsRatioOrTag Scale>
-    class Quantity<Dimensionless, Scale> {
-    public:
-        using dimension_type = Dimensionless;
-        using scale_type = Scale;
-
-        template<IsNumeric T>
-        explicit constexpr Quantity(T value)
-            requires std::is_arithmetic_v<T>
-        : value_(static_cast<double>(value))
-        {
-            validate_real(value_, "Dimensionless");
-        }
-
-        template<IsRatioOrTag OtherScale>
-        constexpr Quantity(const Quantity<Dimensionless, OtherScale>& other)
-        {
-            value_ = this->from_si(other.to_si());
-        }
-
-        constexpr Quantity() : value_(0.0) {}
-        constexpr Quantity(const Quantity& other) : value_(other.value_) {}
-
-        constexpr Quantity& operator=(const Quantity& other) {
-            value_ = other.value_;
-            return *this;
-        }
-
-        constexpr operator double() const {
-            return to_si();
-        }
-
-        double to_si() const;
-
-        float to_si_f() const;
-
-        double value() const;
-
-        double raw_value() const;
-
-        template<IsRatioOrTag NewScale>
-        Quantity<Dimensionless, NewScale> as() const {
-            return Quantity<Dimensionless, NewScale>(*this);
-        }
-
-        template<typename QuantityType>
-            requires requires { typename QuantityType::dimension_type; typename QuantityType::scale_type; }
-        auto as() const {
-            using NewScale = typename QuantityType::scale_type;
-            return Quantity<Dimensionless, NewScale>(*this);
-        }
-
-        std::string to_string() const;
-
-        constexpr Quantity operator+(const Quantity& other) const {
-            return Quantity(value_ + other.value_);
-        }
-
-        constexpr Quantity operator-(const Quantity& other) const {
-            return Quantity(value_ - other.value_);
-        }
-
-        constexpr Quantity& operator+=(const Quantity& other) {
-            value_ += other.value_;
-            return *this;
-        }
-
-        constexpr Quantity& operator-=(const Quantity& other) {
-            value_ -= other.value_;
-            return *this;
-        }
-
-        template <IsNumeric T>
-        constexpr Quantity operator*(T scalar) const {
-            return Quantity(value_ * static_cast<double>(scalar));
-        }
-
-        template <IsNumeric T>
-        constexpr Quantity operator/(T scalar) const {
-            return Quantity(value_ / static_cast<double>(scalar));
-        }
-
-        template <IsNumeric T>
-        constexpr Quantity& operator*=(T scalar) {
-            value_ *= static_cast<double>(scalar);
-            return *this;
-        }
-
-        template <IsNumeric T>
-        constexpr Quantity& operator/=(T scalar) {
-            value_ /= static_cast<double>(scalar);
-            return *this;
-        }
-
-        constexpr bool operator==(const Quantity& other) const {
-            return value_ == other.value_;
-        }
-
-        constexpr bool operator!=(const Quantity& other) const {
-            return value_ != other.value_;
-        }
-
-        constexpr bool operator<(const Quantity& other) const {
-            return value_ < other.value_;
-        }
-
-        constexpr bool operator>(const Quantity& other) const {
-            return value_ > other.value_;
-        }
-
-        constexpr bool operator<=(const Quantity& other) const {
-            return value_ <= other.value_;
-        }
-
-        constexpr bool operator>=(const Quantity& other) const {
-            return value_ >= other.value_;
-        }
-
-        friend std::ostream& operator<<(std::ostream& os, const Quantity& quantity) {
-            os << quantity.to_string();
-            return os;
-        }
-
-    private:
-        double value_;
-
-        constexpr double get_ratio() const {
-            return static_cast<double>(Scale::num) / static_cast<double>(Scale::den);
-        }
-
-        constexpr double from_si(double value_si) const {
-            return value_si / this->get_ratio();
-        }
-
-        constexpr double to_si(double value) const {
-            return value * this->get_ratio();
-        }
-    };
 }
+
+template <IsDimensionality Dim1, IsRatioOrTag Scale1, IsDimensionality Dim2, IsRatioOrTag Scale2>
+constexpr auto operator/(const Quantity<Dim1, Scale1>& lhs, const Quantity<Dim2, Scale2>& rhs)
+{
+    using ResultDim = decltype(Dim1{} / Dim2{});
+    if constexpr (involves_tag_v<Scale1, Scale2>) {
+        return Quantity<ResultDim, std::ratio<1, 1>>(lhs.to_si() / rhs.to_si());
+    } else {
+        using ResultScale = ratio_divide<Scale1, Scale2>;
+        return Quantity<ResultDim, ResultScale>(lhs.raw_value() / rhs.raw_value());
+    }
+}
+
+template <IsNumeric T, IsDimensionality Dim, IsRatioOrTag Scale>
+constexpr auto operator*(T scalar, const Quantity<Dim, Scale>& quantity)
+{
+    return Quantity<Dim, Scale>(static_cast<double>(scalar) * quantity.raw_value());
+}
+
+template <IsNumeric T, IsDimensionality Dim, IsRatioOrTag Scale>
+constexpr auto operator/(T scalar, const Quantity<Dim, Scale>& quantity)
+{
+    using ReciprocalDim = decltype(Dimensionless{} / Dim{});
+    if constexpr (is_std_ratio_v<Scale>) {
+        using ReciprocalScale = ratio_divide<std::ratio<1, 1>, Scale>;
+        return Quantity<ReciprocalDim, ReciprocalScale>(static_cast<double>(scalar) /
+                                                        quantity.raw_value());
+    } else {
+        return Quantity<ReciprocalDim, std::ratio<1, 1>>(static_cast<double>(scalar) /
+                                                         quantity.to_si());
+    }
+}
+
+template <IsDimensionality Dim, IsRatioOrTag Scale1, IsRatioOrTag Scale2>
+constexpr auto operator+(const Quantity<Dim, Scale1>& lhs, const Quantity<Dim, Scale2>& rhs)
+    -> Quantity<Dim, Scale1>
+{
+    Quantity<Dim, Scale1> rhs_converted(rhs);
+    return Quantity<Dim, Scale1>(lhs.raw_value() + rhs_converted.raw_value());
+}
+
+template <IsDimensionality Dim, IsRatioOrTag Scale1, IsRatioOrTag Scale2>
+constexpr auto operator-(const Quantity<Dim, Scale1>& lhs, const Quantity<Dim, Scale2>& rhs)
+    -> Quantity<Dim, Scale1>
+{
+    Quantity<Dim, Scale1> rhs_converted(rhs);
+    return Quantity<Dim, Scale1>(lhs.raw_value() - rhs_converted.raw_value());
+}
+
+template <IsDimensionality Dim, IsRatioOrTag Scale1, IsRatioOrTag Scale2>
+constexpr bool operator==(const Quantity<Dim, Scale1>& lhs, const Quantity<Dim, Scale2>& rhs)
+{
+    return lhs.to_si() == rhs.to_si();
+}
+
+template <IsDimensionality Dim, IsRatioOrTag Scale1, IsRatioOrTag Scale2>
+constexpr bool operator!=(const Quantity<Dim, Scale1>& lhs, const Quantity<Dim, Scale2>& rhs)
+{
+    return lhs.to_si() != rhs.to_si();
+}
+
+template <IsDimensionality Dim, IsRatioOrTag Scale1, IsRatioOrTag Scale2>
+constexpr bool operator<(const Quantity<Dim, Scale1>& lhs, const Quantity<Dim, Scale2>& rhs)
+{
+    return lhs.to_si() < rhs.to_si();
+}
+
+template <IsDimensionality Dim, IsRatioOrTag Scale1, IsRatioOrTag Scale2>
+constexpr bool operator>(const Quantity<Dim, Scale1>& lhs, const Quantity<Dim, Scale2>& rhs)
+{
+    return lhs.to_si() > rhs.to_si();
+}
+
+template <IsDimensionality Dim, IsRatioOrTag Scale1, IsRatioOrTag Scale2>
+constexpr bool operator<=(const Quantity<Dim, Scale1>& lhs, const Quantity<Dim, Scale2>& rhs)
+{
+    return lhs.to_si() <= rhs.to_si();
+}
+
+template <IsDimensionality Dim, IsRatioOrTag Scale1, IsRatioOrTag Scale2>
+constexpr bool operator>=(const Quantity<Dim, Scale1>& lhs, const Quantity<Dim, Scale2>& rhs)
+{
+    return lhs.to_si() >= rhs.to_si();
+}
+
+// Unit tag declarations and specializations
+struct SiderealDayTag {};
+template <>
+struct is_unit_tag<SiderealDayTag> : std::true_type {};
+template <>
+constexpr double Quantity<Time, SiderealDayTag>::get_ratio() const
+{
+    return 86164.0905;
+}
+
+struct DegreeTag {};
+template <>
+struct is_unit_tag<DegreeTag> : std::true_type {};
+template <>
+constexpr double Quantity<Angle, DegreeTag>::get_ratio() const
+{
+    return PI<double>() / 180.0;
+}
+
+template <>
+constexpr double Quantity<AngularVelocity, DegreeTag>::get_ratio() const
+{
+    return PI<double>() / 180.0;
+}
+
+struct ArcMinuteTag {};
+template <>
+struct is_unit_tag<ArcMinuteTag> : std::true_type {};
+template <>
+constexpr double Quantity<Angle, ArcMinuteTag>::get_ratio() const
+{
+    return PI<double>() / 10800.0;
+}
+
+struct ArcSecondTag {};
+template <>
+struct is_unit_tag<ArcSecondTag> : std::true_type {};
+template <>
+constexpr double Quantity<Angle, ArcSecondTag>::get_ratio() const
+{
+    return PI<double>() / 648000.0;
+}
+
+struct SquareDegreeTag {};
+template <>
+struct is_unit_tag<SquareDegreeTag> : std::true_type {};
+template <>
+constexpr double Quantity<SolidAngle, SquareDegreeTag>::get_ratio() const
+{
+    return (PI<double>() / 180.0) * (PI<double>() / 180.0);
+}
+
+struct CelsiusTag {};
+template <>
+struct is_unit_tag<CelsiusTag> : std::true_type {};
+template <>
+constexpr double Quantity<Temperature, CelsiusTag>::to_si(double value) const
+{
+    return value + 273.15;
+}
+
+template <>
+constexpr double Quantity<Temperature, CelsiusTag>::from_si(double value_si) const
+{
+    return value_si - 273.15;
+}
+
+struct FahrenheitTag {};
+template <>
+struct is_unit_tag<FahrenheitTag> : std::true_type {};
+template <>
+constexpr double Quantity<Temperature, FahrenheitTag>::to_si(double value) const
+{
+    return (value + 459.67) * (5. / 9.);
+}
+
+template <>
+constexpr double Quantity<Temperature, FahrenheitTag>::from_si(double value_si) const
+{
+    return value_si * (9. / 5.) - 459.67;
+}
+
+struct ElectronVoltTag {};
+template <>
+struct is_unit_tag<ElectronVoltTag> : std::true_type {};
+template <>
+constexpr double Quantity<Energy, ElectronVoltTag>::get_ratio() const
+{
+    return 1.602176634e-19;
+}
+
+/**
+ * @brief Partial specialization of Quantity for dimensionless quantities
+ *
+ * @tparam Scale The scale/ratio for the dimensionless quantity
+ *
+ * This specialization handles dimensionless quantities (ratios, percentages, etc.)
+ * and provides implicit conversion to double for convenience.
+ */
+template <IsRatioOrTag Scale>
+class Quantity<Dimensionless, Scale> {
+  public:
+    using dimension_type = Dimensionless;
+    using scale_type = Scale;
+
+    template <IsNumeric T>
+    explicit constexpr Quantity(T value)
+        requires std::is_arithmetic_v<T>
+        : value_(static_cast<double>(value))
+    {
+        validate_real(value_, "Dimensionless");
+    }
+
+    template <IsRatioOrTag OtherScale>
+    constexpr Quantity(const Quantity<Dimensionless, OtherScale>& other)
+    {
+        value_ = this->from_si(other.to_si());
+    }
+
+    constexpr Quantity() : value_(0.0) {}
+    constexpr Quantity(const Quantity& other) : value_(other.value_) {}
+
+    constexpr Quantity& operator=(const Quantity& other)
+    {
+        value_ = other.value_;
+        return *this;
+    }
+
+    constexpr operator double() const { return to_si(); }
+
+    double to_si() const;
+
+    float to_si_f() const;
+
+    double value() const;
+
+    double raw_value() const;
+
+    template <IsRatioOrTag NewScale>
+    Quantity<Dimensionless, NewScale> as() const
+    {
+        return Quantity<Dimensionless, NewScale>(*this);
+    }
+
+    template <typename QuantityType>
+        requires requires {
+            typename QuantityType::dimension_type;
+            typename QuantityType::scale_type;
+        }
+    auto as() const
+    {
+        using NewScale = typename QuantityType::scale_type;
+        return Quantity<Dimensionless, NewScale>(*this);
+    }
+
+    std::string to_string() const;
+
+    constexpr Quantity operator+(const Quantity& other) const
+    {
+        return Quantity(value_ + other.value_);
+    }
+
+    constexpr Quantity operator-(const Quantity& other) const
+    {
+        return Quantity(value_ - other.value_);
+    }
+
+    constexpr Quantity& operator+=(const Quantity& other)
+    {
+        value_ += other.value_;
+        return *this;
+    }
+
+    constexpr Quantity& operator-=(const Quantity& other)
+    {
+        value_ -= other.value_;
+        return *this;
+    }
+
+    template <IsNumeric T>
+    constexpr Quantity operator*(T scalar) const
+    {
+        return Quantity(value_ * static_cast<double>(scalar));
+    }
+
+    template <IsNumeric T>
+    constexpr Quantity operator/(T scalar) const
+    {
+        return Quantity(value_ / static_cast<double>(scalar));
+    }
+
+    template <IsNumeric T>
+    constexpr Quantity& operator*=(T scalar)
+    {
+        value_ *= static_cast<double>(scalar);
+        return *this;
+    }
+
+    template <IsNumeric T>
+    constexpr Quantity& operator/=(T scalar)
+    {
+        value_ /= static_cast<double>(scalar);
+        return *this;
+    }
+
+    constexpr bool operator==(const Quantity& other) const { return value_ == other.value_; }
+
+    constexpr bool operator!=(const Quantity& other) const { return value_ != other.value_; }
+
+    constexpr bool operator<(const Quantity& other) const { return value_ < other.value_; }
+
+    constexpr bool operator>(const Quantity& other) const { return value_ > other.value_; }
+
+    constexpr bool operator<=(const Quantity& other) const { return value_ <= other.value_; }
+
+    constexpr bool operator>=(const Quantity& other) const { return value_ >= other.value_; }
+
+    friend std::ostream& operator<<(std::ostream& os, const Quantity& quantity)
+    {
+        os << quantity.to_string();
+        return os;
+    }
+
+  private:
+    double value_;
+
+    constexpr double get_ratio() const
+    {
+        return static_cast<double>(Scale::num) / static_cast<double>(Scale::den);
+    }
+
+    constexpr double from_si(double value_si) const { return value_si / this->get_ratio(); }
+
+    constexpr double to_si(double value) const { return value * this->get_ratio(); }
+};
+} // namespace huira::units
 
 #include "huira_impl/units/quantity.ipp"

@@ -8,11 +8,13 @@
 
 namespace huira {
 
-    ImageBundle<RGB> read_image_bmp(const fs::path& filepath, bool read_alpha = true);
-    ImageBundle<RGB> read_image_bmp(const unsigned char* data, std::size_t size, bool read_alpha = true);
+ImageBundle<RGB> read_image_bmp(const fs::path& filepath, bool read_alpha = true);
+ImageBundle<RGB>
+read_image_bmp(const unsigned char* data, std::size_t size, bool read_alpha = true);
 
-    ImageBundle<float> read_image_bmp_mono(const fs::path& filepath, bool read_alpha = true);
-    ImageBundle<float> read_image_bmp_mono(const unsigned char* data, std::size_t size, bool read_alpha = true);
-}
+ImageBundle<float> read_image_bmp_mono(const fs::path& filepath, bool read_alpha = true);
+ImageBundle<float>
+read_image_bmp_mono(const unsigned char* data, std::size_t size, bool read_alpha = true);
+} // namespace huira
 
 #include "huira_impl/images/io/bmp_io.ipp"

@@ -16,510 +16,537 @@
 
 namespace huira {
 
-    /**
-     * @brief Convert log entry to a formatted string.
-     * 
-     * Formats the log entry as:
-     * HH:MM:SS.mmm [LEVEL] [Thread id] message
-     * 
-     * @return std::string Formatted log entry string
-     */
-    std::string LogEntry::to_string() const {
-        std::ostringstream oss;
-        auto time_t = std::chrono::system_clock::to_time_t(timestamp);
-        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-            timestamp.time_since_epoch()) % 1000;
+/**
+ * @brief Convert log entry to a formatted string.
+ *
+ * Formats the log entry as:
+ * HH:MM:SS.mmm [LEVEL] [Thread id] message
+ *
+ * @return std::string Formatted log entry string
+ */
+std::string LogEntry::to_string() const
+{
+    std::ostringstream oss;
+    auto time_t = std::chrono::system_clock::to_time_t(timestamp);
+    auto ms =
+        std::chrono::duration_cast<std::chrono::milliseconds>(timestamp.time_since_epoch()) % 1000;
 
-        std::tm tm_buf;
+    std::tm tm_buf;
 #ifdef _WIN32
-        localtime_s(&tm_buf, &time_t);
+    localtime_s(&tm_buf, &time_t);
 #else
-        localtime_r(&time_t, &tm_buf);
+    localtime_r(&time_t, &tm_buf);
 #endif
 
-        oss << std::put_time(&tm_buf, "%H:%M:%S")
-            << '.' << std::setfill('0') << std::setw(3) << ms.count()
-            << " [" << level_to_string(level) << "] "
-            << "[Thread " << thread_id << "] "
-            << message;
-        return oss.str();
+    oss << std::put_time(&tm_buf, "%H:%M:%S") << '.' << std::setfill('0') << std::setw(3)
+        << ms.count() << " [" << level_to_string(level) << "] "
+        << "[Thread " << thread_id << "] " << message;
+    return oss.str();
+}
+
+/**
+ * @brief Convert LogLevel enum to string representation.
+ *
+ * @param level LogLevel to convert
+ * @return const char* String representation of the log level
+ */
+const char* LogEntry::level_to_string(LogLevel level)
+{
+    switch (level) {
+    case LogLevel::Debug:
+        return "DEBUG";
+    case LogLevel::Info:
+        return "INFO ";
+    case LogLevel::Warning:
+        return "WARN ";
+    case LogLevel::Error:
+        return "ERROR";
+    default:
+        return "UNKNOWN";
+    }
+}
+
+/**
+ * @brief Static flag to ensure only one crash report is printed per process.
+ *
+ * Used by crash handlers to coordinate and prevent duplicate crash reports
+ * in multi-threaded scenarios.
+ */
+inline std::atomic<bool> Logger::crash_reported_{false};
+
+/**
+ * @brief Initialize the logger with default settings.
+ *
+ * Creates a logger with:
+ * - 1000-entry circular buffer
+ * - Info as minimum log level
+ * - Warning console output enabled
+ * - Debug and info console output disabled
+ * - Crash handler automatically installed
+ */
+Logger::Logger()
+    : buffer_(1000), write_index_(0), min_level_(LogLevel::Info), crash_handler_enabled_(false),
+      console_debug_(false), console_info_(false),
+      console_warning_(true) // Warning is on by default
+      ,
+      custom_sink_(nullptr)
+{
+
+    crash_handler_enabled_.store(true, std::memory_order_relaxed);
+    install_crash_handlers();
+}
+
+/**
+ * @brief Destructor for the logger.
+ */
+Logger::~Logger() = default;
+
+/**
+ * @brief Set the minimum log level.
+ *
+ * Messages below this level will be filtered out and not logged.
+ *
+ * @param level Minimum severity level to log
+ */
+void Logger::set_level(LogLevel level)
+{
+    instance().min_level_.store(level, std::memory_order_relaxed);
+}
+
+/**
+ * @brief Get the current minimum log level.
+ *
+ * @return LogLevel Current minimum log level
+ */
+LogLevel Logger::get_level()
+{
+    return instance().min_level_.load(std::memory_order_relaxed);
+}
+
+/**
+ * @brief Resize the circular buffer.
+ *
+ * Attempts to preserve existing log entries when resizing. If the new size is smaller,
+ * only the most recent entries are kept.
+ *
+ * @param size New buffer size (minimum 1)
+ */
+void Logger::set_buffer_size(size_t size)
+{
+    if (size == 0) {
+        size = 1;
+    }
+    std::vector<LogEntry> new_buffer(size);
+
+    // Copy existing entries
+    size_t current_write = instance().write_index_.load(std::memory_order_relaxed);
+    size_t old_size = instance().buffer_.size();
+    size_t entries_to_copy = std::min(current_write, std::min(old_size, size));
+
+    for (size_t i = 0; i < entries_to_copy; ++i) {
+        size_t old_idx = (current_write - entries_to_copy + i) % old_size;
+        new_buffer[i] = instance().buffer_[old_idx];
     }
 
-    /**
-     * @brief Convert LogLevel enum to string representation.
-     * 
-     * @param level LogLevel to convert
-     * @return const char* String representation of the log level
-     */
-    const char* LogEntry::level_to_string(LogLevel level) {
-        switch (level) {
-            case LogLevel::Debug:   return "DEBUG";
-            case LogLevel::Info:    return "INFO ";
-            case LogLevel::Warning: return "WARN ";
-            case LogLevel::Error:   return "ERROR";
-            default:                return "UNKNOWN";
+    instance().buffer_ = std::move(new_buffer);
+    instance().write_index_.store(entries_to_copy, std::memory_order_relaxed);
+}
+
+/**
+ * @brief Get the current buffer size.
+ *
+ * @return size_t Number of log entries that can be stored
+ */
+size_t Logger::get_buffer_size()
+{
+    return instance().buffer_.size();
+}
+
+/**
+ * @brief Set a custom output sink.
+ *
+ * The custom sink is called for each logged message. Exceptions from the sink
+ * are caught and ignored to prevent logging from crashing the application.
+ *
+ * @param sink Callback function to receive log entries
+ */
+void Logger::set_custom_sink(CustomSink sink)
+{
+    instance().custom_sink_ = std::move(sink);
+}
+
+/**
+ * @brief Clear the custom output sink.
+ */
+void Logger::clear_custom_sink()
+{
+    instance().custom_sink_ = nullptr;
+}
+
+/**
+ * @brief Log a message at the specified level.
+ *
+ * Adds the message to the circular buffer if it meets the minimum log level.
+ * Also calls the custom sink if one is configured.
+ *
+ * @param level Severity level of the message
+ * @param message Message to log
+ */
+void Logger::log(LogLevel level, const std::string& message)
+{
+    if (level < instance().min_level_.load(std::memory_order_relaxed)) {
+        return;
+    }
+
+    LogEntry entry{std::chrono::system_clock::now(), level, message, std::this_thread::get_id()};
+
+    // Add to circular buffer
+    size_t index =
+        instance().write_index_.fetch_add(1, std::memory_order_relaxed) % instance().buffer_.size();
+    instance().buffer_[index] = entry;
+
+    // Call custom sink if set
+    if (instance().custom_sink_) {
+        try {
+            instance().custom_sink_(entry);
+        } catch (...) {
+            // Ignore exceptions from custom sink to prevent logging from crashing
         }
     }
+}
 
-    /**
-     * @brief Static flag to ensure only one crash report is printed per process.
-     * 
-     * Used by crash handlers to coordinate and prevent duplicate crash reports
-     * in multi-threaded scenarios.
-     */
-    inline std::atomic<bool> Logger::crash_reported_{false};
+/**
+ * @brief Dump all buffered log entries to a file.
+ *
+ * Writes the log buffer to a file with header information including platform
+ * and compiler details. If no filepath is specified, uses a platform-appropriate
+ * default location. Falls back to current directory if the specified path fails.
+ *
+ * @param filepath Path to output file (empty for platform-specific default)
+ * @return std::string Actual path where log was written, or empty on failure
+ */
+std::string Logger::dump_to_file(const std::string& filepath)
+{
+    std::filesystem::path actual_path;
 
-    /**
-     * @brief Initialize the logger with default settings.
-     * 
-     * Creates a logger with:
-     * - 1000-entry circular buffer
-     * - Info as minimum log level
-     * - Warning console output enabled
-     * - Debug and info console output disabled
-     * - Crash handler automatically installed
-     */
-    Logger::Logger()
-        : buffer_(1000)
-        , write_index_(0)
-        , min_level_(LogLevel::Info)
-        , crash_handler_enabled_(false)
-        , console_debug_(false)
-        , console_info_(false)
-        , console_warning_(true)  // Warning is on by default
-        , custom_sink_(nullptr) {
-        
-        crash_handler_enabled_.store(true, std::memory_order_relaxed);
-        install_crash_handlers();
+    if (filepath.empty()) {
+        // Use platform-appropriate log directory
+        actual_path = get_log_file_path();
+    } else {
+        actual_path = filepath;
     }
 
-    /**
-     * @brief Destructor for the logger.
-     */
-    Logger::~Logger() = default;
-
-    /**
-     * @brief Set the minimum log level.
-     * 
-     * Messages below this level will be filtered out and not logged.
-     * 
-     * @param level Minimum severity level to log
-     */
-    void Logger::set_level(LogLevel level) {
-        instance().min_level_.store(level, std::memory_order_relaxed);
-    }
-
-    /**
-     * @brief Get the current minimum log level.
-     * 
-     * @return LogLevel Current minimum log level
-     */
-    LogLevel Logger::get_level() {
-        return instance().min_level_.load(std::memory_order_relaxed);
-    }
-
-    /**
-     * @brief Resize the circular buffer.
-     * 
-     * Attempts to preserve existing log entries when resizing. If the new size is smaller,
-     * only the most recent entries are kept.
-     * 
-     * @param size New buffer size (minimum 1)
-     */
-    void Logger::set_buffer_size(size_t size) {
-        if (size == 0) size = 1;
-        std::vector<LogEntry> new_buffer(size);
-
-        // Copy existing entries
-        size_t current_write = instance().write_index_.load(std::memory_order_relaxed);
-        size_t old_size = instance().buffer_.size();
-        size_t entries_to_copy = std::min(current_write, std::min(old_size, size));
-
-        for (size_t i = 0; i < entries_to_copy; ++i) {
-            size_t old_idx = (current_write - entries_to_copy + i) % old_size;
-            new_buffer[i] = instance().buffer_[old_idx];
-        }
-
-        instance().buffer_ = std::move(new_buffer);
-        instance().write_index_.store(entries_to_copy, std::memory_order_relaxed);
-    }
-
-    /**
-     * @brief Get the current buffer size.
-     * 
-     * @return size_t Number of log entries that can be stored
-     */
-    size_t Logger::get_buffer_size() {
-        return instance().buffer_.size();
-    }
-
-    /**
-     * @brief Set a custom output sink.
-     * 
-     * The custom sink is called for each logged message. Exceptions from the sink
-     * are caught and ignored to prevent logging from crashing the application.
-     * 
-     * @param sink Callback function to receive log entries
-     */
-    void Logger::set_custom_sink(CustomSink sink) {
-        instance().custom_sink_ = std::move(sink);
-    }
-
-    /**
-     * @brief Clear the custom output sink.
-     */
-    void Logger::clear_custom_sink() {
-        instance().custom_sink_ = nullptr;
-    }
-
-    /**
-     * @brief Log a message at the specified level.
-     * 
-     * Adds the message to the circular buffer if it meets the minimum log level.
-     * Also calls the custom sink if one is configured.
-     * 
-     * @param level Severity level of the message
-     * @param message Message to log
-     */
-    void Logger::log(LogLevel level, const std::string& message) {
-        if (level < instance().min_level_.load(std::memory_order_relaxed)) {
-            return;
-        }
-
-        LogEntry entry{
-            std::chrono::system_clock::now(),
-            level,
-            message,
-            std::this_thread::get_id()
-        };
-
-        // Add to circular buffer
-        size_t index = instance().write_index_.fetch_add(1, std::memory_order_relaxed) % instance().buffer_.size();
-        instance().buffer_[index] = entry;
-
-        // Call custom sink if set
-        if (instance().custom_sink_) {
-            try {
-                instance().custom_sink_(entry);
-            } catch (...) {
-                // Ignore exceptions from custom sink to prevent logging from crashing
-            }
-        }
-    }
-
-    /**
-     * @brief Dump all buffered log entries to a file.
-     * 
-     * Writes the log buffer to a file with header information including platform
-     * and compiler details. If no filepath is specified, uses a platform-appropriate
-     * default location. Falls back to current directory if the specified path fails.
-     * 
-     * @param filepath Path to output file (empty for platform-specific default)
-     * @return std::string Actual path where log was written, or empty on failure
-     */
-    std::string Logger::dump_to_file(const std::string& filepath) {
-        std::filesystem::path actual_path;
-
-        if (filepath.empty()) {
-            // Use platform-appropriate log directory
-            actual_path = get_log_file_path();
-        } else {
-            actual_path = filepath;
-        }
-
-        std::ofstream file(actual_path);
+    std::ofstream file(actual_path);
+    if (!file) {
+        // Try current directory as absolute fallback
+        actual_path = std::filesystem::current_path() / actual_path.filename();
+        file.open(actual_path);
         if (!file) {
-            // Try current directory as absolute fallback
-            actual_path = std::filesystem::current_path() / actual_path.filename();
-            file.open(actual_path);
-            if (!file) {
-                return "";
-            }
-        }
-
-        std::string platform_str = get_platform();
-        std::string compiler_str = get_compiler_info();
-
-        file << "Huira Log\n";
-        file << "=========\n\n";
-        file << "Platform: " << platform_str << " | Compiler: " << compiler_str << "\n\n";
-
-        size_t current_write = instance().write_index_.load(std::memory_order_relaxed);
-        size_t total_entries = std::min(current_write, instance().buffer_.size());
-        size_t start_index = (current_write > instance().buffer_.size())
-            ? current_write % instance().buffer_.size()
-            : 0;
-
-        for (size_t i = 0; i < total_entries; ++i) {
-            size_t index = (start_index + i) % instance().buffer_.size();
-            const auto& entry = instance().buffer_[index];
-            if (!entry.message.empty()) {
-                file << entry.to_string() << '\n';
-            }
-        }
-
-        file.close();
-        return actual_path.string();
-    }
-
-    /**
-     * @brief Enable or disable the crash handler.
-     * 
-     * When enabled, installs signal handlers and exception filters for automatic
-     * log dumping on crashes.
-     * 
-     * @param enable True to enable crash handling
-     */
-    void Logger::enable_crash_handler(bool enable) {
-        instance().crash_handler_enabled_.store(enable, std::memory_order_relaxed);
-        if (enable) {
-            instance().install_crash_handlers();
+            return "";
         }
     }
 
-    /**
-     * @brief Enable or disable debug-level console output.
-     * 
-     * Enforces log level hierarchy: enabling debug also enables info and warning.
-     * 
-     * @param enable True to enable debug console output
-     */
-    void Logger::enable_console_debug(bool enable) {
-        instance().console_debug_.store(enable, std::memory_order_relaxed);
-        if (enable) {
-            // If DEBUG is on, INFO and WARNING must also be on
-            instance().console_info_.store(true, std::memory_order_relaxed);
-            instance().console_warning_.store(true, std::memory_order_relaxed);
+    std::string platform_str = get_platform();
+    std::string compiler_str = get_compiler_info();
+
+    file << "Huira Log\n";
+    file << "=========\n\n";
+    file << "Platform: " << platform_str << " | Compiler: " << compiler_str << "\n\n";
+
+    size_t current_write = instance().write_index_.load(std::memory_order_relaxed);
+    size_t total_entries = std::min(current_write, instance().buffer_.size());
+    size_t start_index =
+        (current_write > instance().buffer_.size()) ? current_write % instance().buffer_.size() : 0;
+
+    for (size_t i = 0; i < total_entries; ++i) {
+        size_t index = (start_index + i) % instance().buffer_.size();
+        const auto& entry = instance().buffer_[index];
+        if (!entry.message.empty()) {
+            file << entry.to_string() << '\n';
         }
     }
 
-    /**
-     * @brief Enable or disable info-level console output.
-     * 
-     * Enforces log level hierarchy: enabling info also enables warning; disabling
-     * info also disables debug.
-     * 
-     * @param enable True to enable info console output
-     */
-    void Logger::enable_console_info(bool enable) {
-        instance().console_info_.store(enable, std::memory_order_relaxed);
-        if (enable) {
-            // If INFO is on, WARNING must also be on
-            instance().console_warning_.store(true, std::memory_order_relaxed);
-        } else {
-            // If INFO is off, DEBUG must also be off
-            instance().console_debug_.store(false, std::memory_order_relaxed);
-        }
+    file.close();
+    return actual_path.string();
+}
+
+/**
+ * @brief Enable or disable the crash handler.
+ *
+ * When enabled, installs signal handlers and exception filters for automatic
+ * log dumping on crashes.
+ *
+ * @param enable True to enable crash handling
+ */
+void Logger::enable_crash_handler(bool enable)
+{
+    instance().crash_handler_enabled_.store(enable, std::memory_order_relaxed);
+    if (enable) {
+        instance().install_crash_handlers();
     }
+}
 
-    /**
-     * @brief Enable or disable warning-level console output.
-     * 
-     * Enforces log level hierarchy: disabling warning also disables info and debug.
-     * 
-     * @param enable True to enable warning console output
-     */
-    void Logger::enable_console_warning(bool enable) {
-        instance().console_warning_.store(enable, std::memory_order_relaxed);
-        if (!enable) {
-            // If WARNING is off, INFO and DEBUG must also be off
-            instance().console_info_.store(false, std::memory_order_relaxed);
-            instance().console_debug_.store(false, std::memory_order_relaxed);
-        }
+/**
+ * @brief Enable or disable debug-level console output.
+ *
+ * Enforces log level hierarchy: enabling debug also enables info and warning.
+ *
+ * @param enable True to enable debug console output
+ */
+void Logger::enable_console_debug(bool enable)
+{
+    instance().console_debug_.store(enable, std::memory_order_relaxed);
+    if (enable) {
+        // If DEBUG is on, INFO and WARNING must also be on
+        instance().console_info_.store(true, std::memory_order_relaxed);
+        instance().console_warning_.store(true, std::memory_order_relaxed);
     }
+}
 
-    /**
-     * @brief Check if debug console output is enabled.
-     * 
-     * @return bool True if debug console output is enabled
-     */
-    bool Logger::is_console_debug_enabled() {
-        return instance().console_debug_.load(std::memory_order_relaxed);
+/**
+ * @brief Enable or disable info-level console output.
+ *
+ * Enforces log level hierarchy: enabling info also enables warning; disabling
+ * info also disables debug.
+ *
+ * @param enable True to enable info console output
+ */
+void Logger::enable_console_info(bool enable)
+{
+    instance().console_info_.store(enable, std::memory_order_relaxed);
+    if (enable) {
+        // If INFO is on, WARNING must also be on
+        instance().console_warning_.store(true, std::memory_order_relaxed);
+    } else {
+        // If INFO is off, DEBUG must also be off
+        instance().console_debug_.store(false, std::memory_order_relaxed);
     }
+}
 
-    /**
-     * @brief Check if info console output is enabled.
-     * 
-     * @return bool True if info console output is enabled
-     */
-    bool Logger::is_console_info_enabled() {
-        return instance().console_info_.load(std::memory_order_relaxed);
+/**
+ * @brief Enable or disable warning-level console output.
+ *
+ * Enforces log level hierarchy: disabling warning also disables info and debug.
+ *
+ * @param enable True to enable warning console output
+ */
+void Logger::enable_console_warning(bool enable)
+{
+    instance().console_warning_.store(enable, std::memory_order_relaxed);
+    if (!enable) {
+        // If WARNING is off, INFO and DEBUG must also be off
+        instance().console_info_.store(false, std::memory_order_relaxed);
+        instance().console_debug_.store(false, std::memory_order_relaxed);
     }
+}
 
-    /**
-     * @brief Check if warning console output is enabled.
-     * 
-     * @return bool True if warning console output is enabled
-     */
-    bool Logger::is_console_warning_enabled() {
-        return instance().console_warning_.load(std::memory_order_relaxed);
+/**
+ * @brief Check if debug console output is enabled.
+ *
+ * @return bool True if debug console output is enabled
+ */
+bool Logger::is_console_debug_enabled()
+{
+    return instance().console_debug_.load(std::memory_order_relaxed);
+}
+
+/**
+ * @brief Check if info console output is enabled.
+ *
+ * @return bool True if info console output is enabled
+ */
+bool Logger::is_console_info_enabled()
+{
+    return instance().console_info_.load(std::memory_order_relaxed);
+}
+
+/**
+ * @brief Check if warning console output is enabled.
+ *
+ * @return bool True if warning console output is enabled
+ */
+bool Logger::is_console_warning_enabled()
+{
+    return instance().console_warning_.load(std::memory_order_relaxed);
+}
+
+/**
+ * @brief Output a formatted crash report to stderr.
+ *
+ * Displays the log file path and helpful instructions for bug reporting.
+ * Uses atomic flag to ensure the report is printed only once per process.
+ *
+ * @param log_path Path to the dumped log file
+ */
+void Logger::output_crash_report(const std::string& log_path)
+{
+    if (!log_path.empty()) {
+        std::cerr << red("HUIRA UNCAUGHT EXCEPTION") << "\n";
+        std::cerr << yellow(" - Log file written to: " +
+                            std::filesystem::absolute(log_path).string())
+                  << "\n";
+        std::cerr << yellow(
+            " - If this was a SPICE error, consider reviewing your SPICE configuration\n");
+        std::cerr << yellow(
+            " - If you believe this is a bug with Huira, please report this issue:\n");
+        std::cerr << "       "
+                  << blue("https://github.com/huira-render/huira/issues/new?template=bug_report.md")
+                  << "\n";
+        std::cerr << yellow(" - Include the log file in your report.") << "\n";
     }
+}
 
-    /**
-     * @brief Output a formatted crash report to stderr.
-     * 
-     * Displays the log file path and helpful instructions for bug reporting.
-     * Uses atomic flag to ensure the report is printed only once per process.
-     * 
-     * @param log_path Path to the dumped log file
-     */
-    void Logger::output_crash_report(const std::string& log_path) {
-        if (!log_path.empty()) {
-            std::cerr << red("HUIRA UNCAUGHT EXCEPTION") << "\n";
-            std::cerr << yellow(" - Log file written to: " + std::filesystem::absolute(log_path).string()) << "\n";
-            std::cerr << yellow(" - If this was a SPICE error, consider reviewing your SPICE configuration\n");
-            std::cerr << yellow(" - If you believe this is a bug with Huira, please report this issue:\n");
-            std::cerr << "       " << blue("https://github.com/huira-render/huira/issues/new?template=bug_report.md") << "\n";
-            std::cerr << yellow(" - Include the log file in your report.") << "\n";
-        }
+/**
+ * @brief Signal handler for crashes (SIGSEGV, SIGABRT, etc.).
+ *
+ * Logs the signal, dumps the log to a file, outputs a crash report, and
+ * re-raises the signal with the default handler. Ensures only one crash
+ * report is generated per process.
+ *
+ * @param signal Signal number that triggered the handler
+ */
+void Logger::handle_crash(int signal)
+{
+    auto& logger = Logger::instance();
+    if (!logger.crash_handler_enabled_.load(std::memory_order_relaxed)) {
+        return;
     }
-
-    /**
-     * @brief Signal handler for crashes (SIGSEGV, SIGABRT, etc.).
-     * 
-     * Logs the signal, dumps the log to a file, outputs a crash report, and
-     * re-raises the signal with the default handler. Ensures only one crash
-     * report is generated per process.
-     * 
-     * @param signal Signal number that triggered the handler
-     */
-    void Logger::handle_crash(int signal) {
-        auto& logger = Logger::instance();
-        if (!logger.crash_handler_enabled_.load(std::memory_order_relaxed)) {
-            return;
-        }
-        // Only print crash report once
-        bool expected = false;
-        if (!Logger::crash_reported_.compare_exchange_strong(expected, true, std::memory_order_relaxed)) {
-            // Already reported
-            std::signal(signal, SIG_DFL);
-            std::raise(signal);
-            return;
-        }
-        logger.log(LogLevel::Error, "Crash detected with signal: " + std::to_string(signal));
-
-        auto& scopes = get_thread_scope_stack();
-        if (!scopes.empty()) {
-            logger.log(LogLevel::Error, std::string("Crash inside scope: ") + scopes.back());
-            logger.log(LogLevel::Error, "Scope trace:");
-            for (const char* scope : scopes) {
-                logger.log(LogLevel::Error, std::string(" -> ") + scope);
-            }
-        }
-
-        std::string log_path = logger.dump_to_file();
-        output_crash_report(log_path);
-
-        // Re-raise signal with default handler
+    // Only print crash report once
+    bool expected = false;
+    if (!Logger::crash_reported_.compare_exchange_strong(
+            expected, true, std::memory_order_relaxed)) {
+        // Already reported
         std::signal(signal, SIG_DFL);
         std::raise(signal);
+        return;
+    }
+    logger.log(LogLevel::Error, "Crash detected with signal: " + std::to_string(signal));
+
+    auto& scopes = get_thread_scope_stack();
+    if (!scopes.empty()) {
+        logger.log(LogLevel::Error, std::string("Crash inside scope: ") + scopes.back());
+        logger.log(LogLevel::Error, "Scope trace:");
+        for (const char* scope : scopes) {
+            logger.log(LogLevel::Error, std::string(" -> ") + scope);
+        }
     }
 
+    std::string log_path = logger.dump_to_file();
+    output_crash_report(log_path);
+
+    // Re-raise signal with default handler
+    std::signal(signal, SIG_DFL);
+    std::raise(signal);
+}
+
 #ifdef _WIN32
-    /**
-     * @brief Windows Structured Exception Handler for unhandled exceptions.
-     * 
-     * Logs the exception code, dumps the log, and outputs a crash report.
-     * Returns EXCEPTION_CONTINUE_SEARCH to allow other handlers to process
-     * the exception.
-     * 
-     * @param exception_info Windows exception information structure
-     * @return LONG EXCEPTION_CONTINUE_SEARCH to continue exception handling
-     */
-    LONG WINAPI Logger::windows_exception_handler(EXCEPTION_POINTERS* exception_info) {
-        auto& logger = Logger::instance();
-        if (!logger.crash_handler_enabled_.load(std::memory_order_relaxed)) {
-            return EXCEPTION_CONTINUE_SEARCH;
-        }
-
-        std::ostringstream oss;
-        oss << "Windows exception caught: 0x"
-            << std::hex << std::uppercase
-            << exception_info->ExceptionRecord->ExceptionCode;
-        logger.log(LogLevel::Error, oss.str());
-
-        std::string log_path = logger.dump_to_file();
-        output_crash_report(log_path);
-
+/**
+ * @brief Windows Structured Exception Handler for unhandled exceptions.
+ *
+ * Logs the exception code, dumps the log, and outputs a crash report.
+ * Returns EXCEPTION_CONTINUE_SEARCH to allow other handlers to process
+ * the exception.
+ *
+ * @param exception_info Windows exception information structure
+ * @return LONG EXCEPTION_CONTINUE_SEARCH to continue exception handling
+ */
+LONG WINAPI Logger::windows_exception_handler(EXCEPTION_POINTERS* exception_info)
+{
+    auto& logger = Logger::instance();
+    if (!logger.crash_handler_enabled_.load(std::memory_order_relaxed)) {
         return EXCEPTION_CONTINUE_SEARCH;
     }
+
+    std::ostringstream oss;
+    oss << "Windows exception caught: 0x" << std::hex << std::uppercase
+        << exception_info->ExceptionRecord->ExceptionCode;
+    logger.log(LogLevel::Error, oss.str());
+
+    std::string log_path = logger.dump_to_file();
+    output_crash_report(log_path);
+
+    return EXCEPTION_CONTINUE_SEARCH;
+}
 #endif
 
-    /**
-     * @brief Terminate handler for uncaught exceptions.
-     * 
-     * Attempts to extract and log exception information from std::current_exception(),
-     * dumps the log, outputs a crash report, and calls std::abort(). Ensures only
-     * one crash report is generated per process.
-     */
-    [[noreturn]] void Logger::handle_terminate() {
-        auto& logger = Logger::instance();
-        if (!logger.crash_handler_enabled_.load(std::memory_order_relaxed)) {
-            std::abort();
-        }
-        // Only print crash report once
-        bool expected = false;
-        if (!Logger::crash_reported_.compare_exchange_strong(expected, true, std::memory_order_relaxed)) {
-            std::abort();
-        }
-        try {
-            auto exception_ptr = std::current_exception();
-            if (exception_ptr) {
-                try {
-                    std::rethrow_exception(exception_ptr);
-                } catch (const std::exception& e) {
-                    logger.log(LogLevel::Error, std::string("Uncaught exception: ") + e.what());
-                } catch (...) {
-                    logger.log(LogLevel::Error, "Uncaught unknown exception");
-                }
-            } else {
-                logger.log(LogLevel::Error, "Terminate called without active exception");
-            }
-        } catch (...) {
-            // Failed to log the exception
-        }
-        std::string log_path = logger.dump_to_file();
-        output_crash_report(log_path);
+/**
+ * @brief Terminate handler for uncaught exceptions.
+ *
+ * Attempts to extract and log exception information from std::current_exception(),
+ * dumps the log, outputs a crash report, and calls std::abort(). Ensures only
+ * one crash report is generated per process.
+ */
+[[noreturn]] void Logger::handle_terminate()
+{
+    auto& logger = Logger::instance();
+    if (!logger.crash_handler_enabled_.load(std::memory_order_relaxed)) {
         std::abort();
     }
+    // Only print crash report once
+    bool expected = false;
+    if (!Logger::crash_reported_.compare_exchange_strong(
+            expected, true, std::memory_order_relaxed)) {
+        std::abort();
+    }
+    try {
+        auto exception_ptr = std::current_exception();
+        if (exception_ptr) {
+            try {
+                std::rethrow_exception(exception_ptr);
+            } catch (const std::exception& e) {
+                logger.log(LogLevel::Error, std::string("Uncaught exception: ") + e.what());
+            } catch (...) {
+                logger.log(LogLevel::Error, "Uncaught unknown exception");
+            }
+        } else {
+            logger.log(LogLevel::Error, "Terminate called without active exception");
+        }
+    } catch (...) {
+        // Failed to log the exception
+    }
+    std::string log_path = logger.dump_to_file();
+    output_crash_report(log_path);
+    std::abort();
+}
 
-    /**
-     * @brief Install signal handlers and exception filters for crash reporting.
-     * 
-     * Installs handlers for:
-     * - POSIX signals (SIGSEGV, SIGABRT, SIGFPE, SIGILL, SIGBUS on Unix)
-     * - std::terminate for uncaught exceptions
-     * - Windows Structured Exception Handling (on Windows)
-     * 
-     * Uses compiler pragmas to suppress warnings about potentially-throwing functions
-     * in extern C contexts, as the handlers are designed to catch all exceptions internally.
-     */
-    void Logger::install_crash_handlers() {
-        // Suppress C5039: passing potentially-throwing function to extern C function
-        // Our handlers are carefully designed to catch all exceptions internally
+/**
+ * @brief Install signal handlers and exception filters for crash reporting.
+ *
+ * Installs handlers for:
+ * - POSIX signals (SIGSEGV, SIGABRT, SIGFPE, SIGILL, SIGBUS on Unix)
+ * - std::terminate for uncaught exceptions
+ * - Windows Structured Exception Handling (on Windows)
+ *
+ * Uses compiler pragmas to suppress warnings about potentially-throwing functions
+ * in extern C contexts, as the handlers are designed to catch all exceptions internally.
+ */
+void Logger::install_crash_handlers()
+{
+    // Suppress C5039: passing potentially-throwing function to extern C function
+    // Our handlers are carefully designed to catch all exceptions internally
 #ifdef _MSC_VER
-        #pragma warning(push)
-        #pragma warning(disable: 5039)
+#pragma warning(push)
+#pragma warning(disable : 5039)
 #endif
 
-        std::signal(SIGSEGV, handle_crash);
-        std::signal(SIGABRT, handle_crash);
-        std::signal(SIGFPE, handle_crash);
-        std::signal(SIGILL, handle_crash);
+    std::signal(SIGSEGV, handle_crash);
+    std::signal(SIGABRT, handle_crash);
+    std::signal(SIGFPE, handle_crash);
+    std::signal(SIGILL, handle_crash);
 
 #ifndef _WIN32
-        std::signal(SIGBUS, handle_crash);  // Unix/macOS only
+    std::signal(SIGBUS, handle_crash); // Unix/macOS only
 #endif
 
-        std::set_terminate(handle_terminate);
+    std::set_terminate(handle_terminate);
 
 #ifdef _WIN32
-        SetUnhandledExceptionFilter(windows_exception_handler);
+    SetUnhandledExceptionFilter(windows_exception_handler);
 #endif
 
 #ifdef _MSC_VER
-        #pragma warning(pop)
+#pragma warning(pop)
 #endif
-    }
-
 }
+
+} // namespace huira

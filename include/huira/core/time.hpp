@@ -78,7 +78,7 @@ enum class TimeScale {
  * @endcode
  */
 class Time {
-public:
+  public:
     Time() = default;
     explicit Time(const std::string& utc_string);
 
@@ -87,8 +87,6 @@ public:
 
     static Time from_julian_date(double jd, TimeScale scale);
     static Time from_modified_julian_date(double mjd, TimeScale scale);
-
-
 
     double et() const;
     double ephemeris_time() const;
@@ -140,7 +138,7 @@ public:
      */
     static constexpr double TT_TAI_OFFSET = 32.184;
 
-private:
+  private:
     /**
      * @brief Internal time representation: TDB seconds past J2000.0.
      *
@@ -156,6 +154,6 @@ private:
     explicit Time(double et) : et_(et) {}
 };
 
-}
+} // namespace huira
 
 #include "huira_impl/core/time.ipp"

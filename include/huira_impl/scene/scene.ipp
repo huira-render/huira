@@ -1,27 +1,19 @@
-#include <stdexcept>
 #include <iostream>
+#include <stdexcept>
 
-#include "tbb/parallel_for.h"
-#include "tbb/blocked_range.h"
 #include "embree4/rtcore.h"
-
-#include "huira/concepts/spectral_concepts.hpp"
 #include "huira/assets/io/model_loader.hpp"
-#include "huira/handles/assets/model_handle.hpp"
-#include "huira/handles/scene/frame_handle.hpp"
-#include "huira/util/logger.hpp"
-#include "huira/util/colorful_text.hpp"
-#include "huira/stars/io/star_catalog.hpp"
 #include "huira/assets/lights/light.hpp"
 #include "huira/assets/lights/sphere_light.hpp"
-#include "huira/assets/unresolved/unresolved_object.hpp"
-#include "huira/assets/unresolved/unresolved_sphere.hpp"
 #include "huira/assets/unresolved/unresolved_asteroid.hpp"
 #include "huira/assets/unresolved/unresolved_emitter.hpp"
-
-#include "huira/geometry/mesh.hpp"
+#include "huira/assets/unresolved/unresolved_object.hpp"
+#include "huira/assets/unresolved/unresolved_sphere.hpp"
+#include "huira/concepts/spectral_concepts.hpp"
 #include "huira/geometry/ellipsoid.hpp"
-
+#include "huira/geometry/mesh.hpp"
+#include "huira/handles/assets/model_handle.hpp"
+#include "huira/handles/scene/frame_handle.hpp"
 #include "huira/materials/bsdfs/cook_torrance_bsdf.hpp"
 #include "huira/materials/bsdfs/hapke_bsdf.hpp"
 #include "huira/materials/bsdfs/lambertian_bsdf.hpp"
@@ -29,1340 +21,1389 @@
 #include "huira/materials/bsdfs/mcewen_bsdf.hpp"
 #include "huira/materials/bsdfs/null_bsdf.hpp"
 #include "huira/materials/bsdfs/oren_nayar_bsdf.hpp"
-
+#include "huira/stars/io/star_catalog.hpp"
+#include "huira/util/colorful_text.hpp"
+#include "huira/util/logger.hpp"
 #include "huira/volumes/density/constant_density_field.hpp"
 #include "huira/volumes/scattering/isotropic_scatter.hpp"
+#include "tbb/blocked_range.h"
+#include "tbb/parallel_for.h"
 
 namespace huira {
-    // Suppressing C4355: 'this' is passed to FrameNode constructor, but FrameNode only stores
-    // the pointer without calling back into the incomplete Scene object.
+// Suppressing C4355: 'this' is passed to FrameNode constructor, but FrameNode only stores
+// the pointer without calling back into the incomplete Scene object.
 #ifdef _MSC_VER
 #pragma warning(push)
-#pragma warning(disable: 4355)
+#pragma warning(disable : 4355)
 #endif
 
-    /**
-     * @brief Constructs a Scene and initializes the root node.
-     */
-    template <IsSpectral TSpectral>
-    Scene<TSpectral>::Scene()
-        : root_node_(std::make_shared<FrameNode<TSpectral>>(this))
-        , root(root_node_)
-    {
-        HUIRA_TRACE_SCOPE("Scene::Scene");
-        root_node_->set_spice("SOLAR SYSTEM BARYCENTER", "J2000");
+/**
+ * @brief Constructs a Scene and initializes the root node.
+ */
+template <IsSpectral TSpectral>
+Scene<TSpectral>::Scene()
+    : root_node_(std::make_shared<FrameNode<TSpectral>>(this)), root(root_node_)
+{
+    HUIRA_TRACE_SCOPE("Scene::Scene");
+    root_node_->set_spice("SOLAR SYSTEM BARYCENTER", "J2000");
 
-        // Initialize default textures:
-        default_albedo_image_ = std::make_shared<Image<TSpectral>>(1, 1, TSpectral{ 1 });
-        default_alpha_image_ = std::make_shared<Image<float>>(1, 1, 1.f);
-        default_metallic_image_ = std::make_shared<Image<float>>(1, 1, 1.f);
-        default_roughness_image_ = std::make_shared<Image<float>>(1, 1, 1.f);
-        default_normal_image_ = std::make_shared<Image<Vec3<float>>>(1, 1, Vec3<float>{0, 0, 1});
-        default_transmission_image_ = std::make_shared<Image<TSpectral>>(1, 1, TSpectral{ 1.f });
-        default_emission_image_ = std::make_shared<Image<TSpectral>>(1, 1, TSpectral{ 1 });
+    // Initialize default textures:
+    default_albedo_image_ = std::make_shared<Image<TSpectral>>(1, 1, TSpectral{1});
+    default_alpha_image_ = std::make_shared<Image<float>>(1, 1, 1.f);
+    default_metallic_image_ = std::make_shared<Image<float>>(1, 1, 1.f);
+    default_roughness_image_ = std::make_shared<Image<float>>(1, 1, 1.f);
+    default_normal_image_ = std::make_shared<Image<Vec3<float>>>(1, 1, Vec3<float>{0, 0, 1});
+    default_transmission_image_ = std::make_shared<Image<TSpectral>>(1, 1, TSpectral{1.f});
+    default_emission_image_ = std::make_shared<Image<TSpectral>>(1, 1, TSpectral{1});
 
-        // Initialize default material:
-        default_material_ = std::make_shared<Material<TSpectral>>(
-            std::make_shared<LambertianBSDF<TSpectral>>(),
-            default_albedo_image_,
-            default_alpha_image_,
-            default_metallic_image_,
-            default_roughness_image_,
-            default_normal_image_,
-            default_transmission_image_,
-            default_emission_image_
-        );
+    // Initialize default material:
+    default_material_ =
+        std::make_shared<Material<TSpectral>>(std::make_shared<LambertianBSDF<TSpectral>>(),
+                                              default_albedo_image_,
+                                              default_alpha_image_,
+                                              default_metallic_image_,
+                                              default_roughness_image_,
+                                              default_normal_image_,
+                                              default_transmission_image_,
+                                              default_emission_image_);
 
-        default_null_material_ = std::make_shared<Material<TSpectral>>(
-            std::make_shared<NullBSDF<TSpectral>>(),
-            default_albedo_image_,
-            default_alpha_image_,
-            default_metallic_image_,
-            default_roughness_image_,
-            default_normal_image_,
-            default_transmission_image_,
-            default_emission_image_
-        );
+    default_null_material_ =
+        std::make_shared<Material<TSpectral>>(std::make_shared<NullBSDF<TSpectral>>(),
+                                              default_albedo_image_,
+                                              default_alpha_image_,
+                                              default_metallic_image_,
+                                              default_roughness_image_,
+                                              default_normal_image_,
+                                              default_transmission_image_,
+                                              default_emission_image_);
 
-        default_medium_ = std::make_shared<Medium<TSpectral>>(
-            std::make_shared<ConstantDensityField<TSpectral>>(TSpectral{ 0.f }, TSpectral{ 0.f }),
-            std::make_shared<IsotropicPhaseFunction<TSpectral>>()
-        );
+    default_medium_ = std::make_shared<Medium<TSpectral>>(
+        std::make_shared<ConstantDensityField<TSpectral>>(TSpectral{0.f}, TSpectral{0.f}),
+        std::make_shared<IsotropicPhaseFunction<TSpectral>>());
 
-        // Create the Embree RTC Device:
-        device_ = std::make_shared<EmbreeDevice>(nullptr);
+    // Create the Embree RTC Device:
+    device_ = std::make_shared<EmbreeDevice>(nullptr);
 
-        set_background_radiance(TSpectral{ 0 });
-    };
+    set_background_radiance(TSpectral{0});
+};
 
-    template <IsSpectral TSpectral>
-    Scene<TSpectral>::~Scene()
-    {
-        HUIRA_TRACE_SCOPE("Scene::~Scene");
-    }
+template <IsSpectral TSpectral>
+Scene<TSpectral>::~Scene()
+{
+    HUIRA_TRACE_SCOPE("Scene::~Scene");
+}
 
 #ifdef _MSC_VER
 #pragma warning(pop)
 #endif
 
-    /**
-     * @brief Adds a mesh to the scene.
-     * @param index_buffer The index buffer for the mesh.
-     * @param vertex_buffer The vertex buffer for the mesh.
-     * @param name Optional name for the mesh.
-     */
-    template <IsSpectral TSpectral>
-    MeshHandle<TSpectral> Scene<TSpectral>::add_mesh(const IndexBuffer& index_buffer,
-                                                     const VertexBuffer<TSpectral>& vertex_buffer, 
-                                                      std::string name)
-    {
-        auto mesh_shared = std::make_shared<Mesh<TSpectral>>(index_buffer, vertex_buffer);
-        add_geometry(mesh_shared, std::move(name));
-        return MeshHandle<TSpectral>{ mesh_shared };
+/**
+ * @brief Adds a mesh to the scene.
+ * @param index_buffer The index buffer for the mesh.
+ * @param vertex_buffer The vertex buffer for the mesh.
+ * @param name Optional name for the mesh.
+ */
+template <IsSpectral TSpectral>
+MeshHandle<TSpectral> Scene<TSpectral>::add_mesh(const IndexBuffer& index_buffer,
+                                                 const VertexBuffer<TSpectral>& vertex_buffer,
+                                                 std::string name)
+{
+    auto mesh_shared = std::make_shared<Mesh<TSpectral>>(index_buffer, vertex_buffer);
+    add_geometry(mesh_shared, std::move(name));
+    return MeshHandle<TSpectral>{mesh_shared};
+}
+
+/**
+ * @brief Adds a mesh to the scene.
+ * @param index_buffer The index buffer for the mesh.
+ * @param vertex_buffer The vertex buffer for the mesh.
+ * @param tangent_buffer The tangent buffer for the mesh.
+ * @param name Optional name for the mesh.
+ */
+template <IsSpectral TSpectral>
+MeshHandle<TSpectral> Scene<TSpectral>::add_mesh(const IndexBuffer& index_buffer,
+                                                 const VertexBuffer<TSpectral>& vertex_buffer,
+                                                 const TangentBuffer& tangent_buffer,
+                                                 std::string name)
+{
+    auto mesh_shared =
+        std::make_shared<Mesh<TSpectral>>(index_buffer, vertex_buffer, tangent_buffer);
+    add_geometry(mesh_shared, std::move(name));
+    return MeshHandle<TSpectral>{mesh_shared};
+}
+
+/**
+ * @brief Adds an ellipsoid to the scene.
+ * @param x Semi-axis length along the x-axis.
+ * @param y Semi-axis length along the y-axis.
+ * @param z Semi-axis length along the z-axis.
+ * @param name Optional name for the mesh.
+ */
+template <IsSpectral TSpectral>
+EllipsoidHandle<TSpectral> Scene<TSpectral>::add_ellipsoid(const units::Meter& x,
+                                                           const units::Meter& y,
+                                                           const units::Meter& z,
+                                                           std::string name)
+{
+    auto ellipsoid_shared = std::make_shared<Ellipsoid<TSpectral>>(x, y, z);
+    add_geometry(ellipsoid_shared, std::move(name));
+    return EllipsoidHandle<TSpectral>{ellipsoid_shared};
+}
+
+/**
+ * @brief Adds a geometry to the scene.
+ * @param geometry std::shared_ptr to the Geometry object
+ * @param name Optional name for the geometry
+ * @return GeometryHandle<TSpectral> Handle to the added geometry
+ */
+template <IsSpectral TSpectral>
+GeometryHandle<TSpectral>
+Scene<TSpectral>::add_geometry(std::shared_ptr<Geometry<TSpectral>> geometry, std::string name)
+{
+    geometry->set_device(device_);
+    geometries_.add(geometry, name);
+    return GeometryHandle<TSpectral>{geometry};
+}
+
+/**
+ * @brief Sets the name for a geometry asset.
+ * @param geom_handle Handle to the geometry
+ * @param name New name
+ */
+template <IsSpectral TSpectral>
+void Scene<TSpectral>::set_name(const GeometryHandle<TSpectral>& geom_handle,
+                                const std::string& name)
+{
+    geometries_.set_name(geom_handle.get(), name);
+}
+
+/**
+ * @brief Retrieves a geometry by name.
+ * @param name Name of the geometry
+ * @return GeometryHandle<TSpectral> Handle to the mesh
+ */
+template <IsSpectral TSpectral>
+GeometryHandle<TSpectral> Scene<TSpectral>::get_geometry(const std::string& name) const
+{
+    return GeometryHandle<TSpectral>{geometries_.lookup(name)};
+}
+
+/**
+ * @brief Deletes a geometry from the scene.
+ * @param geometry_handle Handle to the geometry
+ */
+template <IsSpectral TSpectral>
+void Scene<TSpectral>::delete_geometry(const GeometryHandle<TSpectral>& geom_handle)
+{
+    auto geom_shared = geom_handle.get();
+    if (!geom_shared) {
+        return;
     }
 
-    /**
-     * @brief Adds a mesh to the scene.
-     * @param index_buffer The index buffer for the mesh.
-     * @param vertex_buffer The vertex buffer for the mesh.
-     * @param tangent_buffer The tangent buffer for the mesh.
-     * @param name Optional name for the mesh.
-     */
-    template <IsSpectral TSpectral>
-    MeshHandle<TSpectral> Scene<TSpectral>::add_mesh(const IndexBuffer& index_buffer,
-                                                     const VertexBuffer<TSpectral>& vertex_buffer,
-                                                     const TangentBuffer& tangent_buffer,
-                                                     std::string name)
-    {
-        auto mesh_shared = std::make_shared<Mesh<TSpectral>>(index_buffer, vertex_buffer,
-                                                             tangent_buffer);
-        add_geometry(mesh_shared, std::move(name));
-        return MeshHandle<TSpectral>{ mesh_shared };
-    }
+    Geometry<TSpectral>* target_ptr = geom_shared.get();
 
-    /**
-     * @brief Adds an ellipsoid to the scene.
-     * @param x Semi-axis length along the x-axis.
-     * @param y Semi-axis length along the y-axis.
-     * @param z Semi-axis length along the z-axis.
-     * @param name Optional name for the mesh.
-     */
-    template <IsSpectral TSpectral>
-    EllipsoidHandle<TSpectral> Scene<TSpectral>::add_ellipsoid(const units::Meter& x,
-                                                               const units::Meter& y,
-                                                               const units::Meter& z,
-                                                               std::string name)
-    {
-        auto ellipsoid_shared = std::make_shared<Ellipsoid<TSpectral>>(x, y, z);
-        add_geometry(ellipsoid_shared, std::move(name));
-        return EllipsoidHandle<TSpectral>{ ellipsoid_shared };
-    }
+    std::vector<std::shared_ptr<Primitive<TSpectral>>> primitives_to_purge;
 
-
-    /**
-     * @brief Adds a geometry to the scene.
-     * @param geometry std::shared_ptr to the Geometry object
-     * @param name Optional name for the geometry
-     * @return GeometryHandle<TSpectral> Handle to the added geometry
-     */
-    template <IsSpectral TSpectral>
-    GeometryHandle<TSpectral> Scene<TSpectral>::add_geometry(
-        std::shared_ptr<Geometry<TSpectral>> geometry,
-        std::string name)
-    {
-        geometry->set_device(device_);
-        geometries_.add(geometry, name);
-        return GeometryHandle<TSpectral>{ geometry };
-    }
-
-    /**
-     * @brief Sets the name for a geometry asset.
-     * @param geom_handle Handle to the geometry
-     * @param name New name
-     */
-    template <IsSpectral TSpectral>
-    void Scene<TSpectral>::set_name(const GeometryHandle<TSpectral>& geom_handle,
-                                    const std::string& name)
-    {
-        geometries_.set_name(geom_handle.get(), name);
-    }
-
-    /**
-     * @brief Retrieves a geometry by name.
-     * @param name Name of the geometry
-     * @return GeometryHandle<TSpectral> Handle to the mesh
-     */
-    template <IsSpectral TSpectral>
-    GeometryHandle<TSpectral> Scene<TSpectral>::get_geometry(const std::string& name) const
-    {
-        return GeometryHandle<TSpectral>{ geometries_.lookup(name) };
-    }
-
-    /**
-     * @brief Deletes a geometry from the scene.
-     * @param geometry_handle Handle to the geometry
-     */
-    template <IsSpectral TSpectral>
-    void Scene<TSpectral>::delete_geometry(const GeometryHandle<TSpectral>& geom_handle)
-    {
-        auto geom_shared = geom_handle.get();
-        if (!geom_shared) {
-            return;
+    for (const auto& prim_ptr : primitives_) {
+        if (prim_ptr->geometry.get() == target_ptr) {
+            primitives_to_purge.push_back(prim_ptr);
         }
-        
-        Geometry<TSpectral>* target_ptr = geom_shared.get();
-        
-        std::vector<std::shared_ptr<Primitive<TSpectral>>> primitives_to_purge;
-        
-        for (const auto& prim_ptr : primitives_) {
-            if (prim_ptr->geometry.get() == target_ptr) {
-                primitives_to_purge.push_back(prim_ptr);
-            }
-        }
-        
-        for (auto& prim_shared : primitives_to_purge) {
-            delete_primitive(PrimitiveHandle<TSpectral>{ prim_shared });
-        }
-        
-        geometries_.remove(geom_shared);
     }
 
-    /**
-     * @brief Adds a primitive to the scene with default material.
-     * @param geometry_handle GeometryHandle for the primitive's geometry
-     * @param name Optional name for the primitive
-     * @return PrimitiveHandle<TSpectral> Handle to the added primitive
-     */
-    template <IsSpectral TSpectral>
-    PrimitiveHandle<TSpectral> Scene<TSpectral>::add_primitive(
-        const GeometryHandle<TSpectral>& geometry_handle,
-        std::string name)
-    {
-        MaterialHandle<TSpectral> default_material_handle{ default_material_ };
-        MediumHandle<TSpectral> default_medium_handle{ default_medium_ };
-        return add_primitive(geometry_handle, default_material_handle, default_medium_handle, name);
+    for (auto& prim_shared : primitives_to_purge) {
+        delete_primitive(PrimitiveHandle<TSpectral>{prim_shared});
     }
 
-    /**
-     * @brief Adds a primitive to the scene.
-     * @param geometry_handle GeometryHandle for the primitive's geometry
-     * @param material_handle MaterialHandle for the primitive's material
-     * @param name Optional name for the primitive
-     * @return PrimitiveHandle<TSpectral> Handle to the added primitive
-     */
-    template <IsSpectral TSpectral>
-    PrimitiveHandle<TSpectral> Scene<TSpectral>::add_primitive(
-        const GeometryHandle<TSpectral>& geometry_handle,
-        const MaterialHandle<TSpectral>& material_handle, std::string name)
-    {
-        MediumHandle<TSpectral> default_medium_handle{ default_medium_ };
-        return add_primitive(geometry_handle, material_handle, default_medium_handle, name);
+    geometries_.remove(geom_shared);
+}
+
+/**
+ * @brief Adds a primitive to the scene with default material.
+ * @param geometry_handle GeometryHandle for the primitive's geometry
+ * @param name Optional name for the primitive
+ * @return PrimitiveHandle<TSpectral> Handle to the added primitive
+ */
+template <IsSpectral TSpectral>
+PrimitiveHandle<TSpectral>
+Scene<TSpectral>::add_primitive(const GeometryHandle<TSpectral>& geometry_handle, std::string name)
+{
+    MaterialHandle<TSpectral> default_material_handle{default_material_};
+    MediumHandle<TSpectral> default_medium_handle{default_medium_};
+    return add_primitive(geometry_handle, default_material_handle, default_medium_handle, name);
+}
+
+/**
+ * @brief Adds a primitive to the scene.
+ * @param geometry_handle GeometryHandle for the primitive's geometry
+ * @param material_handle MaterialHandle for the primitive's material
+ * @param name Optional name for the primitive
+ * @return PrimitiveHandle<TSpectral> Handle to the added primitive
+ */
+template <IsSpectral TSpectral>
+PrimitiveHandle<TSpectral>
+Scene<TSpectral>::add_primitive(const GeometryHandle<TSpectral>& geometry_handle,
+                                const MaterialHandle<TSpectral>& material_handle,
+                                std::string name)
+{
+    MediumHandle<TSpectral> default_medium_handle{default_medium_};
+    return add_primitive(geometry_handle, material_handle, default_medium_handle, name);
+}
+
+/**
+ * @brief Adds a primitive to the scene.
+ * @param geometry_handle GeometryHandle for the primitive's geometry
+ * @param medium_handle MediumHandle for the primitive's medium
+ * @param name Optional name for the primitive
+ * @return PrimitiveHandle<TSpectral> Handle to the added primitive
+ */
+template <IsSpectral TSpectral>
+PrimitiveHandle<TSpectral>
+Scene<TSpectral>::add_primitive(const GeometryHandle<TSpectral>& geometry_handle,
+                                const MediumHandle<TSpectral>& medium_handle,
+                                std::string name)
+{
+    MaterialHandle<TSpectral> default_material_handle{default_material_};
+    return add_primitive(geometry_handle, default_material_handle, medium_handle, name);
+}
+
+/**
+ * @brief Adds a primitive to the scene.
+ * @param geometry_handle GeometryHandle for the primitive's geometry
+ * @param material_handle MaterialHandle for the primitive's material
+ * @param medium_handle MediumHandle for the primitive's medium
+ * @param name Optional name for the primitive
+ * @return PrimitiveHandle<TSpectral> Handle to the added primitive
+ */
+template <IsSpectral TSpectral>
+PrimitiveHandle<TSpectral>
+Scene<TSpectral>::add_primitive(const GeometryHandle<TSpectral>& geometry_handle,
+                                const MaterialHandle<TSpectral>& material_handle,
+                                const MediumHandle<TSpectral>& medium_handle,
+                                std::string name)
+{
+    if (!geometry_handle.valid()) {
+        HUIRA_THROW_ERROR("Cannot create Primitive: Invalid Geometry Handle.");
+    }
+    if (!material_handle.valid()) {
+        HUIRA_THROW_ERROR("Invalid Material Handle provided. Using default material.");
+    }
+    if (!medium_handle.valid()) {
+        HUIRA_THROW_ERROR("Invalid Medium Handle provided. Using default medium.");
     }
 
-    /**
-     * @brief Adds a primitive to the scene.
-     * @param geometry_handle GeometryHandle for the primitive's geometry
-     * @param medium_handle MediumHandle for the primitive's medium
-     * @param name Optional name for the primitive
-     * @return PrimitiveHandle<TSpectral> Handle to the added primitive
-     */
-    template <IsSpectral TSpectral>
-    PrimitiveHandle<TSpectral> Scene<TSpectral>::add_primitive(
-        const GeometryHandle<TSpectral>& geometry_handle,
-        const MediumHandle<TSpectral>& medium_handle, std::string name)
-    {
-        MaterialHandle<TSpectral> default_material_handle{ default_material_ };
-        return add_primitive(geometry_handle, default_material_handle, medium_handle, name);
+    auto primitive_shared = std::make_shared<Primitive<TSpectral>>();
+    primitive_shared->geometry = geometry_handle.get();
+    primitive_shared->material = material_handle.get();
+    primitive_shared->medium = medium_handle.get();
+    primitives_.add(primitive_shared, name);
+
+    return PrimitiveHandle<TSpectral>{primitive_shared};
+}
+
+/**
+ * @brief Sets the name for a primitive asset.
+ * @param primitive_handle Handle to the primitive
+ * @param name New name
+ */
+template <IsSpectral TSpectral>
+void Scene<TSpectral>::set_name(const PrimitiveHandle<TSpectral>& primitive_handle,
+                                const std::string& name)
+{
+    primitives_.set_name(primitive_handle.get(), name);
+}
+
+/**
+ * @brief Retrieves a primitive by name.
+ * @param name Name of the primitive
+ * @return PrimitiveHandle<TSpectral> Handle to the primitive
+ */
+template <IsSpectral TSpectral>
+PrimitiveHandle<TSpectral> Scene<TSpectral>::get_primitive(const std::string& name) const
+{
+    return PrimitiveHandle<TSpectral>{primitives_.lookup(name)};
+}
+
+/**
+ * @brief Deletes a primitive from the scene.
+ * @param primitive_handle Handle to the primitive
+ */
+template <IsSpectral TSpectral>
+void Scene<TSpectral>::delete_primitive(const PrimitiveHandle<TSpectral>& primitive_handle)
+{
+    auto primitive_shared = primitive_handle.get();
+    if (!primitive_shared) {
+        return;
     }
+    prune_graph_references_(primitive_shared.get());
+    primitives_.remove(primitive_shared);
+}
 
-    /**
-     * @brief Adds a primitive to the scene.
-     * @param geometry_handle GeometryHandle for the primitive's geometry
-     * @param material_handle MaterialHandle for the primitive's material
-     * @param medium_handle MediumHandle for the primitive's medium
-     * @param name Optional name for the primitive
-     * @return PrimitiveHandle<TSpectral> Handle to the added primitive
-     */
-    template <IsSpectral TSpectral>
-    PrimitiveHandle<TSpectral> Scene<TSpectral>::add_primitive(
-        const GeometryHandle<TSpectral>& geometry_handle, 
-        const MaterialHandle<TSpectral>& material_handle,
-        const MediumHandle<TSpectral>& medium_handle,
-        std::string name)
-    {
-        if (!geometry_handle.valid()) {
-            HUIRA_THROW_ERROR("Cannot create Primitive: Invalid Geometry Handle.");
-        }
-        if (!material_handle.valid()) {
-            HUIRA_THROW_ERROR("Invalid Material Handle provided. Using default material.");
-        } 
-        if (!medium_handle.valid()) {
-            HUIRA_THROW_ERROR("Invalid Medium Handle provided. Using default medium.");
-        }
+/**
+ * @brief Creates a new sphere light with spectral radiance.
+ * @param radius Radius of the sphere light
+ * @param spectral_radiance Spectral radiance of the light
+ * @param name Optional name
+ * @return LightHandle<TSpectral> Handle to the new light
+ */
+template <IsSpectral TSpectral>
+LightHandle<TSpectral> Scene<TSpectral>::new_sphere_light(
+    const units::Meter& radius,
+    const units::SpectralWattsPerMeterSquaredSteradian<TSpectral>& spectral_radiance,
+    std::string name)
+{
+    auto light_shared = std::make_shared<SphereLight<TSpectral>>(radius, spectral_radiance);
+    return this->add_light(light_shared, name);
+}
 
-        auto primitive_shared = std::make_shared<Primitive<TSpectral>>();
-        primitive_shared->geometry = geometry_handle.get();
-        primitive_shared->material = material_handle.get();
-        primitive_shared->medium = medium_handle.get();
-        primitives_.add(primitive_shared, name);
-        
-        return PrimitiveHandle<TSpectral>{ primitive_shared };
-    }
+/**
+ * @brief Creates a new point light with spectral power.
+ * @param radius Radius of the sphere light
+ * @param spectral_power Spectral power of the light
+ * @param name Optional name
+ * @return LightHandle<TSpectral> Handle to the new light
+ */
+template <IsSpectral TSpectral>
+LightHandle<TSpectral>
+Scene<TSpectral>::new_sphere_light(const units::Meter& radius,
+                                   const units::SpectralWatts<TSpectral>& spectral_power,
+                                   std::string name)
+{
+    auto light_shared = std::make_shared<SphereLight<TSpectral>>(radius, spectral_power);
+    return this->add_light(light_shared, name);
+}
 
-    /**
-     * @brief Sets the name for a primitive asset.
-     * @param primitive_handle Handle to the primitive
-     * @param name New name
-     */
-    template <IsSpectral TSpectral>
-    void Scene<TSpectral>::set_name(const PrimitiveHandle<TSpectral>& primitive_handle,
-        const std::string& name)
-    {
-        primitives_.set_name(primitive_handle.get(), name);
-    }
+/**
+ * @brief Creates a new point light with total power.
+ * @param radius Radius of the sphere light
+ * @param total_power Total power of the light
+ * @param name Optional name
+ * @return LightHandle<TSpectral> Handle to the new light
+ */
+template <IsSpectral TSpectral>
+LightHandle<TSpectral> Scene<TSpectral>::new_sphere_light(const units::Meter& radius,
+                                                          const units::Watt& total_power,
+                                                          std::string name)
+{
+    auto light_shared = std::make_shared<SphereLight<TSpectral>>(radius, total_power);
+    return this->add_light(light_shared, name);
+}
 
-    /**
-     * @brief Retrieves a primitive by name.
-     * @param name Name of the primitive
-     * @return PrimitiveHandle<TSpectral> Handle to the primitive
-     */
-    template <IsSpectral TSpectral>
-    PrimitiveHandle<TSpectral> Scene<TSpectral>::get_primitive(const std::string& name) const
-    {
-        return PrimitiveHandle<TSpectral>{ primitives_.lookup(name) };
-    }
+/**
+ * @brief Creates a new sun light with solar spectral radiance, and radius of the sun.
+ * @return LightHandle<TSpectral> Handle to the new sun light
+ */
+template <IsSpectral TSpectral>
+LightHandle<TSpectral> Scene<TSpectral>::new_sun_light()
+{
+    TSpectral spectral_radiance = black_body<TSpectral>(5800, 1000);
+    units::SpectralWattsPerMeterSquaredSteradian<TSpectral> spectral_radiance_units(
+        spectral_radiance);
 
-    /**
-     * @brief Deletes a primitive from the scene.
-     * @param primitive_handle Handle to the primitive
-     */
-    template <IsSpectral TSpectral>
-    void Scene<TSpectral>::delete_primitive(const PrimitiveHandle<TSpectral>& primitive_handle)
-    {
-        auto primitive_shared = primitive_handle.get();
-        if (!primitive_shared) { return; }
-        prune_graph_references_(primitive_shared.get());
-        primitives_.remove(primitive_shared);
-    }
+    // TODO Move solar radius into constants somehow?
+    units::Meter sun_radius(6.957e8);
 
+    return this->new_sphere_light(sun_radius, spectral_radiance_units, "Sun");
+}
 
+/**
+ * @brief Adds a light to the scene.
+ * @param light Shared pointer to the light
+ * @param name Optional name
+ * @return LightHandle<TSpectral> Handle to the added light
+ */
+template <IsSpectral TSpectral>
+LightHandle<TSpectral> Scene<TSpectral>::add_light(std::shared_ptr<Light<TSpectral>> light,
+                                                   std::string name)
+{
+    lights_.add(light, name);
+    return LightHandle<TSpectral>{light};
+}
 
-    /**
-     * @brief Creates a new sphere light with spectral radiance.
-     * @param radius Radius of the sphere light
-     * @param spectral_radiance Spectral radiance of the light
-     * @param name Optional name
-     * @return LightHandle<TSpectral> Handle to the new light
-     */
-    template <IsSpectral TSpectral>
-    LightHandle<TSpectral> Scene<TSpectral>::new_sphere_light(const units::Meter& radius, const units::SpectralWattsPerMeterSquaredSteradian<TSpectral>& spectral_radiance, std::string name)
-    {
-        auto light_shared = std::make_shared<SphereLight<TSpectral>>(radius, spectral_radiance);
-        return this->add_light(light_shared, name);
-    }
+/**
+ * @brief Sets the name for a light asset.
+ * @param light_handle Handle to the light
+ * @param name New name
+ */
+template <IsSpectral TSpectral>
+void Scene<TSpectral>::set_name(const LightHandle<TSpectral>& light_handle, const std::string& name)
+{
+    lights_.set_name(light_handle.get(), name);
+};
 
-    /**
-     * @brief Creates a new point light with spectral power.
-     * @param radius Radius of the sphere light
-     * @param spectral_power Spectral power of the light
-     * @param name Optional name
-     * @return LightHandle<TSpectral> Handle to the new light
-     */
-    template <IsSpectral TSpectral>
-    LightHandle<TSpectral> Scene<TSpectral>::new_sphere_light(const units::Meter& radius, const units::SpectralWatts<TSpectral>& spectral_power, std::string name)
-    {
-        auto light_shared = std::make_shared<SphereLight<TSpectral>>(radius, spectral_power);
-        return this->add_light(light_shared, name);
-    }
+/**
+ * @brief Retrieves a light by name.
+ * @param name Name of the light
+ * @return LightHandle<TSpectral> Handle to the light
+ */
+template <IsSpectral TSpectral>
+LightHandle<TSpectral> Scene<TSpectral>::get_light(const std::string& name) const
+{
+    return LightHandle<TSpectral>{lights_.lookup(name)};
+}
 
-    /**
-     * @brief Creates a new point light with total power.
-     * @param radius Radius of the sphere light
-     * @param total_power Total power of the light
-     * @param name Optional name
-     * @return LightHandle<TSpectral> Handle to the new light
-     */
-    template <IsSpectral TSpectral>
-    LightHandle<TSpectral> Scene<TSpectral>::new_sphere_light(const units::Meter& radius, const units::Watt& total_power, std::string name)
-    {
-        auto light_shared = std::make_shared<SphereLight<TSpectral>>(radius, total_power);
-        return this->add_light(light_shared, name);
-    }
+/**
+ * @brief Deletes a light from the scene.
+ * @param light_handle Handle to the light
+ */
+template <IsSpectral TSpectral>
+void Scene<TSpectral>::delete_light(const LightHandle<TSpectral>& light_handle)
+{
+    auto light_shared = light_handle.get();
+    prune_graph_references_(light_shared.get());
+    lights_.remove(light_shared);
+}
 
-    /**
-     * @brief Creates a new sun light with solar spectral radiance, and radius of the sun.
-     * @return LightHandle<TSpectral> Handle to the new sun light
-     */
-    template <IsSpectral TSpectral>
-    LightHandle<TSpectral> Scene<TSpectral>::new_sun_light()
-    {
-        TSpectral spectral_radiance = black_body<TSpectral>(5800, 1000);
-        units::SpectralWattsPerMeterSquaredSteradian<TSpectral> spectral_radiance_units(spectral_radiance);
+/**
+ * @brief Creates a new unresolved object with spectral irradiance.
+ * @param spectral_irradiance Spectral irradiance
+ * @param name Optional name
+ * @return UnresolvedObjectHandle<TSpectral> Handle to the new object
+ */
+template <IsSpectral TSpectral>
+UnresolvedObjectHandle<TSpectral> Scene<TSpectral>::new_unresolved_object(
+    const units::SpectralWattsPerMeterSquared<TSpectral>& spectral_irradiance, std::string name)
+{
+    auto unresolved_shared = std::make_shared<UnresolvedObject<TSpectral>>(spectral_irradiance);
+    return add_unresolved_object(unresolved_shared, name);
+}
 
-        // TODO Move solar radius into constants somehow?
-        units::Meter sun_radius(6.957e8);
+/**
+ * @brief Creates a new unresolved object with total irradiance.
+ * @param irradiance Total irradiance
+ * @param name Optional name
+ * @return UnresolvedObjectHandle<TSpectral> Handle to the new object
+ */
+template <IsSpectral TSpectral>
+UnresolvedObjectHandle<TSpectral>
+Scene<TSpectral>::new_unresolved_object(const units::WattsPerMeterSquared& irradiance,
+                                        std::string name)
+{
+    auto unresolved_shared = std::make_shared<UnresolvedObject<TSpectral>>(irradiance);
+    return add_unresolved_object(unresolved_shared, name);
+}
 
-        return this->new_sphere_light(sun_radius, spectral_radiance_units, "Sun");
-    }
+/**
+ * @brief Creates a new unresolved object from visual magnitude.
+ * @param visual_magnitude Visual magnitude
+ * @param name Optional name
+ * @return UnresolvedObjectHandle<TSpectral> Handle to the new object
+ */
+template <IsSpectral TSpectral>
+UnresolvedObjectHandle<TSpectral>
+Scene<TSpectral>::new_unresolved_object_from_magnitude(double visual_magnitude, std::string name)
+{
+    return this->new_unresolved_object_from_magnitude(visual_magnitude, TSpectral{1.f}, name);
+}
 
-    /**
-     * @brief Adds a light to the scene.
-     * @param light Shared pointer to the light
-     * @param name Optional name
-     * @return LightHandle<TSpectral> Handle to the added light
-     */
-    template <IsSpectral TSpectral>
-    LightHandle<TSpectral> Scene<TSpectral>::add_light(std::shared_ptr<Light<TSpectral>> light, std::string name)
-    {
-        lights_.add(light, name);
-        return LightHandle<TSpectral>{ light };
-    }
+/**
+ * @brief Creates a new unresolved object from visual magnitude and albedo.
+ * @param visual_magnitude Visual magnitude
+ * @param albedo Albedo value
+ * @param name Optional name
+ * @return UnresolvedObjectHandle<TSpectral> Handle to the new object
+ */
+template <IsSpectral TSpectral>
+UnresolvedObjectHandle<TSpectral> Scene<TSpectral>::new_unresolved_object_from_magnitude(
+    double visual_magnitude, TSpectral albedo, std::string name)
+{
+    TSpectral irradiance = visual_magnitude_to_irradiance<TSpectral>(visual_magnitude, albedo);
+    units::SpectralWattsPerMeterSquared<TSpectral> irradiance_watts(irradiance);
+    return this->new_unresolved_object(irradiance_watts, name);
+}
 
-    /**
-     * @brief Sets the name for a light asset.
-     * @param light_handle Handle to the light
-     * @param name New name
-     */
-    template <IsSpectral TSpectral>
-    void Scene<TSpectral>::set_name(const LightHandle<TSpectral>& light_handle, const std::string& name)
-    {
-        lights_.set_name(light_handle.get(), name);
-    };
+/**
+ * @brief Creates a new unresolved emitter with spectral power.
+ * @param spectral_power Spectral power
+ * @param name Optional name
+ * @return UnresolvedObjectHandle<TSpectral> Handle to the new emitter
+ */
+template <IsSpectral TSpectral>
+UnresolvedObjectHandle<TSpectral>
+Scene<TSpectral>::new_unresolved_emitter(const units::SpectralWatts<TSpectral>& spectral_power,
+                                         std::string name)
+{
+    auto unresolved_shared = std::make_shared<UnresolvedEmitter<TSpectral>>(spectral_power);
+    return add_unresolved_object(unresolved_shared, name);
+}
 
-    /**
-     * @brief Retrieves a light by name.
-     * @param name Name of the light
-     * @return LightHandle<TSpectral> Handle to the light
-     */
-    template <IsSpectral TSpectral>
-    LightHandle<TSpectral> Scene<TSpectral>::get_light(const std::string& name) const
-    {
-        return LightHandle<TSpectral>{ lights_.lookup(name) };
-    }
+/**
+ * @brief Creates a new unresolved emitter with total power.
+ * @param power Total power
+ * @param name Optional name
+ * @return UnresolvedObjectHandle<TSpectral> Handle to the new emitter
+ */
+template <IsSpectral TSpectral>
+UnresolvedObjectHandle<TSpectral> Scene<TSpectral>::new_unresolved_emitter(const units::Watt& power,
+                                                                           std::string name)
+{
+    auto unresolved_shared = std::make_shared<UnresolvedEmitter<TSpectral>>(power);
+    return add_unresolved_object(unresolved_shared, name);
+}
 
-    /**
-     * @brief Deletes a light from the scene.
-     * @param light_handle Handle to the light
-     */
-    template <IsSpectral TSpectral>
-    void Scene<TSpectral>::delete_light(const LightHandle<TSpectral>& light_handle)
-    {
-        auto light_shared = light_handle.get();
-        prune_graph_references_(light_shared.get());
-        lights_.remove(light_shared);
-    }
+/**
+ * @brief Creates a new unresolved sphere with radius and sun instance.
+ * @param radius Sphere radius
+ * @param sun Sun instance handle
+ * @param name Optional name
+ * @return UnresolvedObjectHandle<TSpectral> Handle to the new sphere
+ */
+template <IsSpectral TSpectral>
+UnresolvedObjectHandle<TSpectral> Scene<TSpectral>::new_unresolved_sphere(
+    units::Meter radius, InstanceHandle<TSpectral> sun, std::string name)
+{
+    return this->new_unresolved_sphere(radius, sun, TSpectral{1.f}, name);
+}
 
-    /**
-     * @brief Creates a new unresolved object with spectral irradiance.
-     * @param spectral_irradiance Spectral irradiance
-     * @param name Optional name
-     * @return UnresolvedObjectHandle<TSpectral> Handle to the new object
-     */
-    template <IsSpectral TSpectral>
-    UnresolvedObjectHandle<TSpectral> Scene<TSpectral>::new_unresolved_object(const units::SpectralWattsPerMeterSquared<TSpectral>& spectral_irradiance, std::string name)
-    {
-        auto unresolved_shared = std::make_shared<UnresolvedObject<TSpectral>>(spectral_irradiance);
-        return add_unresolved_object(unresolved_shared, name);
-    }
+/**
+ * @brief Creates a new unresolved sphere with radius, sun instance, and albedo.
+ * @param radius Sphere radius
+ * @param sun Sun instance handle
+ * @param albedo Albedo value (spectral)
+ * @param name Optional name
+ * @return UnresolvedObjectHandle<TSpectral> Handle to the new sphere
+ */
+template <IsSpectral TSpectral>
+UnresolvedObjectHandle<TSpectral> Scene<TSpectral>::new_unresolved_sphere(
+    units::Meter radius, InstanceHandle<TSpectral> sun, TSpectral albedo, std::string name)
+{
+    auto unresolved_lambertian_sphere =
+        std::make_shared<UnresolvedLambertianSphere<TSpectral>>(radius, sun, albedo);
+    return this->add_unresolved_object(unresolved_lambertian_sphere, name);
+}
 
-    /**
-     * @brief Creates a new unresolved object with total irradiance.
-     * @param irradiance Total irradiance
-     * @param name Optional name
-     * @return UnresolvedObjectHandle<TSpectral> Handle to the new object
-     */
-    template <IsSpectral TSpectral>
-    UnresolvedObjectHandle<TSpectral> Scene<TSpectral>::new_unresolved_object(const units::WattsPerMeterSquared& irradiance, std::string name)
-    {
-        auto unresolved_shared = std::make_shared<UnresolvedObject<TSpectral>>(irradiance);
-        return add_unresolved_object(unresolved_shared, name);
-    }
+/**
+ * @brief Creates a new unresolved sphere with radius, sun instance, and albedo.
+ * @param radius Sphere radius
+ * @param sun Sun instance handle
+ * @param albedo Albedo value (constant)
+ * @param name Optional name
+ * @return UnresolvedObjectHandle<TSpectral> Handle to the new sphere
+ */
+template <IsSpectral TSpectral>
+UnresolvedObjectHandle<TSpectral> Scene<TSpectral>::new_unresolved_sphere(
+    units::Meter radius, InstanceHandle<TSpectral> sun, float albedo, std::string name)
+{
+    auto unresolved_lambertian_sphere =
+        std::make_shared<UnresolvedLambertianSphere<TSpectral>>(radius, sun, albedo);
+    return this->add_unresolved_object(unresolved_lambertian_sphere, name);
+}
 
-    /**
-     * @brief Creates a new unresolved object from visual magnitude.
-     * @param visual_magnitude Visual magnitude
-     * @param name Optional name
-     * @return UnresolvedObjectHandle<TSpectral> Handle to the new object
-     */
-    template <IsSpectral TSpectral>
-    UnresolvedObjectHandle<TSpectral> Scene<TSpectral>::new_unresolved_object_from_magnitude(double visual_magnitude, std::string name)
-    {
-        return this->new_unresolved_object_from_magnitude(visual_magnitude, TSpectral{ 1.f }, name);
-    }
+/**
+ * @brief Creates a new unresolved asteroid with H, G, and sun instance.
+ * @param H Absolute magnitude
+ * @param G Slope parameter
+ * @param sun Sun instance handle
+ * @param name Optional name
+ * @return UnresolvedObjectHandle<TSpectral> Handle to the new asteroid
+ */
+template <IsSpectral TSpectral>
+UnresolvedObjectHandle<TSpectral> Scene<TSpectral>::new_unresolved_asteroid(
+    double H, double G, InstanceHandle<TSpectral> sun, std::string name)
+{
+    return this->new_unresolved_asteroid(H, G, sun, TSpectral{1.f}, name);
+}
 
-    /**
-     * @brief Creates a new unresolved object from visual magnitude and albedo.
-     * @param visual_magnitude Visual magnitude
-     * @param albedo Albedo value
-     * @param name Optional name
-     * @return UnresolvedObjectHandle<TSpectral> Handle to the new object
-     */
-    template <IsSpectral TSpectral>
-    UnresolvedObjectHandle<TSpectral> Scene<TSpectral>::new_unresolved_object_from_magnitude(double visual_magnitude, TSpectral albedo, std::string name)
-    {
-        TSpectral irradiance = visual_magnitude_to_irradiance<TSpectral>(visual_magnitude, albedo);
-        units::SpectralWattsPerMeterSquared<TSpectral> irradiance_watts(irradiance);
-        return this->new_unresolved_object(irradiance_watts, name);
-    }
+/**
+ * @brief Creates a new unresolved asteroid with H, G, sun instance, and albedo.
+ * @param H Absolute magnitude
+ * @param G Slope parameter
+ * @param sun Sun instance handle
+ * @param albedo Albedo value (spectral)
+ * @param name Optional name
+ * @return UnresolvedObjectHandle<TSpectral> Handle to the new asteroid
+ */
+template <IsSpectral TSpectral>
+UnresolvedObjectHandle<TSpectral> Scene<TSpectral>::new_unresolved_asteroid(
+    double H, double G, InstanceHandle<TSpectral> sun, TSpectral albedo, std::string name)
+{
+    auto unresolved_asteroid = std::make_shared<UnresolvedAsteroid<TSpectral>>(H, G, sun, albedo);
+    return this->add_unresolved_object(unresolved_asteroid, name);
+}
 
-    /**
-     * @brief Creates a new unresolved emitter with spectral power.
-     * @param spectral_power Spectral power
-     * @param name Optional name
-     * @return UnresolvedObjectHandle<TSpectral> Handle to the new emitter
-     */
-    template <IsSpectral TSpectral>
-    UnresolvedObjectHandle<TSpectral> Scene<TSpectral>::new_unresolved_emitter(const units::SpectralWatts<TSpectral>& spectral_power, std::string name)
-    {
-        auto unresolved_shared = std::make_shared<UnresolvedEmitter<TSpectral>>(spectral_power);
-        return add_unresolved_object(unresolved_shared, name);
-    }
+/**
+ * @brief Creates a new unresolved asteroid with H, G, sun instance, and albedo.
+ * @param H Absolute magnitude
+ * @param G Slope parameter
+ * @param sun Sun instance handle
+ * @param albedo Albedo value (constant)
+ * @param name Optional name
+ * @return UnresolvedObjectHandle<TSpectral> Handle to the new asteroid
+ */
+template <IsSpectral TSpectral>
+UnresolvedObjectHandle<TSpectral> Scene<TSpectral>::new_unresolved_asteroid(
+    double H, double G, InstanceHandle<TSpectral> sun, float albedo, std::string name)
+{
+    auto unresolved_asteroid = std::make_shared<UnresolvedAsteroid<TSpectral>>(H, G, sun, albedo);
+    return this->add_unresolved_object(unresolved_asteroid, name);
+}
 
-    /**
-     * @brief Creates a new unresolved emitter with total power.
-     * @param power Total power
-     * @param name Optional name
-     * @return UnresolvedObjectHandle<TSpectral> Handle to the new emitter
-     */
-    template <IsSpectral TSpectral>
-    UnresolvedObjectHandle<TSpectral> Scene<TSpectral>::new_unresolved_emitter(const units::Watt& power, std::string name)
-    {
-        auto unresolved_shared = std::make_shared<UnresolvedEmitter<TSpectral>>(power);
-        return add_unresolved_object(unresolved_shared, name);
-    }
+/**
+ * @brief Adds an unresolved object to the scene.
+ * @param unresolved_object Shared pointer to the unresolved object
+ * @param name Optional name
+ * @return UnresolvedObjectHandle<TSpectral> Handle to the added object
+ */
+template <IsSpectral TSpectral>
+UnresolvedObjectHandle<TSpectral> Scene<TSpectral>::add_unresolved_object(
+    std::shared_ptr<UnresolvedObject<TSpectral>> unresolved_object, std::string name)
+{
+    unresolved_objects_.add(unresolved_object, name);
+    return UnresolvedObjectHandle<TSpectral>{unresolved_object};
+}
 
-    /**
-     * @brief Creates a new unresolved sphere with radius and sun instance.
-     * @param radius Sphere radius
-     * @param sun Sun instance handle
-     * @param name Optional name
-     * @return UnresolvedObjectHandle<TSpectral> Handle to the new sphere
-     */
-    template <IsSpectral TSpectral>
-    UnresolvedObjectHandle<TSpectral> Scene<TSpectral>::new_unresolved_sphere(units::Meter radius, InstanceHandle<TSpectral> sun, std::string name)
-    {
-        return this->new_unresolved_sphere(radius, sun, TSpectral{ 1.f }, name);
-    }
+/**
+ * @brief Sets the name for an unresolved object asset.
+ * @param unresolved Handle to the unresolved object
+ * @param name New name
+ */
+template <IsSpectral TSpectral>
+void Scene<TSpectral>::set_name(const UnresolvedObjectHandle<TSpectral>& unresolved,
+                                const std::string& name)
+{
+    unresolved_objects_.set_name(unresolved.get(), name);
+}
 
-    /**
-     * @brief Creates a new unresolved sphere with radius, sun instance, and albedo.
-     * @param radius Sphere radius
-     * @param sun Sun instance handle
-     * @param albedo Albedo value (spectral)
-     * @param name Optional name
-     * @return UnresolvedObjectHandle<TSpectral> Handle to the new sphere
-     */
-    template <IsSpectral TSpectral>
-    UnresolvedObjectHandle<TSpectral> Scene<TSpectral>::new_unresolved_sphere(units::Meter radius, InstanceHandle<TSpectral> sun, TSpectral albedo, std::string name)
-    {
-        auto unresolved_lambertian_sphere = std::make_shared<UnresolvedLambertianSphere<TSpectral>>(radius, sun, albedo);
-        return this->add_unresolved_object(unresolved_lambertian_sphere, name);
-    }
+/**
+ * @brief Retrieves an unresolved object by name.
+ * @param name Name of the unresolved object
+ * @return UnresolvedObjectHandle<TSpectral> Handle to the unresolved object
+ */
+template <IsSpectral TSpectral>
+UnresolvedObjectHandle<TSpectral>
+Scene<TSpectral>::get_unresolved_object(const std::string& name) const
+{
+    return UnresolvedObjectHandle<TSpectral>{unresolved_objects_.lookup(name)};
+}
 
-    /**
-     * @brief Creates a new unresolved sphere with radius, sun instance, and albedo.
-     * @param radius Sphere radius
-     * @param sun Sun instance handle
-     * @param albedo Albedo value (constant)
-     * @param name Optional name
-     * @return UnresolvedObjectHandle<TSpectral> Handle to the new sphere
-     */
-    template <IsSpectral TSpectral>
-    UnresolvedObjectHandle<TSpectral> Scene<TSpectral>::new_unresolved_sphere(units::Meter radius, InstanceHandle<TSpectral> sun, float albedo, std::string name)
-    {
-        auto unresolved_lambertian_sphere = std::make_shared<UnresolvedLambertianSphere<TSpectral>>(radius, sun, albedo);
-        return this->add_unresolved_object(unresolved_lambertian_sphere, name);
-    }
+/**
+ * @brief Deletes an unresolved object from the scene.
+ * @param unresolved_object_handle Handle to the unresolved object
+ */
+template <IsSpectral TSpectral>
+void Scene<TSpectral>::delete_unresolved_object(
+    const UnresolvedObjectHandle<TSpectral>& unresolved_object_handle)
+{
+    auto unresolved_object_shared = unresolved_object_handle.get();
+    prune_graph_references_(unresolved_object_shared.get());
+    unresolved_objects_.remove(unresolved_object_shared);
+}
 
-    /**
-     * @brief Creates a new unresolved asteroid with H, G, and sun instance.
-     * @param H Absolute magnitude
-     * @param G Slope parameter
-     * @param sun Sun instance handle
-     * @param name Optional name
-     * @return UnresolvedObjectHandle<TSpectral> Handle to the new asteroid
-     */
-    template <IsSpectral TSpectral>
-    UnresolvedObjectHandle<TSpectral> Scene<TSpectral>::new_unresolved_asteroid(double H, double G, InstanceHandle<TSpectral> sun, std::string name)
-    {
-        return this->new_unresolved_asteroid(H, G, sun, TSpectral{ 1.f }, name);
-    }
+/**
+ * @brief Creates a new camera model.
+ * @param name Optional name
+ * @return CameraModelHandle<TSpectral> Handle to the new camera model
+ */
+template <IsSpectral TSpectral>
+CameraModelHandle<TSpectral> Scene<TSpectral>::new_camera_model(std::string name)
+{
+    auto camera_shared = std::make_shared<CameraModel<TSpectral>>();
+    camera_models_.add(camera_shared, name);
+    return CameraModelHandle<TSpectral>{camera_shared};
+}
 
-    /**
-     * @brief Creates a new unresolved asteroid with H, G, sun instance, and albedo.
-     * @param H Absolute magnitude
-     * @param G Slope parameter
-     * @param sun Sun instance handle
-     * @param albedo Albedo value (spectral)
-     * @param name Optional name
-     * @return UnresolvedObjectHandle<TSpectral> Handle to the new asteroid
-     */
-    template <IsSpectral TSpectral>
-    UnresolvedObjectHandle<TSpectral> Scene<TSpectral>::new_unresolved_asteroid(double H, double G, InstanceHandle<TSpectral> sun, TSpectral albedo, std::string name)
-    {
-        auto unresolved_asteroid = std::make_shared<UnresolvedAsteroid<TSpectral>>(H, G, sun, albedo);
-        return this->add_unresolved_object(unresolved_asteroid, name);
-    }
+/**
+ * @brief Sets the name for a camera model asset.
+ * @param camera_model_handle Handle to the camera model
+ * @param name New name
+ */
+template <IsSpectral TSpectral>
+void Scene<TSpectral>::set_name(const CameraModelHandle<TSpectral>& camera_model_handle,
+                                const std::string& name)
+{
+    camera_models_.set_name(camera_model_handle.get(), name);
+}
 
-    /**
-     * @brief Creates a new unresolved asteroid with H, G, sun instance, and albedo.
-     * @param H Absolute magnitude
-     * @param G Slope parameter
-     * @param sun Sun instance handle
-     * @param albedo Albedo value (constant)
-     * @param name Optional name
-     * @return UnresolvedObjectHandle<TSpectral> Handle to the new asteroid
-     */
-    template <IsSpectral TSpectral>
-    UnresolvedObjectHandle<TSpectral> Scene<TSpectral>::new_unresolved_asteroid(double H, double G, InstanceHandle<TSpectral> sun, float albedo, std::string name)
-    {
-        auto unresolved_asteroid = std::make_shared<UnresolvedAsteroid<TSpectral>>(H, G, sun, albedo);
-        return this->add_unresolved_object(unresolved_asteroid, name);
-    }
+/**
+ * @brief Retrieves a camera model by name.
+ * @param name Name of the camera model
+ * @return CameraModelHandle<TSpectral> Handle to the camera model
+ */
+template <IsSpectral TSpectral>
+CameraModelHandle<TSpectral> Scene<TSpectral>::get_camera_model(const std::string& name) const
+{
+    return CameraModelHandle<TSpectral>{camera_models_.lookup(name)};
+}
 
-    /**
-     * @brief Adds an unresolved object to the scene.
-     * @param unresolved_object Shared pointer to the unresolved object
-     * @param name Optional name
-     * @return UnresolvedObjectHandle<TSpectral> Handle to the added object
-     */
-    template <IsSpectral TSpectral>
-    UnresolvedObjectHandle<TSpectral> Scene<TSpectral>::add_unresolved_object(std::shared_ptr<UnresolvedObject<TSpectral>> unresolved_object, std::string name)
-    {
-        unresolved_objects_.add(unresolved_object, name);
-        return UnresolvedObjectHandle<TSpectral>{ unresolved_object };
-    }
+/**
+ * @brief Deletes a camera model from the scene.
+ * @param camera_model_handle Handle to the camera model
+ */
+template <IsSpectral TSpectral>
+void Scene<TSpectral>::delete_camera_model(const CameraModelHandle<TSpectral>& camera_model_handle)
+{
+    auto camera_model_shared = camera_model_handle.get();
+    prune_graph_references_(camera_model_shared.get());
+    camera_models_.remove(camera_model_shared);
+}
 
-    /**
-     * @brief Sets the name for an unresolved object asset.
-     * @param unresolved Handle to the unresolved object
-     * @param name New name
-     */
-    template <IsSpectral TSpectral>
-    void Scene<TSpectral>::set_name(const UnresolvedObjectHandle<TSpectral>& unresolved, const std::string& name)
-    {
-        unresolved_objects_.set_name(unresolved.get(), name);
-    }
+/**
+ * @brief Loads a model from file and adds it to the scene.
+ * @param file Path to the model file
+ * @param name Optional name
+ * @param post_process_flags Flags for post-processing
+ * @return ModelHandle<TSpectral> Handle to the loaded model
+ */
+template <IsSpectral TSpectral>
+ModelHandle<TSpectral> Scene<TSpectral>::load_model(const fs::path& file,
+                                                    std::string name,
+                                                    unsigned int post_process_flags)
+{
+    // Load the model using ModelLoader
+    auto model_shared = ModelLoader<TSpectral>::load(*this, file, name, post_process_flags);
+    return ModelHandle<TSpectral>{model_shared};
+}
 
-    /**
-     * @brief Retrieves an unresolved object by name.
-     * @param name Name of the unresolved object
-     * @return UnresolvedObjectHandle<TSpectral> Handle to the unresolved object
-     */
-    template <IsSpectral TSpectral>
-    UnresolvedObjectHandle<TSpectral> Scene<TSpectral>::get_unresolved_object(const std::string& name) const
-    {
-        return UnresolvedObjectHandle<TSpectral>{ unresolved_objects_.lookup(name) };
-    }
+/**
+ * @brief Sets the name for a model asset.
+ * @param model_handle Handle to the model
+ * @param name New name
+ */
+template <IsSpectral TSpectral>
+void Scene<TSpectral>::set_name(const ModelHandle<TSpectral>& model_handle, const std::string& name)
+{
+    models_.set_name(model_handle.get(), name);
+}
 
-    /**
-     * @brief Deletes an unresolved object from the scene.
-     * @param unresolved_object_handle Handle to the unresolved object
-     */
-    template <IsSpectral TSpectral>
-    void Scene<TSpectral>::delete_unresolved_object(const UnresolvedObjectHandle<TSpectral>& unresolved_object_handle)
-    {
-        auto unresolved_object_shared = unresolved_object_handle.get();
-        prune_graph_references_(unresolved_object_shared.get());
-        unresolved_objects_.remove(unresolved_object_shared);
-    }
+/**
+ * @brief Retrieves a model by name.
+ * @param name Name of the model
+ * @return ModelHandle<TSpectral> Handle to the model
+ */
+template <IsSpectral TSpectral>
+ModelHandle<TSpectral> Scene<TSpectral>::get_model(const std::string& name) const
+{
+    return ModelHandle<TSpectral>{models_.lookup(name)};
+}
 
+/**
+ * @brief Deletes a model from the scene.
+ * @param model_handle Handle to the model
+ */
+template <IsSpectral TSpectral>
+void Scene<TSpectral>::delete_model(const ModelHandle<TSpectral>& model_handle)
+{
+    auto model_shared = model_handle.get();
+    prune_graph_references_(model_shared.get());
+    models_.remove(model_shared);
+}
 
-    /**
-     * @brief Creates a new camera model.
-     * @param name Optional name
-     * @return CameraModelHandle<TSpectral> Handle to the new camera model
-     */
-    template <IsSpectral TSpectral>
-    CameraModelHandle<TSpectral> Scene<TSpectral>::new_camera_model(std::string name)
-    {
-        auto camera_shared = std::make_shared<CameraModel<TSpectral>>();
-        camera_models_.add(camera_shared, name);
-        return CameraModelHandle<TSpectral>{ camera_shared };
-    }
+template <IsSpectral TSpectral>
+BSDFHandle<TSpectral> Scene<TSpectral>::new_bsdf_cook_torrance(std::string name)
+{
+    auto bsdf_shared = std::make_shared<CookTorranceBSDF<TSpectral>>();
+    return add_bsdf(bsdf_shared, name);
+}
 
-    /**
-     * @brief Sets the name for a camera model asset.
-     * @param camera_model_handle Handle to the camera model
-     * @param name New name
-     */
-    template <IsSpectral TSpectral>
-    void Scene<TSpectral>::set_name(const CameraModelHandle<TSpectral>& camera_model_handle, const std::string& name)
-    {
-        camera_models_.set_name(camera_model_handle.get(), name);
-    }
+template <IsSpectral TSpectral>
+BSDFHandle<TSpectral>
+Scene<TSpectral>::new_bsdf_hapke(float h, float B0, float b, float c, std::string name)
+{
+    auto bsdf_shared = std::make_shared<HapkeBSDF<TSpectral>>(h, B0, b, c);
+    return add_bsdf(bsdf_shared, name);
+}
 
-    /**
-     * @brief Retrieves a camera model by name.
-     * @param name Name of the camera model
-     * @return CameraModelHandle<TSpectral> Handle to the camera model
-     */
-    template <IsSpectral TSpectral>
-    CameraModelHandle<TSpectral> Scene<TSpectral>::get_camera_model(const std::string& name) const
-    {
-        return CameraModelHandle<TSpectral>{ camera_models_.lookup(name) };
-    }
+template <IsSpectral TSpectral>
+BSDFHandle<TSpectral> Scene<TSpectral>::new_bsdf_lambertian(std::string name)
+{
+    auto bsdf_shared = std::make_shared<LambertianBSDF<TSpectral>>();
+    return add_bsdf(bsdf_shared, name);
+}
 
-    /**
-     * @brief Deletes a camera model from the scene.
-     * @param camera_model_handle Handle to the camera model
-     */
-    template <IsSpectral TSpectral>
-    void Scene<TSpectral>::delete_camera_model(const CameraModelHandle<TSpectral>& camera_model_handle)
-    {
-        auto camera_model_shared = camera_model_handle.get();
-        prune_graph_references_(camera_model_shared.get());
-        camera_models_.remove(camera_model_shared);
-    }
+template <IsSpectral TSpectral>
+BSDFHandle<TSpectral> Scene<TSpectral>::new_bsdf_lommel_seeliger(std::string name)
+{
+    auto bsdf_shared = std::make_shared<LommelSeeligerBSDF<TSpectral>>();
+    return add_bsdf(bsdf_shared, name);
+}
 
+template <IsSpectral TSpectral>
+BSDFHandle<TSpectral> Scene<TSpectral>::new_bsdf_mcewen(std::string name)
+{
+    auto bsdf_shared = std::make_shared<McEwenBSDF<TSpectral>>();
+    return add_bsdf(bsdf_shared, name);
+}
 
-    /**
-     * @brief Loads a model from file and adds it to the scene.
-     * @param file Path to the model file
-     * @param name Optional name
-     * @param post_process_flags Flags for post-processing
-     * @return ModelHandle<TSpectral> Handle to the loaded model
-     */
-    template <IsSpectral TSpectral>
-    ModelHandle<TSpectral> Scene<TSpectral>::load_model(const fs::path& file, std::string name, unsigned int post_process_flags)
-    {
-        // Load the model using ModelLoader
-        auto model_shared = ModelLoader<TSpectral>::load(*this, file, name, post_process_flags);
-        return ModelHandle<TSpectral>{ model_shared };
-    }
+template <IsSpectral TSpectral>
+BSDFHandle<TSpectral> Scene<TSpectral>::new_bsdf_null(std::string name)
+{
+    auto bsdf_shared = std::make_shared<NullBSDF<TSpectral>>();
+    return add_bsdf(bsdf_shared, name);
+}
 
-    /**
-     * @brief Sets the name for a model asset.
-     * @param model_handle Handle to the model
-     * @param name New name
-     */
-    template <IsSpectral TSpectral>
-    void Scene<TSpectral>::set_name(const ModelHandle<TSpectral>& model_handle, const std::string& name)
-    {
-        models_.set_name(model_handle.get(), name);
-    }
+template <IsSpectral TSpectral>
+BSDFHandle<TSpectral> Scene<TSpectral>::new_bsdf_oren_nayar(std::string name)
+{
+    auto bsdf_shared = std::make_shared<OrenNayarBSDF<TSpectral>>();
+    return add_bsdf(bsdf_shared, name);
+}
 
-    /**
-     * @brief Retrieves a model by name.
-     * @param name Name of the model
-     * @return ModelHandle<TSpectral> Handle to the model
-     */
-    template <IsSpectral TSpectral>
-    ModelHandle<TSpectral> Scene<TSpectral>::get_model(const std::string& name) const
-    {
-        return ModelHandle<TSpectral>{ models_.lookup(name) };
-    }
+template <IsSpectral TSpectral>
+BSDFHandle<TSpectral> Scene<TSpectral>::add_bsdf(std::shared_ptr<BSDF<TSpectral>> bsdf,
+                                                 std::string name)
+{
+    bsdfs_.add(bsdf, name);
+    return BSDFHandle<TSpectral>{bsdf};
+}
 
-    /**
-     * @brief Deletes a model from the scene.
-     * @param model_handle Handle to the model
-     */
-    template <IsSpectral TSpectral>
-    void Scene<TSpectral>::delete_model(const ModelHandle<TSpectral>& model_handle)
-    {
-        auto model_shared = model_handle.get();
-        prune_graph_references_(model_shared.get());
-        models_.remove(model_shared);
-    }
-
-    template <IsSpectral TSpectral>
-    BSDFHandle<TSpectral> Scene<TSpectral>::new_bsdf_cook_torrance(std::string name)
-    {
-        auto bsdf_shared = std::make_shared<CookTorranceBSDF<TSpectral>>();
-        return add_bsdf(bsdf_shared, name);
-    }
-
-    template <IsSpectral TSpectral>
-    BSDFHandle<TSpectral> Scene<TSpectral>::new_bsdf_hapke(float h, float B0, float b, float c,
-        std::string name)
-    {
-        auto bsdf_shared = std::make_shared<HapkeBSDF<TSpectral>>(h, B0, b, c);
-        return add_bsdf(bsdf_shared, name);
-    }
-
-    template <IsSpectral TSpectral>
-    BSDFHandle<TSpectral> Scene<TSpectral>::new_bsdf_lambertian(std::string name)
-    {
-        auto bsdf_shared = std::make_shared<LambertianBSDF<TSpectral>>();
-        return add_bsdf(bsdf_shared, name);
-    }
-
-    template <IsSpectral TSpectral>
-    BSDFHandle<TSpectral> Scene<TSpectral>::new_bsdf_lommel_seeliger(std::string name)
-    {
-        auto bsdf_shared = std::make_shared<LommelSeeligerBSDF<TSpectral>>();
-        return add_bsdf(bsdf_shared, name);
-    }
-
-    template <IsSpectral TSpectral>
-    BSDFHandle<TSpectral> Scene<TSpectral>::new_bsdf_mcewen(std::string name)
-    {
-        auto bsdf_shared = std::make_shared<McEwenBSDF<TSpectral>>();
-        return add_bsdf(bsdf_shared, name);
-    }
-
-    template <IsSpectral TSpectral>
-    BSDFHandle<TSpectral> Scene<TSpectral>::new_bsdf_null(std::string name)
-    {
-        auto bsdf_shared = std::make_shared<NullBSDF<TSpectral>>();
-        return add_bsdf(bsdf_shared, name);
-    }
-
-    template <IsSpectral TSpectral>
-    BSDFHandle<TSpectral> Scene<TSpectral>::new_bsdf_oren_nayar(std::string name)
-    {
-        auto bsdf_shared = std::make_shared<OrenNayarBSDF<TSpectral>>();
-        return add_bsdf(bsdf_shared, name);
-    }
-
-    template <IsSpectral TSpectral>
-    BSDFHandle<TSpectral> Scene<TSpectral>::add_bsdf(std::shared_ptr<BSDF<TSpectral>> bsdf, std::string name)
-    {
-        bsdfs_.add(bsdf, name);
-        return BSDFHandle<TSpectral>{ bsdf };
-    }
-
-    template <IsSpectral TSpectral>
-    MaterialHandle<TSpectral> Scene<TSpectral>::new_material(const BSDFHandle<TSpectral>& bsdf_handle, std::string name)
-    {
-        auto material = std::shared_ptr<Material<TSpectral>>(
-            new Material<TSpectral>(
-            bsdf_handle.get(),
-            default_albedo_image_,
-            default_alpha_image_,
-            default_metallic_image_,
-            default_roughness_image_,
-            default_normal_image_,
-            default_transmission_image_,
-            default_emission_image_
-            )
-        );
-        return this->add_material(material, name);
-    }
-
-    template <IsSpectral TSpectral>
-    MaterialHandle<TSpectral> Scene<TSpectral>::add_material(std::shared_ptr<Material<TSpectral>> material, std::string name)
-    {
-        materials_.add(material, name);
-        return MaterialHandle<TSpectral>{ material };
-    }
-
-
-    template <IsSpectral TSpectral>
-    DensityFieldHandle<TSpectral> Scene<TSpectral>::new_constant_density_field(TSpectral absorption, TSpectral scattering, std::string name)
-    {
-        auto density_field = std::make_shared<ConstantDensityField<TSpectral>>(absorption, scattering);
-        return add_density_field(density_field, name);
-    }
-
-    template <IsSpectral TSpectral>
-    DensityFieldHandle<TSpectral> Scene<TSpectral>::add_density_field(
-        std::shared_ptr<DensityField<TSpectral>> density_field, std::string name)
-    {
-        density_fields_.add(density_field, name);
-        return DensityFieldHandle<TSpectral>{ density_field };
-    }
-
-    template <IsSpectral TSpectral>
-    PhaseFunctionHandle<TSpectral> Scene<TSpectral>::new_isotropic_phase_function(std::string name)
-    {
-        auto phase_function = std::make_shared<IsotropicPhaseFunction<TSpectral>>();
-        return add_phase_function(phase_function, name);
-    }
-
-    template <IsSpectral TSpectral>
-    PhaseFunctionHandle<TSpectral> Scene<TSpectral>::add_phase_function(
-        std::shared_ptr<PhaseFunction<TSpectral>> phase_function, std::string name)
-    {
-        phase_functions_.add(phase_function, name);
-        return PhaseFunctionHandle<TSpectral>{ phase_function };
-    }
-
-
-    template <IsSpectral TSpectral>
-    MediumHandle<TSpectral> Scene<TSpectral>::new_medium(
-        DensityFieldHandle<TSpectral> density_field_handle,
-        PhaseFunctionHandle<TSpectral> phase_function_handle,
-        std::string name)
-    {
-        auto medium = std::make_shared<Medium<TSpectral>>(density_field_handle.get(), phase_function_handle.get());
-        return add_medium(medium, name);
-    }
-
-    template <IsSpectral TSpectral>
-    MediumHandle<TSpectral> Scene<TSpectral>::add_medium(std::shared_ptr<Medium<TSpectral>> medium, 
+template <IsSpectral TSpectral>
+MaterialHandle<TSpectral> Scene<TSpectral>::new_material(const BSDFHandle<TSpectral>& bsdf_handle,
                                                          std::string name)
-    {
-        volumes_.add(medium, name);
-        return MediumHandle<TSpectral>{ medium };
+{
+    auto material =
+        std::shared_ptr<Material<TSpectral>>(new Material<TSpectral>(bsdf_handle.get(),
+                                                                     default_albedo_image_,
+                                                                     default_alpha_image_,
+                                                                     default_metallic_image_,
+                                                                     default_roughness_image_,
+                                                                     default_normal_image_,
+                                                                     default_transmission_image_,
+                                                                     default_emission_image_));
+    return this->add_material(material, name);
+}
+
+template <IsSpectral TSpectral>
+MaterialHandle<TSpectral>
+Scene<TSpectral>::add_material(std::shared_ptr<Material<TSpectral>> material, std::string name)
+{
+    materials_.add(material, name);
+    return MaterialHandle<TSpectral>{material};
+}
+
+template <IsSpectral TSpectral>
+DensityFieldHandle<TSpectral> Scene<TSpectral>::new_constant_density_field(TSpectral absorption,
+                                                                           TSpectral scattering,
+                                                                           std::string name)
+{
+    auto density_field = std::make_shared<ConstantDensityField<TSpectral>>(absorption, scattering);
+    return add_density_field(density_field, name);
+}
+
+template <IsSpectral TSpectral>
+DensityFieldHandle<TSpectral>
+Scene<TSpectral>::add_density_field(std::shared_ptr<DensityField<TSpectral>> density_field,
+                                    std::string name)
+{
+    density_fields_.add(density_field, name);
+    return DensityFieldHandle<TSpectral>{density_field};
+}
+
+template <IsSpectral TSpectral>
+PhaseFunctionHandle<TSpectral> Scene<TSpectral>::new_isotropic_phase_function(std::string name)
+{
+    auto phase_function = std::make_shared<IsotropicPhaseFunction<TSpectral>>();
+    return add_phase_function(phase_function, name);
+}
+
+template <IsSpectral TSpectral>
+PhaseFunctionHandle<TSpectral>
+Scene<TSpectral>::add_phase_function(std::shared_ptr<PhaseFunction<TSpectral>> phase_function,
+                                     std::string name)
+{
+    phase_functions_.add(phase_function, name);
+    return PhaseFunctionHandle<TSpectral>{phase_function};
+}
+
+template <IsSpectral TSpectral>
+MediumHandle<TSpectral>
+Scene<TSpectral>::new_medium(DensityFieldHandle<TSpectral> density_field_handle,
+                             PhaseFunctionHandle<TSpectral> phase_function_handle,
+                             std::string name)
+{
+    auto medium = std::make_shared<Medium<TSpectral>>(density_field_handle.get(),
+                                                      phase_function_handle.get());
+    return add_medium(medium, name);
+}
+
+template <IsSpectral TSpectral>
+MediumHandle<TSpectral> Scene<TSpectral>::add_medium(std::shared_ptr<Medium<TSpectral>> medium,
+                                                     std::string name)
+{
+    volumes_.add(medium, name);
+    return MediumHandle<TSpectral>{medium};
+}
+
+template <IsSpectral TSpectral>
+void Scene<TSpectral>::set_background_radiance(Image<TSpectral> background)
+{
+    background_ = std::make_shared<Image<TSpectral>>(std::move(background));
+}
+
+template <IsSpectral TSpectral>
+void Scene<TSpectral>::set_background_radiance(TSpectral background)
+{
+    background_ = std::make_shared<Image<TSpectral>>(1, 1, background);
+}
+
+template <IsSpectral TSpectral>
+void Scene<TSpectral>::set_background_radiance(float background)
+{
+    background_ = std::make_shared<Image<TSpectral>>(1, 1, TSpectral::from_total(background));
+}
+
+template <IsSpectral TSpectral>
+TextureHandle<TSpectral> Scene<TSpectral>::add_texture(Image<TSpectral>&& image, std::string name)
+{
+    auto texture = std::make_shared<Texture<TSpectral>>(std::move(image));
+    spectral_textures_.add(texture, name);
+    return TextureHandle<TSpectral>{texture};
+}
+
+template <IsSpectral TSpectral>
+TextureHandle<float> Scene<TSpectral>::add_texture(Image<float>&& image, std::string name)
+{
+    auto texture = std::make_shared<Texture<float>>(std::move(image));
+    mono_textures_.add(texture, name);
+    return TextureHandle<float>{texture};
+}
+
+template <IsSpectral TSpectral>
+TextureHandle<Vec3<float>> Scene<TSpectral>::add_texture(Image<Vec3<float>>&& image,
+                                                         std::string name)
+{
+    auto texture = std::make_shared<Texture<Vec3<float>>>(std::move(image));
+    vec3_textures_.add(texture, name);
+    return TextureHandle<Vec3<float>>{texture};
+}
+
+template <IsSpectral TSpectral>
+TextureHandle<Vec3<float>> Scene<TSpectral>::add_normal_texture(Image<Vec3<float>>&& image,
+                                                                std::string name)
+{
+    for (std::size_t i = 0; i < image.size(); ++i) {
+        image[i] = glm::normalize(image[i] * 2.0f - Vec3<float>{1.0f});
+    }
+    return add_texture(std::move(image), name);
+}
+
+template <IsSpectral TSpectral>
+TextureHandle<Vec3<float>> Scene<TSpectral>::add_normal_texture(Image<RGB>&& image,
+                                                                std::string name)
+{
+    Image<Vec3<float>> image_vec3(image.width(), image.height());
+    for (std::size_t i = 0; i < image.size(); ++i) {
+        image_vec3[i] = Vec3<float>{image[i][0], image[i][1], image[i][2]};
+    }
+    return add_normal_texture(std::move(image_vec3), name);
+}
+
+/**
+ * @brief Sets the stars in the scene.
+ * @param stars Vector of stars
+ */
+template <IsSpectral TSpectral>
+void Scene<TSpectral>::set_stars(const std::vector<Star<TSpectral>>& stars)
+{
+    stars_ = stars;
+    dynamic_stars_ = false;
+
+    HUIRA_LOG_INFO("Scene::set_stars - " + std::to_string(stars.size()) +
+                   " stars are added manually");
+}
+
+/**
+ * @brief Loads stars from a catalog file.
+ * @param star_catalog_path Path to the star catalog
+ * @param time Time for proper motion
+ * @param min_magnitude Minimum magnitude to load
+ */
+template <IsSpectral TSpectral>
+void Scene<TSpectral>::load_stars(const fs::path& star_catalog_path,
+                                  const Time& time,
+                                  float min_magnitude)
+{
+    // Read the catalog:
+    StarCatalog star_catalog = StarCatalog::read_star_data(star_catalog_path, min_magnitude);
+    const std::vector<StarData>& star_data = star_catalog.get_star_data();
+
+    double tsince = time.julian_years_since_j2000(TimeScale::TT);
+
+    // Create the stars:
+    std::vector<Star<TSpectral>> stars(star_data.size());
+    tbb::parallel_for(tbb::blocked_range<std::size_t>(0, star_data.size()),
+                      [&](const tbb::blocked_range<std::size_t>& r) {
+                          for (std::size_t i = r.begin(); i != r.end(); ++i) {
+                              stars[i] = Star<TSpectral>(star_data[i], tsince);
+                          }
+                      });
+
+    // Add the stars to the scene:
+    stars_ = stars;
+    dynamic_stars_ = false;
+
+    HUIRA_LOG_INFO("Scene::load_stars - " + std::to_string(stars.size()) +
+                   " stars are added statically");
+}
+
+/**
+ * @brief Loads dynamic stars from a catalog file.  These can have their proper motion updated by
+ * calling update_star_epoch().
+ * @param star_catalog_path Path to the star catalog
+ * @param time Time for proper motion
+ * @param min_magnitude Minimum magnitude to load
+ */
+template <IsSpectral TSpectral>
+void Scene<TSpectral>::load_dynamic_stars(const fs::path& star_catalog_path,
+                                          const Time& time,
+                                          float min_magnitude)
+{
+    // Read the catalog:
+    StarCatalog star_catalog = StarCatalog::read_star_data(star_catalog_path, min_magnitude);
+    const std::vector<StarData>& star_data = star_catalog.get_star_data();
+
+    double tsince = time.julian_years_since_j2000(TimeScale::TT);
+
+    // Create the stars:
+    std::vector<Star<TSpectral>> stars(star_data.size());
+    tbb::parallel_for(tbb::blocked_range<std::size_t>(0, star_data.size()),
+                      [&](const tbb::blocked_range<std::size_t>& r) {
+                          for (std::size_t i = r.begin(); i != r.end(); ++i) {
+                              stars[i] = Star<TSpectral>(star_data[i], tsince);
+                          }
+                      });
+
+    // Add the stars to the scene:
+    dynamic_stars_ = true;
+    stars_ = stars;
+    dynamic_star_data_ = star_data;
+    star_epoch_ = time;
+
+    HUIRA_LOG_INFO("Scene::load_dynamic_stars - " + std::to_string(stars.size()) +
+                   " stars are added dynamically");
+}
+
+template <IsSpectral TSpectral>
+void Scene<TSpectral>::update_star_epoch(const Time& new_epoch)
+{
+    if (!dynamic_stars_) {
+        HUIRA_LOG_WARNING(
+            "Scene::update_star_epoch - Attempted to update star epoch, but stars were not loaded "
+            "as dynamic.  Call load_dynamic_stars() to load stars with proper motions.");
+        return;
     }
 
-    template <IsSpectral TSpectral>
-    void Scene<TSpectral>::set_background_radiance(Image<TSpectral> background)
-    {
-        background_ = std::make_shared<Image<TSpectral>>(std::move(background));
+    if (new_epoch == star_epoch_) {
+        return;
     }
 
-    template <IsSpectral TSpectral>
-    void Scene<TSpectral>::set_background_radiance(TSpectral background)
-    {
-        background_ = std::make_shared<Image<TSpectral>>(1, 1, background);
-    }
+    double tsince = new_epoch.julian_years_since_j2000(TimeScale::TT);
 
-    template <IsSpectral TSpectral>
-    void Scene<TSpectral>::set_background_radiance(float background)
-    {
-        background_ = std::make_shared<Image<TSpectral>>(1, 1, TSpectral::from_total(background));
-    }
+    tbb::parallel_for(tbb::blocked_range<std::size_t>(0, stars_.size()),
+                      [&](const tbb::blocked_range<std::size_t>& r) {
+                          for (std::size_t i = r.begin(); i != r.end(); ++i) {
+                              stars_[i].update_direction(dynamic_star_data_[i], tsince);
+                          }
+                      });
+    star_epoch_ = new_epoch;
 
-    template <IsSpectral TSpectral>
-    TextureHandle<TSpectral> Scene<TSpectral>::add_texture(Image<TSpectral>&& image, std::string name)
-    {
-        auto texture = std::make_shared<Texture<TSpectral>>(std::move(image));
-        spectral_textures_.add(texture, name);
-        return TextureHandle<TSpectral>{ texture };
-    }
-    
-    template <IsSpectral TSpectral>
-    TextureHandle<float> Scene<TSpectral>::add_texture(Image<float>&& image, std::string name)
-    {
-        auto texture = std::make_shared<Texture<float>>(std::move(image));
-        mono_textures_.add(texture, name);
-        return TextureHandle<float>{ texture };
-    }
-    
-    template <IsSpectral TSpectral>
-    TextureHandle<Vec3<float>> Scene<TSpectral>::add_texture(Image<Vec3<float>>&& image, std::string name)
-    {
-        auto texture = std::make_shared<Texture<Vec3<float>>>(std::move(image));
-        vec3_textures_.add(texture, name);
-        return TextureHandle<Vec3<float>>{ texture };
-    }
+    HUIRA_LOG_INFO("Scene::update_star_epoch - Updated star epoch to " + new_epoch.to_utc_string());
+}
 
-    template <IsSpectral TSpectral>
-    TextureHandle<Vec3<float>> Scene<TSpectral>::add_normal_texture(Image<Vec3<float>>&& image, std::string name)
-    {
-        for (std::size_t i = 0; i < image.size(); ++i) {
-            image[i] = glm::normalize(image[i] * 2.0f - Vec3<float>{1.0f});
-        }
-        return add_texture(std::move(image), name);
-    }
+/**
+ * @brief Removes assets not referenced in the scene graph.
+ */
+template <IsSpectral TSpectral>
+void Scene<TSpectral>::prune_unreferenced_assets()
+{
+}
 
-    template <IsSpectral TSpectral>
-    TextureHandle<Vec3<float>> Scene<TSpectral>::add_normal_texture(Image<RGB>&& image, std::string name)
-    {
-        Image<Vec3<float>> image_vec3(image.width(), image.height());
-        for (std::size_t i = 0; i < image.size(); ++i) {
-            image_vec3[i] = Vec3<float>{ image[i][0], image[i][1], image[i][2] };
-        }
-        return add_normal_texture(std::move(image_vec3), name);
-    }
+/**
+ * @brief Removes references to an asset from the scene graph.
+ * @tparam TAssetPtr Pointer type of the asset
+ * @param target_ptr Pointer to the asset to prune
+ */
+template <IsSpectral TSpectral>
+template <typename TAssetPtr>
+void Scene<TSpectral>::prune_graph_references_(TAssetPtr target_ptr)
+{
+    std::function<void(Node<TSpectral>*)> prune_references = [&](Node<TSpectral>* parent) {
+        std::vector<std::shared_ptr<Node<TSpectral>>> children_snapshot(
+            parent->get_children().begin(), parent->get_children().end());
 
+        for (const auto& child_node : children_snapshot) {
+            bool deleted = false;
 
-    /**
-     * @brief Sets the stars in the scene.
-     * @param stars Vector of stars
-     */
-    template <IsSpectral TSpectral>
-    void Scene<TSpectral>::set_stars(const std::vector<Star<TSpectral>>& stars)
-    {
-        stars_ = stars;
-        dynamic_stars_ = false;
+            if (auto instance = std::dynamic_pointer_cast<Instance<TSpectral>>(child_node)) {
+                const auto& asset_var = instance->asset();
 
-        HUIRA_LOG_INFO("Scene::set_stars - " + std::to_string(stars.size()) + " stars are added manually");
-    }
+                // We check if the variant holds specific pointer type:
+                if (std::holds_alternative<TAssetPtr>(asset_var)) {
+                    // Compare the pointers
+                    if (std::get<TAssetPtr>(asset_var) == target_ptr) {
 
-    /**
-     * @brief Loads stars from a catalog file.
-     * @param star_catalog_path Path to the star catalog
-     * @param time Time for proper motion
-     * @param min_magnitude Minimum magnitude to load
-     */
-    template <IsSpectral TSpectral>
-    void Scene<TSpectral>::load_stars(const fs::path& star_catalog_path, const Time& time, float min_magnitude)
-    {
-        // Read the catalog:
-        StarCatalog star_catalog = StarCatalog::read_star_data(star_catalog_path, min_magnitude);
-        const std::vector<StarData>& star_data = star_catalog.get_star_data();
-
-        double tsince = time.julian_years_since_j2000(TimeScale::TT);
-
-        // Create the stars:
-        std::vector<Star<TSpectral>> stars(star_data.size());
-        tbb::parallel_for(
-            tbb::blocked_range<std::size_t>(0, star_data.size()),
-            [&](const tbb::blocked_range<std::size_t>& r) {
-                for (std::size_t i = r.begin(); i != r.end(); ++i) {
-                    stars[i] = Star<TSpectral>(star_data[i], tsince);
-                }
-            }
-        );
-
-        // Add the stars to the scene:
-        stars_ = stars;
-        dynamic_stars_ = false;
-
-        HUIRA_LOG_INFO("Scene::load_stars - " + std::to_string(stars.size()) + " stars are added statically");
-    }
-
-    /**
-     * @brief Loads dynamic stars from a catalog file.  These can have their proper motion updated by calling update_star_epoch().
-     * @param star_catalog_path Path to the star catalog
-     * @param time Time for proper motion
-     * @param min_magnitude Minimum magnitude to load
-     */
-    template <IsSpectral TSpectral>
-    void Scene<TSpectral>::load_dynamic_stars(const fs::path& star_catalog_path, const Time& time, float min_magnitude)
-    {
-        // Read the catalog:
-        StarCatalog star_catalog = StarCatalog::read_star_data(star_catalog_path, min_magnitude);
-        const std::vector<StarData>& star_data = star_catalog.get_star_data();
-
-        double tsince = time.julian_years_since_j2000(TimeScale::TT);
-
-        // Create the stars:
-        std::vector<Star<TSpectral>> stars(star_data.size());
-        tbb::parallel_for(
-            tbb::blocked_range<std::size_t>(0, star_data.size()),
-            [&](const tbb::blocked_range<std::size_t>& r) {
-                for (std::size_t i = r.begin(); i != r.end(); ++i) {
-                    stars[i] = Star<TSpectral>(star_data[i], tsince);
-                }
-            }
-        );
-
-        // Add the stars to the scene:
-        dynamic_stars_ = true;
-        stars_ = stars;
-        dynamic_star_data_ = star_data;
-        star_epoch_ = time;
-
-        HUIRA_LOG_INFO("Scene::load_dynamic_stars - " + std::to_string(stars.size()) + " stars are added dynamically");
-    }
-
-    template <IsSpectral TSpectral>
-    void Scene<TSpectral>::update_star_epoch(const Time& new_epoch)
-    {
-        if (!dynamic_stars_) {
-            HUIRA_LOG_WARNING("Scene::update_star_epoch - Attempted to update star epoch, but stars were not loaded as dynamic.  Call load_dynamic_stars() to load stars with proper motions.");
-            return;
-        }
-
-        if (new_epoch == star_epoch_) {
-            return;
-        }
-
-        double tsince = new_epoch.julian_years_since_j2000(TimeScale::TT);
-
-        tbb::parallel_for(
-            tbb::blocked_range<std::size_t>(0, stars_.size()),
-            [&](const tbb::blocked_range<std::size_t>& r) {
-                for (std::size_t i = r.begin(); i != r.end(); ++i) {
-                    stars_[i].update_direction(dynamic_star_data_[i], tsince);
-                }
-            }
-        );
-        star_epoch_ = new_epoch;
-
-        HUIRA_LOG_INFO("Scene::update_star_epoch - Updated star epoch to " + new_epoch.to_utc_string());
-    }
-
-    /**
-     * @brief Removes assets not referenced in the scene graph.
-     */
-    template <IsSpectral TSpectral>
-    void Scene<TSpectral>::prune_unreferenced_assets()
-    {
-        
-    }
-
-
-    /**
-     * @brief Removes references to an asset from the scene graph.
-     * @tparam TAssetPtr Pointer type of the asset
-     * @param target_ptr Pointer to the asset to prune
-     */
-    template <IsSpectral TSpectral>
-    template <typename TAssetPtr>
-    void Scene<TSpectral>::prune_graph_references_(TAssetPtr target_ptr)
-    {
-        std::function<void(Node<TSpectral>*)> prune_references =
-            [&](Node<TSpectral>* parent)
-            {
-                std::vector<std::shared_ptr<Node<TSpectral>>> children_snapshot(
-                    parent->get_children().begin(),
-                    parent->get_children().end()
-                );
-
-                for (const auto& child_node : children_snapshot) {
-                    bool deleted = false;
-
-                    if (auto instance = std::dynamic_pointer_cast<Instance<TSpectral>>(child_node)) {
-                        const auto& asset_var = instance->asset();
-
-                        // We check if the variant holds specific pointer type:
-                        if (std::holds_alternative<TAssetPtr>(asset_var)) {
-                            // Compare the pointers
-                            if (std::get<TAssetPtr>(asset_var) == target_ptr) {
-
-                                if (auto* frame_parent = dynamic_cast<FrameNode<TSpectral>*>(parent)) {
-                                    frame_parent->delete_child(child_node);
-                                    deleted = true;
-                                }
-                                else {
-                                    HUIRA_THROW_ERROR("Attempted to delete child from a non-FrameNode!");
-                                }
-                            }
+                        if (auto* frame_parent = dynamic_cast<FrameNode<TSpectral>*>(parent)) {
+                            frame_parent->delete_child(child_node);
+                            deleted = true;
+                        } else {
+                            HUIRA_THROW_ERROR("Attempted to delete child from a non-FrameNode!");
                         }
                     }
-
-                    // Recurse if the node itself wasn't deleted
-                    if (!deleted) {
-                        prune_references(child_node.get());
-                    }
                 }
-            };
-        if (root_node_) {
-            prune_references(root_node_.get());
+            }
+
+            // Recurse if the node itself wasn't deleted
+            if (!deleted) {
+                prune_references(child_node.get());
+            }
         }
+    };
+    if (root_node_) {
+        prune_references(root_node_.get());
     }
+}
 
-    /**
-     * @brief Prints information about all meshes in the scene.
-     */
-    template <IsSpectral TSpectral>
-    void Scene<TSpectral>::print_meshes() const {
-        std::cout << green("Meshes: " + std::to_string(geometries_.size()) + " loaded") << "\n";
-        for (const auto& mesh : geometries_) {
-            std::cout << " - " << mesh->get_info();
-        }
+/**
+ * @brief Prints information about all meshes in the scene.
+ */
+template <IsSpectral TSpectral>
+void Scene<TSpectral>::print_meshes() const
+{
+    std::cout << green("Meshes: " + std::to_string(geometries_.size()) + " loaded") << "\n";
+    for (const auto& mesh : geometries_) {
+        std::cout << " - " << mesh->get_info();
     }
+}
 
-    /**
-     * @brief Prints information about all lights in the scene.
-     */
-    template <IsSpectral TSpectral>
-    void Scene<TSpectral>::print_lights() const {
-        std::cout << yellow("Lights: " + std::to_string(lights_.size()) + " loaded") << "\n";
-        for (const auto& light : lights_) {
-            std::cout << " - " << light->get_info();
-        }
+/**
+ * @brief Prints information about all lights in the scene.
+ */
+template <IsSpectral TSpectral>
+void Scene<TSpectral>::print_lights() const
+{
+    std::cout << yellow("Lights: " + std::to_string(lights_.size()) + " loaded") << "\n";
+    for (const auto& light : lights_) {
+        std::cout << " - " << light->get_info();
     }
+}
 
-    /**
-     * @brief Prints information about all unresolved objects in the scene.
-     */
-    template <IsSpectral TSpectral>
-    void Scene<TSpectral>::print_unresolved_objects() const {
-        std::cout << cyan("UnresolvedObjects: " + std::to_string(unresolved_objects_.size()) + " loaded") << "\n";
-        for (const auto& unresolved_object : unresolved_objects_) {
-            std::cout << " - " << unresolved_object->get_info();
-        }
+/**
+ * @brief Prints information about all unresolved objects in the scene.
+ */
+template <IsSpectral TSpectral>
+void Scene<TSpectral>::print_unresolved_objects() const
+{
+    std::cout << cyan("UnresolvedObjects: " + std::to_string(unresolved_objects_.size()) +
+                      " loaded")
+              << "\n";
+    for (const auto& unresolved_object : unresolved_objects_) {
+        std::cout << " - " << unresolved_object->get_info();
     }
+}
 
-    /**
-     * @brief Prints information about all camera models in the scene.
-     */
-    template <IsSpectral TSpectral>
-    void Scene<TSpectral>::print_camera_models() const {
-        std::cout << blue("CameraModels: " + std::to_string(camera_models_.size()) + " loaded") << "\n";
-        for (const auto& camera_model : camera_models_) {
-            std::cout << " - " << camera_model->get_info();
-        }
+/**
+ * @brief Prints information about all camera models in the scene.
+ */
+template <IsSpectral TSpectral>
+void Scene<TSpectral>::print_camera_models() const
+{
+    std::cout << blue("CameraModels: " + std::to_string(camera_models_.size()) + " loaded") << "\n";
+    for (const auto& camera_model : camera_models_) {
+        std::cout << " - " << camera_model->get_info();
     }
+}
 
-    /**
-     * @brief Prints information about all models in the scene.
-     */
-    template <IsSpectral TSpectral>
-    void Scene<TSpectral>::print_models() const {
-        std::cout << magenta("Models: " + std::to_string(models_.size()) + " loaded") << "\n";
-        for (const auto& model : models_) {
-            std::cout << " - " << model->get_info();
-        }
+/**
+ * @brief Prints information about all models in the scene.
+ */
+template <IsSpectral TSpectral>
+void Scene<TSpectral>::print_models() const
+{
+    std::cout << magenta("Models: " + std::to_string(models_.size()) + " loaded") << "\n";
+    for (const auto& model : models_) {
+        std::cout << " - " << model->get_info();
     }
+}
 
-    /**
-     * @brief Prints the scene graph hierarchy.
-     */
-    template <IsSpectral TSpectral>
-    void Scene<TSpectral>::print_graph() const {
-        std::cout << on_blue("root");
-        print_node_details_(root_node_.get());
-        std::cout << "\n";
+/**
+ * @brief Prints the scene graph hierarchy.
+ */
+template <IsSpectral TSpectral>
+void Scene<TSpectral>::print_graph() const
+{
+    std::cout << on_blue("root");
+    print_node_details_(root_node_.get());
+    std::cout << "\n";
 
-        const auto children = root_node_->get_children();
-        for (size_t i = 0; i < children.size(); ++i) {
-            bool is_last = (i == children.size() - 1);
-            print_node_((children)[i].get(), "", is_last);
-        }
+    const auto children = root_node_->get_children();
+    for (size_t i = 0; i < children.size(); ++i) {
+        bool is_last = (i == children.size() - 1);
+        print_node_((children)[i].get(), "", is_last);
     }
+}
 
-    /**
-     * @brief Prints a summary of the scene contents and graph.
-     */
-    template <IsSpectral TSpectral>
-    void Scene<TSpectral>::print_contents() const {
-        std::size_t num_textures = spectral_textures_.size() + mono_textures_.size() + vec3_textures_.size();
+/**
+ * @brief Prints a summary of the scene contents and graph.
+ */
+template <IsSpectral TSpectral>
+void Scene<TSpectral>::print_contents() const
+{
+    std::size_t num_textures =
+        spectral_textures_.size() + mono_textures_.size() + vec3_textures_.size();
 
-        std::cout << "Scene Contents:\n";
-        std::cout << " - " << "Stars: " << std::to_string(stars_.size()) << " loaded\n";
-        std::cout << " - " << blue("CameraModels: " + std::to_string(camera_models_.size()) + " loaded") << "\n";
-        std::cout << " - " << green("Meshes: " + std::to_string(geometries_.size()) + " loaded") << "\n";
-        std::cout << "    - " << green("Materials: " + std::to_string(materials_.size()) + " loaded") << "\n";
-        std::cout << "    - " << green("Textures: " + std::to_string(num_textures) + " loaded") << "\n";
-        std::cout << " - " << yellow("Lights: " + std::to_string(lights_.size()) + " loaded") << "\n";
-        std::cout << " - " << cyan("UnresolvedObjects: " + std::to_string(unresolved_objects_.size()) + " loaded") << "\n";
-        std::cout << " - " << magenta("Models: " + std::to_string(models_.size()) + " loaded") << "\n";
-        std::cout << "Scene Graph:\n";
-        print_graph();
-    }
+    std::cout << "Scene Contents:\n";
+    std::cout << " - " << "Stars: " << std::to_string(stars_.size()) << " loaded\n";
+    std::cout << " - " << blue("CameraModels: " + std::to_string(camera_models_.size()) + " loaded")
+              << "\n";
+    std::cout << " - " << green("Meshes: " + std::to_string(geometries_.size()) + " loaded")
+              << "\n";
+    std::cout << "    - " << green("Materials: " + std::to_string(materials_.size()) + " loaded")
+              << "\n";
+    std::cout << "    - " << green("Textures: " + std::to_string(num_textures) + " loaded") << "\n";
+    std::cout << " - " << yellow("Lights: " + std::to_string(lights_.size()) + " loaded") << "\n";
+    std::cout << " - "
+              << cyan("UnresolvedObjects: " + std::to_string(unresolved_objects_.size()) +
+                      " loaded")
+              << "\n";
+    std::cout << " - " << magenta("Models: " + std::to_string(models_.size()) + " loaded") << "\n";
+    std::cout << "Scene Graph:\n";
+    print_graph();
+}
 
+// ======================= //
+// === Private Members === //
+// ======================= //
 
-    // ======================= //
-    // === Private Members === //
-    // ======================= //
+/**
+ * @brief Prints details for a node in the scene graph.
+ * @param node Node to print
+ * @param prefix Prefix for formatting
+ * @param is_last Whether this is the last child
+ */
+template <IsSpectral TSpectral>
+void Scene<TSpectral>::print_node_(const Node<TSpectral>* node,
+                                   const std::string& prefix,
+                                   bool is_last) const
+{
+    std::cout << prefix;
+    std::cout << (is_last ? "+-- " : "|-- ");
 
-    /**
-     * @brief Prints details for a node in the scene graph.
-     * @param node Node to print
-     * @param prefix Prefix for formatting
-     * @param is_last Whether this is the last child
-     */
-    template <IsSpectral TSpectral>
-    void Scene<TSpectral>::print_node_(const Node<TSpectral>* node, const std::string& prefix, bool is_last) const {
-        std::cout << prefix;
-        std::cout << (is_last ? "+-- " : "|-- ");
-        
-        // Check if the node is an Instance
-        if (const auto* instance_node = dynamic_cast<const Instance<TSpectral>*>(node)) {
-            std::string instance_str = "Instance[" + std::to_string(instance_node->id()) + "]";
-            instance_str += instance_node->name().empty() ? "" : " " + instance_node->name();
-            std::cout << on_green(instance_str) << " -> ";
-            std::visit([&](auto* raw_ptr) noexcept {
+    // Check if the node is an Instance
+    if (const auto* instance_node = dynamic_cast<const Instance<TSpectral>*>(node)) {
+        std::string instance_str = "Instance[" + std::to_string(instance_node->id()) + "]";
+        instance_str += instance_node->name().empty() ? "" : " " + instance_node->name();
+        std::cout << on_green(instance_str) << " -> ";
+        std::visit(
+            [&](auto* raw_ptr) noexcept {
                 using AssetType = std::decay_t<decltype(*raw_ptr)>;
                 if constexpr (std::is_same_v<AssetType, Mesh<TSpectral>>) {
                     std::cout << green(raw_ptr->get_info());
-                }
-                else if constexpr (std::is_same_v<AssetType, Light<TSpectral>>) {
+                } else if constexpr (std::is_same_v<AssetType, Light<TSpectral>>) {
                     std::cout << yellow(raw_ptr->get_info());
-                }
-                else if constexpr (std::is_same_v<AssetType, UnresolvedObject<TSpectral>>) {
+                } else if constexpr (std::is_same_v<AssetType, UnresolvedObject<TSpectral>>) {
                     std::cout << cyan(raw_ptr->get_info());
-                }
-                else if constexpr (std::is_same_v<AssetType, CameraModel<TSpectral>>) {
+                } else if constexpr (std::is_same_v<AssetType, CameraModel<TSpectral>>) {
                     std::cout << blue(raw_ptr->get_info());
-                }
-                else if constexpr (std::is_same_v<AssetType, Model<TSpectral>>) {
+                } else if constexpr (std::is_same_v<AssetType, Model<TSpectral>>) {
                     std::cout << magenta(raw_ptr->get_info());
                 }
-                }, instance_node->asset_);
-        }
-        else {
-            std::cout << on_blue(node->get_info());
-        }
-        print_node_details_(node);
-        std::cout << "\n";
-
-        const std::string child_prefix = prefix + (is_last ? "    " : "|   ");
-
-        const auto children = node->get_children();
-        for (size_t i = 0; i < children.size(); ++i) {
-            bool child_is_last = (i == children.size() - 1);
-            print_node_((children)[i].get(), child_prefix, child_is_last);
-        }
+            },
+            instance_node->asset_);
+    } else {
+        std::cout << on_blue(node->get_info());
     }
+    print_node_details_(node);
+    std::cout << "\n";
 
-    /**
-     * @brief Prints SPICE details for a node.
-     * @param node Node to print
-     */
-    template <IsSpectral TSpectral>
-    void Scene<TSpectral>::print_node_details_(const Node<TSpectral>* node) const {
-        if (node->spice_origin_ != "" || node->spice_frame_ != "") {
-            std::cout << " (";
-            if (node->spice_origin_ != "") {
-                std::cout << node->spice_origin_;
-                if (node->spice_frame_ != "") {
-                    std::cout << ", ";
-                }
-            }
+    const std::string child_prefix = prefix + (is_last ? "    " : "|   ");
 
-            if (node->spice_frame_ != "") {
-                std::cout << node->spice_frame_;
-            }
-            std::cout << ")";
-        }
-    }
-
-
-    /**
-     * @brief Finds the shared_ptr for a given raw Node pointer.
-     *
-     * Recursively searches the scene graph starting from the root to find
-     * the shared_ptr corresponding to the given raw pointer. This is needed
-     * for creating handles to existing nodes (e.g., parent nodes).
-     *
-     * @param target The raw pointer to search for
-     * @return std::shared_ptr<Node<TSpectral>> The shared_ptr if found, nullptr otherwise
-     */
-    template <IsSpectral TSpectral>
-    std::shared_ptr<Node<TSpectral>> Scene<TSpectral>::find_node_shared_ptr_(const Node<TSpectral>* target) const {
-        // Check if target is the root
-        if (root_node_.get() == target) {
-            return root_node_;
-        }
-
-        // Otherwise recursively search the tree
-        return find_node_in_tree_(root_node_, target);
-    }
-
-
-    /**
-     * @brief Recursively searches for a node in the scene graph tree.
-     *
-     * Helper function for find_node_shared_ptr_ that traverses the scene graph.
-     *
-     * @param current The current node being examined
-     * @param target The raw pointer to search for
-     * @return std::shared_ptr<Node<TSpectral>> The shared_ptr if found, nullptr otherwise
-     */
-    template <IsSpectral TSpectral>
-    std::shared_ptr<Node<TSpectral>> Scene<TSpectral>::find_node_in_tree_(
-        const std::shared_ptr<Node<TSpectral>>& current, 
-        const Node<TSpectral>* target) const 
-    {
-        // Check if current node is the target
-        if (current.get() == target) {
-            return current;
-        }
-
-        // Get children if this node has any
-        const auto children = current->get_children();
-            for (const auto& child : children) {
-                // Check this child
-                if (child.get() == target) {
-                    return child;
-                }
-
-                // Recursively search this child's subtree
-                auto result = find_node_in_tree_(child, target);
-                if (result) {
-                    return result;
-                }
-            }
-
-        return nullptr;
-    }
-
-    /**
-     * @brief Registers a node name in the node registry.
-     * @param node Node to register
-     * @param name Name to associate
-     */
-    template <IsSpectral TSpectral>
-    void Scene<TSpectral>::register_node_name_(const std::shared_ptr<Node<TSpectral>>& node, const std::string& name)
-    {
-        node_registry_.add(node, name);
+    const auto children = node->get_children();
+    for (size_t i = 0; i < children.size(); ++i) {
+        bool child_is_last = (i == children.size() - 1);
+        print_node_((children)[i].get(), child_prefix, child_is_last);
     }
 }
+
+/**
+ * @brief Prints SPICE details for a node.
+ * @param node Node to print
+ */
+template <IsSpectral TSpectral>
+void Scene<TSpectral>::print_node_details_(const Node<TSpectral>* node) const
+{
+    if (node->spice_origin_ != "" || node->spice_frame_ != "") {
+        std::cout << " (";
+        if (node->spice_origin_ != "") {
+            std::cout << node->spice_origin_;
+            if (node->spice_frame_ != "") {
+                std::cout << ", ";
+            }
+        }
+
+        if (node->spice_frame_ != "") {
+            std::cout << node->spice_frame_;
+        }
+        std::cout << ")";
+    }
+}
+
+/**
+ * @brief Finds the shared_ptr for a given raw Node pointer.
+ *
+ * Recursively searches the scene graph starting from the root to find
+ * the shared_ptr corresponding to the given raw pointer. This is needed
+ * for creating handles to existing nodes (e.g., parent nodes).
+ *
+ * @param target The raw pointer to search for
+ * @return std::shared_ptr<Node<TSpectral>> The shared_ptr if found, nullptr otherwise
+ */
+template <IsSpectral TSpectral>
+std::shared_ptr<Node<TSpectral>>
+Scene<TSpectral>::find_node_shared_ptr_(const Node<TSpectral>* target) const
+{
+    // Check if target is the root
+    if (root_node_.get() == target) {
+        return root_node_;
+    }
+
+    // Otherwise recursively search the tree
+    return find_node_in_tree_(root_node_, target);
+}
+
+/**
+ * @brief Recursively searches for a node in the scene graph tree.
+ *
+ * Helper function for find_node_shared_ptr_ that traverses the scene graph.
+ *
+ * @param current The current node being examined
+ * @param target The raw pointer to search for
+ * @return std::shared_ptr<Node<TSpectral>> The shared_ptr if found, nullptr otherwise
+ */
+template <IsSpectral TSpectral>
+std::shared_ptr<Node<TSpectral>>
+Scene<TSpectral>::find_node_in_tree_(const std::shared_ptr<Node<TSpectral>>& current,
+                                     const Node<TSpectral>* target) const
+{
+    // Check if current node is the target
+    if (current.get() == target) {
+        return current;
+    }
+
+    // Get children if this node has any
+    const auto children = current->get_children();
+    for (const auto& child : children) {
+        // Check this child
+        if (child.get() == target) {
+            return child;
+        }
+
+        // Recursively search this child's subtree
+        auto result = find_node_in_tree_(child, target);
+        if (result) {
+            return result;
+        }
+    }
+
+    return nullptr;
+}
+
+/**
+ * @brief Registers a node name in the node registry.
+ * @param node Node to register
+ * @param name Name to associate
+ */
+template <IsSpectral TSpectral>
+void Scene<TSpectral>::register_node_name_(const std::shared_ptr<Node<TSpectral>>& node,
+                                           const std::string& name)
+{
+    node_registry_.add(node, name);
+}
+} // namespace huira
