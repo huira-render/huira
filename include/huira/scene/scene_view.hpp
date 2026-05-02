@@ -17,6 +17,7 @@
 #include "huira/scene/scene.hpp"
 #include "huira/scene/scene_view_types.hpp"
 #include "huira/units/units.hpp"
+#include "huira/volumes/medium_stack.hpp"
 
 namespace huira {
 template <IsSpectral TSpectral>
@@ -47,6 +48,7 @@ class SceneView {
 
     [[nodiscard]] TSpectral evaluate_transmittance(const Ray<TSpectral>& shadow_ray,
                                                    float t_far,
+                                                   const MediumStack<TSpectral>& initial_stack,
                                                    RandomSampler<float>& sampler,
                                                    float time = 0.5f) const;
 

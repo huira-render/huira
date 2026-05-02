@@ -240,8 +240,11 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
 
                                             Ray<TSpectral> shadow_ray(opt_mi->p, ls.wi);
                                             TSpectral shadow_transmittance =
-                                                scene_view.evaluate_transmittance(
-                                                    shadow_ray, ls.distance, sampler, time);
+                                                scene_view.evaluate_transmittance(shadow_ray,
+                                                                                  ls.distance,
+                                                                                  medium_stack,
+                                                                                  sampler,
+                                                                                  time);
 
                                             if (shadow_transmittance.max() <= 0.0f) {
                                                 continue;
@@ -407,7 +410,7 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                                             offset_intersection_(isect.position, shadow_normal);
                                         Ray<TSpectral> shadow_ray(shadow_origin, ls.wi);
                                         TSpectral transmittance = scene_view.evaluate_transmittance(
-                                            shadow_ray, light_dist, sampler, time);
+                                            shadow_ray, light_dist, medium_stack, sampler, time);
                                         if (transmittance.max() <= 0.0f) {
                                             continue;
                                         }

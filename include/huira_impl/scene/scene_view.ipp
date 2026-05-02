@@ -220,27 +220,40 @@ SceneView<TSpectral>::intersect(const Ray<TSpectral>& ray, float time, unsigned 
 template <IsSpectral TSpectral>
 TSpectral SceneView<TSpectral>::evaluate_transmittance(const Ray<TSpectral>& ray,
                                                        float t_far,
+                                                       const MediumStack<TSpectral>& initial_stack,
                                                        RandomSampler<float>& sampler,
                                                        float time) const
 {
     TSpectral transmittance{1.0f};
     Ray<TSpectral> current_ray = ray;
     float distance_remaining = t_far;
+    
+    MediumStack<TSpectral> stack = initial_stack;
 
     while (distance_remaining > 0.0f) {
         HitRecord hit = this->intersect(current_ray, time, MASK_GEOMETRY_);
-
-        if (!hit.hit() || hit.t >= distance_remaining) {
-            break;
+        
+        const bool surface_in_range = hit.hit() && hit.t < distance_remaining;
+        const float segment_length = surface_in_range ? hit.t : distance_remaining;
+        
+        if (const Medium<TSpectral>* active = stack.top(); active != nullptr) {
+            transmittance *= active->evaluate_transmittance(current_ray, segment_length, sampler);
+            if (transmittance.max() <= 0.0f) {
+                return TSpectral{0.0f};
+            }
         }
 
+        if (!surface_in_range) {
+            break;
+        }
+        
         Interaction<TSpectral> isect = this->resolve_hit(current_ray, hit);
         const auto& mapping = instance_mappings_[hit.inst_id];
         const auto& batch = primitives_[mapping.batch_index];
         const auto* material = batch.primitive->material.get();
 
         auto [params, shading_isect] = material->evaluate(isect);
-
+        
         if (params.opacity < 1.0f) {
             if (sampler.get_1d() > params.opacity) {
                 Vec3<float> bounce_normal =
@@ -248,16 +261,17 @@ TSpectral SceneView<TSpectral>::evaluate_transmittance(const Ray<TSpectral>& ray
                                                                                : isect.normal_g;
                 current_ray = Ray<TSpectral>(offset_intersection_(isect.position, bounce_normal),
                                              current_ray.direction());
+                
+                stack.toggle(batch.primitive.get());
+
                 distance_remaining -= hit.t;
                 continue;
             }
         }
-
+        
         TSpectral surface_transmission = params.transmission;
-
         if (surface_transmission.max() <= 0.0f) {
-            transmittance = TSpectral{0.0f};
-            break;
+            return TSpectral{0.0f};
         }
 
         transmittance *= surface_transmission;
@@ -267,6 +281,9 @@ TSpectral SceneView<TSpectral>::evaluate_transmittance(const Ray<TSpectral>& ray
                                         : isect.normal_g;
         current_ray = Ray<TSpectral>(offset_intersection_(isect.position, bounce_normal),
                                      current_ray.direction());
+        
+        stack.toggle(batch.primitive.get());
+
         distance_remaining -= hit.t;
     }
 
