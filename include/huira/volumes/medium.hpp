@@ -59,7 +59,7 @@ class Medium : public SceneObject<Medium<TSpectral>> {
         // TODO Implement
         (void)ray;
         (void)sampler;
-        return TSpectral{0.f};
+        return TSpectral{1.f};
     }
 
     // Samples a distance along the ray to determine if/where a scattering event occurs.

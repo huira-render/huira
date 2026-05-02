@@ -11,15 +11,14 @@ using namespace huira::units::literals;
 
 using TSpectral = huira::RGB;
 
-static std::pair<fs::path, fs::path> parse_input_paths(int argc, char** argv)
+static fs::path parse_input_paths(int argc, char** argv)
 {
-    if (argc != 3) {
-        std::cerr << "Usage: earth <earth.glb_path> <kernel_path>" << std::endl;
+    if (argc != 2) {
+        std::cerr << "Usage: earth <data_path>" << std::endl;
         std::exit(1);
     }
-    fs::path earth_path = argv[1];
-    fs::path kernel_path = argv[2];
-    return {earth_path, kernel_path};
+    fs::path data_path = argv[1];
+    return data_path;
 }
 
 int main(int argc, char** argv)
@@ -27,12 +26,12 @@ int main(int argc, char** argv)
     huira::Logger::enable_console_debug();
 
     // Parsing input paths
-    auto [earth_path, kernel_path] = parse_input_paths(argc, argv);
+    fs::path data_path = parse_input_paths(argc, argv);
 
     // Load the require SPICE kernels
-    huira::spice::furnsh(kernel_path / "spk/de440s.bsp");
-    huira::spice::furnsh(kernel_path / "pck/earth_latest_high_prec.bpc");
-    huira::spice::furnsh(kernel_path / "pck/earth_fixed.tf");
+    huira::spice::furnsh(data_path / "kernels/spk/de440s.bsp");
+    huira::spice::furnsh(data_path / "kernels/pck/earth_latest_high_prec.bpc");
+    huira::spice::furnsh(data_path / "kernels/pck/earth_fixed.tf");
 
     // Create the scene
     huira::Scene<TSpectral> scene;
@@ -71,20 +70,19 @@ int main(int argc, char** argv)
     auto ct_bsdf = scene.new_bsdf_cook_torrance();
     auto earth_material = scene.new_material(ct_bsdf);
 
-    fs::path huira_data = "/Users/chrisgnam/huira_data";
     // fs::path huira_data = "C:/Users/chris/huira_data";
-    auto earth_albedo_rgb = huira::read_image(huira_data / "models/earth/8k_earth_daymap.jpg");
+    auto earth_albedo_rgb = huira::read_image(data_path / "models/earth/8k_earth_daymap.jpg");
     auto earth_albedo_spec = huira::rgb_to_spectral<TSpectral>(earth_albedo_rgb.image);
     auto earth_albedo_tex = scene.add_texture(std::move(earth_albedo_spec));
     earth_material.set_albedo_image(earth_albedo_tex);
 
     auto earth_roughness =
-        huira::read_image_mono(huira_data / "models/earth/8k_earth_roughness_map.tif");
+        huira::read_image_mono(data_path / "models/earth/8k_earth_roughness_map.tif");
     auto earth_roughness_tex = scene.add_texture(std::move(earth_roughness.image));
     earth_material.set_roughness_image(earth_roughness_tex);
     earth_material.set_metallic_factor(0.f);
 
-    auto earth_normal = huira::read_image(huira_data / "models/earth/8k_earth_normal_map.tif");
+    auto earth_normal = huira::read_image(data_path / "models/earth/8k_earth_normal_map.tif");
     auto earth_normal_tex = scene.add_normal_texture(std::move(earth_normal.image));
     earth_material.set_normal_image(earth_normal_tex);
 
@@ -94,7 +92,7 @@ int main(int argc, char** argv)
     eci.new_instance(earth_primitive);
 
     auto earth_cloud_alpha =
-        huira::read_image_mono(huira_data / "models/earth/8k_earth_clouds.jpg");
+        huira::read_image_mono(data_path / "models/earth/8k_earth_clouds.jpg");
     auto lam_bsdf = scene.new_bsdf_lambertian();
     auto earth_clouds_material = scene.new_material(lam_bsdf);
     auto earth_clouds_tex = scene.add_texture(std::move(earth_cloud_alpha.image));
@@ -107,15 +105,14 @@ int main(int argc, char** argv)
         scene.add_primitive(earth_clouds_ellipsoid, earth_clouds_material);
     eci.new_instance(earth_clouds_primitive);
 
-    auto alt_atmosphere = 60_Km;
+    auto alt_atmosphere = 100_Km;
     auto atmosphere_ellipsoid =
         scene.add_ellipsoid(R_e + alt_atmosphere, R_e + alt_atmosphere, R_e + alt_atmosphere);
     auto null_bsdf = scene.new_bsdf_null();
     auto atmosphere_material = scene.new_material(null_bsdf);
     atmosphere_material.set_transmission_factor(TSpectral{1.f});
 
-    auto constant_density_field = scene.new_constant_density_field(
-        TSpectral{0.000002f, 0.000002f, 0.0000005f}, TSpectral{0.0000002f, 0.0000008f, 0.000001f});
+    auto constant_density_field = scene.new_constant_density_field(TSpectral{0}, TSpectral{2e-6f});
     auto isotropic_phase_function = scene.new_isotropic_phase_function();
     auto atmosphere_medium = scene.new_medium(constant_density_field, isotropic_phase_function);
     auto atmosphere_primitive =
@@ -127,12 +124,7 @@ int main(int argc, char** argv)
     navcam.set_position(100000_Km, 0_Km, 0_m);
     navcam.set_euler_angles(90_deg, 0_deg, 90_deg);
 
-    // Load the Earth model
-    // auto earth_model = scene.load_model(earth_path);
-    // auto earth = ecef.new_instance(earth_model);
-    // earth.set_scale(6371*1000);
-
-    // scene.load_stars(huira_data / "tycho2/tycho2.hrsc", time);
+    // scene.load_stars(data_path / "tycho2/tycho2.hrsc", time);
 
     // Create the sun
     auto sun_light = scene.new_sun_light();

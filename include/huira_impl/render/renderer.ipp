@@ -14,6 +14,7 @@
 #include "huira/concepts/spectral_concepts.hpp"
 #include "huira/core/types.hpp"
 #include "huira/volumes/medium.hpp"
+#include "huira/volumes/medium_stack.hpp"
 #include "huira_impl/render/psf_lut.ipp"
 
 namespace huira {
@@ -190,12 +191,13 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                             float prev_bsdf_pdf = 1.0f;
                             Interaction<TSpectral> prev_isect;
 
-                            const Medium<TSpectral>* current_medium = nullptr;
+                            MediumStack<TSpectral> medium_stack;
 
                             for (int bounce = 0; bounce < max_bounces_; ++bounce) {
                                 HitRecord hit = scene_view.intersect(ray, time);
 
-                                if (current_medium != nullptr) {
+                                if (!medium_stack.is_empty()) {
+                                    const Medium<TSpectral>* current_medium = medium_stack.top();
                                     auto opt_mi = current_medium->sample_free_path(ray, sampler);
                                     auto props = current_medium->get_properties(ray.origin());
                                     TSpectral ext = props.extinction();
@@ -357,6 +359,8 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                                             ray = Ray<TSpectral>(pass_through_origin,
                                                                  ray.direction());
 
+                                            medium_stack.toggle(batch.primitive.get());
+
                                             bounce--; // Don't count this towards bounce counts
                                             continue;
                                         }
@@ -463,10 +467,11 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                                     // Spawn next ray:
                                     ray = Ray<TSpectral>(bounce_origin, bs.wi);
 
-                                    if (glm::dot(bs.wi, isect.normal_g) < 0.0f) {
-                                        current_medium = batch.primitive->medium.get();
-                                    } else {
-                                        current_medium = nullptr;
+                                    const float wo_side = glm::dot(isect.wo, isect.normal_g);
+                                    const float wi_side = glm::dot(bs.wi, isect.normal_g);
+                                    const bool is_transmission = (wo_side * wi_side) < 0.0f;
+                                    if (is_transmission) {
+                                        medium_stack.toggle(batch.primitive.get());
                                     }
                                 }
                             }
