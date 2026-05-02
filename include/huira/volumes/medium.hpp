@@ -53,13 +53,23 @@ class Medium : public SceneObject<Medium<TSpectral>> {
 
     // Returns transmittance along a segment (could be analytical for constant media,
     // or delegated to an integrator/marching utility for heterogeneous media)
-    [[nodiscard]] TSpectral evaluate_transmittance(const Ray<TSpectral>& ray,
-                                                   RandomSampler<float>& sampler) const
+    [[nodiscard]] TSpectral
+    evaluate_transmittance(const Ray<TSpectral>& ray, float t, RandomSampler<float>& sampler) const
     {
-        // TODO Implement
-        (void)ray;
         (void)sampler;
-        return TSpectral{1.f};
+
+        if (t <= 0.0f) {
+            return TSpectral{1.0f};
+        }
+        
+        MediumProperties<TSpectral> props = get_properties(ray.origin());
+        TSpectral ext = props.extinction();
+
+        TSpectral Tr{0.0f};
+        for (std::size_t c = 0; c < TSpectral::size(); ++c) {
+            Tr[c] = std::exp(-ext[c] * t);
+        }
+        return Tr;
     }
 
     // Samples a distance along the ray to determine if/where a scattering event occurs.
