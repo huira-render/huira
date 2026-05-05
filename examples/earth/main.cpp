@@ -28,10 +28,13 @@ int main(int argc, char** argv)
     // Parsing input paths
     fs::path data_path = parse_input_paths(argc, argv);
 
+    fs::path kernel_path = data_path / "kernels";
+    fs::path texture_path = data_path / "textures";
+
     // Load the require SPICE kernels
-    huira::spice::furnsh(data_path / "kernels/spk/de440s.bsp");
-    huira::spice::furnsh(data_path / "kernels/pck/earth_latest_high_prec.bpc");
-    huira::spice::furnsh(data_path / "kernels/pck/earth_fixed.tf");
+    huira::spice::furnsh(kernel_path / "spk/de440s.bsp");
+    huira::spice::furnsh(kernel_path / "pck/earth_latest_high_prec.bpc");
+    huira::spice::furnsh(kernel_path / "pck/earth_fixed.tf");
 
     // Create the scene
     huira::Scene<TSpectral> scene;
@@ -55,9 +58,6 @@ int main(int argc, char** argv)
     camera_model.set_sensor_bit_depth(12);
     camera_model.set_sensor_quantum_efficiency(0.8);
     camera_model.set_sensor_full_well_capacity(20000);
-    // camera_model.set_veiling_glare(0.001f);
-    // camera_model.use_aperture_psf(64, 16);
-    // camera_model.enable_psf_convolution(true);
     camera_model.set_sensor_simulate_noise(false);
 
     // Huira uses the OpenCV convention by default, which is
@@ -69,30 +69,29 @@ int main(int argc, char** argv)
     // Create the Earth material:
     auto ct_bsdf = scene.new_bsdf_cook_torrance();
     auto earth_material = scene.new_material(ct_bsdf);
-
-    // fs::path huira_data = "C:/Users/chris/huira_data";
-    auto earth_albedo_rgb = huira::read_image(data_path / "models/earth/8k_earth_daymap.jpg");
+    
+    auto earth_albedo_rgb = huira::read_image(texture_path / "8k_earth_daymap.jpg");
     auto earth_albedo_spec = huira::rgb_to_spectral<TSpectral>(earth_albedo_rgb.image);
     auto earth_albedo_tex = scene.add_texture(std::move(earth_albedo_spec));
     earth_material.set_albedo_image(earth_albedo_tex);
 
     auto earth_roughness =
-        huira::read_image_mono(data_path / "models/earth/8k_earth_roughness_map.tif");
+        huira::read_image_mono(texture_path / "8k_earth_roughness_map.tif");
     auto earth_roughness_tex = scene.add_texture(std::move(earth_roughness.image));
     earth_material.set_roughness_image(earth_roughness_tex);
     earth_material.set_metallic_factor(0.f);
 
-    auto earth_normal = huira::read_image(data_path / "models/earth/8k_earth_normal_map.tif");
+    auto earth_normal = huira::read_image(texture_path / "8k_earth_normal_map.tif");
     auto earth_normal_tex = scene.add_normal_texture(std::move(earth_normal.image));
     earth_material.set_normal_image(earth_normal_tex);
 
     auto R_e = 6378.137_Km;
     auto earth_ellipsoid = scene.add_ellipsoid(R_e, R_e, R_e);
     auto earth_primitive = scene.add_primitive(earth_ellipsoid, earth_material);
-    eci.new_instance(earth_primitive);
+    ecef.new_instance(earth_primitive);
 
     auto earth_cloud_alpha =
-        huira::read_image_mono(data_path / "models/earth/8k_earth_clouds.jpg");
+        huira::read_image_mono(texture_path / "8k_earth_clouds.jpg");
     auto lam_bsdf = scene.new_bsdf_lambertian();
     auto earth_clouds_material = scene.new_material(lam_bsdf);
     auto earth_clouds_tex = scene.add_texture(std::move(earth_cloud_alpha.image));
@@ -103,7 +102,7 @@ int main(int argc, char** argv)
         scene.add_ellipsoid(R_e + alt_clouds, R_e + alt_clouds, R_e + alt_clouds);
     auto earth_clouds_primitive =
         scene.add_primitive(earth_clouds_ellipsoid, earth_clouds_material);
-    eci.new_instance(earth_clouds_primitive);
+    ecef.new_instance(earth_clouds_primitive);
 
     auto alt_atmosphere = 100_Km;
     auto atmosphere_ellipsoid =
@@ -117,14 +116,12 @@ int main(int argc, char** argv)
     auto atmosphere_medium = scene.new_medium(constant_density_field, isotropic_phase_function);
     auto atmosphere_primitive =
         scene.add_primitive(atmosphere_ellipsoid, atmosphere_material, atmosphere_medium);
-    eci.new_instance(atmosphere_primitive);
+    ecef.new_instance(atmosphere_primitive);
 
     // Create instance of the camera:
     auto navcam = eci.new_instance(camera_model);
     navcam.set_position(100000_Km, 0_Km, 0_m);
     navcam.set_euler_angles(90_deg, 0_deg, 90_deg);
-
-    // scene.load_stars(data_path / "tycho2/tycho2.hrsc", time);
 
     // Create the sun
     auto sun_light = scene.new_sun_light();
@@ -134,7 +131,6 @@ int main(int argc, char** argv)
     // Configure the render buffers
     auto frame_buffer = camera_model.make_frame_buffer();
     frame_buffer.enable_sensor_response();
-    frame_buffer.enable_camera_normals();
 
     // Create the renderer
     huira::Renderer<TSpectral> renderer;
@@ -155,8 +151,4 @@ int main(int argc, char** argv)
     // Save the results
     huira::write_image_png("output/earth.png",
                            huira::linear_to_srgb(frame_buffer.sensor_response()));
-    huira::write_image_png("output/earth_normals.png",
-                           huira::normal_map(frame_buffer.camera_normals()));
-
-    huira::Logger::dump_to_file("output/earth_render_log.txt");
 }
