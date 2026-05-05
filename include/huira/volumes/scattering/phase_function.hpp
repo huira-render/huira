@@ -21,6 +21,11 @@ class PhaseFunction : public SceneObject<PhaseFunction<TSpectral>> {
     PhaseFunction() = default;
     virtual ~PhaseFunction() override = default;
 
+    PhaseFunction(const PhaseFunction&) = delete;
+    PhaseFunction& operator=(const PhaseFunction&) = delete;
+    PhaseFunction(PhaseFunction&&) = default;
+    PhaseFunction& operator=(PhaseFunction&&) = default;
+
     [[nodiscard]] virtual float evaluate(const Vec3<float>& wo, const Vec3<float>& wi) const = 0;
 
     [[nodiscard]] virtual PhaseSample sample(const Vec3<float>& wo,

@@ -14,6 +14,11 @@ class DensityField : public SceneObject<DensityField<TSpectral>> {
     DensityField() = default;
     virtual ~DensityField() override = default;
 
+    DensityField(const DensityField&) = delete;
+    DensityField& operator=(const DensityField&) = delete;
+    DensityField(DensityField&&) = default;
+    DensityField& operator=(DensityField&&) = default;
+
     [[nodiscard]] virtual MediumProperties<TSpectral> evaluate(const Vec3<float>& p) const = 0;
 
     virtual std::string type() const override = 0;
