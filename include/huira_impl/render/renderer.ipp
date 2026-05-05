@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <limits>
 #include <vector>
@@ -119,6 +120,7 @@ template <IsSpectral TSpectral>
 Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_view,
                                                   FrameBuffer<TSpectral>& frame_buffer)
 {
+    auto start_clock = std::chrono::high_resolution_clock::now();
     auto& camera = scene_view.camera_model_;
     const int fb_width = frame_buffer.width();
     const int fb_height = frame_buffer.height();
@@ -574,6 +576,10 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
         received_power.convolve(psf);
     }
 
+    auto end_clock = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> elapsed = end_clock - start_clock;
+    HUIRA_LOG_INFO("Path tracing completed in " + std::to_string(elapsed.count()) + " seconds");
+
     return received_power;
 }
 
@@ -642,6 +648,7 @@ template <IsSpectral TSpectral>
 Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& scene_view,
                                                          FrameBuffer<TSpectral>& frame_buffer)
 {
+    auto start_clock = std::chrono::high_resolution_clock::now();
     auto& camera = scene_view.camera_model_;
     const int fb_width = frame_buffer.width();
     const int fb_height = frame_buffer.height();
@@ -1008,6 +1015,12 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
         const Image<TSpectral>& psf = camera->get_psf_kernel(0.0f, 0.0f);
         received_power.convolve(psf);
     }
+
+    auto end_clock = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> elapsed = end_clock - start_clock;
+    HUIRA_LOG_INFO("Unresolved point source rendering completed in " +
+                   std::to_string(elapsed.count()) +
+                " seconds");
 
     return received_power;
 }

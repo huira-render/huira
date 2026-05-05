@@ -57,6 +57,10 @@ target_link_libraries(huira_test_instantiations
     PUBLIC huira::huira
 )
 
+if(MSVC)
+    target_compile_options(huira_test_instantiations PRIVATE /bigobj)
+endif()
+
 # Add coverage flags to the instantiation library
 if(HUIRA_COVERAGE)
     target_compile_options(huira_test_instantiations PRIVATE ${COVERAGE_FLAGS})
