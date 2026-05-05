@@ -10,7 +10,6 @@ This document explains the various options that can be set when building Huira w
 | [`HUIRA_DOCS`](#huira_docs)        | `OFF` | Build Huira's documentation. This requires additional dependencies to be installed.  Please see below.|
 | [`HUIRA_PYTHON`](#huira_python)      | `OFF` | Build Huira's Python bindings. |
 | [`HUIRA_LOCAL_DEV`](#huira_local_dev)   | `OFF`  | Enable development features such as warnings and assertions. |
-| [`HUIRA_NATIVE_ARCH`](#huira_native_arch) | `ON`  | Enable architecture-specific optimizations for the host machine. |
 
 ## HUIRA_TOOLS
 
@@ -59,7 +58,3 @@ pip install bindings/python/
 This option automatically adds any cmake files found in `local/` to the build.  This is useful for development purposes, as it allows you to easily add custom cmake files without modifying the main CMakeLists.txt file.  This is set to `OFF` by default.
 
 If you have not manually added any files to `local/` , then this option will have no effect.
-
-## HUIRA_NATIVE_ARCH
-
-This option enables architecture-specific optimizations for the host machine.  This can improve performance, but may also cause compatibility issues on some systems.  This is set to `ON` by default, but can be set to `OFF` if you want to disable this feature.  When distributing via PyPI and conda, this is set to `OFF` to ensure maximum compatibility across different systems.  If you are building from source on your own machine, it is recommended to leave this option enabled to take advantage of the performance benefits.

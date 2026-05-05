@@ -9,7 +9,6 @@ cmake -B build \
     -DCMAKE_CXX_SCAN_FOR_MODULES=OFF \
     -DHUIRA_TOOLS=ON \
     -DHUIRA_PYTHON=ON \
-    -DHUIRA_NATIVE_ARCH=OFF \
     -DPython_EXECUTABLE="${PYTHON}"
 
 cmake --build build --parallel ${CPU_COUNT}
