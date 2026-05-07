@@ -12,7 +12,7 @@ namespace huira {
 /**
  * @brief A small fixed-capacity stack tracking which media-bearing primitives a ray is inside.
  *
- * The active medium for free-flight sampling is the medium on top of the stack.  The stack is 
+ * The active medium for free-flight sampling is the medium on top of the stack.  The stack is
  * modified only by transmission events.
  */
 template <IsSpectral TSpectral>

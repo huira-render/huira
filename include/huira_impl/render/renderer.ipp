@@ -1019,8 +1019,7 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
     auto end_clock = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed = end_clock - start_clock;
     HUIRA_LOG_INFO("Unresolved point source rendering completed in " +
-                   std::to_string(elapsed.count()) +
-                " seconds");
+                   std::to_string(elapsed.count()) + " seconds");
 
     return received_power;
 }

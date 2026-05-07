@@ -1,16 +1,27 @@
-# Moon Example
+# Earth Example
 
-*This example is a work in progress!*
+This example shows you how to create a model of the Earth with clouds, and an atmosphere, using
+Huira's Ellipsoid primitive, and manually constructing materials.
 
-This example shows you how to render a star field with Jupiter and it's moons.
-
-- [Get the Moon Model](#get-the-moon-model)
+- [Get the Data](#get-the-data)
 - [Python Example](#python-example)
 - [C++ Example](#c-example)
 
-## Get the Moon Model
+![Example Render](https://www.huira.space/assets/examples/earth.png)
 
-*Coming Soon*
+*NOTE: Volumetric rendering is still very noisy though an update is coming soon to fix that!*
+
+## Get the Data
+
+First, you'll need to clone a repository which has all of the required data for this example:
+
+```bash
+git clone https://github.com/huira-render/huira-assets.git
+```
+
+Inside of the cloned repository will be a `kernels/` and `textures/` directory.  Point the example
+program to the cloned repository so it can access both the textures and kernels.
+
 
 ***
 
@@ -33,7 +44,7 @@ pip install bindings/python/
 Once you have the star catalog and kernels downloaded, you can run the example as follows:
 
 ```bash
-python moon.py /your/output/path/moon.glb
+python earth.py /your/cloned/huira-assets/
 ```
 
 ***
@@ -70,7 +81,6 @@ This will create a `huira` executable in your build directory.  (On windows, it 
 
 ### Run the Example
 The example code allows you to pass in the location of the Tycho-2 star catalog file and the SPICE kernels via command line arguments.  For example:
-
 ```bash
-./moon /your/output/path/moon.glb
+./earth /your/cloned/huira-assets/
 ```

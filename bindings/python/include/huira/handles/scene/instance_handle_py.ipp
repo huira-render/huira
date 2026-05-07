@@ -1,11 +1,10 @@
 #pragma once
 
+#include "huira/handles/handle_py.ipp"
 #include "huira/handles/scene/instance_handle.hpp"
+#include "huira/handles/scene/node_handle_py.ipp"
 #include "pybind11/pybind11.h"
 #include "pybind11/stl.h"
-
-#include "huira/handles/handle_py.ipp"
-#include "huira/handles/scene/node_handle_py.ipp"
 
 namespace py = pybind11;
 

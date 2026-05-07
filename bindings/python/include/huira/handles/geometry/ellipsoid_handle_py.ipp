@@ -1,10 +1,9 @@
 #pragma once
 
 #include "huira/handles/geometry/ellipsoid_handle.hpp"
+#include "huira/handles/handle_py.ipp"
 #include "pybind11/pybind11.h"
 #include "pybind11/stl.h"
-
-#include "huira/handles/handle_py.ipp"
 
 namespace py = pybind11;
 
@@ -18,9 +17,9 @@ inline void bind_ellipsoid_handle(py::module_& m)
     using HandleType = EllipsoidHandle<TSpectral>;
 
     auto cls = py::class_<HandleType, GeometryHandle<TSpectral>>(m, "EllipsoidHandle")
-        // --- Handle basics ---
-        .def("__bool__", &HandleType::valid)
-        .def("__repr__", [](const HandleType&) { return "<EllipsoidHandle>"; });
+                   // --- Handle basics ---
+                   .def("__bool__", &HandleType::valid)
+                   .def("__repr__", [](const HandleType&) { return "<EllipsoidHandle>"; });
 
     bind_handle_methods<Ellipsoid<TSpectral>>(cls);
 }
