@@ -7,7 +7,7 @@
 
 namespace huira {
 template <typename T>
-concept IsSceneObject = requires(const T t) {
+concept IsSceneObject = requires(const T& t) {
     { t.is_scene_owned() } -> std::convertible_to<bool>;
 };
 
