@@ -1,0 +1,69 @@
+#pragma once
+
+#include "huira/handles/assets/light_handle.hpp"
+#include "huira/handles/assets/model_handle.hpp"
+#include "huira/handles/assets/primitive_handle.hpp"
+#include "huira/handles/assets/unresolved_handle.hpp"
+#include "huira/handles/handle_py.ipp"
+#include "huira/handles/scene/frame_handle.hpp"
+#include "huira/handles/scene/node_handle_py.ipp"
+#include "pybind11/pybind11.h"
+#include "pybind11/stl.h"
+
+namespace py = pybind11;
+
+namespace huira {
+template <typename TSpectral>
+inline void bind_frame_handle(py::module_& m)
+{
+    using HandleType = FrameHandle<TSpectral>;
+
+    auto cls = py::class_<HandleType>(m, "FrameHandle")
+                   // Subframe management
+                   .def("new_subframe", &HandleType::new_subframe)
+                   .def("new_spice_subframe",
+                        &HandleType::new_spice_subframe,
+                        py::arg("spice_origin"),
+                        py::arg("spice_frame"))
+                   .def("delete_subframe", &HandleType::delete_subframe, py::arg("subframe"))
+
+                   // Instance management
+                   .def(
+                       "new_instance",
+                       [](const HandleType& self, const CameraModelHandle<TSpectral>& asset) {
+                           return self.new_instance(asset);
+                       },
+                       py::arg("asset_handle"))
+                   .def(
+                       "new_instance",
+                       [](const HandleType& self, const LightHandle<TSpectral>& asset) {
+                           return self.new_instance(asset);
+                       },
+                       py::arg("asset_handle"))
+                   .def(
+                       "new_instance",
+                       [](const HandleType& self, const UnresolvedObjectHandle<TSpectral>& asset) {
+                           return self.new_instance(asset);
+                       },
+                       py::arg("asset_handle"))
+                   .def(
+                       "new_instance",
+                       [](const HandleType& self, const ModelHandle<TSpectral>& asset) {
+                           return self.new_instance(asset);
+                       },
+                       py::arg("asset_handle"))
+                   .def(
+                       "new_instance",
+                       [](const HandleType& self, const PrimitiveHandle<TSpectral>& asset) {
+                           return self.new_instance(asset);
+                       },
+                       py::arg("asset_handle"))
+                   .def("delete_instance", &HandleType::delete_instance, py::arg("instance"))
+
+                   .def("__bool__", &HandleType::valid)
+                   .def("__repr__", [](const HandleType&) { return "<FrameHandle>"; });
+
+    bind_handle_methods<FrameNode<TSpectral>>(cls);
+    bind_node_handle_methods<TSpectral, FrameNode<TSpectral>>(cls);
+}
+} // namespace huira

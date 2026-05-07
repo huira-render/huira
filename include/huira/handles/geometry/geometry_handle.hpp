@@ -1,7 +1,5 @@
 #pragma once
 
-#include <cstddef>
-
 #include "huira/concepts/spectral_concepts.hpp"
 #include "huira/geometry/geometry.hpp"
 #include "huira/handles/handle.hpp"

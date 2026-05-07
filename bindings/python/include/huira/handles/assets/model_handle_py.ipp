@@ -4,6 +4,8 @@
 #include "pybind11/pybind11.h"
 #include "pybind11/stl.h"
 
+#include "huira/handles/handle_py.ipp"
+
 namespace py = pybind11;
 
 namespace huira {
@@ -12,7 +14,7 @@ inline void bind_model_handle(py::module_& m)
 {
     using HandleType = ModelHandle<TSpectral>;
 
-    py::class_<HandleType>(m, "ModelHandle")
+    auto cls = py::class_<HandleType>(m, "ModelHandle")
 
         .def("print_graph", &HandleType::print_graph, "Print the model's node graph")
 
@@ -27,8 +29,9 @@ inline void bind_model_handle(py::module_& m)
              "Assign a new BSDF to all materials")
 
         // --- Handle basics ---
-        .def("valid", &HandleType::valid)
         .def("__bool__", &HandleType::valid)
         .def("__repr__", [](const HandleType&) { return "<ModelHandle>"; });
+
+    bind_handle_methods<Model<TSpectral>>(cls);
 }
 } // namespace huira

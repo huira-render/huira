@@ -31,7 +31,7 @@ inline void bind_camera_model_handle(py::module_& m)
         .def(
             "configure_sensor_from_pitch",
             [](HandleType& self,
-               std::pair<int, int> res, // <-- Removed 'const' here
+               std::pair<int, int> res,
                const py::object& px,
                const py::object& py_,
                std::optional<float> cx,
@@ -57,7 +57,7 @@ inline void bind_camera_model_handle(py::module_& m)
         .def(
             "configure_sensor_from_size",
             [](HandleType& self,
-               std::pair<int, int> res, // <-- Removed 'const' here
+               std::pair<int, int> res,
                const py::object& w,
                const py::object& h,
                std::optional<float> cx,
@@ -83,7 +83,7 @@ inline void bind_camera_model_handle(py::module_& m)
         .def(
             "set_intrinsic_matrix",
             [](HandleType& self,
-               const Mat3<float>& matrix, // <-- Removed 'const' here
+               const Mat3<float>& matrix,
                std::pair<int, int> res,
                const py::object& anchor_fl) {
                 self.set_intrinsic_matrix(matrix,
@@ -102,7 +102,7 @@ inline void bind_camera_model_handle(py::module_& m)
                float fx,
                float fy,
                float cx,
-               float cy, // <-- Removed 'const' here
+               float cy,
                std::pair<int, int> res,
                const py::object& anchor_fl) {
                 self.set_intrinsics(fx,
@@ -176,6 +176,7 @@ inline void bind_camera_model_handle(py::module_& m)
              py::arg("convolve_psf") = true)
         .def("delete_psf", &HandleType::delete_psf)
 
+        // Depth of field
         .def("enable_depth_of_field",
              &HandleType::enable_depth_of_field,
              py::arg("depth_of_field") = true)
@@ -210,18 +211,18 @@ inline void bind_camera_model_handle(py::module_& m)
         // === DEPRECATED METHODS === //
         // ========================== //
         .def("set_sensor_resolution",
-             [](HandleType& self, py::args args, py::kwargs kwargs) {
+             [](HandleType&, py::args, py::kwargs) {
                  throw std::runtime_error(
                      "API BREAKING CHANGE: set_sensor_resolution was removed in v0.9.4. "
                      "Use configure_sensor_from_pitch() or configure_sensor_from_size() instead.");
              })
         .def("set_sensor_pixel_pitch",
-             [](HandleType& self, py::args args, py::kwargs kwargs) {
+             [](HandleType&, py::args, py::kwargs) {
                  throw std::runtime_error(
                      "API BREAKING CHANGE: set_sensor_pixel_pitch was removed in v0.9.4. "
                      "Use configure_sensor_from_pitch() instead.");
              })
-        .def("set_sensor_size", [](HandleType& self, py::args args, py::kwargs kwargs) {
+        .def("set_sensor_size", [](HandleType&, py::args, py::kwargs) {
             throw std::runtime_error("API BREAKING CHANGE: set_sensor_size was removed in v0.9.4. "
                                      "Use configure_sensor_from_size() instead.");
         });

@@ -18,9 +18,6 @@ void bind_frame_buffer(py::module_& m)
     std::string name = "FrameBuffer";
 
     py::class_<FB>(m, name.c_str())
-        // No public constructor (FrameBuffer() = delete, private ctor)
-        // Created via CameraModel, so no .def(py::init<>())
-
         // Resolution
         .def_property_readonly("width", &FB::width)
         .def_property_readonly("height", &FB::height)
@@ -46,12 +43,12 @@ void bind_frame_buffer(py::module_& m)
             [](FB& fb) -> Image<TSpectral>& { return fb.albedo(); },
             py::return_value_policy::reference_internal)
 
-        // -- Mesh IDs -----------------------------------------------------
-        .def("enable_mesh_ids", &FB::enable_mesh_ids, py::arg("enable") = true)
-        .def("has_mesh_ids", &FB::has_mesh_ids)
+        // -- Geometry IDs -------------------------------------------------
+        .def("enable_geometry_ids", &FB::enable_geometry_ids, py::arg("enable") = true)
+        .def("has_geometry_ids", &FB::has_geometry_ids)
         .def_property_readonly(
-            "mesh_ids",
-            [](FB& fb) -> Image<uint64_t>& { return fb.mesh_ids(); },
+            "geometry_ids",
+            [](FB& fb) -> Image<uint64_t>& { return fb.geometry_ids(); },
             py::return_value_policy::reference_internal)
 
         // -- Camera Normals -----------------------------------------------
@@ -118,8 +115,8 @@ void bind_frame_buffer(py::module_& m)
             if (fb.has_albedo()) {
                 os << ", albedo";
             }
-            if (fb.has_mesh_ids()) {
-                os << ", mesh_ids";
+            if (fb.has_geometry_ids()) {
+                os << ", geometry_ids";
             }
             if (fb.has_camera_normals()) {
                 os << ", camera_normals";
