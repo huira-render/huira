@@ -139,9 +139,8 @@ jobs:
     needs: build-linux
     runs-on: ubuntu-22.04
     name: Documentation
-
     environment:
-        name: github-pages
+        name: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') && 'github-pages' || '' }}
         url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
