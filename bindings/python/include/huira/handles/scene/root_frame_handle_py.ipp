@@ -2,9 +2,10 @@
 
 #include "huira/handles/assets/light_handle.hpp"
 #include "huira/handles/assets/model_handle.hpp"
+#include "huira/handles/assets/primitive_handle.hpp"
 #include "huira/handles/assets/unresolved_handle.hpp"
-#include "huira/handles/node_handle_py.ipp"
-#include "huira/handles/scene/frame_handle.hpp"
+#include "huira/handles/handle_py.ipp"
+#include "huira/handles/scene/root_frame_handle.hpp"
 #include "pybind11/pybind11.h"
 #include "pybind11/stl.h"
 
@@ -12,12 +13,12 @@ namespace py = pybind11;
 
 namespace huira {
 template <typename TSpectral>
-inline void bind_frame_handle(py::module_& m)
+inline void bind_root_frame_handle(py::module_& m)
 {
-    using HandleType = FrameHandle<TSpectral>;
+    using HandleType = RootFrameHandle<TSpectral>;
 
-    auto cls = py::class_<HandleType>(m, "FrameHandle")
-                   // Subframe management
+    auto cls = py::class_<HandleType>(m, "RootFrameHandle")
+                   // Subframe management (inherited from FrameHandle, still valid)
                    .def("new_subframe", &HandleType::new_subframe)
                    .def("new_spice_subframe",
                         &HandleType::new_spice_subframe,
@@ -25,7 +26,7 @@ inline void bind_frame_handle(py::module_& m)
                         py::arg("spice_frame"))
                    .def("delete_subframe", &HandleType::delete_subframe, py::arg("subframe"))
 
-                   // Instance management
+                   // Instance management (inherited from FrameHandle, still valid)
                    .def(
                        "new_instance",
                        [](const HandleType& self, const CameraModelHandle<TSpectral>& asset) {
@@ -50,12 +51,28 @@ inline void bind_frame_handle(py::module_& m)
                            return self.new_instance(asset);
                        },
                        py::arg("asset_handle"))
+                   .def(
+                       "new_instance",
+                       [](const HandleType& self, const PrimitiveHandle<TSpectral>& asset) {
+                           return self.new_instance(asset);
+                       },
+                       py::arg("asset_handle"))
                    .def("delete_instance", &HandleType::delete_instance, py::arg("instance"))
 
-                   .def("valid", &HandleType::valid)
-                   .def("__bool__", &HandleType::valid)
-                   .def("__repr__", [](const HandleType&) { return "<FrameHandle>"; });
+                   // SPICE (read-only)
+                   .def("get_spice_origin", &HandleType::get_spice_origin)
+                   .def("get_spice_frame", &HandleType::get_spice_frame)
 
-    bind_node_handle_methods<TSpectral, FrameNode<TSpectral>>(cls);
+                   // Parent access
+                   .def("get_parent", &HandleType::get_parent)
+
+                   .def("__bool__", &HandleType::valid)
+                   .def("__repr__", [](const HandleType&) { return "<RootFrameHandle>"; });
+
+    bind_handle_methods<FrameNode<TSpectral>>(cls);
+
+    // NOTE: Transform methods (set_position, set_rotation, set_scale,
+    // set_velocity, set_angular_velocity) are intentionally omitted —
+    // they are deleted in the C++ class to keep the root frame fixed.
 }
 } // namespace huira

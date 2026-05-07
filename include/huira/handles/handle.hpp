@@ -32,6 +32,10 @@ class Handle {
         requires std::derived_from<U, T> || std::same_as<U, T>
     std::shared_ptr<U> get() const;
 
+    std::string name() const { return get_()->name(); }
+    std::uint64_t id() const { return get_()->id(); }
+    std::string type() const { return get_()->type(); }
+
   protected:
     std::shared_ptr<T> get_() const;
 

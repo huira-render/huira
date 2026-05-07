@@ -3,6 +3,8 @@
 #include "huira/handles/assets/light_handle.hpp"
 #include "pybind11/pybind11.h"
 
+#include "huira/handles/handle_py.ipp"
+
 namespace py = pybind11;
 
 namespace huira {
@@ -11,9 +13,10 @@ inline void bind_light_handle(py::module_& m)
 {
     using HandleType = LightHandle<TSpectral>;
 
-    py::class_<HandleType>(m, "LightHandle")
-        .def("valid", &HandleType::valid)
+    auto cls = py::class_<HandleType>(m, "LightHandle")
         .def("__bool__", &HandleType::valid)
         .def("__repr__", [](const HandleType&) { return "<LightHandle>"; });
+
+    bind_handle_methods<Light<TSpectral>>(cls);
 }
 } // namespace huira

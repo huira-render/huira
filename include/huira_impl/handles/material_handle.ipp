@@ -8,7 +8,7 @@ void MaterialHandle<TSpectral>::set_bsdf(std::shared_ptr<BSDF<TSpectral>> bsdf)
 template <IsSpectral TSpectral>
 void MaterialHandle<TSpectral>::set_albedo_image(const TextureHandle<TSpectral>& albedo_texture)
 {
-    this->get_()->set_albedo(albedo_texture.shared_image());
+    this->get_()->set_albedo(albedo_texture.get()->shared_image());
 }
 
 template <IsSpectral TSpectral>
@@ -26,7 +26,7 @@ void MaterialHandle<TSpectral>::reset_albedo()
 template <IsSpectral TSpectral>
 void MaterialHandle<TSpectral>::set_alpha_image(const TextureHandle<float>& alpha_texture)
 {
-    this->get_()->set_alpha(alpha_texture.shared_image());
+    this->get_()->set_alpha(alpha_texture.get()->shared_image());
 }
 
 template <IsSpectral TSpectral>
@@ -44,7 +44,7 @@ void MaterialHandle<TSpectral>::reset_alpha()
 template <IsSpectral TSpectral>
 void MaterialHandle<TSpectral>::set_metallic_image(const TextureHandle<float>& metallic_texture)
 {
-    this->get_()->set_metallic_image(metallic_texture.shared_image());
+    this->get_()->set_metallic_image(metallic_texture.get()->shared_image());
 }
 
 template <IsSpectral TSpectral>
@@ -62,7 +62,7 @@ void MaterialHandle<TSpectral>::reset_metallic()
 template <IsSpectral TSpectral>
 void MaterialHandle<TSpectral>::set_roughness_image(const TextureHandle<float>& roughness_texture)
 {
-    this->get_()->set_roughness_image(roughness_texture.shared_image());
+    this->get_()->set_roughness_image(roughness_texture.get()->shared_image());
 }
 
 template <IsSpectral TSpectral>
@@ -80,7 +80,7 @@ void MaterialHandle<TSpectral>::reset_roughness()
 template <IsSpectral TSpectral>
 void MaterialHandle<TSpectral>::set_normal_image(const TextureHandle<Vec3<float>>& normal_texture)
 {
-    this->get_()->set_normal_image(normal_texture.shared_image());
+    this->get_()->set_normal_image(normal_texture.get()->shared_image());
 }
 
 template <IsSpectral TSpectral>
@@ -99,7 +99,7 @@ template <IsSpectral TSpectral>
 void MaterialHandle<TSpectral>::set_transmission_image(
     const TextureHandle<TSpectral>& transmission_texture)
 {
-    this->get_()->set_transmission_image(transmission_texture.shared_image());
+    this->get_()->set_transmission_image(transmission_texture.get()->shared_image());
 }
 
 template <IsSpectral TSpectral>
@@ -117,7 +117,7 @@ void MaterialHandle<TSpectral>::reset_transmission()
 template <IsSpectral TSpectral>
 void MaterialHandle<TSpectral>::set_emissive_image(const TextureHandle<TSpectral>& emissive_texture)
 {
-    this->get_()->set_emissive_image(emissive_texture.shared_image());
+    this->get_()->set_emissive_image(emissive_texture.get()->shared_image());
 }
 
 template <IsSpectral TSpectral>

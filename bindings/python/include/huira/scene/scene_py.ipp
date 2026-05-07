@@ -24,6 +24,132 @@ inline void bind_scene(py::module_& m)
         .def_readonly("root", &SceneType::root)
 
         // =============================================================
+        // Geometry
+        // =============================================================
+
+        // add_mesh — without tangents
+        .def("add_mesh",
+             static_cast<MeshHandle<TSpectral> (SceneType::*)(
+                 const IndexBuffer&, const VertexBuffer<TSpectral>&, std::string)>(
+                 &SceneType::add_mesh),
+             py::arg("index_buffer"),
+             py::arg("vertex_buffer"),
+             py::arg("name") = "",
+             "Add a mesh from index and vertex buffers")
+
+        // add_mesh — with tangents
+        .def("add_mesh",
+             static_cast<MeshHandle<TSpectral> (SceneType::*)(const IndexBuffer&,
+                                                              const VertexBuffer<TSpectral>&,
+                                                              const TangentBuffer&,
+                                                              std::string)>(&SceneType::add_mesh),
+             py::arg("index_buffer"),
+             py::arg("vertex_buffer"),
+             py::arg("tangent_buffer"),
+             py::arg("name") = "",
+             "Add a mesh from index, vertex, and tangent buffers")
+
+        // add_ellipsoid
+        .def(
+            "add_ellipsoid",
+            [](SceneType& self,
+               const py::object& x,
+               const py::object& y,
+               const py::object& z,
+               std::string name) {
+                return self.add_ellipsoid(detail::unit_from_py<units::Meter>(x),
+                                          detail::unit_from_py<units::Meter>(y),
+                                          detail::unit_from_py<units::Meter>(z),
+                                          std::move(name));
+            },
+            py::arg("x"),
+            py::arg("y"),
+            py::arg("z"),
+            py::arg("name") = "",
+            "Add an ellipsoid geometry (accepts any distance unit)")
+
+        .def("add_geometry",
+             &SceneType::add_geometry,
+             py::arg("geom"),
+             py::arg("name") = "",
+             "Add a geometry from a shared pointer")
+        .def("get_geometry",
+             &SceneType::get_geometry,
+             py::arg("name"),
+             "Get a geometry handle by name")
+        .def("delete_geometry",
+             &SceneType::delete_geometry,
+             py::arg("geom_handle"),
+             "Delete a geometry from the scene")
+        .def("set_geometry_name",
+             static_cast<void (SceneType::*)(const GeometryHandle<TSpectral>&, const std::string&)>(
+                 &SceneType::set_name),
+             py::arg("geom_handle"),
+             py::arg("name"),
+             "Set the name of a geometry")
+
+        // =============================================================
+        // Primitives
+        // =============================================================
+
+        // add_primitive — geometry only
+        .def("add_primitive",
+             static_cast<PrimitiveHandle<TSpectral> (SceneType::*)(
+                 const GeometryHandle<TSpectral>&, std::string)>(&SceneType::add_primitive),
+             py::arg("geom"),
+             py::arg("name") = "",
+             "Add a primitive from a geometry")
+
+        // add_primitive — geometry + material
+        .def("add_primitive",
+             static_cast<PrimitiveHandle<TSpectral> (SceneType::*)(
+                 const GeometryHandle<TSpectral>&, const MaterialHandle<TSpectral>&, std::string)>(
+                 &SceneType::add_primitive),
+             py::arg("geom"),
+             py::arg("mat"),
+             py::arg("name") = "",
+             "Add a primitive from a geometry and material")
+
+        // add_primitive — geometry + medium
+        .def("add_primitive",
+             static_cast<PrimitiveHandle<TSpectral> (SceneType::*)(
+                 const GeometryHandle<TSpectral>&, const MediumHandle<TSpectral>&, std::string)>(
+                 &SceneType::add_primitive),
+             py::arg("geom"),
+             py::arg("medium"),
+             py::arg("name") = "",
+             "Add a primitive from a geometry and medium")
+
+        // add_primitive — geometry + material + medium
+        .def("add_primitive",
+             static_cast<PrimitiveHandle<TSpectral> (SceneType::*)(const GeometryHandle<TSpectral>&,
+                                                                   const MaterialHandle<TSpectral>&,
+                                                                   const MediumHandle<TSpectral>&,
+                                                                   std::string)>(
+                 &SceneType::add_primitive),
+             py::arg("geom"),
+             py::arg("mat"),
+             py::arg("medium"),
+             py::arg("name") = "",
+             "Add a primitive from a geometry, material, and medium")
+
+        .def("get_primitive",
+             &SceneType::get_primitive,
+             py::arg("name"),
+             "Get a primitive handle by name")
+        .def("delete_primitive",
+             &SceneType::delete_primitive,
+             py::arg("primitive_handle"),
+             "Delete a primitive from the scene")
+        .def(
+            "set_primitive_name",
+            static_cast<void (SceneType::*)(const PrimitiveHandle<TSpectral>&, const std::string&)>(
+                &SceneType::set_name),
+            py::arg("primitive_handle"),
+            py::arg("name"),
+            "Set the name of a primitive")
+
+        // =============================================================
         // Lights
         // =============================================================
 
@@ -252,6 +378,47 @@ inline void bind_scene(py::module_& m)
              "Set the name of a camera model")
 
         // =============================================================
+        // BSDFs
+        // =============================================================
+        .def("new_bsdf_cook_torrance",
+             &SceneType::new_bsdf_cook_torrance,
+             py::arg("name") = "",
+             "Create a Cook-Torrance BSDF")
+        .def("new_bsdf_hapke",
+             &SceneType::new_bsdf_hapke,
+             py::arg("h"),
+             py::arg("B0"),
+             py::arg("b"),
+             py::arg("c"),
+             py::arg("name") = "",
+             "Create a Hapke BSDF")
+        .def("new_bsdf_lambertian",
+             &SceneType::new_bsdf_lambertian,
+             py::arg("name") = "",
+             "Create a Lambertian BSDF")
+        .def("new_bsdf_lommel_seeliger",
+             &SceneType::new_bsdf_lommel_seeliger,
+             py::arg("name") = "",
+             "Create a Lommel-Seeliger BSDF")
+        .def("new_bsdf_mcewen",
+             &SceneType::new_bsdf_mcewen,
+             py::arg("name") = "",
+             "Create a McEwen BSDF")
+        .def("new_bsdf_null",
+             &SceneType::new_bsdf_null,
+             py::arg("name") = "",
+             "Create a null (transparent/passthrough) BSDF")
+        .def("new_bsdf_oren_nayar",
+             &SceneType::new_bsdf_oren_nayar,
+             py::arg("name") = "",
+             "Create an Oren-Nayar BSDF")
+        .def("add_bsdf",
+             &SceneType::add_bsdf,
+             py::arg("bsdf"),
+             py::arg("name") = "",
+             "Add a BSDF from a shared pointer")
+
+        // =============================================================
         // Materials
         // =============================================================
         .def("new_material",
@@ -259,10 +426,54 @@ inline void bind_scene(py::module_& m)
              py::arg("bsdf"),
              py::arg("name") = "",
              "Create a new material with the specified BSDF")
+        .def("add_material",
+             &SceneType::add_material,
+             py::arg("material"),
+             py::arg("name") = "",
+             "Add a material from a shared pointer")
+
+        // =============================================================
+        // Volumes
+        // =============================================================
+        .def(
+            "new_constant_density_field",
+            &SceneType::new_constant_density_field,
+            py::arg("absorption"),
+            py::arg("scattering"),
+            py::arg("name") = "",
+            "Create a constant density field with the given absorption and scattering coefficients")
+        .def("add_density_field",
+             &SceneType::add_density_field,
+             py::arg("density_field"),
+             py::arg("name") = "",
+             "Add a density field from a shared pointer")
+
+        .def("new_isotropic_phase_function",
+             &SceneType::new_isotropic_phase_function,
+             py::arg("name") = "",
+             "Create an isotropic phase function")
+        .def("add_phase_function",
+             &SceneType::add_phase_function,
+             py::arg("phase_function"),
+             py::arg("name") = "",
+             "Add a phase function from a shared pointer")
+
+        .def("new_medium",
+             &SceneType::new_medium,
+             py::arg("density_field_handle"),
+             py::arg("phase_function_handle"),
+             py::arg("name") = "",
+             "Create a new medium from a density field and phase function")
+        .def("add_medium",
+             &SceneType::add_medium,
+             py::arg("medium"),
+             py::arg("name") = "",
+             "Add a medium from a shared pointer")
 
         // =============================================================
         // Background
         // =============================================================
+
         // set_background_radiance — Image
         .def(
             "set_background_radiance",
@@ -286,25 +497,50 @@ inline void bind_scene(py::module_& m)
         // Textures
         // =============================================================
 
-        .def("add_spectral_texture",
-             static_cast<TextureHandle<TSpectral> (SceneType::*)(Image<TSpectral>, std::string)>(
-                 &SceneType::add_texture),
-             py::arg("image"),
-             py::arg("name") = "",
-             "Add a spectral texture from an image")
-        .def("add_float_texture",
-             static_cast<TextureHandle<float> (SceneType::*)(Image<float>, std::string)>(
-                 &SceneType::add_texture),
-             py::arg("image"),
-             py::arg("name") = "",
-             "Add a float texture from a single-channel image")
+        .def(
+            "add_texture",
+            [](SceneType& self,
+               Image<TSpectral> image,
+               std::string name) { return self.add_texture(std::move(image), std::move(name)); },
+            py::arg("image"),
+            py::arg("name") = "",
+            "Add a spectral texture from an image")
+        .def(
+            "add_texture",
+            [](SceneType& self,
+               Image<float> image,
+               std::string name) { return self.add_texture(std::move(image), std::move(name)); },
+            py::arg("image"),
+            py::arg("name") = "",
+            "Add a float texture from a single-channel image")
+        .def(
+            "add_texture",
+            [](SceneType& self,
+               Image<Vec3<float>> image,
+               std::string name) { return self.add_texture(std::move(image), std::move(name)); },
+            py::arg("image"),
+            py::arg("name") = "",
+            "Add a Vec3 texture from a three-channel image")
+
+        // add_normal_texture — dispatches on image type, matching C++ API
         .def(
             "add_normal_texture",
-            static_cast<TextureHandle<Vec3<float>> (SceneType::*)(Image<Vec3<float>>, std::string)>(
-                &SceneType::add_texture),
+            [](SceneType& self,
+               Image<Vec3<float>> image,
+               std::string
+                   name) { return self.add_normal_texture(std::move(image), std::move(name)); },
             py::arg("image"),
             py::arg("name") = "",
             "Add a normal map texture from a Vec3 image")
+        .def(
+            "add_normal_texture",
+            [](SceneType& self,
+               Image<RGB> image,
+               std::string
+                   name) { return self.add_normal_texture(std::move(image), std::move(name)); },
+            py::arg("image"),
+            py::arg("name") = "",
+            "Add a normal map texture from an RGB image")
 
         // =============================================================
         // Models
@@ -312,9 +548,9 @@ inline void bind_scene(py::module_& m)
 
         .def(
             "load_model",
-            [](SceneType& self, const fs::path& file, std::string name) {
-                return self.load_model(file, std::move(name));
-            },
+            [](SceneType& self,
+               const fs::path& file,
+               std::string name) { return self.load_model(file, std::move(name)); },
             py::arg("file"),
             py::arg("name") = "",
             "Load a model from a file")
@@ -352,11 +588,24 @@ inline void bind_scene(py::module_& m)
              "accordingly")
 
         // =============================================================
+        // Utilities
+        // =============================================================
+
+        .def("prune_unreferenced_assets",
+             &SceneType::prune_unreferenced_assets,
+             "Remove any assets that are no longer referenced by the scene graph")
+
+        // =============================================================
         // Debug printing
         // =============================================================
 
-        .def("print_contents", &SceneType::print_contents)
+        .def("print_meshes", &SceneType::print_meshes)
+        .def("print_lights", &SceneType::print_lights)
+        .def("print_unresolved_objects", &SceneType::print_unresolved_objects)
+        .def("print_camera_models", &SceneType::print_camera_models)
+        .def("print_models", &SceneType::print_models)
         .def("print_graph", &SceneType::print_graph)
+        .def("print_contents", &SceneType::print_contents)
 
         .def("__repr__", [](const SceneType&) { return "<Scene>"; });
 }

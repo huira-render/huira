@@ -22,10 +22,6 @@ class TextureHandle : public Handle<Texture<TPixel>> {
     TextureHandle() = delete;
     using Handle<Texture<TPixel>>::Handle;
 
-    std::shared_ptr<Image<TPixel>> shared_image() const { return this->get_()->shared_image(); }
-
-    std::uint64_t id() const { return this->get_()->id(); }
-
     Resolution resolution() const noexcept { return this->get_()->resolution(); }
 };
 } // namespace huira
