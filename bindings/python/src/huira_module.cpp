@@ -1,9 +1,8 @@
 #include <filesystem>
 #include <string>
 
-#include "huira/concepts/spectral_concepts.hpp"
-
 #include "huira/cameras/distortion_coeffs_py.ipp"
+#include "huira/concepts/spectral_concepts.hpp"
 #include "huira/core/interval_py.ipp"
 #include "huira/core/rotation_py.ipp"
 #include "huira/core/spectral_bin_py.ipp"
@@ -15,9 +14,11 @@
 #include "huira/handles/assets/model_handle_py.ipp"
 #include "huira/handles/assets/primitive_handle_py.ipp"
 #include "huira/handles/assets/unresolved_handle_py.ipp"
+#include "huira/handles/camera_handle_py.ipp"
 #include "huira/handles/geometry/ellipsoid_handle_py.ipp"
 #include "huira/handles/geometry/geometry_handle_py.ipp"
 #include "huira/handles/geometry/mesh_handle_py.ipp"
+#include "huira/handles/handle_py.ipp"
 #include "huira/handles/materials/bsdf_handle_py.ipp"
 #include "huira/handles/materials/material_handle_py.ipp"
 #include "huira/handles/materials/texture_handle_py.ipp"
@@ -28,8 +29,6 @@
 #include "huira/handles/volumes/density_field_handle_py.ipp"
 #include "huira/handles/volumes/medium_handle_py.ipp"
 #include "huira/handles/volumes/phase_function_handle_py.ipp"
-#include "huira/handles/camera_handle_py.ipp"
-#include "huira/handles/handle_py.ipp"
 #include "huira/images/fits_metadata_py.ipp"
 #include "huira/images/image_py.ipp"
 #include "huira/render/frame_buffer_py.ipp"

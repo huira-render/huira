@@ -61,7 +61,7 @@ class Medium : public SceneObject<Medium<TSpectral>> {
         if (t <= 0.0f) {
             return TSpectral{1.0f};
         }
-        
+
         MediumProperties<TSpectral> props = get_properties(ray.origin());
         TSpectral ext = props.extinction();
 

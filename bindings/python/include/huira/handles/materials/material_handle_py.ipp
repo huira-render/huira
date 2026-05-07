@@ -14,7 +14,8 @@ inline void bind_material_handle(py::module_& m)
 {
     using HandleType = MaterialHandle<TSpectral>;
 
-    auto cls = py::class_<HandleType>(m, "MaterialHandle")
+    auto cls =
+        py::class_<HandleType>(m, "MaterialHandle")
 
             // --- BSDF ---
             .def("set_bsdf",

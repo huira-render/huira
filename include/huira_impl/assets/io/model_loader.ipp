@@ -414,7 +414,8 @@ void ModelLoader<TSpectral>::process_materials_(LoadContext& ctx)
                     rough_handle = rough_it->second;
                     metal_handle = metal_it->second;
                 } else {
-                    std::shared_ptr<Image<Vec3<float>>> packed_ptr = packed_handle.get()->shared_image();
+                    std::shared_ptr<Image<Vec3<float>>> packed_ptr =
+                        packed_handle.get()->shared_image();
                     const Image<Vec3<float>>& packed = *packed_ptr;
 
                     Image<float> roughness_img(packed.width(), packed.height());

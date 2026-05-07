@@ -51,7 +51,7 @@ jobs:
 
       - name: Install conda-build
         shell: bash -el {0}
-        run: conda install -y conda-build
+        run: conda install -y -n base conda-build
 
       - name: Build conda package
         shell: bash -el {0}

@@ -12,11 +12,10 @@
 #include "huira/images/io/png_io.hpp"
 #include "huira/images/io/read_image.hpp"
 #include "huira/images/io/tiff_io.hpp"
-
 #include "pybind11/numpy.h"
-#include "pybind11/stl/filesystem.h"
 #include "pybind11/pybind11.h"
 #include "pybind11/stl.h"
+#include "pybind11/stl/filesystem.h"
 
 namespace py = pybind11;
 
@@ -415,7 +414,6 @@ inline void bind_image_io(py::module_& m)
         py::arg("image"),
         "Convert a raw sRGB float image reference directly to a linear bundle");
 }
-
 
 // ---------------------------------------------------------------------------
 // bind_image_utils  --  visualization and map conversion tools
