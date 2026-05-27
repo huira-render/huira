@@ -53,11 +53,4 @@ inline void build_default_tangent_frame(const Vec3<float>& normal_s,
     bitangent = Vec3<float>{b, sign + normal_s.y * normal_s.y * a, -normal_s.y};
 }
 
-/**
- * @brief Offsets an intersection point along a normal to prevent self-intersection artifacts.
- */
-template <IsFloatingPoint T>
-inline Vec3<T> offset_intersection_(Vec3<T> intersection, const Vec3<T>& N);
 } // namespace huira
-
-#include "huira_impl/render/interaction.ipp"

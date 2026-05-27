@@ -354,15 +354,8 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
 
                                     if (params.opacity < 1.0f) {
                                         if (sampler.get_1d() > params.opacity) {
-                                            Vec3<float> pass_through_normal =
-                                                (glm::dot(ray.direction(), isect.normal_g) < 0.0f)
-                                                    ? -isect.normal_g
-                                                    : isect.normal_g;
-                                            Vec3<float> pass_through_origin = offset_intersection_(
-                                                isect.position, pass_through_normal);
-
-                                            ray = Ray<TSpectral>(pass_through_origin,
-                                                                 ray.direction());
+                                            ray = Ray<TSpectral>(isect.position, ray.direction(),
+                                                                 256.f);
 
                                             medium_stack.toggle(batch.primitive.get());
 
@@ -404,13 +397,7 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                                             glm::dot(ls.wi, isect.normal_g) <= 0.0f) {
                                             continue;
                                         }
-                                        Vec3<float> shadow_normal =
-                                            (glm::dot(ls.wi, isect.normal_g) < 0.0f)
-                                                ? -isect.normal_g
-                                                : isect.normal_g;
-                                        Vec3<float> shadow_origin =
-                                            offset_intersection_(isect.position, shadow_normal);
-                                        Ray<TSpectral> shadow_ray(shadow_origin, ls.wi);
+                                        Ray<TSpectral> shadow_ray(isect.position, ls.wi, 256.f);
                                         TSpectral transmittance = scene_view.evaluate_transmittance(
                                             shadow_ray, light_dist, medium_stack, sampler, time);
                                         if (transmittance.max() <= 0.0f) {
@@ -449,12 +436,6 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                                         break;
                                     }
 
-                                    Vec3<float> bounce_normal =
-                                        (glm::dot(bs.wi, isect.normal_g) < 0.0f) ? -isect.normal_g
-                                                                                 : isect.normal_g;
-                                    Vec3<float> bounce_origin =
-                                        offset_intersection_(isect.position, bounce_normal);
-
                                     prev_bsdf_pdf = bs.is_delta ? 0.0f : bs.pdf;
                                     prev_isect = shading_isect;
 
@@ -470,7 +451,7 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                                     }
 
                                     // Spawn next ray:
-                                    ray = Ray<TSpectral>(bounce_origin, bs.wi);
+                                    ray = Ray<TSpectral>(isect.position, bs.wi, 256.f);
 
                                     const float wo_side = glm::dot(isect.wo, isect.normal_g);
                                     const float wi_side = glm::dot(bs.wi, isect.normal_g);
