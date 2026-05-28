@@ -256,9 +256,8 @@ TSpectral SceneView<TSpectral>::evaluate_transmittance(const Ray<TSpectral>& ray
 
         if (params.opacity < 1.0f) {
             if (sampler.get_1d() > params.opacity) {
-                current_ray = Ray<TSpectral>(
-                    isect.position, current_ray.direction(),
-                    spawn_ray_tnear(current_ray, hit.t, current_ray.direction()));
+                current_ray = Ray<TSpectral>(isect.position, current_ray.direction(),
+                                             spawn_ray_tnear(current_ray, hit.t));
 
                 stack.toggle(batch.primitive.get());
 
@@ -275,7 +274,7 @@ TSpectral SceneView<TSpectral>::evaluate_transmittance(const Ray<TSpectral>& ray
         transmittance *= surface_transmission;
 
         current_ray = Ray<TSpectral>(isect.position, current_ray.direction(),
-                                     spawn_ray_tnear(current_ray, hit.t, current_ray.direction()));
+                                     spawn_ray_tnear(current_ray, hit.t));
 
         stack.toggle(batch.primitive.get());
 

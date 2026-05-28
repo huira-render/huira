@@ -38,17 +38,13 @@ class Ray {
     float tnear_{0.f};
 };
 
-/* Compute a conservative tnear for a ray spawned from a hit point. The hit
- * point was computed as p = origin + hit_t * direction, so its float roundoff
- * error is bounded from the magnitudes of those operands. Project that bound
- * onto the spawned ray direction so we reject self-hits caused by numerical
- * error without moving the origin in coordinate space. */
+/* Upper bound on p = origin + hit_t * direction roundoff for normalized rays;
+ * used as tnear to reject self-hits without moving the origin. */
 
 template <IsSpectral TSpectral>
-inline float spawn_ray_tnear(const Ray<TSpectral>& ray, float hit_t, const Vec3<float>& direction) noexcept
+inline float spawn_ray_tnear(const Ray<TSpectral>& ray, float hit_t) noexcept
 {
-    return 1e-6f * glm::dot(glm::abs(direction),
-                             glm::abs(ray.origin()) + hit_t * glm::abs(ray.direction()));
+    return 1e-6f * (glm::length(ray.origin()) + hit_t);
 }
 
 struct HitRecord {
