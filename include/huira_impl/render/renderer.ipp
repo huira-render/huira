@@ -595,7 +595,7 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
 
                                     // Spawn next ray:
                                     ray = Ray<TSpectral>(isect.position, bs.wi,
-                                                         spawn_ray_tnear(ray, hit.t, bs.wi));
+                                                         spawn_ray_tnear(ray, hit.t));
 
                                     const float wo_side = glm::dot(isect.wo, isect.normal_g);
                                     const float wi_side = glm::dot(bs.wi, isect.normal_g);
