@@ -355,7 +355,7 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                                     if (params.opacity < 1.0f) {
                                         if (sampler.get_1d() > params.opacity) {
                                             ray = Ray<TSpectral>(isect.position, ray.direction(),
-                                                                 256.f);
+                                                                 spawn_ray_tnear(ray, hit.t, ray.direction()));
 
                                             medium_stack.toggle(batch.primitive.get());
 
@@ -397,7 +397,8 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                                             glm::dot(ls.wi, isect.normal_g) <= 0.0f) {
                                             continue;
                                         }
-                                        Ray<TSpectral> shadow_ray(isect.position, ls.wi, 256.f);
+                                        Ray<TSpectral> shadow_ray(
+                                            isect.position, ls.wi, spawn_ray_tnear(ray, hit.t, ls.wi));
                                         TSpectral transmittance = scene_view.evaluate_transmittance(
                                             shadow_ray, light_dist, medium_stack, sampler, time);
                                         if (transmittance.max() <= 0.0f) {
@@ -451,7 +452,8 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                                     }
 
                                     // Spawn next ray:
-                                    ray = Ray<TSpectral>(isect.position, bs.wi, 256.f);
+                                    ray = Ray<TSpectral>(isect.position, bs.wi,
+                                                         spawn_ray_tnear(ray, hit.t, bs.wi));
 
                                     const float wo_side = glm::dot(isect.wo, isect.normal_g);
                                     const float wi_side = glm::dot(bs.wi, isect.normal_g);
