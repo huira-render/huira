@@ -559,6 +559,18 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
         received_power.convolve(psf);
     }
 
+    if (frame_buffer.has_received_power() && camera->aperture_->has_defocus() &&
+        !camera->depth_of_field_) {
+        const Image<float>& defocus_kernel = camera->aperture_->get_defocus_kernel(0.0f, 0.0f);
+        Image<TSpectral> spectral_defocus_kernel(defocus_kernel.width(), defocus_kernel.height());
+        for (int y = 0; y < defocus_kernel.height(); ++y) {
+            for (int x = 0; x < defocus_kernel.width(); ++x) {
+                spectral_defocus_kernel(x, y) = TSpectral{defocus_kernel(x, y)};
+            }
+        }
+        received_power.convolve(spectral_defocus_kernel);
+    }
+
     auto end_clock = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed = end_clock - start_clock;
     HUIRA_LOG_INFO("Path tracing completed in " + std::to_string(elapsed.count()) + " seconds");
