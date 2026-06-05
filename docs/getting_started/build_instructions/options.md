@@ -56,6 +56,12 @@ pip install bindings/python/
 
 If you enable `HUIRA_USE_SYSTEM_PYBIND11`, CMake will not fetch a copy of pybind11, but instead will attempt to use your system installed version of pybind11.
 
+To replace an existing PyPI install with the local checkout, use:
+
+```bash
+pip install --force-reinstall --no-deps bindings/python/
+```
+
 ## HUIRA_LOCAL_DEV
 
 This option automatically adds any cmake files found in `local/` to the build.  This is useful for development purposes, as it allows you to easily add custom cmake files without modifying the main CMakeLists.txt file.  This is set to `OFF` by default.
