@@ -16,6 +16,12 @@ Once you have confirmed you have the necessary requirements, you can build and i
 pip install bindings/python/
 ```
 
+If you already have Huira installed from PyPI and want this checkout to override that copy, force a reinstall by running:
+
+```bash
+pip install --force-reinstall --no-deps bindings/python/
+```
+
 You can verify the installation with:
 ```bash
 python -c "import huira; print(huira.__version__)"
