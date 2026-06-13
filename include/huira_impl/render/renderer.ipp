@@ -232,7 +232,7 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                                                                       time);
 
                                             auto sample = light_instance.light->sample_li(
-                                                vol_isect, current_transform, this->sampler_);
+                                                vol_isect, current_transform, sampler);
 
                                             if (!sample) {
                                                 continue;
@@ -384,7 +384,7 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                                             interpolate_transform(light_instance.transforms, time);
 
                                         auto sample = light_instance.light->sample_li(
-                                            isect, current_transform, this->sampler_);
+                                            isect, current_transform, sampler);
 
                                         if (!sample) {
                                             continue;
