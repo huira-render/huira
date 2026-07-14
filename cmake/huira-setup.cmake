@@ -29,6 +29,8 @@ find_package(CSPICE REQUIRED)
 find_package(embree CONFIG REQUIRED)
 
 find_package(FFTW3f REQUIRED)
+include(CustomSanitizeTargets)
+huira_strip_unix_libm(FFTW3::fftw3f)  # fftw has shipped '-lm' on Windows before (fftw-feedstock#74)
 
 find_package(glm CONFIG QUIET)
 if(NOT glm_FOUND)

@@ -40,16 +40,8 @@ requirements:
     - tbb-devel
   run:
     - python
-    - cspice
+    - {{ pin_compatible('cspice', max_pin='x') }}
     - glm
-    - assimp
-    - cfitsio
-    - embree
-    - fftw
-    - gdal
-    - libtiff
-    - libpng
-    - libjpeg-turbo
     - tbb-devel
 
 test:

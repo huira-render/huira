@@ -51,11 +51,11 @@ jobs:
 
       - name: Install conda-build
         shell: bash -el {0}
-        run: conda install -y -n base conda-build
+        run: conda install -y -n base conda-build conda-forge-pinning
 
       - name: Build conda package
         shell: bash -el {0}
-        run: conda build packaging/recipe/ --output-folder conda-output
+        run: conda build packaging/recipe/ -m "$(conda info --base)/conda_build_config.yaml" --output-folder conda-output
 
       - name: Upload conda package artifact
         uses: actions/upload-artifact@v4
