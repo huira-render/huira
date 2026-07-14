@@ -26,6 +26,16 @@ class InstanceHandle : public NodeHandle<TSpectral, Instance<TSpectral>> {
     InstanceHandle() = delete;
     using NodeHandle<TSpectral, Instance<TSpectral>>::NodeHandle;
 
+    void look_at(const InstanceHandle<TSpectral>& target, const Vec3<double>& up = {0.0, 0.0, 1.0})
+    {
+        this->get()->look_at(*target.get(), up);
+    }
+
+    void look_at(const Vec3<double>& target_position, const Vec3<double>& up = {0.0, 0.0, 1.0})
+    {
+        this->get()->look_at(target_position, up);
+    }
+
     friend class FrameHandle<TSpectral>;
     friend class SceneView<TSpectral>;
 };

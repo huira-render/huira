@@ -66,6 +66,9 @@ class Instance : public Node<TSpectral> {
 
     std::string get_info() const override;
 
+    void look_at(const Node<TSpectral>& target, const Vec3<double>& up = {0.0, 0.0, 1.0});
+    void look_at(const Vec3<double>& target_position, const Vec3<double>& up = {0.0, 0.0, 1.0});
+
   private:
     Instantiable<TSpectral> asset_;
 
