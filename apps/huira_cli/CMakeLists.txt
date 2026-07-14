@@ -10,6 +10,9 @@ find_package(TCLAP REQUIRED)
 find_package(CURL REQUIRED)
 find_package(indicators REQUIRED)
 
+include(CustomSanitizeTargets)
+huira_strip_unix_libm(CURL::libcurl)
+
 target_link_libraries(huira_cli PRIVATE
     huira::huira
     TCLAP::TCLAP
