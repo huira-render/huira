@@ -29,11 +29,10 @@ template <typename U>
     requires std::derived_from<U, T> || std::same_as<U, T>
 std::shared_ptr<U> Handle<T>::get() const
 {
-    std::shared_ptr<T> p = get_();
-
     if constexpr (std::same_as<U, T>) {
-        return p;
+        return get_();
     } else {
+        std::shared_ptr<T> p = get_();
         std::shared_ptr<U> derived = std::dynamic_pointer_cast<U>(p);
         if (!derived) {
             HUIRA_THROW_ERROR("Handle does not point to the requested type");

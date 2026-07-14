@@ -200,8 +200,20 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
 
                                 if (!medium_stack.is_empty()) {
                                     const Medium<TSpectral>* current_medium = medium_stack.top();
-                                    auto opt_mi = current_medium->sample_free_path(ray, sampler);
-                                    auto props = current_medium->get_properties(ray.origin());
+                                    // After an alpha pass-through the ray keeps its original
+                                    // origin and only tnear advances, so the medium segment
+                                    // starts at at(tnear), not at the origin, and its length
+                                    // is measured from there. (Media only need an approximate
+                                    // start point; intersection exactness is preserved by the
+                                    // fixed-origin ray used for tracing.)
+                                    const float t_seg_start = ray.tnear();
+                                    const Ray<TSpectral> march_ray(ray.at(t_seg_start),
+                                                                   ray.direction());
+                                    const float t_seg = hit.t - t_seg_start;
+
+                                    auto opt_mi =
+                                        current_medium->sample_free_path(march_ray, sampler);
+                                    auto props = current_medium->get_properties(march_ray.origin());
                                     TSpectral ext = props.extinction();
 
                                     float avg_ext = 0.0f;
@@ -210,7 +222,7 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                                     }
                                     avg_ext /= static_cast<float>(TSpectral::size());
 
-                                    if (opt_mi && opt_mi->t < hit.t) {
+                                    if (opt_mi && opt_mi->t < t_seg) {
                                         float t = opt_mi->t;
                                         TSpectral Tr{0.f};
                                         for (std::size_t c = 0; c < TSpectral::size(); ++c) {
@@ -278,9 +290,9 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                                     } else {
                                         TSpectral Tr{0.f};
                                         for (std::size_t c = 0; c < TSpectral::size(); ++c) {
-                                            Tr[c] = std::exp(-ext[c] * hit.t);
+                                            Tr[c] = std::exp(-ext[c] * t_seg);
                                         }
-                                        float pdf = std::exp(-avg_ext * hit.t);
+                                        float pdf = std::exp(-avg_ext * t_seg);
                                         throughput = throughput * Tr * (1.0f / pdf);
                                     }
                                 }
@@ -354,15 +366,16 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
 
                                     if (params.opacity < 1.0f) {
                                         if (sampler.get_1d() > params.opacity) {
-                                            Vec3<float> pass_through_normal =
-                                                (glm::dot(ray.direction(), isect.normal_g) < 0.0f)
-                                                    ? -isect.normal_g
-                                                    : isect.normal_g;
-                                            Vec3<float> pass_through_origin = offset_intersection_(
-                                                isect.position, pass_through_normal);
-
-                                            ray = Ray<TSpectral>(pass_through_origin,
-                                                                 ray.direction());
+                                            // The direction is unchanged, so continue the SAME
+                                            // ray past this hit: origin and direction stay
+                                            // bit-exact and only tnear advances. This is exact
+                                            // (no coordinate-space offset, no epsilon), so a
+                                            // surface any resolvable distance beyond this one —
+                                            // e.g. a planet 6 km below a cloud shell seen from
+                                            // 3.8e8 m — can never be skipped or reordered.
+                                            ray = Ray<TSpectral>(ray.origin(),
+                                                                 ray.direction(),
+                                                                 advance_ray_t(hit.t));
 
                                             medium_stack.toggle(batch.primitive.get());
 
@@ -404,12 +417,16 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                                             glm::dot(ls.wi, isect.normal_g) <= 0.0f) {
                                             continue;
                                         }
+                                        // Direction differs from the incident ray, so a normal-
+                                        // direction offset (scaled by the propagated position
+                                        // error bound) is required: it guarantees tangent-plane
+                                        // clearance for any spawn direction, including grazing.
                                         Vec3<float> shadow_normal =
                                             (glm::dot(ls.wi, isect.normal_g) < 0.0f)
                                                 ? -isect.normal_g
                                                 : isect.normal_g;
-                                        Vec3<float> shadow_origin =
-                                            offset_intersection_(isect.position, shadow_normal);
+                                        Vec3<float> shadow_origin = offset_spawn_point(
+                                            isect.position, shadow_normal, isect.p_err);
                                         Ray<TSpectral> shadow_ray(shadow_origin, ls.wi);
                                         TSpectral transmittance = scene_view.evaluate_transmittance(
                                             shadow_ray, light_dist, medium_stack, sampler, time);
@@ -449,11 +466,14 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                                         break;
                                     }
 
+                                    // Direction changes: offset along the geometric normal by
+                                    // the propagated position-error bound (see interaction.hpp).
                                     Vec3<float> bounce_normal =
                                         (glm::dot(bs.wi, isect.normal_g) < 0.0f) ? -isect.normal_g
                                                                                  : isect.normal_g;
                                     Vec3<float> bounce_origin =
-                                        offset_intersection_(isect.position, bounce_normal);
+                                        offset_spawn_point(isect.position, bounce_normal,
+                                                           isect.p_err);
 
                                     prev_bsdf_pdf = bs.is_delta ? 0.0f : bs.pdf;
                                     prev_isect = shading_isect;

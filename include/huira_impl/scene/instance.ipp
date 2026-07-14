@@ -16,14 +16,16 @@ std::string Instance<TSpectral>::get_info() const
     return "Instance[" + std::to_string(this->id()) + "]" +
            (this->name().empty() ? "" : " " + this->name()) + " -> " +
            std::visit(
-               [](auto* ptr) {
-                   std::string info = ptr->get_info();
+               [](auto* ptr) -> std::string {
                    if constexpr (std::is_same_v<decltype(ptr), Mesh<TSpectral>*>) {
+                       std::string info = ptr->get_info();
                        if (ptr->material()) {
                            info += " -> " + ptr->material()->get_info();
                        }
+                       return info; 
+                   } else {
+                       return ptr->get_info(); 
                    }
-                   return info;
                },
                asset_);
 }

@@ -105,16 +105,19 @@ constexpr std::string Dimensionality<L, M, T, I, O, N, J, A, S>::to_si_string()
     denominator += get_si_unit_string(-1, A, "rad");
     denominator += get_si_unit_string(-1, S, "sr");
 
+    std::string result;
     if (denominator.empty() && numerator.empty()) {
-        return "dimensionless";
+        result = "dimensionless";
     } else {
         if (numerator.empty()) {
-            return "1 / " + denominator;
+            result = "1 / " + denominator;
         } else if (denominator.empty()) {
-            return numerator;
+            result = std::move(numerator);
         } else {
-            return numerator + " / " + denominator;
+            result = numerator + " / " + denominator;
         }
     }
+
+    return result;
 }
 } // namespace huira::units

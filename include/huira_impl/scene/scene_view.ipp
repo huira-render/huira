@@ -1,3 +1,5 @@
+#include <algorithm>
+#include <cmath>
 #include <limits>
 #include <memory>
 #include <vector>
@@ -177,7 +179,7 @@ SceneView<TSpectral>::intersect(const Ray<TSpectral>& ray, float time, unsigned 
     rayhit.ray.dir_x = ray.direction().x;
     rayhit.ray.dir_y = ray.direction().y;
     rayhit.ray.dir_z = ray.direction().z;
-    rayhit.ray.tnear = 0.f;
+    rayhit.ray.tnear = ray.tnear();
     rayhit.ray.tfar = std::numeric_limits<float>::infinity();
     rayhit.ray.time = time;
     rayhit.ray.mask = mask;
@@ -225,21 +227,33 @@ TSpectral SceneView<TSpectral>::evaluate_transmittance(const Ray<TSpectral>& ray
                                                        float time) const
 {
     TSpectral transmittance{1.0f};
-    Ray<TSpectral> current_ray = ray;
-    float distance_remaining = t_far;
-
     MediumStack<TSpectral> stack = initial_stack;
 
-    while (distance_remaining > 0.0f) {
-        HitRecord hit = this->intersect(current_ray, time, MASK_GEOMETRY_);
+    // March a SINGLE ray with an advancing tnear ("same-ray continuation")
+    // instead of re-spawning at each crossed surface. The origin, direction,
+    // and therefore the t parameterization stay bit-exact for the entire
+    // march, so surfaces are always ordered by their true t and no
+    // coordinate-space offset (and no scene-scale epsilon) is needed between
+    // segments. hit.t is always the absolute distance from the original
+    // origin, so it compares directly against t_far.
+    Ray<TSpectral> occlusion_ray = ray;
+    float t_start = ray.tnear();
 
-        const bool surface_in_range = hit.hit() && hit.t < distance_remaining;
-        const float segment_length = surface_in_range ? hit.t : distance_remaining;
+    while (t_start < t_far) {
+        HitRecord hit = this->intersect(occlusion_ray, time, MASK_GEOMETRY_);
+
+        const bool surface_in_range = hit.hit() && hit.t < t_far;
+        const float segment_end = surface_in_range ? hit.t : t_far;
+        const float segment_length = segment_end - t_start;
 
         if (const Medium<TSpectral>* active = stack.top(); active != nullptr) {
-            transmittance *= active->evaluate_transmittance(current_ray, segment_length, sampler);
+            // Media only need an approximate segment start point; exactness
+            // matters solely for intersection, which keeps the fixed origin.
+            Ray<TSpectral> march_ray(occlusion_ray.at(t_start), occlusion_ray.direction());
+            transmittance *= active->evaluate_transmittance(march_ray, segment_length, sampler);
             if (transmittance.max() <= 0.0f) {
-                return TSpectral{0.0f};
+                transmittance = TSpectral{0.0f};
+                return transmittance;
             }
         }
 
@@ -247,44 +261,31 @@ TSpectral SceneView<TSpectral>::evaluate_transmittance(const Ray<TSpectral>& ray
             break;
         }
 
-        Interaction<TSpectral> isect = this->resolve_hit(current_ray, hit);
+        Interaction<TSpectral> isect = this->resolve_hit(occlusion_ray, hit);
         const auto& mapping = instance_mappings_[hit.inst_id];
         const auto& batch = primitives_[mapping.batch_index];
         const auto* material = batch.primitive->material.get();
 
         auto [params, shading_isect] = material->evaluate(isect);
 
-        if (params.opacity < 1.0f) {
-            if (sampler.get_1d() > params.opacity) {
-                Vec3<float> bounce_normal =
-                    (glm::dot(current_ray.direction(), isect.normal_g) < 0.0f) ? -isect.normal_g
-                                                                               : isect.normal_g;
-                current_ray = Ray<TSpectral>(offset_intersection_(isect.position, bounce_normal),
-                                             current_ray.direction());
+        const bool stochastic_pass_through =
+            (params.opacity < 1.0f) && (sampler.get_1d() > params.opacity);
 
-                stack.toggle(batch.primitive.get());
-
-                distance_remaining -= hit.t;
-                continue;
+        if (!stochastic_pass_through) {
+            TSpectral surface_transmission = params.transmission;
+            if (surface_transmission.max() <= 0.0f) {
+                transmittance = TSpectral{0.0f};
+                return transmittance;
             }
+            transmittance *= surface_transmission;
         }
-
-        TSpectral surface_transmission = params.transmission;
-        if (surface_transmission.max() <= 0.0f) {
-            return TSpectral{0.0f};
-        }
-
-        transmittance *= surface_transmission;
-
-        Vec3<float> bounce_normal = (glm::dot(current_ray.direction(), isect.normal_g) < 0.0f)
-                                        ? -isect.normal_g
-                                        : isect.normal_g;
-        current_ray = Ray<TSpectral>(offset_intersection_(isect.position, bounce_normal),
-                                     current_ray.direction());
 
         stack.toggle(batch.primitive.get());
 
-        distance_remaining -= hit.t;
+        // Continue past this surface along the same parameterization:
+        t_start = hit.t;
+        occlusion_ray = Ray<TSpectral>(
+            occlusion_ray.origin(), occlusion_ray.direction(), advance_ray_t(hit.t));
     }
 
     return transmittance;
@@ -312,7 +313,20 @@ Interaction<TSpectral> SceneView<TSpectral>::resolve_hit(const Ray<TSpectral>& r
     const auto& instance_transforms = batch.instances[mapping.instance_index];
     const Transform<float>& xf = instance_transforms[0];
 
+    // Position error accumulates in the primitive's LOCAL frame (surface
+    // reconstruction / barycentric interpolation, rotation) and in the WORLD
+    // frame (translation rounding), so the bound must scale with whichever
+    // coordinate magnitude is larger. Note the local magnitude can dominate:
+    // e.g. a camera in low orbit has small camera-relative coordinates but
+    // planet-radius local coordinates.
+    const Vec3<float> p_local = isect.position;
     isect.position = xf.apply_to_point(isect.position);
+
+    const float local_mag =
+        std::max({std::abs(p_local.x), std::abs(p_local.y), std::abs(p_local.z)});
+    const float world_mag = std::max(
+        {std::abs(isect.position.x), std::abs(isect.position.y), std::abs(isect.position.z)});
+    isect.p_err = SPAWN_POINT_ERROR_SCALE * std::max(local_mag, world_mag);
     isect.normal_g = glm::normalize(xf.apply_to_direction(hit.Ng));
     isect.normal_g =
         glm::dot(ray.direction(), isect.normal_g) < 0.0f ? isect.normal_g : -isect.normal_g;
@@ -580,9 +594,13 @@ void SceneView<TSpectral>::build_tlas_()
 {
     tlas_ = rtcNewScene(device_->get());
     bool motion_blur = (temporal_samples_.size() != 1);
+    // Robust traversal: required so BVH plane tests cannot drop marginal hits
+    // at extreme coordinate ranges (planetary camera-relative scenes).
+    RTCSceneFlags scene_flags = RTC_SCENE_FLAG_ROBUST;
     if (motion_blur) {
-        rtcSetSceneFlags(tlas_, RTC_SCENE_FLAG_DYNAMIC);
+        scene_flags = static_cast<RTCSceneFlags>(scene_flags | RTC_SCENE_FLAG_DYNAMIC);
     }
+    rtcSetSceneFlags(tlas_, scene_flags);
 
     // Add Primitives
     for (std::size_t batch_idx = 0; batch_idx < primitives_.size(); ++batch_idx) {

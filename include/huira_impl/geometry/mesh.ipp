@@ -151,6 +151,10 @@ void Mesh<TSpectral>::build_blas_() const
             std::to_string(static_cast<int>(rtcGetDeviceError(this->device_->get()))) + ").");
     }
 
+    // Robust traversal: required so BVH plane tests cannot drop marginal hits
+    // at extreme coordinate ranges (planetary camera-relative scenes).
+    rtcSetSceneFlags(this->blas_.get(), RTC_SCENE_FLAG_ROBUST);
+
     rtcAttachGeometry(this->blas_.get(), geom);
     rtcReleaseGeometry(geom);
 

@@ -73,7 +73,7 @@ class CompactOutput : public TCLAP::StdOutput {
             result += "--" + name;
         } else {
             // Positional/unlabeled arg
-            return "<" + name + ">";
+            result = "<" + name + ">";
         }
         return result;
     }
