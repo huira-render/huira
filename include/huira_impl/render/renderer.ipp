@@ -471,9 +471,8 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                                     Vec3<float> bounce_normal =
                                         (glm::dot(bs.wi, isect.normal_g) < 0.0f) ? -isect.normal_g
                                                                                  : isect.normal_g;
-                                    Vec3<float> bounce_origin =
-                                        offset_spawn_point(isect.position, bounce_normal,
-                                                           isect.p_err);
+                                    Vec3<float> bounce_origin = offset_spawn_point(
+                                        isect.position, bounce_normal, isect.p_err);
 
                                     prev_bsdf_pdf = bs.is_delta ? 0.0f : bs.pdf;
                                     prev_isect = shading_isect;

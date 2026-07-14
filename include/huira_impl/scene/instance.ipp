@@ -22,9 +22,9 @@ std::string Instance<TSpectral>::get_info() const
                        if (ptr->material()) {
                            info += " -> " + ptr->material()->get_info();
                        }
-                       return info; 
+                       return info;
                    } else {
-                       return ptr->get_info(); 
+                       return ptr->get_info();
                    }
                },
                asset_);

@@ -24,8 +24,7 @@ namespace huira {
  */
 static inline float lambert_phase_function(float phase)
 {
-    return std::max(
-        0.f, (std::sin(phase) + (PI<float>() - phase) * std::cos(phase)) / PI<float>());
+    return std::max(0.f, (std::sin(phase) + (PI<float>() - phase) * std::cos(phase)) / PI<float>());
 }
 
 /**

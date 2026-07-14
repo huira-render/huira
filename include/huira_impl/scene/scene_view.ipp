@@ -284,8 +284,8 @@ TSpectral SceneView<TSpectral>::evaluate_transmittance(const Ray<TSpectral>& ray
 
         // Continue past this surface along the same parameterization:
         t_start = hit.t;
-        occlusion_ray = Ray<TSpectral>(
-            occlusion_ray.origin(), occlusion_ray.direction(), advance_ray_t(hit.t));
+        occlusion_ray =
+            Ray<TSpectral>(occlusion_ray.origin(), occlusion_ray.direction(), advance_ray_t(hit.t));
     }
 
     return transmittance;
