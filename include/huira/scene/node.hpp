@@ -26,6 +26,12 @@ class FrameNode;
 template <IsSpectral TSpectral, typename TNode>
 class NodeHandle;
 
+template <IsSpectral TSpectral>
+class LookAtCallback;
+
+template <IsSpectral TSpectral>
+class LookAtPositionCallback;
+
 enum class TransformMode {
     MANUAL_TRANSFORM,
     SPICE_TRANSFORM,
@@ -173,6 +179,9 @@ class Node : public SceneObject<Node<TSpectral>> {
     friend class Scene<TSpectral>;
     friend class FrameNode<TSpectral>;
     friend class SceneView<TSpectral>;
+
+    friend class LookAtCallback<TSpectral>;
+    friend class LookAtPositionCallback<TSpectral>;
 };
 } // namespace huira
 

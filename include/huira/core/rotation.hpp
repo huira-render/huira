@@ -62,6 +62,9 @@ class Rotation {
     Vec3<T> y_axis() const;
     Vec3<T> z_axis() const;
 
+    units::Radian angle() const;
+    Vec3<T> axis() const;
+
     Rotation operator*(const Rotation& b) const;
     Rotation& operator*=(const Rotation& b);
 

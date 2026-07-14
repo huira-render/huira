@@ -374,6 +374,38 @@ Vec3<T> Rotation<T>::z_axis() const
 }
 
 /**
+ * @brief Get the rotation angle in radians.
+ * @return units::Radian Rotation angle
+ */
+template <IsFloatingPoint T>
+units::Radian Rotation<T>::angle() const
+{
+    // Convert matrix to quaternion to safely extract the angle
+    Quaternion<T> q = this->local_to_parent_quaternion();
+    return units::Radian(glm::angle(q));
+}
+
+/**
+ * @brief Get the normalized rotation axis.
+ * @return Vec3<T> Normalized rotation axis
+ */
+template <IsFloatingPoint T>
+Vec3<T> Rotation<T>::axis() const
+{
+    // Convert matrix to quaternion to safely extract the axis
+    Quaternion<T> q = this->local_to_parent_quaternion();
+    Vec3<T> ax = glm::axis(q);
+
+    // Safety check: if there is no rotation, return a default valid axis
+    T length2 = ax.x * ax.x + ax.y * ax.y + ax.z * ax.z;
+    if (length2 < std::numeric_limits<T>::epsilon()) {
+        return Vec3<T>{1.0, 0.0, 0.0};
+    }
+
+    return glm::normalize(ax);
+}
+
+/**
  * @brief Compose two rotations (this * b).
  * @param b Other rotation
  * @return Rotation<T> Composed rotation

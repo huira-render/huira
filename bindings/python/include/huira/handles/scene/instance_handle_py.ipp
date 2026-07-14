@@ -14,9 +14,21 @@ inline void bind_instance_handle(py::module_& m)
 {
     using HandleType = InstanceHandle<TSpectral>;
 
-    auto cls = py::class_<HandleType>(m, "InstanceHandle")
-                   .def("__bool__", &HandleType::valid)
-                   .def("__repr__", [](const HandleType&) { return "<InstanceHandle>"; });
+    auto cls =
+        py::class_<HandleType>(m, "InstanceHandle")
+            .def("__bool__", &HandleType::valid)
+            .def("__repr__", [](const HandleType&) { return "<InstanceHandle>"; })
+            // Bind the overload taking another InstanceHandle target
+            .def("look_at",
+                 py::overload_cast<const InstanceHandle<TSpectral>&, const Vec3<double>&>(
+                     &HandleType::look_at),
+                 py::arg("target"),
+                 py::arg("up") = Vec3<double>{0.0, 0.0, 1.0})
+            // Bind the overload taking a static target position
+            .def("look_at",
+                 py::overload_cast<const Vec3<double>&, const Vec3<double>&>(&HandleType::look_at),
+                 py::arg("target_position"),
+                 py::arg("up") = Vec3<double>{0.0, 0.0, 1.0});
 
     bind_handle_methods<Instance<TSpectral>>(cls);
     bind_node_handle_methods<TSpectral, Instance<TSpectral>>(cls);
