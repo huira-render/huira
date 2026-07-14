@@ -19,7 +19,7 @@ Initial work on Huira has been on the basic architecture as well as distribution
 
 If there are features you wish to see, that you don't see listed here, please feel free to submit a [Feature Request](https://github.com/huira-render/huira/issues/new?template=feature_request.md)
 
-## Currently Stable Features (as of v0.9.5)
+## Currently Stable Features (as of v0.9.6)
 - Radiometrically accurate rendering
 - Planetary BRDFS including Lambertian, Oren-Nayar, Cook-Torrance, McEwen, Lommel-Seeliger
 - Basic volumetric rendering of planetary atmospheres
