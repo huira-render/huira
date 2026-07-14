@@ -24,8 +24,9 @@ namespace huira {
  */
 static inline float lambert_phase_function(float phase)
 {
-    return (std::sin(phase) + (PI<float>() - phase) * std::cos(phase)) / PI<float>();
-};
+    return std::max(
+        0.f, (std::sin(phase) + (PI<float>() - phase) * std::cos(phase)) / PI<float>());
+}
 
 /**
  * @brief Constructs an UnresolvedLambertianSphere with specified properties.
@@ -137,7 +138,8 @@ void UnresolvedLambertianSphere<TSpectral>::resolve_irradiance(
             TSpectral incident_irradiance =
                 light_->irradiance_at(self_transform.position, light_inst.transforms[0]);
 
-            float phase = std::acos(glm::dot(V, L));
+            float cos_phase = std::clamp(glm::dot(V, L), -1.f, 1.f);
+            float phase = std::acos(cos_phase);
             float A = PI<float>() * radius_ * radius_; // Cross-sectional area
             TSpectral reflectedPower =
                 albedo_ * A * incident_irradiance * lambert_phase_function(phase);
