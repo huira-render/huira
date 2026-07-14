@@ -171,9 +171,8 @@ void Ellipsoid<TSpectral>::intersect_callback(const RTCIntersectFunctionNArgumen
 
         const double t_u = static_cast<double>(t_candidate) * L;
         const glm::dvec3 P_s = O_s + t_u * D_u;
-        const double r_max =
-            std::max({static_cast<double>(r.x), static_cast<double>(r.y),
-                      static_cast<double>(r.z)});
+        const double r_max = std::max(
+            {static_cast<double>(r.x), static_cast<double>(r.y), static_cast<double>(r.z)});
         const glm::dvec3 normal = (P_s * inv_r) * r_max;
 
         RTCHitN_Ng_x(hit, args->N, 0) = static_cast<float>(normal.x);
@@ -183,8 +182,8 @@ void Ellipsoid<TSpectral>::intersect_callback(const RTCIntersectFunctionNArgumen
         const glm::dvec3 P_unit = glm::normalize(P_s);
         const float u = static_cast<float>((std::atan2(P_unit.y, P_unit.x) + PI<double>()) /
                                            (2.0 * PI<double>()));
-        const float v = static_cast<float>(std::acos(std::clamp(P_unit.z, -1.0, 1.0)) /
-                                           PI<double>());
+        const float v =
+            static_cast<float>(std::acos(std::clamp(P_unit.z, -1.0, 1.0)) / PI<double>());
 
         RTCHitN_u(hit, args->N, 0) = u;
         RTCHitN_v(hit, args->N, 0) = v;

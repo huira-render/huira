@@ -98,9 +98,8 @@ inline constexpr float SPAWN_POINT_ERROR_SCALE = 16.0f * std::numeric_limits<flo
  * @param n       Geometric normal, pre-flipped toward the spawn hemisphere
  * @param p_err   Position error bound from Interaction::p_err
  */
-inline Vec3<float> offset_spawn_point(const Vec3<float>& p,
-                                      const Vec3<float>& n,
-                                      float p_err) noexcept
+inline Vec3<float>
+offset_spawn_point(const Vec3<float>& p, const Vec3<float>& n, float p_err) noexcept
 {
     return p + n * p_err;
 }
