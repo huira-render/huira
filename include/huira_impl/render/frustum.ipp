@@ -100,18 +100,17 @@ Frustum<TSpectral>::clip_triangle(const Triangle<TSpectral>& triangle) const
 template <IsSpectral TSpectral>
 std::vector<std::pair<float, float>> Frustum<TSpectral>::clip_arc(const TrajectoryArc& arc) const
 {
-    if (plane_normals_.empty()) {
-        return {{0.0f, 1.0f}};
-    }
-
     std::vector<std::pair<float, float>> result = {{0.0f, 1.0f}};
+    if (plane_normals_.empty()) {
+        return result;
+    }
 
     for (const auto& normal : plane_normals_) {
         auto plane_intervals = arc_intervals_inside_plane_(arc, normal);
         result = intersect_intervals_(result, plane_intervals);
 
         if (result.empty()) {
-            return {};
+            return result;
         }
     }
 

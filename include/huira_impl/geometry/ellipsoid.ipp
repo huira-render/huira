@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cmath>
 #include <limits>
 
@@ -65,6 +66,9 @@ void Ellipsoid<TSpectral>::build_blas_() const
     rtcCommitGeometry(geom);
 
     this->blas_.reset(rtcNewScene(this->device_->get()));
+    // Robust traversal: required so BVH plane tests cannot drop marginal hits
+    // at extreme coordinate ranges (planetary camera-relative scenes).
+    rtcSetSceneFlags(this->blas_.get(), RTC_SCENE_FLAG_ROBUST);
     rtcAttachGeometry(this->blas_.get(), geom);
     rtcReleaseGeometry(geom);
 
@@ -98,44 +102,61 @@ void Ellipsoid<TSpectral>::intersect_callback(const RTCIntersectFunctionNArgumen
 
     const auto* ellipsoid = static_cast<const Ellipsoid<TSpectral>*>(args->geometryUserPtr);
     Vec3<float> r = ellipsoid->radii_;
-    Vec3<float> inv_r = {1.0f / r.x, 1.0f / r.y, 1.0f / r.z};
 
     RTCRayHitN* rayhit = args->rayhit;
     RTCRayN* ray = RTCRayHitN_RayN(rayhit, args->N);
     RTCHitN* hit = RTCRayHitN_HitN(rayhit, args->N);
 
-    Vec3<float> O = {RTCRayN_org_x(ray, args->N, 0),
-                     RTCRayN_org_y(ray, args->N, 0),
-                     RTCRayN_org_z(ray, args->N, 0)};
-    Vec3<float> D = {RTCRayN_dir_x(ray, args->N, 0),
-                     RTCRayN_dir_y(ray, args->N, 0),
-                     RTCRayN_dir_z(ray, args->N, 0)};
+    // The quadratic is solved in DOUBLE precision using the geometric
+    // (closest-approach) form of the discriminant. The naive float32
+    // B*B - 4*C form cancels catastrophically once the origin is far from
+    // the body: at |O|/r ~ 60 (Earth seen from lunar range) it loses ~10
+    // bits: near-hit t errors reach ~6 km over the disk and ~57 km at
+    // grazing (limb) incidence, corrupting depth output, hit positions,
+    // and the u/v texture coordinates derived from them.
+    // In double with the stable form, the t error is limited by the float32
+    // quantization of the ray itself (~1 ULP of t). Cost is negligible for
+    // a single analytic primitive.
+    const glm::dvec3 inv_r = {1.0 / static_cast<double>(r.x),
+                              1.0 / static_cast<double>(r.y),
+                              1.0 / static_cast<double>(r.z)};
 
-    Vec3<float> O_s = O * inv_r;
-    Vec3<float> D_s = D * inv_r;
+    const glm::dvec3 O = {static_cast<double>(RTCRayN_org_x(ray, args->N, 0)),
+                          static_cast<double>(RTCRayN_org_y(ray, args->N, 0)),
+                          static_cast<double>(RTCRayN_org_z(ray, args->N, 0))};
+    const glm::dvec3 D = {static_cast<double>(RTCRayN_dir_x(ray, args->N, 0)),
+                          static_cast<double>(RTCRayN_dir_y(ray, args->N, 0)),
+                          static_cast<double>(RTCRayN_dir_z(ray, args->N, 0))};
 
-    float L = glm::length(D_s);
-    Vec3<float> D_u = D_s / L;
+    const glm::dvec3 O_s = O * inv_r;
+    const glm::dvec3 D_s = D * inv_r;
 
-    float B = 2.0f * glm::dot(O_s, D_u);
-    float C = glm::dot(O_s, O_s) - 1.0f;
+    const double L = glm::length(D_s);
+    const glm::dvec3 D_u = D_s / L;
 
-    float discriminant = B * B - 4.0f * C;
-    if (discriminant < 0.0f) {
+    // Signed distance along D_u to the point of closest approach is -b:
+    const double b = glm::dot(O_s, D_u);
+    // Perpendicular offset of the (unit) sphere center from the ray:
+    const glm::dvec3 m = O_s - b * D_u;
+    // Stable discriminant: 1 - |m|^2 == (B^2 - 4C)/4 without the cancellation.
+    const double discriminant = 1.0 - glm::dot(m, m);
+    if (discriminant < 0.0) {
         return;
     }
 
-    float sqrt_disc = std::sqrt(discriminant);
-    float q = -0.5f * (B + std::copysign(sqrt_disc, B));
-    float t0_u = q;
-    float t1_u = C / q;
+    const double sqrt_disc = std::sqrt(discriminant);
+    // Citardauq split: compute the non-cancelling root directly, the other via C/q.
+    const double q = -(b + std::copysign(sqrt_disc, b));
+    const double C = glm::dot(O_s, O_s) - 1.0;
+    double t0_u = q;
+    double t1_u = C / q;
 
     if (t0_u > t1_u) {
         std::swap(t0_u, t1_u);
     }
 
-    float t0 = t0_u / L;
-    float t1 = t1_u / L;
+    const float t0 = static_cast<float>(t0_u / L);
+    const float t1 = static_cast<float>(t1_u / L);
 
     // A lambda allows us to cleanly test t0, and if rejected by alpha, test t1
     auto test_hit = [&](float t_candidate) -> bool {
@@ -148,18 +169,22 @@ void Ellipsoid<TSpectral>::intersect_callback(const RTCIntersectFunctionNArgumen
         float old_tfar = RTCRayN_tfar(ray, args->N, 0);
         RTCRayN_tfar(ray, args->N, 0) = t_candidate;
 
-        float t_u = t_candidate * L;
-        Vec3<float> P_s = O_s + t_u * D_u;
-        float r_max = std::max({r.x, r.y, r.z});
-        Vec3<float> normal = (P_s * inv_r) * r_max;
+        const double t_u = static_cast<double>(t_candidate) * L;
+        const glm::dvec3 P_s = O_s + t_u * D_u;
+        const double r_max =
+            std::max({static_cast<double>(r.x), static_cast<double>(r.y),
+                      static_cast<double>(r.z)});
+        const glm::dvec3 normal = (P_s * inv_r) * r_max;
 
-        RTCHitN_Ng_x(hit, args->N, 0) = normal.x;
-        RTCHitN_Ng_y(hit, args->N, 0) = normal.y;
-        RTCHitN_Ng_z(hit, args->N, 0) = normal.z;
+        RTCHitN_Ng_x(hit, args->N, 0) = static_cast<float>(normal.x);
+        RTCHitN_Ng_y(hit, args->N, 0) = static_cast<float>(normal.y);
+        RTCHitN_Ng_z(hit, args->N, 0) = static_cast<float>(normal.z);
 
-        Vec3<float> P_unit = glm::normalize(O_s + t_u * D_u);
-        float u = (std::atan2(P_unit.y, P_unit.x) + PI<float>()) / (2.0f * PI<float>());
-        float v = std::acos(P_unit.z) / PI<float>();
+        const glm::dvec3 P_unit = glm::normalize(P_s);
+        const float u = static_cast<float>((std::atan2(P_unit.y, P_unit.x) + PI<double>()) /
+                                           (2.0 * PI<double>()));
+        const float v = static_cast<float>(std::acos(std::clamp(P_unit.z, -1.0, 1.0)) /
+                                           PI<double>());
 
         RTCHitN_u(hit, args->N, 0) = u;
         RTCHitN_v(hit, args->N, 0) = v;
