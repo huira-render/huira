@@ -81,6 +81,7 @@ inline Transform<float> interpolate_transform(const std::vector<Transform<float>
         return transforms[0];
     }
 
+    t = std::clamp(t, 0.0f, 1.0f);
     float scaled_t = t * static_cast<float>(transforms.size() - 1);
     std::size_t idx = static_cast<std::size_t>(std::floor(scaled_t));
     idx = std::min(idx, transforms.size() - 2);
@@ -244,7 +245,7 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                                                                       time);
 
                                             auto sample = light_instance.light->sample_li(
-                                                vol_isect, current_transform, this->sampler_);
+                                                vol_isect, current_transform, sampler);
 
                                             if (!sample) {
                                                 continue;
@@ -404,7 +405,7 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                                             interpolate_transform(light_instance.transforms, time);
 
                                         auto sample = light_instance.light->sample_li(
-                                            isect, current_transform, this->sampler_);
+                                            isect, current_transform, sampler);
 
                                         if (!sample) {
                                             continue;
@@ -481,7 +482,8 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
 
                                     // Russian roulette (after a few bounces):
                                     if (bounce >= 3) {
-                                        float p_continue = std::min(0.95f, throughput.max());
+                                        float p_continue =
+                                            std::clamp(throughput.max(), 0.05f, 0.95f);
                                         if (sampler.get_1d() > p_continue) {
                                             break;
                                         }
