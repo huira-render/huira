@@ -358,56 +358,18 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                                         albedo_total += params.albedo;
                                     }
 
-                                    // Direct lighting (next event estimation)
+                                    // Direct lighting (next event estimation):
                                     for (const auto& light_instance : lights) {
-                                        Transform<float> current_transform =
-                                            interpolate_transform(light_instance.transforms, time);
-
-                                        auto sample = light_instance.light->sample_li(
-                                            isect, current_transform, sampler);
-
-                                        if (!sample) {
-                                            continue;
-                                        }
-                                        const auto& ls = *sample;
-                                        float light_dist = sample->distance;
-
-                                        // Shadow test:
-                                        if (params.transmission.max() <= 0.0f &&
-                                            glm::dot(ls.wi, isect.normal_g) <= 0.0f) {
-                                            continue;
-                                        }
-                                        // Direction differs from the incident ray, so a normal-
-                                        // direction offset (scaled by the propagated position
-                                        // error bound) is required: it guarantees tangent-plane
-                                        // clearance for any spawn direction, including grazing.
-                                        Vec3<float> shadow_normal =
-                                            (glm::dot(ls.wi, isect.normal_g) < 0.0f)
-                                                ? -isect.normal_g
-                                                : isect.normal_g;
-                                        Vec3<float> shadow_origin = offset_spawn_point(
-                                            isect.position, shadow_normal, isect.p_err);
-                                        Ray<TSpectral> shadow_ray(shadow_origin, ls.wi);
-                                        TSpectral transmittance = scene_view.evaluate_transmittance(
-                                            shadow_ray, light_dist, medium_stack, sampler, time);
-                                        if (transmittance.max() <= 0.0f) {
-                                            continue;
-                                        }
-
-                                        // Evaluate BSDF:
-                                        TSpectral f = material->bsdf_eval(
-                                            isect.wo, ls.wi, {params, shading_isect});
-                                        float cos_theta =
-                                            std::max(0.0f, glm::dot(shading_isect.normal_s, ls.wi));
-
-                                        float mis_weight = 1.0f;
-                                        float bsdf_pdf = material->bsdf_pdf(
-                                            isect.wo, ls.wi, {params, shading_isect});
-                                        mis_weight = power_heuristic(ls.pdf, bsdf_pdf);
-
-                                        // Multiply the final direct lighting by the transmittance
-                                        TSpectral Ld = throughput * (ls.Li / ls.pdf) * f *
-                                                       cos_theta * mis_weight * transmittance;
+                                        TSpectral Ld =
+                                            throughput *
+                                            scene_view.sample_light_contribution_(light_instance,
+                                                                                  isect,
+                                                                                  material,
+                                                                                  params,
+                                                                                  shading_isect,
+                                                                                  medium_stack,
+                                                                                  sampler,
+                                                                                  time);
                                         if (bounce == 0) {
                                             direct_radiance += Ld;
                                         } else {
