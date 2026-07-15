@@ -232,7 +232,7 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                                                                       time);
 
                                             auto sample = light_instance.light->sample_li(
-                                                vol_isect, current_transform, this->sampler_);
+                                                vol_isect, current_transform, sampler);
 
                                             if (!sample) {
                                                 continue;
@@ -354,15 +354,8 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
 
                                     if (params.opacity < 1.0f) {
                                         if (sampler.get_1d() > params.opacity) {
-                                            Vec3<float> pass_through_normal =
-                                                (glm::dot(ray.direction(), isect.normal_g) < 0.0f)
-                                                    ? -isect.normal_g
-                                                    : isect.normal_g;
-                                            Vec3<float> pass_through_origin = offset_intersection_(
-                                                isect.position, pass_through_normal);
-
-                                            ray = Ray<TSpectral>(pass_through_origin,
-                                                                 ray.direction());
+                                            ray = Ray<TSpectral>(isect.position, ray.direction(),
+                                                                 spawn_ray_tnear(ray, hit.t));
 
                                             medium_stack.toggle(batch.primitive.get());
 
@@ -391,7 +384,7 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                                             interpolate_transform(light_instance.transforms, time);
 
                                         auto sample = light_instance.light->sample_li(
-                                            isect, current_transform, this->sampler_);
+                                            isect, current_transform, sampler);
 
                                         if (!sample) {
                                             continue;
@@ -404,13 +397,8 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                                             glm::dot(ls.wi, isect.normal_g) <= 0.0f) {
                                             continue;
                                         }
-                                        Vec3<float> shadow_normal =
-                                            (glm::dot(ls.wi, isect.normal_g) < 0.0f)
-                                                ? -isect.normal_g
-                                                : isect.normal_g;
-                                        Vec3<float> shadow_origin =
-                                            offset_intersection_(isect.position, shadow_normal);
-                                        Ray<TSpectral> shadow_ray(shadow_origin, ls.wi);
+                                        Ray<TSpectral> shadow_ray(isect.position, ls.wi,
+                                                                  spawn_ray_tnear(ray, hit.t));
                                         TSpectral transmittance = scene_view.evaluate_transmittance(
                                             shadow_ray, light_dist, medium_stack, sampler, time);
                                         if (transmittance.max() <= 0.0f) {
@@ -449,12 +437,6 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                                         break;
                                     }
 
-                                    Vec3<float> bounce_normal =
-                                        (glm::dot(bs.wi, isect.normal_g) < 0.0f) ? -isect.normal_g
-                                                                                 : isect.normal_g;
-                                    Vec3<float> bounce_origin =
-                                        offset_intersection_(isect.position, bounce_normal);
-
                                     prev_bsdf_pdf = bs.is_delta ? 0.0f : bs.pdf;
                                     prev_isect = shading_isect;
 
@@ -470,7 +452,8 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                                     }
 
                                     // Spawn next ray:
-                                    ray = Ray<TSpectral>(bounce_origin, bs.wi);
+                                    ray = Ray<TSpectral>(isect.position, bs.wi,
+                                                         spawn_ray_tnear(ray, hit.t));
 
                                     const float wo_side = glm::dot(isect.wo, isect.normal_g);
                                     const float wi_side = glm::dot(bs.wi, isect.normal_g);
@@ -574,6 +557,18 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
     if (frame_buffer.has_received_power() && camera->convolve_psf_) {
         const Image<TSpectral>& psf = camera->get_psf_kernel(0.0f, 0.0f);
         received_power.convolve(psf);
+    }
+
+    if (frame_buffer.has_received_power() && camera->aperture_->has_defocus() &&
+        !camera->depth_of_field_) {
+        const Image<float>& defocus_kernel = camera->aperture_->get_defocus_kernel(0.0f, 0.0f);
+        Image<TSpectral> spectral_defocus_kernel(defocus_kernel.width(), defocus_kernel.height());
+        for (int y = 0; y < defocus_kernel.height(); ++y) {
+            for (int x = 0; x < defocus_kernel.width(); ++x) {
+                spectral_defocus_kernel(x, y) = TSpectral{defocus_kernel(x, y)};
+            }
+        }
+        received_power.convolve(spectral_defocus_kernel);
     }
 
     auto end_clock = std::chrono::high_resolution_clock::now();

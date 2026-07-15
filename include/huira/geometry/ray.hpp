@@ -12,15 +12,17 @@ class Ray {
   public:
     Ray() noexcept = default;
 
-    Ray(const Vec3<float>& origin, const Vec3<float>& direction) noexcept
+    Ray(const Vec3<float>& origin, const Vec3<float>& direction, float tnear = 0.f) noexcept
         : origin_(origin), direction_(direction),
-          reciprocal_direction_{1.f / direction.x, 1.f / direction.y, 1.f / direction.z}
+          reciprocal_direction_{1.f / direction.x, 1.f / direction.y, 1.f / direction.z},
+          tnear_(tnear)
     {
     }
 
     // Accessors
     [[nodiscard]] const Vec3<float>& origin() const noexcept { return origin_; }
     [[nodiscard]] const Vec3<float>& direction() const noexcept { return direction_; }
+    [[nodiscard]] float tnear() const noexcept { return tnear_; }
     [[nodiscard]] const Vec3<float>& reciprocal_direction() const noexcept
     {
         return reciprocal_direction_;
@@ -33,7 +35,17 @@ class Ray {
     Vec3<float> origin_{0, 0, 0};
     Vec3<float> direction_{0, 0, -1};
     Vec3<float> reciprocal_direction_{0, 0, -1};
+    float tnear_{0.f};
 };
+
+/* Upper bound on p = origin + hit_t * direction roundoff for normalized rays;
+ * used as tnear to reject self-hits without moving the origin. */
+
+template <IsSpectral TSpectral>
+inline float spawn_ray_tnear(const Ray<TSpectral>& ray, float hit_t) noexcept
+{
+    return 1e-6f * (glm::length(ray.origin()) + hit_t);
+}
 
 struct HitRecord {
     float t = std::numeric_limits<float>::infinity(); ///< Ray parameter at hit

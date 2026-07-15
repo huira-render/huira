@@ -1,6 +1,7 @@
 #include <filesystem>
 #include <string>
 
+#include "huira/assets/io/qld_loader_py.ipp"
 #include "huira/cameras/distortion_coeffs_py.ipp"
 #include "huira/concepts/spectral_concepts.hpp"
 #include "huira/core/interval_py.ipp"
@@ -136,6 +137,7 @@ PYBIND11_MODULE(_huira, m)
     // Bind 8-bin Visible spectral specialization:
     auto visible8 = m.def_submodule("visible8", "Visible (8-bin) spectral specialization");
     bind_spectral<huira::Visible8>(visible8);
+    huira::bind_qld_loader(visible8);
 
     auto swir8 = m.def_submodule("swir8", "Short-wave infrared (8-bin) spectral specialization");
     bind_spectral<huira::SWIR8>(swir8);

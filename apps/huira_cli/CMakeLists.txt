@@ -4,17 +4,21 @@ add_executable(huira_cli
 
     commands/fetch_tycho2.cpp
     commands/process_tycho2.cpp
+    commands/fetch_moon_data.cpp
+    commands/dem2qld.cpp
 )
 
 find_package(TCLAP REQUIRED)
 find_package(CURL REQUIRED)
 find_package(indicators REQUIRED)
+find_package(GDAL REQUIRED)
 
 target_link_libraries(huira_cli PRIVATE
     huira::huira
     TCLAP::TCLAP
     CURL::libcurl
     indicators::indicators
+    GDAL::GDAL
 )
 
 target_include_directories(huira_cli PRIVATE

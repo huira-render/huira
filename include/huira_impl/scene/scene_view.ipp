@@ -177,7 +177,7 @@ SceneView<TSpectral>::intersect(const Ray<TSpectral>& ray, float time, unsigned 
     rayhit.ray.dir_x = ray.direction().x;
     rayhit.ray.dir_y = ray.direction().y;
     rayhit.ray.dir_z = ray.direction().z;
-    rayhit.ray.tnear = 0.f;
+    rayhit.ray.tnear = ray.tnear();
     rayhit.ray.tfar = std::numeric_limits<float>::infinity();
     rayhit.ray.time = time;
     rayhit.ray.mask = mask;
@@ -256,11 +256,8 @@ TSpectral SceneView<TSpectral>::evaluate_transmittance(const Ray<TSpectral>& ray
 
         if (params.opacity < 1.0f) {
             if (sampler.get_1d() > params.opacity) {
-                Vec3<float> bounce_normal =
-                    (glm::dot(current_ray.direction(), isect.normal_g) < 0.0f) ? -isect.normal_g
-                                                                               : isect.normal_g;
-                current_ray = Ray<TSpectral>(offset_intersection_(isect.position, bounce_normal),
-                                             current_ray.direction());
+                current_ray = Ray<TSpectral>(isect.position, current_ray.direction(),
+                                             spawn_ray_tnear(current_ray, hit.t));
 
                 stack.toggle(batch.primitive.get());
 
@@ -276,11 +273,8 @@ TSpectral SceneView<TSpectral>::evaluate_transmittance(const Ray<TSpectral>& ray
 
         transmittance *= surface_transmission;
 
-        Vec3<float> bounce_normal = (glm::dot(current_ray.direction(), isect.normal_g) < 0.0f)
-                                        ? -isect.normal_g
-                                        : isect.normal_g;
-        current_ray = Ray<TSpectral>(offset_intersection_(isect.position, bounce_normal),
-                                     current_ray.direction());
+        current_ray = Ray<TSpectral>(isect.position, current_ray.direction(),
+                                     spawn_ray_tnear(current_ray, hit.t));
 
         stack.toggle(batch.primitive.get());
 
