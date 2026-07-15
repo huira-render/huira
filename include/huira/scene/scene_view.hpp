@@ -61,6 +61,15 @@ class SceneView {
     [[nodiscard]] std::vector<Interaction<TSpectral>>
     resolve_hits(const std::vector<Ray<TSpectral>>& rays, const std::vector<HitRecord>& hits) const;
 
+    [[nodiscard]] const std::vector<LightInstance<TSpectral>>& lights() const { return lights_; }
+
+    [[nodiscard]] TSpectral direct_lit_radiance(
+        const Ray<TSpectral>& ray,
+        const HitRecord& hit,
+        RandomSampler<float>& sampler,
+        float time = 0.5f,
+        const MediumStack<TSpectral>& medium_stack = MediumStack<TSpectral>{}) const;
+
     Interval get_exposure_interval() const { return exposure_interval_; }
     units::Second duration() const { return exposure_interval_.duration(); }
     Time get_time() const { return exposure_interval_.center(); }
@@ -70,6 +79,16 @@ class SceneView {
   private:
     Interval exposure_interval_;
     std::vector<Time> temporal_samples_;
+
+    template <typename TMaterial, typename TParams>
+    TSpectral sample_light_contribution_(const LightInstance<TSpectral>& light_instance,
+                                         const Interaction<TSpectral>& isect,
+                                         const TMaterial* material,
+                                         const TParams& params,
+                                         const Interaction<TSpectral>& shading_isect,
+                                         const MediumStack<TSpectral>& medium_stack,
+                                         RandomSampler<float>& sampler,
+                                         float time) const;
 
     void traverse_and_collect_(const std::shared_ptr<Node<TSpectral>>& node,
                                const std::vector<Transform<double>>& observer_transforms,
@@ -122,11 +141,13 @@ class SceneView {
 
     struct InstanceMapping {
         GeometryType type;
-        std::size_t batch_index; // Index into geometry_ if type == Primitive
-        std::size_t
-            instance_index; // Index into geometry_[batch_index].instances if type == Primitive
 
-        std::size_t light_index; // Index into lights_ if type == Light
+        // if type == Primitive
+        std::size_t batch_index;    // Index into geometry_
+        std::size_t instance_index; // Index into geometry_[batch_index].instances
+
+        // if type == Light
+        std::size_t light_index; // Index into lights_
     };
     std::vector<InstanceMapping> instance_mappings_;
 
