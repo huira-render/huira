@@ -75,9 +75,14 @@ inline void bind_spectral_bins(py::module_& m)
 
         // Arithmetic: SpectralBins <op> SpectralBins
         .def(py::self += py::self)
-        .def(py::self -= py::self)
         .def(py::self *= py::self)
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wself-assign-overloaded"
+        .def(py::self -= py::self)
         .def(py::self /= py::self)
+#pragma clang diagnostic pop
+
         .def("__add__",
              [](const TSpectral& a, const TSpectral& b) {
                  TSpectral result(a);

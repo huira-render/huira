@@ -306,7 +306,7 @@ inline void enable_console_warning(bool enable = true)
     } while (0)
 
 namespace huira {
-std::vector<const char*>& get_thread_scope_stack()
+inline std::vector<const char*>& get_thread_scope_stack()
 {
     thread_local std::vector<const char*> scope_stack;
     return scope_stack;

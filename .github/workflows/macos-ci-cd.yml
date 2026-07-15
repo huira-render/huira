@@ -24,8 +24,12 @@ jobs:
 
   build-macos:
     needs: pre-checks
-    runs-on: macos-14
-    name: Build
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15-intel, macos-14]
+    runs-on: ${{ matrix.os }}
+    name: Build (${{ matrix.os }})
 
     steps:
       - name: Checkout code

@@ -29,9 +29,12 @@ jobs:
           - platform: linux
             os: ubuntu-22.04
             triplet: x64-linux
-          - platform: macos
+          - platform: macos-arm64
             os: macos-14
             triplet: arm64-osx
+          - platform: macos-x86_64
+            os: macos-15-intel
+            triplet: x64-osx
           - platform: windows
             os: windows-2022
             triplet: x64-windows

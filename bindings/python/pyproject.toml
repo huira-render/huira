@@ -68,10 +68,10 @@ environment = { CMAKE_TOOLCHAIN_FILE = "/opt/vcpkg/scripts/buildsystems/vcpkg.cm
 repair-wheel-command = "auditwheel repair -w {dest_dir} {wheel}"
 
 # ---------------------------------------------------------------------------
-# macOS: conda (ARM64 only, macOS 11.0+)
+# macOS: conda (ARM64 and x86_64, macOS 11.0+)
 # ---------------------------------------------------------------------------
 [tool.cibuildwheel.macos]
-archs = ["arm64"]
+archs = ["native"]
 before-all = [
     "curl -fsSL https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-MacOSX-$(uname -m).sh -o /tmp/miniforge.sh",
     "bash /tmp/miniforge.sh -b -p $HOME/conda",

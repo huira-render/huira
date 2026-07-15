@@ -45,6 +45,7 @@ This approach leverages [conda](https://github.com/conda-forge/miniforge) for st
 ### Step 1: conda Installation
 If conda isn't already available:
 
+**For Apple Silicon (ARM):**
 ```bash
 cd ~
 curl -L -O "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-MacOSX-arm64.sh"
@@ -53,7 +54,14 @@ chmod +x Miniforge3-MacOSX-arm64.sh
 ./Miniforge3-MacOSX-arm64.sh
 ```
 
-*NOTE: x86 (Intel) based macs are not officially supported, but likely will still work with the `Miniforge3-MacOSX-x86_64.sh` installer.  If you have an Intel-based mac, please try installing with the x86 installer and let us know if you encounter any issues.*
+**For Intel (x86):**
+```bash
+cd ~
+curl -L -O "https://github.com/conda-forge/miniforge/releases/download/26.3.2-3/Miniforge3-MacOSX-x86_64.sh"
+
+chmod +x Miniforge3-MacOSX-x86_64.sh
+./Miniforge3-MacOSX-x86_64.sh
+```
 
 Complete the installation prompts and verify conda activation by checking for `(base)` in your terminal prompt.  If it is not activated, you may need to run `source ~/miniforge3/bin/activate`.
 

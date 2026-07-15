@@ -8,7 +8,7 @@ add_executable(huira_cli
 
 find_package(TCLAP REQUIRED)
 find_package(CURL REQUIRED)
-find_package(indicators REQUIRED)
+find_package(Indicators REQUIRED)
 
 include(CustomSanitizeTargets)
 huira_strip_unix_libm(CURL::libcurl)

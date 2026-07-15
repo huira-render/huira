@@ -34,10 +34,16 @@ jobs:
       matrix:
         include:
           - platform: linux
+            os_family: linux
             os: ubuntu-22.04
-          - platform: macos
+          - platform: macos-arm64
+            os_family: macos
             os: macos-14
+          - platform: macos-x86_64
+            os_family: macos
+            os: macos-15-intel
           - platform: windows
+            os_family: windows
             os: windows-2022
     runs-on: ${{ matrix.os }}
     name: Build (${{ matrix.platform }})
@@ -51,7 +57,7 @@ jobs:
       - name: Set up build environment
         uses: ./.github/actions/setup
         with:
-          platform: ${{ matrix.platform }}
+          platform: ${{ matrix.os_family}}
 
       - name: Install Python bindings
         shell: bash -el {0}
@@ -74,12 +80,18 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-22.04
-            platform: linux
-          - os: macos-14
-            platform: macos
-          - os: windows-2022
-            platform: windows
+          - platform: linux
+            os_family: linux
+            os: ubuntu-22.04
+          - platform: macos-arm64
+            os_family: macos
+            os: macos-14
+          - platform: macos-x86_64
+            os_family: macos
+            os: macos-15-intel
+          - platform: windows
+            os_family: windows
+            os: windows-2022
     runs-on: ${{ matrix.os }}
     name: Wheels (${{ matrix.platform }})
 
