@@ -14,6 +14,7 @@
 
 #include "huira/concepts/spectral_concepts.hpp"
 #include "huira/core/types.hpp"
+#include "huira/render/shading_utils.hpp"
 #include "huira/volumes/medium.hpp"
 #include "huira/volumes/medium_stack.hpp"
 #include "huira_impl/render/psf_lut.ipp"
@@ -59,48 +60,6 @@ void Renderer<TSpectral>::render(SceneView<TSpectral>& scene_view,
     }
 
     this->get_camera(scene_view)->readout(frame_buffer, scene_view.duration());
-}
-
-inline float power_heuristic(float f_pdf, float g_pdf)
-{
-    if (std::isinf(f_pdf * f_pdf)) {
-        return 1.0f;
-    }
-    float f2 = f_pdf * f_pdf;
-    float g2 = g_pdf * g_pdf;
-    return f2 / (f2 + g2);
-}
-
-inline Transform<float> interpolate_transform(const std::vector<Transform<float>>& transforms,
-                                              float t)
-{
-    if (transforms.empty()) {
-        return Transform<float>{};
-    }
-    if (transforms.size() == 1) {
-        return transforms[0];
-    }
-
-    t = std::clamp(t, 0.0f, 1.0f);
-    float scaled_t = t * static_cast<float>(transforms.size() - 1);
-    std::size_t idx = static_cast<std::size_t>(std::floor(scaled_t));
-    idx = std::min(idx, transforms.size() - 2);
-    float frac = scaled_t - static_cast<float>(idx);
-
-    Transform<float> result;
-    // Linearly interpolate position
-    result.position =
-        transforms[idx].position * (1.0f - frac) + transforms[idx + 1].position * frac;
-
-    // Slerp rotation (assuming you are using glm::quat for rotations)
-    auto quat = transforms[idx].rotation.local_to_parent_quaternion();
-    auto next_quat = transforms[idx + 1].rotation.local_to_parent_quaternion();
-    result.rotation.from_local_to_parent(glm::slerp(quat, next_quat, frac));
-
-    // Scale interpolation
-    // result.scale = transforms[idx].scale * (1.0f - frac) + transforms[idx + 1].scale * frac;
-
-    return result;
 }
 
 /**
