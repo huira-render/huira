@@ -111,40 +111,65 @@ UnresolvedLambertianSphere<TSpectral>::UnresolvedLambertianSphere(
  * @brief Resolves the spectral irradiance based on Lambertian sphere scattering.
  *
  * Computes the apparent brightness of the sphere as seen by an observer at the
- * origin. The calculation accounts for:
- * - The incident irradiance from the light source
+ * origin, at each temporal sample of the exposure. The calculation accounts for:
+ * - The incident irradiance from each illuminating light source
  * - The sphere's cross-sectional area and albedo
  * - The Lambert phase function based on the phase angle
  * - Inverse square law falloff to the observer
  *
- * @param self_transform The world-space transform of the sphere.
- * @param lights A vector of all light instances in the scene.
- * @throws std::runtime_error if the sphere's light source is not found in the scene.
+ * If this sphere was constructed with a light-linking filter, only that light
+ * contributes; otherwise all lights in the scene view contribute.
+ *
+ * @param self_transforms Camera-relative transforms of this object, one per temporal sample.
+ * @param times Absolute times of the temporal samples.
+ * @param scene_view The fully constructed scene view.
+ * @param sampler Random sampler (reserved for the stochastic shadowing estimator).
+ * @throws std::runtime_error if a light-linked sphere's light source is not found in the scene.
  */
 template <IsSpectral TSpectral>
 void UnresolvedLambertianSphere<TSpectral>::resolve_irradiance(
-    const Transform<float>& self_transform, const std::vector<LightInstance<TSpectral>>& lights)
+    const std::vector<Transform<float>>& self_transforms,
+    const std::vector<Time>& times,
+    const SceneView<TSpectral>& scene_view,
+    RandomSampler<float>& sampler)
 {
-    // TODO Only first element of Light Transforms is used.
-    for (const auto& light_inst : lights) {
-        if (light_inst.light.get() == light_) {
-            Vec3<float> L =
-                glm::normalize(light_inst.transforms[0].position - self_transform.position);
+    (void)sampler;
+
+    const std::vector<LightInstance<TSpectral>>& lights = scene_view.lights();
+
+    bool filter_light_found = (light_ == nullptr);
+    std::vector<TSpectral> irradiances(self_transforms.size(), TSpectral{0});
+
+    for (std::size_t i = 0; i < self_transforms.size(); ++i) {
+        const Transform<float>& self_transform = self_transforms[i];
+        TSpectral total_irradiance{0};
+
+        for (const auto& light_inst : lights) {
+            if (light_ != nullptr && light_inst.light.get() != light_) {
+                continue;
+            }
+            filter_light_found = true;
+
+            // Use the light transform matching this temporal sample:
+            const std::size_t li = std::min(i, light_inst.transforms.size() - 1);
+            const Transform<float>& light_transform = light_inst.transforms[li];
+
+            Vec3<float> L = glm::normalize(light_transform.position - self_transform.position);
 
             float distance = glm::length(self_transform.position);
             Vec3<float> V = -self_transform.position / distance;
 
             TSpectral incident_irradiance =
-                light_->irradiance_at(self_transform.position, light_inst.transforms[0]);
+                light_inst.light->irradiance_at(self_transform.position, light_transform);
 
-            float cos_phase = std::clamp(glm::dot(V, L), -1.f, 1.f);
-            float phase = std::acos(cos_phase);
+            float phase = std::acos(std::clamp(glm::dot(V, L), -1.0f, 1.0f));
             float A = PI<float>() * radius_ * radius_; // Cross-sectional area
-            TSpectral reflectedPower =
+            TSpectral reflected_power =
                 albedo_ * A * incident_irradiance * lambert_phase_function(phase);
-
-            TSpectral reflected_irradiance =
-                reflectedPower / (4 * PI<float>() * distance * distance);
+            
+            TSpectral reflected_irradiance = (2.0f / 3.0f) * albedo_ * incident_irradiance *
+                                             (radius_ * radius_) / (distance * distance) *
+                                             lambert_phase_function(phase);
 
             if (!reflected_irradiance.valid()) {
                 HUIRA_THROW_ERROR("UnresolvedLambertianSphere::resolve_irradiance - Computed "
@@ -152,12 +177,39 @@ void UnresolvedLambertianSphere<TSpectral>::resolve_irradiance(
                                   reflected_irradiance.to_string());
             }
 
-            this->irradiance_ = reflected_irradiance;
-
-            return;
+            total_irradiance += reflected_irradiance;
         }
+
+        irradiances[i] = total_irradiance;
     }
-    HUIRA_THROW_ERROR("UnresolvedLambertianSphere::resolve_irradiance - Could not find its light "
-                      "source in SceneView");
+
+    if (!filter_light_found) {
+        HUIRA_THROW_ERROR("UnresolvedLambertianSphere::resolve_irradiance - Could not find its "
+                          "light source in SceneView");
+    }
+
+    this->set_resolved_irradiance_(std::move(irradiances), times);
 }
+
+/**
+ * @brief Validates the sphere's radius and albedo.
+ *
+ * @throws std::runtime_error if the radius is not a positive finite value or the
+ *         albedo is not a valid ratio.
+ */
+template <IsSpectral TSpectral>
+void UnresolvedLambertianSphere<TSpectral>::validate_shape_and_albedo_() const
+{
+    if (radius_ <= 0.f || std::isnan(radius_) || std::isinf(radius_)) {
+        HUIRA_THROW_ERROR("UnresolvedLambertianSphere::UnresolvedLambertianSphere - Radius must be "
+                          "a positive finite value");
+    }
+
+    if (!albedo_.valid_ratio()) {
+        HUIRA_THROW_ERROR(
+            "UnresolvedLambertianSphere::UnresolvedLambertianSphere - Invalid spectral albedo: " +
+            albedo_.to_string());
+    }
+}
+
 } // namespace huira

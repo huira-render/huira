@@ -136,10 +136,11 @@ SceneView<TSpectral>::SceneView(const Scene<TSpectral>& scene,
 
     // Resolve all unresolved objects now that we have light positions
     for (auto& unresolved_object : unresolved_objects_) {
-        // NOTE: Here we use the irradiance computed using the transform at the start of the
-        // interval
-        unresolved_object.unresolved_object->resolve_irradiance(unresolved_object.transforms[0],
-                                                                lights_);
+        RandomSampler<float> sampler(
+            static_cast<unsigned int>(unresolved_object.unresolved_object->id()));
+
+        unresolved_object.unresolved_object->resolve_irradiance(
+            unresolved_object.transforms, temporal_samples_, *this, sampler);
     }
 
     build_tlas_();

@@ -29,16 +29,20 @@ class UnresolvedLambertianSphere : public UnresolvedObject<TSpectral> {
                                InstanceHandle<TSpectral> light_instance,
                                float albedo);
 
-    void resolve_irradiance(const Transform<float>& self_transform,
-                            const std::vector<LightInstance<TSpectral>>& lights) override;
+    void resolve_irradiance(const std::vector<Transform<float>>& self_transforms,
+                            const std::vector<Time>& times,
+                            const SceneView<TSpectral>& scene_view,
+                            RandomSampler<float>& sampler) override;
 
     std::string type() const override { return "UnresolvedLambertianSphere"; }
 
   private:
     float radius_;
-    std::shared_ptr<Instance<TSpectral>> light_instance_;
-    Light<TSpectral>* light_;
+    std::shared_ptr<Instance<TSpectral>> light_instance_ = nullptr;
+    Light<TSpectral>* light_ = nullptr;
     TSpectral albedo_;
+
+    void validate_shape_and_albedo_() const;
 };
 } // namespace huira
 
