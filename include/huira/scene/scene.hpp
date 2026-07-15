@@ -129,6 +129,10 @@ class Scene {
                            std::string name = "");
     UnresolvedObjectHandle<TSpectral> new_unresolved_emitter(const units::Watt& power,
                                                              std::string name = "");
+    UnresolvedObjectHandle<TSpectral>
+    new_unresolved_sphere(units::Meter radius, TSpectral albedo, std::string name = "");
+    UnresolvedObjectHandle<TSpectral>
+    new_unresolved_sphere(units::Meter radius, float albedo, std::string name = "");
     UnresolvedObjectHandle<TSpectral> new_unresolved_sphere(units::Meter radius,
                                                             InstanceHandle<TSpectral> sun,
                                                             std::string name = "");

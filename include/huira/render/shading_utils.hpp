@@ -48,7 +48,7 @@ inline Transform<float> interpolate_transform(const std::vector<Transform<float>
     float frac = scaled_t - static_cast<float>(idx);
 
     Transform<float> result;
-    
+
     // Linearly interpolate position
     result.position =
         transforms[idx].position * (1.0f - frac) + transforms[idx + 1].position * frac;
