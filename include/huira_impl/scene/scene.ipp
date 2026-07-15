@@ -541,6 +541,38 @@ UnresolvedObjectHandle<TSpectral> Scene<TSpectral>::new_unresolved_emitter(const
 }
 
 /**
+ * @brief Creates a new unresolved sphere illuminated by all lights in the scene.
+ * @param radius Sphere radius
+ * @param albedo Albedo value (spectral)
+ * @param name Optional name
+ * @return UnresolvedObjectHandle<TSpectral> Handle to the new sphere
+ */
+template <IsSpectral TSpectral>
+UnresolvedObjectHandle<TSpectral>
+Scene<TSpectral>::new_unresolved_sphere(units::Meter radius, TSpectral albedo, std::string name)
+{
+    auto unresolved_lambertian_sphere =
+        std::make_shared<UnresolvedLambertianSphere<TSpectral>>(radius, albedo);
+    return this->add_unresolved_object(unresolved_lambertian_sphere, name);
+}
+
+/**
+ * @brief Creates a new unresolved sphere illuminated by all lights in the scene.
+ * @param radius Sphere radius
+ * @param albedo Albedo value (constant)
+ * @param name Optional name
+ * @return UnresolvedObjectHandle<TSpectral> Handle to the new sphere
+ */
+template <IsSpectral TSpectral>
+UnresolvedObjectHandle<TSpectral>
+Scene<TSpectral>::new_unresolved_sphere(units::Meter radius, float albedo, std::string name)
+{
+    auto unresolved_lambertian_sphere =
+        std::make_shared<UnresolvedLambertianSphere<TSpectral>>(radius, TSpectral{albedo});
+    return this->add_unresolved_object(unresolved_lambertian_sphere, name);
+}
+
+/**
  * @brief Creates a new unresolved sphere with radius and sun instance.
  * @param radius Sphere radius
  * @param sun Sun instance handle

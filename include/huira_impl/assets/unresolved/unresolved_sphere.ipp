@@ -166,7 +166,7 @@ void UnresolvedLambertianSphere<TSpectral>::resolve_irradiance(
             float A = PI<float>() * radius_ * radius_; // Cross-sectional area
             TSpectral reflected_power =
                 albedo_ * A * incident_irradiance * lambert_phase_function(phase);
-            
+
             TSpectral reflected_irradiance = (2.0f / 3.0f) * albedo_ * incident_irradiance *
                                              (radius_ * radius_) / (distance * distance) *
                                              lambert_phase_function(phase);
