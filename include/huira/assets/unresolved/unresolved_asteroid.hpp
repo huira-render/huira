@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -18,6 +19,9 @@ namespace huira {
  * and slope parameter (G) characterize the asteroid's intrinsic brightness and
  * phase function.
  *
+ * The H-G system is defined against solar illumination, so a light instance
+ * (the sun) is required; other lights in the scene do not contribute.
+ *
  * @tparam TSpectral The spectral representation type.
  */
 template <IsSpectral TSpectral>
@@ -29,8 +33,10 @@ class UnresolvedAsteroid : public UnresolvedObject<TSpectral> {
                        TSpectral albedo = TSpectral{1.f});
     UnresolvedAsteroid(double H, double G, InstanceHandle<TSpectral> light_instance, float albedo);
 
-    void resolve_irradiance(const Transform<float>& self_transform,
-                            const std::vector<LightInstance<TSpectral>>& lights) override;
+    void resolve_irradiance(const std::vector<Transform<float>>& self_transforms,
+                            const std::vector<Time>& times,
+                            const SceneView<TSpectral>& scene_view,
+                            RandomSampler<float>& sampler) override;
 
     std::string type() const override { return "UnresolvedAsteroid"; }
 

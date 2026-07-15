@@ -1,3 +1,4 @@
+#include <utility>
 #include <vector>
 
 #include "glm/glm.hpp"
@@ -46,23 +47,36 @@ UnresolvedEmitter<TSpectral>::UnresolvedEmitter(const units::Watt& power)
  * @brief Resolves the spectral irradiance based on distance and spectral power.
  *
  * Computes the irradiance at the observer (assumed to be at the origin) using
- * the inverse square law. The irradiance is calculated as:
+ * the inverse square law, at each temporal sample of the exposure. The
+ * irradiance is calculated as:
  * \f$E = \frac{\Phi}{4\pi d^2}\f$, where \f$\Phi\f$ is the spectral power
  * and \f$d\f$ is the distance from the observer.
  *
- * @param self_transform The world-space transform of the emitter.
- * @param lights A vector of all light instances in the scene (unused).
+ * @param self_transforms Camera-relative transforms of the emitter, one per temporal sample.
+ * @param times Absolute times of the temporal samples.
+ * @param scene_view The scene view (unused; the emitter is self-luminous).
+ * @param sampler Random sampler (unused; the model is analytic).
  */
 template <IsSpectral TSpectral>
 void UnresolvedEmitter<TSpectral>::resolve_irradiance(
-    const Transform<float>& self_transform, const std::vector<LightInstance<TSpectral>>& lights)
+    const std::vector<Transform<float>>& self_transforms,
+    const std::vector<Time>& times,
+    const SceneView<TSpectral>& scene_view,
+    RandomSampler<float>& sampler)
 {
-    (void)lights; // Not needed for this implementation
+    (void)scene_view; // Not needed for this implementation
+    (void)sampler;    // Not needed for this implementation
 
-    float distance = glm::length(self_transform.position);
+    std::vector<TSpectral> irradiances(self_transforms.size(), TSpectral{0});
 
-    float distance_sq = distance * distance;
-    this->irradiance_ = spectral_power_ / (4.f * PI<float>() * distance_sq);
+    for (std::size_t i = 0; i < self_transforms.size(); ++i) {
+        float distance = glm::length(self_transforms[i].position);
+
+        float distance_sq = distance * distance;
+        irradiances[i] = spectral_power_ / (4.f * PI<float>() * distance_sq);
+    }
+
+    this->set_resolved_irradiance_(std::move(irradiances), times);
 }
 
 /**
