@@ -431,13 +431,6 @@ static TileMesh read_tile_(const fs::path& path, int requested_lod, double gsd)
         src_srs = OGRSpatialReference(proj.proj_ref.c_str());
         semi_major = src_srs.GetSemiMajor();
         semi_minor = src_srs.GetSemiMinor();
-        if (!std::getenv("PROJ_DATA")) {
-            if (const char* prefix = std::getenv("CONDA_PREFIX")) {
-                setenv("PROJ_DATA", (std::string(prefix) + "/share/proj").c_str(), 0);
-            }
-        }
-        setenv("PROJ_IGNORE_CELESTIAL_BODY", "YES", 1);
-        CPLSetConfigOption("PROJ_IGNORE_CELESTIAL_BODY", "YES");
         std::ostringstream lonlat_proj;
         lonlat_proj << "+proj=longlat +a=" << semi_major << " +b=" << semi_minor << " +no_defs";
         if (dst_srs.importFromProj4(lonlat_proj.str().c_str()) != OGRERR_NONE) {

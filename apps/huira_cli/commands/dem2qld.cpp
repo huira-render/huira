@@ -12,10 +12,10 @@
 #include <string>
 #include <vector>
 
-#include <fnmatch.h>
-
-#include "gdal_priv.h"
 #include "cpl_conv.h"
+#include "cpl_string.h"
+#include "cpl_vsi.h"
+#include "gdal_priv.h"
 #include "ogr_spatialref.h"
 #include "tclap/CmdLine.h"
 
@@ -57,28 +57,13 @@ fs::path resolve_path(const fs::path& root, const fs::path& path)
 std::vector<fs::path> expand_paths(const fs::path& root, const fs::path& pattern)
 {
     fs::path resolved = resolve_path(root, pattern);
-    std::string name = resolved.filename().string();
-    if (name.find_first_of("*?[") == std::string::npos) return {resolved};
-    fs::path parent = resolved.parent_path();
+    if (resolved.string().find_first_of("*?[") == std::string::npos) return {resolved};
+    char** matches = VSIGlob(resolved.string().c_str(), nullptr, nullptr, nullptr);
     std::vector<fs::path> out;
-    for (const auto& entry : fs::directory_iterator(parent)) {
-        if (entry.is_regular_file() && fnmatch(name.c_str(), entry.path().filename().string().c_str(), 0) == 0) {
-            out.push_back(entry.path());
-        }
-    }
+    for (char** match = matches; match && *match; ++match) out.emplace_back(*match);
+    CSLDestroy(matches);
     std::sort(out.begin(), out.end());
     return out;
-}
-
-void configure_proj()
-{
-    if (!std::getenv("PROJ_DATA")) {
-        if (const char* prefix = std::getenv("CONDA_PREFIX")) {
-            setenv("PROJ_DATA", (std::string(prefix) + "/share/proj").c_str(), 0);
-        }
-    }
-    setenv("PROJ_IGNORE_CELESTIAL_BODY", "YES", 1);
-    CPLSetConfigOption("PROJ_IGNORE_CELESTIAL_BODY", "YES");
 }
 
 std::string dataset_projection(GDALDataset& dataset)
@@ -111,7 +96,6 @@ std::array<double, 3> compute_ogr_origin(const std::vector<float>& heights,
                                          double xoff,
                                          double yoff)
 {
-    configure_proj();
     if (projection.empty()) return {0.0, 0.0, 0.0};
 
     float z = 0.0f;
@@ -185,7 +169,6 @@ struct HeightTile {
 
 void apply_lonwrap(Raster& raster)
 {
-    configure_proj();
     OGRSpatialReference srs(raster.projection.c_str());
     std::ostringstream latlon_proj;
     latlon_proj << "+proj=longlat +a=" << srs.GetSemiMajor() << " +b=" << srs.GetSemiMinor()
@@ -277,7 +260,6 @@ void sample_albedo_from(const Raster& albedo,
                         std::uint32_t height,
                         std::vector<float>& out)
 {
-    configure_proj();
     OGRSpatialReference src_srs(dem_projection.c_str());
     OGRSpatialReference dst_srs(albedo.projection.c_str());
     std::unique_ptr<OGRCoordinateTransformation, void (*)(OGRCoordinateTransformation*)> transform(
