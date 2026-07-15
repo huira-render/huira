@@ -56,7 +56,11 @@ runs:
             MINIFORGE_URL="https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh"
             ;;
           "macos")
-            MINIFORGE_URL="https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-MacOSX-arm64.sh"
+            if [ "${{ runner.arch }}" == "ARM64" ]; then
+              MINIFORGE_URL="https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-MacOSX-arm64.sh"
+            else
+              MINIFORGE_URL="https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-MacOSX-x86_64.sh"
+            fi
             ;;
           "windows")
             echo "Cannot do manual installation on Windows, exiting..."
@@ -98,7 +102,7 @@ runs:
             echo "Using system CMake and ninja (already installed via apt)"
             ;;
           "macos")
-            echo "Installing macOS ARM64 build tools..."
+            echo "Installing macOS build tools..."
             mamba install -y ninja pkg-config
             ;;
         esac

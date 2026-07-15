@@ -51,13 +51,13 @@ class LookAtCallback : public RotationCallback {
                 Rotation<double>::from_basis_vectors(right, true_up, z_axis);
 
             // Convert world rotation to local rotation relative to parent
-            Rotation<double> rotation;
+            Rotation<double> local_rotation;
             if (self_->get_parent().valid()) {
-                rotation = parent_ssb.rotation.inverse() * world_rotation;
+                local_rotation = parent_ssb.rotation.inverse() * world_rotation;
             } else {
-                rotation = world_rotation;
+                local_rotation = world_rotation;
             }
-            return rotation;
+            return local_rotation;
         };
 
         this->rotation = compute_rotation_at(t_emit, local_pos);
@@ -138,13 +138,13 @@ class LookAtPositionCallback : public RotationCallback {
                 Rotation<double>::from_basis_vectors(right, true_up, z_axis);
 
             // Convert world rotation to local rotation
-            Rotation<double> rotation;
+            Rotation<double> local_rotation;
             if (self_->get_parent().valid()) {
-                rotation = parent_ssb.rotation.inverse() * world_rotation;
+                local_rotation = parent_ssb.rotation.inverse() * world_rotation;
             } else {
-                rotation = world_rotation;
+                local_rotation = world_rotation;
             }
-            return rotation;
+            return local_rotation;
         };
 
         this->rotation = compute_rotation_at(t_emit, local_pos);

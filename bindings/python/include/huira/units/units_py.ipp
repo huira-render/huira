@@ -96,11 +96,16 @@ void bind_quantity_type(py::module& m, const std::string& name)
             "Subtract another unit of the same dimension. Result is in this unit's scale.")
         // Same-type operators
         .def(py::self += py::self)
-        .def(py::self -= py::self)
         .def(py::self * double(), "Multiply by a scalar.")
         .def(py::self / double(), "Divide by a scalar.")
         .def(py::self *= double())
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wself-assign-overloaded"
+        .def(py::self -= py::self)
         .def(py::self /= double())
+#pragma clang diagnostic pop
+
         .def(double() * py::self, "Multiply a scalar by this unit.")
         // Cross-unit comparison via SI values
         .def(

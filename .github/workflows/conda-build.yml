@@ -28,8 +28,10 @@ jobs:
         include:
           - platform: linux
             os: ubuntu-22.04
-          - platform: macos
+          - platform: macos-arm64
             os: macos-14
+          - platform: macos-x86_64
+            os: macos-15-intel
           - platform: windows
             os: windows-2022
     runs-on: ${{ matrix.os }}
@@ -55,7 +57,13 @@ jobs:
 
       - name: Build conda package
         shell: bash -el {0}
-        run: conda build packaging/recipe/ -m "$(conda info --base)/conda_build_config.yaml" --output-folder conda-output
+        run: |
+          # Explicitly bump the deployment target for Intel macOS to support C++17 <filesystem>
+          if [ "${{ matrix.platform }}" == "macos-x86_64" ]; then
+            export MACOSX_DEPLOYMENT_TARGET="10.15"
+          fi
+          
+          conda build packaging/recipe/ -m "$(conda info --base)/conda_build_config.yaml" --output-folder conda-output
 
       - name: Upload conda package artifact
         uses: actions/upload-artifact@v4
@@ -72,8 +80,10 @@ jobs:
         include:
           - platform: linux
             os: ubuntu-22.04
-          - platform: macos
+          - platform: macos-arm64
             os: macos-14
+          - platform: macos-x86_64
+            os: macos-15-intel
           - platform: windows
             os: windows-2022
     runs-on: ${{ matrix.os }}

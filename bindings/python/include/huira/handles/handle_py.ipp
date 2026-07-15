@@ -13,7 +13,7 @@ namespace huira {
 template <typename T, typename PyClass>
 inline void bind_handle_methods(PyClass& cls)
 {
-    using HandleType = Handle<T>;
+    // using HandleType = Handle<T>;
     using BoundType = typename PyClass::type;
 
     cls.def("valid", &BoundType::valid)
