@@ -135,13 +135,16 @@ SceneView<TSpectral>::SceneView(const Scene<TSpectral>& scene,
         stars_[i] = star_samples;
     }
 
+    compute_indirect_source_bounds_();
+
     build_tlas_();
 
-    // Resolve all unresolved objects now that we have light positions
+    // Resolve all unresolved objects now that the TLAS is built, so implementations
+    // can cast occlusion/sampling rays through this view. Each object gets its own
+    // deterministically seeded sampler for reproducible results.
     for (auto& unresolved_object : unresolved_objects_) {
         RandomSampler<float> sampler(
             static_cast<unsigned int>(unresolved_object.unresolved_object->id()));
-
         unresolved_object.unresolved_object->resolve_irradiance(
             unresolved_object.transforms, temporal_samples_, *this, sampler);
     }
@@ -391,101 +394,6 @@ SceneView<TSpectral>::resolve_hits(const std::vector<Ray<TSpectral>>& rays,
 }
 
 /**
- * @brief Evaluates the direct (next-event-estimated) radiance leaving a hit point.
- */
-template <IsSpectral TSpectral>
-TSpectral
-SceneView<TSpectral>::direct_lit_radiance(const Ray<TSpectral>& ray,
-                                          const HitRecord& hit,
-                                          RandomSampler<float>& sampler,
-                                          float time,
-                                          const MediumStack<TSpectral>& medium_stack) const
-{
-    if (!hit.hit()) {
-        return TSpectral{0};
-    }
-
-    const auto& mapping = instance_mappings_[hit.inst_id];
-    if (mapping.type != GeometryType::Primitive) {
-        return TSpectral{0};
-    }
-
-    // Resolve full shading data and look up the material:
-    Interaction<TSpectral> isect = this->resolve_hit(ray, hit);
-    const auto& batch = primitives_[mapping.batch_index];
-    const auto* material = batch.primitive->material.get();
-
-    auto [params, shading_isect] = material->evaluate(isect);
-
-    TSpectral radiance{0};
-    for (const auto& light_instance : lights_) {
-        radiance += this->sample_light_contribution_(
-            light_instance, isect, material, params, shading_isect, medium_stack, sampler, time);
-    }
-    return radiance;
-}
-
-/**
- * @brief Evaluates one light's MIS-weighted NEE contribution at a shading point.
- *
- * This is the body previously inlined in the renderer's direct-lighting loop,
- * lifted so it can also serve indirect-source (reflector) shading and unresolved
- * object irradiance resolution. The random number consumption order is identical
- * to the original inline code (light sample, then transmittance).
- */
-template <IsSpectral TSpectral>
-template <typename TMaterial, typename TParams>
-TSpectral
-SceneView<TSpectral>::sample_light_contribution_(const LightInstance<TSpectral>& light_instance,
-                                                 const Interaction<TSpectral>& isect,
-                                                 const TMaterial* material,
-                                                 const TParams& params,
-                                                 const Interaction<TSpectral>& shading_isect,
-                                                 const MediumStack<TSpectral>& medium_stack,
-                                                 RandomSampler<float>& sampler,
-                                                 float time) const
-{
-    Transform<float> current_transform = interpolate_transform(light_instance.transforms, time);
-
-    auto sample = light_instance.light->sample_li(isect, current_transform, sampler);
-
-    if (!sample) {
-        return TSpectral{0};
-    }
-    const auto& ls = *sample;
-    float light_dist = sample->distance;
-
-    // Shadow test:
-    if (params.transmission.max() <= 0.0f && glm::dot(ls.wi, isect.normal_g) <= 0.0f) {
-        return TSpectral{0};
-    }
-
-    // Direction differs from the incident ray, so a normal-
-    // direction offset (scaled by the propagated position
-    // error bound) is required: it guarantees tangent-plane
-    // clearance for any spawn direction, including grazing.
-    Vec3<float> shadow_normal =
-        (glm::dot(ls.wi, isect.normal_g) < 0.0f) ? -isect.normal_g : isect.normal_g;
-    Vec3<float> shadow_origin = offset_spawn_point(isect.position, shadow_normal, isect.p_err);
-    Ray<TSpectral> shadow_ray(shadow_origin, ls.wi);
-    TSpectral transmittance =
-        this->evaluate_transmittance(shadow_ray, light_dist, medium_stack, sampler, time);
-    if (transmittance.max() <= 0.0f) {
-        return TSpectral{0};
-    }
-
-    // Evaluate BSDF:
-    TSpectral f = material->bsdf_eval(isect.wo, ls.wi, {params, shading_isect});
-    float cos_theta = std::max(0.0f, glm::dot(shading_isect.normal_s, ls.wi));
-
-    float bsdf_pdf = material->bsdf_pdf(isect.wo, ls.wi, {params, shading_isect});
-    float mis_weight = power_heuristic(ls.pdf, bsdf_pdf);
-
-    // Multiply the final direct lighting by the transmittance
-    return (ls.Li / ls.pdf) * f * cos_theta * mis_weight * transmittance;
-}
-
-/**
  * @brief Traverse the scene graph and collect renderable objects.
  *
  * Recursively visits nodes and collects mesh, light, unresolved, and model instances.
@@ -521,6 +429,13 @@ void SceneView<TSpectral>::traverse_and_collect_(
         const auto& asset_var = instance->asset();
         std::visit([&](auto* raw_ptr) noexcept { handle_asset_ptr_(raw_ptr, render_transforms); },
                    asset_var);
+
+        // Capture indirect-source designation (validated at set-time to be a Primitive):
+        if (instance->is_indirect_source()) {
+            if (auto* const* prim_ptr = std::get_if<Primitive<TSpectral>*>(&asset_var)) {
+                add_indirect_source_instance_((*prim_ptr)->shared_from_this(), render_transforms);
+            }
+        }
     }
 
     for (const auto& child : node->get_children()) {
@@ -657,6 +572,80 @@ void SceneView<TSpectral>::add_unresolved_instance_(
 }
 
 /**
+ * @brief Records a designated indirect-source instance.
+ *
+ * Must be called immediately after the corresponding primitive instance was
+ * added via the traversal dispatch, so the batch's most recent instance is the
+ * one being designated.
+ *
+ * @param primitive Primitive pointer
+ * @param instance_apparent_transforms Render transforms (one per temporal sample)
+ */
+template <IsSpectral TSpectral>
+void SceneView<TSpectral>::add_indirect_source_instance_(
+    std::shared_ptr<Primitive<TSpectral>> primitive,
+    const std::vector<Transform<float>>& instance_apparent_transforms)
+{
+    auto it = batch_lookup_.find(primitive.get());
+    if (it == batch_lookup_.end()) {
+        HUIRA_THROW_ERROR("SceneView::add_indirect_source_instance_ - Designated primitive was "
+                          "not collected as scene geometry");
+    }
+
+    IndirectSourceInstance<TSpectral> source;
+    source.primitive = primitive;
+    source.batch_index = it->second;
+    source.instance_index = primitives_[it->second].instances.size() - 1;
+    source.transforms = instance_apparent_transforms;
+
+    indirect_sources_.push_back(std::move(source));
+}
+
+/**
+ * @brief Populates each indirect source's world-space bounding spheres.
+ *
+ * Reads the primitive's local-space AABB from its committed BLAS and produces
+ * a conservative world-space bounding sphere per temporal sample: the local
+ * box center transformed to world space, with radius equal to the maximum
+ * distance to the transformed box corners (conservative under any affine
+ * transform, including non-uniform scale).
+ */
+template <IsSpectral TSpectral>
+void SceneView<TSpectral>::compute_indirect_source_bounds_()
+{
+    for (auto& source : indirect_sources_) {
+        RTCScene blas = source.primitive->geometry->blas();
+        RTCBounds bounds{};
+        rtcGetSceneBounds(blas, &bounds);
+
+        const Vec3<float> lower{bounds.lower_x, bounds.lower_y, bounds.lower_z};
+        const Vec3<float> upper{bounds.upper_x, bounds.upper_y, bounds.upper_z};
+        const Vec3<float> center_local = 0.5f * (lower + upper);
+
+        const std::size_t N = source.transforms.size();
+        source.bounding_centers.resize(N);
+        source.bounding_radii.resize(N);
+
+        for (std::size_t i = 0; i < N; ++i) {
+            const Transform<float>& xf = source.transforms[i];
+            const Vec3<float> center_world = xf.apply_to_point(center_local);
+
+            float radius = 0.0f;
+            for (int corner = 0; corner < 8; ++corner) {
+                const Vec3<float> corner_local{(corner & 1) ? upper.x : lower.x,
+                                               (corner & 2) ? upper.y : lower.y,
+                                               (corner & 4) ? upper.z : lower.z};
+                const Vec3<float> corner_world = xf.apply_to_point(corner_local);
+                radius = std::max(radius, glm::length(corner_world - center_world));
+            }
+
+            source.bounding_centers[i] = center_world;
+            source.bounding_radii[i] = radius;
+        }
+    }
+}
+
+/**
  * @brief Traverse a model's scene graph and collect instances.
  * @param node Node to traverse
  * @param parent_tf Parent transform
@@ -737,6 +726,13 @@ void SceneView<TSpectral>::build_tlas_()
             mapping.batch_index = batch_idx;
             mapping.instance_index = inst_idx;
             mapping.light_index = 0;
+            for (std::size_t src_idx = 0; src_idx < indirect_sources_.size(); ++src_idx) {
+                if (indirect_sources_[src_idx].batch_index == batch_idx &&
+                    indirect_sources_[src_idx].instance_index == inst_idx) {
+                    mapping.indirect_index = src_idx;
+                    break;
+                }
+            }
             instance_mappings_[geom_id] = mapping;
         }
     }
@@ -826,4 +822,99 @@ void SceneView<TSpectral>::build_tlas_()
     rtcCommitScene(tlas_);
 }
 
+/**
+ * @brief Evaluates one light's MIS-weighted NEE contribution at a shading point.
+ *
+ * This is the body previously inlined in the renderer's direct-lighting loop,
+ * lifted so it can also serve indirect-source (reflector) shading and unresolved
+ * object irradiance resolution. The random number consumption order is identical
+ * to the original inline code (light sample, then transmittance).
+ */
+template <IsSpectral TSpectral>
+template <typename TMaterial, typename TParams>
+TSpectral
+SceneView<TSpectral>::sample_light_contribution_(const LightInstance<TSpectral>& light_instance,
+                                                 const Interaction<TSpectral>& isect,
+                                                 const TMaterial* material,
+                                                 const TParams& params,
+                                                 const Interaction<TSpectral>& shading_isect,
+                                                 const MediumStack<TSpectral>& medium_stack,
+                                                 RandomSampler<float>& sampler,
+                                                 float time) const
+{
+    Transform<float> current_transform = interpolate_transform(light_instance.transforms, time);
+
+    auto sample = light_instance.light->sample_li(isect, current_transform, sampler);
+
+    if (!sample) {
+        return TSpectral{0};
+    }
+    const auto& ls = *sample;
+    float light_dist = sample->distance;
+
+    // Shadow test:
+    if (params.transmission.max() <= 0.0f && glm::dot(ls.wi, isect.normal_g) <= 0.0f) {
+        return TSpectral{0};
+    }
+    // Direction differs from the incident ray, so a normal-
+    // direction offset (scaled by the propagated position
+    // error bound) is required: it guarantees tangent-plane
+    // clearance for any spawn direction, including grazing.
+    Vec3<float> shadow_normal =
+        (glm::dot(ls.wi, isect.normal_g) < 0.0f) ? -isect.normal_g : isect.normal_g;
+    Vec3<float> shadow_origin = offset_spawn_point(isect.position, shadow_normal, isect.p_err);
+    Ray<TSpectral> shadow_ray(shadow_origin, ls.wi);
+    TSpectral transmittance =
+        this->evaluate_transmittance(shadow_ray, light_dist, medium_stack, sampler, time);
+    if (transmittance.max() <= 0.0f) {
+        return TSpectral{0};
+    }
+
+    // Evaluate BSDF:
+    TSpectral f = material->bsdf_eval(isect.wo, ls.wi, {params, shading_isect});
+    float cos_theta = std::max(0.0f, glm::dot(shading_isect.normal_s, ls.wi));
+
+    float bsdf_pdf = material->bsdf_pdf(isect.wo, ls.wi, {params, shading_isect});
+    float mis_weight = power_heuristic(ls.pdf, bsdf_pdf);
+
+    // Multiply the final direct lighting by the transmittance
+    return (ls.Li / ls.pdf) * f * cos_theta * mis_weight * transmittance;
+}
+
+/**
+ * @brief Evaluates the direct (next-event-estimated) radiance leaving a hit point.
+ */
+template <IsSpectral TSpectral>
+TSpectral
+SceneView<TSpectral>::direct_lit_radiance(const Ray<TSpectral>& ray,
+                                          const HitRecord& hit,
+                                          RandomSampler<float>& sampler,
+                                          float time,
+                                          const MediumStack<TSpectral>& medium_stack) const
+{
+    if (!hit.hit()) {
+        return TSpectral{0};
+    }
+
+    const auto& mapping = instance_mappings_[hit.inst_id];
+    if (mapping.type != GeometryType::Primitive) {
+        // Emission from light geometry is the caller's responsibility; this routine
+        // only shades reflective (primitive) surfaces.
+        return TSpectral{0};
+    }
+
+    // Resolve full shading data and look up the material:
+    Interaction<TSpectral> isect = this->resolve_hit(ray, hit);
+    const auto& batch = primitives_[mapping.batch_index];
+    const auto* material = batch.primitive->material.get();
+
+    auto [params, shading_isect] = material->evaluate(isect);
+
+    TSpectral radiance{0};
+    for (const auto& light_instance : lights_) {
+        radiance += this->sample_light_contribution_(
+            light_instance, isect, material, params, shading_isect, medium_stack, sampler, time);
+    }
+    return radiance;
+}
 } // namespace huira

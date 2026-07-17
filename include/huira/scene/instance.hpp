@@ -5,6 +5,7 @@
 
 #include "huira/concepts/spectral_concepts.hpp"
 #include "huira/scene/node.hpp"
+#include "huira/util/logger.hpp"
 
 namespace huira {
 // Forward declarations
@@ -62,6 +63,30 @@ class Instance : public Node<TSpectral> {
 
     const Instantiable<TSpectral>& asset() const { return asset_; }
 
+    /**
+     * @brief Designates this instance as an indirect illumination source (reflector).
+     *
+     * Designated instances are directly sampled during next event estimation:
+     * they do not emit light, but their (sun)lit surfaces are importance-sampled
+     * as if they were light sources, which is essential for capturing e.g.
+     * earthshine or moonshine that undirected path sampling would rarely find.
+     * Only Instances containing a Primitive may be designated.
+     *
+     * @param enabled Whether this instance acts as an indirect source (default true).
+     * @throws std::runtime_error if enabled and the instance does not contain a Primitive.
+     */
+    void set_indirect_source(bool enabled = true)
+    {
+        if (enabled && !std::holds_alternative<Primitive<TSpectral>*>(asset_)) {
+            HUIRA_THROW_ERROR("Instance::set_indirect_source - Only Instances containing a "
+                              "Primitive can be designated as indirect sources");
+        }
+        indirect_source_ = enabled;
+    }
+
+    /// Whether this instance is designated as an indirect illumination source.
+    bool is_indirect_source() const { return indirect_source_; }
+
     std::string type() const override { return "Instance"; }
 
     std::string get_info() const override;
@@ -71,6 +96,7 @@ class Instance : public Node<TSpectral> {
 
   private:
     Instantiable<TSpectral> asset_;
+    bool indirect_source_ = false;
 
     friend class Scene<TSpectral>;
     friend class SceneView<TSpectral>;

@@ -5,7 +5,7 @@
 #include "huira/concepts/spectral_concepts.hpp"
 #include "huira/core/constants.hpp"
 #include "huira/core/types.hpp"
-#include "huira/render/sampler.hpp"
+#include "huira/sampling/sampler.hpp"
 #include "huira/volumes/scattering/phase_function.hpp"
 
 namespace huira {

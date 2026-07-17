@@ -4,6 +4,7 @@
 #include "glm/glm.hpp"
 #include "huira/core/constants.hpp"
 #include "huira/core/physics.hpp"
+#include "huira/sampling/cone_sampling.hpp"
 #include "huira/util/logger.hpp"
 
 namespace huira {
@@ -91,61 +92,20 @@ SphereLight<TSpectral>::sample_li(const Interaction<TSpectral>& isect,
                                   const Transform<float>& transform,
                                   Sampler<float>& sampler) const
 {
-    Vec3<float> p_center = transform.position;
-    Vec3<float> wc = p_center - isect.position;
-    float d2 = glm::dot(wc, wc);
-    float d = std::sqrt(d2);
+    // Uniformly sample the cone subtended by the sphere (shared with
+    // indirect-source sampling; see huira/render/cone_sampling.hpp).
+    auto cone = sample_sphere_cone(isect.position, transform.position, radius_, sampler);
 
     // If the shading point is inside the light sphere, it receives no direct lighting
-    if (d <= radius_) {
+    if (!cone) {
         return std::nullopt;
     }
 
-    // Calculate the cone subtended by the sphere
-    float sin_theta_max2 = (radius_ * radius_) / d2;
-    float cos_theta_max = std::sqrt(std::max(0.0f, 1.0f - sin_theta_max2));
-
-    // Uniformly sample the cone
-    float u1 = sampler.get_1d();
-    float u2 = sampler.get_1d();
-
-    float cos_theta = (1.0f - u1) + u1 * cos_theta_max;
-    float sin_theta = std::sqrt(std::max(0.0f, 1.0f - cos_theta * cos_theta));
-    float phi = u2 * 2.0f * PI<float>();
-
-    // Build a local coordinate system around the vector to the center (wc)
-    Vec3<float> w = wc / d;
-    Vec3<float> u, v;
-    if (std::abs(w.z) < 0.999f) {
-        u = glm::normalize(Vec3<float>(-w.y, w.x, 0.0f));
-    } else {
-        u = glm::normalize(Vec3<float>(0.0f, -w.z, w.y));
-    }
-    v = glm::cross(w, u);
-
-    // Convert sampled local direction to world space
-    Vec3<float> wi =
-        u * (sin_theta * std::cos(phi)) + v * (sin_theta * std::sin(phi)) + w * cos_theta;
-
-    // Calculate Solid Angle and PDF
-    float solid_angle = 2.0f * PI<float>() * (1.0f - cos_theta_max);
-
-    // Robustness fallback for tiny spheres or immense distances
-    // to prevent catastrophic cancellation in floating point math
-    if (solid_angle < 1e-7f) {
-        solid_angle = PI<float>() * sin_theta_max2;
-    }
-
-    // Calculate distance to the sphere surface along wi using standard ray-sphere intersection:
-    float b = glm::dot(wc, wi);
-    float discriminant = b * b - d2 + (radius_ * radius_);
-    float distance = b - std::sqrt(std::max(0.0f, discriminant));
-
     LightSample<TSpectral> ls;
-    ls.wi = wi;
+    ls.wi = cone->wi;
     ls.Li = radiance_;
-    ls.pdf = 1.0f / solid_angle;
-    ls.distance = distance;
+    ls.pdf = cone->pdf;
+    ls.distance = cone->distance;
 
     return ls;
 }
@@ -155,30 +115,7 @@ float SphereLight<TSpectral>::pdf_li(const Interaction<TSpectral>& isect,
                                      const Transform<float>& transform,
                                      const Vec3<float>& wi) const
 {
-    Vec3<float> p_center = transform.position;
-    Vec3<float> wc = p_center - isect.position;
-    float d2 = glm::dot(wc, wc);
-
-    // If inside the sphere, probability is 0
-    if (d2 <= radius_ * radius_) {
-        return 0.0f;
-    }
-
-    float sin_theta_max2 = (radius_ * radius_) / d2;
-    float cos_theta_max = std::sqrt(std::max(0.0f, 1.0f - sin_theta_max2));
-
-    // Check if the given direction `wi` actually hits the sphere cone
-    float cos_theta = glm::dot(wi, glm::normalize(wc));
-    if (cos_theta < cos_theta_max) {
-        return 0.0f; // Ray missed the sphere
-    }
-
-    float solid_angle = 2.0f * PI<float>() * (1.0f - cos_theta_max);
-    if (solid_angle < 1e-7f) {
-        solid_angle = PI<float>() * sin_theta_max2;
-    }
-
-    return 1.0f / solid_angle;
+    return pdf_sphere_cone(isect.position, transform.position, radius_, wi);
 }
 
 template <IsSpectral TSpectral>

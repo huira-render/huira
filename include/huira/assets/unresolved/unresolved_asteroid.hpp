@@ -7,6 +7,7 @@
 #include "huira/assets/lights/light.hpp"
 #include "huira/assets/unresolved/unresolved_object.hpp"
 #include "huira/concepts/spectral_concepts.hpp"
+#include "huira/handles/scene/instance_handle.hpp"
 #include "huira/scene/scene_view_types.hpp"
 
 namespace huira {

@@ -8,7 +8,7 @@
 #include "huira/core/transform.hpp"
 #include "huira/core/types.hpp"
 #include "huira/render/interaction.hpp"
-#include "huira/render/sampler.hpp"
+#include "huira/sampling/sampler.hpp"
 
 namespace huira {
 template <IsSpectral TSpectral>

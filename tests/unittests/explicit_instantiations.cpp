@@ -44,7 +44,7 @@
 #include "huira/render/frame_buffer.hpp"
 #include "huira/render/interaction.hpp"
 #include "huira/render/renderer.hpp"
-#include "huira/render/sampler.hpp"
+#include "huira/sampling/sampler.hpp"
 
 // scene/
 #include "huira/scene/frame_node.hpp"
