@@ -7,7 +7,7 @@
 #include "huira/concepts/spectral_concepts.hpp"
 #include "huira/core/types.hpp"
 #include "huira/geometry/ray.hpp"
-#include "huira/render/sampler.hpp"
+#include "huira/sampling/sampler.hpp"
 #include "huira/scene/scene_object.hpp"
 #include "huira/volumes/density/density_field.hpp"
 #include "huira/volumes/medium_interaction.hpp"

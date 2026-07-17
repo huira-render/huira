@@ -6,7 +6,7 @@
 
 #include "huira/concepts/spectral_concepts.hpp"
 #include "huira/render/frame_buffer.hpp"
-#include "huira/render/sampler.hpp"
+#include "huira/sampling/sampler.hpp"
 #include "huira/scene/scene_view.hpp"
 
 namespace huira {

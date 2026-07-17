@@ -36,6 +36,13 @@ class InstanceHandle : public NodeHandle<TSpectral, Instance<TSpectral>> {
         this->get()->look_at(target_position, up);
     }
 
+    /// Designates this instance as an indirect illumination source (see
+    /// Instance::set_indirect_source).
+    void set_indirect_source(bool enabled = true) { this->get()->set_indirect_source(enabled); }
+
+    /// Whether this instance is designated as an indirect illumination source.
+    bool is_indirect_source() const { return this->get()->is_indirect_source(); }
+
     friend class FrameHandle<TSpectral>;
     friend class SceneView<TSpectral>;
 };

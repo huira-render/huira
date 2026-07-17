@@ -4,7 +4,7 @@
 
 #include "huira/cameras/apertures/aperture.hpp"
 #include "huira/concepts/spectral_concepts.hpp"
-#include "huira/render/sampler.hpp"
+#include "huira/sampling/sampler.hpp"
 #include "huira/units/units.hpp"
 
 namespace huira {
