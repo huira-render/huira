@@ -15,6 +15,7 @@
 #include "huira/concepts/spectral_concepts.hpp"
 #include "huira/core/types.hpp"
 #include "huira/render/shading_utils.hpp"
+#include "huira/sampling/cone_sampling.hpp"
 #include "huira/volumes/medium.hpp"
 #include "huira/volumes/medium_stack.hpp"
 #include "huira_impl/render/psf_lut.ipp"
@@ -113,6 +114,13 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
 
                 // Per-tile RNG seeded from tile index for reproducibility:
                 RandomSampler<float> sampler(static_cast<unsigned int>(tile_idx));
+
+                // BSDF-side MIS counterweight: for each designated indirect source,
+                // the reflector-NEE PDF of the most recent BSDF-sampled direction.
+                // Refilled at every bounce; sized once (empty, and thus inert, when
+                // no sources are designated, so scenes without reflectors draw the
+                // exact same RNG sequence as before).
+                std::vector<float> prev_reflector_pdf(scene_view.indirect_sources().size(), 0.0f);
 
                 for (int y = y0; y < y1; ++y) {
                     for (int x = x0; x < x1; ++x) {
@@ -358,10 +366,26 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                                         albedo_total += params.albedo;
                                     }
 
+                                    // If this surface is itself a designated reflector reached
+                                    // via a BSDF bounce, its emitter-NEE estimates the same
+                                    // single-reflector-bounce transport (sun -> here -> previous
+                                    // vertex) that reflector-NEE sampled from the previous vertex.
+                                    // MIS-weight it against that reflector sample to remove the
+                                    // double count. Bounce 0 has no previous vertex (the camera is
+                                    // not a shading point), so there is no partner and no weight.
+                                    float reflector_nee_weight = 1.0f;
+                                    const std::size_t hit_source =
+                                        scene_view.indirect_source_index(hit);
+                                    if (bounce > 0 &&
+                                        hit_source != SceneView<TSpectral>::NO_INDIRECT_SOURCE) {
+                                        reflector_nee_weight = power_heuristic(
+                                            prev_bsdf_pdf, prev_reflector_pdf[hit_source]);
+                                    }
+
                                     // Direct lighting (next event estimation):
                                     for (const auto& light_instance : lights) {
                                         TSpectral Ld =
-                                            throughput *
+                                            throughput * reflector_nee_weight *
                                             scene_view.sample_light_contribution_(light_instance,
                                                                                   isect,
                                                                                   material,
@@ -374,6 +398,84 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                                             direct_radiance += Ld;
                                         } else {
                                             indirect_radiance += Ld;
+                                        }
+                                    }
+
+                                    // Reflector next event estimation: sample each designated
+                                    // indirect source (earthshine, moonshine, ...) directly, the
+                                    // low-variance partner to BSDF sampling for compact bright
+                                    // reflectors. Empty when nothing is designated, in which case
+                                    // no rays are cast and no random numbers are drawn.
+                                    const auto& sources = scene_view.indirect_sources();
+                                    for (std::size_t k = 0; k < sources.size(); ++k) {
+                                        const auto& source = sources[k];
+
+                                        SphereConeSample cs =
+                                            source.sample_toward(isect.position, time, sampler);
+                                        if (cs.pdf <= 0.0f) {
+                                            continue;
+                                        }
+
+                                        // Evaluate the surface response first: a (near-)zero BSDF
+                                        // (e.g. a delta surface off its mirror direction) cannot
+                                        // carry the reflector and would only add variance.
+                                        TSpectral f = material->bsdf_eval(
+                                            isect.wo, cs.wi, {params, shading_isect});
+                                        float cos_theta =
+                                            std::max(0.0f, glm::dot(shading_isect.normal_s, cs.wi));
+                                        if (cos_theta <= 0.0f || f.max() <= 0.0f) {
+                                            continue;
+                                        }
+
+                                        // Trace toward the source's bounding proxy: one
+                                        // intersection with the source-index check. Any nearer
+                                        // surface (an occluding body, a light sphere) physically
+                                        // blocks the sample, and a miss inside the cone is a known
+                                        // zero. (Leg transmittance through an intervening shell or
+                                        // participating medium is a documented v1 gap.)
+                                        Vec3<float> probe_normal =
+                                            (glm::dot(cs.wi, isect.normal_g) < 0.0f)
+                                                ? -isect.normal_g
+                                                : isect.normal_g;
+                                        Vec3<float> probe_origin = offset_spawn_point(
+                                            isect.position, probe_normal, isect.p_err);
+                                        Ray<TSpectral> probe_ray(probe_origin, cs.wi);
+                                        HitRecord probe_hit = scene_view.intersect(probe_ray, time);
+
+                                        if (scene_view.indirect_source_index(probe_hit) != k) {
+                                            continue;
+                                        }
+
+                                        // Radiance leaving the reflector toward this vertex; this
+                                        // performs the reflector's own sun-NEE at the hit point,
+                                        // with its own (independent) light/BSDF MIS.
+                                        TSpectral Lr = scene_view.direct_lit_radiance(
+                                            probe_ray, probe_hit, sampler, time, medium_stack);
+                                        if (Lr.max() <= 0.0f) {
+                                            continue;
+                                        }
+
+                                        // MIS against BSDF sampling. At the final bounce the BSDF
+                                        // partner would reach the reflector one bounce deeper and
+                                        // is cut by max_bounces_, leaving this sample with no
+                                        // partner: it must then carry full weight, mirroring the
+                                        // weight-1 the light-hit branch uses at bounce 0. Russian
+                                        // roulette does not trigger this (it rescales surviving
+                                        // throughput and keeps the partner alive in expectation);
+                                        // only the hard bounce cap does.
+                                        float bsdf_pdf = material->bsdf_pdf(
+                                            isect.wo, cs.wi, {params, shading_isect});
+                                        const bool partner_truncated = (bounce + 1 >= max_bounces_);
+                                        float w = partner_truncated
+                                                      ? 1.0f
+                                                      : power_heuristic(cs.pdf, bsdf_pdf);
+
+                                        TSpectral Lr_contrib =
+                                            throughput * f * cos_theta * (Lr / cs.pdf) * w;
+                                        if (bounce == 0) {
+                                            direct_radiance += Lr_contrib;
+                                        } else {
+                                            indirect_radiance += Lr_contrib;
                                         }
                                     }
 
@@ -398,6 +500,16 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
 
                                     prev_bsdf_pdf = bs.is_delta ? 0.0f : bs.pdf;
                                     prev_isect = shading_isect;
+
+                                    // Record, for the next vertex, the reflector-NEE PDF each
+                                    // source would have assigned to this BSDF-sampled direction.
+                                    // If that ray lands on source k, its emitter-NEE is weighted
+                                    // by power_heuristic(prev_bsdf_pdf, prev_reflector_pdf[k]).
+                                    // (No random draws; inert when no sources are designated.)
+                                    for (std::size_t k = 0; k < prev_reflector_pdf.size(); ++k) {
+                                        prev_reflector_pdf[k] =
+                                            sources[k].pdf_toward(isect.position, time, bs.wi);
+                                    }
 
                                     throughput = throughput * bs.value;
 

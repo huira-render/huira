@@ -1,8 +1,11 @@
 #pragma once
 
+#include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <limits>
 #include <memory>
+#include <utility>
 #include <vector>
 
 #include "glm/glm.hpp"
@@ -117,6 +120,77 @@ struct IndirectSourceInstance {
             return uniform_sphere_pdf();
         }
         return pdf_sphere_cone(p, center, radius, wi);
+    }
+
+    /**
+     * @brief Continuous-time sample_toward(): the bounding sphere is linearly
+     *        interpolated between temporal samples at normalized time t in [0, 1].
+     *
+     * The path tracer works in continuous shutter time, so the reflector's proxy
+     * must be evaluated at the ray's time rather than a fixed sample. The lerped
+     * sphere need not tightly bound the moving geometry between samples: any
+     * surface direction it fails to cover is simply left to BSDF sampling
+     * (pdf_toward returns 0 there, so MIS gives that arm full weight), which keeps
+     * the estimator unbiased at the cost of at most a little efficiency.
+     *
+     * @param p Shading/reference point (world space).
+     * @param t Normalized time in [0, 1] across the temporal samples.
+     * @param sampler Random sampler (consumes two 1D samples).
+     * @return The sampled direction and its solid-angle PDF.
+     */
+    SphereConeSample sample_toward(const Vec3<float>& p, float t, Sampler<float>& sampler) const
+    {
+        const auto [center, radius] = interpolated_bound_(t);
+
+        Vec3<float> wc = center - p;
+        if (glm::dot(wc, wc) <= radius * radius) {
+            SphereConeSample sample;
+            sample.wi = sample_uniform_sphere(sampler);
+            sample.pdf = uniform_sphere_pdf();
+            sample.distance = std::numeric_limits<float>::infinity();
+            return sample;
+        }
+        return *sample_sphere_cone(p, center, radius, sampler);
+    }
+
+    /**
+     * @brief Continuous-time pdf_toward(); interpolates the bounding sphere exactly
+     *        as the continuous-time sample_toward() does so the two agree for MIS.
+     *
+     * @param p Shading/reference point (world space).
+     * @param t Normalized time in [0, 1] across the temporal samples.
+     * @param wi Direction to evaluate (normalized).
+     * @return The solid-angle PDF of sampling wi from p (0 if wi misses the cone).
+     */
+    float pdf_toward(const Vec3<float>& p, float t, const Vec3<float>& wi) const
+    {
+        const auto [center, radius] = interpolated_bound_(t);
+
+        Vec3<float> wc = center - p;
+        if (glm::dot(wc, wc) <= radius * radius) {
+            return uniform_sphere_pdf();
+        }
+        return pdf_sphere_cone(p, center, radius, wi);
+    }
+
+  private:
+    /// Linearly interpolates (center, radius) at normalized time t in [0, 1],
+    /// indexing temporal samples exactly as interpolate_transform() does.
+    std::pair<Vec3<float>, float> interpolated_bound_(float t) const
+    {
+        const std::size_t n = bounding_centers.size();
+        if (n == 1) {
+            return {bounding_centers[0], bounding_radii[0]};
+        }
+        const float scaled = t * static_cast<float>(n - 1);
+        std::size_t idx = static_cast<std::size_t>(std::floor(scaled));
+        idx = std::min(idx, n - 2);
+        const float frac = scaled - static_cast<float>(idx);
+
+        const Vec3<float> center =
+            bounding_centers[idx] * (1.0f - frac) + bounding_centers[idx + 1] * frac;
+        const float radius = bounding_radii[idx] * (1.0f - frac) + bounding_radii[idx + 1] * frac;
+        return {center, radius};
     }
 };
 } // namespace huira
