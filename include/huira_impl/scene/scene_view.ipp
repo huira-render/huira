@@ -1,5 +1,7 @@
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <cstddef>
 #include <limits>
 #include <memory>
 #include <vector>
@@ -351,6 +353,21 @@ Interaction<TSpectral> SceneView<TSpectral>::resolve_hit(const Ray<TSpectral>& r
 }
 
 /**
+ * @brief Returns the indirect-source index of the instance a hit landed on.
+ * @param hit The hit record to classify.
+ * @return Index into indirect_sources(), or NO_INDIRECT_SOURCE if the hit is
+ *         invalid or not on a designated indirect source.
+ */
+template <IsSpectral TSpectral>
+[[nodiscard]] std::size_t SceneView<TSpectral>::indirect_source_index(const HitRecord& hit) const
+{
+    if (!hit.hit()) {
+        return NO_INDIRECT_SOURCE;
+    }
+    return instance_mappings_[hit.inst_id].indirect_index;
+}
+
+/**
  * @brief Intersect a batch of rays with the scene and return their hit records.
  * @param rays The rays to intersect.
  * @param time The time for motion blur.
@@ -426,15 +443,21 @@ void SceneView<TSpectral>::traverse_and_collect_(
             render_transforms[i] = static_cast<Transform<float>>(local_apparent);
         }
 
+        // Indirect-source designation brackets the asset dispatch (the asset is
+        // validated at set-time to be a Primitive or a Model). Everything the
+        // dispatch collects in between becomes a member of one source: the lone
+        // primitive instance, or every primitive instance in a model's sub-graph.
+        const bool designated = instance->is_indirect_source();
+        if (designated) {
+            begin_indirect_source_(render_transforms);
+        }
+
         const auto& asset_var = instance->asset();
         std::visit([&](auto* raw_ptr) noexcept { handle_asset_ptr_(raw_ptr, render_transforms); },
                    asset_var);
 
-        // Capture indirect-source designation (validated at set-time to be a Primitive):
-        if (instance->is_indirect_source()) {
-            if (auto* const* prim_ptr = std::get_if<Primitive<TSpectral>*>(&asset_var)) {
-                add_indirect_source_instance_((*prim_ptr)->shared_from_this(), render_transforms);
-            }
+        if (designated) {
+            end_indirect_source_(*instance);
         }
     }
 
@@ -524,16 +547,29 @@ void SceneView<TSpectral>::add_primitive_instance_(
     auto* key = primitive.get();
     auto it = batch_lookup_.find(key);
 
+    std::size_t batch_index = 0;
     if (it != batch_lookup_.end()) {
-        size_t index = it->second;
-        primitives_[index].instances.push_back(instance_apparent_transforms);
+        batch_index = it->second;
+        primitives_[batch_index].instances.push_back(instance_apparent_transforms);
     } else {
         PrimitiveBatch<TSpectral> batch;
         batch.primitive = primitive;
         batch.instances.push_back(instance_apparent_transforms);
 
         primitives_.push_back(std::move(batch));
-        batch_lookup_[key] = primitives_.size() - 1;
+        batch_index = primitives_.size() - 1;
+        batch_lookup_[key] = batch_index;
+    }
+
+    // If the traversal is currently inside a designated instance, this instance is
+    // one of that source's members (see begin_indirect_source_).
+    if (open_indirect_index_ != NO_INDIRECT_SOURCE) {
+        IndirectSourceMember<TSpectral> member;
+        member.primitive = primitive;
+        member.batch_index = batch_index;
+        member.instance_index = primitives_[batch_index].instances.size() - 1;
+
+        indirect_sources_[open_indirect_index_].members.push_back(std::move(member));
     }
 }
 
@@ -572,74 +608,134 @@ void SceneView<TSpectral>::add_unresolved_instance_(
 }
 
 /**
- * @brief Records a designated indirect-source instance.
+ * @brief Opens a designated indirect source spanning the asset about to be collected.
  *
- * Must be called immediately after the corresponding primitive instance was
- * added via the traversal dispatch, so the batch's most recent instance is the
- * one being designated.
+ * Every primitive instance added between this call and the matching
+ * end_indirect_source_() is recorded as a member of the new source: exactly one
+ * for a designated Primitive, or one per Primitive in the sub-graph of a
+ * designated Model.
  *
- * @param primitive Primitive pointer
- * @param instance_apparent_transforms Render transforms (one per temporal sample)
+ * @param instance_apparent_transforms Render transforms of the designated instance.
+ * @throws std::runtime_error if a source is already open (designations cannot nest).
  */
 template <IsSpectral TSpectral>
-void SceneView<TSpectral>::add_indirect_source_instance_(
-    std::shared_ptr<Primitive<TSpectral>> primitive,
+void SceneView<TSpectral>::begin_indirect_source_(
     const std::vector<Transform<float>>& instance_apparent_transforms)
 {
-    auto it = batch_lookup_.find(primitive.get());
-    if (it == batch_lookup_.end()) {
-        HUIRA_THROW_ERROR("SceneView::add_indirect_source_instance_ - Designated primitive was "
-                          "not collected as scene geometry");
+    if (open_indirect_index_ != NO_INDIRECT_SOURCE) {
+        HUIRA_THROW_ERROR("SceneView::begin_indirect_source_ - An indirect source is already "
+                          "open; designated instances cannot nest");
     }
 
     IndirectSourceInstance<TSpectral> source;
-    source.primitive = primitive;
-    source.batch_index = it->second;
-    source.instance_index = primitives_[it->second].instances.size() - 1;
     source.transforms = instance_apparent_transforms;
 
     indirect_sources_.push_back(std::move(source));
+    open_indirect_index_ = indirect_sources_.size() - 1;
+}
+
+/**
+ * @brief Closes the source opened by begin_indirect_source_().
+ * @param instance The designated instance, for diagnostics.
+ * @throws std::runtime_error if the designated instance collected no primitive geometry.
+ */
+template <IsSpectral TSpectral>
+void SceneView<TSpectral>::end_indirect_source_(const Instance<TSpectral>& instance)
+{
+    const bool empty = indirect_sources_[open_indirect_index_].members.empty();
+    open_indirect_index_ = NO_INDIRECT_SOURCE;
+
+    if (empty) {
+        // A Model whose sub-graph holds no Primitive (or holds only lights, cameras
+        // or unresolved objects) has no surface to reflect from, and would leave the
+        // sampling proxy undefined:
+        HUIRA_THROW_ERROR("SceneView::end_indirect_source_ - " + instance.get_info() +
+                          " is designated as an indirect illumination source but contributes no "
+                          "Primitive geometry to this scene view");
+    }
 }
 
 /**
  * @brief Populates each indirect source's world-space bounding spheres.
  *
- * Reads the primitive's local-space AABB from its committed BLAS and produces
- * a conservative world-space bounding sphere per temporal sample: the local
- * box center transformed to world space, with radius equal to the maximum
- * distance to the transformed box corners (conservative under any affine
- * transform, including non-uniform scale).
+ * Produces one conservative bounding sphere per temporal sample, enclosing every
+ * member of the source. Each member contributes the eight corners of its
+ * primitive's committed BLAS AABB, transformed by the same render transform that
+ * places that instance in the TLAS. The affine image of a box is the convex hull
+ * of the images of its corners, so a sphere containing every transformed corner
+ * contains all of the geometry: the bound stays conservative under any affine
+ * transform (including non-uniform scale), and for a designated Model it spans the
+ * whole sub-graph.
+ *
+ * Deriving the bound from each member's placed transform, rather than composing a
+ * model-space union box and transforming that once, is deliberate: Transform's TRS
+ * composition is not associative under non-uniform scale, so a separately composed
+ * chain could disagree with where Embree actually places the geometry and silently
+ * break containment (the estimator's one unbiasedness precondition).
  */
 template <IsSpectral TSpectral>
 void SceneView<TSpectral>::compute_indirect_source_bounds_()
 {
-    for (auto& source : indirect_sources_) {
-        RTCScene blas = source.primitive->geometry->blas();
-        RTCBounds bounds{};
-        rtcGetSceneBounds(blas, &bounds);
+    // Bit i of the corner index selects upper vs lower on axis i:
+    auto box_corner = [](const Vec3<float>& lower, const Vec3<float>& upper, std::size_t corner) {
+        return Vec3<float>{(corner & 1) ? upper.x : lower.x,
+                           (corner & 2) ? upper.y : lower.y,
+                           (corner & 4) ? upper.z : lower.z};
+    };
 
-        const Vec3<float> lower{bounds.lower_x, bounds.lower_y, bounds.lower_z};
-        const Vec3<float> upper{bounds.upper_x, bounds.upper_y, bounds.upper_z};
-        const Vec3<float> center_local = 0.5f * (lower + upper);
+    for (auto& source : indirect_sources_) {
+        // Each member's local-space AABB corners, read once from its committed BLAS:
+        std::vector<std::array<Vec3<float>, 8>> member_corners(source.members.size());
+        for (std::size_t m = 0; m < source.members.size(); ++m) {
+            RTCScene blas = source.members[m].primitive->geometry->blas();
+            RTCBounds bounds{};
+            rtcGetSceneBounds(blas, &bounds);
+
+            const Vec3<float> lower{bounds.lower_x, bounds.lower_y, bounds.lower_z};
+            const Vec3<float> upper{bounds.upper_x, bounds.upper_y, bounds.upper_z};
+            for (std::size_t corner = 0; corner < 8; ++corner) {
+                member_corners[m][corner] = box_corner(lower, upper, corner);
+            }
+        }
 
         const std::size_t N = source.transforms.size();
         source.bounding_centers.resize(N);
         source.bounding_radii.resize(N);
 
-        for (std::size_t i = 0; i < N; ++i) {
-            const Transform<float>& xf = source.transforms[i];
-            const Vec3<float> center_world = xf.apply_to_point(center_local);
+        std::vector<Vec3<float>> world_corners;
+        world_corners.reserve(8 * source.members.size());
 
-            float radius = 0.0f;
-            for (int corner = 0; corner < 8; ++corner) {
-                const Vec3<float> corner_local{(corner & 1) ? upper.x : lower.x,
-                                               (corner & 2) ? upper.y : lower.y,
-                                               (corner & 4) ? upper.z : lower.z};
-                const Vec3<float> corner_world = xf.apply_to_point(corner_local);
-                radius = std::max(radius, glm::length(corner_world - center_world));
+        for (std::size_t i = 0; i < N; ++i) {
+            world_corners.clear();
+            for (std::size_t m = 0; m < source.members.size(); ++m) {
+                const IndirectSourceMember<TSpectral>& member = source.members[m];
+                const std::vector<Transform<float>>& member_transforms =
+                    primitives_[member.batch_index].instances[member.instance_index];
+                const Transform<float>& xf =
+                    member_transforms[std::min(i, member_transforms.size() - 1)];
+
+                for (const Vec3<float>& corner_local : member_corners[m]) {
+                    world_corners.push_back(xf.apply_to_point(corner_local));
+                }
             }
 
-            source.bounding_centers[i] = center_world;
+            // Centre on the world AABB of the corners. For a single member this is
+            // the transformed local box centre, since an affine map preserves the
+            // corners' central symmetry: the lone-Primitive bound is unchanged.
+            Vec3<float> lower = world_corners[0];
+            Vec3<float> upper = world_corners[0];
+            for (const Vec3<float>& corner_world : world_corners) {
+                lower = glm::min(lower, corner_world);
+                upper = glm::max(upper, corner_world);
+            }
+            const Vec3<float> center = 0.5f * (lower + upper);
+
+            float radius = 0.0f;
+            for (const Vec3<float>& corner_world : world_corners) {
+                radius = std::max(radius, glm::length(corner_world - center));
+            }
+
+            source.bounding_centers[i] = center;
             source.bounding_radii[i] = radius;
         }
     }
@@ -688,6 +784,20 @@ void SceneView<TSpectral>::build_tlas_()
     }
     rtcSetSceneFlags(tlas_, scene_flags);
 
+    // Reverse map from a primitive instance to the indirect source that owns it.
+    // A source may own many instances (every Primitive of a designated Model), so
+    // this is built once rather than scanned per instance.
+    std::vector<std::vector<std::size_t>> indirect_lookup(primitives_.size());
+    for (std::size_t batch_idx = 0; batch_idx < primitives_.size(); ++batch_idx) {
+        indirect_lookup[batch_idx].assign(primitives_[batch_idx].instances.size(),
+                                          NO_INDIRECT_SOURCE);
+    }
+    for (std::size_t src_idx = 0; src_idx < indirect_sources_.size(); ++src_idx) {
+        for (const auto& member : indirect_sources_[src_idx].members) {
+            indirect_lookup[member.batch_index][member.instance_index] = src_idx;
+        }
+    }
+
     // Add Primitives
     for (std::size_t batch_idx = 0; batch_idx < primitives_.size(); ++batch_idx) {
         const auto& batch = primitives_[batch_idx];
@@ -726,13 +836,7 @@ void SceneView<TSpectral>::build_tlas_()
             mapping.batch_index = batch_idx;
             mapping.instance_index = inst_idx;
             mapping.light_index = 0;
-            for (std::size_t src_idx = 0; src_idx < indirect_sources_.size(); ++src_idx) {
-                if (indirect_sources_[src_idx].batch_index == batch_idx &&
-                    indirect_sources_[src_idx].instance_index == inst_idx) {
-                    mapping.indirect_index = src_idx;
-                    break;
-                }
-            }
+            mapping.indirect_index = indirect_lookup[batch_idx][inst_idx];
             instance_mappings_[geom_id] = mapping;
         }
     }
@@ -825,10 +929,14 @@ void SceneView<TSpectral>::build_tlas_()
 /**
  * @brief Evaluates one light's MIS-weighted NEE contribution at a shading point.
  *
- * This is the body previously inlined in the renderer's direct-lighting loop,
- * lifted so it can also serve indirect-source (reflector) shading and unresolved
- * object irradiance resolution. The random number consumption order is identical
- * to the original inline code (light sample, then transmittance).
+ * Samples the light, performs the shadow/transmittance test, evaluates the BSDF,
+ * and applies the power heuristic against the BSDF sampling PDF. Returns the
+ * contribution WITHOUT any path throughput applied (the caller owns throughput).
+ * Returns zero for occluded, back-facing (opaque), or unsampleable configurations.
+ *
+ * Templated on the material and its evaluated-parameter types so this header does
+ * not need to name them; the Renderer and direct_lit_radiance() instantiate it
+ * with the types produced by Material::evaluate().
  */
 template <IsSpectral TSpectral>
 template <typename TMaterial, typename TParams>
@@ -883,6 +991,19 @@ SceneView<TSpectral>::sample_light_contribution_(const LightInstance<TSpectral>&
 
 /**
  * @brief Evaluates the direct (next-event-estimated) radiance leaving a hit point.
+ *
+ * Resolves the hit, evaluates its material, and accumulates the MIS-weighted
+ * contribution of every light in the view toward the hit point, returning the
+ * outgoing radiance along -ray.direction(). Only primitive (non-light) geometry
+ * is shaded; hits on light geometry return zero, as emission is the caller's
+ * responsibility. Partial opacity at the hit point is not resampled here.
+ *
+ * @param ray The ray that produced the hit.
+ * @param hit The hit record (must reference primitive geometry to shade).
+ * @param sampler Random sampler for light sampling and transmittance estimation.
+ * @param time Normalized time in [0, 1] for motion blur.
+ * @param medium_stack The medium stack at the hit point (defaults to empty).
+ * @return The direct-lit outgoing spectral radiance at the hit.
  */
 template <IsSpectral TSpectral>
 TSpectral

@@ -93,7 +93,7 @@ SphereLight<TSpectral>::sample_li(const Interaction<TSpectral>& isect,
                                   Sampler<float>& sampler) const
 {
     // Uniformly sample the cone subtended by the sphere (shared with
-    // indirect-source sampling; see huira/render/cone_sampling.hpp).
+    // indirect-source sampling; see huira/sampling/cone_sampling.hpp).
     auto cone = sample_sphere_cone(isect.position, transform.position, radius_, sampler);
 
     // If the shading point is inside the light sphere, it receives no direct lighting
