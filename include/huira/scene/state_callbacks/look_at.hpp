@@ -1,4 +1,9 @@
+#pragma once
+
+#include <cmath>
+
 #include "huira/core/rotation.hpp"
+#include "huira/scene/node.hpp"
 #include "huira/scene/state_callbacks/state_callbacks.hpp"
 
 namespace huira {

@@ -77,11 +77,15 @@ inline void bind_spectral_bins(py::module_& m)
         .def(py::self += py::self)
         .def(py::self *= py::self)
 
+#if defined(__clang__)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wself-assign-overloaded"
+#endif
         .def(py::self -= py::self)
         .def(py::self /= py::self)
+#if defined(__clang__)
 #pragma clang diagnostic pop
+#endif
 
         .def("__add__",
              [](const TSpectral& a, const TSpectral& b) {

@@ -100,11 +100,15 @@ void bind_quantity_type(py::module& m, const std::string& name)
         .def(py::self / double(), "Divide by a scalar.")
         .def(py::self *= double())
 
+#if defined(__clang__)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wself-assign-overloaded"
+#endif
         .def(py::self -= py::self)
         .def(py::self /= double())
+#if defined(__clang__)
 #pragma clang diagnostic pop
+#endif
 
         .def(double() * py::self, "Multiply a scalar by this unit.")
         // Cross-unit comparison via SI values
