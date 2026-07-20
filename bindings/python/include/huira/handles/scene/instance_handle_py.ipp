@@ -28,7 +28,17 @@ inline void bind_instance_handle(py::module_& m)
             .def("look_at",
                  py::overload_cast<const Vec3<double>&, const Vec3<double>&>(&HandleType::look_at),
                  py::arg("target_position"),
-                 py::arg("up") = Vec3<double>{0.0, 0.0, 1.0});
+                 py::arg("up") = Vec3<double>{0.0, 0.0, 1.0})
+            // Designate this instance (which must contain a Primitive or a Model)
+            // as an indirect illumination source that is explicitly sampled during
+            // rendering, rather than relying on it being found by chance.
+            .def("set_indirect_source",
+                 &HandleType::set_indirect_source,
+                 py::arg("enabled") = true,
+                 "Designate this instance as an indirect illumination source")
+            .def("is_indirect_source",
+                 &HandleType::is_indirect_source,
+                 "Whether this instance is designated as an indirect illumination source");
 
     bind_handle_methods<Instance<TSpectral>>(cls);
     bind_node_handle_methods<TSpectral, Instance<TSpectral>>(cls);
