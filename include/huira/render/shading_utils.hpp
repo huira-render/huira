@@ -23,6 +23,9 @@ inline float power_heuristic(float f_pdf, float g_pdf)
     }
     float f2 = f_pdf * f_pdf;
     float g2 = g_pdf * g_pdf;
+    if (f2 + g2 <= 0.0f) {
+        return 0.0f;
+    }
     return f2 / (f2 + g2);
 }
 
@@ -42,6 +45,8 @@ inline Transform<float> interpolate_transform(const std::vector<Transform<float>
     if (transforms.size() == 1) {
         return transforms[0];
     }
+
+    t = std::clamp(t, 0.0f, 1.0f);
 
     float scaled_t = t * static_cast<float>(transforms.size() - 1);
     std::size_t idx = static_cast<std::size_t>(std::floor(scaled_t));
