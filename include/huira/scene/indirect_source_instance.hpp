@@ -182,6 +182,8 @@ struct IndirectSourceInstance {
         if (n == 1) {
             return {bounding_centers[0], bounding_radii[0]};
         }
+        t = std::clamp(t, 0.0f, 1.0f);
+
         const float scaled = t * static_cast<float>(n - 1);
         std::size_t idx = static_cast<std::size_t>(std::floor(scaled));
         idx = std::min(idx, n - 2);
