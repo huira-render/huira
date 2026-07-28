@@ -48,6 +48,7 @@ void CameraModel<TSpectral>::set_focal_length(units::Millimeter focal_length)
         units::Meter px(sensor_->pixel_pitch().x);
         units::Meter py(sensor_->pixel_pitch().y);
         psf_ = aperture_->make_psf(f, px, py, psf_->get_radius(), psf_->get_banks());
+        psf_convolution_kernel_valid_ = false;
     }
 }
 
@@ -307,6 +308,7 @@ void CameraModel<TSpectral>::set_psf(Args&&... args)
 {
     psf_ = std::make_unique<TPSF>(std::forward<Args>(args)...);
     use_aperture_psf_ = false;
+    psf_convolution_kernel_valid_ = false;
 }
 
 /**
@@ -322,6 +324,53 @@ void CameraModel<TSpectral>::use_aperture_psf(int radius, int banks)
     units::Meter px(sensor_->pixel_pitch().x);
     units::Meter py(sensor_->pixel_pitch().y);
     psf_ = aperture_->make_psf(f, px, py, radius, banks);
+    psf_convolution_kernel_valid_ = false;
+}
+
+/**
+ * @brief Sets the radius of the whole-image PSF convolution kernel.
+ *
+ * The convolution kernel is a single centered kernel built via
+ * PSF::generate_convolution_kernel() and is independent of the polyphase stamping cache, so
+ * it may be much larger (e.g. spanning the full frame to model scattered-light wings). A
+ * radius of 0 matches the polyphase radius.
+ *
+ * @param radius Convolution kernel radius in pixels (kernel dimension is 2 * radius + 1)
+ */
+template <IsSpectral TSpectral>
+void CameraModel<TSpectral>::set_psf_convolution_radius(int radius)
+{
+    if (radius < 0) {
+        HUIRA_THROW_ERROR(
+            "CameraModel::set_psf_convolution_radius - Radius must be non-negative: " +
+            std::to_string(radius));
+    }
+    if (radius != psf_convolution_radius_) {
+        psf_convolution_radius_ = radius;
+        psf_convolution_kernel_valid_ = false;
+    }
+}
+
+/**
+ * @brief Returns the whole-image PSF convolution kernel, building it lazily if needed.
+ *
+ * @return Reference to the cached convolution kernel.
+ */
+template <IsSpectral TSpectral>
+const Image<TSpectral>& CameraModel<TSpectral>::get_psf_convolution_kernel()
+{
+    if (psf_ == nullptr) {
+        HUIRA_THROW_ERROR("CameraModel::get_psf_convolution_kernel - No PSF has been set");
+    }
+    if (!psf_convolution_kernel_valid_) {
+        const int radius =
+            (psf_convolution_radius_ > 0) ? psf_convolution_radius_ : psf_->get_radius();
+        HUIRA_LOG_INFO("CameraModel - Generating " + std::to_string(2 * radius + 1) + "x" +
+                       std::to_string(2 * radius + 1) + " PSF convolution kernel");
+        psf_convolution_kernel_ = psf_->generate_convolution_kernel(radius);
+        psf_convolution_kernel_valid_ = true;
+    }
+    return psf_convolution_kernel_;
 }
 
 /**
@@ -330,6 +379,7 @@ void CameraModel<TSpectral>::use_aperture_psf(int radius, int banks)
 template <IsSpectral TSpectral>
 void CameraModel<TSpectral>::delete_psf()
 {
+    psf_convolution_kernel_valid_ = false;
     psf_ = nullptr;
     use_aperture_psf_ = false;
 }
@@ -580,6 +630,7 @@ void CameraModel<TSpectral>::set_fstop(float fstop)
         units::Meter px(sensor_->pixel_pitch().x);
         units::Meter py(sensor_->pixel_pitch().y);
         psf_ = aperture_->make_psf(f, px, py, psf_->get_radius(), psf_->get_banks());
+        psf_convolution_kernel_valid_ = false;
     }
 }
 

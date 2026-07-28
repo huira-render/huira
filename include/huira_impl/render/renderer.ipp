@@ -626,7 +626,7 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
         });
 
     if (frame_buffer.has_received_power() && camera->convolve_psf_) {
-        const Image<TSpectral>& psf = camera->get_psf_kernel(0.0f, 0.0f);
+        const Image<TSpectral>& psf = camera->get_psf_convolution_kernel();
         received_power.convolve(psf);
     }
 
@@ -1066,7 +1066,7 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                       });
 
     if (use_defocus && camera->convolve_psf_) {
-        const Image<TSpectral>& psf = camera->get_psf_kernel(0.0f, 0.0f);
+        const Image<TSpectral>& psf = camera->get_psf_convolution_kernel();
         received_power.convolve(psf);
     }
 

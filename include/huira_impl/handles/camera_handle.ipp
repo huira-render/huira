@@ -366,6 +366,12 @@ void CameraModelHandle<TSpectral>::enable_psf_convolution(bool convolve_psf) con
     this->get_()->enable_psf_convolution(convolve_psf);
 }
 
+template <IsSpectral TSpectral>
+void CameraModelHandle<TSpectral>::set_psf_convolution_radius(int radius) const
+{
+    this->get_()->set_psf_convolution_radius(radius);
+}
+
 /**
  * @brief Delete the PSF and disable aperture PSF usage.
  */
@@ -417,6 +423,18 @@ template <IsSpectral TSpectral>
 void CameraModelHandle<TSpectral>::disable_harvey_shack_scatter() const
 {
     this->get_()->disable_harvey_shack_scatter();
+}
+
+template <IsSpectral TSpectral>
+int CameraModelHandle<TSpectral>::get_psf_radius() const
+{
+    return this->get_()->get_psf_radius();
+}
+
+template <IsSpectral TSpectral>
+const Image<TSpectral>& CameraModelHandle<TSpectral>::get_psf_convolution_kernel() const
+{
+    return this->get_()->get_psf_convolution_kernel();
 }
 
 /**

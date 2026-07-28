@@ -4,6 +4,7 @@
 #include "huira/cameras/psfs/psf.hpp"
 #include "huira/concepts/spectral_concepts.hpp"
 #include "huira/core/types.hpp"
+#include "huira/units/units.hpp"
 
 namespace huira {
 

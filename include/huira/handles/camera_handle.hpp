@@ -98,6 +98,7 @@ class CameraModelHandle : public Handle<CameraModel<TSpectral>> {
     void use_aperture_psf(bool value) const;
     void use_aperture_psf(int radius = 64, int banks = 16) const;
     void enable_psf_convolution(bool convolve_psf = true) const;
+    void set_psf_convolution_radius(int radius) const;
     void delete_psf() const;
 
     void set_veiling_glare(float alpha) const;
@@ -107,6 +108,9 @@ class CameraModelHandle : public Handle<CameraModel<TSpectral>> {
                                   float r0 = 0.5f,
                                   float radius = 0.f) const;
     void disable_harvey_shack_scatter() const;
+
+    int get_psf_radius() const;
+    const Image<TSpectral>& get_psf_convolution_kernel() const;
 
     void enable_depth_of_field(bool depth_of_field = true) const;
     void set_focus_distance(units::Meter focus_distance) const;

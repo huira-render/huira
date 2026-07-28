@@ -9,6 +9,8 @@ set(UNIT_TESTS
     huira/core/test_rotation.cpp
     huira/core/test_time.cpp
 
+    huira/images/test_convolution.cpp
+
     huira/units/test_units.cpp
 )
 
