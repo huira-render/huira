@@ -100,6 +100,7 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
 
     void use_aperture_psf(int radius = 64, int banks = 16);
     void enable_psf_convolution(bool convolve_psf = true) { convolve_psf_ = convolve_psf; }
+    void set_psf_convolution_radius(int radius);
     void delete_psf();
 
     void set_veiling_glare(float alpha);
@@ -116,6 +117,8 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
         return psf_->get_kernel(u, v);
     }
     int get_psf_radius() const { return psf_->get_radius(); }
+
+    const Image<TSpectral>& get_psf_convolution_kernel();
 
     void enable_depth_of_field(bool depth_of_field = true) { depth_of_field_ = depth_of_field; }
     void set_focus_distance(units::Meter focus_distance);
@@ -163,6 +166,13 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     std::unique_ptr<Distortion<TSpectral>> distortion_ = nullptr;
     std::unique_ptr<PSF<TSpectral>> psf_ = nullptr;
     bool convolve_psf_ = false;
+
+    // Whole-image convolution kernel: a single centered kernel, built lazily from psf_ and
+    // cached. Independent of the polyphase stamping cache; may be much larger. A radius of 0
+    // means "match the polyphase radius".
+    int psf_convolution_radius_ = 0;
+    Image<TSpectral> psf_convolution_kernel_;
+    bool psf_convolution_kernel_valid_ = false;
 
     bool use_aperture_psf_ = false;
     float d_ = std::numeric_limits<float>::infinity();

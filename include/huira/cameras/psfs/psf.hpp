@@ -26,6 +26,8 @@ class PSF {
 
     void build_polyphase_cache(int radius, int banks);
 
+    Image<TSpectral> generate_convolution_kernel(int radius);
+
     const Image<TSpectral>& get_kernel(float u, float v) const;
     std::vector<Image<TSpectral>> get_all_kernels() const { return cache_.kernels; }
 

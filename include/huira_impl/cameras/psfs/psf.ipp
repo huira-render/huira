@@ -1,9 +1,10 @@
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
+#include <string>
 
 #include "huira/images/image.hpp"
-#include "huira/images/io/png_io.hpp"
 #include "huira/util/logger.hpp"
 #include "tbb/blocked_range2d.h"
 #include "tbb/parallel_for.h"
@@ -21,6 +22,32 @@ namespace huira {
 template <IsSpectral TSpectral>
 void PSF<TSpectral>::build_polyphase_cache(int radius, int banks)
 {
+    // The polyphase cache stores (banks * banks) subpixel-shifted kernels, generated from an
+    // intermediate super-resolution LUT of (dim * 64)^2 samples. Both scale steeply with
+    // radius: this path is designed for the compact PSF core used when stamping unresolved
+    // sources (radius ~4-64). Frame-wide kernels for whole-image convolution should use
+    // generate_convolution_kernel() instead, which builds a single centered kernel with no
+    // subpixel banks and no super-resolution intermediate.
+    {
+        const std::size_t dim = 2 * static_cast<std::size_t>(radius) + 1;
+        const std::size_t lut_res = std::max<std::size_t>(2048, dim * 64);
+        const std::size_t lut_bytes = lut_res * lut_res * sizeof(TSpectral);
+        const std::size_t bank_bytes = static_cast<std::size_t>(banks) *
+                                       static_cast<std::size_t>(banks) * dim * dim *
+                                       sizeof(TSpectral);
+        constexpr std::size_t MAX_BYTES = std::size_t{4} * 1024 * 1024 * 1024; // 4 GiB
+        if (lut_bytes + bank_bytes > MAX_BYTES) {
+            HUIRA_THROW_ERROR(
+                "PSF::build_polyphase_cache - radius " + std::to_string(radius) + " with " +
+                std::to_string(banks) + "x" + std::to_string(banks) + " banks requires " +
+                std::to_string((lut_bytes + bank_bytes) >> 30) +
+                " GiB. The polyphase cache is intended for the compact stamping core; for "
+                "large frame-wide convolution kernels use "
+                "CameraModel::set_psf_convolution_radius() / "
+                "PSF::generate_convolution_kernel() instead.");
+        }
+    }
+
     cache_.radius = radius;
     cache_.banks = banks;
     cache_.dim = 2 * radius + 1;
@@ -61,6 +88,82 @@ const Image<TSpectral>& PSF<TSpectral>::get_kernel(float u, float v) const
                         static_cast<int>(cache_.banks) - 1);
 
     return cache_.kernels[static_cast<std::size_t>(by * cache_.banks + bx)];
+}
+
+/**
+ * @brief Generates a single centered kernel suitable for whole-image convolution.
+ *
+ * Unlike the polyphase cache, this produces exactly one kernel with zero subpixel offset, by
+ * directly integrating evaluate() over each pixel with stratified sampling. There is no
+ * super-resolution intermediate LUT and no bank multiplicity, so memory is dim^2 pixels
+ * regardless of radius - large frame-wide kernels (radius of hundreds to thousands of pixels)
+ * are practical. The result is normalized to unit energy per channel.
+ *
+ * evaluate() must be thread-safe: pixels are integrated in parallel.
+ *
+ * @param radius The kernel radius in pixels (kernel dimension is 2 * radius + 1).
+ * @return The normalized convolution kernel.
+ */
+template <IsSpectral TSpectral>
+Image<TSpectral> PSF<TSpectral>::generate_convolution_kernel(int radius)
+{
+    if (radius < 1) {
+        HUIRA_THROW_ERROR("PSF::generate_convolution_kernel - Radius must be >= 1: " +
+                          std::to_string(radius));
+    }
+
+    const int dim = 2 * radius + 1;
+    Image<TSpectral> kernel(dim, dim);
+
+    // Same per-pixel integration quality as the polyphase path (16x16 stratified samples),
+    // but sampling evaluate() directly instead of an interpolated super-resolution LUT:
+    constexpr int INTEGRATION_STEPS = 16;
+    constexpr float INV_SAMPLES_SQ =
+        1.0f / static_cast<float>(INTEGRATION_STEPS * INTEGRATION_STEPS);
+    constexpr float SAMPLE_STEP = 1.0f / static_cast<float>(INTEGRATION_STEPS);
+
+    tbb::parallel_for(
+        tbb::blocked_range2d<int>(0, dim, 0, dim), [&](const tbb::blocked_range2d<int>& r) {
+            for (int y = r.rows().begin(); y < r.rows().end(); ++y) {
+                const float pixel_center_y = static_cast<float>(y - radius);
+                for (int x = r.cols().begin(); x < r.cols().end(); ++x) {
+                    const float pixel_center_x = static_cast<float>(x - radius);
+
+                    TSpectral integrated_val{};
+                    for (int sy = 0; sy < INTEGRATION_STEPS; ++sy) {
+                        const float sub_y = ((static_cast<float>(sy) + 0.5f) * SAMPLE_STEP) - 0.5f;
+                        for (int sx = 0; sx < INTEGRATION_STEPS; ++sx) {
+                            const float sub_x =
+                                ((static_cast<float>(sx) + 0.5f) * SAMPLE_STEP) - 0.5f;
+                            integrated_val +=
+                                evaluate(pixel_center_x + sub_x, pixel_center_y + sub_y);
+                        }
+                    }
+                    kernel(x, y) = integrated_val * INV_SAMPLES_SQ;
+                }
+            }
+        });
+
+    // Normalize to unit energy per channel (double accumulation for large kernels):
+    std::array<double, TSpectral::size()> totals{};
+    for (int y = 0; y < dim; ++y) {
+        for (int x = 0; x < dim; ++x) {
+            for (std::size_t i = 0; i < TSpectral::size(); ++i) {
+                totals[i] += static_cast<double>(kernel(x, y)[i]);
+            }
+        }
+    }
+    TSpectral scale;
+    for (std::size_t i = 0; i < TSpectral::size(); ++i) {
+        scale[i] = (totals[i] > 1e-12) ? static_cast<float>(1.0 / totals[i]) : 0.0f;
+    }
+    for (int y = 0; y < dim; ++y) {
+        for (int x = 0; x < dim; ++x) {
+            kernel(x, y) *= scale;
+        }
+    }
+
+    return kernel;
 }
 
 /**
