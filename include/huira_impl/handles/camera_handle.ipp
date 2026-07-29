@@ -421,6 +421,23 @@ void CameraModelHandle<TSpectral>::delete_psf() const
 }
 
 /**
+ * @brief Sets a measured (user-supplied) PSF as the core PSF of the camera.
+ *
+ * @param data Measured PSF samples, centered on the image.
+ * @param samples_per_pixel Measurement samples per sensor pixel per axis.
+ * @param radius Polyphase stamping kernel radius in sensor pixels (0 = auto).
+ * @param banks Number of polyphase banks per axis for subpixel stamping.
+ */
+template <IsSpectral TSpectral>
+void CameraModelHandle<TSpectral>::set_measured_psf(const Image<TSpectral>& data,
+                                                    float samples_per_pixel,
+                                                    int radius,
+                                                    int banks) const
+{
+    this->get_()->set_measured_psf(data, samples_per_pixel, radius, banks);
+}
+
+/**
  * @brief Set the veiling glare alpha value.
  * @param alpha Veiling glare alpha (0 to 1)
  */

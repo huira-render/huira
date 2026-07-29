@@ -151,3 +151,57 @@ TEST_CASE("Scatter-only camera (no core PSF)", "[cameras][psf][scatter]")
         REQUIRE(kernel(radius, radius)[0] > 0.9f);
     }
 }
+
+TEST_CASE("Wings-only kernel for unresolved sources", "[cameras][psf][scatter]")
+{
+    CameraModel<RGB> camera;
+    camera.set_focal_length(units::Millimeter(25.0));
+    camera.configure_sensor_from_size(Resolution{256, 256}, units::Millimeter(6.0));
+    camera.use_aperture_psf(4, 2);
+    camera.set_psf_convolution_radius(48);
+
+    SECTION("Requires scattering to be enabled")
+    {
+        REQUIRE_THROWS(camera.get_psf_wings_kernel());
+    }
+
+    SECTION("Wings kernel is the unit-energy scatter component")
+    {
+        const float b = 2.5f;
+        const float r0 = 0.5f;
+        camera.set_harvey_shack_scatter(0.05f, b, r0);
+
+        const Image<RGB>& wings = camera.get_psf_wings_kernel();
+        REQUIRE(wings.width() == 97);
+        for (std::size_t c = 0; c < 3; ++c) {
+            REQUIRE(std::fabs(kernel_energy(wings, c) - 1.0) < 1e-4);
+        }
+
+        // It must match a directly generated scatter kernel (not scaled by f_s):
+        HarveyShackScatter<RGB> scatter(b, r0);
+        Image<RGB> expected = scatter.generate_convolution_kernel(48);
+        float max_err = 0.f;
+        for (int y = 0; y < wings.height(); ++y) {
+            for (int x = 0; x < wings.width(); ++x) {
+                max_err = std::max(max_err, std::fabs(wings(x, y)[0] - expected(x, y)[0]));
+            }
+        }
+        REQUIRE(max_err < 1e-7f);
+
+        // And the identity used by the renderer must hold:
+        //     composite == (1 - f_s) * core + f_s * wings
+        camera.disable_harvey_shack_scatter();
+        Image<RGB> core = camera.get_psf_convolution_kernel();
+        camera.set_harvey_shack_scatter(0.05f, b, r0);
+        const Image<RGB>& composite = camera.get_psf_convolution_kernel();
+        const Image<RGB>& wings2 = camera.get_psf_wings_kernel();
+        max_err = 0.f;
+        for (int y = 0; y < composite.height(); ++y) {
+            for (int x = 0; x < composite.width(); ++x) {
+                const float e = core(x, y)[0] * 0.95f + wings2(x, y)[0] * 0.05f;
+                max_err = std::max(max_err, std::fabs(composite(x, y)[0] - e));
+            }
+        }
+        REQUIRE(max_err < 1e-6f);
+    }
+}
