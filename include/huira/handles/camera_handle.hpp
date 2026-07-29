@@ -83,9 +83,9 @@ class CameraModelHandle : public Handle<CameraModel<TSpectral>> {
     void set_sensor_dark_current(float dark_current) const;
     void set_sensor_bias_level(float bias_level) const;
     void set_sensor_bit_depth(int bit_depth) const;
-    void set_sensor_gain(float gain) const;
+    void set_sensor_conversion_gain(float gain) const;
     void set_sensor_gain_db(float gain_db) const;
-    void set_sensor_uinty_db(float unity_db) const;
+    void set_sensor_unity_db(float unity_db) const;
 
     void set_sensor_rotation(units::Radian angle) const;
 

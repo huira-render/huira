@@ -53,7 +53,7 @@ int main(int argc, char** argv)
 
     // Set camera exposure settings
     camera_model.set_fstop(5);
-    camera_model.set_sensor_gain(1.f);
+    camera_model.set_sensor_conversion_gain(1.f);
     camera_model.set_sensor_bit_depth(12);
     camera_model.set_sensor_quantum_efficiency(0.8);
     camera_model.set_sensor_full_well_capacity(20000);

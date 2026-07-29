@@ -209,16 +209,16 @@ void SensorModel<TSpectral>::set_bit_depth(int bit_depth)
 }
 
 /**
- * @brief Sets the gain of the sensor in e-/ADU.
+ * @brief Sets the conversion gain of the sensor in e-/ADU.
  *
  * @param gain The gain in electrons per ADU.
  * @throws std::runtime_error if the value is invalid.
  */
 template <IsSpectral TSpectral>
-void SensorModel<TSpectral>::set_gain_adu(float gain)
+void SensorModel<TSpectral>::set_conversion_gain(float gain)
 {
     if (gain <= 0 || std::isinf(gain) || std::isnan(gain)) {
-        HUIRA_THROW_ERROR("SensorModel::set_gain_adu - Gain must be a positive value: " +
+        HUIRA_THROW_ERROR("SensorModel::set_conversion_gain - Gain must be a positive value: " +
                           std::to_string(gain) + " e-/ADU");
     }
     config_.gain = gain;
