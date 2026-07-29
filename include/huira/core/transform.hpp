@@ -24,7 +24,16 @@ struct Transform {
     Rotation<T> rotation{};
     Vec3<T> scale{1, 1, 1};
 
+    /// Linear velocity of this frame's origin, expressed in the PARENT frame's
+    /// axes. operator* composes it accordingly (rotating a child's velocity only
+    /// by ancestor rotations, never by the child's own rotation).
     Vec3<T> velocity{0, 0, 0};
+
+    /// Angular velocity of this frame, expressed in the PARENT frame's axes.
+    /// This convention is relied upon by operator*, inverse(),
+    /// apply_to_angular_velocity(), and velocity_of_point(). Body-frame rates
+    /// must be re-expressed in parent axes (omega_parent = rotation * omega_body)
+    /// before being stored here.
     Vec3<T> angular_velocity{0, 0, 0};
 
     template <IsFloatingPoint U>

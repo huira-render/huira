@@ -137,6 +137,14 @@ class Node : public SceneObject<Node<TSpectral>> {
 
   protected:
     Transform<double> local_transform_;
+
+    /// When true, local_transform_.angular_velocity was supplied via
+    /// set_body_angular_velocity() and is expressed in the node's own body axes;
+    /// orientation propagates as q(t) = q_0 * delta. When false (the default),
+    /// the rates are expressed in the parent frame's axes and orientation
+    /// propagates as q(t) = delta * q_0. Note that get_local_rotation_at_()
+    /// always re-expresses the angular velocity in parent axes before storing it
+    /// in the returned Transform (the frame Transform::operator* expects).
     bool body_frame_rates_ = false;
 
     TransformMode position_mode_ = TransformMode::MANUAL_TRANSFORM;

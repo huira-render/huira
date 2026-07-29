@@ -30,5 +30,6 @@ class RootFrameHandle : public FrameHandle<TSpectral> {
     void set_scale(const Vec3<double>&) = delete;
     void set_velocity(const Vec3<double>&) = delete;
     void set_angular_velocity(const Vec3<double>&) = delete;
+    void set_body_angular_velocity(const Vec3<double>&) = delete;
 };
 } // namespace huira
