@@ -38,7 +38,24 @@ void Renderer<TSpectral>::render(SceneView<TSpectral>& scene_view,
 
     Image<TSpectral> ray_traced_power = this->path_trace_(scene_view, frame_buffer);
 
-    Image<TSpectral> star_power = this->render_unresolved_(scene_view, frame_buffer);
+    Image<TSpectral> star_wing_splat(0, 0, TSpectral{0});
+    Image<TSpectral> star_power =
+        this->render_unresolved_(scene_view, frame_buffer, star_wing_splat);
+
+    // Apply the scattered-light wings to unresolved sources. Their compact core was stamped
+    // with exact subpixel placement; their raw energy was bilinearly splatted (which
+    // preserves total energy and centroid exactly) into star_wing_splat. Convolving the
+    // splat with the wings-only kernel and blending by energy fraction reproduces the same
+    // total system PSF the resolved image receives:
+    //     star_total = (1 - f_s) * core_stamped + f_s * (wings (x) splat)
+    if (star_wing_splat.size() > 0) {
+        star_wing_splat.convolve(camera->get_psf_wings_kernel());
+        const float f_s = camera->scatter_fraction_;
+        const float core_weight = 1.f - f_s;
+        for (std::size_t i = 0; i < star_power.size(); ++i) {
+            star_power[i] = star_power[i] * core_weight + star_wing_splat[i] * f_s;
+        }
+    }
 
     if (frame_buffer.has_received_power()) {
         frame_buffer.received_power() = ray_traced_power + star_power;
@@ -700,7 +717,8 @@ struct RenderItem {
  */
 template <IsSpectral TSpectral>
 Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& scene_view,
-                                                         FrameBuffer<TSpectral>& frame_buffer)
+                                                         FrameBuffer<TSpectral>& frame_buffer,
+                                                         Image<TSpectral>& wing_splat)
 {
     auto start_clock = std::chrono::high_resolution_clock::now();
     auto& camera = scene_view.camera_model_;
@@ -716,6 +734,16 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
 
     // Determine the stamp radius based on camera settings:
     bool use_defocus = camera->aperture_->has_defocus();
+
+    // Scattered-light wings for unresolved sources: the (large) wings kernel is never
+    // stamped per source. Instead, raw sample energy is bilinearly splatted into wing_splat
+    // and the caller convolves it with the wings kernel once. In the defocus path the whole
+    // unresolved image is convolved with the composite kernel below, which already includes
+    // the wings, so the splat is skipped there:
+    const bool splat_wings = camera->convolve_psf_ && camera->scatter_enabled_ && !use_defocus;
+    if (splat_wings) {
+        wing_splat = Image<TSpectral>(fb_width, fb_height, TSpectral{0});
+    }
     bool use_psf_direct = camera->has_psf() && !use_defocus;
     int stamp_radius = 0;
     if (use_defocus) {
@@ -752,6 +780,7 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
     }
 
     if (items.empty()) {
+        wing_splat = Image<TSpectral>(0, 0, TSpectral{0});
         return received_power;
     }
 
@@ -899,10 +928,11 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
     const auto& depth_buffer = frame_buffer.depth();
     bool has_depth = frame_buffer.has_depth();
 
-    int margin = stamp_radius;
+    int margin = splat_wings ? std::max(stamp_radius, 1) : stamp_radius;
 
     struct TileBuffer {
         Image<TSpectral> buf;
+        Image<TSpectral> splat;
         int origin_x = 0;
         int origin_y = 0;
         int local_w = 0;
@@ -934,6 +964,7 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                 int local_h = local_y1 - local_y0;
 
                 Image<TSpectral> local_buf(local_w, local_h);
+                Image<TSpectral> local_splat(splat_wings ? local_w : 0, splat_wings ? local_h : 0);
 
                 for (const auto& proj : bin) {
                     const auto& item = items[proj.item_idx];
@@ -951,6 +982,33 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
 
                     float projected_area = camera->get_projected_aperture_area(proj.direction);
                     TSpectral power = proj.weight * proj.irradiance * projected_area;
+
+                    if (splat_wings) {
+                        // Bilinear splat: preserves total energy and first moment (centroid)
+                        // exactly at every subpixel position, which is all the smooth wings
+                        // require. Placement convention matches the polyphase stamp (a
+                        // kernel centered at floor(p) with centroid shifted by +frac):
+                        const int bx = static_cast<int>(std::floor(star_p.x));
+                        const int by = static_cast<int>(std::floor(star_p.y));
+                        const float fx = star_p.x - static_cast<float>(bx);
+                        const float fy = star_p.y - static_cast<float>(by);
+
+                        const float w00 = (1.f - fx) * (1.f - fy);
+                        const float w10 = fx * (1.f - fy);
+                        const float w01 = (1.f - fx) * fy;
+                        const float w11 = fx * fy;
+
+                        auto splat_at = [&](int px, int py, float w) {
+                            if (w > 0.f && px >= local_x0 && px < local_x1 && py >= local_y0 &&
+                                py < local_y1) {
+                                local_splat(px - local_x0, py - local_y0) += power * w;
+                            }
+                        };
+                        splat_at(bx, by, w00);
+                        splat_at(bx + 1, by, w10);
+                        splat_at(bx, by + 1, w01);
+                        splat_at(bx + 1, by + 1, w11);
+                    }
 
                     if (stamp_radius > 0) {
                         float floor_x = std::floor(star_p.x);
@@ -1023,6 +1081,7 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
 
                 auto& tb = tile_buffers[static_cast<std::size_t>(tile_idx)];
                 tb.buf = std::move(local_buf);
+                tb.splat = std::move(local_splat);
                 tb.origin_x = local_x0;
                 tb.origin_y = local_y0;
                 tb.local_w = local_w;
@@ -1059,6 +1118,15 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                                       }
                                       if (nonzero) {
                                           received_power(tb.origin_x + lx, y) += val;
+                                      }
+                                      if (splat_wings) {
+                                          const TSpectral& sval = tb.splat(lx, ly);
+                                          for (std::size_t c = 0; c < TSpectral::size(); ++c) {
+                                              if (sval[c] != 0.0f) {
+                                                  wing_splat(tb.origin_x + lx, y) += sval;
+                                                  break;
+                                              }
+                                          }
                                       }
                                   }
                               }

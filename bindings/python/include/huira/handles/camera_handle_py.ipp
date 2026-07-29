@@ -175,6 +175,40 @@ inline void bind_camera_model_handle(py::module_& m)
              &HandleType::enable_psf_convolution,
              py::arg("convolve_psf") = true)
         .def("delete_psf", &HandleType::delete_psf)
+        .def("set_psf_convolution_radius",
+             &HandleType::set_psf_convolution_radius,
+             py::arg("radius"),
+             "Set the radius (pixels) of the whole-image PSF convolution kernel, independent "
+             "of the polyphase stamping radius. Large frame-wide radii are supported.")
+        .def("set_measured_psf",
+             &HandleType::set_measured_psf,
+             py::arg("data"),
+             py::arg("samples_per_pixel"),
+             py::arg("radius") = 0,
+             py::arg("banks") = 16,
+             "Use a measured (user-supplied) PSF as the camera's core PSF. 'data' is an Image "
+             "of centered PSF samples; 'samples_per_pixel' is the measurement sampling density "
+             "per sensor pixel per axis. radius=0 auto-selects the largest stamping radius "
+             "covered by the measurement (capped at 64).")
+
+        // Stray light
+        .def("set_veiling_glare",
+             &HandleType::set_veiling_glare,
+             py::arg("alpha"),
+             "Redistribute the given fraction of total collected energy uniformly across the "
+             "image (veiling glare).")
+        .def("disable_veiling_glare", &HandleType::disable_veiling_glare)
+        .def("set_harvey_shack_scatter",
+             &HandleType::set_harvey_shack_scatter,
+             py::arg("scatter_fraction"),
+             py::arg("falloff_exponent"),
+             py::arg("r0") = 0.5f,
+             py::arg("radius") = 0.f,
+             "Add Harvey-Shack scattered-light wings to the total system PSF: "
+             "'scatter_fraction' of the energy follows a power-law halo with the given "
+             "falloff exponent (typically 2-3), shoulder radius r0 (pixels), and optional "
+             "hard cutoff radius (0 = none).")
+        .def("disable_harvey_shack_scatter", &HandleType::disable_harvey_shack_scatter)
 
         // Depth of field
         .def("enable_depth_of_field",

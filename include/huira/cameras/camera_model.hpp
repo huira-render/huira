@@ -98,6 +98,11 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     template <IsPSF TPSF, typename... Args>
     void set_psf(Args&&... args);
 
+    void set_measured_psf(const Image<TSpectral>& data,
+                          float samples_per_pixel,
+                          int radius = 0,
+                          int banks = 16);
+
     void use_aperture_psf(int radius = 64, int banks = 16);
     void enable_psf_convolution(bool convolve_psf = true) { convolve_psf_ = convolve_psf; }
     void set_psf_convolution_radius(int radius);
@@ -119,6 +124,7 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     int get_psf_radius() const { return psf_->get_radius(); }
 
     const Image<TSpectral>& get_psf_convolution_kernel();
+    const Image<TSpectral>& get_psf_wings_kernel();
 
     void enable_depth_of_field(bool depth_of_field = true) { depth_of_field_ = depth_of_field; }
     void set_focus_distance(units::Meter focus_distance);
@@ -173,6 +179,17 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     int psf_convolution_radius_ = 0;
     Image<TSpectral> psf_convolution_kernel_;
     bool psf_convolution_kernel_valid_ = false;
+
+    // Scattered-light wings kernel alone (unit energy), used by the renderer to apply wings
+    // to unresolved sources whose compact core is stamped rather than convolved:
+    Image<TSpectral> psf_wings_kernel_;
+    bool psf_wings_kernel_valid_ = false;
+
+    void invalidate_psf_kernels_()
+    {
+        psf_convolution_kernel_valid_ = false;
+        psf_wings_kernel_valid_ = false;
+    }
 
     bool use_aperture_psf_ = false;
     float d_ = std::numeric_limits<float>::infinity();

@@ -9,6 +9,7 @@
 #include "huira/cameras/distortion/owen_distortion.hpp"
 #include "huira/concepts/spectral_concepts.hpp"
 #include "huira/handles/handle.hpp"
+#include "huira/images/image.hpp"
 #include "huira/units/units.hpp"
 
 namespace huira {
@@ -94,6 +95,11 @@ class CameraModelHandle : public Handle<CameraModel<TSpectral>> {
 
     template <IsPSF TPSF, typename... Args>
     void set_psf(Args&&... args) const;
+
+    void set_measured_psf(const Image<TSpectral>& data,
+                          float samples_per_pixel,
+                          int radius = 0,
+                          int banks = 16) const;
 
     void use_aperture_psf(bool value) const;
     void use_aperture_psf(int radius = 64, int banks = 16) const;

@@ -46,6 +46,7 @@ int main(int argc, char** argv)
     camera_model.configure_sensor_from_pitch({1024, 1024}, 8.5_um, 8.5_um);
     camera_model.use_aperture_psf(32, 16);
     camera_model.set_sensor_bit_depth(14);
+    camera_model.set_diopters(0.0025_dpt);
 
     // Set the observation time
     huira::Time time("2016-09-19T16:22:05.728");

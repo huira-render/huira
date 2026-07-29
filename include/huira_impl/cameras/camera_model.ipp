@@ -4,6 +4,7 @@
 
 #include "huira/cameras/apertures/circular_aperture.hpp"
 #include "huira/cameras/psfs/harvey_shack_scatter.hpp"
+#include "huira/cameras/psfs/measured_psf.hpp"
 #include "huira/cameras/sensors/simple_sensor.hpp"
 
 namespace huira {
@@ -49,7 +50,7 @@ void CameraModel<TSpectral>::set_focal_length(units::Millimeter focal_length)
         units::Meter px(sensor_->pixel_pitch().x);
         units::Meter py(sensor_->pixel_pitch().y);
         psf_ = aperture_->make_psf(f, px, py, psf_->get_radius(), psf_->get_banks());
-        psf_convolution_kernel_valid_ = false;
+        invalidate_psf_kernels_();
     }
 }
 
@@ -309,7 +310,28 @@ void CameraModel<TSpectral>::set_psf(Args&&... args)
 {
     psf_ = std::make_unique<TPSF>(std::forward<Args>(args)...);
     use_aperture_psf_ = false;
-    psf_convolution_kernel_valid_ = false;
+    invalidate_psf_kernels_();
+}
+
+/**
+ * @brief Sets a measured (user-supplied) PSF as the core PSF of the camera.
+ *
+ * Convenience wrapper around set_psf<MeasuredPSF>() that is also exposed through the Python
+ * bindings. See MeasuredPSF for the data conventions (centered measurement, sampling
+ * density, extent limits).
+ *
+ * @param data Measured PSF samples, centered on the image.
+ * @param samples_per_pixel Measurement samples per sensor pixel per axis.
+ * @param radius Polyphase stamping kernel radius in sensor pixels (0 = auto).
+ * @param banks Number of polyphase banks per axis for subpixel stamping.
+ */
+template <IsSpectral TSpectral>
+void CameraModel<TSpectral>::set_measured_psf(const Image<TSpectral>& data,
+                                              float samples_per_pixel,
+                                              int radius,
+                                              int banks)
+{
+    this->set_psf<MeasuredPSF<TSpectral>>(data, samples_per_pixel, radius, banks);
 }
 
 /**
@@ -325,7 +347,7 @@ void CameraModel<TSpectral>::use_aperture_psf(int radius, int banks)
     units::Meter px(sensor_->pixel_pitch().x);
     units::Meter py(sensor_->pixel_pitch().y);
     psf_ = aperture_->make_psf(f, px, py, radius, banks);
-    psf_convolution_kernel_valid_ = false;
+    invalidate_psf_kernels_();
 }
 
 /**
@@ -348,7 +370,7 @@ void CameraModel<TSpectral>::set_psf_convolution_radius(int radius)
     }
     if (radius != psf_convolution_radius_) {
         psf_convolution_radius_ = radius;
-        psf_convolution_kernel_valid_ = false;
+        invalidate_psf_kernels_();
     }
 }
 
@@ -416,12 +438,44 @@ const Image<TSpectral>& CameraModel<TSpectral>::get_psf_convolution_kernel()
 }
 
 /**
+ * @brief Returns the scattered-light wings kernel alone, building it lazily if needed.
+ *
+ * This is the Harvey-Shack component of the total system PSF, normalized to unit energy and
+ * NOT scaled by the scatter fraction. The renderer uses it to apply wings to unresolved
+ * sources: their compact core is stamped via the polyphase cache, their raw energy is
+ * splatted into a separate buffer, and that buffer is convolved with this kernel before the
+ * two are blended by (1 - f_s) and f_s. Requires scattering to be enabled.
+ *
+ * @return Reference to the cached wings kernel (unit energy per channel).
+ */
+template <IsSpectral TSpectral>
+const Image<TSpectral>& CameraModel<TSpectral>::get_psf_wings_kernel()
+{
+    if (!scatter_enabled_) {
+        HUIRA_THROW_ERROR("CameraModel::get_psf_wings_kernel - Scattering is not enabled");
+    }
+    if (psf_ == nullptr && psf_convolution_radius_ <= 0) {
+        HUIRA_THROW_ERROR("CameraModel::get_psf_wings_kernel - set_psf_convolution_radius() is "
+                          "required when no core PSF is set");
+    }
+
+    if (!psf_wings_kernel_valid_) {
+        const int radius =
+            (psf_convolution_radius_ > 0) ? psf_convolution_radius_ : psf_->get_radius();
+        HarveyShackScatter<TSpectral> scatter(scatter_falloff_exponent_, r0_, scatter_radius_);
+        psf_wings_kernel_ = scatter.generate_convolution_kernel(radius);
+        psf_wings_kernel_valid_ = true;
+    }
+    return psf_wings_kernel_;
+}
+
+/**
  * @brief Delete the PSF and disable aperture PSF usage.
  */
 template <IsSpectral TSpectral>
 void CameraModel<TSpectral>::delete_psf()
 {
-    psf_convolution_kernel_valid_ = false;
+    invalidate_psf_kernels_();
     psf_ = nullptr;
     use_aperture_psf_ = false;
 }
@@ -488,7 +542,7 @@ void CameraModel<TSpectral>::set_harvey_shack_scatter(float scatter_fraction,
     r0_ = r0;
     scatter_radius_ = radius;
     scatter_enabled_ = (scatter_fraction > 0.f);
-    psf_convolution_kernel_valid_ = false;
+    invalidate_psf_kernels_();
 }
 
 /**
@@ -502,7 +556,7 @@ void CameraModel<TSpectral>::disable_harvey_shack_scatter()
     r0_ = 0.5f;
     scatter_radius_ = 0.f;
     scatter_enabled_ = false;
-    psf_convolution_kernel_valid_ = false;
+    invalidate_psf_kernels_();
 }
 
 /**
@@ -693,7 +747,7 @@ void CameraModel<TSpectral>::set_fstop(float fstop)
         units::Meter px(sensor_->pixel_pitch().x);
         units::Meter py(sensor_->pixel_pitch().y);
         psf_ = aperture_->make_psf(f, px, py, psf_->get_radius(), psf_->get_banks());
-        psf_convolution_kernel_valid_ = false;
+        invalidate_psf_kernels_();
     }
 }
 
