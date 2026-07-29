@@ -123,7 +123,30 @@ inline void bind_node_handle_methods(PyClass& cls)
             py::arg("wx"),
             py::arg("wy"),
             py::arg("wz"),
-            "Set angular velocity (accepts any angular velocity unit)")
+            "Set the angular velocity expressed in the PARENT frame's axes (accepts any "
+            "angular velocity unit). The orientation evolves as q(t) = delta(t) * q_0; this "
+            "is only an 'inertial' rate if every ancestor of the node is static. To command "
+            "rates about the node's own axes (e.g. a roll about a camera boresight), use "
+            "set_body_angular_velocity() instead.")
+        .def(
+            "set_body_angular_velocity",
+            [](const BoundType& self,
+               const py::object& wx,
+               const py::object& wy,
+               const py::object& wz) {
+                self.set_body_angular_velocity(detail::unit_from_py<units::RadiansPerSecond>(wx),
+                                               detail::unit_from_py<units::RadiansPerSecond>(wy),
+                                               detail::unit_from_py<units::RadiansPerSecond>(wz));
+            },
+            py::arg("wx"),
+            py::arg("wy"),
+            py::arg("wz"),
+            "Set the angular velocity expressed in the node's own BODY frame axes (accepts "
+            "any angular velocity unit). The orientation evolves as q(t) = q_0 * delta(t). "
+            "For a camera (OpenCV convention, +z = boresight), a pure wz produces a roll "
+            "about the boresight regardless of the camera's orientation relative to its "
+            "parent. To command rates in the parent frame's axes, use "
+            "set_angular_velocity() instead.")
         .def("get_static_angular_velocity", &HandleType::get_static_angular_velocity)
 
         // Scale

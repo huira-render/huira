@@ -11,6 +11,9 @@ set(UNIT_TESTS
 
     huira/core/test_rotation.cpp
     huira/core/test_time.cpp
+    huira/core/test_transform.cpp
+
+    huira/scene/test_node_rates.cpp
 
     huira/images/test_convolution.cpp
 

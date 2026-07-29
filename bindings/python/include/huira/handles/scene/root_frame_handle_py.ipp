@@ -72,7 +72,8 @@ inline void bind_root_frame_handle(py::module_& m)
     bind_handle_methods<FrameNode<TSpectral>>(cls);
 
     // NOTE: Transform methods (set_position, set_rotation, set_scale,
-    // set_velocity, set_angular_velocity) are intentionally omitted —
-    // they are deleted in the C++ class to keep the root frame fixed.
+    // set_velocity, set_angular_velocity, set_body_angular_velocity) are
+    // intentionally omitted — they are deleted in the C++ class to keep the
+    // root frame fixed.
 }
 } // namespace huira

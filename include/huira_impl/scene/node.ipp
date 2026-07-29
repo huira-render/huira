@@ -148,8 +148,15 @@ void Node<TSpectral>::set_velocity(units::MetersPerSecond vx,
 }
 
 /**
- * @brief Set the node's angular velocity manually.
- * @param angular_velocity Angular velocity vector in rad/s
+ * @brief Set the node's angular velocity manually, expressed in the PARENT frame.
+ *
+ * The angular velocity vector is interpreted in the axes of this node's parent
+ * frame, and the node's orientation evolves as q(t) = delta(t) * q_0. This is
+ * only an "inertial" rate if every ancestor of this node is itself static. To
+ * command rates about the node's own axes (e.g. a roll about a camera
+ * boresight), use set_body_angular_velocity() instead.
+ *
+ * @param angular_velocity Angular velocity vector in rad/s, parent-frame axes
  */
 template <IsSpectral TSpectral>
 void Node<TSpectral>::set_angular_velocity(const Vec3<double>& angular_velocity)
@@ -161,13 +168,22 @@ void Node<TSpectral>::set_angular_velocity(const Vec3<double>& angular_velocity)
     }
 
     this->local_transform_.angular_velocity = angular_velocity;
+    this->body_frame_rates_ = false;
 }
 
 /**
- * @brief Set the node's angular velocity manually using unit types.
- * @param wx X angular velocity (rad/s)
- * @param wy Y angular velocity (rad/s)
- * @param wz Z angular velocity (rad/s)
+ * @brief Set the node's angular velocity manually using unit types, expressed in
+ * the PARENT frame.
+ *
+ * The (wx, wy, wz) components are interpreted in the axes of this node's parent
+ * frame, and the node's orientation evolves as q(t) = delta(t) * q_0. This is
+ * only an "inertial" rate if every ancestor of this node is itself static. To
+ * command rates about the node's own axes (e.g. a roll about a camera
+ * boresight), use set_body_angular_velocity() instead.
+ *
+ * @param wx X angular velocity about the parent-frame x-axis (rad/s)
+ * @param wy Y angular velocity about the parent-frame y-axis (rad/s)
+ * @param wz Z angular velocity about the parent-frame z-axis (rad/s)
  */
 template <IsSpectral TSpectral>
 void Node<TSpectral>::set_angular_velocity(units::RadiansPerSecond wx,
@@ -188,7 +204,16 @@ void Node<TSpectral>::set_angular_velocity(units::RadiansPerSecond wx,
 }
 
 /**
- * @brief Set the node's body-frame angular velocity manually using unit types.
+ * @brief Set the node's angular velocity manually using unit types, expressed in
+ * the node's own BODY frame.
+ *
+ * The (wx, wy, wz) components are interpreted in this node's own axes, and the
+ * node's orientation evolves as q(t) = q_0 * delta(t). For a camera (OpenCV
+ * convention, +z = boresight), a pure wz therefore produces a roll about the
+ * boresight regardless of how the camera is oriented relative to its parent.
+ * To command rates in the parent frame's axes, use set_angular_velocity()
+ * instead.
+ *
  * @param wx X-body angular velocity (rad/s)
  * @param wy Y-body angular velocity (rad/s)
  * @param wz Z-body angular velocity (rad/s)
@@ -204,7 +229,7 @@ void Node<TSpectral>::set_body_angular_velocity(units::RadiansPerSecond wx,
             " - cannot manually set angular velocity when node does not use manual rotation");
     }
 
-    HUIRA_LOG_INFO(this->get_info() + " - set_angular_velocity(" + std::to_string(wx.to_si()) +
+    HUIRA_LOG_INFO(this->get_info() + " - set_body_angular_velocity(" + std::to_string(wx.to_si()) +
                    ", " + std::to_string(wy.to_si()) + ", " + std::to_string(wz.to_si()) + ")");
 
     this->local_transform_.angular_velocity = Vec3<double>{wx.to_si(), wy.to_si(), wz.to_si()};
@@ -558,15 +583,28 @@ Node<TSpectral>::get_local_rotation_at_(const Time& epoch, const Time& t_obs, do
                 Rotation<double>::from_local_to_parent(axis, units::Radian{angle});
 
             if (body_frame_rates_) {
-                // Body-frame: q(t) = q_0 * delta
+                // Body-frame rates: the increment is applied in the body frame,
+                // i.e. q(t) = q_0 * delta
                 local_transform_at_time.rotation = local_transform_.rotation * delta;
             } else {
-                // Inertial-frame: q(t) = delta * q_0
+                // Parent-frame rates: the increment is applied in the parent frame,
+                // i.e. q(t) = delta * q_0
                 local_transform_at_time.rotation = delta * local_transform_.rotation;
             }
         }
 
-        local_transform_at_time.angular_velocity = local_transform_.angular_velocity;
+        // Transform::angular_velocity is (by convention -- see Transform::operator*)
+        // always expressed in the node's parent frame. Body-frame rates must
+        // therefore be re-expressed in parent axes before being stored:
+        //     omega_parent(t) = q(t) * omega_body = q_0 * delta * omega_body
+        //                     = q_0 * omega_body
+        // (constant in time, since delta is a rotation about omega_body itself and
+        // therefore preserves it). Parent-frame rates are stored as given.
+        if (body_frame_rates_) {
+            local_transform_at_time.angular_velocity = local_transform_.rotation * omega;
+        } else {
+            local_transform_at_time.angular_velocity = omega;
+        }
     } else {
         // This is not expected to happen since the setters should prevent it
         HUIRA_THROW_ERROR("get_local_rotation_at_ - Unknown rotation_mode_");

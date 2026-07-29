@@ -160,11 +160,18 @@ Rotation<double> NodeHandle<TSpectral, TNode>::get_static_rotation() const
 }
 
 /**
- * @brief Sets the angular velocity using individual components.
+ * @brief Sets the angular velocity using individual components, expressed in the
+ * PARENT frame.
  *
- * @param wx The x-component of angular velocity
- * @param wy The y-component of angular velocity
- * @param wz The z-component of angular velocity
+ * The components are interpreted in the axes of this node's parent frame; the
+ * orientation evolves as q(t) = delta(t) * q_0. This is only an "inertial" rate
+ * if every ancestor of the node is static. To command rates about the node's
+ * own axes (e.g. a roll about a camera boresight), use
+ * set_body_angular_velocity() instead.
+ *
+ * @param wx The x-component of angular velocity (parent-frame axes)
+ * @param wy The y-component of angular velocity (parent-frame axes)
+ * @param wz The z-component of angular velocity (parent-frame axes)
  */
 template <IsSpectral TSpectral, typename TNode>
 void NodeHandle<TSpectral, TNode>::set_angular_velocity(units::RadiansPerSecond wx,
@@ -175,7 +182,14 @@ void NodeHandle<TSpectral, TNode>::set_angular_velocity(units::RadiansPerSecond 
 }
 
 /**
- * @brief Sets the body-frame angular velocity using individual components.
+ * @brief Sets the angular velocity using individual components, expressed in the
+ * node's own BODY frame.
+ *
+ * The components are interpreted in this node's own axes; the orientation
+ * evolves as q(t) = q_0 * delta(t). For a camera (OpenCV convention,
+ * +z = boresight), a pure wz produces a roll about the boresight regardless of
+ * how the camera is oriented relative to its parent. To command rates in the
+ * parent frame's axes, use set_angular_velocity() instead.
  *
  * @param wx The x-body frame component of angular velocity
  * @param wy The y-body frame component of angular velocity

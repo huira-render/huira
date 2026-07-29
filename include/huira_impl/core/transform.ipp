@@ -122,8 +122,14 @@ Transform<T> Transform<T>::inverse() const
     // Inverse position: undo the rotation and scale
     result.position = result.rotation * (-position * result.scale);
 
-    // Inverse velocity (in the new frame)
-    result.velocity = result.rotation * (-velocity * result.scale);
+    // Inverse velocity (in the new frame): chosen such that T * T.inverse()
+    // has zero velocity. Composition contributes both the rotated inverse
+    // velocity and the omega-cross-r term of this frame's angular velocity
+    // acting on the inverse position:
+    //     v + R * v_inv + omega x (R * p_inv) = 0,  with  R * p_inv = -p
+    // =>  v_inv = R^-1 * (omega x p - v)
+    result.velocity =
+        result.rotation * ((glm::cross(angular_velocity, position) - velocity) * result.scale);
 
     // Inverse angular velocity
     result.angular_velocity = result.rotation * (-angular_velocity);
