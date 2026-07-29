@@ -266,18 +266,37 @@ void CameraModelHandle<TSpectral>::set_sensor_bit_depth(int bit_depth) const
 }
 
 /**
- * @brief Set the sensor gain (ADU).
+ * @brief Set the sensor conversion gain (e-/ADU).
+ *
+ * Sets the conversion gain of the sensor, which defines how many electrons correspond to one ADU
+ * (Analog-to-Digital Unit). This affects the sensor's sensitivity and noise characteristics.  This
+ * value is frequently found on sensor datasheets.  A larger value will make the resulting image
+ * darker.
+ *
  * @param gain Gain value
+ * @throws std::runtime_error if gain is not positive or finite.
+ * @see set_sensor_gain_db, set_sensor_unity_db
  */
 template <IsSpectral TSpectral>
-void CameraModelHandle<TSpectral>::set_sensor_gain(float gain) const
+void CameraModelHandle<TSpectral>::set_sensor_conversion_gain(float gain) const
 {
-    this->get_()->sensor_->set_gain_adu(gain);
+    this->get_()->sensor_->set_conversion_gain(gain);
 }
 
 /**
  * @brief Set the sensor gain in decibels (dB).
+ *
+ * Sets the gain of the sensor in decibels, a logarithmic representation of the
+ * sensor's amplification. A larger value produces a brighter image. This is the
+ * convention used by most machine-vision cameras.
+ *
+ * The dB value maps onto the conversion gain (e-/ADU) as:
+ *     conversion_gain = 10^((unity_db - gain_db) / 20)
+ * so at gain_db == unity_db the conversion gain is exactly 1 e-/ADU.
+ *
  * @param gain_db Gain in dB
+ * @throws std::runtime_error if gain_db is not finite.
+ * @see set_sensor_unity_db, set_sensor_conversion_gain
  */
 template <IsSpectral TSpectral>
 void CameraModelHandle<TSpectral>::set_sensor_gain_db(float gain_db) const
@@ -286,18 +305,38 @@ void CameraModelHandle<TSpectral>::set_sensor_gain_db(float gain_db) const
 }
 
 /**
- * @brief Set the sensor unity gain in decibels (dB).
- * @param unity_db Unity gain in dB
+ * @brief Set the reference level (in dB) for the sensor's gain-in-dB scale.
+ *
+ * unity_db defines where the dB scale is anchored: it is the gain_db value at
+ * which the conversion gain equals exactly 1 e-/ADU (i.e. one electron maps to
+ * one ADU, before bias). Changing unity_db shifts the entire dB scale without
+ * altering the underlying conversion gain.
+ *
+ * This is useful for matching a real camera's datasheet, where "0 dB" is
+ * typically defined relative to the camera's own baseline analog gain rather
+ * than to 1 e-/ADU. For example, if a camera reports a conversion gain of
+ * 3.16 e-/ADU at its 0 dB setting, set unity_db to 10 (since
+ * 20*log10(3.16) ≈ 10) and set_sensor_gain_db(0) will then reproduce that
+ * camera's 0 dB behavior.
+ *
+ * Defaults to 0, meaning gain_db = 0 corresponds to 1 e-/ADU.
+ *
+ * @param unity_db Reference level in dB
+ * @throws std::runtime_error if unity_db is not finite.
+ * @see set_sensor_gain_db
  */
 template <IsSpectral TSpectral>
-void CameraModelHandle<TSpectral>::set_sensor_uinty_db(float unity_db) const
+void CameraModelHandle<TSpectral>::set_sensor_unity_db(float unity_db) const
 {
     this->get_()->sensor_->set_unity_db(unity_db);
 }
 
 /**
  * @brief Set the sensor rotation angle.
- * @param angle Rotation angle in radians
+ *
+ * Rotates the sensor around the optical axis by the specified angle.
+ *
+ * @param angle Rotation angle
  */
 template <IsSpectral TSpectral>
 void CameraModelHandle<TSpectral>::set_sensor_rotation(units::Radian angle) const

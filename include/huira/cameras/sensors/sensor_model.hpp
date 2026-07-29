@@ -116,8 +116,8 @@ class SensorModel {
     void set_bit_depth(int bit_depth);
     int bit_depth() const { return config_.bit_depth; }
 
-    void set_gain_adu(float gain);
-    float gain_adu() const { return config_.gain; }
+    void set_conversion_gain(float gain);
+    float conversion_gain() const { return config_.gain; }
 
     void set_unity_db(float unity_db);
     float unity_db() const { return config_.unity_db; }

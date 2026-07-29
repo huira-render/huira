@@ -150,9 +150,9 @@ inline void bind_camera_model_handle(py::module_& m)
              py::arg("dark_current"))
         .def("set_sensor_bias_level", &HandleType::set_sensor_bias_level, py::arg("bias_level"))
         .def("set_sensor_bit_depth", &HandleType::set_sensor_bit_depth, py::arg("bit_depth"))
-        .def("set_sensor_gain", &HandleType::set_sensor_gain, py::arg("gain"))
+        .def("set_sensor_conversion_gain", &HandleType::set_sensor_conversion_gain, py::arg("gain"))
         .def("set_sensor_gain_db", &HandleType::set_sensor_gain_db, py::arg("gain_db"))
-        .def("set_sensor_uinty_db", &HandleType::set_sensor_uinty_db, py::arg("unity_db"))
+        .def("set_sensor_unity_db", &HandleType::set_sensor_unity_db, py::arg("unity_db"))
 
         // Sensor rotation
         .def(
