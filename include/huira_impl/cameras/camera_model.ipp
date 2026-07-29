@@ -3,6 +3,7 @@
 #include <memory>
 
 #include "huira/cameras/apertures/circular_aperture.hpp"
+#include "huira/cameras/psfs/harvey_shack_scatter.hpp"
 #include "huira/cameras/sensors/simple_sensor.hpp"
 
 namespace huira {
@@ -352,22 +353,63 @@ void CameraModel<TSpectral>::set_psf_convolution_radius(int radius)
 }
 
 /**
- * @brief Returns the whole-image PSF convolution kernel, building it lazily if needed.
+ * @brief Returns the total-system PSF kernel for whole-image convolution.
  *
- * @return Reference to the cached convolution kernel.
+ * The total point spread function of the optical system is the energy-weighted sum of its
+ * components: the diffraction-limited core (from the aperture or a user-provided PSF) and the
+ * Harvey-Shack scattered-light wings. Veiling glare, the third component, is uniform across
+ * the image and is applied separately by the renderer for efficiency. The kernel is built
+ * lazily and cached; any change to the core PSF, convolution radius, or scatter parameters
+ * invalidates it.
+ *
+ * @return Reference to the cached total-system convolution kernel (unit energy per channel).
  */
 template <IsSpectral TSpectral>
 const Image<TSpectral>& CameraModel<TSpectral>::get_psf_convolution_kernel()
 {
-    if (psf_ == nullptr) {
-        HUIRA_THROW_ERROR("CameraModel::get_psf_convolution_kernel - No PSF has been set");
+    if (psf_ == nullptr && !scatter_enabled_) {
+        HUIRA_THROW_ERROR("CameraModel::get_psf_convolution_kernel - No PSF or scatter model "
+                          "has been set");
     }
+    if (psf_ == nullptr && psf_convolution_radius_ <= 0) {
+        HUIRA_THROW_ERROR("CameraModel::get_psf_convolution_kernel - "
+                          "set_psf_convolution_radius() is required when scattering is enabled "
+                          "without a core PSF");
+    }
+
     if (!psf_convolution_kernel_valid_) {
         const int radius =
             (psf_convolution_radius_ > 0) ? psf_convolution_radius_ : psf_->get_radius();
-        HUIRA_LOG_INFO("CameraModel - Generating " + std::to_string(2 * radius + 1) + "x" +
-                       std::to_string(2 * radius + 1) + " PSF convolution kernel");
-        psf_convolution_kernel_ = psf_->generate_convolution_kernel(radius);
+        const int dim = 2 * radius + 1;
+        HUIRA_LOG_INFO("CameraModel - Generating " + std::to_string(dim) + "x" +
+                       std::to_string(dim) + " PSF convolution kernel");
+
+        // Core component: the diffraction-limited (or user-provided) PSF. With no core PSF
+        // set, the core is an ideal delta (perfect optics plus scatter):
+        if (psf_ != nullptr) {
+            psf_convolution_kernel_ = psf_->generate_convolution_kernel(radius);
+        } else {
+            psf_convolution_kernel_ = Image<TSpectral>(dim, dim, TSpectral{0.f});
+            psf_convolution_kernel_(radius, radius) = TSpectral{1.f};
+        }
+
+        // Scattered-light wings: mixed with the core by energy fraction, so that the total
+        // system PSF remains normalized to unit energy:
+        //     psf_total = (1 - f_s) * core + f_s * wings
+        if (scatter_enabled_ && scatter_fraction_ > 0.f) {
+            HarveyShackScatter<TSpectral> scatter(scatter_falloff_exponent_, r0_, scatter_radius_);
+            Image<TSpectral> wings = scatter.generate_convolution_kernel(radius);
+
+            const float f_s = scatter_fraction_;
+            const float core_weight = 1.f - f_s;
+            for (int y = 0; y < dim; ++y) {
+                for (int x = 0; x < dim; ++x) {
+                    psf_convolution_kernel_(x, y) =
+                        psf_convolution_kernel_(x, y) * core_weight + wings(x, y) * f_s;
+                }
+            }
+        }
+
         psf_convolution_kernel_valid_ = true;
     }
     return psf_convolution_kernel_;
@@ -422,11 +464,31 @@ void CameraModel<TSpectral>::set_harvey_shack_scatter(float scatter_fraction,
                                                       float r0,
                                                       float radius)
 {
+    if (scatter_fraction < 0.f || scatter_fraction >= 1.f || std::isnan(scatter_fraction)) {
+        HUIRA_THROW_ERROR("CameraModel::set_harvey_shack_scatter - Scatter fraction must be in "
+                          "the range [0, 1): " +
+                          std::to_string(scatter_fraction));
+    }
+    if (!(falloff_exponent > 0.f) || std::isnan(falloff_exponent)) {
+        HUIRA_THROW_ERROR("CameraModel::set_harvey_shack_scatter - Falloff exponent must be a "
+                          "positive finite value: " +
+                          std::to_string(falloff_exponent));
+    }
+    if (!(r0 > 0.f) || std::isnan(r0)) {
+        HUIRA_THROW_ERROR("CameraModel::set_harvey_shack_scatter - r0 must be a positive finite "
+                          "value: " +
+                          std::to_string(r0));
+    }
+    if (radius < 0.f || std::isnan(radius)) {
+        HUIRA_THROW_ERROR("CameraModel::set_harvey_shack_scatter - Radius must be non-negative: " +
+                          std::to_string(radius));
+    }
     scatter_fraction_ = scatter_fraction;
     scatter_falloff_exponent_ = falloff_exponent;
     r0_ = r0;
     scatter_radius_ = radius;
-    scatter_enabled_ = true;
+    scatter_enabled_ = (scatter_fraction > 0.f);
+    psf_convolution_kernel_valid_ = false;
 }
 
 /**
@@ -440,6 +502,7 @@ void CameraModel<TSpectral>::disable_harvey_shack_scatter()
     r0_ = 0.5f;
     scatter_radius_ = 0.f;
     scatter_enabled_ = false;
+    psf_convolution_kernel_valid_ = false;
 }
 
 /**
