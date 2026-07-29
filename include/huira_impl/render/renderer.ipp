@@ -905,7 +905,14 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                 } else {
                     dt = (params[k + 1] - params[k - 1]) / 2.0f;
                 }
-                float weight = dt / (t_end - t_start); // normalize so weights sum to ~1
+                // The arc parameter spans the full exposure on [0, 1], so dt is already the
+                // fraction of the exposure this sample represents. Weights over a visible
+                // interval therefore sum to the star's visible fraction of the exposure -
+                // NOT to 1. Renormalizing by (t_end - t_start) here would compress the full
+                // exposure energy into whatever sliver of the trajectory is in frame,
+                // overbrightening partially visible streaks (e.g. corner streaks under
+                // boresight rotation) by 1 / visible_fraction:
+                float weight = dt;
 
                 // Interpolate irradiance at this parameter value:
                 TSpectral irrad = item.interpolate_irradiances(params[k]);
