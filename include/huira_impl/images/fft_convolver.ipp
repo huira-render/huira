@@ -82,6 +82,12 @@ class FftwPlanCache {
         fftwf_free(complex_buf);
 
         if (plans.forward == nullptr || plans.inverse == nullptr) {
+            if (plans.forward != nullptr) {
+                fftwf_destroy_plan(plans.forward);
+            }
+            if (plans.inverse != nullptr) {
+                fftwf_destroy_plan(plans.inverse);
+            }
             HUIRA_THROW_ERROR("FftwPlanCache::get - FFTW plan creation failed");
         }
 
@@ -298,6 +304,7 @@ void FftConvolver<PixelT>::set_kernel(const Image<PixelT>& kernel,
             fftwf_complex* spectrum = fftwf_alloc_complex(complex_size);
             if (spectrum == nullptr) {
                 fftwf_free(real_buf);
+                release_();
                 HUIRA_THROW_ERROR("FftConvolver::set_kernel - Failed to allocate spectrum");
             }
             kernel_spectra_[c] = spectrum;

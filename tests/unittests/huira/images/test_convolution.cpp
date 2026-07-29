@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cmath>
 #include <random>
 
@@ -112,7 +113,7 @@ TEST_CASE("FftConvolver matches reference convolution", "[images][convolution]")
 
     SECTION("Spectral pixel type applies each channel independently")
     {
-        using Spec8 = SpectralBins<8, 400.0, 800.0>;
+        using Spec8 = SpectralBins<8, 400, 800>;
         std::uniform_real_distribution<float> dist(0.0f, 1.0f);
 
         Image<Spec8> img(31, 29, Spec8{0.0f});
