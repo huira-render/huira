@@ -4,7 +4,7 @@ from pathlib import Path
 import numpy as np
 
 import huira
-from huira.rgb import SpectralBins, Scene, SceneView, Renderer
+from huira.rgb import SpectralBins, Scene, SceneView, Renderer, rgb_to_spectral
 
 from huira.units import Meter as m
 from huira.units import Kilometer as km
@@ -70,9 +70,8 @@ def main():
     earth_material = scene.new_material(ct_bsdf)
 
     earth_albedo_rgb = huira.read_image(textures_path / "8k_earth_daymap.jpg")
-    #earth_albedo_spec = huira.rgb_to_spectral(earth_albedo_rgb.image)
-    #earth_albedo_tex = scene.add_texture(earth_albedo_spec)
-    earth_albedo_tex = scene.add_texture(earth_albedo_rgb.image)
+    earth_albedo_spec = rgb_to_spectral(earth_albedo_rgb.image)
+    earth_albedo_tex = scene.add_texture(earth_albedo_spec)
     earth_material.set_albedo_image(earth_albedo_tex)
 
     earth_roughness = huira.read_image_mono(textures_path / "8k_earth_roughness_map.tif")

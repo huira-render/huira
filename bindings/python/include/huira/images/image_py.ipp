@@ -203,6 +203,26 @@ void bind_image(py::module_& m, const char* class_name)
         });
 }
 
+template <IsSpectral TSpectral>
+void bind_rgb_to_spectral(py::module_& m)
+{
+    m.def(
+        "rgb_to_spectral",
+        [](Image<RGB> rgb_image, const py::object& spectral_conversion) {
+            if (spectral_conversion.is_none()) {
+                py::gil_scoped_release release;
+                return rgb_to_spectral<TSpectral>(std::move(rgb_image));
+            }
+            auto fn = spectral_conversion.cast<std::function<TSpectral(RGB)>>();
+            return rgb_to_spectral<TSpectral>(std::move(rgb_image), std::move(fn));
+        },
+        py::arg("rgb_image"),
+        py::arg("spectral_conversion") = py::none(),
+        "Convert an Image_rgb to this module's spectral representation.\n"
+        "spectral_conversion: optional callable mapping an rgb.SpectralBins to this\n"
+        "module's SpectralBins. Defaults to huira's band-integration conversion.");
+}
+
 // ---------------------------------------------------------------------------
 // bind_image_io  --  free-standing read / write functions
 // ---------------------------------------------------------------------------
