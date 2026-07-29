@@ -81,6 +81,7 @@ inline void bind_spectral(py::module_& m)
     std::string img_name = "Image_" + m.attr("__name__").cast<std::string>();
     huira::bind_image<TSpectral>(m, img_name.c_str());
     huira::bind_image_bundle<TSpectral>(m, "ImageBundle_" + m.attr("__name__").cast<std::string>());
+    huira::bind_rgb_to_spectral<TSpectral>(m);
 
     // --- Spectral texture handle ---
     std::string tex_name = "TextureHandle_" + m.attr("__name__").cast<std::string>();
