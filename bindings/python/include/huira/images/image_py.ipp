@@ -219,8 +219,8 @@ void bind_rgb_to_spectral(py::module_& m)
         py::arg("rgb_image"),
         py::arg("spectral_conversion") = py::none(),
         "Convert an Image_rgb to this module's spectral representation.\n"
-        "spectral_conversion: optional callable mapping an rgb.SpectralBins to this\n"
-        "module's SpectralBins. Defaults to huira's band-integration conversion.");
+        "spectral_conversion: optional callable mapping an RGB pixel to this module's\n"
+        "SpectralBins. Defaults to huira's band-integration conversion.");
 }
 
 // ---------------------------------------------------------------------------

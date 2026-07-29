@@ -56,6 +56,11 @@ class SpectralBins {
     using iterator = typename std::array<float, N>::iterator;
     using const_iterator = typename std::array<float, N>::const_iterator;
 
+    static_assert((std::is_integral_v<decltype(Args)> && ...),
+                  "SpectralBins wavelength arguments must be integers (nanometers); "
+                  "fractional wavelengths are not supported (Apple Clang lacks "
+                  "floating-point non-type template parameters)");
+
     // Constructors
     constexpr SpectralBins();
     explicit constexpr SpectralBins(const float& value);
