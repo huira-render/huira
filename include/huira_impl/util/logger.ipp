@@ -72,7 +72,9 @@ const char* LogEntry::level_to_string(LogLevel level)
  * Used by crash handlers to coordinate and prevent duplicate crash reports
  * in multi-threaded scenarios.
  */
+HUIRA_PER_MODULE_STATE_BEGIN
 inline std::atomic<bool> Logger::crash_reported_{false};
+HUIRA_PER_MODULE_STATE_END
 
 /**
  * @brief Initialize the logger with default settings.

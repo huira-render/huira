@@ -9,6 +9,8 @@
 #include <thread>
 #include <vector>
 
+#include "huira/util/macros.hpp"
+
 #ifdef _WIN32
 #include <Windows.h>
 #endif
@@ -71,7 +73,9 @@ class Logger {
 
     static Logger& instance()
     {
+        HUIRA_PER_MODULE_STATE_BEGIN
         static Logger logger;
+        HUIRA_PER_MODULE_STATE_END
         return logger;
     }
 
@@ -308,7 +312,9 @@ inline void enable_console_warning(bool enable = true)
 namespace huira {
 inline std::vector<const char*>& get_thread_scope_stack()
 {
+    HUIRA_PER_MODULE_STATE_BEGIN
     thread_local std::vector<const char*> scope_stack;
+    HUIRA_PER_MODULE_STATE_END
     return scope_stack;
 }
 

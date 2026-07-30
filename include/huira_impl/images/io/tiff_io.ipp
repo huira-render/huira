@@ -167,7 +167,7 @@ inline TIFFData read_tiff_raw_(const unsigned char* data, std::size_t size)
 #pragma clang diagnostic ignored "-Wformat-nonliteral"
 #elif defined(__GNUC__)
 #pragma GCC diagnostic push
-#pragma diagnostic ignored "-Wformat-nonliteral"
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
 #elif defined(_MSC_VER)
 #pragma warning(push)
 #pragma warning(disable : 4774)
