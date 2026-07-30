@@ -11,6 +11,7 @@
 #include "huira/concepts/numeric_concepts.hpp"
 #include "huira/core/rotation.hpp"
 #include "huira/core/types.hpp"
+#include "huira/util/macros.hpp"
 
 namespace fs = std::filesystem;
 
@@ -40,8 +41,10 @@ inline void furnsh(const fs::path& file_path);
 inline void furnsh_relative_to_file(const fs::path& kernel_path);
 
 // Default SPICE kernel management
+HUIRA_PER_MODULE_STATE_BEGIN
 inline std::once_flag lsk_init_flag;
 inline std::atomic<bool> lsk_loaded{false};
+HUIRA_PER_MODULE_STATE_END
 
 inline fs::path get_default_lsk_path();
 inline void ensure_lsk_loaded();

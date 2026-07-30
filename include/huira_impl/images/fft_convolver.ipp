@@ -8,6 +8,7 @@
 
 #include "fftw3.h"
 #include "huira/util/logger.hpp"
+#include "huira/util/macros.hpp"
 #include "tbb/blocked_range.h"
 #include "tbb/enumerable_thread_specific.h"
 #include "tbb/parallel_for.h"
@@ -31,6 +32,9 @@ namespace detail {
  */
 class FftwPlanCache {
   public:
+    FftwPlanCache(const FftwPlanCache&) = delete;
+    FftwPlanCache& operator=(const FftwPlanCache&) = delete;
+
     struct Plans {
         fftwf_plan forward = nullptr; // real-to-complex
         fftwf_plan inverse = nullptr; // complex-to-real
@@ -38,12 +42,16 @@ class FftwPlanCache {
 
     static FftwPlanCache& instance()
     {
+        HUIRA_PER_MODULE_STATE_BEGIN
         static FftwPlanCache cache;
+        HUIRA_PER_MODULE_STATE_END
         return cache;
     }
 
+#ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wthread-safety-negative"
+#endif
     Plans get(int padded_height, int padded_width, bool measure)
     {
         const std::uint64_t key = (static_cast<std::uint64_t>(padded_height) << 33) |
@@ -94,7 +102,9 @@ class FftwPlanCache {
         plans_[key] = plans;
         return plans;
     }
+#ifdef __clang__
 #pragma clang diagnostic pop
+#endif
 
   private:
     FftwPlanCache() = default;

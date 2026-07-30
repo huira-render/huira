@@ -281,7 +281,7 @@ inline FitsMetadata read_fits_metadata(fitsfile* fptr)
         fits_get_hdrspace(fptr, &num_keys, nullptr, &status);
         fits_check(status, "get header space");
 
-        static const char* known[] = {
+        static constexpr const char* const known[] = {
             "SIMPLE",   "BITPIX", "NAXIS",   "NAXIS1",  "NAXIS2",   "NAXIS3",   "EXTEND",
             "BZERO",    "BSCALE", "END",     "OBJECT",  "TELESCOP", "INSTRUME", "OBSERVER",
             "DATE-OBS", "ORIGIN", "EXPTIME", "FILTER",  "BUNIT",    "DATAMIN",  "DATAMAX",
@@ -289,7 +289,7 @@ inline FitsMetadata read_fits_metadata(fitsfile* fptr)
             "CTYPE1",   "CTYPE2", "EQUINOX", "RADESYS", nullptr};
 
         auto is_known = [&](const char* key) -> bool {
-            for (const char** k = known; *k; ++k) {
+            for (const char* const* k = known; *k; ++k) {
                 if (std::strcmp(*k, key) == 0) {
                     return true;
                 }

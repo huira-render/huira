@@ -2,6 +2,8 @@
 
 #include <string>
 
+#include "huira/util/macros.hpp"
+
 #ifdef _WIN32
 #include <Windows.h>
 #include <io.h>
@@ -19,7 +21,9 @@ namespace huira {
 inline bool initialize_console_colors()
 {
 #ifdef _WIN32
+    HUIRA_PER_MODULE_STATE_BEGIN
     static bool initialized = false;
+    HUIRA_PER_MODULE_STATE_END
     if (!initialized) {
         HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
         HANDLE hErr = GetStdHandle(STD_ERROR_HANDLE);
@@ -45,18 +49,21 @@ inline bool initialize_console_colors()
 // Check if output is a terminal (not redirected to file)
 inline bool is_terminal()
 {
+    HUIRA_PER_MODULE_STATE_BEGIN
 #ifdef _WIN32
     static bool is_tty = _isatty(_fileno(stderr)) != 0;
 #else
     static bool is_tty = isatty(fileno(stderr)) != 0;
 #endif
+    HUIRA_PER_MODULE_STATE_END
     return is_tty;
 }
 
 inline std::string colorize(const std::string& text, const char* code)
 {
+    HUIRA_PER_MODULE_STATE_BEGIN
     static bool init = initialize_console_colors();
-    (void)init;
+    HUIRA_PER_MODULE_STATE_END(void) init;
 
     if (!is_terminal()) {
         return text; // No colors if redirected to file
