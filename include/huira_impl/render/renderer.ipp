@@ -63,19 +63,47 @@ void Renderer<TSpectral>::render(SceneView<TSpectral>& scene_view,
         frame_buffer.received_power() = ray_traced_power + star_power;
     }
 
+    // Unresolved sources reach the sensor without an intervening bounce, so they are
+    // direct illumination and belong in that component too. Without this,
+    // received_power != received_direct_power + received_indirect_power in any scene
+    // with a star field - which, for this renderer, is nearly all of them.
+    if (frame_buffer.has_received_direct_power() && star_power.size() > 0) {
+        Image<TSpectral>& direct = frame_buffer.received_direct_power();
+        for (std::size_t i = 0; i < direct.size(); ++i) {
+            direct[i] += star_power[i];
+        }
+    }
+
     // Apply Veiling Glare
     if (camera->veiling_glare_enabled_) {
-        float unveiled = 1.f - camera->veiling_alpha_;
-        TSpectral total_power{0.f};
-        for (std::size_t i = 0; i < frame_buffer.received_power().size(); ++i) {
-            total_power += frame_buffer.received_power()[i];
-        }
-        TSpectral veiling_bias = camera->veiling_alpha_ * total_power /
-                                 static_cast<float>(frame_buffer.received_power().size());
+        const float unveiled = 1.f - camera->veiling_alpha_;
 
-        for (std::size_t i = 0; i < frame_buffer.received_power().size(); ++i) {
-            frame_buffer.received_power()[i] =
-                (frame_buffer.received_power()[i] * unveiled) + veiling_bias;
+        // Redistributing each component by its own mean is linear, so the
+        // decomposition survives: D' + I' = (D + I) * unveiled + alpha * mean(D + I).
+        auto apply_veiling = [&](Image<TSpectral>& image) {
+            if (image.size() == 0) {
+                return;
+            }
+            TSpectral total_power{0.f};
+            for (std::size_t i = 0; i < image.size(); ++i) {
+                total_power += image[i];
+            }
+            TSpectral veiling_bias =
+                camera->veiling_alpha_ * total_power / static_cast<float>(image.size());
+
+            for (std::size_t i = 0; i < image.size(); ++i) {
+                image[i] = (image[i] * unveiled) + veiling_bias;
+            }
+        };
+
+        if (frame_buffer.has_received_power()) {
+            apply_veiling(frame_buffer.received_power());
+        }
+        if (frame_buffer.has_received_direct_power()) {
+            apply_veiling(frame_buffer.received_direct_power());
+        }
+        if (frame_buffer.has_received_indirect_power()) {
+            apply_veiling(frame_buffer.received_indirect_power());
         }
     }
 
@@ -705,9 +733,19 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
     }
     occluder_mask_valid_ = true;
 
-    if (frame_buffer.has_received_power() && camera->convolve_psf_) {
+    if (camera->convolve_psf_) {
+        // Convolution is linear, so convolving the components independently keeps
+        // total == direct + indirect exactly.
         const Image<TSpectral>& psf = camera->get_psf_convolution_kernel();
-        received_power.convolve(psf);
+        if (frame_buffer.has_received_power()) {
+            received_power.convolve(psf);
+        }
+        if (frame_buffer.has_received_direct_power()) {
+            frame_buffer.received_direct_power().convolve(psf);
+        }
+        if (frame_buffer.has_received_indirect_power()) {
+            frame_buffer.received_indirect_power().convolve(psf);
+        }
     }
 
     auto end_clock = std::chrono::high_resolution_clock::now();
