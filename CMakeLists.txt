@@ -8,6 +8,7 @@ option(HUIRA_EXAMPLES "Build Examples" OFF)
 option(HUIRA_TESTS "Build Tests" OFF)
 option(HUIRA_DOCS "Build Documentation" OFF)
 option(HUIRA_PYTHON "Build Python Bindings" OFF)
+option(HUIRA_USE_SYSTEM_PYBIND11 "Use an external pybind11 via find_package instead of FetchContent" OFF)
 option(HUIRA_LOCAL_DEV "Build Local Development Directory" OFF)
 
 # Documentation uses Sphinx autodoc which requires the Python extension module

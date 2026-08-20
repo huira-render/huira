@@ -1,4 +1,4 @@
-{% set version = "0.9.7" %}
+{% set version = "0.9.8" %}
 
 package:
   name: huira
@@ -25,6 +25,8 @@ requirements:
     - pkg-config
   host:
     - python
+    - pybind11
+    - pybind11-abi
     - assimp
     - cfitsio
     - cspice

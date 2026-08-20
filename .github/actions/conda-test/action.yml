@@ -32,7 +32,7 @@ runs:
       if: inputs.platform != 'windows'
       shell: bash -el {0}
       run: |
-        conda install -y cmake ninja compilers
+        conda install -y cmake ninja
         conda install -y -c file://$PWD/conda-package huira
 
     - name: Install dependencies and local package (Windows)
@@ -56,11 +56,14 @@ runs:
       if: inputs.platform != 'windows'
       shell: bash -el {0}
       run: |
+        set -euo pipefail
+        args=(-DCMAKE_PREFIX_PATH="$CONDA_PREFIX" -DCMAKE_FIND_FRAMEWORK=LAST)
+        if [ -n "${CXX:-}" ]; then args+=(-DCMAKE_CXX_COMPILER="$CXX"); fi
+        if [ -n "${CC:-}" ];  then args+=(-DCMAKE_C_COMPILER="$CC");   fi
         cd tests/packaging
-        mkdir build && cd build
-        cmake .. -DCMAKE_PREFIX_PATH=$CONDA_PREFIX -DCMAKE_CXX_COMPILER=$CXX -DCMAKE_C_COMPILER=$CC -DCMAKE_FIND_FRAMEWORK=LAST
-        cmake --build .
-        ctest --output-on-failure
+        cmake -B build "${args[@]}"
+        cmake --build build
+        ctest --test-dir build --output-on-failure
 
     - name: Smoke-test CLI apps (Windows)
       if: inputs.platform == 'windows'
