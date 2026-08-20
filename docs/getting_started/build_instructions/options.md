@@ -9,6 +9,7 @@ This document explains the various options that can be set when building Huira w
 | [`HUIRA_TESTS`](#huira_tests)       | `OFF` | Build Huira's unit tests. |
 | [`HUIRA_DOCS`](#huira_docs)        | `OFF` | Build Huira's documentation. This requires additional dependencies to be installed.  Please see below.|
 | [`HUIRA_PYTHON`](#huira_python)      | `OFF` | Build Huira's Python bindings. |
+| [`HUIRA_USE_SYSTEM_PYBIND11`](#huira_python) | `OFF` | Locate pybind11 with `find_package` instead of fetching it.  Only relevant when `HUIRA_PYTHON=ON`. |
 | [`HUIRA_LOCAL_DEV`](#huira_local_dev)   | `OFF`  | Enable development features such as warnings and assertions. |
 
 ## HUIRA_TOOLS
@@ -52,6 +53,8 @@ If you wish to build the python bindings from source, it is recommended to use `
 ```bash
 pip install bindings/python/
 ```
+
+If you enable `HUIRA_USE_SYSTEM_PYBIND11`, CMake will not fetch a copy of pybind11, but instead will attempt to use your system installed version of pybind11.
 
 ## HUIRA_LOCAL_DEV
 
