@@ -130,6 +130,16 @@ PYBIND11_MODULE(_huira, m)
         .value("GEOMETRIC_STATE", huira::ObservationMode::GEOMETRIC_STATE)
         .value("ABERRATED_STATE", huira::ObservationMode::ABERRATED_STATE);
 
+    // Alpha Mode Enum:
+    // Not templated on the spectral type, so it is registered once here rather than
+    // per spectral submodule. Must precede bind_spectral(), which binds
+    // SceneView::evaluate_transmittance with an AlphaMode default argument -
+    // pybind11 casts default values at definition time and would throw on an
+    // unregistered type.
+    py::enum_<huira::AlphaMode>(m, "AlphaMode")
+        .value("STOCHASTIC", huira::AlphaMode::Stochastic)
+        .value("EXPECTED", huira::AlphaMode::Expected);
+
     // Bind RGB spectral specializations:
     auto rgb = m.def_submodule("rgb", "RGB (3-bin) spectral specialization");
     bind_spectral<huira::RGB>(rgb);
