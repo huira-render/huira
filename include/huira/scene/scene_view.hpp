@@ -28,6 +28,21 @@ class Renderer;
 enum class GeometryType { Primitive, Light };
 
 /**
+ * @brief How partial surface opacity is resolved along a transmittance query.
+ */
+enum class AlphaMode {
+    /// Russian-roulette on opacity: unbiased over many samples, one RNG draw per
+    /// partially opaque surface crossed. Used by shadow rays, where the estimate is
+    /// already averaged over the pixel's samples.
+    Stochastic,
+    /// Analytic expected value of the stochastic estimator, drawing no random
+    /// numbers. Used for queries that are evaluated exactly once and therefore have
+    /// no samples to average over - notably occlusion of unresolved point sources,
+    /// where a coin flip would make a star flicker on and off behind thin geometry.
+    Expected
+};
+
+/**
  * @brief View of a scene at a specific time and camera instance.
  *
  * SceneView collects geometry, lights, unresolved objects, and stars for rendering.
@@ -48,11 +63,13 @@ class SceneView {
     [[nodiscard]] HitRecord
     intersect(const Ray<TSpectral>& ray, float time = 0.5f, unsigned int mask = 0xFFFFFFFF) const;
 
-    [[nodiscard]] TSpectral evaluate_transmittance(const Ray<TSpectral>& shadow_ray,
-                                                   float t_far,
-                                                   const MediumStack<TSpectral>& initial_stack,
-                                                   RandomSampler<float>& sampler,
-                                                   float time = 0.5f) const;
+    [[nodiscard]] TSpectral
+    evaluate_transmittance(const Ray<TSpectral>& shadow_ray,
+                           float t_far,
+                           const MediumStack<TSpectral>& initial_stack,
+                           RandomSampler<float>& sampler,
+                           float time = 0.5f,
+                           AlphaMode alpha_mode = AlphaMode::Stochastic) const;
 
     [[nodiscard]] Interaction<TSpectral> resolve_hit(const Ray<TSpectral>& ray,
                                                      const HitRecord& hit) const;

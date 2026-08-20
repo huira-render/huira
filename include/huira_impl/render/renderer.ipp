@@ -1,6 +1,8 @@
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cmath>
+#include <cstdint>
 #include <limits>
 #include <vector>
 
@@ -110,6 +112,15 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
         received_power = Image<TSpectral>(fb_width, fb_height, TSpectral{0});
     }
 
+    // Conservative occluder record consumed by render_unresolved_(). Built here
+    // because the primary rays that answer the question are already being traced;
+    // it costs one byte per pixel and no extra intersection work. Deliberately not
+    // an AOV: unresolved sources must be occluded correctly whether or not the user
+    // asked for a depth image.
+    occluder_mask_valid_ = false;
+    occluder_mask_ = Image<uint8_t>(fb_width, fb_height, uint8_t{0});
+    std::atomic<bool> any_occluder{false};
+
     // Tile-based parallel rendering:
     constexpr int TILE_SIZE = 16;
     int tiles_x = (fb_width + TILE_SIZE - 1) / TILE_SIZE;
@@ -147,6 +158,7 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                         TSpectral pixel_radiance{0};
 
                         float closest_depth = std::numeric_limits<float>::infinity();
+                        bool primary_occluder = false;
                         std::size_t geometry_id = std::numeric_limits<std::size_t>::max();
                         TSpectral albedo_total{0};
                         Vec3<float> camera_normals{0};
@@ -301,6 +313,19 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                                 }
 
                                 const auto& mapping = scene_view.instance_mappings_[hit.inst_id];
+
+                                // Record that a primitive lies along this pixel's line of
+                                // sight. Taken before the opacity test, so surfaces that are
+                                // alpha-passed still flag the pixel, and repeated for every
+                                // surface crossed at bounce 0 across every sampled shutter
+                                // time: the mask must be a superset of everything that could
+                                // attenuate a point source, since a clear mask is trusted to
+                                // mean "no ray cast needed". Lights are excluded because
+                                // evaluate_transmittance() traces against MASK_GEOMETRY_ only
+                                // and would report them as transparent anyway.
+                                if (bounce == 0 && mapping.type == GeometryType::Primitive) {
+                                    primary_occluder = true;
+                                }
 
                                 if (mapping.type == GeometryType::Light) {
                                     const auto& light_instance = lights[mapping.light_index];
@@ -599,6 +624,11 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                         TSpectral indirect_radiance = pixel_indirect_radiance * inv_spp;
                         Vec3<float> avg_camera_normals = glm::normalize(camera_normals * inv_spp);
 
+                        if (primary_occluder) {
+                            occluder_mask_(x, y) = uint8_t{1};
+                            any_occluder.store(true, std::memory_order_relaxed);
+                        }
+
                         if (frame_buffer.has_depth()) {
                             if (closest_depth < std::numeric_limits<float>::infinity()) {
                                 frame_buffer.depth()(x, y) = closest_depth;
@@ -642,6 +672,39 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
             }
         });
 
+    // Dilate the occluder mask by one pixel. The mask is sampled at the exact
+    // sub-pixel position of a point source, but it was built from jittered samples:
+    // a silhouette that clips a corner of a pixel can be missed by all spp_ of them.
+    // One pixel of slack costs a handful of needless ray casts along each silhouette
+    // and makes "clear" trustworthy. Skipped entirely when no primitive was hit at
+    // all, which is the common case for a bare star field.
+    if (any_occluder.load(std::memory_order_relaxed)) {
+        Image<uint8_t> dilated(fb_width, fb_height, uint8_t{0});
+        tbb::parallel_for(tbb::blocked_range<int>(0, fb_height),
+                          [&](const tbb::blocked_range<int>& range) {
+                              for (int y = range.begin(); y < range.end(); ++y) {
+                                  const int ny0 = std::max(0, y - 1);
+                                  const int ny1 = std::min(fb_height - 1, y + 1);
+                                  for (int x = 0; x < fb_width; ++x) {
+                                      const int nx0 = std::max(0, x - 1);
+                                      const int nx1 = std::min(fb_width - 1, x + 1);
+                                      uint8_t v = 0;
+                                      for (int ny = ny0; ny <= ny1 && v == 0; ++ny) {
+                                          for (int nx = nx0; nx <= nx1; ++nx) {
+                                              if (occluder_mask_(nx, ny) != 0) {
+                                                  v = 1;
+                                                  break;
+                                              }
+                                          }
+                                      }
+                                      dilated(x, y) = v;
+                                  }
+                              }
+                          });
+        occluder_mask_ = std::move(dilated);
+    }
+    occluder_mask_valid_ = true;
+
     if (frame_buffer.has_received_power() && camera->convolve_psf_) {
         const Image<TSpectral>& psf = camera->get_psf_convolution_kernel();
         received_power.convolve(psf);
@@ -658,15 +721,28 @@ template <IsSpectral TSpectral>
 struct RenderItem {
     RenderItem(TrajectoryArc set_arc,
                std::vector<TSpectral> set_irradiance,
+               std::vector<float> set_range,
                int set_effective_radius)
         : arc(std::move(set_arc)), irradiance(std::move(set_irradiance)),
-          effective_radius(set_effective_radius)
+          range(std::move(set_range)), effective_radius(set_effective_radius)
     {
     }
 
     TrajectoryArc arc;
     std::vector<TSpectral> irradiance;
+
+    /// Distance to the source at each temporal sample, in the same units as the
+    /// camera-relative scene coordinates. RANGE_AT_INFINITY for catalogue stars.
+    /// Used as the far limit of the occlusion query, so that an unresolved object
+    /// is only occluded by geometry that is actually in front of it.
+    std::vector<float> range;
+
     int effective_radius;
+
+    /// Far limit standing in for "infinitely distant". Deliberately finite: an
+    /// infinite segment length inside a medium of zero extinction would evaluate
+    /// exp(-0 * inf) and produce a NaN transmittance.
+    static constexpr float RANGE_AT_INFINITY = std::numeric_limits<float>::max();
 
     TSpectral interpolate_irradiances(float t) const
     {
@@ -680,6 +756,26 @@ struct RenderItem {
         float frac = scaled - static_cast<float>(lo);
 
         return irradiance[lo] + frac * (irradiance[lo + 1] - irradiance[lo]);
+    }
+
+    float interpolate_ranges(float t) const
+    {
+        if (range.size() == 1) {
+            return range[0];
+        }
+
+        float scaled = t * static_cast<float>(range.size() - 1);
+        std::size_t lo = static_cast<std::size_t>(std::floor(scaled));
+        lo = std::min(lo, range.size() - 2);
+        float frac = scaled - static_cast<float>(lo);
+
+        // Guard the infinite case: interpolating between two RANGE_AT_INFINITY
+        // endpoints must stay at infinity rather than drifting.
+        if (range[lo] == RANGE_AT_INFINITY || range[lo + 1] == RANGE_AT_INFINITY) {
+            return RANGE_AT_INFINITY;
+        }
+
+        return range[lo] + frac * (range[lo + 1] - range[lo]);
     }
 
     float max_irradiance() const
@@ -709,7 +805,11 @@ struct RenderItem {
  * Performance optimizations:
  * - Adaptive PSF radius: dim sources use smaller kernels
  * - Tiled rendering: parallel processing with minimal synchronization
- * - Depth occlusion testing: skip sources behind resolved geometry
+ * - Occlusion testing: sources are attenuated by the transmittance of whatever
+ *   resolved geometry lies between them and the camera, evaluated per trajectory
+ *   sample at that sample's own instant within the exposure. The screen-space
+ *   occluder mask built by path_trace_() culls the ray casts down to the sources
+ *   whose line of sight might actually be obstructed.
  *
  * @tparam TSpectral Spectral type for the rendering pipeline
  * @param scene_view The scene view containing stars and unresolved objects
@@ -761,22 +861,28 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
     for (const auto& star : scene_view.stars_) {
         std::vector<Vec3<float>> directions(star.size());
         std::vector<TSpectral> irradiances(star.size());
+        std::vector<float> ranges(star.size(), RenderItem<TSpectral>::RANGE_AT_INFINITY);
         for (std::size_t i = 0; i < star.size(); ++i) {
             directions[i] = star[i].get_direction();
             irradiances[i] = star[i].get_irradiance();
         }
         TrajectoryArc arc(directions);
-        items.push_back({arc, irradiances, stamp_radius});
+        items.push_back({arc, irradiances, ranges, stamp_radius});
     }
     for (const auto& instance : scene_view.unresolved_objects_) {
         std::vector<Vec3<float>> directions(instance.transforms.size());
         std::vector<TSpectral> irradiances(instance.transforms.size());
+        std::vector<float> ranges(instance.transforms.size());
         for (std::size_t i = 0; i < instance.transforms.size(); ++i) {
-            directions[i] = glm::normalize(instance.transforms[i].position);
+            const Vec3<float>& position = instance.transforms[i].position;
+            directions[i] = glm::normalize(position);
             irradiances[i] = instance.unresolved_object->get_irradiance(times[i]);
+            // Unlike a catalogue star, an unresolved object sits at a finite range
+            // and can legitimately be in FRONT of resolved geometry.
+            ranges[i] = glm::length(position);
         }
         TrajectoryArc arc(directions);
-        items.push_back({arc, irradiances, stamp_radius});
+        items.push_back({arc, irradiances, ranges, stamp_radius});
     }
 
     if (items.empty()) {
@@ -823,6 +929,8 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
         float weight;
         TSpectral irradiance;
         Vec3<float> direction;
+        float range; ///< Distance to the source, for the occlusion query's far limit.
+        float time;  ///< Shutter parameter in [0, 1], for motion-blurred occluders.
     };
 
     std::vector<std::vector<ProjectedItem>> tile_bins(static_cast<std::size_t>(num_tiles));
@@ -916,6 +1024,7 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
 
                 // Interpolate irradiance at this parameter value:
                 TSpectral irrad = item.interpolate_irradiances(params[k]);
+                float source_range = item.interpolate_ranges(params[k]);
                 Vec3<float> dir = arc.evaluate(params[k]);
                 const Pixel& p = pixels[k];
                 if (p.x < 0.f || p.x > res_x || p.y < 0.f || p.y > res_y) {
@@ -925,15 +1034,30 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                 int tx = std::clamp(static_cast<int>(p.x) / TILE_SIZE, 0, tiles_x - 1);
                 int ty = std::clamp(static_cast<int>(p.y) / TILE_SIZE, 0, tiles_y - 1);
 
+                // params[k] is the arc parameter over the full exposure on [0, 1],
+                // which is the same parameterization the intersectors take as their
+                // motion-blur time, so the occlusion query for this sample sees the
+                // scene as it was at the instant this piece of the streak was laid
+                // down - not a union of the occluder over the whole exposure.
                 tile_bins[static_cast<std::size_t>(ty * tiles_x + tx)].push_back(
-                    {i, p, weight, irrad, dir});
+                    {i, p, weight, irrad, dir, source_range, params[k]});
             }
         }
     }
 
     // Render tiles in parallel:
-    const auto& depth_buffer = frame_buffer.depth();
-    bool has_depth = frame_buffer.has_depth();
+
+    // Occlusion of unresolved sources. A point source subtends no solid angle, so
+    // its line of sight is either clear or it is not - there is no partial pixel
+    // coverage to average, and the honest test is a single ray along the source's
+    // exact direction. The screen-space occluder mask from path_trace_() is used
+    // only to prove a line of sight clear and skip that ray; anything it flags, and
+    // everything if it was never built, is tested for real. Scenes with no
+    // primitives at all have nothing that could occlude and skip the machinery
+    // entirely:
+    const bool test_occlusion = unresolved_occlusion_ && !scene_view.primitives_.empty();
+    const bool mask_available = occluder_mask_valid_ && occluder_mask_.width() == fb_width &&
+                                occluder_mask_.height() == fb_height;
 
     int margin = splat_wings ? std::max(stamp_radius, 1) : stamp_radius;
 
@@ -973,22 +1097,53 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                 Image<TSpectral> local_buf(local_w, local_h);
                 Image<TSpectral> local_splat(splat_wings ? local_w : 0, splat_wings ? local_h : 0);
 
+                // Required by the transmittance query's signature. In Expected alpha
+                // mode nothing actually draws from it (media transmittance is
+                // analytic and the alpha branch is taken in closed form), so the
+                // result is deterministic; it is per-tile regardless so that the
+                // query is never a data race if that ever changes.
+                RandomSampler<float> sampler(static_cast<unsigned int>(tile_idx));
+
                 for (const auto& proj : bin) {
                     const auto& item = items[proj.item_idx];
                     const Pixel& star_p = proj.projected;
 
-                    bool unobstructed = true;
-                    if (has_depth) {
-                        if (!std::isinf(depth_buffer(star_p))) {
-                            unobstructed = false;
-                        }
-                    }
-                    if (!unobstructed) {
-                        continue;
-                    }
-
                     float projected_area = camera->get_projected_aperture_area(proj.direction);
                     TSpectral power = proj.weight * proj.irradiance * projected_area;
+
+                    if (test_occlusion) {
+                        // The mask is indexed by truncation, matching how it was
+                        // written; clamped because a source may project exactly onto
+                        // the far edge of the frame.
+                        const int mx = std::clamp(static_cast<int>(star_p.x), 0, fb_width - 1);
+                        const int my = std::clamp(static_cast<int>(star_p.y), 0, fb_height - 1);
+
+                        if (!mask_available || occluder_mask_(mx, my) != 0) {
+                            // The arc directions are splined through unit vectors and
+                            // are not themselves unit length, so normalize: hit.t is
+                            // compared against proj.range in scene units.
+                            Ray<TSpectral> occlusion_ray(Vec3<float>{0.f, 0.f, 0.f},
+                                                         glm::normalize(proj.direction));
+
+                            // Empty initial medium stack, matching the assumption
+                            // camera rays make in path_trace_().
+                            TSpectral transmittance =
+                                scene_view.evaluate_transmittance(occlusion_ray,
+                                                                  proj.range,
+                                                                  MediumStack<TSpectral>{},
+                                                                  sampler,
+                                                                  proj.time,
+                                                                  AlphaMode::Expected);
+
+                            if (transmittance.max() <= 0.f) {
+                                continue;
+                            }
+                            // Attenuating power (rather than gating the stamp) keeps
+                            // the compact core and the bilinear wings splat below
+                            // consistent, so an energy-preserving blend still holds.
+                            power = power * transmittance;
+                        }
+                    }
 
                     if (splat_wings) {
                         // Bilinear splat: preserves total energy and first moment (centroid)

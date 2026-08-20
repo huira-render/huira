@@ -231,7 +231,8 @@ TSpectral SceneView<TSpectral>::evaluate_transmittance(const Ray<TSpectral>& ray
                                                        float t_far,
                                                        const MediumStack<TSpectral>& initial_stack,
                                                        RandomSampler<float>& sampler,
-                                                       float time) const
+                                                       float time,
+                                                       AlphaMode alpha_mode) const
 {
     TSpectral transmittance{1.0f};
     MediumStack<TSpectral> stack = initial_stack;
@@ -275,16 +276,31 @@ TSpectral SceneView<TSpectral>::evaluate_transmittance(const Ray<TSpectral>& ray
 
         auto [params, shading_isect] = material->evaluate(isect);
 
-        const bool stochastic_pass_through =
-            (params.opacity < 1.0f) && (sampler.get_1d() > params.opacity);
+        if (alpha_mode == AlphaMode::Stochastic) {
+            const bool stochastic_pass_through =
+                (params.opacity < 1.0f) && (sampler.get_1d() > params.opacity);
 
-        if (!stochastic_pass_through) {
-            TSpectral surface_transmission = params.transmission;
-            if (surface_transmission.max() <= 0.0f) {
+            if (!stochastic_pass_through) {
+                TSpectral surface_transmission = params.transmission;
+                if (surface_transmission.max() <= 0.0f) {
+                    transmittance = TSpectral{0.0f};
+                    return transmittance;
+                }
+                transmittance *= surface_transmission;
+            }
+        } else {
+            // Expected value of the branch above, taken analytically rather than by
+            // Russian roulette:
+            //     E[T] = (1 - alpha) * 1 + alpha * transmission
+            // Identical in the alpha == 1 and alpha == 0 limits, and noise-free in
+            // between. Draws no random numbers, so the RNG stream is untouched.
+            const float alpha = std::clamp(params.opacity, 0.0f, 1.0f);
+            TSpectral surface_factor = TSpectral{1.0f - alpha} + params.transmission * alpha;
+            if (surface_factor.max() <= 0.0f) {
                 transmittance = TSpectral{0.0f};
                 return transmittance;
             }
-            transmittance *= surface_transmission;
+            transmittance *= surface_factor;
         }
 
         stack.toggle(batch.primitive.get());
