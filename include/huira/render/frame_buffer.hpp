@@ -50,19 +50,39 @@ class FrameBuffer {
     Image<Vec3<float>>& world_normals() { return world_normals_; }
     bool has_world_normals() const { return has_(world_normals_); }
 
+    /**
+     * @brief Enable the direct-illumination component of received power.
+     *
+     * Also enables received_power(), which the direct and indirect components are a
+     * decomposition of: the renderer's unresolved-source, veiling-glare and sensor
+     * stages all key off the total, and the invariant
+     * received_power == received_direct_power + received_indirect_power
+     * only holds if the total is actually produced.
+     */
     void enable_received_direct_power(bool enable = true)
     {
-        enable_(received_power_, TSpectral{0}, enable);
+        if (enable) {
+            enable_(received_power_, TSpectral{0}, true);
+        }
+        enable_(received_direct_power_, TSpectral{0}, enable);
     }
-    Image<TSpectral>& received_direct_power() { return received_power_; }
-    bool has_received_direct_power() const { return has_(received_power_); }
+    Image<TSpectral>& received_direct_power() { return received_direct_power_; }
+    bool has_received_direct_power() const { return has_(received_direct_power_); }
 
+    /**
+     * @brief Enable the indirect-illumination component of received power.
+     *
+     * See enable_received_direct_power() for why this also enables the total.
+     */
     void enable_received_indirect_power(bool enable = true)
     {
-        enable_(received_power_, TSpectral{0}, enable);
+        if (enable) {
+            enable_(received_power_, TSpectral{0}, true);
+        }
+        enable_(received_indirect_power_, TSpectral{0}, enable);
     }
-    Image<TSpectral>& received_indirect_power() { return received_power_; }
-    bool has_received_indirect_power() const { return has_(received_power_); }
+    Image<TSpectral>& received_indirect_power() { return received_indirect_power_; }
+    bool has_received_indirect_power() const { return has_(received_indirect_power_); }
 
     void enable_received_power(bool enable = true)
     {
@@ -99,6 +119,12 @@ class FrameBuffer {
         if (has_received_power()) {
             received_power_.fill(TSpectral{0});
         }
+        if (has_received_direct_power()) {
+            received_direct_power_.fill(TSpectral{0});
+        }
+        if (has_received_indirect_power()) {
+            received_indirect_power_.fill(TSpectral{0});
+        }
         if (has_sensor_response()) {
             sensor_response_.fill(SensorT{});
         }
@@ -116,6 +142,8 @@ class FrameBuffer {
     Image<Vec3<float>> world_normals_;
 
     Image<TSpectral> received_power_;
+    Image<TSpectral> received_direct_power_;
+    Image<TSpectral> received_indirect_power_;
     Image<SensorT> sensor_response_;
 
     template <IsImagePixel T>
