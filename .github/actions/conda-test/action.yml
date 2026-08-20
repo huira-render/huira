@@ -33,6 +33,18 @@ runs:
       shell: bash -el {0}
       run: |
         conda install -y cmake ninja
+        # conda-forge builds its Linux packages against a newer libstdc++ than the
+        # runner's system compiler ships: libembree4 references CXXABI_1.3.15
+        # (GCC 13+), while ubuntu-22.04 provides GCC 11 / CXXABI_1.3.13, so linking
+        # against it with /usr/bin/c++ fails with an undefined reference. Installing
+        # the conda toolchain makes the link resolve against $CONDA_PREFIX/lib, which
+        # is also how conda-forge expects its packages to be consumed. Activation
+        # exports CXX/CC, which the build step below already forwards to CMake.
+        # macOS has no equivalent mismatch (libc++ is ABI-stable across the versions
+        # in play), so it keeps using the system toolchain.
+        if [ "${{ inputs.platform }}" = "linux" ]; then
+          conda install -y cxx-compiler
+        fi
         conda install -y -c file://$PWD/conda-package huira
 
     - name: Install dependencies and local package (Windows)
