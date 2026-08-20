@@ -42,6 +42,7 @@ void bind_scene_view(py::module_& m)
              py::arg("initial_stack"),
              py::arg("sampler"),
              py::arg("time") = 0.5f,
+             py::arg("alpha_mode") = AlphaMode::Stochastic,
              "Evaluate transmittance along a shadow ray through participating media")
         .def("resolve_hit",
              &SV::resolve_hit,
