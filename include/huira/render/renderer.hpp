@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "huira/concepts/spectral_concepts.hpp"
+#include "huira/images/fft_convolver.hpp"
 #include "huira/render/frame_buffer.hpp"
 #include "huira/sampling/sampler.hpp"
 #include "huira/scene/scene_view.hpp"
@@ -17,7 +18,7 @@ namespace huira {
  * Renderer provides the interface and common helpers for rendering a SceneView into a FrameBuffer.
  * Derived classes implement specific rendering algorithms.
  *
- * @tparam TSpectral Spectral type for the rendering pipeline
+ * @tparam TSpectral The spectral type (e.g., RGB, Visible8)
  */
 template <IsSpectral TSpectral>
 class Renderer {
@@ -26,39 +27,25 @@ class Renderer {
 
     virtual void render(SceneView<TSpectral>& scene_view, FrameBuffer<TSpectral>& frame_buffer);
 
-    /**
-     * @brief Set the number of samples per pixel.
-     */
+    /// Set the number of samples per pixel.
     void set_samples_per_pixel(int spp) { spp_ = spp; }
 
-    /**
-     * @brief Set the maximum number of bounces for path tracing.
-     */
+    /// Set the maximum number of bounces for path tracing.
     void set_max_bounces(int max_bounces) { max_bounces_ = max_bounces; }
 
-    /**
-     * @brief Enable or disable dynamic sampling of pixels based on variance.
-     */
+    /// Enable or disable dynamic sampling of pixels based on variance.
     void set_dynamic_sampling(bool dynamic_sample = true) { dynamic_sampling_ = dynamic_sample; }
 
-    /**
-     * @brief Set the minimum samples per pixel for dynamic sampling.
-     */
+    /// Set the minimum samples per pixel for dynamic sampling.
     void set_min_samples(int min_samples) { min_spp_ = min_samples; }
 
-    /**
-     * @brief Set the variance threshold for dynamic sampling.
-     */
+    /// Set the variance threshold for dynamic sampling.
     void set_variance_threshold(float threshold) { variance_threshold_ = threshold; }
 
-    /**
-     * @brief Set the indirect lighting clamp threshold.
-     */
+    /// Set the indirect lighting clamp threshold.
     void set_indirect_clamp(float indirect_clamp) { indirect_clamp_threshold_ = indirect_clamp; }
 
-    /**
-     * @brief Enable or disable occlusion testing of unresolved point sources.  (Enabled by default)
-     */
+    /// Enable or disable occlusion testing of unresolved point sources.  */
     void set_unresolved_occlusion(bool occlusion = true) { unresolved_occlusion_ = occlusion; }
 
   protected:
@@ -82,11 +69,32 @@ class Renderer {
         return scene_view.lights_;
     }
 
+    /// @brief A persistent FFT convolver plus the configuration it was built for.
+    struct ConvolverCache {
+        FftConvolver<TSpectral> convolver;
+        const void* camera = nullptr;
+        std::uint64_t kernel_version = 0;
+        int image_width = 0;
+        int image_height = 0;
+        int kernel_width = 0;
+        int kernel_height = 0;
+        bool valid = false;
+    };
+
+    void convolve_cached_(Image<TSpectral>& image,
+                          const Image<TSpectral>& kernel,
+                          const CameraModel<TSpectral>& camera,
+                          ConvolverCache& cache);
+
+    /// Scattered-light wings applied to the unresolved splat buffer, once per frame.
+    ConvolverCache wings_convolver_;
+
+    /// Composite PSF applied to the whole unresolved image in the defocus path.
+    ConvolverCache defocus_convolver_;
+
     RandomSampler<float> sampler_;
 
-    /**
-     * @brief Conservative screen-space record of where an occluder may lie.
-     */
+    /// Conservative screen-space record of where an occluder may lie.  */
     Image<uint8_t> occluder_mask_;
 
     /// False until path_trace_() has filled occluder_mask_ for the current frame.

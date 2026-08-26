@@ -16,11 +16,25 @@ namespace huira {
  * @param samples Direction vectors at each sample time. Must have at least 2 elements.
  */
 TrajectoryArc::TrajectoryArc(const std::vector<Vec3<float>>& samples)
-    : sample_count_(samples.size())
+{
+    reset(samples);
+}
+
+/**
+ * @brief Rebuild the arc in place, reusing any heap capacity already held.
+ *
+ * Performs exactly the same construction as the constructor; only the storage
+ * lifetime differs.
+ *
+ * @param samples Direction vectors at each sample time. Must have at least 1 element.
+ */
+void TrajectoryArc::reset(const std::vector<Vec3<float>>& samples)
 {
     if (samples.size() < 1) {
-        HUIRA_THROW_ERROR("TrajectoryArc::TrajectoryArc - requires at least 1 sample point.");
+        HUIRA_THROW_ERROR("TrajectoryArc::reset - requires at least 1 sample point.");
     }
+
+    sample_count_ = samples.size();
 
     if (is_polynomial_()) {
         build_polynomial_(samples);
@@ -54,10 +68,26 @@ Vec3<float> TrajectoryArc::evaluate(float t) const
  */
 std::vector<float> TrajectoryArc::find_plane_crossings(const Vec3<float>& plane_normal) const
 {
+    std::vector<float> out;
+    find_plane_crossings(plane_normal, out);
+    return out;
+}
+
+/**
+ * @brief Allocation-free form of find_plane_crossings().
+ *
+ * @param plane_normal Inward-pointing normal of a plane through the origin.
+ * @param out Cleared and filled with the parameter values of the crossings.
+ */
+void TrajectoryArc::find_plane_crossings(const Vec3<float>& plane_normal,
+                                         std::vector<float>& out) const
+{
+    out.clear();
     if (is_polynomial_()) {
-        return find_crossings_polynomial_(plane_normal);
+        find_crossings_polynomial_(plane_normal, out);
+    } else {
+        find_crossings_spline_(plane_normal, out);
     }
-    return find_crossings_spline_(plane_normal);
 }
 
 /**
@@ -72,11 +102,11 @@ void TrajectoryArc::build_polynomial_(const std::vector<Vec3<float>>& samples)
 {
     if (samples.size() == 1) {
         // Constant: f(t) = p0
-        poly_coeffs_.resize(1);
+        poly_count_ = 1;
         poly_coeffs_[0] = samples[0];
     } else if (samples.size() == 2) {
         // Linear: f(t) = p0 + (p1 - p0) * t
-        poly_coeffs_.resize(2);
+        poly_count_ = 2;
         poly_coeffs_[0] = samples[0];
         poly_coeffs_[1] = samples[1] - samples[0];
     } else {
@@ -85,7 +115,7 @@ void TrajectoryArc::build_polynomial_(const std::vector<Vec3<float>>& samples)
         const auto& p1 = samples[1];
         const auto& p2 = samples[2];
 
-        poly_coeffs_.resize(3);
+        poly_count_ = 3;
         poly_coeffs_[0] = p0;
         poly_coeffs_[1] = -3.0f * p0 + 4.0f * p1 - p2;
         poly_coeffs_[2] = 2.0f * p0 - 4.0f * p1 + 2.0f * p2;
@@ -167,8 +197,8 @@ void TrajectoryArc::build_cubic_spline_(const std::vector<Vec3<float>>& samples)
 Vec3<float> TrajectoryArc::evaluate_polynomial_(float t) const
 {
     // Horner's method:
-    Vec3<float> result = poly_coeffs_.back();
-    for (std::size_t i = poly_coeffs_.size() - 1; i > 0; --i) {
+    Vec3<float> result = poly_coeffs_[poly_count_ - 1];
+    for (std::size_t i = poly_count_ - 1; i > 0; --i) {
         result = result * t + poly_coeffs_[i - 1];
     }
     return result;
@@ -198,21 +228,27 @@ Vec3<float> TrajectoryArc::evaluate_spline_(float t) const
  *
  * dot(normal, f(t)) = 0 becomes a scalar polynomial in t.
  */
-std::vector<float> TrajectoryArc::find_crossings_polynomial_(const Vec3<float>& normal) const
+void TrajectoryArc::find_crossings_polynomial_(const Vec3<float>& normal,
+                                               std::vector<float>& out) const
 {
-    if (poly_coeffs_.size() == 1) {
+    float roots[3];
+    std::size_t count = 0;
+
+    if (poly_count_ == 1) {
         // Constant: dot(normal, p0) is either >= 0 or < 0. No crossings.
-        return {};
-    } else if (poly_coeffs_.size() == 2) {
+        return;
+    } else if (poly_count_ == 2) {
         float c0 = glm::dot(normal, poly_coeffs_[0]);
         float c1 = glm::dot(normal, poly_coeffs_[1]);
-        return solve_linear_(c1, c0, 0.0f, 1.0f);
+        count = solve_linear_(c1, c0, 0.0f, 1.0f, roots);
     } else {
         float c0 = glm::dot(normal, poly_coeffs_[0]);
         float c1 = glm::dot(normal, poly_coeffs_[1]);
         float c2 = glm::dot(normal, poly_coeffs_[2]);
-        return solve_quadratic_(c2, c1, c0, 0.0f, 1.0f);
+        count = solve_quadratic_(c2, c1, c0, 0.0f, 1.0f, roots);
     }
+
+    out.insert(out.end(), roots, roots + count);
 }
 
 /**
@@ -220,10 +256,9 @@ std::vector<float> TrajectoryArc::find_crossings_polynomial_(const Vec3<float>& 
  *
  * For each segment, dot(normal, S_i(u)) = 0 is a cubic in u.
  */
-std::vector<float> TrajectoryArc::find_crossings_spline_(const Vec3<float>& normal) const
+void TrajectoryArc::find_crossings_spline_(const Vec3<float>& normal,
+                                           std::vector<float>& all_roots) const
 {
-    std::vector<float> all_roots;
-
     for (std::size_t i = 0; i < segments_.size(); ++i) {
         const auto& s = segments_[i];
         const float h = knots_[i + 1] - knots_[i];
@@ -233,10 +268,11 @@ std::vector<float> TrajectoryArc::find_crossings_spline_(const Vec3<float>& norm
         float c = glm::dot(normal, s.b);
         float d = glm::dot(normal, s.a);
 
-        auto roots = solve_cubic_(a, b, c, d, 0.0f, h);
+        float roots[3];
+        std::size_t count = solve_cubic_(a, b, c, d, 0.0f, h, roots);
 
-        for (float u : roots) {
-            float t = knots_[i] + u;
+        for (std::size_t k = 0; k < count; ++k) {
+            float t = knots_[i] + roots[k];
             if (all_roots.empty() || std::abs(t - all_roots.back()) > 1e-6f) {
                 all_roots.push_back(t);
             }
@@ -244,45 +280,45 @@ std::vector<float> TrajectoryArc::find_crossings_spline_(const Vec3<float>& norm
     }
 
     std::sort(all_roots.begin(), all_roots.end());
-    return all_roots;
 }
 
 // =========================================================================
 // Root-finding utilities
 // =========================================================================
 
-std::vector<float> TrajectoryArc::solve_linear_(float a, float b, float t_min, float t_max)
+std::size_t TrajectoryArc::solve_linear_(float a, float b, float t_min, float t_max, float* out)
 {
     constexpr float eps = 1e-10f;
     if (std::abs(a) < eps) {
-        return {};
+        return 0;
     }
     float t = -b / a;
     if (t >= t_min - eps && t <= t_max + eps) {
-        return {std::clamp(t, t_min, t_max)};
+        out[0] = std::clamp(t, t_min, t_max);
+        return 1;
     }
-    return {};
+    return 0;
 }
 
-std::vector<float>
-TrajectoryArc::solve_quadratic_(float a, float b, float c, float t_min, float t_max)
+std::size_t
+TrajectoryArc::solve_quadratic_(float a, float b, float c, float t_min, float t_max, float* out)
 {
     constexpr float eps = 1e-10f;
 
     if (std::abs(a) < eps) {
-        return solve_linear_(b, c, t_min, t_max);
+        return solve_linear_(b, c, t_min, t_max, out);
     }
 
     float discriminant = b * b - 4.0f * a * c;
     if (discriminant < 0.0f) {
-        return {};
+        return 0;
     }
 
-    std::vector<float> roots;
+    std::size_t n = 0;
     if (discriminant < eps) {
         float t = -b / (2.0f * a);
         if (t >= t_min - eps && t <= t_max + eps) {
-            roots.push_back(std::clamp(t, t_min, t_max));
+            out[n++] = std::clamp(t, t_min, t_max);
         }
     } else {
         float sqrt_d = std::sqrt(discriminant);
@@ -295,15 +331,15 @@ TrajectoryArc::solve_quadratic_(float a, float b, float c, float t_min, float t_
         }
 
         if (t1 >= t_min - eps && t1 <= t_max + eps) {
-            roots.push_back(std::clamp(t1, t_min, t_max));
+            out[n++] = std::clamp(t1, t_min, t_max);
         }
         if (t2 >= t_min - eps && t2 <= t_max + eps) {
-            if (roots.empty() || std::abs(t2 - roots.back()) > eps) {
-                roots.push_back(std::clamp(t2, t_min, t_max));
+            if (n == 0 || std::abs(t2 - out[n - 1]) > eps) {
+                out[n++] = std::clamp(t2, t_min, t_max);
             }
         }
     }
-    return roots;
+    return n;
 }
 
 /**
@@ -311,13 +347,13 @@ TrajectoryArc::solve_quadratic_(float a, float b, float c, float t_min, float t_
  *
  * Uses the depressed cubic (Cardano's method) for analytic solution.
  */
-std::vector<float>
-TrajectoryArc::solve_cubic_(float a, float b, float c, float d, float t_min, float t_max)
+std::size_t TrajectoryArc::solve_cubic_(
+    float a, float b, float c, float d, float t_min, float t_max, float* out)
 {
     constexpr float eps = 1e-10f;
 
     if (std::abs(a) < eps) {
-        return solve_quadratic_(b, c, d, t_min, t_max);
+        return solve_quadratic_(b, c, d, t_min, t_max, out);
     }
 
     float p = b / a;
@@ -330,7 +366,7 @@ TrajectoryArc::solve_cubic_(float a, float b, float c, float d, float t_min, flo
 
     float discriminant = -4.0f * A * A * A - 27.0f * B * B;
 
-    std::vector<float> roots;
+    std::size_t n = 0;
     float offset = -p / 3.0f;
 
     if (discriminant > eps) {
@@ -341,7 +377,7 @@ TrajectoryArc::solve_cubic_(float a, float b, float c, float d, float t_min, flo
             float u = m * std::cos(theta - 2.0f * PI<float>() * static_cast<float>(k) / 3.0f);
             float t = u + offset;
             if (t >= t_min - eps && t <= t_max + eps) {
-                roots.push_back(std::clamp(t, t_min, t_max));
+                out[n++] = std::clamp(t, t_min, t_max);
             }
         }
     } else if (discriminant < -eps) {
@@ -359,13 +395,13 @@ TrajectoryArc::solve_cubic_(float a, float b, float c, float d, float t_min, flo
 
         float t = u + offset;
         if (t >= t_min - eps && t <= t_max + eps) {
-            roots.push_back(std::clamp(t, t_min, t_max));
+            out[n++] = std::clamp(t, t_min, t_max);
         }
     } else {
         if (std::abs(B) < eps) {
             float t = offset;
             if (t >= t_min - eps && t <= t_max + eps) {
-                roots.push_back(std::clamp(t, t_min, t_max));
+                out[n++] = std::clamp(t, t_min, t_max);
             }
         } else {
             float u1 = 3.0f * B / A;
@@ -375,18 +411,18 @@ TrajectoryArc::solve_cubic_(float a, float b, float c, float d, float t_min, flo
             float t2 = u2 + offset;
 
             if (t1 >= t_min - eps && t1 <= t_max + eps) {
-                roots.push_back(std::clamp(t1, t_min, t_max));
+                out[n++] = std::clamp(t1, t_min, t_max);
             }
             if (t2 >= t_min - eps && t2 <= t_max + eps) {
-                if (roots.empty() || std::abs(t2 - roots.back()) > eps) {
-                    roots.push_back(std::clamp(t2, t_min, t_max));
+                if (n == 0 || std::abs(t2 - out[n - 1]) > eps) {
+                    out[n++] = std::clamp(t2, t_min, t_max);
                 }
             }
         }
     }
 
-    std::sort(roots.begin(), roots.end());
-    return roots;
+    std::sort(out, out + n);
+    return n;
 }
 
 } // namespace huira

@@ -23,6 +23,8 @@ static std::pair<fs::path, fs::path> parse_input_paths(int argc, char** argv)
 
 int main(int argc, char** argv)
 {
+    huira::enable_console_info();
+
     // Parsing input paths
     auto [star_catalog_path, kernel_path] = parse_input_paths(argc, argv);
 

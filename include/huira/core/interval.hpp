@@ -1,18 +1,5 @@
 #pragma once
 
-/**
- * @file interval.hpp
- * @brief Defines an exposure time interval for rendering with optional motion blur.
- *
- * Interval represents a continuous time span during which a sensor
- * integrates light. It can be constructed from various common parameterizations:
- * center time + duration, start time + duration, or explicit start/end bounds.
- *
- * When the interval has non-zero duration and motion blur is enabled, SceneView
- * will provide multiple time-step transforms to Embree for instance-level
- * motion blur interpolation.
- */
-
 #include "huira/core/time.hpp"
 #include "huira/units/units.hpp"
 
@@ -71,10 +58,10 @@ struct Interval {
      */
     static Interval from_bounds(const Time& start, const Time& end) { return {start, end}; }
 
-    /** @brief The midpoint of the exposure interval. */
+    /// The midpoint of the exposure interval.
     Time center() const { return start + units::Second((end.et() - start.et()) / 2.0); }
 
-    /** @brief Create uniformly spaced Time samples across the interval. */
+    /// Create uniformly spaced Time samples across the interval.
     std::vector<Time> samples(std::size_t N) const
     {
         if (N == 0) {
@@ -91,7 +78,7 @@ struct Interval {
         }
     }
 
-    /** @brief The total duration of the exposure in seconds. */
+    /// The total duration of the exposure in seconds.
     units::Second duration() const { return units::Second(end.et() - start.et()); }
 };
 

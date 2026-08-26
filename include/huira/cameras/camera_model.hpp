@@ -39,7 +39,7 @@ class Renderer;
  * to the image plane, compute projected aperture area, and supports both analytic and PSF-based
  * point spread functions. All units are SI unless otherwise noted.
  *
- * @tparam TSpectral The spectral type (e.g., float, Vec3f, etc.)
+ * @tparam TSpectral The spectral type
  */
 template <IsSpectral TSpectral>
 class CameraModel : public SceneObject<CameraModel<TSpectral>> {
@@ -50,6 +50,8 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     CameraModel& operator=(const CameraModel&) = delete;
 
     void set_focal_length(units::Millimeter focal_length);
+
+    /// Get the focal length of the camera in millimeters.
     units::Millimeter focal_length() const { return units::Millimeter(1000 * focal_length_); }
 
     void set_fstop(float fstop);
@@ -62,6 +64,7 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     void set_opencv_distortion(OpenCVCoefficients coeffs);
     void set_owen_distortion(OwenCoefficients coeffs);
 
+    /// Delete the current distortion model.
     void delete_distortion() { distortion_ = nullptr; }
 
     template <IsSensor<TSpectral> TSensor, typename... Args>
@@ -104,6 +107,8 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
                           int banks = 16);
 
     void use_aperture_psf(int radius = 64, int banks = 16);
+
+    /// Enable or disable PSF convolution.
     void enable_psf_convolution(bool convolve_psf = true) { convolve_psf_ = convolve_psf; }
     void set_psf_convolution_radius(int radius);
     void delete_psf();
@@ -116,18 +121,29 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
                                   float radius = 0.f);
     void disable_harvey_shack_scatter();
 
+    /// Check if the camera model has a PSF.
     bool has_psf() const { return psf_ != nullptr; }
+
+    /// Get the PSF kernel at the specified image coordinates.
     const Image<TSpectral>& get_psf_kernel(float u, float v) const
     {
         return psf_->get_kernel(u, v);
     }
+
+    /// Get the PSF radius.
     int get_psf_radius() const { return psf_->get_radius(); }
 
     const Image<TSpectral>& get_psf_convolution_kernel();
     const Image<TSpectral>& get_psf_wings_kernel();
 
+    /// Monotonic counter identifying the current PSF/scatter kernel configuration.
+    [[nodiscard]] std::uint64_t psf_kernel_version() const noexcept { return psf_kernel_version_; }
+
+    /// Enable or disable depth of field for the camera model.
     void enable_depth_of_field(bool depth_of_field = true) { depth_of_field_ = depth_of_field; }
     void set_focus_distance(units::Meter focus_distance);
+
+    /// Get the focus distance of the camera.
     units::Meter get_focus_distance() const { return units::Meter(d_); }
     void set_diopters(units::Diopter diopters);
     units::Diopter get_diopters() const;
@@ -139,12 +155,14 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     Ray<TSpectral> cast_ray(const Pixel& pixel) const;
     Ray<TSpectral> cast_ray(int x, int y) const;
 
+    /// Get the frustum representing the camera's field of view.
     const Frustum<TSpectral>& view_frustum() const { return view_frustum_; }
 
     float pixel_radiance_to_power(int x, int y) const;
 
     bool in_fov(const Vec3<float>& point) const;
 
+    /// Read out the sensor into the given frame buffer with the specified exposure time.
     void readout(FrameBuffer<TSpectral>& fb, units::Second exposure_time) const
     {
         sensor_->readout(fb, exposure_time);
@@ -152,16 +170,20 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
 
     float get_projected_aperture_area(const Vec3<float>& direction) const;
 
+    /// Get the sensor resolution.
     Resolution resolution() const { return sensor_->resolution(); }
+    Resolution res() const { return sensor_->resolution(); }
 
+    /// Get the type of the camera model.
     std::string type() const override { return "CameraModel"; }
 
-    FrameBuffer<TSpectral> make_frame_buffer() const
-    {
-        return FrameBuffer<TSpectral>(resolution());
-    }
+    /// Create a frame buffer matching the sensor resolution.
+    FrameBuffer<TSpectral> make_frame_buffer() const { return FrameBuffer<TSpectral>(res()); }
 
+    /// Enable or disable the Blender convention for the camera model.
     void use_blender_convention(bool value = true) { blender_convention_ = value; }
+
+    /// Check if the Blender convention is enabled for the camera model.
     bool is_blender_convention() const { return blender_convention_; }
 
   protected:
@@ -173,23 +195,26 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     std::unique_ptr<PSF<TSpectral>> psf_ = nullptr;
     bool convolve_psf_ = false;
 
-    // Whole-image convolution kernel: a single centered kernel, built lazily from psf_ and
-    // cached. Independent of the polyphase stamping cache; may be much larger. A radius of 0
-    // means "match the polyphase radius".
+    // Whole-image convolution kernel: a single centered kernel, built lazily from psf_ and cached.
     int psf_convolution_radius_ = 0;
     Image<TSpectral> psf_convolution_kernel_;
     bool psf_convolution_kernel_valid_ = false;
 
     // Scattered-light wings kernel alone (unit energy), used by the renderer to apply wings
-    // to unresolved sources whose compact core is stamped rather than convolved:
+    // to unresolved sources whose compact core is stamped rather than convolved.
     Image<TSpectral> psf_wings_kernel_;
     bool psf_wings_kernel_valid_ = false;
 
+    /// Invalidate the cached PSF convolution and wings kernels.
     void invalidate_psf_kernels_()
     {
         psf_convolution_kernel_valid_ = false;
         psf_wings_kernel_valid_ = false;
+        ++psf_kernel_version_;
     }
+
+    /// See psf_kernel_version(). Starts at 1 so that 0 is usable as "never seen".
+    std::uint64_t psf_kernel_version_ = 1;
 
     bool use_aperture_psf_ = false;
     float d_ = std::numeric_limits<float>::infinity();

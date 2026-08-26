@@ -120,9 +120,7 @@ class FftwPlanCache {
     std::unordered_map<std::uint64_t, Plans> plans_;
 };
 
-/**
- * @brief Per-thread scratch buffers for FFT convolution.
- */
+/// Per-thread scratch buffers for FFT convolution.
 struct FftScratch {
     float* real = nullptr;
     fftwf_complex* complex_buf = nullptr;
@@ -157,6 +155,16 @@ struct FftScratch {
     FftScratch& operator=(const FftScratch&) = delete;
 };
 
+/**
+ * @brief Thread-local FftScratch buffers owned by a single FftConvolver.
+ *
+ * Wrapped in a named struct so that FftConvolver can hold it behind a unique_ptr to an incomplete
+ * type and remain movable.
+ */
+struct FftScratchPool {
+    tbb::enumerable_thread_specific<FftScratch> buffers;
+};
+
 template <typename PixelT>
 inline float get_pixel_channel(const PixelT& pixel, std::size_t c)
 {
@@ -184,6 +192,12 @@ inline void set_pixel_channel(PixelT& pixel, std::size_t c, float val)
 }
 } // namespace detail
 
+/**
+ * @brief Returns the smallest 7-smooth integer (2^a 3^b 5^c 7^d) that is >= n.
+ *
+ * FFTW is fast for sizes whose prime factors are all small; sizes containing large prime
+ * factors fall back to generic algorithms that can be an order of magnitude slower.
+ */
 template <IsImagePixel PixelT>
 int FftConvolver<PixelT>::next_fast_size(int n)
 {
@@ -221,7 +235,8 @@ FftConvolver<PixelT>::FftConvolver(FftConvolver&& other) noexcept
     : ready_(other.ready_), image_width_(other.image_width_), image_height_(other.image_height_),
       padded_width_(other.padded_width_), padded_height_(other.padded_height_),
       complex_cols_(other.complex_cols_), kernel_spectra_(std::move(other.kernel_spectra_)),
-      forward_plan_(other.forward_plan_), inverse_plan_(other.inverse_plan_)
+      forward_plan_(other.forward_plan_), inverse_plan_(other.inverse_plan_),
+      scratch_pool_(std::move(other.scratch_pool_))
 {
     other.kernel_spectra_.clear();
     other.ready_ = false;
@@ -241,6 +256,7 @@ FftConvolver<PixelT>& FftConvolver<PixelT>::operator=(FftConvolver&& other) noex
         kernel_spectra_ = std::move(other.kernel_spectra_);
         forward_plan_ = other.forward_plan_;
         inverse_plan_ = other.inverse_plan_;
+        scratch_pool_ = std::move(other.scratch_pool_);
         other.kernel_spectra_.clear();
         other.ready_ = false;
     }
@@ -255,9 +271,22 @@ void FftConvolver<PixelT>::release_()
     }
     kernel_spectra_.clear();
     ready_ = false;
-    // Plans are owned by the global cache and are intentionally not destroyed here.
+
+    // Scratch buffers are sized for the previous transform
+    scratch_pool_.reset();
 }
 
+/**
+ * @brief Prepares the convolver for a given kernel and image resolution.
+ *
+ * Computes padded transform dimensions, obtains (or creates) cached FFTW plans, and
+ * transforms each kernel channel into its cached frequency-domain spectrum. Safe to call
+ * again to change the kernel or target resolution.
+ *
+ * @param kernel The convolution kernel (any size, including larger than the image)
+ * @param image_resolution Resolution of the images that will be passed to apply()
+ * @param effort FFTW planning effort (see FftPlanEffort)
+ */
 template <IsImagePixel PixelT>
 void FftConvolver<PixelT>::set_kernel(const Image<PixelT>& kernel,
                                       Resolution image_resolution,
@@ -346,6 +375,11 @@ void FftConvolver<PixelT>::set_kernel(const Image<PixelT>& kernel,
     }
 }
 
+/**
+ * @brief Convolves an image in place with the kernel given to set_kernel().
+ *
+ * @param image The image to convolve. Must match the resolution given to set_kernel().
+ */
 template <IsImagePixel PixelT>
 void FftConvolver<PixelT>::apply(Image<PixelT>& image) const
 {
@@ -368,50 +402,83 @@ void FftConvolver<PixelT>::apply(Image<PixelT>& image) const
         constexpr std::size_t num_channels = ImagePixelTraits<PixelT>::channels;
 
         // Each spectral channel is independent; process them in parallel with per-thread
-        // scratch buffers. Plan execution via the new-array interface is thread-safe:
-        tbb::enumerable_thread_specific<detail::FftScratch> scratch_pool;
+        // scratch buffers. Plan execution via the new-array interface is thread-safe.
+        //
+        // Channel count caps the outer parallelism at three for RGB, which leaves most
+        // of a modern machine idle, so the pack, pointwise-multiply and unpack passes
+        // are additionally split over rows. All three are elementwise, so splitting them
+        // changes no result - only the transforms themselves impose an ordering, and
+        // those are left to FFTW.
+        if (!scratch_pool_) {
+            scratch_pool_ = std::make_unique<detail::FftScratchPool>();
+        }
+        auto& scratch_buffers = scratch_pool_->buffers;
 
         tbb::parallel_for(
             tbb::blocked_range<std::size_t>(0, num_channels, 1),
             [&](const tbb::blocked_range<std::size_t>& range) {
-                detail::FftScratch& scratch = scratch_pool.local();
+                detail::FftScratch& scratch = scratch_buffers.local();
                 scratch.ensure(real_size, complex_size);
 
                 for (std::size_t c = range.begin(); c < range.end(); ++c) {
                     // Pack this channel top-left into the zero-padded buffer:
-                    std::memset(scratch.real, 0, real_size * sizeof(float));
-                    for (int y = 0; y < image_height_; ++y) {
-                        float* row = scratch.real + static_cast<std::size_t>(y) *
-                                                        static_cast<std::size_t>(padded_width_);
-                        for (int x = 0; x < image_width_; ++x) {
-                            row[x] = detail::get_pixel_channel(image(x, y), c);
-                        }
-                    }
+                    tbb::parallel_for(
+                        tbb::blocked_range<int>(0, padded_height_),
+                        [&](const tbb::blocked_range<int>& rows) {
+                            for (int y = rows.begin(); y < rows.end(); ++y) {
+                                float* row =
+                                    scratch.real + static_cast<std::size_t>(y) *
+                                                       static_cast<std::size_t>(padded_width_);
+                                if (y < image_height_) {
+                                    for (int x = 0; x < image_width_; ++x) {
+                                        row[x] = detail::get_pixel_channel(image(x, y), c);
+                                    }
+                                    std::memset(
+                                        row + image_width_,
+                                        0,
+                                        static_cast<std::size_t>(padded_width_ - image_width_) *
+                                            sizeof(float));
+                                } else {
+                                    std::memset(row,
+                                                0,
+                                                static_cast<std::size_t>(padded_width_) *
+                                                    sizeof(float));
+                                }
+                            }
+                        });
 
                     fftwf_execute_dft_r2c(forward_plan_, scratch.real, scratch.complex_buf);
 
                     // Pointwise multiply with the cached (pre-normalized) kernel spectrum:
                     const fftwf_complex* k_spec = kernel_spectra_[c];
-                    for (std::size_t i = 0; i < complex_size; ++i) {
-                        const float re = scratch.complex_buf[i][0] * k_spec[i][0] -
-                                         scratch.complex_buf[i][1] * k_spec[i][1];
-                        const float im = scratch.complex_buf[i][0] * k_spec[i][1] +
-                                         scratch.complex_buf[i][1] * k_spec[i][0];
-                        scratch.complex_buf[i][0] = re;
-                        scratch.complex_buf[i][1] = im;
-                    }
+                    tbb::parallel_for(
+                        tbb::blocked_range<std::size_t>(0, complex_size),
+                        [&](const tbb::blocked_range<std::size_t>& block) {
+                            for (std::size_t i = block.begin(); i < block.end(); ++i) {
+                                const float re = scratch.complex_buf[i][0] * k_spec[i][0] -
+                                                 scratch.complex_buf[i][1] * k_spec[i][1];
+                                const float im = scratch.complex_buf[i][0] * k_spec[i][1] +
+                                                 scratch.complex_buf[i][1] * k_spec[i][0];
+                                scratch.complex_buf[i][0] = re;
+                                scratch.complex_buf[i][1] = im;
+                            }
+                        });
 
                     fftwf_execute_dft_c2r(inverse_plan_, scratch.complex_buf, scratch.real);
 
                     // Unpack the valid "same" region from the top-left of the padded result:
-                    for (int y = 0; y < image_height_; ++y) {
-                        const float* row =
-                            scratch.real +
-                            static_cast<std::size_t>(y) * static_cast<std::size_t>(padded_width_);
-                        for (int x = 0; x < image_width_; ++x) {
-                            detail::set_pixel_channel(image(x, y), c, row[x]);
-                        }
-                    }
+                    tbb::parallel_for(tbb::blocked_range<int>(0, image_height_),
+                                      [&](const tbb::blocked_range<int>& rows) {
+                                          for (int y = rows.begin(); y < rows.end(); ++y) {
+                                              const float* row =
+                                                  scratch.real +
+                                                  static_cast<std::size_t>(y) *
+                                                      static_cast<std::size_t>(padded_width_);
+                                              for (int x = 0; x < image_width_; ++x) {
+                                                  detail::set_pixel_channel(image(x, y), c, row[x]);
+                                              }
+                                          }
+                                      });
                 }
             });
     }

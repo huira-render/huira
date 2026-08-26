@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <utility>
 #include <vector>
 
@@ -23,26 +24,28 @@ namespace huira {
  */
 class TrajectoryArc {
   public:
+    TrajectoryArc() = default;
     explicit TrajectoryArc(const std::vector<Vec3<float>>& samples);
+
+    void reset(const std::vector<Vec3<float>>& samples);
 
     [[nodiscard]] Vec3<float> evaluate(float t) const;
 
     [[nodiscard]] std::vector<float> find_plane_crossings(const Vec3<float>& plane_normal) const;
 
-    /** @brief Number of sample points used to construct this arc. */
+    void find_plane_crossings(const Vec3<float>& plane_normal, std::vector<float>& out) const;
+
+    /// Number of sample points used to construct this arc.
     [[nodiscard]] std::size_t sample_count() const noexcept { return sample_count_; }
 
   private:
     std::size_t sample_count_;
 
-    // --- Polynomial representation (N <= 3) ---
-    // curve(t) = poly_coeffs_[0] + poly_coeffs_[1]*t + poly_coeffs_[2]*t^2
-    std::vector<Vec3<float>> poly_coeffs_;
+    // Polynomial representation (N <= 3)
+    std::array<Vec3<float>, 3> poly_coeffs_{};
+    std::size_t poly_count_ = 0;
 
-    // --- Cubic spline representation (N > 3) ---
-    // For each segment i, the spline is:
-    //   S_i(u) = a_i + b_i*u + c_i*u^2 + d_i*u^3
-    // where u = t - knots_[i].
+    // Cubic spline representation (N > 3)
     struct SplineSegment {
         Vec3<float> a, b, c, d;
     };
@@ -57,14 +60,15 @@ class TrajectoryArc {
     [[nodiscard]] Vec3<float> evaluate_polynomial_(float t) const;
     [[nodiscard]] Vec3<float> evaluate_spline_(float t) const;
 
-    [[nodiscard]] std::vector<float> find_crossings_polynomial_(const Vec3<float>& normal) const;
-    [[nodiscard]] std::vector<float> find_crossings_spline_(const Vec3<float>& normal) const;
+    void find_crossings_polynomial_(const Vec3<float>& normal, std::vector<float>& out) const;
+    void find_crossings_spline_(const Vec3<float>& normal, std::vector<float>& out) const;
 
-    // Root-finding utilities:
-    static std::vector<float> solve_linear_(float a, float b, float t_min, float t_max);
-    static std::vector<float> solve_quadratic_(float a, float b, float c, float t_min, float t_max);
-    static std::vector<float>
-    solve_cubic_(float a, float b, float c, float d, float t_min, float t_max);
+    // Root-finding utilities
+    static std::size_t solve_linear_(float a, float b, float t_min, float t_max, float* out);
+    static std::size_t
+    solve_quadratic_(float a, float b, float c, float t_min, float t_max, float* out);
+    static std::size_t
+    solve_cubic_(float a, float b, float c, float d, float t_min, float t_max, float* out);
 };
 
 } // namespace huira
