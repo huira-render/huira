@@ -101,6 +101,12 @@ class SceneView {
         float time = 0.5f,
         const MediumStack<TSpectral>& medium_stack = MediumStack<TSpectral>{}) const;
 
+    /// True when the TLAS contains nothing that a ray could ever hit.
+    [[nodiscard]] bool tlas_is_empty() const noexcept { return tlas_empty_; }
+
+    /// The scene background, sampled by rays that hit nothing.
+    [[nodiscard]] const std::shared_ptr<Image<TSpectral>>& background() const { return background_; }
+
     Interval get_exposure_interval() const { return exposure_interval_; }
     units::Second duration() const { return exposure_interval_.duration(); }
     Time get_time() const { return exposure_interval_.center(); }
@@ -209,6 +215,7 @@ class SceneView {
 
     std::shared_ptr<EmbreeDevice> device_ = nullptr;
     RTCScene tlas_ = nullptr;
+    bool tlas_empty_ = true;
 
     uint32_t MASK_GEOMETRY_ = 0x01;
     uint32_t MASK_LIGHT_ = 0x02;

@@ -139,6 +139,69 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
     occluder_mask_ = Image<uint8_t>(fb_width, fb_height, uint8_t{0});
     std::atomic<bool> any_occluder{false};
 
+    // Empty-scene fast path (when no geometry is loaded, skip tracing entirely):
+    if (scene_view.tlas_is_empty() && (background == nullptr || background->size() <= 1)) {
+        const TSpectral env = (background == nullptr || background->size() == 0)
+                                  ? TSpectral{0.f}
+                                  : (*background)[0];
+
+        occluder_mask_valid_ = true; // all zero: nothing can occlude anything
+
+        const bool has_power = frame_buffer.has_received_power();
+        const bool has_direct = frame_buffer.has_received_direct_power();
+        const bool has_indirect = frame_buffer.has_received_indirect_power();
+        const bool has_albedo = frame_buffer.has_albedo();
+        const bool has_geom = frame_buffer.has_geometry_ids();
+        const bool has_cam_n = frame_buffer.has_camera_normals();
+        const bool has_world_n = frame_buffer.has_world_normals();
+
+        // glm::normalize(vec3(0)) is undefined, and the general path feeds it
+        // camera_normals * inv_spp, which is exactly zero when every sample misses.
+        // Reproduce whatever that produced rather than substituting a "nicer" value.
+        const Vec3<float> miss_normal = glm::normalize(Vec3<float>{0.f});
+
+        tbb::parallel_for(
+            tbb::blocked_range<int>(0, fb_height), [&](const tbb::blocked_range<int>& rows) {
+                for (int y = rows.begin(); y < rows.end(); ++y) {
+                    for (int x = 0; x < fb_width; ++x) {
+                        if (has_power) {
+                            received_power(x, y) = camera->pixel_radiance_to_power(x, y) * env;
+                        }
+                        if (has_direct) {
+                            frame_buffer.received_direct_power()(x, y) =
+                                camera->pixel_radiance_to_power(x, y) * env;
+                        }
+                        if (has_indirect) {
+                            frame_buffer.received_indirect_power()(x, y) =
+                                camera->pixel_radiance_to_power(x, y) * TSpectral{0.f};
+                        }
+                        if (has_albedo) {
+                            frame_buffer.albedo()(x, y) = TSpectral{0.f};
+                        }
+                        if (has_geom) {
+                            frame_buffer.geometry_ids()(x, y) =
+                                std::numeric_limits<std::size_t>::max();
+                        }
+                        if (has_cam_n) {
+                            frame_buffer.camera_normals()(x, y) = miss_normal;
+                        }
+                        if (has_world_n) {
+                            frame_buffer.world_normals()(x, y) =
+                                scene_view.camera_to_world_[0].apply_to_direction(miss_normal);
+                        }
+                        // Depth is left untouched, matching the general path: it only
+                        // writes when a finite hit distance was recorded.
+                    }
+                }
+            });
+
+        auto fast_end = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> fast_elapsed = fast_end - start_clock;
+        HUIRA_LOG_INFO("Path tracing (empty scene fast path) completed in " +
+                       std::to_string(fast_elapsed.count()) + " seconds");
+        return received_power;
+    }
+
     // Tile-based parallel rendering:
     constexpr int TILE_SIZE = 16;
     int tiles_x = (fb_width + TILE_SIZE - 1) / TILE_SIZE;

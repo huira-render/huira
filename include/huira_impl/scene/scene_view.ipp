@@ -842,6 +842,8 @@ void SceneView<TSpectral>::build_tlas_()
         }
     }
 
+    tlas_empty_ = primitives_.empty() && lights_.empty();
+
     // Add Primitives
     for (std::size_t batch_idx = 0; batch_idx < primitives_.size(); ++batch_idx) {
         const auto& batch = primitives_[batch_idx];
