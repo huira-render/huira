@@ -48,6 +48,23 @@ class Renderer {
     /// Enable or disable occlusion testing of unresolved point sources.  */
     void set_unresolved_occlusion(bool occlusion = true) { unresolved_occlusion_ = occlusion; }
 
+    /**
+     * @brief Enable or disable skipping screen regions that provably contain no geometry.
+     *
+     * Enabled by default. Purely an optimization: the image is identical either way.
+     * Disable it to isolate a suspected culling problem.
+     */
+    void set_region_culling(bool enable = true) { region_culling_ = enable; }
+
+    /// Scale the safety margin added to each tile's direction cone.
+    void set_region_cull_margin_scale(float scale)
+    {
+        region_cull_margin_scale_ = std::max(1.0f, scale);
+    }
+
+    /// (CI): Trace culled regions anyway and report any that turn out to contain geometry.
+    void set_region_cull_validation(bool enable = true) { region_cull_validation_ = enable; }
+
   protected:
     virtual Image<TSpectral> path_trace_(SceneView<TSpectral>& scene_view,
                                          FrameBuffer<TSpectral>& frame_buffer);
@@ -81,6 +98,20 @@ class Renderer {
         bool valid = false;
     };
 
+    /// A set of ray directions, as a cone about a unit axis.
+    struct DirectionCone {
+        Vec3<float> axis{0.f, 0.f, 1.f};
+        float half_angle = 0.f;
+    };
+
+    /// Cones subtending each TLAS occupant as seen from the camera.
+    bool build_occupancy_cones_(SceneView<TSpectral>& scene_view,
+                                std::vector<DirectionCone>& cones) const;
+
+    /// Cone enclosing every ray direction a tile can produce.
+    DirectionCone tile_direction_cone_(
+        const CameraModel<TSpectral>& camera, float x0, float y0, float x1, float y1) const;
+
     void convolve_cached_(Image<TSpectral>& image,
                           const Image<TSpectral>& kernel,
                           const CameraModel<TSpectral>& camera,
@@ -106,6 +137,10 @@ class Renderer {
     int max_bounces_ = 3;
 
     bool unresolved_occlusion_ = true;
+
+    bool region_culling_ = true;
+    bool region_cull_validation_ = false;
+    float region_cull_margin_scale_ = 1.0f;
 
     bool dynamic_sampling_ = false;
     int min_spp_ = 16;
