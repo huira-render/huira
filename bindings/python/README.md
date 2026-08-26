@@ -12,14 +12,17 @@
 
 [![Coverage](https://codecov.io/gh/huira-render/huira/branch/main/graph/badge.svg)](https://app.codecov.io/gh/huira-render/huira/tree/main)
 
-***
+![Example Render](https://www.huira.space/assets/examples/gateway_render.png)
 
-# Features
-Initial work on Huira has been on the basic architecture as well as distribution/cross-platform compatability.  As much of that work is now completed, new features are expected to be released in relatively short order.
+## Quickstart Examples
+Example code can be found in [`examples/`](https://github.com/huira-render/huira/tree/main/examples).  Several scenarios intended to demonstrate various features are provided, along with instructions for fetching the required data.
+
+## Features
+Initial work on Huira has been on the basic architecture as well as distribution/cross-platform compatibility.  As much of that work is now completed, new features are expected to be released in relatively short order.
 
 If there are features you wish to see, that you don't see listed here, please feel free to submit a [Feature Request](https://github.com/huira-render/huira/issues/new?template=feature_request.md)
 
-## Currently Stable Features (as of v0.9.8)
+### Currently Stable Features (as of v0.9.9)
 - Radiometrically accurate rendering
 - Planetary BRDFS including Lambertian, Oren-Nayar, Cook-Torrance, McEwen, Lommel-Seeliger
 - Basic volumetric rendering of planetary atmospheres
@@ -34,39 +37,24 @@ If there are features you wish to see, that you don't see listed here, please fe
 - Logging and crash report generation
 - API Reference Documentation (NOTE: Some docs may appear incomplete or poorly formatted)
 
-## Features Coming Soon (Order of Priority)
+### Features Coming Soon (Order of Priority)
 | Feature | Status | Expected by | Version |
 | --- | --- | --- | --- |
-| Digital Elevation Maps | In-Progress | TBD | v0.9.9 |
-| Level-of-Detail | Designed | TBD | v0.9.10 |
-| Solar Radiation Pressure | Designed | TBD | v1.0.X |
+| SRP and Unresolved 3d Models | In-Progress | TBD | v0.9.10 |
+| Digital Elevation Maps | In-Progress | TBD | v0.9.11 |
+| Level-of-Detail | Designed | TBD | v0.9.12 |
 | LIDAR simulation | Planned | TBD | v1.0.X |
 | Comprehensive Tutorials | In-Progress | TBD | v1.0.X |
 | TLE support | Licensing | - | - |
 
-## Long Term Plans
+### Long Term Plans
 - Vulkan based GPU Acceleration
 - Desktop application (GUI)
 
-## Known Bugs and Limitations
-- Severe lack of formal testing
-- Star fields potentially too dim (validation with real-world images is currently in-progress)
-
-
-***
-
-# Examples
-Example programs demonstrating common usage patterns are available in https://github.com/huira-render/huira/tree/main/examples
-
-*** 
-
-# Background
+## Background
 Huira is a complete rewrite providing similar functionality to the [vira](https://github.com/nasa/vira) project originally developed by the same author while at NASA's Goddard Space Flight Center. While inspired by vira, huira is built from scratch with new code and is released under the MIT license.
 
-Vira is still maintained on a [personal fork by the original author](https://github.com/crgnam/vira).  However it is recommended to use this project moving forward.
+Vira is also available on a [personal fork by the original author](https://github.com/crgnam/vira).  However it is no longer maintained, and it is recommended to use this project moving forward.
 
-
-***
-
-# License
-Huira is licensed under the [MIT License](https://github.com/huira-render/huira/blob/main/LICENSE)
+## License
+Huira is licensed under the [MIT License](./LICENSE)

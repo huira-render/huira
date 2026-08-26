@@ -12,14 +12,60 @@
 
 [![Coverage](https://codecov.io/gh/huira-render/huira/branch/main/graph/badge.svg)](https://app.codecov.io/gh/huira-render/huira/tree/main)
 
-***
+![Example Render](https://www.huira.space/assets/examples/gateway_render.png)
 
-# Features
+## Installing Huira
+
+### PyPI (Python only)
+Huira's python bindings are available on [PyPI](https://pypi.org/project/huira/) and can be installed with:
+
+```bash
+pip install huira
+```
+
+For building from source or more details on python bindings, see the **[Python Bindings](docs/getting_started/build_instructions/python-bindings.md)** guide.
+
+### Conda (Python and C++)
+Huira's python bindings and C++ headers are available on [conda-forge](https://anaconda.org/channels/conda-forge/packages/huira/overview) and can be installed with:
+
+```bash
+conda install conda-forge::huira
+```
+
+For building from source or more details on python bindings, see the **[Python Bindings](docs/getting_started/build_instructions/python-bindings.md)** guide.
+
+### vcpkg (C++ only)
+Huira's C++ headers are available on [vcpkg](https://vcpkg.io/en/package/huira), and can be installed with:
+
+```bash
+vcpkg install huira[tools]
+```
+
+*Note:* vcpkg is not intended to be an application distribution system, so installed applications are not immediately accessible.  To use the `huira` command line program, you need to run:
+
+```bash
+.\path\to\vcpkg\installed\x64-windows\tools\huira\huira
+```
+
+### Building from Source
+Please see the platform specific build guides:
+- **[Linux](docs/getting_started/build_instructions/linux.md)**
+- **[macOS](docs/getting_started/build_instructions/macos.md)**
+- **[Windows (PowerShell)](docs/getting_started/build_instructions/windows.md)**
+- **[Windows (Visual Studio)](docs/getting_started/build_instructions/visual-studio.md)**
+- **[Build Options](docs/getting_started/build_instructions/options.md)**
+
+If you wish to build the python bindings from source (perhaps for local edits or development), see the **[Python Bindings](docs/getting_started/build_instructions/python-bindings.md)** guide.
+
+## Quickstart Examples
+Example code (both C++ and python) can be found in [`examples/`](examples/).  Several scenarios intended to demonstrate various features are provided, along with instructions for fetching the required data.
+
+## Features
 Initial work on Huira has been on the basic architecture as well as distribution/cross-platform compatibility.  As much of that work is now completed, new features are expected to be released in relatively short order.
 
 If there are features you wish to see, that you don't see listed here, please feel free to submit a [Feature Request](https://github.com/huira-render/huira/issues/new?template=feature_request.md)
 
-## Currently Stable Features (as of v0.9.8)
+### Currently Stable Features (as of v0.9.9)
 - Radiometrically accurate rendering
 - Planetary BRDFS including Lambertian, Oren-Nayar, Cook-Torrance, McEwen, Lommel-Seeliger
 - Basic volumetric rendering of planetary atmospheres
@@ -34,79 +80,30 @@ If there are features you wish to see, that you don't see listed here, please fe
 - Logging and crash report generation
 - API Reference Documentation (NOTE: Some docs may appear incomplete or poorly formatted)
 
-## Features Coming Soon (Order of Priority)
+### Features Coming Soon (Order of Priority)
 | Feature | Status | Expected by | Version |
 | --- | --- | --- | --- |
-| Digital Elevation Maps | In-Progress | TBD | v0.9.9 |
-| Level-of-Detail | Designed | TBD | v0.9.10 |
-| Solar Radiation Pressure | Designed | TBD | v1.0.X |
+| SRP and Unresolved 3d Models | In-Progress | TBD | v0.9.10 |
+| Digital Elevation Maps | In-Progress | TBD | v0.9.11 |
+| Level-of-Detail | Designed | TBD | v0.9.12 |
 | LIDAR simulation | Planned | TBD | v1.0.X |
 | Comprehensive Tutorials | In-Progress | TBD | v1.0.X |
 | TLE support | Licensing | - | - |
 
-## Long Term Plans
+### Long Term Plans
 - Vulkan based GPU Acceleration
 - Desktop application (GUI)
 
-## Known Bugs and Limitations
-- Severe lack of formal testing
-- Star fields potentially too dim (validation with real-world images is currently in-progress)
-
-***
-
-# Installing Huira
-
-## Python
-Huira's python bindings are available on [PyPI](https://pypi.org/project/huira/) and can be installed with:
-
-```bash
-pip install huira
-```
-
-For building from source or more details, see the **[Python Bindings](docs/getting_started/build_instructions/python-bindings.md)** guide.
-
-## C++ (Package Managers)
-Huira's C++ library is available on [vcpkg](https://vcpkg.io/en/package/huira), and can be installed with:
-
-### vcpkg:
-```bash
-vcpkg install huira[tools]
-```
-
-*Note:* vcpkg is not intended to be an application distribution system, so installed applications are not immediately accessible.  To use the `huira` command line program, you need to run:
-
-```bash
-.\path\to\vcpkg\installed\x64-windows\tools\huira\huira
-```
-
-## C++ (Building From Source)
-Please see the platform specific build guides:
-- **[Linux](docs/getting_started/build_instructions/linux.md)**
-- **[macOS](docs/getting_started/build_instructions/macos.md)**
-- **[Windows (PowerShell)](docs/getting_started/build_instructions/windows.md)**
-- **[Windows (Visual Studio)](docs/getting_started/build_instructions/visual-studio.md)**
-- **[Build Options](docs/getting_started/build_instructions/options.md)**
-
-***
-
-# Examples
-Example programs demonstrating common usage patterns are available in the [`examples/`](examples/) directory.
-
-*Comprehensive tutorials are coming soon!*
-
-*** 
-
-# Background
+## Background
 Huira is a complete rewrite providing similar functionality to the [vira](https://github.com/nasa/vira) project originally developed by the same author while at NASA's Goddard Space Flight Center. While inspired by vira, huira is built from scratch with new code and is released under the MIT license.
 
-Vira is still maintained on a [personal fork by the original author](https://github.com/crgnam/vira).  However it is recommended to use this project moving forward.
+Vira is also available on a [personal fork by the original author](https://github.com/crgnam/vira).  However it is no longer maintained, and it is recommended to use this project moving forward.
 
-***
-# Contributing to Huira
+## Contributing to Huira
 
-We welcome contributions! To keep the codebase clean, highly readable, and consistent, we enforce a strict style guide using `clang-format`. 
+We welcome contributions! To keep the codebase clean, highly readable, and consistent, we enforce a strict style guide using `clang-format`.
 
-## Code Formatting
+### Code Formatting
 Huira uses a custom `.clang-format` file located in the root of the repository. Before submitting a pull request, please ensure your code is formatted.
 
 *NOTE: Most modern IDEs (Visual Studio, VS Code, CLion) will automatically detect and apply this file when you format your document.*
@@ -117,22 +114,20 @@ If you prefer the command line, you can format your changes using:
 clang-format -i path/to/your/file.cpp
 ```
 
-### Key Rules
+#### Key Rules
 * **Line Length:** Maximum 100 characters per line.
 * **Indentation:** 4 spaces (no tabs).
-* **Brace Style:** Modified Stroustrup/K&R style. 
+* **Brace Style:** Modified Stroustrup/K&R style.
   * Classes, structs, and control statements keep their opening brace on the same line.
   * Function definitions drop their opening brace to the next line to separate complex signatures from logic.
-* **Control Statements:** Single-statement `if` or `while` blocks must always be wrapped in braces. 
+* **Control Statements:** Single-statement `if` or `while` blocks must always be wrapped in braces.
 * **Includes:** Includes are automatically sorted alphabetically into three groups: System headers, Third-party headers, and huira headers.
 
-### Naming Conventions
+#### Naming Conventions
 * **Classes and Structs:** `PascalCase`
 * **Functions:** `snake_case`
 * **Variables:** `snake_case`
 * **Private Members:** `snake_case` with a trailing underscore
 
-***
-
-# License
+## License
 Huira is licensed under the [MIT License](./LICENSE)
