@@ -135,6 +135,33 @@ class Node : public SceneObject<Node<TSpectral>> {
 
     virtual std::span<const std::shared_ptr<Node<TSpectral>>> get_children() const { return {}; }
 
+    /**
+     * @brief Set whether this node is collected into a SceneView.
+     *
+     * Read once, while a SceneView is constructed. An existing SceneView holds its own
+     * copy of the collected geometry and its own TLAS, so it is unaffected; construct a
+     * new SceneView to render the change.
+     *
+     * A hidden node's descendants are skipped along with it, but their own flags are
+     * left alone, so showing this node again restores whatever each descendant was
+     * individually set to.
+     *
+     * Hiding a light removes its illumination as well as its appearance, and hiding a
+     * designated indirect source removes it from next event estimation. Hiding the
+     * instance that a SceneView is constructed against does not disable that camera:
+     * the observer pose is read from the instance directly rather than through the
+     * traversal.
+     *
+     * @param visible True to collect this node, false to skip it and its descendants.
+     */
+    void set_visible(bool visible = true) { visible_ = visible; }
+
+    /// This node's own flag, which ignores whether an ancestor is hidden.
+    [[nodiscard]] bool is_visible() const { return visible_; }
+
+    /// True only when this node and every one of its ancestors are visible.
+    [[nodiscard]] bool is_effectively_visible() const;
+
   protected:
     Transform<double> local_transform_;
 
@@ -146,6 +173,8 @@ class Node : public SceneObject<Node<TSpectral>> {
     /// always re-expresses the angular velocity in parent axes before storing it
     /// in the returned Transform (the frame Transform::operator* expects).
     bool body_frame_rates_ = false;
+
+    bool visible_ = true;
 
     TransformMode position_mode_ = TransformMode::MANUAL_TRANSFORM;
     TransformMode rotation_mode_ = TransformMode::MANUAL_TRANSFORM;

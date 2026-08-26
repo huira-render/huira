@@ -843,6 +843,21 @@ NodeHandle<TSpectral, Node<TSpectral>> Node<TSpectral>::get_parent() const
  * @throws std::runtime_error If this node has no parent
  * @throws std::runtime_error If the parent is not of type TParentNode
  */
+/**
+ * @brief Walk up to the root, checking each node's visibility flag.
+ * @return bool True only if this node and every ancestor are visible
+ */
+template <IsSpectral TSpectral>
+bool Node<TSpectral>::is_effectively_visible() const
+{
+    for (const Node<TSpectral>* node = this; node != nullptr; node = node->parent_) {
+        if (!node->visible_) {
+            return false;
+        }
+    }
+    return true;
+}
+
 template <IsSpectral TSpectral>
 template <typename TParentNode>
 NodeHandle<TSpectral, TParentNode> Node<TSpectral>::get_parent_as() const
