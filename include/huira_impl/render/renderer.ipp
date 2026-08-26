@@ -118,6 +118,125 @@ void Renderer<TSpectral>::render(SceneView<TSpectral>& scene_view,
  * @param scene_view The scene view containing geometry, lights, and environment
  * @param frame_buffer The frame buffer to render into
  */
+/**
+ * @brief Build the cones subtending each TLAS occupant, as seen from the camera.
+ *
+ * Each occupant's bounding sphere is inflated by the aperture's bounding radius before
+ * the cone is taken. Rays do not all leave the camera origin when depth of field is on;
+ * they leave points on the aperture. Translating a line by at most R keeps it within R
+ * of the original, so a line from any aperture point that meets a sphere of radius r
+ * meets the sphere of radius r + R when re-based at the origin. Inflating the sphere
+ * therefore makes the origin-centred cone cover every aperture ray exactly.
+ *
+ * @return false when culling must be abandoned for this view.
+ */
+template <IsSpectral TSpectral>
+bool Renderer<TSpectral>::build_occupancy_cones_(SceneView<TSpectral>& scene_view,
+                                                 std::vector<DirectionCone>& cones) const
+{
+    cones.clear();
+
+    if (!scene_view.occupancy_bounds_complete()) {
+        return false;
+    }
+
+    const auto& camera = scene_view.camera_model_;
+    // Only depth-of-field rays leave the origin; otherwise every ray starts at (0,0,0).
+    const float aperture_radius = (camera->depth_of_field_ && camera->aperture_)
+                                      ? camera->aperture_->get_bounding_radius().to_si_f()
+                                      : 0.f;
+
+    for (const auto& bound : scene_view.occupancy_bounds()) {
+        const float distance = glm::length(bound.center);
+        const float radius = bound.radius + aperture_radius;
+
+        // The camera is inside this occupant: it subtends every direction, so no tile
+        // can be rejected and the whole test is worthless for this view.
+        if (!(distance > radius)) {
+            return false;
+        }
+
+        DirectionCone cone;
+        cone.axis = bound.center / distance;
+        cone.half_angle = std::asin(std::clamp(radius / distance, 0.f, 1.f));
+        cones.push_back(cone);
+    }
+
+    return true;
+}
+
+/**
+ * @brief Cone enclosing every ray direction a tile can produce.
+ *
+ * @param camera Camera model supplying the ray directions.
+ * @param x0,y0,x1,y1 The tile's closed pixel rectangle. Jittered samples span exactly
+ *                    this range: pixel x is sampled over [x, x + 1).
+ */
+template <IsSpectral TSpectral>
+typename Renderer<TSpectral>::DirectionCone Renderer<TSpectral>::tile_direction_cone_(
+    const CameraModel<TSpectral>& camera, float x0, float y0, float x1, float y1) const
+{
+    // A 5x5 grid over the tile. The interior points are not redundant: with lens
+    // distortion the direction field bulges between the corners, and the widening
+    // below is only as good as the sample spacing that measures it.
+    constexpr int GRID = 5;
+    std::array<Vec3<float>, GRID * GRID> dirs;
+
+    for (int j = 0; j < GRID; ++j) {
+        const float ty = static_cast<float>(j) / static_cast<float>(GRID - 1);
+        for (int i = 0; i < GRID; ++i) {
+            const float tx = static_cast<float>(i) / static_cast<float>(GRID - 1);
+            const Pixel pixel{x0 + tx * (x1 - x0), y0 + ty * (y1 - y0)};
+            dirs[static_cast<std::size_t>(j * GRID + i)] =
+                glm::normalize(camera.cast_ray(pixel).direction());
+        }
+    }
+
+    Vec3<float> mean{0.f};
+    for (const Vec3<float>& d : dirs) {
+        mean += d;
+    }
+
+    DirectionCone cone;
+    const float mean_length = glm::length(mean);
+    if (mean_length <= 0.f) {
+        // Degenerate: the tile spans more than a hemisphere. Accept everything.
+        cone.axis = Vec3<float>{0.f, 0.f, 1.f};
+        cone.half_angle = PI<float>();
+        return cone;
+    }
+    cone.axis = mean / mean_length;
+
+    float half_angle = 0.f;
+    for (const Vec3<float>& d : dirs) {
+        half_angle = std::max(half_angle, std::acos(std::clamp(glm::dot(cone.axis, d), -1.f, 1.f)));
+    }
+
+    // Widen by the largest gap between adjacent grid points. The true directions
+    // between two samples cannot deviate from the straight interpolation by more than
+    // roughly the gap itself for a smooth distortion field, so this covers the
+    // curvature the grid cannot see. It is an estimate, not a bound - hence
+    // set_region_cull_margin_scale() and set_region_cull_validation().
+    float max_gap = 0.f;
+    auto gap = [&](std::size_t a, std::size_t b) {
+        max_gap = std::max(max_gap, std::acos(std::clamp(glm::dot(dirs[a], dirs[b]), -1.f, 1.f)));
+    };
+    for (int j = 0; j < GRID; ++j) {
+        for (int i = 0; i + 1 < GRID; ++i) {
+            gap(static_cast<std::size_t>(j * GRID + i), static_cast<std::size_t>(j * GRID + i + 1));
+        }
+    }
+    for (int j = 0; j + 1 < GRID; ++j) {
+        for (int i = 0; i < GRID; ++i) {
+            gap(static_cast<std::size_t>(j * GRID + i),
+                static_cast<std::size_t>((j + 1) * GRID + i));
+        }
+    }
+
+    cone.half_angle = std::min(PI<float>(), half_angle + region_cull_margin_scale_ * max_gap);
+    return cone;
+}
+
 template <IsSpectral TSpectral>
 Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_view,
                                                   FrameBuffer<TSpectral>& frame_buffer)
@@ -141,9 +260,8 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
 
     // Empty-scene fast path (when no geometry is loaded, skip tracing entirely):
     if (scene_view.tlas_is_empty() && (background == nullptr || background->size() <= 1)) {
-        const TSpectral env = (background == nullptr || background->size() == 0)
-                                  ? TSpectral{0.f}
-                                  : (*background)[0];
+        const TSpectral env =
+            (background == nullptr || background->size() == 0) ? TSpectral{0.f} : (*background)[0];
 
         occluder_mask_valid_ = true; // all zero: nothing can occlude anything
 
@@ -210,6 +328,32 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
     float time = 0.f;
     const bool has_motion_blur = scene_view.temporal_samples_.size() > 1;
 
+    // Regions of the frame that provably contain no geometry take the same miss path
+    // the empty-scene case above uses. In space scenes the field of view is mostly
+    // empty sky even when the scene itself is not, so this is the common case rather
+    // than a corner case.
+    //
+    // Each tile is reduced to a cone of ray directions and tested against the cone
+    // subtended by every TLAS occupant. Tiles whose cone is disjoint from all of them
+    // cannot register a hit. Per-tile RNG seeding makes this safe: a tile's sampler is
+    // seeded from its own index, so skipping one cannot perturb any other.
+    //
+    // Only worthwhile when the background is uniform. With an environment map the miss
+    // path still has to sample it per jittered direction, which is most of the cost
+    // that would be saved.
+    std::vector<DirectionCone> occupancy_cones;
+    const bool uniform_background = (background == nullptr || background->size() <= 1);
+    const bool cull_regions = region_culling_ && uniform_background &&
+                              build_occupancy_cones_(scene_view, occupancy_cones) &&
+                              !occupancy_cones.empty();
+
+    const TSpectral miss_radiance =
+        (background == nullptr || background->size() == 0) ? TSpectral{0.f} : (*background)[0];
+    const Vec3<float> miss_normal_tile = glm::normalize(Vec3<float>{0.f});
+
+    std::atomic<int> culled_tiles{0};
+    std::atomic<int> validation_failures{0};
+
     tbb::parallel_for(
         tbb::blocked_range<int>(0, num_tiles), [&](const tbb::blocked_range<int>& range) {
             for (int tile_idx = range.begin(); tile_idx < range.end(); ++tile_idx) {
@@ -220,6 +364,74 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                 int y0 = tile_y * TILE_SIZE;
                 int x1 = std::min(x0 + TILE_SIZE, fb_width);
                 int y1 = std::min(y0 + TILE_SIZE, fb_height);
+
+                bool tile_culled = false;
+                if (cull_regions) {
+                    // The jittered sample domain is the closed rectangle [x0, x1] x
+                    // [y0, y1]: pixel x1 - 1 is sampled over [x1 - 1, x1).
+                    const DirectionCone tile_cone = tile_direction_cone_(*camera,
+                                                                         static_cast<float>(x0),
+                                                                         static_cast<float>(y0),
+                                                                         static_cast<float>(x1),
+                                                                         static_cast<float>(y1));
+
+                    tile_culled = true;
+                    for (const DirectionCone& occ : occupancy_cones) {
+                        const float separation =
+                            std::acos(std::clamp(glm::dot(tile_cone.axis, occ.axis), -1.f, 1.f));
+                        if (separation <= tile_cone.half_angle + occ.half_angle) {
+                            tile_culled = false;
+                            break;
+                        }
+                    }
+                }
+
+                if (tile_culled) {
+                    culled_tiles.fetch_add(1, std::memory_order_relaxed);
+                }
+
+                // In validation mode nothing is actually skipped; the tile is traced
+                // normally and checked afterwards against the decision that was made.
+                const bool skip_tile = tile_culled && !region_cull_validation_;
+
+                if (skip_tile) {
+                    for (int y = y0; y < y1; ++y) {
+                        for (int x = x0; x < x1; ++x) {
+                            if (frame_buffer.has_received_power()) {
+                                received_power(x, y) =
+                                    camera->pixel_radiance_to_power(x, y) * miss_radiance;
+                            }
+                            if (frame_buffer.has_received_direct_power()) {
+                                frame_buffer.received_direct_power()(x, y) =
+                                    camera->pixel_radiance_to_power(x, y) * miss_radiance;
+                            }
+                            if (frame_buffer.has_received_indirect_power()) {
+                                frame_buffer.received_indirect_power()(x, y) =
+                                    camera->pixel_radiance_to_power(x, y) * TSpectral{0.f};
+                            }
+                            if (frame_buffer.has_albedo()) {
+                                frame_buffer.albedo()(x, y) = TSpectral{0.f};
+                            }
+                            if (frame_buffer.has_geometry_ids()) {
+                                frame_buffer.geometry_ids()(x, y) =
+                                    std::numeric_limits<std::size_t>::max();
+                            }
+                            if (frame_buffer.has_camera_normals()) {
+                                frame_buffer.camera_normals()(x, y) = miss_normal_tile;
+                            }
+                            if (frame_buffer.has_world_normals()) {
+                                frame_buffer.world_normals()(x, y) =
+                                    scene_view.camera_to_world_[0].apply_to_direction(
+                                        miss_normal_tile);
+                            }
+                            // Depth and the occluder mask keep their cleared values,
+                            // matching a tile in which every sample missed.
+                        }
+                    }
+                    continue;
+                }
+
+                bool tile_hit_geometry = false;
 
                 // Per-tile RNG seeded from tile index for reproducibility:
                 RandomSampler<float> sampler(static_cast<unsigned int>(tile_idx));
@@ -384,6 +596,8 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                                     }
                                     break;
                                 }
+
+                                tile_hit_geometry = true;
 
                                 const auto& mapping = scene_view.instance_mappings_[hit.inst_id];
 
@@ -694,6 +908,10 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                         }
                     }
                 }
+
+                if (tile_culled && tile_hit_geometry) {
+                    validation_failures.fetch_add(1, std::memory_order_relaxed);
+                }
             }
         });
 
@@ -738,6 +956,20 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
         if (frame_buffer.has_received_indirect_power()) {
             frame_buffer.received_indirect_power().convolve(psf);
         }
+    }
+
+    const int culled = culled_tiles.load(std::memory_order_relaxed);
+    if (culled > 0) {
+        HUIRA_LOG_INFO("Region culling skipped " + std::to_string(culled) + " of " +
+                       std::to_string(num_tiles) + " tiles");
+    }
+    const int failures = validation_failures.load(std::memory_order_relaxed);
+    if (failures > 0) {
+        HUIRA_LOG_ERROR(
+            "Region culling validation FAILED: " + std::to_string(failures) +
+            " tile(s) marked empty actually contained geometry. Increase the margin via "
+            "Renderer::set_region_cull_margin_scale(), or disable culling entirely with "
+            "Renderer::set_region_culling(false).");
     }
 
     auto end_clock = std::chrono::high_resolution_clock::now();

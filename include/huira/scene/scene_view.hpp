@@ -104,8 +104,29 @@ class SceneView {
     /// True when the TLAS contains nothing that a ray could ever hit.
     [[nodiscard]] bool tlas_is_empty() const noexcept { return tlas_empty_; }
 
+    /// Conservative camera-space bounding sphere of one TLAS occupant.
+    struct OccupancyBound {
+        Vec3<float> center; ///< Camera-frame centre.
+        float radius;       ///< Radius enclosing the occupant at that instant.
+    };
+
+    /// Per-occupant bounds for every instance in the TLAS, over the exposure.
+    [[nodiscard]] const std::vector<OccupancyBound>& occupancy_bounds() const noexcept
+    {
+        return occupancy_bounds_;
+    }
+
+    /// False when the bounds are not usable for culling.
+    [[nodiscard]] bool occupancy_bounds_complete() const noexcept
+    {
+        return occupancy_bounds_complete_;
+    }
+
     /// The scene background, sampled by rays that hit nothing.
-    [[nodiscard]] const std::shared_ptr<Image<TSpectral>>& background() const { return background_; }
+    [[nodiscard]] const std::shared_ptr<Image<TSpectral>>& background() const
+    {
+        return background_;
+    }
 
     Interval get_exposure_interval() const { return exposure_interval_; }
     units::Second duration() const { return exposure_interval_.duration(); }
@@ -216,6 +237,11 @@ class SceneView {
     std::shared_ptr<EmbreeDevice> device_ = nullptr;
     RTCScene tlas_ = nullptr;
     bool tlas_empty_ = true;
+
+    std::vector<OccupancyBound> occupancy_bounds_;
+    bool occupancy_bounds_complete_ = true;
+
+    void compute_occupancy_bounds_();
 
     uint32_t MASK_GEOMETRY_ = 0x01;
     uint32_t MASK_LIGHT_ = 0x02;

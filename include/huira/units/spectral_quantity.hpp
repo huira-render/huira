@@ -36,8 +36,7 @@ namespace huira::units {
  * @endcode
  *
  * @tparam Dim    The dimensionality type (e.g. Power, Irradiance).
- * @tparam Scale  The scale ratio relative to SI (e.g. std::ratio<1,1> for base, std::kilo for
- * kilo-).
+ * @tparam Scale  The scale ratio relative to SI (e.g. std::ratio<1,1> for base, std::kilo, etc.)
  * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsDimensionality Dim, typename Scale, IsSpectral TSpectral>

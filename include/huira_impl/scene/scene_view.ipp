@@ -9,6 +9,7 @@
 #include "embree4/rtcore.h"
 #include "glm/glm.hpp"
 #include "huira/assets/lights/light.hpp"
+#include "huira/assets/lights/sphere_light.hpp"
 #include "huira/core/physics.hpp"
 #include "huira/core/time.hpp"
 #include "huira/core/transform.hpp"
@@ -168,6 +169,8 @@ SceneView<TSpectral>::SceneView(const Scene<TSpectral>& scene,
     compute_indirect_source_bounds_();
 
     build_tlas_();
+
+    compute_occupancy_bounds_();
 
     // Resolve all unresolved objects now that the TLAS is built, so implementations
     // can cast occlusion/sampling rays through this view. Each object gets its own
@@ -717,6 +720,107 @@ void SceneView<TSpectral>::end_indirect_source_(const Instance<TSpectral>& insta
  * chain could disagree with where Embree actually places the geometry and silently
  * break containment (the estimator's one unbiasedness precondition).
  */
+
+/**
+ * @brief Build a conservative camera-space bounding sphere for every TLAS occupant.
+ *
+ * Mirrors compute_indirect_source_bounds_(): each primitive's local AABB is read from
+ * its committed BLAS, the eight corners are pushed through the instance transform at
+ * each temporal sample, and a sphere is fitted around them. Sphere lights are bounded
+ * directly from their radius.
+ *
+ * Every hit that a ray can register lies inside one of these spheres, so a set of ray
+ * directions that misses all of them cannot hit anything. Any occupant that cannot be
+ * bounded clears occupancy_bounds_complete_, which disables culling entirely rather
+ * than culling against an incomplete set.
+ */
+template <IsSpectral TSpectral>
+void SceneView<TSpectral>::compute_occupancy_bounds_()
+{
+    occupancy_bounds_.clear();
+    occupancy_bounds_complete_ = true;
+
+    if (tlas_empty_) {
+        return;
+    }
+
+    auto box_corner = [](const Vec3<float>& lower, const Vec3<float>& upper, std::size_t corner) {
+        return Vec3<float>{(corner & 1) ? upper.x : lower.x,
+                           (corner & 2) ? upper.y : lower.y,
+                           (corner & 4) ? upper.z : lower.z};
+    };
+
+    for (const auto& batch : primitives_) {
+        RTCScene blas = batch.primitive->geometry->blas();
+        if (blas == nullptr) {
+            occupancy_bounds_complete_ = false;
+            return;
+        }
+
+        RTCBounds bounds{};
+        rtcGetSceneBounds(blas, &bounds);
+
+        const Vec3<float> lower{bounds.lower_x, bounds.lower_y, bounds.lower_z};
+        const Vec3<float> upper{bounds.upper_x, bounds.upper_y, bounds.upper_z};
+
+        // An empty or non-finite BLAS bound cannot be trusted to enclose anything.
+        if (!std::isfinite(lower.x) || !std::isfinite(lower.y) || !std::isfinite(lower.z) ||
+            !std::isfinite(upper.x) || !std::isfinite(upper.y) || !std::isfinite(upper.z) ||
+            upper.x < lower.x || upper.y < lower.y || upper.z < lower.z) {
+            occupancy_bounds_complete_ = false;
+            return;
+        }
+
+        std::array<Vec3<float>, 8> corners_local;
+        for (std::size_t corner = 0; corner < 8; ++corner) {
+            corners_local[corner] = box_corner(lower, upper, corner);
+        }
+
+        for (const auto& instance_transforms : batch.instances) {
+            for (const Transform<float>& xf : instance_transforms) {
+                Vec3<float> lo{std::numeric_limits<float>::infinity()};
+                Vec3<float> hi{-std::numeric_limits<float>::infinity()};
+                std::array<Vec3<float>, 8> corners_world;
+                for (std::size_t corner = 0; corner < 8; ++corner) {
+                    corners_world[corner] = xf.apply_to_point(corners_local[corner]);
+                    lo = glm::min(lo, corners_world[corner]);
+                    hi = glm::max(hi, corners_world[corner]);
+                }
+
+                const Vec3<float> center = 0.5f * (lo + hi);
+                float radius_sq = 0.f;
+                for (std::size_t corner = 0; corner < 8; ++corner) {
+                    const Vec3<float> d = corners_world[corner] - center;
+                    radius_sq = std::max(radius_sq, glm::dot(d, d));
+                }
+
+                const float radius = std::sqrt(radius_sq);
+                if (!std::isfinite(radius) || !std::isfinite(glm::dot(center, center))) {
+                    occupancy_bounds_complete_ = false;
+                    return;
+                }
+                occupancy_bounds_.push_back({center, radius});
+            }
+        }
+    }
+
+    for (const auto& light_inst : lights_) {
+        auto sphere_light = std::dynamic_pointer_cast<SphereLight<TSpectral>>(light_inst.light);
+        if (!sphere_light) {
+            // Only sphere lights are attached to the TLAS today. Anything else that
+            // starts being attached must be bounded here too, so fail closed.
+            occupancy_bounds_complete_ = false;
+            return;
+        }
+        const float radius = sphere_light->radius().to_si_f();
+        for (const Transform<float>& xf : light_inst.transforms) {
+            // The sphere is placed at the instance origin and is not scaled by the
+            // TLAS instancing, matching how build_tlas_() attaches it.
+            occupancy_bounds_.push_back({xf.position, radius});
+        }
+    }
+}
+
 template <IsSpectral TSpectral>
 void SceneView<TSpectral>::compute_indirect_source_bounds_()
 {
