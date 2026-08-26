@@ -30,6 +30,13 @@ void bind_renderer(py::module_& m)
         .def("set_unresolved_occlusion",
              &Renderer::set_unresolved_occlusion,
              py::arg("occlusion") = true)
+        .def("set_region_culling", &Renderer::set_region_culling, py::arg("enable") = true)
+        .def("set_region_cull_margin_scale",
+             &Renderer::set_region_cull_margin_scale,
+             py::arg("scale"))
+        .def("set_region_cull_validation",
+             &Renderer::set_region_cull_validation,
+             py::arg("enable") = true)
         .def("__repr__", [](const Renderer&) { return "Renderer()"; });
 }
 

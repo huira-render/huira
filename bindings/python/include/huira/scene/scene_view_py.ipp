@@ -63,6 +63,14 @@ void bind_scene_view(py::module_& m)
              py::arg("hits"),
              "Resolve batches of HitRecords into Interactions")
 
+        // Geometry occupancy
+        .def("tlas_is_empty",
+             &SV::tlas_is_empty,
+             "True when the TLAS contains nothing that a ray could ever hit")
+        .def("occupancy_bounds_complete",
+             &SV::occupancy_bounds_complete,
+             "False when the occupancy bounds are not usable for region culling")
+
         // Exposure / timing
         .def("get_exposure_interval", &SV::get_exposure_interval)
         .def("duration", &SV::duration)
