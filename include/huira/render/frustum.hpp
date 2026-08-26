@@ -25,6 +25,8 @@ namespace huira {
  *
  * A boresight plane (normal = boresight direction) can be included to reject
  * points behind the camera.
+ *
+ * @tparam TSpectral The spectral type (e.g., RGB, Visible8)
  */
 template <IsSpectral TSpectral>
 class Frustum {
@@ -39,10 +41,29 @@ class Frustum {
 
     [[nodiscard]] std::vector<std::pair<float, float>> clip_arc(const TrajectoryArc& arc) const;
 
-    /** @brief Number of planes defining this frustum. */
+    /**
+     * @brief Reusable working storage for clip_arc().
+     *
+     * clip_arc() otherwise allocates several small vectors per call, which dominates
+     * its cost when it is invoked once per catalogue star per frame. Callers that
+     * clip many arcs should keep one Scratch alive (one per thread) and pass it in;
+     * after the first few calls its buffers stop reallocating entirely.
+     */
+    struct ClipScratch {
+        std::vector<float> crossings;
+        std::vector<float> boundaries;
+        std::vector<std::pair<float, float>> plane_intervals;
+        std::vector<std::pair<float, float>> result;
+        std::vector<std::pair<float, float>> merged;
+    };
+
+    [[nodiscard]] const std::vector<std::pair<float, float>>& clip_arc(const TrajectoryArc& arc,
+                                                                       ClipScratch& scratch) const;
+
+    /// Number of planes defining this frustum.
     [[nodiscard]] std::size_t plane_count() const noexcept { return plane_normals_.size(); }
 
-    /** @brief Access the plane normals. */
+    /// Access the plane normals.
     [[nodiscard]] const std::vector<Vec3<float>>& plane_normals() const noexcept
     {
         return plane_normals_;
@@ -71,9 +92,19 @@ class Frustum {
     [[nodiscard]] static std::vector<std::pair<float, float>>
     arc_intervals_inside_plane_(const TrajectoryArc& arc, const Vec3<float>& normal);
 
+    static void arc_intervals_inside_plane_(const TrajectoryArc& arc,
+                                            const Vec3<float>& normal,
+                                            std::vector<float>& crossings,
+                                            std::vector<float>& boundaries,
+                                            std::vector<std::pair<float, float>>& intervals);
+
     [[nodiscard]] static std::vector<std::pair<float, float>>
     intersect_intervals_(const std::vector<std::pair<float, float>>& a,
                          const std::vector<std::pair<float, float>>& b);
+
+    static void intersect_intervals_(const std::vector<std::pair<float, float>>& a,
+                                     const std::vector<std::pair<float, float>>& b,
+                                     std::vector<std::pair<float, float>>& out);
 };
 
 } // namespace huira

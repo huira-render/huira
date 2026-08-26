@@ -83,8 +83,7 @@ class SceneView {
     /// The light instances collected for this view.
     [[nodiscard]] const std::vector<LightInstance<TSpectral>>& lights() const { return lights_; }
 
-    /// Sentinel returned by indirect_source_index() for hits that are not on a
-    /// designated indirect source.
+    /// Sentinel returned by indirect_source_index() for hits that are not on an indirect source.
     static constexpr std::size_t NO_INDIRECT_SOURCE = std::numeric_limits<std::size_t>::max();
 
     /// The designated indirect illumination sources collected for this view.
@@ -173,7 +172,36 @@ class SceneView {
     /// traversal, or NO_INDIRECT_SOURCE outside a designated instance's sub-graph.
     std::size_t open_indirect_index_ = NO_INDIRECT_SOURCE;
 
-    std::vector<std::vector<Star<TSpectral>>> stars_;
+    /**
+     * @brief Apparent star directions over the exposure, in camera coordinates.
+     *
+     * Stored as a flat struct-of-arrays rather than a vector-of-vectors: a catalogue
+     * of a few million stars is rebuilt on every view, and one heap allocation per
+     * star costs far more than the arithmetic that fills it.
+     *
+     * @c directions holds @c sample_count entries per star, star-major, so star @c i
+     * at temporal sample @c j is at index <tt>i * sample_count + j</tt>.
+     *
+     * @c irradiances holds one entry per star. A catalogue star's irradiance is
+     * constant over the exposure - only its apparent direction moves - so there is
+     * nothing to store per sample.
+     */
+    struct StarField {
+        std::vector<Vec3<float>> directions;
+        std::vector<TSpectral> irradiances;
+        std::size_t sample_count = 0;
+
+        [[nodiscard]] std::size_t size() const noexcept { return irradiances.size(); }
+        [[nodiscard]] bool empty() const noexcept { return irradiances.empty(); }
+
+        /// Directions for star @p i, contiguous, @c sample_count long.
+        [[nodiscard]] const Vec3<float>* directions_for(std::size_t i) const noexcept
+        {
+            return directions.data() + i * sample_count;
+        }
+    };
+
+    StarField stars_;
 
     std::shared_ptr<Image<TSpectral>> background_;
 

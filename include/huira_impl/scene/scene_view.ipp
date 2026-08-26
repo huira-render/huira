@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "embree4/rtcore.h"
+#include "glm/glm.hpp"
 #include "huira/assets/lights/light.hpp"
 #include "huira/core/physics.hpp"
 #include "huira/core/time.hpp"
@@ -15,6 +16,8 @@
 #include "huira/handles/camera_handle.hpp"
 #include "huira/render/shading_utils.hpp"
 #include "huira/scene/scene.hpp"
+#include "tbb/blocked_range.h"
+#include "tbb/parallel_for.h"
 
 namespace huira {
 /**
@@ -118,23 +121,48 @@ SceneView<TSpectral>::SceneView(const Scene<TSpectral>& scene,
         }
     }
 
-    // Copy stars in camera frame:
-    stars_ = std::vector<std::vector<Star<TSpectral>>>(scene.stars_.size());
-    for (std::size_t i = 0; i < scene.stars_.size(); ++i) {
-        Vec3<double> direction = scene.stars_[i].get_direction();
-        TSpectral irradiance = scene.stars_[i].get_irradiance();
+    // Copy stars in camera frame.
+    //
+    // This runs over the whole catalogue on every view, so it is written to touch the
+    // heap a fixed number of times rather than once per star, and the observer
+    // orientation is inverted once per temporal sample rather than once per star per
+    // sample. The arithmetic per star is unchanged: aberrate in the SSB frame, rotate
+    // into camera coordinates, normalize in double precision, and only then narrow to
+    // float - exactly what Star's constructor did.
+    {
+        const std::size_t n_stars = scene.stars_.size();
+        const std::size_t n_samples = temporal_samples_.size();
 
-        std::vector<Star<TSpectral>> star_samples(temporal_samples_.size());
-        for (std::size_t j = 0; j < temporal_samples_.size(); ++j) {
-            // Compute stellar aberration:
-            Vec3<double> aberrated_direction =
-                compute_aberrated_direction(direction, observer_transforms[j].velocity);
-            Vec3<double> apparent_direction =
-                observer_transforms[j].rotation.inverse() * aberrated_direction;
-            star_samples[j] = Star<TSpectral>(apparent_direction, irradiance);
+        stars_.sample_count = n_samples;
+        stars_.directions.resize(n_stars * n_samples);
+        stars_.irradiances.resize(n_stars);
+
+        // Hoisted: rotation.inverse() is a fixed property of each temporal sample.
+        std::vector<Rotation<double>> inverse_rotations(n_samples);
+        std::vector<Vec3<double>> observer_velocities(n_samples);
+        for (std::size_t j = 0; j < n_samples; ++j) {
+            inverse_rotations[j] = observer_transforms[j].rotation.inverse();
+            observer_velocities[j] = observer_transforms[j].velocity;
         }
 
-        stars_[i] = star_samples;
+        tbb::parallel_for(tbb::blocked_range<std::size_t>(0, n_stars),
+                          [&](const tbb::blocked_range<std::size_t>& r) {
+                              for (std::size_t i = r.begin(); i != r.end(); ++i) {
+                                  const Vec3<double> direction = scene.stars_[i].get_direction();
+                                  stars_.irradiances[i] = scene.stars_[i].get_irradiance();
+
+                                  Vec3<float>* out = stars_.directions.data() + i * n_samples;
+                                  for (std::size_t j = 0; j < n_samples; ++j) {
+                                      // Compute stellar aberration:
+                                      Vec3<double> aberrated_direction =
+                                          compute_aberrated_direction(direction,
+                                                                      observer_velocities[j]);
+                                      Vec3<double> apparent_direction =
+                                          inverse_rotations[j] * aberrated_direction;
+                                      out[j] = Vec3<float>(glm::normalize(apparent_direction));
+                                  }
+                              }
+                          });
     }
 
     compute_indirect_source_bounds_();
