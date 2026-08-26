@@ -40,7 +40,7 @@ struct MaterialEval {
  *   - normal_image:      1x1 with {0.5, 0.5, 1.0} (unperturbed normal)
  *   - emissive_image:    1x1 black (TSpectral{0})
  *
- * @tparam TSpectral The spectral type used in the rendering pipeline
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 class Material : public SceneObject<Material<TSpectral>> {

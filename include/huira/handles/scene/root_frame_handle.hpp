@@ -13,7 +13,7 @@ namespace huira {
  * It disables all transform modification methods to ensure the root frame remains fixed.
  * Copy and assignment are also disabled to enforce unique ownership semantics.
  *
- * @tparam TSpectral Spectral type for the scene
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 class RootFrameHandle : public FrameHandle<TSpectral> {

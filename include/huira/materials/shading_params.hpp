@@ -14,7 +14,7 @@ namespace huira {
  * Fields are initialized to physically reasonable defaults so that a
  * partially filled ShadingParams still produces sensible output.
  *
- * @tparam TSpectral The spectral type used in the rendering pipeline
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 struct ShadingParams {

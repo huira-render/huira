@@ -29,7 +29,7 @@ struct DistortionCoefficients {
  * Defines the interface for all distortion models, including distortion/undistortion and
  * coefficient access.
  *
- * @tparam TSpectral The spectral representation type.
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 class Distortion {

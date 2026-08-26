@@ -19,7 +19,7 @@ class UnresolvedObject;
 
 /**
  * @brief Instance of a light in a scene view.
- * @tparam TSpectral Spectral type
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 struct LightInstance {
@@ -29,7 +29,7 @@ struct LightInstance {
 
 /**
  * @brief Instance of an unresolved object in a scene view.
- * @tparam TSpectral Spectral type
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 struct UnresolvedInstance {
@@ -39,7 +39,7 @@ struct UnresolvedInstance {
 
 /**
  * @brief Batch of mesh instances in a scene view.
- * @tparam TSpectral Spectral type
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 struct PrimitiveBatch {

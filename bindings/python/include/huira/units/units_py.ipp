@@ -408,7 +408,7 @@ static void bind_units(py::module& m)
  * This should be called after the spectral type itself has been bound.
  * For example, after binding RGB or Visible8 as "SpectralBins".
  *
- * @tparam TSpectral The spectral type (e.g., RGB, Visible8)
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <typename TSpectral>
 void bind_spectral_units_for_type(py::module& m)

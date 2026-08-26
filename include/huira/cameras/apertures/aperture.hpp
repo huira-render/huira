@@ -16,7 +16,7 @@ namespace huira {
  *
  * Defines the interface for all aperture types, including area management and PSF creation.
  *
- * @tparam TSpectral The spectral representation type.
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 class Aperture {

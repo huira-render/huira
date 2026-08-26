@@ -32,7 +32,7 @@ class Camera;
  * FrameNode represents a node in the scene graph that can have child nodes and leaf objects.
  * Provides child management and factory methods for leaf node creation.
  *
- * @tparam TSpectral Spectral type (e.g., RGB, Spectral)
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 class FrameNode : public Node<TSpectral> {

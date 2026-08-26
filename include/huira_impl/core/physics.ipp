@@ -70,7 +70,7 @@ std::vector<T> linspace(T min, T max, size_t N)
 
 /**
  * @brief Compute the black-body spectral radiance for a given temperature.
- * @tparam TSpectral Spectral type
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  * @param temperature Temperature in Kelvin
  * @param steps Number of integration steps per bin
  * @return TSpectral Black-body radiance in each spectral bin

@@ -32,7 +32,7 @@ namespace huira {
  * are dynamic-range limited, they rarely capture the faint far wings, so Harvey-Shack scatter
  * and veiling glare can still be layered on top via the camera model.
  *
- * @tparam TSpectral The spectral representation type.
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 class MeasuredPSF : public PSF<TSpectral> {

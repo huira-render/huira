@@ -13,7 +13,7 @@ namespace huira {
  * manipulation of position, velocity, rotation, scale, SPICE parameters, and parent access.
  * It is used for both base Node and derived node types (e.g., FrameNode, Instance).
  *
- * @tparam TSpectral Spectral type for the scene
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  * @tparam TNode Node type (must derive from Node<TSpectral>)
  */
 template <IsSpectral TSpectral, typename TNode>

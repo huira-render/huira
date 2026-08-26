@@ -19,7 +19,7 @@ namespace huira {
  * and instantiate or delete asset instances within a frame node. It is a strongly-typed
  * handle that ensures safe access and modification of the scene graph hierarchy.
  *
- * @tparam TSpectral Spectral type for the scene
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 class FrameHandle : public NodeHandle<TSpectral, FrameNode<TSpectral>> {

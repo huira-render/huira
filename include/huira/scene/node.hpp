@@ -53,7 +53,7 @@ enum class ObservationMode { TRUE_STATE, GEOMETRIC_STATE, ABERRATED_STATE };
  * Node itself cannot have children - use FrameNode for nodes that need children.
  * Leaf nodes (lights, unresolved objects, etc.) should derive from Node directly.
  *
- * @tparam TSpectral Spectral type (e.g., RGB, Spectral)
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 class Node : public SceneObject<Node<TSpectral>> {

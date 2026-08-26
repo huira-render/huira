@@ -19,7 +19,7 @@ class FrameHandle;
  * ModelHandle provides safe, type-checked access to Model assets, allowing
  * manipulation and querying of models within the scene. Used by Scene and FrameHandle.
  *
- * @tparam TSpectral Spectral type for the scene
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 class ModelHandle : public Handle<Model<TSpectral>> {

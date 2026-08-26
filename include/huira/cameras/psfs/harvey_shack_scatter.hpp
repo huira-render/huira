@@ -24,7 +24,7 @@ namespace huira {
  * Note: this component is used for whole-image convolution via generate_convolution_kernel()
  * and does not require (or benefit from) a polyphase cache.
  *
- * @tparam TSpectral The spectral representation type.
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 class HarveyShackScatter : public PSF<TSpectral> {

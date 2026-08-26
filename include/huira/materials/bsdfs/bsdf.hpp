@@ -21,7 +21,7 @@ struct BSDFRequirements {
  * BSDFSample::value is pre-weighted: f(wo, wi) * |cos(theta_i)| / pdf.
  * The integrator accumulates sample.value * Li directly.
  *
- * @tparam TSpectral The spectral type used in the rendering pipeline
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 struct BSDFSample {
@@ -51,7 +51,7 @@ struct BSDFSample {
  * constants as member variables set at construction. Read spatially-varying
  * data (albedo, roughness, etc.) from ShadingParams at evaluation time.
  *
- * @tparam TSpectral The spectral type used in the rendering pipeline
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 class BSDF : public SceneObject<BSDF<TSpectral>> {

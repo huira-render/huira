@@ -21,7 +21,7 @@ enum class LightType { Sphere };
 /**
  * @brief Represents a sampled light contribution at a point.
  *
- * @tparam TSpectral The spectral representation type.
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 struct LightSample {
@@ -37,7 +37,7 @@ struct LightSample {
  * Provides an interface for sampling light contributions, evaluating PDFs,
  * and computing irradiance. All lights have a unique ID for identification.
  *
- * @tparam TSpectral The spectral representation type.
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 class Light : public SceneObject<Light<TSpectral>> {

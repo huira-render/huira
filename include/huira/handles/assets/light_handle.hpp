@@ -18,7 +18,7 @@ class FrameHandle;
  * LightHandle provides safe, type-checked access to Light assets, allowing
  * manipulation and querying of lights within the scene. Used by Scene and FrameHandle.
  *
- * @tparam TSpectral Spectral type for the scene
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 class LightHandle : public Handle<Light<TSpectral>> {

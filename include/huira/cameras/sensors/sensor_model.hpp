@@ -19,7 +19,7 @@ class CameraModel;
  * pixel pitch, quantum efficiency, noise, gain, and rotation. Used to initialize and configure
  * SensorModel instances.
  *
- * @tparam TSpectral The spectral representation type.
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 struct SensorConfig {
@@ -76,7 +76,7 @@ struct SensorConfig {
  * Defines the interface and configuration for all sensor models, including pixel pitch, quantum
  * efficiency, and noise parameters.
  *
- * @tparam TSpectral The spectral representation type.
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 class SensorModel {

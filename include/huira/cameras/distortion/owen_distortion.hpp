@@ -36,7 +36,7 @@ struct OwenCoefficients : public DistortionCoefficients {
  *
  * Implements the Owen distortion model with both coordinate-aligned and rotated terms.
  *
- * @tparam TSpectral The spectral representation type.
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 class OwenDistortion : public Distortion<TSpectral> {

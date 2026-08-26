@@ -18,7 +18,7 @@ namespace huira {
  * Renderer provides the interface and common helpers for rendering a SceneView into a FrameBuffer.
  * Derived classes implement specific rendering algorithms.
  *
- * @tparam TSpectral The spectral type (e.g., RGB, Visible8)
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 class Renderer {

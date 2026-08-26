@@ -23,7 +23,7 @@ namespace huira {
  * The H-G system is defined against solar illumination, so a light instance
  * (the sun) is required; other lights in the scene do not contribute.
  *
- * @tparam TSpectral The spectral representation type.
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 class UnresolvedAsteroid : public UnresolvedObject<TSpectral> {

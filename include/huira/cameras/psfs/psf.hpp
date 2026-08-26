@@ -14,7 +14,7 @@ namespace huira {
  * Defines the interface and cache management for all PSF types, supporting polyphase kernel
  * generation.
  *
- * @tparam TSpectral The spectral representation type.
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 class PSF {

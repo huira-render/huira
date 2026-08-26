@@ -18,7 +18,7 @@ class SceneView;
  * manipulation and querying of asset instances within the scene. Used by FrameHandle
  * and SceneView for instance management.
  *
- * @tparam TSpectral Spectral type for the scene
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 class InstanceHandle : public NodeHandle<TSpectral, Instance<TSpectral>> {

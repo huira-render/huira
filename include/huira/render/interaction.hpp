@@ -16,7 +16,7 @@ namespace huira {
  * vertex albedo, and outgoing direction. Used in BSDF evaluation, texture
  * lookup, and light transport calculations.
  *
- * @tparam TSpectral Spectral type for the rendering pipeline
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 struct Interaction {

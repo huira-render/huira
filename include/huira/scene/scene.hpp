@@ -47,7 +47,7 @@ class SceneView;
  * catalogs and models. The scene graph is rooted at a FrameNode and supports hierarchical
  * relationships between nodes and assets. Scene is non-copyable.
  *
- * @tparam TSpectral Spectral type used for asset spectral properties
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 class Scene {

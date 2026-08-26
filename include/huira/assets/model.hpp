@@ -30,7 +30,7 @@ class ModelLoader;
  * The Model's scene graph is disconnected from the main Scene graph. To place a Model
  * into the Scene, use Instance with a Model reference.
  *
- * @tparam TSpectral The spectral representation type.
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 class Model : public SceneObject<Model<TSpectral>> {

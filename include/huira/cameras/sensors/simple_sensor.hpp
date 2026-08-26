@@ -15,7 +15,7 @@ namespace huira {
  *
  * Inherits all parameters from SensorConfig. Used to initialize SimpleSensor instances.
  *
- * @tparam TSpectral The spectral representation type.
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 struct SimpleSensorConfig : public SensorConfig<TSpectral> {};
@@ -25,7 +25,7 @@ struct SimpleSensorConfig : public SensorConfig<TSpectral> {};
  *
  * Implements a basic sensor readout model, including shot noise, read noise, and quantization.
  *
- * @tparam TSpectral The spectral representation type.
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 class SimpleSensor : public SensorModel<TSpectral> {

@@ -18,7 +18,7 @@ namespace huira {
  * on the distance from the observer (assumed to be at the origin) and the
  * total spectral power.
  *
- * @tparam TSpectral The spectral representation type.
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 class UnresolvedEmitter : public UnresolvedObject<TSpectral> {

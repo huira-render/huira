@@ -27,7 +27,7 @@ namespace huira {
  * (via set_device()) before the BLAS can be built — this is handled
  * automatically by Scene::add_mesh().
  *
- * @tparam TSpectral The spectral representation type.
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 class Mesh : public Geometry<TSpectral> {

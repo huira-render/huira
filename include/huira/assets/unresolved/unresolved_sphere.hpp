@@ -25,7 +25,7 @@ namespace huira {
  * light-linked constructors restrict illumination to a single specified light
  * instance (light linking).
  *
- * @tparam TSpectral The spectral representation type.
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 class UnresolvedLambertianSphere : public UnresolvedObject<TSpectral> {

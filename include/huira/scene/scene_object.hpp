@@ -21,7 +21,7 @@ class Scene;
  * SceneObject provides common interface for scene ownership, naming, and info reporting.
  *
  * @tparam TDerived Derived type (CRTP)
- * @tparam TSpectral Spectral type (e.g., RGB, Spectral)
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <typename TDerived>
 class SceneObject : public std::enable_shared_from_this<TDerived> {

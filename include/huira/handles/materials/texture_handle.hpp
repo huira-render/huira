@@ -14,7 +14,7 @@ namespace huira {
  * Provides a safe, reference-like interface for configuring and querying a Material
  * instance.  All operations are forwarded to the underlying Material.
  *
- * @tparam TSpectral The spectral type
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <typename TPixel>
 class TextureHandle : public Handle<Texture<TPixel>> {
