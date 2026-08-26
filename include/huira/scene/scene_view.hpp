@@ -4,6 +4,7 @@
 #include <limits>
 #include <memory>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "embree4/rtcore.h"
@@ -182,6 +183,12 @@ class SceneView {
 
     void traverse_model_graph_(const std::shared_ptr<Node<TSpectral>> node,
                                const std::vector<Transform<float>>& parent_transform);
+
+    void collect_hidden_(const std::shared_ptr<Node<TSpectral>>& node);
+
+    /// Assets reachable only through a hidden node. Kept so that the unlinked-object
+    /// check can tell a hidden asset apart from one that was never attached.
+    std::unordered_set<const void*> hidden_assets_;
 
     std::shared_ptr<CameraModel<TSpectral>> camera_model_;
     std::vector<Transform<float>> camera_to_world_;

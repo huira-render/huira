@@ -346,4 +346,38 @@ NodeHandle<TSpectral, TParentNode> NodeHandle<TSpectral, TNode>::get_parent_as()
 {
     return this->get_()->template get_parent_as<TParentNode>();
 }
+
+/**
+ * @brief Sets whether this node is collected into a SceneView.
+ *
+ * Takes effect for SceneViews constructed after the call; ones that already exist are
+ * unaffected. Descendants are skipped along with this node but keep their own flags.
+ *
+ * @param visible True to collect this node, false to skip it and its descendants
+ */
+template <IsSpectral TSpectral, typename TNode>
+void NodeHandle<TSpectral, TNode>::set_visible(bool visible) const
+{
+    this->get_()->set_visible(visible);
+}
+
+/**
+ * @brief Reads this node's own visibility flag, ignoring any hidden ancestor.
+ * @return bool The flag as last set on this node
+ */
+template <IsSpectral TSpectral, typename TNode>
+bool NodeHandle<TSpectral, TNode>::is_visible() const
+{
+    return this->get_()->is_visible();
+}
+
+/**
+ * @brief Reports whether this node would be collected, ancestors included.
+ * @return bool True only if this node and every ancestor are visible
+ */
+template <IsSpectral TSpectral, typename TNode>
+bool NodeHandle<TSpectral, TNode>::is_effectively_visible() const
+{
+    return this->get_()->is_effectively_visible();
+}
 } // namespace huira

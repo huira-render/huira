@@ -5,6 +5,7 @@
 #include "huira/handles/assets/primitive_handle.hpp"
 #include "huira/handles/assets/unresolved_handle.hpp"
 #include "huira/handles/handle_py.ipp"
+#include "huira/handles/scene/node_handle_py.ipp"
 #include "huira/handles/scene/root_frame_handle.hpp"
 #include "pybind11/pybind11.h"
 #include "pybind11/stl.h"
@@ -70,6 +71,7 @@ inline void bind_root_frame_handle(py::module_& m)
                    .def("__repr__", [](const HandleType&) { return "<RootFrameHandle>"; });
 
     bind_handle_methods<FrameNode<TSpectral>>(cls);
+    bind_visibility_methods<TSpectral, FrameNode<TSpectral>>(cls);
 
     // NOTE: Transform methods (set_position, set_rotation, set_scale,
     // set_velocity, set_angular_velocity, set_body_angular_velocity) are

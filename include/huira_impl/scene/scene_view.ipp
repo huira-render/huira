@@ -4,6 +4,8 @@
 #include <cstddef>
 #include <limits>
 #include <memory>
+#include <string>
+#include <type_traits>
 #include <vector>
 
 #include "embree4/rtcore.h"
@@ -83,13 +85,25 @@ SceneView<TSpectral>::SceneView(const Scene<TSpectral>& scene,
                    " unique primitive batches and " + std::to_string(lights_.size()) +
                    " light instances.");
 
-    // Check for unlinked objects:
+    // Check for objects that were not collected. An object under a hidden node was
+    // deliberately left out and is reported as such; anything else never reached the
+    // scene graph at all, which is almost always a mistake.
+    auto report_uncollected = [this](const std::string& label,
+                                     std::uint64_t id,
+                                     const std::string& name,
+                                     const void* key) {
+        const std::string subject = label + "[" + std::to_string(id) + "] '" + name + "' ";
+        if (hidden_assets_.find(key) != hidden_assets_.end()) {
+            HUIRA_LOG_INFO(subject + "is hidden and will not be rendered.");
+        } else {
+            HUIRA_LOG_WARNING(subject + "is unlinked in the scene graph and will not be rendered.");
+        }
+    };
+
     for (auto& primitive : scene.primitives_) {
         auto* key = primitive.get();
         if (batch_lookup_.find(key) == batch_lookup_.end()) {
-            HUIRA_LOG_WARNING("Primitive[" + std::to_string(primitive->id()) + "] '" +
-                              primitive->name() +
-                              "' is unlinked in the scene graph and will not be rendered.");
+            report_uncollected("Primitive", primitive->id(), primitive->name(), key);
         }
     }
 
@@ -102,8 +116,7 @@ SceneView<TSpectral>::SceneView(const Scene<TSpectral>& scene,
             }
         }
         if (!found) {
-            HUIRA_LOG_WARNING("Light[" + std::to_string(light->id()) + "] '" + light->name() +
-                              "' is unlinked in the scene graph and will not be rendered.");
+            report_uncollected("Light", light->id(), light->name(), light.get());
         }
     }
 
@@ -116,9 +129,10 @@ SceneView<TSpectral>::SceneView(const Scene<TSpectral>& scene,
             }
         }
         if (!found) {
-            HUIRA_LOG_WARNING("UnresolvedObject[" + std::to_string(unresolved_object->id()) +
-                              "] '" + unresolved_object->name() +
-                              "' is unlinked in the scene graph and will not be rendered.");
+            report_uncollected("UnresolvedObject",
+                               unresolved_object->id(),
+                               unresolved_object->name(),
+                               unresolved_object.get());
         }
     }
 
@@ -475,6 +489,13 @@ void SceneView<TSpectral>::traverse_and_collect_(
     const std::vector<Transform<double>>& observer_inverses,
     ObservationMode obs_mode)
 {
+    // Hidden nodes and their descendants are not collected. Their assets are still
+    // recorded, so the unlinked check can tell hidden apart from unattached.
+    if (!node->is_visible()) {
+        collect_hidden_(node);
+        return;
+    }
+
     if (auto instance = std::dynamic_pointer_cast<Instance<TSpectral>>(node)) {
         std::vector<Transform<float>> render_transforms(temporal_samples_.size());
         for (std::size_t i = 0; i < temporal_samples_.size(); ++i) {
@@ -510,6 +531,37 @@ void SceneView<TSpectral>::traverse_and_collect_(
 
     for (const auto& child : node->get_children()) {
         traverse_and_collect_(child, observer_transforms, observer_inverses, obs_mode);
+    }
+}
+
+/**
+ * @brief Record every asset under a hidden node without collecting it.
+ *
+ * Recurses through a hidden sub-graph, and through the internal graph of any Model it
+ * finds, noting each asset it reaches. The constructor consults this to report hidden
+ * assets separately from ones that were never attached to the scene graph.
+ *
+ * @param node Root of the hidden sub-graph
+ */
+template <IsSpectral TSpectral>
+void SceneView<TSpectral>::collect_hidden_(const std::shared_ptr<Node<TSpectral>>& node)
+{
+    if (auto instance = std::dynamic_pointer_cast<Instance<TSpectral>>(node)) {
+        std::visit(
+            [&](auto* raw_ptr) {
+                if constexpr (std::is_same_v<decltype(raw_ptr), Model<TSpectral>*>) {
+                    if (raw_ptr) {
+                        collect_hidden_(raw_ptr->root_node_);
+                    }
+                } else {
+                    hidden_assets_.insert(static_cast<const void*>(raw_ptr));
+                }
+            },
+            instance->asset());
+    }
+
+    for (const auto& child : node->get_children()) {
+        collect_hidden_(child);
     }
 }
 
@@ -899,6 +951,9 @@ void SceneView<TSpectral>::traverse_model_graph_(
     const std::shared_ptr<Node<TSpectral>> node,
     const std::vector<Transform<float>>& parent_transforms)
 {
+    // Node visibility is deliberately not consulted here. A Model's internal graph is
+    // not reachable through ModelHandle, so nothing can set a flag on it. Honor it here
+    // if those nodes are ever exposed.
     std::vector<Transform<float>> current_transforms(parent_transforms.size());
     for (std::size_t i = 0; i < parent_transforms.size(); ++i) {
         current_transforms[i] =

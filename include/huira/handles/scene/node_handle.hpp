@@ -75,6 +75,10 @@ class NodeHandle : public Handle<TNode> {
 
     template <typename TParentNode>
     NodeHandle<TSpectral, TParentNode> get_parent_as() const;
+
+    void set_visible(bool visible = true) const;
+    [[nodiscard]] bool is_visible() const;
+    [[nodiscard]] bool is_effectively_visible() const;
 };
 } // namespace huira
 

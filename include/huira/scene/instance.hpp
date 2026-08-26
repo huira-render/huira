@@ -63,32 +63,7 @@ class Instance : public Node<TSpectral> {
 
     const Instantiable<TSpectral>& asset() const { return asset_; }
 
-    /**
-     * @brief Designates this instance as an indirect illumination source (reflector).
-     *
-     * Designated instances are directly sampled during next event estimation:
-     * they do not emit light, but their (sun)lit surfaces are importance-sampled
-     * as if they were light sources, which is essential for capturing e.g.
-     * earthshine or moonshine that undirected path sampling would rarely find.
-     *
-     * Instances containing a Primitive or a Model may be designated. A designated
-     * Model acts as a single source: the sampling proxy bounds every Primitive in
-     * its sub-graph, and a sample landing on any of them counts as a hit on this
-     * source. Lights, camera models and unresolved objects cannot be designated.
-     *
-     * @param enabled Whether this instance acts as an indirect source (default true).
-     * @throws std::runtime_error if enabled and the instance contains neither a
-     *         Primitive nor a Model.
-     */
-    void set_indirect_source(bool enabled = true)
-    {
-        if (enabled && !std::holds_alternative<Primitive<TSpectral>*>(asset_) &&
-            !std::holds_alternative<Model<TSpectral>*>(asset_)) {
-            HUIRA_THROW_ERROR("Instance::set_indirect_source - Only Instances containing a "
-                              "Primitive or a Model can be designated as indirect sources");
-        }
-        indirect_source_ = enabled;
-    }
+    void set_indirect_source(bool enabled = true);
 
     /// Whether this instance is designated as an indirect illumination source.
     bool is_indirect_source() const { return indirect_source_; }

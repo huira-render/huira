@@ -9,6 +9,35 @@ namespace py = pybind11;
 
 namespace huira {
 /**
+ * @brief Injects the visibility methods into an existing py::class_ binding.
+ *
+ * Kept separate from bind_node_handle_methods so that RootFrameHandle, which omits the
+ * transform methods, can take these without them.
+ */
+template <typename TSpectral, typename TNode, typename PyClass>
+inline void bind_visibility_methods(PyClass& cls)
+{
+    using HandleType = NodeHandle<TSpectral, TNode>;
+
+    cls.def("set_visible",
+            &HandleType::set_visible,
+            py::arg("visible") = true,
+            R"(Set whether this node is collected into a SceneView.
+
+Read when a SceneView is constructed, so a SceneView that already exists is
+unaffected; build a new one to render the change. Descendants are skipped along
+with this node but keep their own flags, so showing it again restores whatever
+each descendant was individually set to. Hiding a light removes its illumination
+as well as its appearance.)")
+        .def("is_visible",
+             &HandleType::is_visible,
+             "This node's own flag, which ignores whether an ancestor is hidden")
+        .def("is_effectively_visible",
+             &HandleType::is_effectively_visible,
+             "True only when this node and every one of its ancestors are visible");
+}
+
+/**
  * @brief Injects all NodeHandle methods into an existing py::class_ binding.
  *
  * Call this on any handle whose C++ type inherits from NodeHandle<TSpectral, TNode>.
@@ -169,5 +198,7 @@ inline void bind_node_handle_methods(PyClass& cls)
 
         // Parent access
         .def("get_parent", &HandleType::get_parent);
+
+    bind_visibility_methods<TSpectral, TNode>(cls);
 }
 } // namespace huira
