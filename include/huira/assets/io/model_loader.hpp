@@ -30,7 +30,7 @@ namespace huira {
  * Provides static methods to load models from disk and convert them into huira scene objects.
  * Handles mesh conversion, node hierarchy, and basic transform extraction.
  *
- * @tparam TSpectral Spectral type (must satisfy IsSpectral concept)
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 class ModelLoader {

@@ -21,7 +21,7 @@ namespace huira {
  * - b:     DHG phase function asymmetry
  * - c:     DHG phase function forward/backward fraction
  *
- * @tparam TSpectral The spectral type used in the rendering pipeline
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 class HapkeBSDF final : public BSDF<TSpectral> {

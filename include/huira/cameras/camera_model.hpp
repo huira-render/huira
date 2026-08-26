@@ -39,7 +39,7 @@ class Renderer;
  * to the image plane, compute projected aperture area, and supports both analytic and PSF-based
  * point spread functions. All units are SI unless otherwise noted.
  *
- * @tparam TSpectral The spectral type
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 class CameraModel : public SceneObject<CameraModel<TSpectral>> {

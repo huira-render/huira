@@ -17,7 +17,7 @@ namespace huira {
  *
  * f(wo, wi) = albedo / (4 * pi * (cos_i + cos_o))
  *
- * @tparam TSpectral The spectral type used in the rendering pipeline
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 class LommelSeeligerBSDF final : public BSDF<TSpectral> {

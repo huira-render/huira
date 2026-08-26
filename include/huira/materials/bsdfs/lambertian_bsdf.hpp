@@ -13,7 +13,7 @@ namespace huira {
  * ShadingParams. This BSDF is stateless and a single instance can be
  * shared across all Lambertian materials in the scene.
  *
- * @tparam TSpectral The spectral type used in the rendering pipeline
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 class LambertianBSDF : public BSDF<TSpectral> {

@@ -13,7 +13,7 @@ namespace huira {
  *
  * Models the PSF of a circular aperture using the Airy disk formula for diffraction-limited optics.
  *
- * @tparam TSpectral The spectral representation type.
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 class AiryDisk : public PSF<TSpectral> {

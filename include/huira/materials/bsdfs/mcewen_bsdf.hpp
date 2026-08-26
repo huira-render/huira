@@ -17,7 +17,7 @@ namespace huira {
  *
  * f(wo, wi) = albedo * ((1 - beta) * Lambert + beta * Lommel_Seeliger)
  *
- * @tparam TSpectral The spectral type used in the rendering pipeline
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 class McEwenBSDF final : public BSDF<TSpectral> {

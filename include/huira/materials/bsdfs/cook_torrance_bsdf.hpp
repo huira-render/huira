@@ -46,7 +46,7 @@ namespace huira {
  * sampling (Heitz 2018) for the specular lobe, combined with cosine-weighted
  * hemisphere sampling for the diffuse lobe via one-sample MIS.
  *
- * @tparam TSpectral The spectral type used in the rendering pipeline
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 class CookTorranceBSDF final : public BSDF<TSpectral> {

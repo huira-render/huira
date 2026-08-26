@@ -43,7 +43,7 @@ using Instantiable = std::variant<Primitive<TSpectral>*,
  *
  * Instance nodes are leaf nodes in the scene graph and wrap a single asset pointer.
  *
- * @tparam TSpectral Spectral type (e.g., RGB, Spectral)
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 class Instance : public Node<TSpectral> {

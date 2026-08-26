@@ -29,7 +29,7 @@ class SceneView;
  * entry represents a constant value, while N entries are linearly interpolated
  * across the resolved time range by get_irradiance().
  *
- * @tparam TSpectral The spectral representation type.
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 class UnresolvedObject : public SceneObject<UnresolvedObject<TSpectral>> {

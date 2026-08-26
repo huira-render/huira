@@ -114,7 +114,7 @@ void Renderer<TSpectral>::render(SceneView<TSpectral>& scene_view,
  * The rendering is parallelized over tiles using TBB. Each tile accumulates
  * results from multiple samples per pixel (spp_) into the frame buffer.
  *
- * @tparam TSpectral Spectral type for the rendering pipeline
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  * @param scene_view The scene view containing geometry, lights, and environment
  * @param frame_buffer The frame buffer to render into
  */
@@ -762,7 +762,7 @@ struct RenderItem {
  * 4. Renders each tile in parallel into local buffers
  * 5. Combines tile buffers into the final frame buffer
  *
- * @tparam TSpectral Spectral type for the rendering pipeline
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  * @param scene_view The scene view containing stars and unresolved objects
  * @param frame_buffer The frame buffer to render into
  */

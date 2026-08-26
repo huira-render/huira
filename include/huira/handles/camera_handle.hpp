@@ -28,7 +28,7 @@ class FrameHandle;
  * Provides a safe, reference-like interface for configuring and querying a CameraModel instance
  * within a scene graph. All operations are forwarded to the underlying CameraModel.
  *
- * @tparam TSpectral The spectral type (e.g., float, Vec3f, etc.)
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 class CameraModelHandle : public Handle<CameraModel<TSpectral>> {

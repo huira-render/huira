@@ -14,7 +14,7 @@ namespace huira {
  * manipulation and querying of mesh data within the scene. Used by Scene,
  * FrameHandle, and ModelLoader for mesh management.
  *
- * @tparam TSpectral Spectral type for the scene
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 class MeshHandle : public GeometryHandle<TSpectral> {

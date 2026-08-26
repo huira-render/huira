@@ -34,7 +34,7 @@ struct RadiusLUTEntry {
  * per-star radius culling: stars with low irradiance can use smaller PSF kernels without
  * visible quality loss.
  *
- * @tparam TSpectral Spectral type for the rendering pipeline
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  * @param center_kernel The full PSF kernel centered at (0,0) offset
  * @param full_radius_signed The maximum PSF radius in pixels
  * @param area The projected aperture area for photon flux calculations

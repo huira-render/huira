@@ -14,7 +14,7 @@ namespace huira {
  * Provides access and control for unresolved scene objects, allowing irradiance to be set or
  * queried. This handle is used to interact with unresolved objects in a type-safe manner.
  *
- * @tparam TSpectral The spectral representation type.
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 class UnresolvedObjectHandle : public Handle<UnresolvedObject<TSpectral>> {

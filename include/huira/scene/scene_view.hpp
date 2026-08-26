@@ -47,7 +47,7 @@ enum class AlphaMode {
  *
  * SceneView collects geometry, lights, unresolved objects, and stars for rendering.
  *
- * @tparam TSpectral Spectral type (e.g., RGB, Spectral)
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 class SceneView {

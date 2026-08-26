@@ -23,7 +23,7 @@ namespace huira {
  * parent-frame resolution, basis construction, the world->local conversion, and
  * the central-difference angular velocity for motion blur -- lives here.
  *
- * @tparam TSpectral The spectral representation type.
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 class LookAtCallbackBase : public RotationCallback {
@@ -127,7 +127,7 @@ class LookAtCallbackBase : public RotationCallback {
  * The target is re-resolved at every evaluated time, so a moving target is
  * followed continuously (including across the motion-blur interval).
  *
- * @tparam TSpectral The spectral representation type.
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 class LookAtCallback : public LookAtCallbackBase<TSpectral> {
@@ -152,7 +152,7 @@ class LookAtCallback : public LookAtCallbackBase<TSpectral> {
 
 /**
  * @brief Orients a node toward a fixed world-space position.
- * @tparam TSpectral The spectral representation type.
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 class LookAtPositionCallback : public LookAtCallbackBase<TSpectral> {

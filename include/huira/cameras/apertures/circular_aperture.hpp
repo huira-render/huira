@@ -14,7 +14,7 @@ namespace huira {
  *
  * Models a circular aperture with a specified diameter and area, supporting PSF creation.
  *
- * @tparam TSpectral The spectral representation type.
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 class CircularAperture : public Aperture<TSpectral> {

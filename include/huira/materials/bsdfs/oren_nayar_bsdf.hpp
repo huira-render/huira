@@ -17,7 +17,7 @@ namespace huira {
  * The roughness parameter is mapped to the standard deviation of the
  * microfacet angle (sigma) in the range [0, PI/2].
  *
- * @tparam TSpectral The spectral type used in the rendering pipeline
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 class OrenNayarBSDF final : public BSDF<TSpectral> {

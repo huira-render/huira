@@ -16,7 +16,7 @@ namespace huira {
  * This BSDF is stateless and a single instance can be shared across all
  * materials in the scene that use it.
  *
- * @tparam TSpectral The spectral type used in the rendering pipeline
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 class NullBSDF final : public BSDF<TSpectral> {

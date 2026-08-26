@@ -34,7 +34,7 @@ struct BrownCoefficients : public DistortionCoefficients {
  *
  * Implements the Brown-Conrady distortion model with radial and tangential coefficients.
  *
- * @tparam TSpectral The spectral representation type.
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 class BrownDistortion : public Distortion<TSpectral> {

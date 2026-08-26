@@ -23,8 +23,7 @@ Star<TSpectral>::Star(const Vec3<double>& direction, TSpectral irradiance)
  * proper motion corrections to the catalog position. The proper motion is
  * extrapolated from the catalog epoch (J2000.0) to the specified observation time.
  *
- * @tparam TSpectral A type satisfying the IsSpectral concept, representing the
- *                   star's spectral characteristics.
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  *
  * @param star_data Catalog data for the star. Assumes:
  *                  - RA and DEC are in radians (ICRS, epoch J2000.0)

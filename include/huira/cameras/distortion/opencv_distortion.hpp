@@ -58,7 +58,7 @@ struct OpenCVCoefficients : public DistortionCoefficients {
  * Implements the OpenCV distortion model with rational radial, tangential, and thin prism
  * coefficients.
  *
- * @tparam TSpectral The spectral representation type.
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 class OpenCVDistortion : public Distortion<TSpectral> {

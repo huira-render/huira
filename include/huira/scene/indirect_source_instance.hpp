@@ -27,7 +27,7 @@ class Primitive;
  * BLAS bounds and render transforms) and hit classification (which maps a TLAS
  * geometry back to its owning source).
  *
- * @tparam TSpectral The spectral representation type.
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 struct IndirectSourceMember {
@@ -54,7 +54,7 @@ struct IndirectSourceMember {
  * every member. Samples that miss the actual geometry are known zeros; the PDF is
  * defined over the bounding cone, so the estimator remains unbiased.
  *
- * @tparam TSpectral The spectral representation type.
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 struct IndirectSourceInstance {
