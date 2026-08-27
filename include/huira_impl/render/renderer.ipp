@@ -46,13 +46,27 @@ void Renderer<TSpectral>::render(SceneView<TSpectral>& scene_view,
 
     // Apply the scattered-light wings to unresolved sources.
     if (star_wing_splat.size() > 0) {
-        this->convolve_cached_(
-            star_wing_splat, camera->get_psf_wings_kernel(), *camera, wings_convolver_);
+        // Timed and logged separately: this is a frame-sized convolution that belongs
+        // to neither the path tracing nor the unresolved stage, so without its own line
+        // it shows up only as an unexplained gap between those two and the total.
+        auto wings_start = std::chrono::high_resolution_clock::now();
+
+        // No source landed in frame, so the splat is empty and its wings are too. The
+        // core/wing blend below still has to run: it rescales the core by 1 - f_s.
+        if (!image_is_zero_(star_wing_splat)) {
+            this->convolve_cached_(
+                star_wing_splat, camera->get_psf_wings_kernel(), *camera, wings_convolver_);
+        }
         const float f_s = camera->scatter_fraction_;
         const float core_weight = 1.f - f_s;
         for (std::size_t i = 0; i < star_power.size(); ++i) {
             star_power[i] = star_power[i] * core_weight + star_wing_splat[i] * f_s;
         }
+
+        std::chrono::duration<double> wings_elapsed =
+            std::chrono::high_resolution_clock::now() - wings_start;
+        HUIRA_LOG_INFO("Scattered-light wings completed in " +
+                       std::to_string(wings_elapsed.count()) + " seconds");
     }
 
     if (frame_buffer.has_received_power()) {
@@ -946,15 +960,28 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
     if (camera->convolve_psf_) {
         // Convolution is linear, so convolving the components independently keeps
         // total == direct + indirect exactly.
+        //
+        // The kernel is fetched unconditionally even when nothing needs convolving, so
+        // that its (potentially very expensive) generation still happens on the first
+        // frame rather than stalling whichever later frame first has content in view.
         const Image<TSpectral>& psf = camera->get_psf_convolution_kernel();
-        if (frame_buffer.has_received_power()) {
-            received_power.convolve(psf);
+
+        // An empty field of view leaves these buffers identically zero, and a zero
+        // image convolves to a zero image. Skipping the transforms in that case is
+        // exact, and it is the difference between a frame-sized FFT pair per component
+        // and nothing at all.
+        if (frame_buffer.has_received_power() && !image_is_zero_(received_power)) {
+            this->convolve_cached_(received_power, psf, *camera, psf_convolver_);
         }
-        if (frame_buffer.has_received_direct_power()) {
-            frame_buffer.received_direct_power().convolve(psf);
+        if (frame_buffer.has_received_direct_power() &&
+            !image_is_zero_(frame_buffer.received_direct_power())) {
+            this->convolve_cached_(
+                frame_buffer.received_direct_power(), psf, *camera, psf_convolver_);
         }
-        if (frame_buffer.has_received_indirect_power()) {
-            frame_buffer.received_indirect_power().convolve(psf);
+        if (frame_buffer.has_received_indirect_power() &&
+            !image_is_zero_(frame_buffer.received_indirect_power())) {
+            this->convolve_cached_(
+                frame_buffer.received_indirect_power(), psf, *camera, psf_convolver_);
         }
     }
 
@@ -1615,7 +1642,9 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
 
     if (use_defocus && camera->convolve_psf_) {
         const Image<TSpectral>& psf = camera->get_psf_convolution_kernel();
-        this->convolve_cached_(received_power, psf, *camera, defocus_convolver_);
+        if (!image_is_zero_(received_power)) {
+            this->convolve_cached_(received_power, psf, *camera, psf_convolver_);
+        }
     }
 
     auto end_clock = std::chrono::high_resolution_clock::now();
@@ -1637,6 +1666,38 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
  * @param camera Camera the kernel came from, used to detect kernel changes.
  * @param cache Persistent convolver to reuse.
  */
+/**
+ * @brief True when every channel of every pixel is exactly zero.
+ *
+ * @param image Image to test.
+ */
+template <IsSpectral TSpectral>
+bool Renderer<TSpectral>::image_is_zero_(const Image<TSpectral>& image)
+{
+    if (image.size() == 0) {
+        return true;
+    }
+
+    std::atomic<bool> nonzero{false};
+    tbb::parallel_for(tbb::blocked_range<std::size_t>(0, image.size()),
+                      [&](const tbb::blocked_range<std::size_t>& range) {
+                          // Another block already found a non-zero pixel.
+                          if (nonzero.load(std::memory_order_relaxed)) {
+                              return;
+                          }
+                          for (std::size_t i = range.begin(); i != range.end(); ++i) {
+                              for (std::size_t c = 0; c < TSpectral::size(); ++c) {
+                                  if (image[i][c] != 0.0f) {
+                                      nonzero.store(true, std::memory_order_relaxed);
+                                      return;
+                                  }
+                              }
+                          }
+                      });
+
+    return !nonzero.load(std::memory_order_relaxed);
+}
+
 template <IsSpectral TSpectral>
 void Renderer<TSpectral>::convolve_cached_(Image<TSpectral>& image,
                                            const Image<TSpectral>& kernel,
