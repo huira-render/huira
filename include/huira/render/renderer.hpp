@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
 #include <limits>
 #include <memory>
@@ -23,7 +24,13 @@ namespace huira {
 template <IsSpectral TSpectral>
 class Renderer {
   public:
+    Renderer() = default;
     virtual ~Renderer() = default;
+
+    Renderer(const Renderer&) = delete;
+    Renderer& operator=(const Renderer&) = delete;
+    Renderer(Renderer&&) = delete;
+    Renderer& operator=(Renderer&&) = delete;
 
     virtual void render(SceneView<TSpectral>& scene_view, FrameBuffer<TSpectral>& frame_buffer);
 
@@ -45,7 +52,7 @@ class Renderer {
     /// Set the indirect lighting clamp threshold.
     void set_indirect_clamp(float indirect_clamp) { indirect_clamp_threshold_ = indirect_clamp; }
 
-    /// Enable or disable occlusion testing of unresolved point sources.  */
+    /// Enable or disable occlusion testing of unresolved point sources.
     void set_unresolved_occlusion(bool occlusion = true) { unresolved_occlusion_ = occlusion; }
 
     /**
@@ -87,6 +94,12 @@ class Renderer {
 
     /// @brief A persistent FFT convolver plus the configuration it was built for.
     struct ConvolverCache {
+        ConvolverCache() = default;
+        ConvolverCache(const ConvolverCache&) = delete;
+        ConvolverCache& operator=(const ConvolverCache&) = delete;
+        ConvolverCache(ConvolverCache&&) = delete;
+        ConvolverCache& operator=(ConvolverCache&&) = delete;
+
         FftConvolver<TSpectral> convolver;
         const void* camera = nullptr;
         std::uint64_t kernel_version = 0;

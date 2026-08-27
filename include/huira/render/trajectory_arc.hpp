@@ -39,7 +39,7 @@ class TrajectoryArc {
     [[nodiscard]] std::size_t sample_count() const noexcept { return sample_count_; }
 
   private:
-    std::size_t sample_count_;
+    std::size_t sample_count_ = 0;
 
     // Polynomial representation (N <= 3)
     std::array<Vec3<float>, 3> poly_coeffs_{};

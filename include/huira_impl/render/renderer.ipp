@@ -1656,17 +1656,6 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
 }
 
 /**
- * @brief Convolve an image with a camera kernel, reusing a cached kernel spectrum.
- *
- * Behaviour matches Image::convolve() exactly, including its small-kernel dispatch;
- * only the lifetime of the FFT plan and kernel spectrum differs.
- *
- * @param image Image convolved in place.
- * @param kernel Convolution kernel.
- * @param camera Camera the kernel came from, used to detect kernel changes.
- * @param cache Persistent convolver to reuse.
- */
-/**
  * @brief True when every channel of every pixel is exactly zero.
  *
  * @param image Image to test.
@@ -1698,6 +1687,17 @@ bool Renderer<TSpectral>::image_is_zero_(const Image<TSpectral>& image)
     return !nonzero.load(std::memory_order_relaxed);
 }
 
+/**
+ * @brief Convolve an image with a camera kernel, reusing a cached kernel spectrum.
+ *
+ * Behaviour matches Image::convolve() exactly, including its small-kernel dispatch;
+ * only the lifetime of the FFT plan and kernel spectrum differs.
+ *
+ * @param image Image convolved in place.
+ * @param kernel Convolution kernel.
+ * @param camera Camera the kernel came from, used to detect kernel changes.
+ * @param cache Persistent convolver to reuse.
+ */
 template <IsSpectral TSpectral>
 void Renderer<TSpectral>::convolve_cached_(Image<TSpectral>& image,
                                            const Image<TSpectral>& kernel,
