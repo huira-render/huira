@@ -1,5 +1,6 @@
 #pragma once
 
+#include "huira/cameras/optics_py.ipp"
 #include "huira/handles/camera_handle.hpp"
 #include "huira/units/units_py.ipp"
 #include "pybind11/pybind11.h"
@@ -163,73 +164,73 @@ inline void bind_camera_model_handle(py::module_& m)
             py::arg("angle"),
             "Set sensor rotation (accepts any angle unit, e.g. Radian, Degree)")
 
-        // PSF
-        .def("use_aperture_psf",
-             py::overload_cast<bool>(&HandleType::use_aperture_psf, py::const_),
-             py::arg("value"))
-        .def("use_aperture_psf",
-             py::overload_cast<int, int>(&HandleType::use_aperture_psf, py::const_),
-             py::arg("radius") = 64,
-             py::arg("banks") = 16)
-        .def("enable_psf_convolution",
-             &HandleType::enable_psf_convolution,
-             py::arg("convolve_psf") = true)
-        .def("delete_psf", &HandleType::delete_psf)
-        .def("set_psf_convolution_radius",
-             &HandleType::set_psf_convolution_radius,
-             py::arg("radius"),
-             "Set the radius (pixels) of the whole-image PSF convolution kernel, independent "
-             "of the polyphase stamping radius. Large frame-wide radii are supported.")
-        .def("set_measured_psf",
-             &HandleType::set_measured_psf,
-             py::arg("data"),
-             py::arg("samples_per_pixel"),
-             py::arg("radius") = 0,
-             py::arg("banks") = 16,
-             "Use a measured (user-supplied) PSF as the camera's core PSF. 'data' is an Image "
-             "of centered PSF samples; 'samples_per_pixel' is the measurement sampling density "
-             "per sensor pixel per axis. radius=0 auto-selects the largest stamping radius "
-             "covered by the measurement (capped at 64).")
+        // Optics
+        .def("set_optics",
+             &HandleType::set_optics,
+             py::arg("optics"),
+             "Set the complete optical description: PSF core, scattered-light wings, and "
+             "veiling glare. Everything it describes is applied to both path-traced geometry "
+             "and unresolved point sources.")
+        .def("optics", &HandleType::optics, "Get the camera's optical description.")
+        .def("set_core",
+             &HandleType::set_core,
+             py::arg("core"),
+             "Replace the PSF core, leaving the stray-light components unchanged.")
+        .def("set_ideal_optics",
+             &HandleType::set_ideal_optics,
+             "Render with perfect optics: no PSF core, no scatter, and no glare.")
+        .def("build_optics",
+             &HandleType::build_optics,
+             "Build every optical kernel the camera describes. Rendering does this "
+             "automatically; call it to move the build cost off the first frame.")
+        .def("has_core_psf", &HandleType::has_core_psf)
+        .def("get_psf_radius", &HandleType::get_psf_radius)
+        .def("psf_convolution_kernel", &HandleType::psf_convolution_kernel)
+        .def("psf_wings_kernel", &HandleType::psf_wings_kernel)
 
         // Stray light
+        .def("set_scatter",
+             &HandleType::set_scatter,
+             py::arg("scatter"),
+             "Add Harvey-Shack scattered-light wings, leaving the core unchanged.")
+        .def("clear_scatter",
+             &HandleType::clear_scatter,
+             "Remove the scattered-light wings, leaving the core and glare unchanged.")
+        .def("has_scatter", &HandleType::has_scatter)
+        .def("scatter_fraction", &HandleType::scatter_fraction)
         .def("set_veiling_glare",
              &HandleType::set_veiling_glare,
-             py::arg("alpha"),
+             py::arg("fraction"),
              "Redistribute the given fraction of total collected energy uniformly across the "
-             "image (veiling glare).")
-        .def("disable_veiling_glare", &HandleType::disable_veiling_glare)
-        .def("set_harvey_shack_scatter",
-             &HandleType::set_harvey_shack_scatter,
-             py::arg("scatter_fraction"),
-             py::arg("falloff_exponent"),
-             py::arg("r0") = 0.5f,
-             py::arg("radius") = 0.f,
-             "Add Harvey-Shack scattered-light wings to the total system PSF: "
-             "'scatter_fraction' of the energy follows a power-law halo with the given "
-             "falloff exponent (typically 2-3), shoulder radius r0 (pixels), and optional "
-             "hard cutoff radius (0 = none).")
-        .def("disable_harvey_shack_scatter", &HandleType::disable_harvey_shack_scatter)
+             "image.")
+        .def("veiling_glare", &HandleType::veiling_glare)
 
-        // Depth of field
-        .def("enable_depth_of_field",
-             &HandleType::enable_depth_of_field,
-             py::arg("depth_of_field") = true)
+        // Focus
         .def(
-            "set_focus_distance",
-            [](const HandleType& self, const py::object& fd) {
-                self.set_focus_distance(detail::unit_from_py<units::Meter>(fd));
+            "set_focus",
+            [](const HandleType& self, const py::object& focus) {
+                if (py::isinstance<units::Diopter>(focus) ||
+                    py::isinstance<units::Millidiopter>(focus) ||
+                    py::isinstance<units::Microdiopter>(focus)) {
+                    self.set_focus(detail::unit_from_py<units::Diopter>(focus));
+                } else {
+                    self.set_focus(detail::unit_from_py<units::Meter>(focus));
+                }
             },
-            py::arg("focus_distance"),
-            "Set the focus distance (accepts any distance unit)")
-        .def("get_focus_distance", &HandleType::get_focus_distance)
-        .def(
-            "set_diopters",
-            [](const HandleType& self, const py::object& dpts) {
-                self.set_diopters(detail::unit_from_py<units::Diopter>(dpts));
-            },
-            py::arg("diopters"),
-            "Set the camera diopter (accepts units of diopters)")
-        .def("get_diopters", &HandleType::get_diopters)
+            py::arg("focus"),
+            "Set the focus. A distance unit focuses at that distance; a diopter unit sets the "
+            "focus vergence, where 0 is infinity, positive focuses nearer, and negative "
+            "focuses beyond infinity.")
+        .def("focus_distance",
+             &HandleType::focus_distance,
+             "Get the focus distance, infinite when focused at infinity.")
+        .def("focus_vergence",
+             &HandleType::focus_vergence,
+             "Get the focus setting as a vergence, the reciprocal of the focus distance.")
+        .def("defocus_blur_pixels",
+             &HandleType::defocus_blur_pixels,
+             "Get the defocus blur radius for a source at infinity, in pixels.")
+        .def("has_defocus", &HandleType::has_defocus)
 
         // Make the FrameBuffer
         .def("make_frame_buffer", &HandleType::make_frame_buffer)

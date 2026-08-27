@@ -24,6 +24,25 @@
 
 namespace huira {
 
+/**
+ * @brief Set the upper bound on any PSF kernel radius the camera may generate.
+ *
+ * Derived scatter kernels can otherwise reach several thousand pixels for shallow falloff
+ * exponents. Raising the bound improves the fidelity of the far wings at the cost of a
+ * larger whole-image convolution.
+ *
+ * @param radius Maximum kernel radius in pixels.
+ */
+template <IsSpectral TSpectral>
+void Renderer<TSpectral>::set_max_psf_radius(int radius)
+{
+    if (radius < 1) {
+        HUIRA_THROW_ERROR("Renderer::set_max_psf_radius - Radius must be at least 1: " +
+                          std::to_string(radius));
+    }
+    max_psf_radius_ = radius;
+}
+
 template <IsSpectral TSpectral>
 void Renderer<TSpectral>::render(SceneView<TSpectral>& scene_view,
                                  FrameBuffer<TSpectral>& frame_buffer)
@@ -36,6 +55,16 @@ void Renderer<TSpectral>::render(SceneView<TSpectral>& scene_view,
             "Renderer::render - Frame buffer resolution does not match camera resolution.");
     }
 
+    // Kernels are built here so that the polyphase caches are complete before any tile is
+    // stamped in parallel.
+    OpticsBudget budget;
+    budget.max_kernel_radius = max_psf_radius_;
+    budget.build_convolution_kernel = (psf_application_ != PSFApplication::Off);
+    budget.aperture_sampling = aperture_sampling_;
+    camera->prepare_optics_(budget);
+
+    const bool apply_to_points = (psf_application_ != PSFApplication::Off);
+
     frame_buffer.clear();
 
     Image<TSpectral> ray_traced_power = this->path_trace_(scene_view, frame_buffer);
@@ -46,6 +75,7 @@ void Renderer<TSpectral>::render(SceneView<TSpectral>& scene_view,
 
     // Apply the scattered-light wings to unresolved sources.
     if (star_wing_splat.size() > 0) {
+<<<<<<< HEAD
         // Timed and logged separately: this is a frame-sized convolution that belongs
         // to neither the path tracing nor the unresolved stage, so without its own line
         // it shows up only as an unexplained gap between those two and the total.
@@ -58,6 +88,11 @@ void Renderer<TSpectral>::render(SceneView<TSpectral>& scene_view,
                 star_wing_splat, camera->get_psf_wings_kernel(), *camera, wings_convolver_);
         }
         const float f_s = camera->scatter_fraction_;
+=======
+        this->convolve_cached_(
+            star_wing_splat, camera->psf_wings_kernel(), *camera, wings_convolver_);
+        const float f_s = camera->scatter_fraction();
+>>>>>>> 3d49dc2 (temp)
         const float core_weight = 1.f - f_s;
         for (std::size_t i = 0; i < star_power.size(); ++i) {
             star_power[i] = star_power[i] * core_weight + star_wing_splat[i] * f_s;
@@ -83,8 +118,9 @@ void Renderer<TSpectral>::render(SceneView<TSpectral>& scene_view,
     }
 
     // Apply Veiling Glare
-    if (camera->veiling_glare_enabled_) {
-        const float unveiled = 1.f - camera->veiling_alpha_;
+    const float veiling_alpha = camera->veiling_glare();
+    if (apply_to_points && veiling_alpha > 0.f) {
+        const float unveiled = 1.f - veiling_alpha;
 
         // Redistributing each component by its own mean is linear, so the
         // decomposition survives: D' + I' = (D + I) * unveiled + alpha * mean(D + I).
@@ -96,8 +132,7 @@ void Renderer<TSpectral>::render(SceneView<TSpectral>& scene_view,
             for (std::size_t i = 0; i < image.size(); ++i) {
                 total_power += image[i];
             }
-            TSpectral veiling_bias =
-                camera->veiling_alpha_ * total_power / static_cast<float>(image.size());
+            TSpectral veiling_bias = veiling_alpha * total_power / static_cast<float>(image.size());
 
             for (std::size_t i = 0; i < image.size(); ++i) {
                 image[i] = (image[i] * unveiled) + veiling_bias;
@@ -156,7 +191,7 @@ bool Renderer<TSpectral>::build_occupancy_cones_(SceneView<TSpectral>& scene_vie
 
     const auto& camera = scene_view.camera_model_;
     // Only depth-of-field rays leave the origin; otherwise every ray starts at (0,0,0).
-    const float aperture_radius = (camera->depth_of_field_ && camera->aperture_)
+    const float aperture_radius = (camera->aperture_sampling_active() && camera->aperture_)
                                       ? camera->aperture_->get_bounding_radius().to_si_f()
                                       : 0.f;
 
@@ -957,9 +992,11 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
     }
     occluder_mask_valid_ = true;
 
-    if (camera->convolve_psf_) {
+    if (psf_application_ == PSFApplication::Full &&
+        (camera->has_core_psf() || camera->has_scatter())) {
         // Convolution is linear, so convolving the components independently keeps
         // total == direct + indirect exactly.
+<<<<<<< HEAD
         //
         // The kernel is fetched unconditionally even when nothing needs convolving, so
         // that its (potentially very expensive) generation still happens on the first
@@ -972,6 +1009,11 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
         // and nothing at all.
         if (frame_buffer.has_received_power() && !image_is_zero_(received_power)) {
             this->convolve_cached_(received_power, psf, *camera, psf_convolver_);
+=======
+        const Image<TSpectral>& psf = camera->psf_convolution_kernel();
+        if (frame_buffer.has_received_power()) {
+            received_power.convolve(psf);
+>>>>>>> 3d49dc2 (temp)
         }
         if (frame_buffer.has_received_direct_power() &&
             !image_is_zero_(frame_buffer.received_direct_power())) {
@@ -1106,14 +1148,16 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
     }
 
     // Determine the stamp radius based on camera settings:
-    bool use_defocus = camera->aperture_->has_defocus();
+    const bool apply_optics = (psf_application_ != PSFApplication::Off);
+    bool use_defocus = camera->has_defocus();
 
-    // Scattered-light wings for unresolved sources:
-    const bool splat_wings = camera->convolve_psf_ && camera->scatter_enabled_ && !use_defocus;
+    // Scattered-light wings for unresolved sources. In the defocus path the wings arrive
+    // through the whole-image convolution below instead.
+    const bool splat_wings = apply_optics && camera->has_scatter() && !use_defocus;
     if (splat_wings) {
         wing_splat = Image<TSpectral>(fb_width, fb_height, TSpectral{0});
     }
-    bool use_psf_direct = camera->has_psf() && !use_defocus;
+    bool use_psf_direct = apply_optics && camera->has_core_psf() && !use_defocus;
     int stamp_radius = 0;
     if (use_defocus) {
         stamp_radius = camera->aperture_->get_defocus_half_extent();
@@ -1640,7 +1684,7 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                           }
                       });
 
-    if (use_defocus && camera->convolve_psf_) {
+    if (use_defocus && apply_optics && (camera->has_core_psf() || camera->has_scatter())) {
         const Image<TSpectral>& psf = camera->get_psf_convolution_kernel();
         if (!image_is_zero_(received_power)) {
             this->convolve_cached_(received_power, psf, *camera, psf_convolver_);

@@ -9,6 +9,7 @@ from huira.units import Millimeter as mm
 from huira.units import Micrometer as um
 from huira.units import Degree as deg
 from huira.units import Second as sec
+from huira.units import Diopter as dpt
 
 def parse_input_paths():
     if len(sys.argv) != 3:
@@ -41,8 +42,14 @@ def main():
     camera_model.set_fstop(3.30)
     camera_model.set_sensor_rotation(deg(90))
     camera_model.configure_sensor_from_pitch((1920, 1080), um(8.5))
-    camera_model.use_aperture_psf(32, 16)
     camera_model.set_sensor_bit_depth(14)
+
+    # A diffraction-limited core is applied by default. Add representative scattered-light
+    # wings and veiling glare on top of it.
+    camera_model.set_optics(huira.rgb.Optics.realistic())
+
+    # Focus slightly nearer than infinity, leaving distant sources mildly defocused.
+    camera_model.set_focus(dpt(0.0025))
     
     # Set the observation time
     time = huira.Time("2016-09-19T16:22:05.728")

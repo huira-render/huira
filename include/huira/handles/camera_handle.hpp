@@ -7,6 +7,7 @@
 #include "huira/cameras/distortion/brown_distortion.hpp"
 #include "huira/cameras/distortion/opencv_distortion.hpp"
 #include "huira/cameras/distortion/owen_distortion.hpp"
+#include "huira/cameras/optics.hpp"
 #include "huira/concepts/spectral_concepts.hpp"
 #include "huira/handles/handle.hpp"
 #include "huira/images/image.hpp"
@@ -93,36 +94,31 @@ class CameraModelHandle : public Handle<CameraModel<TSpectral>> {
     template <IsAperture TAperture, typename... Args>
     void set_aperture(Args&&... args) const;
 
-    template <IsPSF TPSF, typename... Args>
-    void set_psf(Args&&... args) const;
+    void set_optics(Optics<TSpectral> optics) const;
+    const Optics<TSpectral>& optics() const;
 
-    void set_measured_psf(const Image<TSpectral>& data,
-                          float samples_per_pixel,
-                          int radius = 0,
-                          int banks = 16) const;
+    void set_core(typename Optics<TSpectral>::Core core) const;
+    void set_scatter(HarveyShack scatter) const;
+    void set_veiling_glare(float fraction) const;
+    void clear_scatter() const;
+    void set_ideal_optics() const;
 
-    void use_aperture_psf(bool value) const;
-    void use_aperture_psf(int radius = 64, int banks = 16) const;
-    void enable_psf_convolution(bool convolve_psf = true) const;
-    void set_psf_convolution_radius(int radius) const;
-    void delete_psf() const;
-
-    void set_veiling_glare(float alpha) const;
-    void disable_veiling_glare() const;
-    void set_harvey_shack_scatter(float scatter_fraction,
-                                  float falloff_exponent,
-                                  float r0 = 0.5f,
-                                  float radius = 0.f) const;
-    void disable_harvey_shack_scatter() const;
+    bool has_core_psf() const;
+    bool has_scatter() const;
+    float scatter_fraction() const;
+    float veiling_glare() const;
 
     int get_psf_radius() const;
-    const Image<TSpectral>& get_psf_convolution_kernel() const;
+    const Image<TSpectral>& psf_convolution_kernel() const;
+    const Image<TSpectral>& psf_wings_kernel() const;
+    void build_optics() const;
 
-    void enable_depth_of_field(bool depth_of_field = true) const;
-    void set_focus_distance(units::Meter focus_distance) const;
-    units::Meter get_focus_distance() const;
-    void set_diopters(units::Diopter diopters) const;
-    units::Diopter get_diopters() const;
+    void set_focus(units::Meter distance) const;
+    void set_focus(units::Diopter vergence) const;
+    units::Meter focus_distance() const;
+    units::Diopter focus_vergence() const;
+    float defocus_blur_pixels() const;
+    bool has_defocus() const;
 
     Pixel project_point(const Vec3<float>& point_camera_coords) const;
 
@@ -135,6 +131,67 @@ class CameraModelHandle : public Handle<CameraModel<TSpectral>> {
     friend class FrameHandle<TSpectral>;
 
     // DEPRECATED
+    [[deprecated("use_aperture_psf was removed in v0.10.0.  Set an Optics with a "
+                 "DiffractionCore instead, which is now the default.")]]
+    void use_aperture_psf(bool value) const;
+
+    [[deprecated("use_aperture_psf was removed in v0.10.0.  Set an Optics with a "
+                 "DiffractionCore instead, which is now the default.")]]
+    void use_aperture_psf(int radius = 64, int banks = 16) const;
+
+    [[deprecated("enable_psf_convolution was removed in v0.10.0.  The optics are applied to "
+                 "the whole image by default; use Renderer::set_psf_application() to skip it.")]]
+    void enable_psf_convolution(bool convolve_psf = true) const;
+
+    [[deprecated("set_psf_convolution_radius was removed in v0.10.0.  Set "
+                 "HarveyShack::captured_energy, or HarveyShack::kernel_radius for an explicit "
+                 "radius.")]]
+    void set_psf_convolution_radius(int radius) const;
+
+    [[deprecated("delete_psf was removed in v0.10.0.  Use set_ideal_optics(), or set an "
+                 "Optics with an IdealCore.")]]
+    void delete_psf() const;
+
+    [[deprecated("set_measured_psf was removed in v0.10.0.  Use set_core() with a "
+                 "MeasuredCore instead.")]]
+    void set_measured_psf(const Image<TSpectral>& data,
+                          float samples_per_pixel,
+                          int radius = 0,
+                          int banks = 16) const;
+
+    [[deprecated("set_harvey_shack_scatter was removed in v0.10.0.  Use set_scatter() with a "
+                 "HarveyShack instead.")]]
+    void set_harvey_shack_scatter(float scatter_fraction,
+                                  float falloff_exponent,
+                                  float r0 = 0.5f,
+                                  float radius = 0.f) const;
+
+    [[deprecated("disable_harvey_shack_scatter was removed in v0.10.0.  Use clear_scatter() "
+                 "instead.")]]
+    void disable_harvey_shack_scatter() const;
+
+    [[deprecated("disable_veiling_glare was removed in v0.10.0.  Use set_veiling_glare(0.f) "
+                 "instead.")]]
+    void disable_veiling_glare() const;
+
+    [[deprecated("enable_depth_of_field was removed in v0.10.0.  Aperture sampling now "
+                 "follows the focus setting; use Renderer::set_aperture_sampling() to "
+                 "override it.")]]
+    void enable_depth_of_field(bool depth_of_field = true) const;
+
+    [[deprecated("set_focus_distance was removed in v0.10.0.  Use set_focus() instead.")]]
+    void set_focus_distance(units::Meter focus_distance) const;
+
+    [[deprecated("get_focus_distance was removed in v0.10.0.  Use focus_distance() instead.")]]
+    units::Meter get_focus_distance() const;
+
+    [[deprecated("set_diopters was removed in v0.10.0.  Use set_focus() with a Diopter "
+                 "argument instead.")]]
+    void set_diopters(units::Diopter diopters) const;
+
+    [[deprecated("get_diopters was removed in v0.10.0.  Use focus_vergence() instead.")]]
+    units::Diopter get_diopters() const;
+
     [[deprecated("set_sensor_resolution was removed in v0.9.4.  Use configure_sensor_from_pitch() "
                  "or configure_sensor_from_size() instead.")]]
     void set_sensor_resolution(Resolution resolution) const;

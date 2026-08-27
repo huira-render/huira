@@ -3,8 +3,10 @@
 #include <cstdint>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <vector>
 
+#include "huira/cameras/optics.hpp"
 #include "huira/concepts/spectral_concepts.hpp"
 #include "huira/images/fft_convolver.hpp"
 #include "huira/render/frame_buffer.hpp"
@@ -63,6 +65,23 @@ class Renderer {
 
     /// (CI): Trace culled regions anyway and report any that turn out to contain geometry.
     void set_region_cull_validation(bool enable = true) { region_cull_validation_ = enable; }
+
+    /// Select which parts of the image the camera's optical model is applied to.
+    void set_psf_application(PSFApplication mode) { psf_application_ = mode; }
+
+    /// Get the current PSF application mode.
+    PSFApplication psf_application() const { return psf_application_; }
+
+    void set_max_psf_radius(int radius);
+
+    /// Get the upper bound on generated PSF kernel radii, in pixels.
+    int max_psf_radius() const { return max_psf_radius_; }
+
+    /// Force aperture-sampled camera rays on or off.
+    void set_aperture_sampling(bool enable) { aperture_sampling_ = enable; }
+
+    /// Let the camera decide whether to sample the aperture, based on its focus setting.
+    void clear_aperture_sampling() { aperture_sampling_.reset(); }
 
   protected:
     virtual Image<TSpectral> path_trace_(SceneView<TSpectral>& scene_view,
@@ -144,6 +163,10 @@ class Renderer {
     bool region_culling_ = true;
     bool region_cull_validation_ = false;
     float region_cull_margin_scale_ = 1.0f;
+
+    PSFApplication psf_application_ = PSFApplication::Full;
+    int max_psf_radius_ = 1024;
+    std::optional<bool> aperture_sampling_;
 
     bool dynamic_sampling_ = false;
     int min_spp_ = 16;

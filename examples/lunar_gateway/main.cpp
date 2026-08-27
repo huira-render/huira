@@ -37,11 +37,9 @@ int main(int argc, char** argv)
     camera_model.use_blender_convention();
     camera_model.set_focal_length(50_mm);
     camera_model.configure_sensor_from_size({1920, 1080}, 36_mm);
-    camera_model.use_aperture_psf();
     camera_model.set_sensor_bias_level(10.f);
     camera_model.set_fstop(16);
-    // camera_model.enable_depth_of_field();
-    // camera_model.set_focus_distance(1_m);
+    // camera_model.set_focus(1_m);
 
     // Create an instance of the camera and model
     auto navcam = scene.root.new_instance(camera_model);

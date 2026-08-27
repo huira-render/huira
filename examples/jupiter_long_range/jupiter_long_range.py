@@ -37,7 +37,6 @@ def main():
     camera_model.set_fstop(3.30)
     camera_model.configure_sensor_from_pitch((1920, 1080), um(8.5))
     camera_model.set_sensor_bit_depth(12)
-    camera_model.use_aperture_psf(64, 16)
     
     # Set the observation time
     time = huira.Time("2016-09-19T16:22:05.728")

@@ -39,7 +39,6 @@ int main(int argc, char** argv)
     camera_model.set_fstop(3.30f);
     camera_model.configure_sensor_from_pitch({1920, 1080}, 8.5_um, 8.5_um);
     camera_model.set_sensor_bit_depth(12);
-    camera_model.use_aperture_psf(64, 16);
 
     huira::Time time("2016-09-19T16:22:05.728");
     huira::Interval exposure_interval = huira::Interval::from_centered(time, 1_s);

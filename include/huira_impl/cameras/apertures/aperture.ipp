@@ -4,29 +4,19 @@
 #include "huira/util/logger.hpp"
 
 namespace huira {
+/**
+ * @brief Build the polyphase defocus kernel for a given blur radius.
+ *
+ * A blur radius below half a pixel is treated as in focus and clears the cache.
+ *
+ * @param blur_radius_pixels Radius of the defocus blur spot on the sensor, in pixels.
+ * @param banks Number of polyphase banks per axis used for subpixel stamping.
+ */
 template <IsSpectral TSpectral>
-void Aperture<TSpectral>::build_defocus_kernel(units::Diopter defocus,
-                                               units::Meter focal_length,
-                                               units::Meter pitch_x,
-                                               units::Meter pitch_y,
-                                               int banks)
+void Aperture<TSpectral>::build_defocus_kernel(float blur_radius_pixels, int banks)
 {
-    const float abs_defocus = std::abs(defocus.to_si_f());
-    const float f = focal_length.to_si_f();
-    const float bounding_r = this->get_bounding_radius().to_si_f();
-
-    // Physical radius of the blur spot on the sensor
-    const float blur_radius_meters = abs_defocus * f * bounding_r;
-
-    // Convert to pixels (use the smaller pitch for conservative sizing)
-    const float pitch = std::min(pitch_x.to_si_f(), pitch_y.to_si_f());
-    const float blur_radius_pixels = blur_radius_meters / pitch;
-    if (blur_radius_pixels < 0.5f) {
-        // Blur is less than half a pixel - treat as in focus
-        defocus_cache_.radius = 0.f;
-        defocus_cache_.banks = 0;
-        defocus_cache_.dim = 0;
-        defocus_cache_.kernels.clear();
+    if (!(blur_radius_pixels >= 0.5f)) {
+        defocus_cache_ = PolyphaseCache{};
         return;
     }
 

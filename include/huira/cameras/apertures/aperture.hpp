@@ -34,16 +34,20 @@ class Aperture {
                                                      int radius,
                                                      int banks) = 0;
 
-    void build_defocus_kernel(units::Diopter defocus,
-                              units::Meter focal_length,
-                              units::Meter pitch_x,
-                              units::Meter pitch_y,
-                              int banks);
+    void build_defocus_kernel(float blur_radius_pixels, int banks);
+
+    /// Discard any defocus kernel, returning the aperture to the in-focus state.
+    void clear_defocus_kernel() { defocus_cache_ = PolyphaseCache{}; }
 
     const Image<float>& get_defocus_kernel(float u, float v) const;
 
+    /// Get the defocus blur radius in pixels.
     float get_defocus_radius() const { return defocus_cache_.radius; }
+
+    /// Get the defocus kernel half extent in pixels.
     int get_defocus_half_extent() const { return defocus_cache_.half_extent; }
+
+    /// Check whether a defocus kernel is present.
     bool has_defocus() const { return defocus_cache_.radius > 0; }
 
     virtual units::Meter get_bounding_radius() const = 0;

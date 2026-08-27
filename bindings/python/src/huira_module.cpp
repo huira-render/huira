@@ -2,6 +2,7 @@
 #include <string>
 
 #include "huira/cameras/distortion_coeffs_py.ipp"
+#include "huira/cameras/optics_py.ipp"
 #include "huira/concepts/spectral_concepts.hpp"
 #include "huira/core/interval_py.ipp"
 #include "huira/core/rotation_py.ipp"
@@ -50,6 +51,9 @@ inline void bind_spectral(py::module_& m)
 {
     huira::bind_spectral_units_for_type<TSpectral>(m);
     huira::bind_spectral_bins<TSpectral>(m);
+
+    // --- Optics ---
+    huira::bind_optics<TSpectral>(m);
 
     // --- Geometry handles ---
     huira::bind_geometry_handle<TSpectral>(m);
@@ -117,6 +121,7 @@ PYBIND11_MODULE(_huira, m)
     huira::spice::bind_spice(m);
 
     huira::bind_distortion_coefficients(m);
+    huira::bind_optics_types(m);
 
     huira::bind_fits_metadata(m);
     huira::bind_common_images(m);

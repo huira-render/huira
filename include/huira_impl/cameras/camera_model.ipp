@@ -1,6 +1,9 @@
 
+#include <algorithm>
+#include <cmath>
 #include <limits>
 #include <memory>
+#include <variant>
 
 #include "huira/cameras/apertures/circular_aperture.hpp"
 #include "huira/cameras/psfs/harvey_shack_scatter.hpp"
@@ -12,7 +15,8 @@ namespace huira {
  * @brief Construct a new CameraModel with default sensor and aperture.
  *
  * Initializes the camera with a default focal length, a SimpleSensor, and a CircularAperture.
- * The aperture diameter is set based on the focal length and a default f-stop of 2.8.
+ * The aperture diameter is set based on the focal length and a default f-stop of 2.8. The
+ * optics default to a diffraction-limited core with no stray light.
  */
 template <IsSpectral TSpectral>
 CameraModel<TSpectral>::CameraModel()
@@ -29,7 +33,6 @@ CameraModel<TSpectral>::CameraModel()
 /**
  * @brief Set the focal length of the camera (in millimeters).
  *
- * Updates the camera intrinsics and, if using aperture PSF, updates the PSF as well.
  * @param focal_length Focal length in millimeters
  */
 template <IsSpectral TSpectral>
@@ -45,13 +48,7 @@ void CameraModel<TSpectral>::set_focal_length(units::Millimeter focal_length)
     }
 
     compute_intrinsics_();
-    if (use_aperture_psf_) {
-        units::Meter f(focal_length_);
-        units::Meter px(sensor_->pixel_pitch().x);
-        units::Meter py(sensor_->pixel_pitch().y);
-        psf_ = aperture_->make_psf(f, px, py, psf_->get_radius(), psf_->get_banks());
-        invalidate_psf_kernels_();
-    }
+    invalidate_optics_();
 }
 
 /**
@@ -113,6 +110,7 @@ void CameraModel<TSpectral>::set_sensor(Args&&... args)
 {
     sensor_ = std::make_unique<TSensor>(std::forward<Args>(args)...);
     compute_intrinsics_();
+    invalidate_optics_();
 }
 
 /**
@@ -162,6 +160,7 @@ void CameraModel<TSpectral>::configure_sensor_from_pitch(const Resolution& resol
     cy_ = final_cy;
 
     compute_intrinsics_();
+    invalidate_optics_();
 }
 
 /**
@@ -216,6 +215,7 @@ void CameraModel<TSpectral>::configure_sensor_from_size(const Resolution& resolu
     cy_ = final_cy;
 
     compute_intrinsics_();
+    invalidate_optics_();
 }
 
 /**
@@ -270,6 +270,7 @@ void CameraModel<TSpectral>::set_intrinsics(float fx,
     sensor_->set_sensor_size(px * resolution.x, py * resolution.y);
 
     compute_intrinsics_();
+    invalidate_optics_();
 }
 
 /**
@@ -295,119 +296,322 @@ template <IsAperture TAperture, typename... Args>
 void CameraModel<TSpectral>::set_aperture(Args&&... args)
 {
     aperture_ = std::make_unique<TAperture>(std::forward<Args>(args)...);
+    invalidate_optics_();
 }
 
 /**
- * @brief Set the point spread function (PSF) model for the camera.
+ * @brief Set the complete optical description of the camera.
  *
- * @tparam TPSF PSF model type
- * @tparam Args Constructor arguments for the PSF
- * @param args Arguments to construct the PSF
+ * Replaces the PSF core, scattered-light wings, and veiling glare in one step. Kernels are
+ * rebuilt on next use, so this may be called before or after the focal length, f-stop,
+ * aperture, and sensor are configured.
+ *
+ * @param optics The optical description to apply.
  */
 template <IsSpectral TSpectral>
-template <IsPSF TPSF, typename... Args>
-void CameraModel<TSpectral>::set_psf(Args&&... args)
+void CameraModel<TSpectral>::set_optics(Optics<TSpectral> optics)
 {
-    psf_ = std::make_unique<TPSF>(std::forward<Args>(args)...);
-    use_aperture_psf_ = false;
-    invalidate_psf_kernels_();
+    optics.validate();
+    optics_ = std::move(optics);
+    invalidate_optics_();
 }
 
 /**
- * @brief Sets a measured (user-supplied) PSF as the core PSF of the camera.
- *
- * Convenience wrapper around set_psf<MeasuredPSF>() that is also exposed through the Python
- * bindings. See MeasuredPSF for the data conventions (centered measurement, sampling
- * density, extent limits).
- *
- * @param data Measured PSF samples, centered on the image.
- * @param samples_per_pixel Measurement samples per sensor pixel per axis.
- * @param radius Polyphase stamping kernel radius in sensor pixels (0 = auto).
- * @param banks Number of polyphase banks per axis for subpixel stamping.
+ * @brief Replace the PSF core, leaving the stray-light components unchanged.
+ * @param core The core to apply.
  */
 template <IsSpectral TSpectral>
-void CameraModel<TSpectral>::set_measured_psf(const Image<TSpectral>& data,
-                                              float samples_per_pixel,
-                                              int radius,
-                                              int banks)
+void CameraModel<TSpectral>::set_core(typename Optics<TSpectral>::Core core)
 {
-    this->set_psf<MeasuredPSF<TSpectral>>(data, samples_per_pixel, radius, banks);
+    Optics<TSpectral> optics = optics_;
+    optics.core = std::move(core);
+    set_optics(std::move(optics));
 }
 
 /**
- * @brief Use the aperture to generate a PSF (point spread function).
- * @param radius PSF kernel radius
- * @param banks Number of PSF banks
+ * @brief Add scattered-light wings to the optics, leaving the core unchanged.
+ * @param scatter The scatter parameters to apply.
  */
 template <IsSpectral TSpectral>
-void CameraModel<TSpectral>::use_aperture_psf(int radius, int banks)
+void CameraModel<TSpectral>::set_scatter(HarveyShack scatter)
 {
-    use_aperture_psf_ = true;
-    units::Meter f(focal_length_);
-    units::Meter px(sensor_->pixel_pitch().x);
-    units::Meter py(sensor_->pixel_pitch().y);
-    psf_ = aperture_->make_psf(f, px, py, radius, banks);
-    invalidate_psf_kernels_();
+    Optics<TSpectral> optics = optics_;
+    optics.stray_light.scatter = std::move(scatter);
+    set_optics(std::move(optics));
 }
 
 /**
- * @brief Sets the radius of the whole-image PSF convolution kernel.
- *
- * The convolution kernel is a single centered kernel built via
- * PSF::generate_convolution_kernel() and is independent of the polyphase stamping cache, so
- * it may be much larger (e.g. spanning the full frame to model scattered-light wings). A
- * radius of 0 matches the polyphase radius.
- *
- * @param radius Convolution kernel radius in pixels (kernel dimension is 2 * radius + 1)
+ * @brief Set the fraction of energy redistributed uniformly across the frame.
+ * @param fraction Veiling glare fraction in [0, 1].
  */
 template <IsSpectral TSpectral>
-void CameraModel<TSpectral>::set_psf_convolution_radius(int radius)
+void CameraModel<TSpectral>::set_veiling_glare(float fraction)
 {
-    if (radius < 0) {
-        HUIRA_THROW_ERROR(
-            "CameraModel::set_psf_convolution_radius - Radius must be non-negative: " +
-            std::to_string(radius));
+    Optics<TSpectral> optics = optics_;
+    optics.stray_light.veiling_glare = fraction;
+    set_optics(std::move(optics));
+}
+
+/**
+ * @brief Remove the scattered-light wings, leaving the core and glare unchanged.
+ */
+template <IsSpectral TSpectral>
+void CameraModel<TSpectral>::clear_scatter()
+{
+    Optics<TSpectral> optics = optics_;
+    optics.stray_light.scatter.reset();
+    set_optics(std::move(optics));
+}
+
+/**
+ * @brief Render with perfect optics: no PSF core, no scatter, and no glare.
+ */
+template <IsSpectral TSpectral>
+void CameraModel<TSpectral>::set_ideal_optics()
+{
+    set_optics(Optics<TSpectral>::ideal());
+}
+
+/**
+ * @brief Discard every lazily built kernel and reset the automatic sampling choice.
+ */
+template <IsSpectral TSpectral>
+void CameraModel<TSpectral>::invalidate_optics_()
+{
+    optics_built_ = false;
+    psf_convolution_kernel_valid_ = false;
+    psf_wings_kernel_valid_ = false;
+    psf_ = nullptr;
+    scatter_kernel_radius_ = 0;
+    ++psf_kernel_version_;
+
+    if (aperture_) {
+        aperture_->clear_defocus_kernel();
     }
-    if (radius != psf_convolution_radius_) {
-        psf_convolution_radius_ = radius;
-        invalidate_psf_kernels_();
+    aperture_sampling_active_ = auto_aperture_sampling_();
+}
+
+/**
+ * @brief Build the core PSF and defocus kernel if they are not already current.
+ */
+template <IsSpectral TSpectral>
+void CameraModel<TSpectral>::ensure_optics_built_() const
+{
+    if (optics_built_) {
+        return;
+    }
+    build_core_psf_();
+    build_defocus_();
+    optics_built_ = true;
+}
+
+/**
+ * @brief Build the PSF core described by the current optics.
+ */
+template <IsSpectral TSpectral>
+void CameraModel<TSpectral>::build_core_psf_() const
+{
+    const units::Meter f(focal_length_);
+    const units::Meter px(sensor_->pixel_pitch().x);
+    const units::Meter py(sensor_->pixel_pitch().y);
+
+    if (const auto* diffraction = std::get_if<DiffractionCore>(&optics_.core)) {
+        int radius = diffraction->radius.value_or(0);
+        if (radius <= 0) {
+            double max_wavelength = 0.0;
+            for (std::size_t i = 0; i < TSpectral::size(); ++i) {
+                max_wavelength = std::max(max_wavelength, TSpectral::get_bin(i).center_wavelength);
+            }
+            const float min_pitch = std::min(px.to_si_f(), py.to_si_f());
+            radius = DiffractionCore::derive_radius(
+                max_wavelength, static_cast<double>(fstop()), min_pitch);
+        }
+        radius = std::min(radius, max_kernel_radius_);
+        psf_ = aperture_->make_psf(f, px, py, radius, diffraction->banks);
+    } else if (const auto* measured = std::get_if<MeasuredCore<TSpectral>>(&optics_.core)) {
+        const int radius = std::min(measured->radius.value_or(0), max_kernel_radius_);
+        psf_ = std::make_shared<MeasuredPSF<TSpectral>>(
+            measured->data, measured->samples_per_pixel, radius, measured->banks);
+    } else if (const auto* custom = std::get_if<CustomCore<TSpectral>>(&optics_.core)) {
+        psf_ = custom->psf;
+    } else {
+        psf_ = nullptr;
+    }
+}
+
+/**
+ * @brief Build the defocus kernel for the current focus setting.
+ */
+template <IsSpectral TSpectral>
+void CameraModel<TSpectral>::build_defocus_() const
+{
+    aperture_->build_defocus_kernel(defocus_blur_pixels(), DEFOCUS_BANKS);
+}
+
+/**
+ * @brief Radius of the defocus blur spot for a source at infinity, in pixels.
+ *
+ * Zero means the camera is in focus at infinity. The kernel is only built once this
+ * exceeds half a pixel.
+ *
+ * @return The blur radius in pixels.
+ */
+template <IsSpectral TSpectral>
+float CameraModel<TSpectral>::defocus_blur_pixels() const
+{
+    if (!aperture_ || !sensor_) {
+        return 0.f;
+    }
+    const float vergence = std::abs(focus_vergence_);
+    if (!(vergence > 0.f) || std::isinf(vergence)) {
+        return 0.f;
+    }
+
+    const float bounding_radius = aperture_->get_bounding_radius().to_si_f();
+    const float blur_meters = vergence * focal_length_ * bounding_radius;
+    const float pitch = std::min(sensor_->pixel_pitch().x, sensor_->pixel_pitch().y);
+    if (!(pitch > 0.f)) {
+        return 0.f;
+    }
+    return blur_meters / pitch;
+}
+
+/**
+ * @brief Whether camera rays should be sampled across the aperture by default.
+ *
+ * Aperture sampling is only worth its noise cost once the camera is defocused enough for
+ * the blur to be visible, which is the same threshold the stamped defocus kernel uses.
+ */
+template <IsSpectral TSpectral>
+bool CameraModel<TSpectral>::auto_aperture_sampling_() const
+{
+    return defocus_blur_pixels() >= 0.5f;
+}
+
+/**
+ * @brief Resolve the convolution kernel radius for the scattered-light wings.
+ *
+ * The radius spans the requested fraction of the scattered energy, bounded by the render
+ * budget and by any explicit cutoff. An explicit kernel_radius overrides the derivation.
+ *
+ * @return The kernel radius in pixels.
+ */
+template <IsSpectral TSpectral>
+int CameraModel<TSpectral>::resolve_scatter_radius_() const
+{
+    const HarveyShack& scatter = optics_.stray_light.scatter.value();
+
+    float radius = 0.f;
+    if (scatter.kernel_radius.has_value()) {
+        radius = static_cast<float>(scatter.kernel_radius.value());
+    } else {
+        radius =
+            HarveyShack::radius_for_energy(scatter.captured_energy, scatter.exponent, scatter.r0);
+        if (scatter.cutoff_radius.has_value()) {
+            radius = std::min(radius, scatter.cutoff_radius.value());
+        }
+    }
+
+    int resolved = std::max(1, static_cast<int>(std::ceil(radius)));
+    if (resolved > max_kernel_radius_) {
+        resolved = max_kernel_radius_;
+    }
+
+    const float captured =
+        HarveyShack::energy_within(static_cast<float>(resolved), scatter.exponent, scatter.r0);
+    HUIRA_LOG_INFO("CameraModel - Scatter kernel radius " + std::to_string(resolved) +
+                   " px spans " + std::to_string(100.f * captured) + "% of the scattered energy");
+
+    return resolved;
+}
+
+/**
+ * @brief Build every optical kernel this render needs, before any parallel work starts.
+ *
+ * The kernel accessors build on demand and are safe to call from a single thread, but the
+ * polyphase caches are read concurrently while stamping. This forces the construction to
+ * happen up front and applies the renderer's budget and sampling override.
+ *
+ * @param budget Render-time constraints supplied by the renderer.
+ */
+template <IsSpectral TSpectral>
+void CameraModel<TSpectral>::prepare_optics_(const OpticsBudget& budget)
+{
+    if (budget.max_kernel_radius != max_kernel_radius_) {
+        max_kernel_radius_ = std::max(1, budget.max_kernel_radius);
+        invalidate_optics_();
+    }
+
+    ensure_optics_built_();
+    if (budget.build_convolution_kernel && (psf_ != nullptr || has_scatter())) {
+        psf_convolution_kernel();
+    }
+    if (has_scatter()) {
+        psf_wings_kernel();
+    }
+
+    aperture_sampling_active_ = budget.aperture_sampling.value_or(auto_aperture_sampling_());
+    if (!aperture_sampling_active_ && auto_aperture_sampling_()) {
+        HUIRA_LOG_WARNING("Aperture sampling is disabled while the camera is defocused. "
+                          "Unresolved sources will be blurred but path-traced geometry will "
+                          "render as though through a pinhole.");
+    }
+}
+
+/**
+ * @brief Build every optical kernel the camera currently describes.
+ *
+ * Rendering does this automatically. Call it directly before reading get_psf_kernel() or
+ * get_psf_radius() outside a render, or to move the build cost off the first frame.
+ */
+template <IsSpectral TSpectral>
+void CameraModel<TSpectral>::build_optics() const
+{
+    ensure_optics_built_();
+    if (psf_ != nullptr || has_scatter()) {
+        psf_convolution_kernel();
+    }
+    if (has_scatter()) {
+        psf_wings_kernel();
     }
 }
 
 /**
  * @brief Returns the total-system PSF kernel for whole-image convolution.
  *
- * The total point spread function of the optical system is the energy-weighted sum of its
- * components: the diffraction-limited core (from the aperture or a user-provided PSF) and the
- * Harvey-Shack scattered-light wings. Veiling glare, the third component, is uniform across
- * the image and is applied separately by the renderer for efficiency. The kernel is built
- * lazily and cached; any change to the core PSF, convolution radius, or scatter parameters
- * invalidates it.
+ * The total point spread function is the energy-weighted sum of the core and the
+ * Harvey-Shack wings. Veiling glare is uniform across the image and is applied separately
+ * by the renderer. The kernel is normalized to unit energy per channel and cached until
+ * any quantity it depends on changes.
  *
- * @return Reference to the cached total-system convolution kernel (unit energy per channel).
+ * @return Reference to the cached total-system convolution kernel.
  */
 template <IsSpectral TSpectral>
-const Image<TSpectral>& CameraModel<TSpectral>::get_psf_convolution_kernel()
+const Image<TSpectral>& CameraModel<TSpectral>::psf_convolution_kernel() const
 {
-    if (psf_ == nullptr && !scatter_enabled_) {
-        HUIRA_THROW_ERROR("CameraModel::get_psf_convolution_kernel - No PSF or scatter model "
-                          "has been set");
-    }
-    if (psf_ == nullptr && psf_convolution_radius_ <= 0) {
-        HUIRA_THROW_ERROR("CameraModel::get_psf_convolution_kernel - "
-                          "set_psf_convolution_radius() is required when scattering is enabled "
-                          "without a core PSF");
+    ensure_optics_built_();
+
+    if (psf_ == nullptr && !has_scatter()) {
+        HUIRA_THROW_ERROR("CameraModel::psf_convolution_kernel - The optics are ideal, so there "
+                          "is no kernel to build");
     }
 
     if (!psf_convolution_kernel_valid_) {
-        const int radius =
-            (psf_convolution_radius_ > 0) ? psf_convolution_radius_ : psf_->get_radius();
+        int radius = 0;
+        if (has_scatter()) {
+            scatter_kernel_radius_ = resolve_scatter_radius_();
+            radius = scatter_kernel_radius_;
+        }
+        if (psf_ != nullptr) {
+            radius = std::max(radius, psf_->get_radius());
+        }
+        radius = std::clamp(radius, 1, max_kernel_radius_);
+
         const int dim = 2 * radius + 1;
         HUIRA_LOG_INFO("CameraModel - Generating " + std::to_string(dim) + "x" +
                        std::to_string(dim) + " PSF convolution kernel");
 
-        // Core component: the diffraction-limited (or user-provided) PSF. With no core PSF
-        // set, the core is an ideal delta (perfect optics plus scatter):
+        // With no core PSF the core is an ideal delta, leaving perfect optics plus scatter.
         if (psf_ != nullptr) {
             psf_convolution_kernel_ = psf_->generate_convolution_kernel(radius);
         } else {
@@ -415,14 +619,12 @@ const Image<TSpectral>& CameraModel<TSpectral>::get_psf_convolution_kernel()
             psf_convolution_kernel_(radius, radius) = TSpectral{1.f};
         }
 
-        // Scattered-light wings: mixed with the core by energy fraction, so that the total
-        // system PSF remains normalized to unit energy:
+        // The wings are mixed with the core by energy fraction, so that the total system
+        // PSF stays normalized to unit energy:
         //     psf_total = (1 - f_s) * core + f_s * wings
-        if (scatter_enabled_ && scatter_fraction_ > 0.f) {
-            HarveyShackScatter<TSpectral> scatter(scatter_falloff_exponent_, r0_, scatter_radius_);
-            Image<TSpectral> wings = scatter.generate_convolution_kernel(radius);
-
-            const float f_s = scatter_fraction_;
+        const float f_s = scatter_fraction();
+        if (f_s > 0.f) {
+            const Image<TSpectral>& wings = psf_wings_kernel();
             const float core_weight = 1.f - f_s;
             for (int y = 0; y < dim; ++y) {
                 for (int x = 0; x < dim; ++x) {
@@ -438,31 +640,37 @@ const Image<TSpectral>& CameraModel<TSpectral>::get_psf_convolution_kernel()
 }
 
 /**
- * @brief Returns the scattered-light wings kernel alone, building it lazily if needed.
+ * @brief Returns the scattered-light wings kernel alone.
  *
- * This is the Harvey-Shack component of the total system PSF, normalized to unit energy and
- * NOT scaled by the scatter fraction. The renderer uses it to apply wings to unresolved
- * sources: their compact core is stamped via the polyphase cache, their raw energy is
- * splatted into a separate buffer, and that buffer is convolved with this kernel before the
- * two are blended by (1 - f_s) and f_s. Requires scattering to be enabled.
+ * This is the Harvey-Shack component of the total system PSF, normalized to unit energy
+ * and not scaled by the scatter fraction. The renderer uses it to apply wings to
+ * unresolved sources whose compact core is stamped rather than convolved.
  *
- * @return Reference to the cached wings kernel (unit energy per channel).
+ * @return Reference to the cached wings kernel.
  */
 template <IsSpectral TSpectral>
-const Image<TSpectral>& CameraModel<TSpectral>::get_psf_wings_kernel()
+const Image<TSpectral>& CameraModel<TSpectral>::psf_wings_kernel() const
 {
-    if (!scatter_enabled_) {
-        HUIRA_THROW_ERROR("CameraModel::get_psf_wings_kernel - Scattering is not enabled");
-    }
-    if (psf_ == nullptr && psf_convolution_radius_ <= 0) {
-        HUIRA_THROW_ERROR("CameraModel::get_psf_wings_kernel - set_psf_convolution_radius() is "
-                          "required when no core PSF is set");
+    if (!has_scatter()) {
+        HUIRA_THROW_ERROR("CameraModel::psf_wings_kernel - The optics describe no scatter "
+                          "component");
     }
 
+    ensure_optics_built_();
+
     if (!psf_wings_kernel_valid_) {
-        const int radius =
-            (psf_convolution_radius_ > 0) ? psf_convolution_radius_ : psf_->get_radius();
-        HarveyShackScatter<TSpectral> scatter(scatter_falloff_exponent_, r0_, scatter_radius_);
+        if (scatter_kernel_radius_ <= 0) {
+            scatter_kernel_radius_ = resolve_scatter_radius_();
+        }
+        int radius = scatter_kernel_radius_;
+        if (psf_ != nullptr) {
+            radius = std::max(radius, psf_->get_radius());
+        }
+        radius = std::clamp(radius, 1, max_kernel_radius_);
+
+        const HarveyShack& params = optics_.stray_light.scatter.value();
+        HarveyShackScatter<TSpectral> scatter(
+            params.exponent, params.r0, params.cutoff_radius.value_or(0.f));
         psf_wings_kernel_ = scatter.generate_convolution_kernel(radius);
         psf_wings_kernel_valid_ = true;
     }
@@ -470,148 +678,63 @@ const Image<TSpectral>& CameraModel<TSpectral>::get_psf_wings_kernel()
 }
 
 /**
- * @brief Delete the PSF and disable aperture PSF usage.
- */
-template <IsSpectral TSpectral>
-void CameraModel<TSpectral>::delete_psf()
-{
-    invalidate_psf_kernels_();
-    psf_ = nullptr;
-    use_aperture_psf_ = false;
-}
-
-/**
- * @brief Set the veiling glare alpha value.
- * @param alpha Veiling glare alpha (0 to 1)
- */
-template <IsSpectral TSpectral>
-void CameraModel<TSpectral>::set_veiling_glare(float alpha)
-{
-    if (alpha < 0.f || alpha > 1.f || std::isnan(alpha)) {
-        HUIRA_THROW_ERROR("CameraModel::set_veiling_glare - Alpha must be in the range [0, 1]: " +
-                          std::to_string(alpha));
-    }
-    veiling_alpha_ = alpha;
-    veiling_glare_enabled_ = (alpha > 0.f);
-}
-
-/**
- * @brief Disable veiling glare effects.
- */
-template <IsSpectral TSpectral>
-void CameraModel<TSpectral>::disable_veiling_glare()
-{
-    veiling_alpha_ = 0.f;
-    veiling_glare_enabled_ = false;
-}
-
-/**
- * @brief Set Harvey-Shack scatter parameters.
- * @param scatter_fraction Fraction of light scattered (0 to 1)
- * @param falloff_exponent Exponent for scatter falloff (typically > 1)
- * @param r0 Radius at which scatter fraction is measured (default 0.5)
- * @param radius Maximum scatter radius in pixels (default 0, meaning infinite)
- */
-template <IsSpectral TSpectral>
-void CameraModel<TSpectral>::set_harvey_shack_scatter(float scatter_fraction,
-                                                      float falloff_exponent,
-                                                      float r0,
-                                                      float radius)
-{
-    if (scatter_fraction < 0.f || scatter_fraction >= 1.f || std::isnan(scatter_fraction)) {
-        HUIRA_THROW_ERROR("CameraModel::set_harvey_shack_scatter - Scatter fraction must be in "
-                          "the range [0, 1): " +
-                          std::to_string(scatter_fraction));
-    }
-    if (!(falloff_exponent > 0.f) || std::isnan(falloff_exponent)) {
-        HUIRA_THROW_ERROR("CameraModel::set_harvey_shack_scatter - Falloff exponent must be a "
-                          "positive finite value: " +
-                          std::to_string(falloff_exponent));
-    }
-    if (!(r0 > 0.f) || std::isnan(r0)) {
-        HUIRA_THROW_ERROR("CameraModel::set_harvey_shack_scatter - r0 must be a positive finite "
-                          "value: " +
-                          std::to_string(r0));
-    }
-    if (radius < 0.f || std::isnan(radius)) {
-        HUIRA_THROW_ERROR("CameraModel::set_harvey_shack_scatter - Radius must be non-negative: " +
-                          std::to_string(radius));
-    }
-    scatter_fraction_ = scatter_fraction;
-    scatter_falloff_exponent_ = falloff_exponent;
-    r0_ = r0;
-    scatter_radius_ = radius;
-    scatter_enabled_ = (scatter_fraction > 0.f);
-    invalidate_psf_kernels_();
-}
-
-/**
- * @brief Disable Harvey-Shack scatter effects.
- */
-template <IsSpectral TSpectral>
-void CameraModel<TSpectral>::disable_harvey_shack_scatter()
-{
-    scatter_fraction_ = 0.f;
-    scatter_falloff_exponent_ = 2.f;
-    r0_ = 0.5f;
-    scatter_radius_ = 0.f;
-    scatter_enabled_ = false;
-    invalidate_psf_kernels_();
-}
-
-/**
- * @brief Set the focus distance for depth of field calculations.
- * @param focus_distance Focus distance in meters
- */
-template <IsSpectral TSpectral>
-void CameraModel<TSpectral>::set_focus_distance(units::Meter focus_distance)
-{
-    float focus_distance_ = focus_distance.to_si_f();
-    if (std::isnan(focus_distance_)) {
-        HUIRA_THROW_ERROR("CameraModel::set_focus_distance - Focus distance cannot be NaN");
-    }
-    if (std::abs(focus_distance_) < 1e-12f) {
-        HUIRA_THROW_ERROR("CameraModel::set_focus_distance - Focus distance is too small");
-    }
-    d_ = focus_distance_;
-
-    units::Meter pitch_x(sensor_->pixel_pitch().x);
-    units::Meter pitch_y(sensor_->pixel_pitch().y);
-    this->aperture_->build_defocus_kernel(
-        this->get_diopters(), this->focal_length(), pitch_x, pitch_y, 16);
-}
-
-/**
- * @brief Set the focus distance using diopters.
+ * @brief Set the focus distance.
  *
- * Converts the given diopter value to a focus distance in meters and forwards
- * it to set_focus_distance().
+ * A source at this distance is imaged in focus. Sources at other distances, including
+ * everything at infinity, are blurred by the defocus this implies.
  *
- * @param diopters Focus distance expressed in diopters
+ * @param distance Focus distance. Infinite focuses at infinity.
  */
 template <IsSpectral TSpectral>
-void CameraModel<TSpectral>::set_diopters(units::Diopter diopters)
+void CameraModel<TSpectral>::set_focus(units::Meter distance)
 {
-    units::Meter focus_distance;
-    if (std::abs(diopters.to_si_f()) < 1e-12f) {
-        focus_distance = units::Meter(std::numeric_limits<float>::infinity());
-    } else {
-        focus_distance = 1.f / diopters;
+    const float d = distance.to_si_f();
+    if (std::isnan(d)) {
+        HUIRA_THROW_ERROR("CameraModel::set_focus - Focus distance cannot be NaN");
     }
-    set_focus_distance(focus_distance);
+    if (std::isinf(d)) {
+        set_focus(units::Diopter(0.f));
+        return;
+    }
+    if (std::abs(d) < 1e-12f) {
+        HUIRA_THROW_ERROR("CameraModel::set_focus - Focus distance is too small: " +
+                          std::to_string(d));
+    }
+    set_focus(units::Diopter(1.f / d));
 }
 
 /**
- * @brief Get the current focus distance in diopters.
- * @return units::Diopter Focus distance expressed in diopters
+ * @brief Set the focus as a vergence, the reciprocal of the focus distance.
+ *
+ * This parameterization is continuous through infinity: zero focuses at infinity, positive
+ * values focus nearer, and negative values focus beyond infinity. It is also the natural
+ * scale for describing a small focus error on an instrument that is nominally focused at
+ * infinity, since the value is then the defocus applied to every distant source.
+ *
+ * @param vergence Focus vergence in diopters.
  */
 template <IsSpectral TSpectral>
-units::Diopter CameraModel<TSpectral>::get_diopters() const
+void CameraModel<TSpectral>::set_focus(units::Diopter vergence)
 {
-    if (std::isinf(d_)) {
-        return units::Diopter(0.f);
+    const float v = vergence.to_si_f();
+    if (std::isnan(v) || std::isinf(v)) {
+        HUIRA_THROW_ERROR("CameraModel::set_focus - Focus vergence must be finite");
     }
-    return units::Diopter(1.f / d_);
+    focus_vergence_ = v;
+    invalidate_optics_();
+}
+
+/**
+ * @brief Get the focus distance.
+ * @return The focus distance, infinite when focused at infinity.
+ */
+template <IsSpectral TSpectral>
+units::Meter CameraModel<TSpectral>::focus_distance() const
+{
+    if (std::abs(focus_vergence_) < 1e-12f) {
+        return units::Meter(std::numeric_limits<float>::infinity());
+    }
+    return units::Meter(1.f / focus_vergence_);
 }
 
 /**
@@ -664,12 +787,18 @@ Ray<TSpectral> CameraModel<TSpectral>::cast_ray(const Pixel& pixel, Sampler<floa
         direction = pixel_to_direction_<float>(pixel);
     }
 
-    if (depth_of_field_) {
+    if (aperture_sampling_active_) {
         Vec2<float> aperture_sample = aperture_->sample(sampler);
         Vec3<float> aperture_point{aperture_sample.x, aperture_sample.y, 0.f};
 
-        if (!std::isinf(d_)) {
-            Vec3<float> focal_point = direction * d_;
+        // A negative vergence focuses beyond infinity, placing the focal point behind the
+        // camera. Mirroring the offset keeps the ray fan converging in front of it.
+        if (std::abs(focus_vergence_) > 1e-12f) {
+            const float focus_distance = 1.f / focus_vergence_;
+            Vec3<float> focal_point = direction * std::abs(focus_distance);
+            if (focus_distance < 0.f) {
+                aperture_point = -aperture_point;
+            }
             direction = focal_point - aperture_point;
         }
         origin = aperture_point;
@@ -742,13 +871,7 @@ void CameraModel<TSpectral>::set_fstop(float fstop)
     units::Meter aperture_diameter(focal_length_ / fstop);
     units::SquareMeter aperture_area = PI<float>() * (aperture_diameter * aperture_diameter) / 4.f;
     this->aperture_->set_area(aperture_area);
-    if (use_aperture_psf_) {
-        units::Meter f(focal_length_);
-        units::Meter px(sensor_->pixel_pitch().x);
-        units::Meter py(sensor_->pixel_pitch().y);
-        psf_ = aperture_->make_psf(f, px, py, psf_->get_radius(), psf_->get_banks());
-        invalidate_psf_kernels_();
-    }
+    invalidate_optics_();
 }
 
 /**

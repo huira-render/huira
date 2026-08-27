@@ -37,6 +37,24 @@ void bind_renderer(py::module_& m)
         .def("set_region_cull_validation",
              &Renderer::set_region_cull_validation,
              py::arg("enable") = true)
+        .def("set_psf_application",
+             &Renderer::set_psf_application,
+             py::arg("mode"),
+             "Select which parts of the image the camera's optical model is applied to. "
+             "PSFApplication.Full is the default; the other modes trade fidelity for speed.")
+        .def("psf_application", &Renderer::psf_application)
+        .def("set_max_psf_radius",
+             &Renderer::set_max_psf_radius,
+             py::arg("radius"),
+             "Set the upper bound on any PSF kernel radius the camera may generate, in pixels.")
+        .def("max_psf_radius", &Renderer::max_psf_radius)
+        .def("set_aperture_sampling",
+             &Renderer::set_aperture_sampling,
+             py::arg("enable"),
+             "Force aperture-sampled camera rays on or off.")
+        .def("clear_aperture_sampling",
+             &Renderer::clear_aperture_sampling,
+             "Let the camera decide whether to sample the aperture, based on its focus setting.")
         .def("__repr__", [](const Renderer&) { return "Renderer()"; });
 }
 

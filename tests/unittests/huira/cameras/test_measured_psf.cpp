@@ -3,6 +3,7 @@
 
 #include "catch2/catch_test_macros.hpp"
 #include "huira/cameras/camera_model.hpp"
+#include "huira/cameras/optics.hpp"
 #include "huira/cameras/psfs/measured_psf.hpp"
 #include "huira/core/spectral_bins.hpp"
 #include "huira/images/image.hpp"
@@ -152,12 +153,20 @@ TEST_CASE("MeasuredPSF as the camera's core PSF", "[cameras][psf][measured]")
     camera.set_focal_length(units::Millimeter(25.0));
     camera.configure_sensor_from_size(Resolution{256, 256}, units::Millimeter(6.0));
 
-    Image<RGB> data = make_measurement();
-    camera.set_psf<MeasuredPSF<RGB>>(data, 4.f);
-    camera.set_psf_convolution_radius(24);
-    camera.set_harvey_shack_scatter(0.03f, 2.5f, 0.5f);
+    MeasuredCore<RGB> core;
+    core.data = make_measurement();
+    core.samples_per_pixel = 4.f;
 
-    const Image<RGB>& kernel = camera.get_psf_convolution_kernel();
+    HarveyShack scatter;
+    scatter.fraction = 0.03f;
+    scatter.exponent = 2.5f;
+    scatter.r0 = 0.5f;
+    scatter.kernel_radius = 24;
+
+    camera.set_core(core);
+    camera.set_scatter(scatter);
+
+    const Image<RGB>& kernel = camera.psf_convolution_kernel();
     REQUIRE(kernel.width() == 49);
 
     double total = 0.0;

@@ -1,3 +1,5 @@
+#include <utility>
+
 #include "huira/concepts/spectral_concepts.hpp"
 #include "huira/units/units.hpp"
 
@@ -358,189 +360,219 @@ void CameraModelHandle<TSpectral>::set_aperture(Args&&... args) const
 }
 
 /**
- * @brief Set the point spread function (PSF) model for the camera.
- * @tparam TPSF PSF model type
- * @tparam Args Constructor arguments for the PSF
- * @param args Arguments to construct the PSF
+ * @brief Set the complete optical description of the camera.
+ * @param optics The optical description to apply.
  */
 template <IsSpectral TSpectral>
-template <IsPSF TPSF, typename... Args>
-void CameraModelHandle<TSpectral>::set_psf(Args&&... args) const
+void CameraModelHandle<TSpectral>::set_optics(Optics<TSpectral> optics) const
 {
-    this->get_()->template set_psf<TPSF>(std::forward<Args>(args)...);
+    this->get_()->set_optics(std::move(optics));
 }
 
 /**
- * @brief Use the aperture to generate a PSF (point spread function).
- * @param value True to enable aperture PSF, false to disable
+ * @brief Get the camera's optical description.
+ * @return Reference to the current optics.
  */
 template <IsSpectral TSpectral>
-void CameraModelHandle<TSpectral>::use_aperture_psf(bool value) const
+const Optics<TSpectral>& CameraModelHandle<TSpectral>::optics() const
 {
-    if (value) {
-        this->get_()->use_aperture_psf();
-    } else {
-        this->get_()->delete_psf();
-    }
+    return this->get_()->optics();
 }
 
 /**
- * @brief Use the aperture to generate a PSF (point spread function).
- * @param radius PSF kernel radius
- * @param banks Number of PSF banks
+ * @brief Replace the PSF core, leaving the stray-light components unchanged.
+ * @param core The core to apply.
  */
 template <IsSpectral TSpectral>
-void CameraModelHandle<TSpectral>::use_aperture_psf(int radius, int banks) const
+void CameraModelHandle<TSpectral>::set_core(typename Optics<TSpectral>::Core core) const
 {
-    this->get_()->use_aperture_psf(radius, banks);
+    this->get_()->set_core(std::move(core));
 }
 
 /**
- * @brief Convolve the specified PSF with rendered extended images.
- * @param convolve_psf True to enable convolving the PSF with rendered images.
+ * @brief Add scattered-light wings to the optics, leaving the core unchanged.
+ * @param scatter The scatter parameters to apply.
  */
 template <IsSpectral TSpectral>
-void CameraModelHandle<TSpectral>::enable_psf_convolution(bool convolve_psf) const
+void CameraModelHandle<TSpectral>::set_scatter(HarveyShack scatter) const
 {
-    this->get_()->enable_psf_convolution(convolve_psf);
-}
-
-template <IsSpectral TSpectral>
-void CameraModelHandle<TSpectral>::set_psf_convolution_radius(int radius) const
-{
-    this->get_()->set_psf_convolution_radius(radius);
+    this->get_()->set_scatter(std::move(scatter));
 }
 
 /**
- * @brief Delete the PSF and disable aperture PSF usage.
+ * @brief Set the fraction of energy redistributed uniformly across the frame.
+ * @param fraction Veiling glare fraction in [0, 1].
  */
 template <IsSpectral TSpectral>
-void CameraModelHandle<TSpectral>::delete_psf() const
+void CameraModelHandle<TSpectral>::set_veiling_glare(float fraction) const
 {
-    this->get_()->delete_psf();
+    this->get_()->set_veiling_glare(fraction);
 }
 
 /**
- * @brief Sets a measured (user-supplied) PSF as the core PSF of the camera.
- *
- * @param data Measured PSF samples, centered on the image.
- * @param samples_per_pixel Measurement samples per sensor pixel per axis.
- * @param radius Polyphase stamping kernel radius in sensor pixels (0 = auto).
- * @param banks Number of polyphase banks per axis for subpixel stamping.
+ * @brief Remove the scattered-light wings, leaving the core and glare unchanged.
  */
 template <IsSpectral TSpectral>
-void CameraModelHandle<TSpectral>::set_measured_psf(const Image<TSpectral>& data,
-                                                    float samples_per_pixel,
-                                                    int radius,
-                                                    int banks) const
+void CameraModelHandle<TSpectral>::clear_scatter() const
 {
-    this->get_()->set_measured_psf(data, samples_per_pixel, radius, banks);
+    this->get_()->clear_scatter();
 }
 
 /**
- * @brief Set the veiling glare alpha value.
- * @param alpha Veiling glare alpha (0 to 1)
+ * @brief Render with perfect optics: no PSF core, no scatter, and no glare.
  */
 template <IsSpectral TSpectral>
-void CameraModelHandle<TSpectral>::set_veiling_glare(float alpha) const
+void CameraModelHandle<TSpectral>::set_ideal_optics() const
 {
-    this->get_()->set_veiling_glare(alpha);
+    this->get_()->set_ideal_optics();
 }
 
 /**
- * @brief Disable veiling glare effects.
+ * @brief Check whether a PSF core is present.
+ * @return True when the optics describe a core other than IdealCore.
  */
 template <IsSpectral TSpectral>
-void CameraModelHandle<TSpectral>::disable_veiling_glare() const
+bool CameraModelHandle<TSpectral>::has_core_psf() const
 {
-    this->get_()->disable_veiling_glare();
+    this->get_()->build_optics();
+    return this->get_()->has_core_psf();
 }
 
 /**
- * @brief Set Harvey-Shack scatter parameters.
- * @param scatter_fraction Fraction of light scattered (0 to 1)
- * @param falloff_exponent Exponent for scatter falloff (typically > 1)
- * @param r0 Radius at which scatter fraction is measured (default 0.5)
- * @param radius Maximum scatter radius in pixels (default 0, meaning infinite)
+ * @brief Check whether the optics include scattered-light wings.
+ * @return True when a scatter component is present.
  */
 template <IsSpectral TSpectral>
-void CameraModelHandle<TSpectral>::set_harvey_shack_scatter(float scatter_fraction,
-                                                            float falloff_exponent,
-                                                            float r0,
-                                                            float radius) const
+bool CameraModelHandle<TSpectral>::has_scatter() const
 {
-    this->get_()->set_harvey_shack_scatter(scatter_fraction, falloff_exponent, r0, radius);
+    return this->get_()->has_scatter();
 }
 
 /**
- * @brief Disable Harvey-Shack scatter effects.
+ * @brief Get the fraction of energy diverted into the scattered-light wings.
+ * @return The scatter fraction, or zero when no scatter is present.
  */
 template <IsSpectral TSpectral>
-void CameraModelHandle<TSpectral>::disable_harvey_shack_scatter() const
+float CameraModelHandle<TSpectral>::scatter_fraction() const
 {
-    this->get_()->disable_harvey_shack_scatter();
+    return this->get_()->scatter_fraction();
 }
 
+/**
+ * @brief Get the fraction of energy redistributed uniformly across the frame.
+ * @return The veiling glare fraction.
+ */
+template <IsSpectral TSpectral>
+float CameraModelHandle<TSpectral>::veiling_glare() const
+{
+    return this->get_()->veiling_glare();
+}
+
+/**
+ * @brief Get the PSF stamping radius in pixels.
+ * @return The radius in pixels.
+ */
 template <IsSpectral TSpectral>
 int CameraModelHandle<TSpectral>::get_psf_radius() const
 {
+    this->get_()->build_optics();
     return this->get_()->get_psf_radius();
 }
 
+/**
+ * @brief Get the total-system PSF kernel used for whole-image convolution.
+ * @return Reference to the cached convolution kernel.
+ */
 template <IsSpectral TSpectral>
-const Image<TSpectral>& CameraModelHandle<TSpectral>::get_psf_convolution_kernel() const
+const Image<TSpectral>& CameraModelHandle<TSpectral>::psf_convolution_kernel() const
 {
-    return this->get_()->get_psf_convolution_kernel();
+    return this->get_()->psf_convolution_kernel();
 }
 
 /**
- * @brief Enable or disable depth of field effects.
- * @param depth_of_field True to enable depth of field, false to disable
+ * @brief Get the scattered-light wings kernel alone.
+ * @return Reference to the cached wings kernel.
  */
 template <IsSpectral TSpectral>
-void CameraModelHandle<TSpectral>::enable_depth_of_field(bool depth_of_field) const
+const Image<TSpectral>& CameraModelHandle<TSpectral>::psf_wings_kernel() const
 {
-    this->get_()->enable_depth_of_field(depth_of_field);
+    return this->get_()->psf_wings_kernel();
 }
 
 /**
- * @brief Set the focus distance for depth of field calculations.
- * @param focus_distance Focus distance in meters
+ * @brief Build every optical kernel the camera currently describes.
+ *
+ * Rendering does this automatically. Call it to move the build cost off the first frame.
  */
 template <IsSpectral TSpectral>
-void CameraModelHandle<TSpectral>::set_focus_distance(units::Meter focus_distance) const
+void CameraModelHandle<TSpectral>::build_optics() const
 {
-    this->get_()->set_focus_distance(focus_distance);
+    this->get_()->build_optics();
 }
 
 /**
- * @brief Get the current focus distance for depth of field calculations.
- * @return units::Meter Focus distance in meters
+ * @brief Set the focus distance.
+ * @param distance Focus distance. Infinite focuses at infinity.
  */
 template <IsSpectral TSpectral>
-units::Meter CameraModelHandle<TSpectral>::get_focus_distance() const
+void CameraModelHandle<TSpectral>::set_focus(units::Meter distance) const
 {
-    return this->get_()->get_focus_distance();
+    this->get_()->set_focus(distance);
 }
 
 /**
- * @brief Set the diopters for depth of field calculations.
- * @param diopters Diopters value
+ * @brief Set the focus as a vergence, the reciprocal of the focus distance.
+ *
+ * Zero focuses at infinity, positive values focus nearer, and negative values focus beyond
+ * infinity.
+ *
+ * @param vergence Focus vergence in diopters.
  */
 template <IsSpectral TSpectral>
-void CameraModelHandle<TSpectral>::set_diopters(units::Diopter diopters) const
+void CameraModelHandle<TSpectral>::set_focus(units::Diopter vergence) const
 {
-    this->get_()->set_diopters(diopters);
+    this->get_()->set_focus(vergence);
 }
 
 /**
- * @brief Get the current diopters value for depth of field calculations.
- * @return units::Diopter Diopters value
+ * @brief Get the focus distance.
+ * @return The focus distance, infinite when focused at infinity.
  */
 template <IsSpectral TSpectral>
-units::Diopter CameraModelHandle<TSpectral>::get_diopters() const
+units::Meter CameraModelHandle<TSpectral>::focus_distance() const
 {
-    return this->get_()->get_diopters();
+    return this->get_()->focus_distance();
+}
+
+/**
+ * @brief Get the focus setting as a vergence.
+ * @return The focus vergence in diopters.
+ */
+template <IsSpectral TSpectral>
+units::Diopter CameraModelHandle<TSpectral>::focus_vergence() const
+{
+    return this->get_()->focus_vergence();
+}
+
+/**
+ * @brief Get the defocus blur radius for a source at infinity.
+ * @return The blur radius in pixels, zero when focused at infinity.
+ */
+template <IsSpectral TSpectral>
+float CameraModelHandle<TSpectral>::defocus_blur_pixels() const
+{
+    return this->get_()->defocus_blur_pixels();
+}
+
+/**
+ * @brief Check whether the camera is defocused enough to blur sources at infinity.
+ * @return True when a defocus kernel is in use.
+ */
+template <IsSpectral TSpectral>
+bool CameraModelHandle<TSpectral>::has_defocus() const
+{
+    this->get_()->build_optics();
+    return this->get_()->has_defocus();
 }
 
 /**
@@ -577,6 +609,133 @@ void CameraModelHandle<TSpectral>::use_blender_convention(bool value) const
 // ================== //
 // === DEPRECATED === //
 // ================== //
+template <IsSpectral TSpectral>
+void CameraModelHandle<TSpectral>::use_aperture_psf(bool value) const
+{
+    (void)value;
+    HUIRA_THROW_ERROR("API BREAKING CHANGE: use_aperture_psf was removed in v0.10.0. A "
+                      "diffraction core is now applied by default; use set_optics() to change "
+                      "it, or set_ideal_optics() to remove it.");
+}
+
+template <IsSpectral TSpectral>
+void CameraModelHandle<TSpectral>::use_aperture_psf(int radius, int banks) const
+{
+    (void)radius;
+    (void)banks;
+    HUIRA_THROW_ERROR("API BREAKING CHANGE: use_aperture_psf was removed in v0.10.0. A "
+                      "diffraction core is now applied by default; use set_core() with a "
+                      "DiffractionCore to override its radius and banks.");
+}
+
+template <IsSpectral TSpectral>
+void CameraModelHandle<TSpectral>::enable_psf_convolution(bool convolve_psf) const
+{
+    (void)convolve_psf;
+    HUIRA_THROW_ERROR("API BREAKING CHANGE: enable_psf_convolution was removed in v0.10.0. The "
+                      "optics are applied to the whole image by default; use "
+                      "Renderer::set_psf_application() to skip it.");
+}
+
+template <IsSpectral TSpectral>
+void CameraModelHandle<TSpectral>::set_psf_convolution_radius(int radius) const
+{
+    (void)radius;
+    HUIRA_THROW_ERROR("API BREAKING CHANGE: set_psf_convolution_radius was removed in v0.10.0. "
+                      "The radius is derived from HarveyShack::captured_energy; set "
+                      "HarveyShack::kernel_radius to override it.");
+}
+
+template <IsSpectral TSpectral>
+void CameraModelHandle<TSpectral>::delete_psf() const
+{
+    HUIRA_THROW_ERROR("API BREAKING CHANGE: delete_psf was removed in v0.10.0. Use "
+                      "set_ideal_optics() instead.");
+}
+
+template <IsSpectral TSpectral>
+void CameraModelHandle<TSpectral>::set_measured_psf(const Image<TSpectral>& data,
+                                                    float samples_per_pixel,
+                                                    int radius,
+                                                    int banks) const
+{
+    (void)data;
+    (void)samples_per_pixel;
+    (void)radius;
+    (void)banks;
+    HUIRA_THROW_ERROR("API BREAKING CHANGE: set_measured_psf was removed in v0.10.0. Use "
+                      "set_core() with a MeasuredCore instead.");
+}
+
+template <IsSpectral TSpectral>
+void CameraModelHandle<TSpectral>::set_harvey_shack_scatter(float scatter_fraction,
+                                                            float falloff_exponent,
+                                                            float r0,
+                                                            float radius) const
+{
+    (void)scatter_fraction;
+    (void)falloff_exponent;
+    (void)r0;
+    (void)radius;
+    HUIRA_THROW_ERROR("API BREAKING CHANGE: set_harvey_shack_scatter was removed in v0.10.0. "
+                      "Use set_scatter() with a HarveyShack instead.");
+}
+
+template <IsSpectral TSpectral>
+void CameraModelHandle<TSpectral>::disable_harvey_shack_scatter() const
+{
+    HUIRA_THROW_ERROR("API BREAKING CHANGE: disable_harvey_shack_scatter was removed in "
+                      "v0.10.0. Use clear_scatter() instead.");
+}
+
+template <IsSpectral TSpectral>
+void CameraModelHandle<TSpectral>::disable_veiling_glare() const
+{
+    HUIRA_THROW_ERROR("API BREAKING CHANGE: disable_veiling_glare was removed in v0.10.0. Use "
+                      "set_veiling_glare(0.f) instead.");
+}
+
+template <IsSpectral TSpectral>
+void CameraModelHandle<TSpectral>::enable_depth_of_field(bool depth_of_field) const
+{
+    (void)depth_of_field;
+    HUIRA_THROW_ERROR("API BREAKING CHANGE: enable_depth_of_field was removed in v0.10.0. "
+                      "Aperture sampling now follows the focus setting; use "
+                      "Renderer::set_aperture_sampling() to override it.");
+}
+
+template <IsSpectral TSpectral>
+void CameraModelHandle<TSpectral>::set_focus_distance(units::Meter focus_distance) const
+{
+    (void)focus_distance;
+    HUIRA_THROW_ERROR("API BREAKING CHANGE: set_focus_distance was removed in v0.10.0. Use "
+                      "set_focus() instead.");
+}
+
+template <IsSpectral TSpectral>
+units::Meter CameraModelHandle<TSpectral>::get_focus_distance() const
+{
+    HUIRA_THROW_ERROR("API BREAKING CHANGE: get_focus_distance was removed in v0.10.0. Use "
+                      "focus_distance() instead.");
+    return units::Meter(0.0);
+}
+
+template <IsSpectral TSpectral>
+void CameraModelHandle<TSpectral>::set_diopters(units::Diopter diopters) const
+{
+    (void)diopters;
+    HUIRA_THROW_ERROR("API BREAKING CHANGE: set_diopters was removed in v0.10.0. Use "
+                      "set_focus() with a Diopter argument instead.");
+}
+
+template <IsSpectral TSpectral>
+units::Diopter CameraModelHandle<TSpectral>::get_diopters() const
+{
+    HUIRA_THROW_ERROR("API BREAKING CHANGE: get_diopters was removed in v0.10.0. Use "
+                      "focus_vergence() instead.");
+    return units::Diopter(0.0);
+}
+
 template <IsSpectral TSpectral>
 void CameraModelHandle<TSpectral>::set_sensor_resolution(Resolution resolution) const
 {

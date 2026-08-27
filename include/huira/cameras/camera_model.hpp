@@ -10,6 +10,7 @@
 #include "huira/cameras/distortion/distortion.hpp"
 #include "huira/cameras/distortion/opencv_distortion.hpp"
 #include "huira/cameras/distortion/owen_distortion.hpp"
+#include "huira/cameras/optics.hpp"
 #include "huira/cameras/psfs/psf.hpp"
 #include "huira/cameras/sensors/sensor_model.hpp"
 #include "huira/concepts/numeric_concepts.hpp"
@@ -36,8 +37,13 @@ class Renderer;
  * This class provides a flexible camera abstraction for rendering and simulation, supporting
  * various sensor types, aperture shapes, and lens distortion models. It allows configuration of
  * focal length, f-stop, sensor resolution, pixel pitch, and more. The camera can project 3D points
- * to the image plane, compute projected aperture area, and supports both analytic and PSF-based
- * point spread functions. All units are SI unless otherwise noted.
+ * to the image plane and compute projected aperture area. All units are SI unless otherwise noted.
+ *
+ * The optical response is described by an Optics object covering the PSF core, scattered-light
+ * wings, and veiling glare. It defaults to a diffraction-limited core derived from the aperture,
+ * and everything it describes is applied to both path-traced geometry and unresolved point
+ * sources. Kernels are built lazily, so the optics and the quantities they depend on may be set
+ * in any order. Use Optics::ideal() to render without any PSF.
  *
  * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
@@ -98,55 +104,64 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     template <IsAperture TAperture, typename... Args>
     void set_aperture(Args&&... args);
 
-    template <IsPSF TPSF, typename... Args>
-    void set_psf(Args&&... args);
+    void set_optics(Optics<TSpectral> optics);
 
-    void set_measured_psf(const Image<TSpectral>& data,
-                          float samples_per_pixel,
-                          int radius = 0,
-                          int banks = 16);
+    /// Get the camera's optical description.
+    const Optics<TSpectral>& optics() const { return optics_; }
 
-    void use_aperture_psf(int radius = 64, int banks = 16);
+    void set_core(typename Optics<TSpectral>::Core core);
+    void set_scatter(HarveyShack scatter);
+    void set_veiling_glare(float fraction);
+    void clear_scatter();
+    void set_ideal_optics();
 
-    /// Enable or disable PSF convolution.
-    void enable_psf_convolution(bool convolve_psf = true) { convolve_psf_ = convolve_psf; }
-    void set_psf_convolution_radius(int radius);
-    void delete_psf();
+    /// Check whether a PSF core is present. Requires build_optics() or a render first.
+    bool has_core_psf() const { return psf_ != nullptr; }
 
-    void set_veiling_glare(float alpha);
-    void disable_veiling_glare();
-    void set_harvey_shack_scatter(float scatter_fraction,
-                                  float falloff_exponent,
-                                  float r0 = 0.5f,
-                                  float radius = 0.f);
-    void disable_harvey_shack_scatter();
+    /// Check whether the optics include scattered-light wings.
+    bool has_scatter() const { return optics_.stray_light.scatter.has_value(); }
 
-    /// Check if the camera model has a PSF.
-    bool has_psf() const { return psf_ != nullptr; }
+    /// Get the fraction of energy diverted into the scattered-light wings.
+    float scatter_fraction() const
+    {
+        return has_scatter() ? optics_.stray_light.scatter->fraction : 0.f;
+    }
 
-    /// Get the PSF kernel at the specified image coordinates.
+    /// Get the fraction of energy redistributed uniformly across the frame.
+    float veiling_glare() const { return optics_.stray_light.veiling_glare; }
+
+    /// Get the PSF kernel at the specified subpixel offset.
     const Image<TSpectral>& get_psf_kernel(float u, float v) const
     {
         return psf_->get_kernel(u, v);
     }
 
-    /// Get the PSF radius.
+    /// Get the PSF stamping radius in pixels.
     int get_psf_radius() const { return psf_->get_radius(); }
 
-    const Image<TSpectral>& get_psf_convolution_kernel();
-    const Image<TSpectral>& get_psf_wings_kernel();
+    const Image<TSpectral>& psf_convolution_kernel() const;
+    const Image<TSpectral>& psf_wings_kernel() const;
+
+    void build_optics() const;
 
     /// Monotonic counter identifying the current PSF/scatter kernel configuration.
     [[nodiscard]] std::uint64_t psf_kernel_version() const noexcept { return psf_kernel_version_; }
 
-    /// Enable or disable depth of field for the camera model.
-    void enable_depth_of_field(bool depth_of_field = true) { depth_of_field_ = depth_of_field; }
-    void set_focus_distance(units::Meter focus_distance);
+    void set_focus(units::Meter distance);
+    void set_focus(units::Diopter vergence);
 
-    /// Get the focus distance of the camera.
-    units::Meter get_focus_distance() const { return units::Meter(d_); }
-    void set_diopters(units::Diopter diopters);
-    units::Diopter get_diopters() const;
+    units::Meter focus_distance() const;
+
+    /// Get the focus setting as a vergence, the reciprocal of the focus distance.
+    units::Diopter focus_vergence() const { return units::Diopter(focus_vergence_); }
+
+    float defocus_blur_pixels() const;
+
+    /// Check whether the camera is defocused enough to blur sources at infinity.
+    bool has_defocus() const { return aperture_->has_defocus(); }
+
+    /// Check whether camera rays are sampled across the aperture.
+    bool aperture_sampling_active() const { return aperture_sampling_active_; }
 
     Pixel project_point(const Vec3<float>& point_camera_coords) const;
     Pixel try_project_point(const Vec3<float>& point_camera_coords) const;
@@ -192,41 +207,40 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     std::unique_ptr<SensorModel<TSpectral>> sensor_;
     std::unique_ptr<Aperture<TSpectral>> aperture_;
     std::unique_ptr<Distortion<TSpectral>> distortion_ = nullptr;
-    std::unique_ptr<PSF<TSpectral>> psf_ = nullptr;
-    bool convolve_psf_ = false;
 
-    // Whole-image convolution kernel: a single centered kernel, built lazily from psf_ and cached.
-    int psf_convolution_radius_ = 0;
-    Image<TSpectral> psf_convolution_kernel_;
-    bool psf_convolution_kernel_valid_ = false;
+    Optics<TSpectral> optics_{};
 
-    // Scattered-light wings kernel alone (unit energy), used by the renderer to apply wings
-    // to unresolved sources whose compact core is stamped rather than convolved.
-    Image<TSpectral> psf_wings_kernel_;
-    bool psf_wings_kernel_valid_ = false;
+    /// Focus setting as a vergence in diopters. Zero is infinity, negative is beyond it.
+    float focus_vergence_ = 0.f;
 
-    /// Invalidate the cached PSF convolution and wings kernels.
-    void invalidate_psf_kernels_()
-    {
-        psf_convolution_kernel_valid_ = false;
-        psf_wings_kernel_valid_ = false;
-        ++psf_kernel_version_;
-    }
+    bool aperture_sampling_active_ = false;
+
+    // Lazily built optical state. Every accessor below builds on demand, so the camera may
+    // be configured in any order; Renderer calls prepare_optics_() before any parallel work.
+    mutable std::shared_ptr<PSF<TSpectral>> psf_ = nullptr;
+    mutable bool optics_built_ = false;
+    mutable int max_kernel_radius_ = 1024;
+    mutable int scatter_kernel_radius_ = 0;
+
+    mutable Image<TSpectral> psf_convolution_kernel_;
+    mutable bool psf_convolution_kernel_valid_ = false;
+
+    mutable Image<TSpectral> psf_wings_kernel_;
+    mutable bool psf_wings_kernel_valid_ = false;
 
     /// See psf_kernel_version(). Starts at 1 so that 0 is usable as "never seen".
-    std::uint64_t psf_kernel_version_ = 1;
+    mutable std::uint64_t psf_kernel_version_ = 1;
 
-    bool use_aperture_psf_ = false;
-    float d_ = std::numeric_limits<float>::infinity();
+    /// Polyphase banks per axis used for the defocus kernel.
+    static constexpr int DEFOCUS_BANKS = 16;
 
-    float veiling_alpha_ = 0.f;
-    bool veiling_glare_enabled_ = false;
-
-    float scatter_fraction_ = 0.f;
-    float scatter_falloff_exponent_ = 2.f;
-    float r0_ = 0.5f;
-    float scatter_radius_ = 0.f;
-    bool scatter_enabled_ = false;
+    void invalidate_optics_();
+    void ensure_optics_built_() const;
+    void build_core_psf_() const;
+    void build_defocus_() const;
+    int resolve_scatter_radius_() const;
+    bool auto_aperture_sampling_() const;
+    void prepare_optics_(const OpticsBudget& budget);
 
     float fx_;
     float fy_;
@@ -237,8 +251,6 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
 
     bool is_explicit_matrix_ = false;
     void compute_intrinsics_();
-
-    bool depth_of_field_ = false;
 
     template <IsFloatingPoint TFloat>
     Vec3<TFloat> pixel_to_direction_(const Pixel& pixel) const;
