@@ -52,7 +52,6 @@ class Renderer {
      * @brief Enable or disable skipping screen regions that provably contain no geometry.
      *
      * Enabled by default. Purely an optimization: the image is identical either way.
-     * Disable it to isolate a suspected culling problem.
      */
     void set_region_culling(bool enable = true) { region_culling_ = enable; }
 
@@ -112,6 +111,8 @@ class Renderer {
     DirectionCone tile_direction_cone_(
         const CameraModel<TSpectral>& camera, float x0, float y0, float x1, float y1) const;
 
+    [[nodiscard]] static bool image_is_zero_(const Image<TSpectral>& image);
+
     void convolve_cached_(Image<TSpectral>& image,
                           const Image<TSpectral>& kernel,
                           const CameraModel<TSpectral>& camera,
@@ -120,8 +121,10 @@ class Renderer {
     /// Scattered-light wings applied to the unresolved splat buffer, once per frame.
     ConvolverCache wings_convolver_;
 
-    /// Composite PSF applied to the whole unresolved image in the defocus path.
-    ConvolverCache defocus_convolver_;
+    /// Composite PSF from get_psf_convolution_kernel(), shared by the path-traced
+    /// image and the defocus path: same kernel and same resolution, so one cached
+    /// spectrum serves both.
+    ConvolverCache psf_convolver_;
 
     RandomSampler<float> sampler_;
 
