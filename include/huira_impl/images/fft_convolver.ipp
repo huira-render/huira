@@ -2,15 +2,16 @@
 
 #include <cstdint>
 #include <cstring>
+#include <memory>
 #include <mutex>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 #include "fftw3.h"
 #include "huira/util/logger.hpp"
 #include "huira/util/macros.hpp"
 #include "tbb/blocked_range.h"
-#include "tbb/enumerable_thread_specific.h"
 #include "tbb/parallel_for.h"
 
 namespace huira {
@@ -120,7 +121,7 @@ class FftwPlanCache {
     std::unordered_map<std::uint64_t, Plans> plans_;
 };
 
-/// Per-thread scratch buffers for FFT convolution.
+/// Scratch buffers for one channel's FFT convolution.
 struct FftScratch {
     float* real = nullptr;
     fftwf_complex* complex_buf = nullptr;
@@ -156,13 +157,13 @@ struct FftScratch {
 };
 
 /**
- * @brief Thread-local FftScratch buffers owned by a single FftConvolver.
+ * @brief Per-channel FftScratch buffers owned by a single FftConvolver.
  *
  * Wrapped in a named struct so that FftConvolver can hold it behind a unique_ptr to an incomplete
  * type and remain movable.
  */
 struct FftScratchPool {
-    tbb::enumerable_thread_specific<FftScratch> buffers;
+    std::vector<std::unique_ptr<FftScratch>> buffers;
 };
 
 template <typename PixelT>
@@ -401,26 +402,38 @@ void FftConvolver<PixelT>::apply(Image<PixelT>& image) const
 
         constexpr std::size_t num_channels = ImagePixelTraits<PixelT>::channels;
 
-        // Each spectral channel is independent; process them in parallel with per-thread
-        // scratch buffers. Plan execution via the new-array interface is thread-safe.
+        // Each spectral channel is independent; process them in parallel, each against its own
+        // scratch buffer. Plan execution via the new-array interface is thread-safe.
         //
         // Channel count caps the outer parallelism at three for RGB, which leaves most
         // of a modern machine idle, so the pack, pointwise-multiply and unpack passes
         // are additionally split over rows. All three are elementwise, so splitting them
         // changes no result - only the transforms themselves impose an ordering, and
         // those are left to FFTW.
+        //
+        // The buffers are indexed by channel rather than drawn from thread-local storage: the
+        // nested loops below block, and a blocked worker may pick up another channel's task on
+        // the same thread, which would otherwise alias two channels onto one buffer.
         if (!scratch_pool_) {
             scratch_pool_ = std::make_unique<detail::FftScratchPool>();
         }
         auto& scratch_buffers = scratch_pool_->buffers;
+        if (scratch_buffers.size() < num_channels) {
+            scratch_buffers.resize(num_channels);
+        }
+        for (std::size_t c = 0; c < num_channels; ++c) {
+            if (scratch_buffers[c] == nullptr) {
+                scratch_buffers[c] = std::make_unique<detail::FftScratch>();
+            }
+        }
 
         tbb::parallel_for(
             tbb::blocked_range<std::size_t>(0, num_channels, 1),
             [&](const tbb::blocked_range<std::size_t>& range) {
-                detail::FftScratch& scratch = scratch_buffers.local();
-                scratch.ensure(real_size, complex_size);
-
                 for (std::size_t c = range.begin(); c < range.end(); ++c) {
+                    detail::FftScratch& scratch = *scratch_buffers[c];
+                    scratch.ensure(real_size, complex_size);
+
                     // Pack this channel top-left into the zero-padded buffer:
                     tbb::parallel_for(
                         tbb::blocked_range<int>(0, padded_height_),
