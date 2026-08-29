@@ -27,6 +27,11 @@ class TestNode : public Node<RGB> {
   public:
     TestNode() : Node<RGB>(nullptr) {}
 
+    TestNode(const TestNode&) = delete;
+    TestNode& operator=(const TestNode&) = delete;
+    TestNode(TestNode&&) = delete;
+    TestNode& operator=(TestNode&&) = delete;
+
     Transform<double> propagate_rotation(double dt_seconds) const
     {
         return this->get_local_rotation_at_(Time::from_et(0.0), Time::from_et(dt_seconds), 0.0);

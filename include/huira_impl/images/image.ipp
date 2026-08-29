@@ -661,9 +661,13 @@ void Image<PixelT>::convolve_fft_(const Image<PixelT>& kernel)
     // One-shot convenience path. For repeated convolutions with the same kernel (e.g. per
     // rendered frame), hold a persistent FftConvolver and call apply() directly to reuse the
     // cached kernel spectra:
-    FftConvolver<PixelT> convolver;
-    convolver.set_kernel(kernel, this->resolution());
-    convolver.apply(*this);
+    if constexpr (IsInteger<PixelT>) {
+        HUIRA_THROW_ERROR("Image::convolve_fft_ - Requires a floating-point pixel type");
+    } else {
+        FftConvolver<PixelT> convolver;
+        convolver.set_kernel(kernel, this->resolution());
+        convolver.apply(*this);
+    }
 }
 
 } // namespace huira

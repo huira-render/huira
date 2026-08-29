@@ -89,7 +89,7 @@ class FftConvolver {
     fftwf_plan forward_plan_ = nullptr;
     fftwf_plan inverse_plan_ = nullptr;
 
-    // Per-thread transform buffers, retained between apply() calls.
+    // Per-channel transform buffers, retained between apply() calls.
     mutable std::unique_ptr<detail::FftScratchPool> scratch_pool_;
 };
 } // namespace huira
