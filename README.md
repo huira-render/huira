@@ -99,6 +99,21 @@ Huira is a complete rewrite providing similar functionality to the [vira](https:
 
 Vira is also available on a [personal fork by the original author](https://github.com/crgnam/vira).  However it is no longer maintained, and it is recommended to use this project moving forward.
 
+## Citing Huira
+If you use Huira in published work, please cite it. On GitHub, click
+**Cite this repository** in the sidebar for APA and BibTeX, or use:
+
+```bibtex
+@misc{gnam_huira,
+  author       = {Gnam, Christopher},
+  title        = {Huira},
+  year         = {2026},
+  howpublished = {\url{https://github.com/huira-render/huira}}
+}
+```
+
+Please also note which version of Huira you used.
+
 ## Contributing to Huira
 
 We welcome contributions! To keep the codebase clean, highly readable, and consistent, we enforce a strict style guide using `clang-format`.

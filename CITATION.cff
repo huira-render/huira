@@ -1,0 +1,25 @@
+cff-version: 1.2.0
+message: "If you use Huira in your work, please cite it using the metadata below."
+type: software
+title: "Huira"
+abstract: >-
+  Huira is a library for space rendering, LiDAR simulation, and solar
+  radiation pressure modeling.
+authors:
+  - given-names: Christopher
+    family-names: Gnam
+    orcid: "https://orcid.org/0009-0009-5096-3116"
+repository-code: "https://github.com/huira-render/huira"
+url: "https://www.huira.space"
+license: MIT
+keywords:
+  - rendering
+  - optical navigation
+  - space
+  - spacecraft
+  - lidar
+  - solar radiation pressure
+  - simulation
+version: 0.9.9
+date-released: "2026-08-31"
+# doi: "10.5281/zenodo.XXXXXXX"
