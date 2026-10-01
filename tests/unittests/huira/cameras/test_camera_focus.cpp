@@ -21,8 +21,10 @@ std::unique_ptr<CameraModel<RGB>> make_camera(bool blender, bool distorted)
     if (blender) {
         camera->use_blender_convention();
     }
-    camera->set_focal_length(units::Millimeter(20.0));
+    // Sensor first: each setter recomputes per-pixel camera data at the current resolution,
+    // and the default sensor is 1024x1024, which is slow in unoptimized builds.
     camera->configure_sensor_from_pitch(Resolution{64, 48}, units::Micrometer(200.0));
+    camera->set_focal_length(units::Millimeter(20.0));
     camera->set_fstop(2.0f);
     if (distorted) {
         camera->set_brown_conrady_distortion(BrownCoefficients(-0.2, 0.05, 0.0, 0.0, 0.0));
@@ -109,28 +111,16 @@ TEST_CASE("Depth of field rays meet at the point of focus", "[cameras][focus]")
             {
                 auto camera = make_camera(blender, distorted);
 
-                SECTION("Finite focus in front of the camera")
-                {
-                    for (double distance : {0.5, 10.0}) {
-                        camera->set_focus_distance(units::Meter(distance));
-                        check_rays_meet_focal_point(*camera, distance, blender);
-                    }
+                // In front of the camera, then past infinity:
+                for (double distance : {0.5, 10.0, -0.5, -10.0}) {
+                    camera->set_focus_distance(units::Meter(distance));
+                    check_rays_meet_focal_point(*camera, distance, blender);
                 }
 
-                SECTION("Focus past infinity")
-                {
-                    for (double distance : {-0.5, -10.0}) {
-                        camera->set_focus_distance(units::Meter(distance));
-                        check_rays_meet_focal_point(*camera, distance, blender);
-                    }
-                }
-
-                SECTION("Focus past infinity set through diopters")
-                {
-                    camera->set_diopters(units::Diopter(-0.1));
-                    REQUIRE(std::abs(camera->get_focus_distance().to_si() + 10.0) < 1e-4);
-                    check_rays_meet_focal_point(*camera, -10.0, blender);
-                }
+                // Past infinity, set through diopters:
+                camera->set_diopters(units::Diopter(-0.1));
+                REQUIRE(std::abs(camera->get_focus_distance().to_si() + 10.0) < 1e-4);
+                check_rays_meet_focal_point(*camera, -10.0, blender);
             }
         }
     }
@@ -141,10 +131,12 @@ TEST_CASE("Depth of field rays are parallel when focused at infinity", "[cameras
     const float inf = std::numeric_limits<float>::infinity();
 
     for (bool blender : {false, true}) {
-        for (float distance : {inf, -inf}) {
-            DYNAMIC_SECTION("blender " << blender << ", focus distance " << distance)
-            {
-                auto camera = make_camera(blender, true);
+        DYNAMIC_SECTION("blender " << blender)
+        {
+            auto camera = make_camera(blender, true);
+
+            for (float distance : {inf, -inf}) {
+                INFO("focus distance " << distance);
                 camera->set_focus_distance(units::Meter(distance));
                 REQUIRE(camera->get_diopters().to_si() == 0.0);
 

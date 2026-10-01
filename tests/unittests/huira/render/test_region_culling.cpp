@@ -20,9 +20,11 @@ Image<RGB> render_out_of_field_ball(float focus_distance_m, bool region_culling)
 {
     Scene<RGB> scene;
 
+    // Sensor first: each setter recomputes per-pixel camera data at the current resolution,
+    // and the default sensor is 1024x1024, which is slow in unoptimized builds.
     auto camera_model = scene.new_camera_model();
-    camera_model.set_focal_length(20_mm);
     camera_model.configure_sensor_from_pitch({64, 48}, 200_um);
+    camera_model.set_focal_length(20_mm);
     camera_model.set_fstop(1.0f);
     camera_model.enable_depth_of_field();
     camera_model.set_focus_distance(units::Meter(focus_distance_m));
@@ -42,7 +44,7 @@ Image<RGB> render_out_of_field_ball(float focus_distance_m, bool region_culling)
     sun.set_position(0_m, 0_m, -1_au);
 
     auto frame_buffer = camera_model.make_frame_buffer();
-    frame_buffer.enable_sensor_response();
+    frame_buffer.enable_received_power();
 
     Renderer<RGB> renderer;
     renderer.set_samples_per_pixel(16);
