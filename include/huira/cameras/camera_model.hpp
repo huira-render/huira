@@ -163,8 +163,14 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     bool in_fov(const Vec3<float>& point) const;
 
     /// Read out the sensor into the given frame buffer with the specified exposure time.
+    ///
+    /// Does nothing when the frame buffer's sensor response is disabled: there is nowhere to
+    /// put the result, and sensor models write into it unconditionally.
     void readout(FrameBuffer<TSpectral>& fb, units::Second exposure_time) const
     {
+        if (!fb.has_sensor_response()) {
+            return;
+        }
         sensor_->readout(fb, exposure_time);
     }
 
