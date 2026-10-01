@@ -125,7 +125,8 @@ class Image {
     [[nodiscard]] int sensor_bit_depth() const noexcept { return sensor_bit_depth_; }
     void set_sensor_bit_depth(int bits) noexcept { sensor_bit_depth_ = bits; }
 
-    void convolve(const Image& kernel);
+    void convolve(const Image& kernel)
+        requires(!IsInteger<PixelT>);
 
     void clear();
     void fill(const PixelT& value);
@@ -146,9 +147,11 @@ class Image {
     template <WrapMode W>
     [[nodiscard]] float wrap_coordinate(float coord, float max) const noexcept;
 
-    void convolve_direct_(const Image& kernel);
+    void convolve_direct_(const Image& kernel)
+        requires(!IsInteger<PixelT>);
 
-    void convolve_fft_(const Image& kernel);
+    void convolve_fft_(const Image& kernel)
+        requires(!IsInteger<PixelT>);
 };
 
 // Used for loading image data:

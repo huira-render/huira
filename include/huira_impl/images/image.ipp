@@ -486,6 +486,7 @@ const PixelT* Image<PixelT>::data() const noexcept
 
 template <IsImagePixel PixelT>
 void Image<PixelT>::convolve(const Image<PixelT>& kernel)
+    requires(!IsInteger<PixelT>)
 {
     if constexpr (IsInteger<PixelT>) {
         HUIRA_THROW_ERROR("Image::convolve - Requires a floating-point pixel type");
@@ -622,6 +623,7 @@ float Image<PixelT>::wrap_coordinate(float coord, float max) const noexcept
 
 template <IsImagePixel PixelT>
 void Image<PixelT>::convolve_direct_(const Image<PixelT>& kernel)
+    requires(!IsInteger<PixelT>)
 {
     const int kw = kernel.width();
     const int kh = kernel.height();
@@ -657,6 +659,7 @@ void Image<PixelT>::convolve_direct_(const Image<PixelT>& kernel)
 
 template <IsImagePixel PixelT>
 void Image<PixelT>::convolve_fft_(const Image<PixelT>& kernel)
+    requires(!IsInteger<PixelT>)
 {
     // One-shot convenience path. For repeated convolutions with the same kernel (e.g. per
     // rendered frame), hold a persistent FftConvolver and call apply() directly to reuse the
