@@ -140,7 +140,9 @@ void Renderer<TSpectral>::render(SceneView<TSpectral>& scene_view,
  * they leave points on the aperture. Translating a line by at most R keeps it within R
  * of the original, so a line from any aperture point that meets a sphere of radius r
  * meets the sphere of radius r + R when re-based at the origin. Inflating the sphere
- * therefore makes the origin-centred cone cover every aperture ray exactly.
+ * therefore makes the origin-centred cone cover every aperture ray's offset exactly.
+ * With a finite focus distance those rays are also tilted relative to the pinhole rays;
+ * tile_direction_cone_() widens the tile cones by that tilt.
  *
  * @return false when culling must be abandoned for this view.
  */
@@ -247,7 +249,25 @@ typename Renderer<TSpectral>::DirectionCone Renderer<TSpectral>::tile_direction_
         }
     }
 
-    cone.half_angle = std::min(PI<float>(), half_angle + region_cull_margin_scale_ * max_gap);
+    // Depth-of-field rays are not parallel to the pinhole rays sampled above: with a finite
+    // focus distance d each one is tilted towards its focal point F (or, past infinity, away
+    // from a virtual one behind the camera). Their origins are offset too, but the occupancy
+    // cones already absorb that (see build_occupancy_cones_()); the tilt must be added here.
+    // For an aperture point a, |a| <= R, the angle between F and F - a obeys
+    // sin(tilt) <= |a| / |F - a| <= R / (|F| - R), and |F| >= |d| because F lies on the focal
+    // plane at axial distance |d|. Close enough that this bound reaches a right angle, any
+    // direction is possible.
+    float dof_tilt = 0.f;
+    if (camera.depth_of_field_ && camera.aperture_ && !std::isinf(camera.d_)) {
+        const float aperture_radius = camera.aperture_->get_bounding_radius().to_si_f();
+        const float focus_distance = std::abs(camera.d_);
+        dof_tilt = (focus_distance > 2.f * aperture_radius)
+                       ? std::asin(aperture_radius / (focus_distance - aperture_radius))
+                       : PI<float>();
+    }
+
+    cone.half_angle =
+        std::min(PI<float>(), half_angle + region_cull_margin_scale_ * max_gap + dof_tilt);
     return cone;
 }
 
