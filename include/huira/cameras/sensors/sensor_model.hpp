@@ -128,6 +128,8 @@ class SensorModel {
     void set_rotation(units::Radian angle) { config_.rotation = angle; }
     units::Radian rotation() const { return config_.rotation; }
 
+    /// Convert the frame buffer's received power into its sensor response. Only called (via
+    /// CameraModel::readout()) when the frame buffer has a sensor response to write into.
     virtual void readout(FrameBuffer<TSpectral>& fb, units::Second exposure_time) const = 0;
 
   protected:

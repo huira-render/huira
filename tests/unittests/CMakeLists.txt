@@ -9,6 +9,7 @@ set(UNIT_TESTS
     huira/cameras/test_camera_focus.cpp
     huira/cameras/test_psf_composite.cpp
     huira/cameras/test_measured_psf.cpp
+    huira/cameras/test_sensor_readout.cpp
 
     huira/core/test_rotation.cpp
     huira/core/test_time.cpp
