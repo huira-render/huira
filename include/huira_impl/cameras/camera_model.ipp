@@ -561,6 +561,11 @@ void CameraModel<TSpectral>::disable_harvey_shack_scatter()
 
 /**
  * @brief Set the focus distance for depth of field calculations.
+ *
+ * Any non-zero, non-NaN value is accepted. Positive values focus in front of the camera,
+ * infinity of either sign focuses at infinity, and negative values focus past infinity: rays
+ * then diverge from a virtual point that distance behind the camera.
+ *
  * @param focus_distance Focus distance in meters
  */
 template <IsSpectral TSpectral>
@@ -669,8 +674,19 @@ Ray<TSpectral> CameraModel<TSpectral>::cast_ray(const Pixel& pixel, Sampler<floa
         Vec3<float> aperture_point{aperture_sample.x, aperture_sample.y, 0.f};
 
         if (!std::isinf(d_)) {
-            Vec3<float> focal_point = direction * d_;
+            // The thin-lens focal surface is the plane at axial distance d_, so the pixel's
+            // focal point is found by scaling its direction to unit axial length first. The
+            // distortion field stores unit vectors, which would otherwise place it on a
+            // sphere of radius d_ instead.
+            Vec3<float> focal_point = direction * (d_ / std::abs(direction.z));
             direction = focal_point - aperture_point;
+
+            // Focus past infinity: the focal point is a virtual point behind the camera, and
+            // the rays diverge from it rather than converging on it, so the direction is the
+            // reverse of the vector towards it.
+            if (d_ < 0.f) {
+                direction = -direction;
+            }
         }
         origin = aperture_point;
     }
@@ -681,7 +697,10 @@ Ray<TSpectral> CameraModel<TSpectral>::cast_ray(const Pixel& pixel, Sampler<floa
 template <IsSpectral TSpectral>
 Ray<TSpectral> CameraModel<TSpectral>::cast_ray(const Pixel& pixel) const
 {
-    assert(pixel[0] >= 0 && pixel[0] < rx_ && pixel[1] >= 0 && pixel[1] < ry_);
+    // Pixel coordinates are continuous and the sensor spans [0, rx_] x [0, ry_], so the far
+    // edge is a valid position. Region culling relies on this: it samples tile corners, and
+    // the last tile's far corner lies exactly on that edge.
+    assert(pixel[0] >= 0 && pixel[0] <= rx_ && pixel[1] >= 0 && pixel[1] <= ry_);
 
     Vec3<float> origin{0, 0, 0};
     Vec3<float> direction{0, 0, 1};
