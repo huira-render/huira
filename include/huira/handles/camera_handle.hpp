@@ -119,10 +119,16 @@ class CameraModelHandle : public Handle<CameraModel<TSpectral>> {
     const Image<TSpectral>& get_psf_convolution_kernel() const;
 
     void enable_depth_of_field(bool depth_of_field = true) const;
+
     void set_focus_distance(units::Meter focus_distance) const;
-    units::Meter get_focus_distance() const;
-    void set_diopters(units::Diopter diopters) const;
-    units::Diopter get_diopters() const;
+    void set_focus_diopters(units::Diopter diopters) const;
+    void set_focus_sensor_offset(units::Micrometer offset) const;
+
+    units::Meter focus_distance() const;
+    units::Diopter focus_diopters() const;
+    units::Micrometer focus_sensor_offset() const;
+
+    float defocus_blur_radius() const;
 
     Pixel project_point(const Vec3<float>& point_camera_coords) const;
 
@@ -135,6 +141,15 @@ class CameraModelHandle : public Handle<CameraModel<TSpectral>> {
     friend class FrameHandle<TSpectral>;
 
     // DEPRECATED
+    [[deprecated("set_diopters() was renamed v0.9.10.  Use set_focus_diopters() instead.")]]
+    void set_diopters(units::Diopter diopters) const;
+
+    [[deprecated("get_diopters() was renamed in v0.9.10.  Use focus_diopters() instead.")]]
+    units::Diopter get_diopters() const;
+
+    [[deprecated("get_focus_distance() was renamed in v0.9.10.  Use focus_distance() instead.")]]
+    units::Meter get_focus_distance() const;
+
     [[deprecated("set_sensor_resolution was removed in v0.9.4.  Use configure_sensor_from_pitch() "
                  "or configure_sensor_from_size() instead.")]]
     void set_sensor_resolution(Resolution resolution) const;

@@ -8,6 +8,7 @@
 namespace py = pybind11;
 
 namespace huira {
+
 template <typename TSpectral>
 inline void bind_camera_model_handle(py::module_& m)
 {
@@ -214,22 +215,47 @@ inline void bind_camera_model_handle(py::module_& m)
         .def("enable_depth_of_field",
              &HandleType::enable_depth_of_field,
              py::arg("depth_of_field") = true)
+
+        // Focus
         .def(
             "set_focus_distance",
             [](const HandleType& self, const py::object& fd) {
                 self.set_focus_distance(detail::unit_from_py<units::Meter>(fd));
             },
             py::arg("focus_distance"),
-            "Set the focus distance (accepts any distance unit)")
-        .def("get_focus_distance", &HandleType::get_focus_distance)
+            "Focus at a distance (any distance unit). Negative values focus past infinity; "
+            "infinity focuses at infinity.")
         .def(
-            "set_diopters",
+            "set_focus_diopters",
             [](const HandleType& self, const py::object& dpts) {
-                self.set_diopters(detail::unit_from_py<units::Diopter>(dpts));
+                self.set_focus_diopters(detail::unit_from_py<units::Diopter>(dpts));
             },
             py::arg("diopters"),
-            "Set the camera diopter (accepts units of diopters)")
-        .def("get_diopters", &HandleType::get_diopters)
+            "Focus by vergence, the reciprocal of the focus distance (Diopter). 0 focuses at "
+            "infinity; negative values focus past infinity.")
+        .def(
+            "set_focus_sensor_offset",
+            [](const HandleType& self, const py::object& offset) {
+                self.set_focus_sensor_offset(detail::unit_from_py<units::Micrometer>(offset));
+            },
+            py::arg("offset"),
+            "Focus by moving the sensor from the infinity-focus position (any distance unit). "
+            "0 focuses at infinity, positive values (sensor farther from the lens) focus in "
+            "front of the camera, negative values focus past infinity. The offset, not the "
+            "focus distance, is kept fixed if the focal length changes.")
+        .def("focus_distance",
+             &HandleType::focus_distance,
+             "Distance the camera is focused at: negative past infinity, inf at infinity.")
+        .def("focus_diopters",
+             &HandleType::focus_diopters,
+             "Focus as a vergence: the reciprocal of focus_distance(), 0 at infinity.")
+        .def("focus_sensor_offset",
+             &HandleType::focus_sensor_offset,
+             "Focus as the sensor's offset from the infinity-focus position.")
+        .def("defocus_blur_radius",
+             &HandleType::defocus_blur_radius,
+             "Radius in pixels of the defocus blur applied to unresolved sources (0 if in "
+             "focus).")
 
         // Make the FrameBuffer
         .def("make_frame_buffer", &HandleType::make_frame_buffer)
@@ -244,6 +270,23 @@ inline void bind_camera_model_handle(py::module_& m)
         // ========================== //
         // === DEPRECATED METHODS === //
         // ========================== //
+        .def(
+            "set_diopters",
+            [](const HandleType& self, const py::object& dpts) {
+                throw std::runtime_error("API BREAKING CHANGE: set_diopters was removed in "
+                                         "v0.9.10. Use set_focus_diopters() instead.");
+            },
+            py::arg("diopters"))
+        .def("get_diopters",
+             [](const HandleType& self) {
+                 throw std::runtime_error("API BREAKING CHANGE: get_diopters was removed in "
+                                          "v0.9.10. Use focus_diopters() instead.");
+             })
+        .def("get_focus_distance",
+             [](const HandleType& self) {
+                 throw std::runtime_error("API BREAKING CHANGE: get_focus_distance was removed in "
+                                          "v0.9.10. Use focus_distance() instead.");
+             })
         .def("set_sensor_resolution",
              [](HandleType&, py::args, py::kwargs) {
                  throw std::runtime_error(
