@@ -295,6 +295,7 @@ template <IsAperture TAperture, typename... Args>
 void CameraModel<TSpectral>::set_aperture(Args&&... args)
 {
     aperture_ = std::make_unique<TAperture>(std::forward<Args>(args)...);
+    update_focus_(); // the defocus kernel lives on the aperture
 }
 
 /**
@@ -560,63 +561,205 @@ void CameraModel<TSpectral>::disable_harvey_shack_scatter()
 }
 
 /**
- * @brief Set the focus distance for depth of field calculations.
+ * @brief Focus the camera at a distance.
  *
- * Any non-zero, non-NaN value is accepted. Positive values focus in front of the camera,
- * infinity of either sign focuses at infinity, and negative values focus past infinity: rays
- * then diverge from a virtual point that distance behind the camera.
+ * Any value other than zero or NaN is accepted. Positive values focus in front of the camera,
+ * and infinity of either sign focuses at infinity. Negative values focus past infinity: the
+ * rays then diverge from a virtual point that distance behind the camera.
  *
- * @param focus_distance Focus distance in meters
+ * Equivalent to set_focus_diopters() with the reciprocal. Either way the camera stays focused
+ * at this distance if the focal length later changes, and focus_distance() returns exactly
+ * this value (with infinity of either sign returned as +inf).
+ *
+ * @param focus_distance Focus distance (any length unit).
+ * @throws std::runtime_error if the distance is NaN or closer to zero than 1e-12 m.
  */
 template <IsSpectral TSpectral>
 void CameraModel<TSpectral>::set_focus_distance(units::Meter focus_distance)
 {
-    float focus_distance_ = focus_distance.to_si_f();
-    if (std::isnan(focus_distance_)) {
-        HUIRA_THROW_ERROR("CameraModel::set_focus_distance - Focus distance cannot be NaN");
+    const double distance = focus_distance.to_si();
+    if (!(std::abs(distance) >= MIN_FOCUS_DISTANCE_)) {
+        HUIRA_THROW_ERROR("CameraModel::set_focus_distance - Focus distance must not be NaN or "
+                          "closer to zero than 1e-12 m: " +
+                          std::to_string(distance) + " m");
     }
-    if (std::abs(focus_distance_) < 1e-12f) {
-        HUIRA_THROW_ERROR("CameraModel::set_focus_distance - Focus distance is too small");
+    set_focus_(FocusReference::Distance,
+               std::isinf(distance) ? std::numeric_limits<double>::infinity() : distance);
+}
+
+/**
+ * @brief Focus the camera by the vergence of the light it brings to focus.
+ *
+ * The reciprocal of the focus distance: 0 focuses at infinity, positive values focus in front
+ * of the camera, and negative values focus past infinity.
+ *
+ * @param diopters Focus vergence (diopters, i.e. reciprocal meters).
+ * @throws std::runtime_error if the vergence is not finite, or corresponds to a focus distance
+ *         closer to zero than 1e-12 m.
+ */
+template <IsSpectral TSpectral>
+void CameraModel<TSpectral>::set_focus_diopters(units::Diopter diopters)
+{
+    const double vergence = diopters.to_si();
+    if (!(std::abs(vergence) <= 1.0 / MIN_FOCUS_DISTANCE_)) {
+        HUIRA_THROW_ERROR("CameraModel::set_focus_diopters - Diopters must be finite and at most "
+                          "1e12 in magnitude: " +
+                          std::to_string(vergence));
     }
-    d_ = focus_distance_;
+    set_focus_(FocusReference::Diopters, vergence);
+}
+
+/**
+ * @brief Focus the camera by moving the sensor away from the infinity-focus position.
+ *
+ * The offset is measured along the optical axis, from the plane where the lens focuses an
+ * object at infinity. 0 focuses at infinity, positive values (sensor farther from the lens)
+ * focus in front of the camera, and negative values focus past infinity. The focus distance
+ * follows from the thin lens equation, 1/f = 1/distance + 1/(f + offset).
+ *
+ * Unlike the other focus setters this one is image-side, so the offset is what is held fixed
+ * if the focal length later changes, and the focus distance moves with it.
+ *
+ * A point at infinity blurs to a disk of diameter close to |offset| / N, for f-number N. The
+ * camera's projection does not change with focus, so for offsets that are a sizeable fraction
+ * of the focal length this differs from a physical lens by roughly a factor f / (f + offset).
+ *
+ * @param offset Sensor offset (any length unit).
+ * @throws std::runtime_error if the offset is not finite, or puts the sensor at the lens.
+ */
+template <IsSpectral TSpectral>
+void CameraModel<TSpectral>::set_focus_sensor_offset(units::Micrometer offset)
+{
+    const double offset_m = offset.to_si();
+    const double vergence =
+        resolve_focus_diopters_(FocusReference::SensorOffset, offset_m, focal_length_);
+    if (!std::isfinite(offset_m) || !(std::abs(vergence) <= 1.0 / MIN_FOCUS_DISTANCE_)) {
+        HUIRA_THROW_ERROR("CameraModel::set_focus_sensor_offset - Offset must be finite and must "
+                          "not put the sensor at the lens: " +
+                          std::to_string(offset_m * 1e6) + " um, with a focal length of " +
+                          std::to_string(focal_length_ * 1e3) + " mm");
+    }
+    set_focus_(FocusReference::SensorOffset, offset_m);
+}
+
+/// Get the distance the camera is focused at: negative past infinity, +inf at infinity.
+template <IsSpectral TSpectral>
+units::Meter CameraModel<TSpectral>::focus_distance() const
+{
+    if (focus_reference_ == FocusReference::Distance) {
+        return units::Meter(focus_setting_);
+    }
+    const double vergence = focus_diopters().to_si();
+    return units::Meter(vergence == 0.0 ? std::numeric_limits<double>::infinity() : 1.0 / vergence);
+}
+
+/// Get the focus as a vergence: the reciprocal of focus_distance(), 0 at infinity.
+template <IsSpectral TSpectral>
+units::Diopter CameraModel<TSpectral>::focus_diopters() const
+{
+    return units::Diopter(resolve_focus_diopters_(focus_reference_, focus_setting_, focal_length_));
+}
+
+/**
+ * @brief Get the focus as a sensor offset from the infinity-focus position.
+ *
+ * See set_focus_sensor_offset(). For a focus distance of exactly one focal length the offset
+ * is infinite, and for shorter distances, which a physical lens cannot focus on, it is below
+ * -f (the thin lens image is virtual). Those values still round-trip through
+ * set_focus_sensor_offset().
+ */
+template <IsSpectral TSpectral>
+units::Micrometer CameraModel<TSpectral>::focus_sensor_offset() const
+{
+    if (focus_reference_ == FocusReference::SensorOffset) {
+        return units::Meter(focus_setting_);
+    }
+    // Thin lens, with the image at f + offset: offset = f^2 / (distance - f).
+    const double f = focal_length_;
+    if (focus_reference_ == FocusReference::Distance) {
+        return units::Meter(std::isinf(focus_setting_) ? 0.0 : f * f / (focus_setting_ - f));
+    }
+    const double vergence = focus_setting_;
+    return units::Meter(f * f * vergence / (1.0 - f * vergence));
+}
+
+/**
+ * @brief Get the radius, in pixels, of the defocus blur applied to unresolved sources.
+ *
+ * This is the blur of a point at infinity for the current focus, aperture, focal length and
+ * pixel pitch. It is 0 when the blur is under half a pixel, which is treated as in focus.
+ */
+template <IsSpectral TSpectral>
+float CameraModel<TSpectral>::defocus_blur_radius() const
+{
+    return aperture_->get_defocus_radius();
+}
+
+/**
+ * @brief Convert a focus setting to a vergence (diopters) for the given focal length.
+ *
+ * A distance is inverted (infinity giving 0). A sensor offset is converted with the thin lens
+ * equation, with the sensor at f + offset: 1/distance = 1/f - 1/(f + offset).
+ */
+template <IsSpectral TSpectral>
+double CameraModel<TSpectral>::resolve_focus_diopters_(FocusReference reference,
+                                                       double setting,
+                                                       double focal_length)
+{
+    switch (reference) {
+    case FocusReference::Distance:
+        return std::isinf(setting) ? 0.0 : 1.0 / setting;
+    case FocusReference::Diopters:
+        return setting;
+    case FocusReference::SensorOffset:
+        return setting / (focal_length * (focal_length + setting));
+    default:
+        return setting; // unreachable: every reference is handled above
+    }
+}
+
+/**
+ * @brief Store an already validated focus setting and apply it.
+ */
+template <IsSpectral TSpectral>
+void CameraModel<TSpectral>::set_focus_(FocusReference reference, double setting)
+{
+    focus_reference_ = reference;
+    focus_setting_ = (setting == 0.0) ? 0.0 : setting; // no negative zero
+    update_focus_();
+}
+
+/**
+ * @brief Resolve the focus setting and rebuild the defocus kernel for unresolved sources.
+ *
+ * Must run whenever the focus setting or anything the defocus blur depends on changes: the
+ * focal length and pixel pitch (compute_intrinsics_() calls this), and the aperture.
+ */
+template <IsSpectral TSpectral>
+void CameraModel<TSpectral>::update_focus_()
+{
+    const double vergence = focus_diopters().to_si();
+
+    // Setters validate their input, so this only fails for a sensor offset whose focal length
+    // has since changed to put the sensor at the lens:
+    if (!(std::abs(vergence) <= 1.0 / MIN_FOCUS_DISTANCE_)) {
+        HUIRA_THROW_ERROR("CameraModel - The focus sensor offset of " +
+                          std::to_string(focus_setting_ * 1e6) +
+                          " um puts the sensor at the lens for a focal length of " +
+                          std::to_string(focal_length_ * 1e3) + " mm");
+    }
+
+    if (focus_reference_ == FocusReference::Distance) {
+        d_ = static_cast<float>(focus_setting_); // exactly as given
+    } else {
+        d_ = (vergence == 0.0) ? std::numeric_limits<float>::infinity()
+                               : static_cast<float>(1.0 / vergence);
+    }
 
     units::Meter pitch_x(sensor_->pixel_pitch().x);
     units::Meter pitch_y(sensor_->pixel_pitch().y);
-    this->aperture_->build_defocus_kernel(
-        this->get_diopters(), this->focal_length(), pitch_x, pitch_y, 16);
-}
-
-/**
- * @brief Set the focus distance using diopters.
- *
- * Converts the given diopter value to a focus distance in meters and forwards
- * it to set_focus_distance().
- *
- * @param diopters Focus distance expressed in diopters
- */
-template <IsSpectral TSpectral>
-void CameraModel<TSpectral>::set_diopters(units::Diopter diopters)
-{
-    units::Meter focus_distance;
-    if (std::abs(diopters.to_si_f()) < 1e-12f) {
-        focus_distance = units::Meter(std::numeric_limits<float>::infinity());
-    } else {
-        focus_distance = 1.f / diopters;
-    }
-    set_focus_distance(focus_distance);
-}
-
-/**
- * @brief Get the current focus distance in diopters.
- * @return units::Diopter Focus distance expressed in diopters
- */
-template <IsSpectral TSpectral>
-units::Diopter CameraModel<TSpectral>::get_diopters() const
-{
-    if (std::isinf(d_)) {
-        return units::Diopter(0.f);
-    }
-    return units::Diopter(1.f / d_);
+    aperture_->build_defocus_kernel(
+        units::Diopter(vergence), units::Meter(focal_length_), pitch_x, pitch_y, 16);
 }
 
 /**
@@ -761,6 +904,7 @@ void CameraModel<TSpectral>::set_fstop(float fstop)
     units::Meter aperture_diameter(focal_length_ / fstop);
     units::SquareMeter aperture_area = PI<float>() * (aperture_diameter * aperture_diameter) / 4.f;
     this->aperture_->set_area(aperture_area);
+    update_focus_();
     if (use_aperture_psf_) {
         units::Meter f(focal_length_);
         units::Meter px(sensor_->pixel_pitch().x);
@@ -798,6 +942,9 @@ void CameraModel<TSpectral>::compute_intrinsics_()
 
     compute_frustum_();
     compute_pixel_solid_angles_();
+
+    // Every focal length and pixel pitch change comes through here, and focus depends on both:
+    update_focus_();
 }
 
 template <IsSpectral TSpectral>

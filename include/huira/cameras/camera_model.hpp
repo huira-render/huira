@@ -141,12 +141,18 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
 
     /// Enable or disable depth of field for the camera model.
     void enable_depth_of_field(bool depth_of_field = true) { depth_of_field_ = depth_of_field; }
-    void set_focus_distance(units::Meter focus_distance);
 
-    /// Get the focus distance of the camera.
-    units::Meter get_focus_distance() const { return units::Meter(d_); }
-    void set_diopters(units::Diopter diopters);
-    units::Diopter get_diopters() const;
+    // Focus. The three setters are alternative ways of specifying the same state, and all
+    // three getters are always available and mutually consistent, whichever was set.
+    void set_focus_distance(units::Meter focus_distance);
+    void set_focus_diopters(units::Diopter diopters);
+    void set_focus_sensor_offset(units::Micrometer offset);
+
+    units::Meter focus_distance() const;
+    units::Diopter focus_diopters() const;
+    units::Micrometer focus_sensor_offset() const;
+
+    float defocus_blur_radius() const;
 
     Pixel project_point(const Vec3<float>& point_camera_coords) const;
     Pixel try_project_point(const Vec3<float>& point_camera_coords) const;
@@ -223,7 +229,21 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     std::uint64_t psf_kernel_version_ = 1;
 
     bool use_aperture_psf_ = false;
+
+    enum class FocusReference { Distance, Diopters, SensorOffset };
+    FocusReference focus_reference_ = FocusReference::Distance;
+    double focus_setting_ = std::numeric_limits<double>::infinity();
+
+    /// Resolved focus distance used by ray generation
     float d_ = std::numeric_limits<float>::infinity();
+
+    /// Closest focus distance accepted (meters), in either direction.
+    static constexpr double MIN_FOCUS_DISTANCE_ = 1e-12;
+
+    static double
+    resolve_focus_diopters_(FocusReference reference, double setting, double focal_length);
+    void set_focus_(FocusReference reference, double setting);
+    void update_focus_();
 
     float veiling_alpha_ = 0.f;
     bool veiling_glare_enabled_ = false;

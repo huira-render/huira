@@ -504,8 +504,12 @@ void CameraModelHandle<TSpectral>::enable_depth_of_field(bool depth_of_field) co
 }
 
 /**
- * @brief Set the focus distance for depth of field calculations.
- * @param focus_distance Focus distance in meters
+ * @brief Focus the camera at a distance.
+ *
+ * Positive values focus in front of the camera, infinity focuses at infinity, and negative
+ * values focus past infinity. See CameraModel::set_focus_distance().
+ *
+ * @param focus_distance Focus distance (any length unit).
  */
 template <IsSpectral TSpectral>
 void CameraModelHandle<TSpectral>::set_focus_distance(units::Meter focus_distance) const
@@ -514,33 +518,59 @@ void CameraModelHandle<TSpectral>::set_focus_distance(units::Meter focus_distanc
 }
 
 /**
- * @brief Get the current focus distance for depth of field calculations.
- * @return units::Meter Focus distance in meters
+ * @brief Focus the camera by vergence, the reciprocal of the focus distance.
+ *
+ * 0 focuses at infinity and negative values focus past infinity. See
+ * CameraModel::set_focus_diopters().
+ *
+ * @param diopters Focus vergence (diopters).
  */
 template <IsSpectral TSpectral>
-units::Meter CameraModelHandle<TSpectral>::get_focus_distance() const
+void CameraModelHandle<TSpectral>::set_focus_diopters(units::Diopter diopters) const
 {
-    return this->get_()->get_focus_distance();
+    this->get_()->set_focus_diopters(diopters);
 }
 
 /**
- * @brief Set the diopters for depth of field calculations.
- * @param diopters Diopters value
+ * @brief Focus the camera by the sensor's offset from the infinity-focus position.
+ *
+ * 0 focuses at infinity, positive values (sensor farther from the lens) focus in front of the
+ * camera, and negative values focus past infinity. See CameraModel::set_focus_sensor_offset().
+ *
+ * @param offset Sensor offset (any length unit).
  */
 template <IsSpectral TSpectral>
-void CameraModelHandle<TSpectral>::set_diopters(units::Diopter diopters) const
+void CameraModelHandle<TSpectral>::set_focus_sensor_offset(units::Micrometer offset) const
 {
-    this->get_()->set_diopters(diopters);
+    this->get_()->set_focus_sensor_offset(offset);
 }
 
-/**
- * @brief Get the current diopters value for depth of field calculations.
- * @return units::Diopter Diopters value
- */
+/// Get the distance the camera is focused at: negative past infinity, +inf at infinity.
 template <IsSpectral TSpectral>
-units::Diopter CameraModelHandle<TSpectral>::get_diopters() const
+units::Meter CameraModelHandle<TSpectral>::focus_distance() const
 {
-    return this->get_()->get_diopters();
+    return this->get_()->focus_distance();
+}
+
+/// Get the focus as a vergence: the reciprocal of focus_distance(), 0 at infinity.
+template <IsSpectral TSpectral>
+units::Diopter CameraModelHandle<TSpectral>::focus_diopters() const
+{
+    return this->get_()->focus_diopters();
+}
+
+/// Get the focus as the sensor's offset from the infinity-focus position.
+template <IsSpectral TSpectral>
+units::Micrometer CameraModelHandle<TSpectral>::focus_sensor_offset() const
+{
+    return this->get_()->focus_sensor_offset();
+}
+
+/// Get the radius, in pixels, of the defocus blur applied to unresolved sources (0 if in focus).
+template <IsSpectral TSpectral>
+float CameraModelHandle<TSpectral>::defocus_blur_radius() const
+{
+    return this->get_()->defocus_blur_radius();
 }
 
 /**
@@ -577,6 +607,28 @@ void CameraModelHandle<TSpectral>::use_blender_convention(bool value) const
 // ================== //
 // === DEPRECATED === //
 // ================== //
+template <IsSpectral TSpectral>
+void CameraModelHandle<TSpectral>::set_diopters(units::Diopter diopters) const
+{
+    (void)diopters;
+    HUIRA_THROW_ERROR("API BREAKING CHANGE: set_diopters was removed in v0.9.10. Use "
+                      "set_focus_diopters() instead.");
+}
+
+template <IsSpectral TSpectral>
+units::Diopter CameraModelHandle<TSpectral>::get_diopters() const
+{
+    HUIRA_THROW_ERROR("API BREAKING CHANGE: get_diopters was removed in v0.9.10. Use "
+                      "focus_diopters() instead.");
+}
+
+template <IsSpectral TSpectral>
+units::Meter CameraModelHandle<TSpectral>::get_focus_distance() const
+{
+    HUIRA_THROW_ERROR("API BREAKING CHANGE: get_focus_distance was removed in v0.9.10. Use "
+                      "focus_distance() instead.");
+}
+
 template <IsSpectral TSpectral>
 void CameraModelHandle<TSpectral>::set_sensor_resolution(Resolution resolution) const
 {
