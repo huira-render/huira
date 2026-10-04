@@ -27,7 +27,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-15-intel, macos-14]
+        os: [macos-15-intel, macos-15]
     runs-on: ${{ matrix.os }}
     name: Build (${{ matrix.os }})
 
@@ -54,7 +54,7 @@ jobs:
 
   test:
     needs: build-macos
-    runs-on: macos-14
+    runs-on: macos-15
     name: Test
 
     steps:
