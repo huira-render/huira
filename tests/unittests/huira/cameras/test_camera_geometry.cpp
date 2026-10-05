@@ -30,7 +30,10 @@ bool close(double a, double b, double relative = 1e-6)
 }
 
 // A small sensor (fast to set up) with strong distortion, and an off-center principal point.
+// These tests address the sensor's edges directly, so they use the convention whose coordinates
+// are the sensor's own: pixel edges at integers, so the sensor spans [0, 64] x [0, 48].
 const Setting SENSOR = [](CameraModel<RGB>& c) {
+    c.set_pixel_convention(PixelConvention::colmap());
     c.configure_sensor_from_pitch(
         Resolution{64, 48}, units::Micrometer(200.0), std::nullopt, 30.f, 26.f);
 };

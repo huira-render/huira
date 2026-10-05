@@ -60,7 +60,9 @@ enum class WrapMode {
  *
  * Memory is stored in row-major order, with the origin at the top-left corner.
  * Pixel coordinates (x, y) map to image space where x increases to the right
- * and y increases downward.
+ * and y increases downward. This layout is fixed: a camera's PixelConvention only changes how
+ * positions on the image are numbered, and file formats with bottom-up rows are flipped as they
+ * are read and written.
  *
  * @tparam PixelT The type of pixel stored (must satisfy IsImagePixel concept)
  */
