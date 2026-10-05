@@ -51,6 +51,14 @@ class Renderer;
  * by the setters. precompute() builds them ahead of time; see there for what a render does
  * when they are out of date.
  *
+ * Settings can be made in any order, with one exception: the aperture. Until it is set, the
+ * camera is f/2.8 at whatever focal length it has. set_fstop() and set_aperture_diameter() fix
+ * the aperture's diameter, which a later focal length change keeps, changing the f-number
+ * (and logging a warning if the f-stop was set directly). See set_fstop().
+ *
+ * Every setter checks its values and throws for ones that are not physically meaningful,
+ * leaving the camera as it was.
+ *
  * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
@@ -68,6 +76,9 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
 
     void set_fstop(float fstop);
     float fstop() const;
+
+    void set_aperture_diameter(units::Millimeter diameter);
+    units::Millimeter aperture_diameter() const;
 
     template <IsDistortion<TSpectral> TDistortion, typename... Args>
     void set_distortion(Args&&... args);
@@ -102,7 +113,8 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
                         float cx,
                         float cy,
                         const Resolution& resolution,
-                        units::Millimeter anchor_focal_length);
+                        units::Millimeter anchor_focal_length,
+                        float skew = 0.f);
 
     Rotation<double> sensor_rotation() const;
 
@@ -326,6 +338,8 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     /// Closest focus distance accepted (meters), in either direction.
     static constexpr double MIN_FOCUS_DISTANCE_ = 1e-12;
 
+    void check_focal_length_(float focal_length, const std::string& caller) const;
+
     static double
     resolve_focus_diopters_(FocusReference reference, double setting, double focal_length);
     void set_focus_(FocusReference reference, double setting);
@@ -346,15 +360,22 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     float cx_;
     float cy_;
 
+    /// Skew in sensor coordinates (pixels): x_pixel = fx * x + skew * y + cx. Resolved by
+    /// compute_intrinsics_() from shear_, the skew as given divided by fx, which is the
+    /// cotangent of the angle between the pixel axes and so does not change with focal length.
+    float skew_ = 0.f;
+    float shear_ = 0.f;
+
     /// The principal point as it was given, in pixel_convention_; unset means the center of
     /// the sensor, whatever its resolution. Kept as given so that the result does not depend on
     /// whether the convention is set before or after it.
     std::optional<float> principal_x_;
     std::optional<float> principal_y_;
     PixelConvention pixel_convention_{};
-    void set_principal_point_(std::optional<float> cx,
-                              std::optional<float> cy,
-                              const Resolution& resolution);
+    static void check_principal_point_(std::optional<float> cx,
+                                       std::optional<float> cy,
+                                       const Resolution& resolution,
+                                       const std::string& caller);
 
     // Sensor-coordinate versions of the public projection and ray functions, for internal use
     // (the renderer works in sensor coordinates throughout). See PixelConvention.
@@ -365,6 +386,20 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     float ry_;
 
     bool is_explicit_matrix_ = false;
+
+    /// Where the aperture's size came from, which decides what a focal length change does to
+    /// it: the default aperture stays f/2.8, and one that was set keeps its diameter.
+    enum class ApertureSource { Default, FStop, Diameter };
+    ApertureSource aperture_source_ = ApertureSource::Default;
+    static constexpr float DEFAULT_FSTOP_ = 2.8f;
+
+    /// The f-stop given to set_fstop(), and whether a focal length change since has been
+    /// warned about.
+    float fstop_setting_ = DEFAULT_FSTOP_;
+    bool fstop_change_warned_ = false;
+
+    void set_aperture_area_(units::Meter diameter);
+    void focal_length_changed_(float previous_focal_length);
 
     /// Recompute everything derived from the camera's geometry settings. Every setter that
     /// changes focal length, sensor, principal point, distortion or axis convention calls this,

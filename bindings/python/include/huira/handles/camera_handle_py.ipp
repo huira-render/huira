@@ -2,6 +2,7 @@
 
 #include "huira/handles/camera_handle.hpp"
 #include "huira/units/units_py.ipp"
+#include "pybind11/numpy.h"
 #include "pybind11/pybind11.h"
 #include "pybind11/stl.h"
 
@@ -22,12 +23,29 @@ inline void bind_camera_model_handle(py::module_& m)
                 self.set_focal_length(detail::unit_from_py<units::Millimeter>(fl));
             },
             py::arg("focal_length"),
-            "Set the focal length (accepts any distance unit)")
+            "Set the focal length (accepts any distance unit). Until the aperture is set, the "
+            "camera stays f/2.8. After set_fstop() the aperture's diameter is kept, so the "
+            "f-number changes (with a warning); set the f-stop after the focal length.")
         .def("focal_length", &HandleType::focal_length)
 
-        // F-stop
-        .def("set_fstop", &HandleType::set_fstop, py::arg("fstop"))
-        .def("fstop", &HandleType::fstop)
+        // Aperture
+        .def("set_fstop",
+             &HandleType::set_fstop,
+             py::arg("fstop"),
+             "Set the f-number, e.g. 8 for f/8. This sets the aperture's diameter from the "
+             "current focal length, and the diameter is what is kept if the focal length "
+             "changes later (with a warning), so set the f-stop after the focal length. Until "
+             "the aperture is set, the camera is f/2.8 at any focal length.")
+        .def("fstop", &HandleType::fstop, "The f-number: focal length / aperture diameter.")
+        .def(
+            "set_aperture_diameter",
+            [](const HandleType& self, const py::object& diameter) {
+                self.set_aperture_diameter(detail::unit_from_py<units::Millimeter>(diameter));
+            },
+            py::arg("diameter"),
+            "Set the aperture's diameter (any distance unit). It is kept if the focal length "
+            "changes, so the f-number follows the focal length.")
+        .def("aperture_diameter", &HandleType::aperture_diameter)
 
         .def(
             "configure_sensor_from_pitch",
@@ -86,18 +104,48 @@ inline void bind_camera_model_handle(py::module_& m)
         .def(
             "set_intrinsic_matrix",
             [](HandleType& self,
-               const Mat3<float>& matrix,
+               const Mat3<double>& matrix,
                std::pair<int, int> res,
                const py::object& anchor_fl) {
-                self.set_intrinsic_matrix(matrix,
+                self.set_intrinsic_matrix(Mat3<float>(matrix),
                                           Resolution{res.first, res.second},
                                           detail::unit_from_py<units::Millimeter>(anchor_fl));
             },
             py::arg("intrinsic_matrix"),
             py::arg("resolution"),
             py::arg("anchor_focal_length"),
-            "Explicitly set the 3x3 intrinsic matrix with a resolution tuple and physical focal "
-            "length anchor. The principal point is in the camera's pixel convention (see "
+            "Set the intrinsics from a huira.Mat3 camera matrix [[fx, s, cx], [0, fy, cy], "
+            "[0, 0, 1]] (up to scale), with a resolution tuple and physical focal length "
+            "anchor. The principal point is in the camera's pixel convention (see "
+            "set_pixel_convention).")
+        .def(
+            "set_intrinsic_matrix",
+            [](HandleType& self,
+               py::array_t<double, py::array::c_style | py::array::forcecast> matrix,
+               std::pair<int, int> res,
+               const py::object& anchor_fl) {
+                const auto buf = matrix.request();
+                if (buf.ndim != 2 || buf.shape[0] != 3 || buf.shape[1] != 3) {
+                    throw std::runtime_error("set_intrinsic_matrix - Expected a 3x3 matrix");
+                }
+                // NumPy is row-major, and GLM column-major: K[row][col] -> k[col][row].
+                const auto* values = static_cast<const double*>(buf.ptr);
+                Mat3<float> k;
+                for (int row = 0; row < 3; ++row) {
+                    for (int col = 0; col < 3; ++col) {
+                        k[col][row] = static_cast<float>(values[row * 3 + col]);
+                    }
+                }
+                self.set_intrinsic_matrix(k,
+                                          Resolution{res.first, res.second},
+                                          detail::unit_from_py<units::Millimeter>(anchor_fl));
+            },
+            py::arg("intrinsic_matrix"),
+            py::arg("resolution"),
+            py::arg("anchor_focal_length"),
+            "Set the intrinsics from a 3x3 camera matrix, as a NumPy array or nested list "
+            "written row by row: [[fx, s, cx], [0, fy, cy], [0, 0, 1]] (up to scale), where s "
+            "is the skew. The principal point is in the camera's pixel convention (see "
             "set_pixel_convention).")
 
         .def(
@@ -108,13 +156,15 @@ inline void bind_camera_model_handle(py::module_& m)
                float cx,
                float cy,
                std::pair<int, int> res,
-               const py::object& anchor_fl) {
+               const py::object& anchor_fl,
+               float skew) {
                 self.set_intrinsics(fx,
                                     fy,
                                     cx,
                                     cy,
                                     Resolution{res.first, res.second},
-                                    detail::unit_from_py<units::Millimeter>(anchor_fl));
+                                    detail::unit_from_py<units::Millimeter>(anchor_fl),
+                                    skew);
             },
             py::arg("fx"),
             py::arg("fy"),
@@ -122,9 +172,11 @@ inline void bind_camera_model_handle(py::module_& m)
             py::arg("cy"),
             py::arg("resolution"),
             py::arg("anchor_focal_length"),
+            py::arg("skew") = 0.f,
             "Explicitly set mathematical intrinsics with a resolution tuple and physical focal "
-            "length anchor. cx/cy are in the camera's pixel convention (see "
-            "set_pixel_convention).")
+            "length anchor: (x, y) projects to (fx * x + skew * y + cx, fy * y + cy). cx/cy "
+            "are in the camera's pixel convention (see set_pixel_convention); skew is 0 for "
+            "perpendicular pixel axes.")
 
         // Pixel coordinate convention
         .def("set_pixel_convention",
@@ -269,7 +321,7 @@ inline void bind_camera_model_handle(py::module_& m)
                 self.set_focus_diopters(detail::unit_from_py<units::Diopter>(dpts));
             },
             py::arg("diopters"),
-            "Focus by vergence, the reciprocal of the focus distance (Diopter). 0 focuses at "
+            "Focus in diopters, the reciprocal of the focus distance (Diopter). 0 focuses at "
             "infinity; negative values focus past infinity.")
         .def(
             "set_focus_sensor_offset",
@@ -286,7 +338,7 @@ inline void bind_camera_model_handle(py::module_& m)
              "Distance the camera is focused at: negative past infinity, inf at infinity.")
         .def("focus_diopters",
              &HandleType::focus_diopters,
-             "Focus as a vergence: the reciprocal of focus_distance(), 0 at infinity.")
+             "Focus in diopters: the reciprocal of focus_distance(), 0 at infinity.")
         .def("focus_sensor_offset",
              &HandleType::focus_sensor_offset,
              "Focus as the sensor's offset from the infinity-focus position.")

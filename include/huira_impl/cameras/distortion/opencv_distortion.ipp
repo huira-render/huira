@@ -12,11 +12,16 @@ namespace huira {
  * @brief Constructs an OpenCVDistortion with the given coefficients.
  *
  * @param coefficients The OpenCV distortion coefficients (radial, tangential, thin prism).
+ * @throws std::runtime_error if any coefficient is not finite.
  */
 template <IsSpectral TSpectral>
 OpenCVDistortion<TSpectral>::OpenCVDistortion(OpenCVCoefficients coefficients)
     : coefficients_(coefficients)
 {
+    const OpenCVCoefficients& c = coefficients;
+    this->check_coefficients_(
+        {c.k1, c.k2, c.k3, c.k4, c.k5, c.k6, c.p1, c.p2, c.s1, c.s2, c.s3, c.s4},
+        "OpenCVDistortion");
 }
 
 /**
@@ -71,7 +76,8 @@ OpenCVDistortion<TSpectral>::compute_delta_(BasePixel<TFloat> homogeneous_coords
             static_cast<TFloat>(coefficients_.s3) * r2 +
             static_cast<TFloat>(coefficients_.s4) * r4};
 
-    return radial_factor * homogeneous_coords_tf + tangential_and_prism;
+    // The radial factor scales the point, so the change it makes is (factor - 1) times it:
+    return (radial_factor - TFloat{1}) * homogeneous_coords_tf + tangential_and_prism;
 }
 
 /**

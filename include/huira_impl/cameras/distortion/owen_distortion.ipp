@@ -11,11 +11,14 @@ namespace huira {
  * @brief Constructs an OwenDistortion with the given coefficients.
  *
  * @param coefficients The Owen distortion coefficients.
+ * @throws std::runtime_error if any coefficient is not finite.
  */
 template <IsSpectral TSpectral>
 OwenDistortion<TSpectral>::OwenDistortion(OwenCoefficients coefficients)
     : coefficients_(coefficients)
 {
+    const OwenCoefficients& c = coefficients;
+    this->check_coefficients_({c.e1, c.e2, c.e3, c.e4, c.e5, c.e6}, "OwenDistortion");
 }
 
 /**

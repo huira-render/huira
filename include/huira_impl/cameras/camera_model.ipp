@@ -1,8 +1,11 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <limits>
 #include <memory>
+#include <sstream>
+#include <string>
 
 #include "huira/cameras/apertures/circular_aperture.hpp"
 #include "huira/cameras/psfs/harvey_shack_scatter.hpp"
@@ -13,17 +16,28 @@
 #include "tbb/task_arena.h"
 
 namespace huira {
+namespace detail {
+/// A number as people write it: 50, 6.25, 2.8 (not 50.000000).
+inline std::string short_number(double value)
+{
+    std::ostringstream out;
+    out.precision(4);
+    out << value;
+    return out.str();
+}
+} // namespace detail
+
 /**
  * @brief Construct a new CameraModel with default sensor and aperture.
  *
- * Initializes the camera with a default focal length, a SimpleSensor, and a CircularAperture.
- * The aperture diameter is set based on the focal length and a default f-stop of 2.8.
+ * Initializes the camera with a 50 mm focal length, a SimpleSensor, and a CircularAperture at
+ * f/2.8, which it stays at until the aperture is set (see set_fstop()).
  */
 template <IsSpectral TSpectral>
 CameraModel<TSpectral>::CameraModel()
 {
     HUIRA_TRACE_SCOPE("CameraModel::CameraModel()");
-    units::Meter diameter(this->focal_length_ / 2.8f);
+    units::Meter diameter(this->focal_length_ / DEFAULT_FSTOP_);
     this->sensor_ = std::make_unique<SimpleSensor<TSpectral>>();
     this->aperture_ = std::make_unique<CircularAperture<TSpectral>>(diameter);
     compute_intrinsics_(); // principal point unset: the center of the sensor
@@ -32,22 +46,53 @@ CameraModel<TSpectral>::CameraModel()
 /**
  * @brief Set the focal length of the camera (in millimeters).
  *
- * Updates the camera intrinsics. The aperture's diameter is kept, so the f-number changes.
+ * Updates the camera intrinsics. What happens to the aperture depends on how it was set:
+ * - Not set: the camera stays f/2.8, and the aperture's diameter follows the focal length.
+ * - set_fstop(): the diameter is kept, so the f-number changes, and a warning is logged the
+ *   first time. Call set_fstop() after set_focal_length() to get the f-number asked for.
+ * - set_aperture_diameter() or set_aperture(): the diameter is kept, as asked.
+ *
  * @param focal_length Focal length in millimeters
+ * @throws std::runtime_error if the focal length is not positive and finite, or if the focus is
+ *         a sensor offset that would put the sensor at the lens at this focal length.
  */
 template <IsSpectral TSpectral>
 void CameraModel<TSpectral>::set_focal_length(units::Millimeter focal_length)
 {
+    const float f = focal_length.to_si_f();
+    check_focal_length_(f, "CameraModel::set_focal_length");
+
     is_explicit_matrix_ = false;
-    focal_length_ = focal_length.to_si_f();
-
-    if (focal_length_ <= 0 || std::isinf(focal_length_) || std::isnan(focal_length_)) {
-        HUIRA_THROW_ERROR(
-            "CameraModel::set_focal_length - Focal length must be a positive finite value: " +
-            std::to_string(focal_length_));
-    }
-
+    focal_length_ = f;
     compute_intrinsics_();
+}
+
+/**
+ * @brief Checks a focal length before it is stored.
+ *
+ * It must be positive and finite, and must leave the focus valid: a focus given as a sensor
+ * offset is re-resolved at the new focal length, and must not put the sensor at the lens.
+ *
+ * @param focal_length Focal length in meters.
+ * @param caller Name for the error message.
+ */
+template <IsSpectral TSpectral>
+void CameraModel<TSpectral>::check_focal_length_(float focal_length,
+                                                 const std::string& caller) const
+{
+    if (!(focal_length > 0.f) || !std::isfinite(focal_length)) {
+        HUIRA_THROW_ERROR(caller + " - Focal length must be a positive finite value: " +
+                          std::to_string(focal_length) + " m");
+    }
+    const double vergence = resolve_focus_diopters_(
+        focus_reference_, focus_setting_, static_cast<double>(focal_length));
+    if (!(std::abs(vergence) <= 1.0 / MIN_FOCUS_DISTANCE_)) {
+        HUIRA_THROW_ERROR(caller + " - The focus sensor offset of " +
+                          detail::short_number(focus_setting_ * 1e6) +
+                          " um would put the sensor at the lens with a focal length of " +
+                          detail::short_number(static_cast<double>(focal_length) * 1e3) +
+                          " mm. Change the focus first.");
+    }
 }
 
 /**
@@ -112,15 +157,18 @@ void CameraModel<TSpectral>::set_pixel_convention(PixelConvention convention)
 }
 
 /**
- * @brief Validate and store a principal point as given (unset means the sensor's center).
+ * @brief Check a principal point before it is stored (unset means the sensor's center).
+ *
+ * Throws if it is not finite, and warns if it is far outside the sensor.
  */
 template <IsSpectral TSpectral>
-void CameraModel<TSpectral>::set_principal_point_(std::optional<float> cx,
-                                                  std::optional<float> cy,
-                                                  const Resolution& resolution)
+void CameraModel<TSpectral>::check_principal_point_(std::optional<float> cx,
+                                                    std::optional<float> cy,
+                                                    const Resolution& resolution,
+                                                    const std::string& caller)
 {
     if ((cx && !std::isfinite(*cx)) || (cy && !std::isfinite(*cy))) {
-        HUIRA_THROW_ERROR("CameraModel - Principal point (cx, cy) must be finite numeric values.");
+        HUIRA_THROW_ERROR(caller + " - Principal point (cx, cy) must be finite numeric values.");
     }
 
     const float width = static_cast<float>(resolution.x);
@@ -128,11 +176,8 @@ void CameraModel<TSpectral>::set_principal_point_(std::optional<float> cx,
     if ((cx && (*cx < -width || *cx > 2.f * width)) ||
         (cy && (*cy < -height || *cy > 2.f * height))) {
         HUIRA_LOG_WARNING("Principal point is significantly outside the sensor resolution. Ensure "
-                          "this intended for an off-axis projection.");
+                          "this is intended, e.g. for an off-axis projection.");
     }
-
-    principal_x_ = cx;
-    principal_y_ = cy;
 }
 
 /**
@@ -199,16 +244,19 @@ void CameraModel<TSpectral>::configure_sensor_from_pitch(const Resolution& resol
                                                          std::optional<float> cx,
                                                          std::optional<float> cy)
 {
+    // Everything is checked before anything is changed:
+    const std::string caller = "CameraModel::configure_sensor_from_pitch";
+    const units::Micrometer pitch_y_value = pitch_y.value_or(pitch_x);
+    SensorModel<TSpectral>::check_resolution(resolution, caller);
+    SensorModel<TSpectral>::check_pixel_pitch(pitch_x, pitch_y_value, caller);
+    check_principal_point_(cx, cy, resolution, caller);
+
     is_explicit_matrix_ = false;
-
     sensor_->set_resolution(resolution);
-
-    if (!pitch_y.has_value()) {
-        pitch_y = pitch_x;
-    }
-    sensor_->set_pixel_pitch(pitch_x, pitch_y.value());
-
-    set_principal_point_(cx, cy, resolution);
+    sensor_->set_pixel_pitch(pitch_x, pitch_y_value);
+    principal_x_ = cx;
+    principal_y_ = cy;
+    shear_ = 0.f; // rectangular pixels
 
     compute_intrinsics_();
 }
@@ -232,57 +280,112 @@ void CameraModel<TSpectral>::configure_sensor_from_size(const Resolution& resolu
                                                         std::optional<float> cx,
                                                         std::optional<float> cy)
 {
+    // Everything is checked before anything is changed. Without a height the pixels are
+    // square, so the height follows from the width and the resolution:
+    const std::string caller = "CameraModel::configure_sensor_from_size";
+    SensorModel<TSpectral>::check_resolution(resolution, caller);
+    SensorModel<TSpectral>::check_sensor_size(width, height.value_or(width), caller);
+    const units::Meter pitch_x(width.to_si() / static_cast<double>(resolution.x));
+    const units::Meter pitch_y(height ? height->to_si() / static_cast<double>(resolution.y)
+                                      : pitch_x.to_si());
+    SensorModel<TSpectral>::check_pixel_pitch(pitch_x, pitch_y, caller);
+    check_principal_point_(cx, cy, resolution, caller);
+
     is_explicit_matrix_ = false;
-
     sensor_->set_resolution(resolution);
-
-    if (height.has_value()) {
-        sensor_->set_sensor_size(width, height.value());
-    } else {
-        // If height is not provided, assume square pixels and compute height from width and
-        // resolution
-        float pixel_size_x = width.to_si_f() / static_cast<float>(resolution.x);
-        float pixel_size_y = pixel_size_x; // Square pixels
-        sensor_->set_pixel_pitch(units::Meter(pixel_size_x), units::Meter(pixel_size_y));
-    }
-
-    set_principal_point_(cx, cy, resolution);
+    sensor_->set_pixel_pitch(pitch_x, pitch_y);
+    principal_x_ = cx;
+    principal_y_ = cy;
+    shear_ = 0.f; // rectangular pixels
 
     compute_intrinsics_();
 }
 
 /**
- * @brief Set the intrinsic matrix for the camera.
- * @param intrinsic_matrix 3x3 intrinsic matrix
+ * @brief Set the intrinsics from a camera matrix.
+ *
+ * The matrix maps normalized image coordinates to pixel coordinates, and is upper triangular:
+ *
+ *     | fx  s  cx |
+ *     |  0  fy cy |
+ *     |  0  0  1  |
+ *
+ * Like any homogeneous matrix it is defined up to scale, so a matrix whose bottom-right entry
+ * is not 1 is divided through by it.
+ *
+ * Mat3 is GLM's column-major matrix, indexed K[column][row], so cx is K[2][0], cy is K[2][1]
+ * and s is K[1][0]. GLM's constructor also takes the values a column at a time:
+ * Mat3<float>{fx, 0, 0, s, fy, 0, cx, cy, 1}. (From Python, pass the matrix as written above,
+ * as a row-major 3x3 array.) See set_intrinsics() for what the values mean.
+ *
+ * @param intrinsic_matrix The camera matrix.
  * @param resolution Sensor resolution
  * @param anchor_focal_length Anchor focal length in millimeters
+ * @throws std::runtime_error if the matrix is not upper triangular (most likely, it was filled
+ *         one row at a time and is transposed), its bottom-right entry is 0, or as
+ *         set_intrinsics().
  */
 template <IsSpectral TSpectral>
 void CameraModel<TSpectral>::set_intrinsic_matrix(const Mat3<float>& intrinsic_matrix,
                                                   const Resolution& resolution,
                                                   units::Millimeter anchor_focal_length)
 {
-    this->set_intrinsics(intrinsic_matrix[0][0],
-                         intrinsic_matrix[1][1],
-                         intrinsic_matrix[0][2],
-                         intrinsic_matrix[1][2],
-                         resolution,
-                         anchor_focal_length);
+    const float w = intrinsic_matrix[2][2];
+    if (!std::isfinite(w) || w == 0.f) {
+        HUIRA_THROW_ERROR("CameraModel::set_intrinsic_matrix - The bottom-right entry of the "
+                          "matrix must be finite and non-zero: " +
+                          std::to_string(w));
+    }
+    const Mat3<float> k = intrinsic_matrix / w;
+
+    // The entries below the diagonal are 0 in any camera matrix. With them, the matrix would be
+    // a general homography, which no calibration produces. The bottom row multiplies normalized
+    // coordinates, and the entry under fx multiplies pixels, so each has its own scale:
+    const float pixel_scale = std::max({std::abs(k[0][0]), std::abs(k[1][1]), 1.f});
+    if (!(std::abs(k[0][2]) <= 1e-6f) || !(std::abs(k[1][2]) <= 1e-6f) ||
+        !(std::abs(k[0][1]) <= 1e-6f * pixel_scale)) {
+        HUIRA_THROW_ERROR("CameraModel::set_intrinsic_matrix - The matrix must be upper "
+                          "triangular, [[fx, s, cx], [0, fy, cy], [0, 0, 1]] up to scale. If "
+                          "cx and cy are in its bottom row, it is transposed: MATLAB's "
+                          "IntrinsicMatrix property is (its K property is not), and so is a "
+                          "Mat3 filled one row at a time in C++, since Mat3 is column-major "
+                          "(GLM), indexed K[column][row].");
+    }
+
+    this->set_intrinsics(
+        k[0][0], k[1][1], k[2][0], k[2][1], resolution, anchor_focal_length, k[1][0]);
 }
 
 /**
  * @brief Set the intrinsic parameters for the camera.
  *
+ * A point at normalized image coordinates (x, y) projects to pixel
+ * (fx * x + skew * y + cx, fy * y + cy).
+ *
  * The principal point is read in the camera's pixel convention (see set_pixel_convention()),
  * so a calibration can be passed in the convention of the tool that produced it. fx and fy are
- * scales, and mean the same in every convention.
+ * scales, and mean the same in every convention. The skew does too, except that a convention
+ * counting y up from the bottom row flips its sign.
  *
- * @param fx Focal length in x direction
- * @param fy Focal length in y direction
+ * The skew is 0 for pixels with perpendicular axes, which is what most calibration tools
+ * assume (OpenCV, for one, never estimates it). It is kept if the focal length changes later,
+ * as a fraction of fx; configure_sensor_from_pitch() and configure_sensor_from_size() describe
+ * rectangular pixels and set it back to 0.
+ *
+ * The anchor focal length sets the physical scale: the pixel pitch is the anchor focal length
+ * divided by fx and fy. Like set_focal_length(), it changes the focal length, with the same
+ * effect on the aperture.
+ *
+ * @param fx Focal length in x direction, in pixels
+ * @param fy Focal length in y direction, in pixels
  * @param cx Principal point x coordinate, in the camera's pixel convention
  * @param cy Principal point y coordinate, in the camera's pixel convention
  * @param resolution Sensor resolution
  * @param anchor_focal_length Anchor focal length in millimeters
+ * @param skew Skew, in pixels; 0 for perpendicular pixel axes.
+ * @throws std::runtime_error if fx or fy is not positive and finite, the principal point or
+ *         skew is not finite, the resolution is not at least 1x1, or the anchor focal length is
+ *         not valid (see set_focal_length()).
  */
 template <IsSpectral TSpectral>
 void CameraModel<TSpectral>::set_intrinsics(float fx,
@@ -290,21 +393,39 @@ void CameraModel<TSpectral>::set_intrinsics(float fx,
                                             float cx,
                                             float cy,
                                             const Resolution& resolution,
-                                            units::Millimeter anchor_focal_length)
+                                            units::Millimeter anchor_focal_length,
+                                            float skew)
 {
-    is_explicit_matrix_ = true;
+    // Everything is checked before anything is changed:
+    const std::string caller = "CameraModel::set_intrinsics";
+    if (!(fx > 0.f) || !std::isfinite(fx) || !(fy > 0.f) || !std::isfinite(fy)) {
+        HUIRA_THROW_ERROR(caller + " - fx and fy must be positive finite values: " +
+                          std::to_string(fx) + ", " + std::to_string(fy) +
+                          ". (For an image whose y axis points up, keep fy positive and set a "
+                          "bottom-left pixel convention; see set_pixel_convention().)");
+    }
+    if (!std::isfinite(skew)) {
+        HUIRA_THROW_ERROR(caller + " - Skew must be finite: " + std::to_string(skew));
+    }
+    SensorModel<TSpectral>::check_resolution(resolution, caller);
+    check_principal_point_(cx, cy, resolution, caller);
+    const float f = anchor_focal_length.to_si_f();
+    check_focal_length_(f, caller);
 
+    // The anchor gives the pixel pitch:
+    const units::Meter pitch_x(static_cast<double>(f) / static_cast<double>(fx));
+    const units::Meter pitch_y(static_cast<double>(f) / static_cast<double>(fy));
+    SensorModel<TSpectral>::check_pixel_pitch(pitch_x, pitch_y, caller);
+
+    is_explicit_matrix_ = true;
     fx_ = fx;
     fy_ = fy;
-    set_principal_point_(cx, cy, resolution);
+    shear_ = skew / fx;
+    principal_x_ = cx;
+    principal_y_ = cy;
     sensor_->set_resolution(resolution);
-    focal_length_ = anchor_focal_length.to_si_f();
-
-    // Use the anchor to compute the pixel_pitch/size
-    units::Meter px(focal_length_ / fx_);
-    units::Meter py(focal_length_ / fy_);
-    sensor_->set_pixel_pitch(px, py);
-    sensor_->set_sensor_size(px * resolution.x, py * resolution.y);
+    sensor_->set_pixel_pitch(pitch_x, pitch_y);
+    focal_length_ = f;
 
     compute_intrinsics_();
 }
@@ -323,6 +444,9 @@ Rotation<double> CameraModel<TSpectral>::sensor_rotation() const
 /**
  * @brief Set the aperture model for the camera.
  *
+ * The aperture's size is kept if the focal length later changes, so the f-number follows the
+ * focal length. See set_fstop().
+ *
  * @tparam TAperture Aperture model type
  * @tparam Args Constructor arguments for the aperture
  * @param args Arguments to construct the aperture
@@ -332,6 +456,7 @@ template <IsAperture TAperture, typename... Args>
 void CameraModel<TSpectral>::set_aperture(Args&&... args)
 {
     aperture_ = std::make_unique<TAperture>(std::forward<Args>(args)...);
+    aperture_source_ = ApertureSource::Diameter;
     optics_changed_(OpticsInput::Aperture);
 }
 
@@ -532,10 +657,12 @@ void CameraModel<TSpectral>::disable_veiling_glare()
 
 /**
  * @brief Set Harvey-Shack scatter parameters.
- * @param scatter_fraction Fraction of light scattered (0 to 1)
- * @param falloff_exponent Exponent for scatter falloff (typically > 1)
- * @param r0 Radius at which scatter fraction is measured (default 0.5)
- * @param radius Maximum scatter radius in pixels (default 0, meaning infinite)
+ * @param scatter_fraction Fraction of light scattered, in [0, 1)
+ * @param falloff_exponent Power-law exponent of the falloff (typically 2 to 3)
+ * @param r0 Shoulder radius in pixels: the profile is flat within it and falls off as
+ *        r^-falloff_exponent beyond it (default 0.5)
+ * @param radius Cutoff radius in pixels (default 0: none, beyond the convolution kernel's own
+ *        radius)
  */
 template <IsSpectral TSpectral>
 void CameraModel<TSpectral>::set_harvey_shack_scatter(float scatter_fraction,
@@ -597,9 +724,9 @@ void CameraModel<TSpectral>::disable_harvey_shack_scatter()
  * camera is configured keeps that time out of the first render, so that every render takes
  * comparable time, as a timed or hardware-in-the-loop run needs.
  *
- * Without it, a render builds whatever is out of date itself and logs the time taken: as
- * information when precompute() has never been called, and as a warning when it has (the
- * settings have then changed since). set_auto_precompute(false) makes the render throw
+ * Without it, a render builds whatever is out of date itself and logs the time taken: as a
+ * warning the first time after precompute() was called (the settings have then changed
+ * since), and as information otherwise. set_auto_precompute(false) makes the render throw
  * instead.
  *
  * Only what the current settings use is built: for example, no PSF stamps while a defocus
@@ -676,6 +803,9 @@ void CameraModel<TSpectral>::precompute_for_render_()
     const std::chrono::duration<double> elapsed = std::chrono::steady_clock::now() - start;
     const std::string seconds = std::to_string(elapsed.count());
     if (explicitly_precomputed_) {
+        // Once per precompute(): a camera changed on every frame would otherwise warn on every
+        // frame. Later rebuilds are logged as information until precompute() is called again.
+        explicitly_precomputed_ = false;
         HUIRA_LOG_WARNING("CameraModel - The camera changed after precompute() was called, so "
                           "this render rebuilt its optics, taking " +
                           seconds +
@@ -723,7 +853,8 @@ bool CameraModel<TSpectral>::is_precomputed_locked_() const
                                               {OpticsInput::FocalLength,
                                                OpticsInput::PixelPitch,
                                                OpticsInput::Aperture,
-                                               OpticsInput::Focus})) {
+                                               OpticsInput::Focus,
+                                               OpticsInput::Resolution})) {
             return false;
         }
     } else if (!defocus_kernel_.empty()) {
@@ -845,10 +976,14 @@ void CameraModel<TSpectral>::ensure_defocus_()
                                             {OpticsInput::FocalLength,
                                              OpticsInput::PixelPitch,
                                              OpticsInput::Aperture,
-                                             OpticsInput::Focus})) {
+                                             OpticsInput::Focus,
+                                             OpticsInput::Resolution})) {
         return;
     }
-    defocus_kernel_.build(*aperture_, radius, DEFOCUS_BANKS_);
+    // Sources are stamped where they project onto the image, so no stamp needs to reach further
+    // than the image's larger dimension:
+    const int reach = std::max(sensor_->resolution().x, sensor_->resolution().y) + 1;
+    defocus_kernel_.build(*aperture_, radius, DEFOCUS_BANKS_, reach);
     defocus_built_at_ = optics_version_;
 }
 
@@ -1039,14 +1174,16 @@ void CameraModel<TSpectral>::set_focus_distance(units::Meter focus_distance)
 }
 
 /**
- * @brief Focus the camera by the vergence of the light it brings to focus.
+ * @brief Focus the camera in diopters: the reciprocal of the focus distance.
  *
- * The reciprocal of the focus distance: 0 focuses at infinity, positive values focus in front
- * of the camera, and negative values focus past infinity.
+ * 0 focuses at infinity, positive values focus in front of the camera, and negative values
+ * focus past infinity. This is the sign of a focus scale marked in diopters. (In the sign
+ * convention of optics, where light diverging from a point in front of a lens has negative
+ * vergence, the light from the focus distance has vergence -diopters.)
  *
- * @param diopters Focus vergence (diopters, i.e. reciprocal meters).
- * @throws std::runtime_error if the vergence is not finite, or corresponds to a focus distance
- *         closer to zero than 1e-12 m.
+ * @param diopters The reciprocal of the focus distance (diopters, i.e. reciprocal meters).
+ * @throws std::runtime_error if it is not finite, or corresponds to a focus distance closer to
+ *         zero than 1e-12 m.
  */
 template <IsSpectral TSpectral>
 void CameraModel<TSpectral>::set_focus_diopters(units::Diopter diopters)
@@ -1104,7 +1241,7 @@ units::Meter CameraModel<TSpectral>::focus_distance() const
     return units::Meter(vergence == 0.0 ? std::numeric_limits<double>::infinity() : 1.0 / vergence);
 }
 
-/// Get the focus as a vergence: the reciprocal of focus_distance(), 0 at infinity.
+/// Get the focus in diopters: the reciprocal of focus_distance(), 0 at infinity.
 template <IsSpectral TSpectral>
 units::Diopter CameraModel<TSpectral>::focus_diopters() const
 {
@@ -1260,7 +1397,7 @@ Pixel CameraModel<TSpectral>::project_to_sensor_(const Vec3<float>& point_camera
     if (distortion_) {
         normalized = distortion_->distort(normalized);
     }
-    return Pixel{fx_ * normalized[0] + cx_, fy_ * normalized[1] + cy_};
+    return Pixel{fx_ * normalized[0] + skew_ * normalized[1] + cx_, fy_ * normalized[1] + cy_};
 }
 
 template <IsSpectral TSpectral>
@@ -1278,6 +1415,8 @@ Pixel CameraModel<TSpectral>::try_project_point(const Vec3<float>& point_camera_
  * @brief Cast a camera ray through a position on the image, sampling the aperture when depth
  * of field is enabled.
  *
+ * The position may be anywhere, including outside the image.
+ *
  * @param pixel Position in the camera's pixel convention (see set_pixel_convention()).
  * @param sampler Sampler for the aperture position.
  */
@@ -1289,6 +1428,8 @@ Ray<TSpectral> CameraModel<TSpectral>::cast_ray(const Pixel& pixel, Sampler<floa
 
 /**
  * @brief Cast a pinhole camera ray through a position on the image.
+ *
+ * The position may be anywhere, including outside the image.
  *
  * @param pixel Position in the camera's pixel convention (see set_pixel_convention()).
  */
@@ -1316,8 +1457,6 @@ template <IsSpectral TSpectral>
 Ray<TSpectral> CameraModel<TSpectral>::sensor_ray_(const Pixel& pixel,
                                                    Sampler<float>& sampler) const
 {
-    assert(pixel[0] >= 0 && pixel[0] < rx_ && pixel[1] >= 0 && pixel[1] < ry_);
-
     Vec3<float> origin{0, 0, 0};
     Vec3<float> direction = ray_direction_(pixel);
 
@@ -1352,11 +1491,6 @@ Ray<TSpectral> CameraModel<TSpectral>::sensor_ray_(const Pixel& pixel,
 template <IsSpectral TSpectral>
 Ray<TSpectral> CameraModel<TSpectral>::sensor_ray_(const Pixel& pixel) const
 {
-    // Pixel coordinates are continuous and the sensor spans [0, rx_] x [0, ry_], so the far
-    // edge is a valid position. Region culling relies on this: it samples tile corners, and
-    // the last tile's far corner lies exactly on that edge.
-    assert(pixel[0] >= 0 && pixel[0] <= rx_ && pixel[1] >= 0 && pixel[1] <= ry_);
-
     return Ray<TSpectral>{Vec3<float>{0, 0, 0}, glm::normalize(ray_direction_(pixel))};
 }
 
@@ -1364,22 +1498,32 @@ Ray<TSpectral> CameraModel<TSpectral>::sensor_ray_(const Pixel& pixel) const
  * @brief Direction (not normalized) of the pinhole ray through a sensor position.
  *
  * Without distortion this is computed exactly. With distortion it is interpolated from the
- * precomputed directions at every pixel corner, which span the whole sensor, so positions
- * anywhere in [0, width] x [0, height] are interpolated rather than clamped.
+ * precomputed directions at every pixel corner, which span the whole sensor, [0, width] x
+ * [0, height]. Beyond the sensor, it is computed exactly too, by undistorting.
  */
 template <IsSpectral TSpectral>
 Vec3<float> CameraModel<TSpectral>::ray_direction_(const Pixel& pixel) const
 {
-    if (!distortion_) {
+    const bool on_sensor = pixel[0] >= 0.f && pixel[0] <= rx_ && pixel[1] >= 0.f && pixel[1] <= ry_;
+    if (!distortion_ || !on_sensor) {
         return pixel_to_direction_<float>(pixel);
     }
     return distortion_field_.sample_bilinear<WrapMode::Clamp>(pixel[0] / rx_, pixel[1] / ry_);
 }
 
+/**
+ * @brief The power a pixel receives per unit of radiance: its solid angle times the aperture
+ * area projected along the direction to the pixel's center.
+ *
+ * @param x Pixel column.
+ * @param y Pixel row, from the top.
+ */
 template <IsSpectral TSpectral>
 float CameraModel<TSpectral>::pixel_radiance_to_power(int x, int y) const
 {
-    Ray<TSpectral> ray = sensor_ray_(Pixel{static_cast<float>(x), static_cast<float>(y)});
+    // Pixel (x, y) covers [x, x + 1) x [y, y + 1) in sensor coordinates:
+    const Ray<TSpectral> ray =
+        sensor_ray_(Pixel{static_cast<float>(x) + 0.5f, static_cast<float>(y) + 0.5f});
     return pixel_solid_angles_(x, y) * this->get_projected_aperture_area(ray.direction());
 }
 
@@ -1406,24 +1550,36 @@ float CameraModel<TSpectral>::get_projected_aperture_area(const Vec3<float>& dir
 }
 
 /**
- * @brief Set the f-stop (aperture ratio) of the camera.
- * @param fstop F-stop value
+ * @brief Set the f-stop (focal ratio) of the camera.
+ *
+ * Sets the aperture's diameter to the current focal length divided by the f-stop. The diameter
+ * is what is kept: if the focal length changes later, the f-number changes with it, and a
+ * warning is logged the first time, in case that was not intended. Set the f-stop after the
+ * focal length to get the f-number asked for, or use set_aperture_diameter() to set the
+ * diameter itself.
+ *
+ * Until the aperture is set, by this or set_aperture_diameter() or set_aperture(), the camera
+ * is f/2.8 at any focal length.
+ *
+ * @param fstop The f-number, e.g. 8 for f/8.
+ * @throws std::runtime_error if it is not positive and finite.
  */
 template <IsSpectral TSpectral>
 void CameraModel<TSpectral>::set_fstop(float fstop)
 {
-    units::Meter aperture_diameter(focal_length_ / fstop);
-    units::SquareMeter aperture_area = PI<float>() * (aperture_diameter * aperture_diameter) / 4.f;
-    const double previous_area = aperture_->get_area().to_si();
-    this->aperture_->set_area(aperture_area);
-    if (aperture_->get_area().to_si() != previous_area) {
-        optics_changed_(OpticsInput::Aperture);
+    if (!(fstop > 0.f) || !std::isfinite(fstop)) {
+        HUIRA_THROW_ERROR("CameraModel::set_fstop - The f-stop must be a positive finite value: " +
+                          std::to_string(fstop));
     }
+    set_aperture_area_(units::Meter(focal_length_ / fstop));
+    aperture_source_ = ApertureSource::FStop;
+    fstop_setting_ = fstop;
+    fstop_change_warned_ = false;
 }
 
 /**
- * @brief Get the f-stop (aperture ratio) of the camera.
- * @return float F-stop value
+ * @brief Get the f-stop (focal ratio) of the camera: the focal length divided by the aperture's
+ * diameter (for a non-circular aperture, the diameter of a circle of the same area).
  */
 template <IsSpectral TSpectral>
 float CameraModel<TSpectral>::fstop() const
@@ -1431,6 +1587,91 @@ float CameraModel<TSpectral>::fstop() const
     float area = this->aperture_->get_area().to_si_f();
     float aperture_diameter = 2.f * std::sqrt(area / PI<float>());
     return focal_length_ / aperture_diameter;
+}
+
+/**
+ * @brief Set the aperture's diameter, which is kept if the focal length changes.
+ *
+ * The aperture keeps its shape. For a non-circular aperture this is the diameter of a circle of
+ * the same area. Unlike set_fstop(), the f-number then follows the focal length without a
+ * warning, since the diameter is what was asked for.
+ *
+ * @param diameter The aperture's diameter.
+ * @throws std::runtime_error if it is not positive and finite.
+ */
+template <IsSpectral TSpectral>
+void CameraModel<TSpectral>::set_aperture_diameter(units::Millimeter diameter)
+{
+    const double d = diameter.to_si();
+    if (!(d > 0.0) || !std::isfinite(d)) {
+        HUIRA_THROW_ERROR("CameraModel::set_aperture_diameter - The diameter must be a positive "
+                          "finite value: " +
+                          std::to_string(d) + " m");
+    }
+    set_aperture_area_(units::Meter(d));
+    aperture_source_ = ApertureSource::Diameter;
+}
+
+/// Get the aperture's diameter (for a non-circular aperture, that of a circle of the same area).
+template <IsSpectral TSpectral>
+units::Millimeter CameraModel<TSpectral>::aperture_diameter() const
+{
+    const double area = aperture_->get_area().to_si();
+    return units::Meter(2.0 * std::sqrt(area / PI<double>()));
+}
+
+/**
+ * @brief Resize the aperture to the area of a circle of the given diameter, keeping its shape.
+ */
+template <IsSpectral TSpectral>
+void CameraModel<TSpectral>::set_aperture_area_(units::Meter diameter)
+{
+    const units::SquareMeter area = PI<float>() * (diameter * diameter) / 4.f;
+    if (!(area.to_si() > 0.0) || !std::isfinite(area.to_si())) {
+        HUIRA_THROW_ERROR("CameraModel - The aperture's area must be a positive finite value: " +
+                          std::to_string(area.to_si()) + " m^2, from a diameter of " +
+                          std::to_string(diameter.to_si()) + " m");
+    }
+    const double previous_area = aperture_->get_area().to_si();
+    aperture_->set_area(area);
+    if (aperture_->get_area().to_si() != previous_area) {
+        optics_changed_(OpticsInput::Aperture);
+    }
+}
+
+/**
+ * @brief Apply a focal length change to the aperture. See set_focal_length().
+ *
+ * @param previous_focal_length The focal length before the change, in meters; 0 when the camera
+ *        is first constructed.
+ */
+template <IsSpectral TSpectral>
+void CameraModel<TSpectral>::focal_length_changed_(float previous_focal_length)
+{
+    switch (aperture_source_) {
+    case ApertureSource::Default:
+        set_aperture_area_(units::Meter(focal_length_ / DEFAULT_FSTOP_));
+        break;
+    case ApertureSource::FStop:
+        if (!fstop_change_warned_ && previous_focal_length > 0.f) {
+            fstop_change_warned_ = true;
+            HUIRA_LOG_WARNING(
+                "CameraModel - The focal length changed from " +
+                detail::short_number(static_cast<double>(previous_focal_length) * 1e3) + " mm to " +
+                detail::short_number(static_cast<double>(focal_length_) * 1e3) +
+                " mm after set_fstop(" + detail::short_number(fstop_setting_) +
+                "). The aperture keeps its " +
+                detail::short_number(aperture_diameter().to_si() * 1e3) +
+                " mm diameter, so the camera is now f/" + detail::short_number(fstop()) +
+                ". Call set_fstop() after set_focal_length() to keep f/" +
+                detail::short_number(fstop_setting_) +
+                ", or set_aperture_diameter() to keep the diameter without this warning.");
+        }
+        break;
+    case ApertureSource::Diameter:
+    default:
+        break;
+    }
 }
 
 /**
@@ -1446,6 +1687,11 @@ void CameraModel<TSpectral>::compute_intrinsics_()
         fx_ = focal_length_ / sensor_->pixel_pitch().x;
         fy_ = focal_length_ / sensor_->pixel_pitch().y;
     }
+
+    // The skew as given is in the pixel convention, where y may count up from the bottom row,
+    // which flips its sign in sensor coordinates (y down):
+    const float skew_sign = (pixel_convention_.origin == PixelOrigin::BottomLeft) ? -1.f : 1.f;
+    skew_ = skew_sign * shear_ * fx_;
 
     // The principal point as given is in the pixel convention; everything below works in sensor
     // coordinates. Unset, it is the center of the sensor, which is the same in every convention.
@@ -1466,8 +1712,10 @@ void CameraModel<TSpectral>::compute_intrinsics_()
     // The optics kernels depend on some of these; see precompute().
     const Vec2<float> pitch = sensor_->pixel_pitch();
     if (focal_length_ != optics_focal_length_) {
+        const float previous_focal_length = optics_focal_length_;
         optics_focal_length_ = focal_length_;
         optics_changed_(OpticsInput::FocalLength);
+        focal_length_changed_(previous_focal_length);
     }
     if (pitch.x != optics_pixel_pitch_.x || pitch.y != optics_pixel_pitch_.y) {
         optics_pixel_pitch_ = pitch;
@@ -1485,8 +1733,8 @@ template <IsFloatingPoint TFloat>
 Vec3<TFloat> CameraModel<TSpectral>::pixel_to_direction_(const Pixel& pixel) const
 {
     // Invert the intrinsic matrix
-    float nx = (pixel[0] - cx_) / fx_;
     float ny = (pixel[1] - cy_) / fy_;
+    float nx = (pixel[0] - cx_ - skew_ * ny) / fx_;
     Pixel normalized{nx, ny};
 
     // Undistort
