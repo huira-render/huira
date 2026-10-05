@@ -50,7 +50,7 @@ tools:
      - :math:`(0.5, 0.5)`
      - down
      - :math:`\left(\frac{W}{2}, \frac{H}{2}\right)`
-     - COLMAP, graphics APIs; Huira before v0.9.10
+     - COLMAP, and Direct3D, Vulkan and Metal pixel coordinates; Huira before v0.9.10
    * - ``matlab()``
      - :math:`(1, 1)`
      - down
@@ -85,6 +85,11 @@ Python:
 The convention can be set before or after the principal point: a principal point is kept as it
 was given and read in whichever convention is current when rendering. It is a per-camera
 setting.
+
+The focal lengths ``fx`` and ``fy`` are scales, and mean the same in every convention. So does
+the skew that ``set_intrinsics()`` and ``set_intrinsic_matrix()`` also accept, except that a
+convention counting :math:`y` up from the bottom row (such as ``fits()``) flips its sign, since
+the skew multiplies :math:`y`.
 
 What it does not change
 -----------------------

@@ -1,12 +1,14 @@
 
 #include <cmath>
 #include <memory>
+#include <string>
 
 #include "huira/cameras/apertures/aperture.hpp"
 #include "huira/cameras/psfs/airy_disk.hpp"
 #include "huira/concepts/spectral_concepts.hpp"
 #include "huira/core/constants.hpp"
 #include "huira/units/units.hpp"
+#include "huira/util/logger.hpp"
 
 namespace huira {
 
@@ -16,6 +18,7 @@ namespace huira {
  * Initializes the aperture and computes its area from the specified diameter.
  *
  * @param diameter The diameter of the aperture in meters.
+ * @throws std::runtime_error if the diameter is not positive and finite.
  */
 template <IsSpectral TSpectral>
 CircularAperture<TSpectral>::CircularAperture(units::Meter diameter)
@@ -29,11 +32,17 @@ CircularAperture<TSpectral>::CircularAperture(units::Meter diameter)
  * Directly sets the area value (in square meters) for the aperture.
  *
  * @param area The new area in square meters.
+ * @throws std::runtime_error if the area is not positive and finite.
  */
 template <IsSpectral TSpectral>
 void CircularAperture<TSpectral>::set_area(units::SquareMeter area)
 {
-    this->area_ = area.to_si_f();
+    const float a = area.to_si_f();
+    if (!(a > 0.f) || !std::isfinite(a)) {
+        HUIRA_THROW_ERROR("CircularAperture::set_area - Area must be a positive finite value: " +
+                          std::to_string(area.to_si()) + " m^2");
+    }
+    this->area_ = a;
     diameter_ = std::sqrt(4.f * this->area_ / PI<float>());
     radius_ = diameter_ / 2.f;
 }
@@ -67,11 +76,17 @@ Vec2<float> CircularAperture<TSpectral>::sample(Sampler<float>& sampler) const
  * Computes the area from the specified diameter and updates the internal area value.
  *
  * @param diameter The new diameter in meters.
+ * @throws std::runtime_error if the diameter is not positive and finite.
  */
 template <IsSpectral TSpectral>
 void CircularAperture<TSpectral>::set_diameter(units::Meter diameter)
 {
-    float d = diameter.to_si_f();
+    const float d = diameter.to_si_f();
+    if (!(d > 0.f) || !std::isfinite(d) || !std::isfinite(d * d)) {
+        HUIRA_THROW_ERROR(
+            "CircularAperture::set_diameter - Diameter must be a positive finite value: " +
+            std::to_string(diameter.to_si()) + " m");
+    }
     this->area_ = PI<float>() * (d * d) / 4.f;
     this->diameter_ = d;
     this->radius_ = d / 2.f;

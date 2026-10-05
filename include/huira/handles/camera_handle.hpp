@@ -42,6 +42,9 @@ class CameraModelHandle : public Handle<CameraModel<TSpectral>> {
     void set_fstop(float fstop) const;
     float fstop() const;
 
+    void set_aperture_diameter(units::Millimeter diameter) const;
+    units::Millimeter aperture_diameter() const;
+
     template <IsDistortion<TSpectral> TDistortion, typename... Args>
     void set_distortion(Args&&... args) const;
 
@@ -74,7 +77,8 @@ class CameraModelHandle : public Handle<CameraModel<TSpectral>> {
                         float cx,
                         float cy,
                         const Resolution& resolution,
-                        units::Millimeter anchor_focal_length);
+                        units::Millimeter anchor_focal_length,
+                        float skew = 0.f);
 
     void set_sensor_quantum_efficiency(double qe) const;
     void set_sensor_quantum_efficiency(TSpectral qe) const;

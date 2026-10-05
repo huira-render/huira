@@ -51,12 +51,12 @@ enum class PixelOrigin {
  *
  * The default is OpenCV's, which most calibration tools share. Presets cover common tools:
  *
- * | Preset     | First pixel center | y runs | Used by                                  |
- * |------------|--------------------|--------|------------------------------------------|
- * | `opencv()` | (0, 0)             | down   | OpenCV, Kornia, most calibration tools   |
- * | `colmap()` | (0.5, 0.5)         | down   | COLMAP, graphics; Huira before v0.9.10   |
- * | `matlab()` | (1, 1)             | down   | MATLAB                                   |
- * | `fits()`   | (1, 1)             | up     | FITS / WCS (CRPIX), DS9                  |
+ * | Preset     | First pixel center | y runs | Used by                                         |
+ * |------------|--------------------|--------|-------------------------------------------------|
+ * | `opencv()` | (0, 0)             | down   | OpenCV, Kornia, most calibration tools          |
+ * | `colmap()` | (0.5, 0.5)         | down   | COLMAP, Direct3D/Vulkan/Metal; Huira pre-0.9.10 |
+ * | `matlab()` | (1, 1)             | down   | MATLAB                                          |
+ * | `fits()`   | (1, 1)             | up     | FITS / WCS (CRPIX), DS9                         |
  *
  * Internally Huira works in sensor coordinates: x right and y down from the sensor's top-left
  * corner, in pixels, so that pixel i covers [i, i + 1). to_sensor() and from_sensor() convert.

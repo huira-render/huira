@@ -2,6 +2,7 @@
 #pragma once
 
 #include <cstddef>
+#include <string>
 
 #include "huira/concepts/spectral_concepts.hpp"
 #include "huira/render/frame_buffer.hpp"
@@ -47,15 +48,18 @@ struct SensorConfig {
     /**
      * @brief Sets the gain in dB for the sensor.
      * @param gain_db The gain in decibels.
-     * @throws std::runtime_error if the value is not finite.
+     * @throws std::runtime_error if the value is not finite, or gives a conversion gain that is
+     *         not a positive finite value.
      */
     void set_gain_db(float gain_db)
     {
-        if (std::isinf(gain_db) || std::isnan(gain_db)) {
-            HUIRA_THROW_ERROR("SensorModel::set_gain_db - Gain in dB must be a finite value: " +
+        const float new_gain = std::pow(10.f, (unity_db - gain_db) / 20.f);
+        if (!std::isfinite(gain_db) || !(new_gain > 0.f) || !std::isfinite(new_gain)) {
+            HUIRA_THROW_ERROR("SensorModel::set_gain_db - Gain in dB must be finite, and give a "
+                              "positive finite conversion gain: " +
                               std::to_string(gain_db) + " dB");
         }
-        gain = std::pow(10.f, (unity_db - gain_db) / 20.f);
+        gain = new_gain;
     }
     /**
      * @brief Returns the gain in dB for the sensor.
@@ -125,8 +129,15 @@ class SensorModel {
     void set_gain_db(float gain_db);
     float gain_db() const { return config_.gain_db(); }
 
-    void set_rotation(units::Radian angle) { config_.rotation = angle; }
+    void set_rotation(units::Radian angle);
     units::Radian rotation() const { return config_.rotation; }
+
+    static void check_resolution(const Resolution& resolution, const std::string& caller);
+    static void check_pixel_pitch(units::Micrometer pitch_x,
+                                  units::Micrometer pitch_y,
+                                  const std::string& caller);
+    static void
+    check_sensor_size(units::Millimeter width, units::Millimeter height, const std::string& caller);
 
     /// Convert the frame buffer's received power into its sensor response. Only called (via
     /// CameraModel::readout()) when the frame buffer has a sensor response to write into.
@@ -134,6 +145,10 @@ class SensorModel {
 
   protected:
     SensorConfig<TSpectral> config_;
+
+    /// Largest bit depth accepted: that of the widest integer type. Real ADCs are far narrower
+    /// (scientific sensors reach 16 to 18 bits); this only rules out nonsense.
+    static constexpr int MAX_BIT_DEPTH = 64;
 
     // TODO function to sample poisson distribution
     friend class CameraModel<TSpectral>;
