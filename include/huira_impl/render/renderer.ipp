@@ -1444,7 +1444,32 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
     const bool mask_available = occluder_mask_valid_ && occluder_mask_.width() == fb_width &&
                                 occluder_mask_.height() == fb_height;
 
-    int margin = splat_wings ? std::max(stamp_radius, 1) : stamp_radius;
+    // Sources are binned by the pixel that contains them, but stamps and the bilinear splat are
+    // anchored at pixel-center coordinates half a pixel lower (see below), so they can start
+    // one pixel before the binned pixel.
+    const int margin = stamp_radius + 1;
+
+    // Polyphase stamp kernels hold the kernel pre-shifted by bank / banks of a pixel. Each
+    // source uses the nearest bank, which keeps the quantization error unbiased (within half a
+    // bank either way)
+    const int stamp_banks = !use_defocus ? (use_psf_direct ? camera->psf_->get_banks() : 0)
+                                         : camera->aperture_->get_defocus_banks();
+    struct StampPhase {
+        int base;    ///< Pixel the kernel's center pixel lands on.
+        float phase; ///< Fraction for get_kernel(), mid-way through the chosen bank.
+    };
+    auto nearest_stamp_phase = [stamp_banks](float center) {
+        const long banks = static_cast<long>(stamp_banks);
+        const long k = std::lround(static_cast<double>(center) * static_cast<double>(banks));
+        long base = k / banks;
+        long bank = k % banks;
+        if (bank < 0) {
+            bank += banks;
+            base -= 1;
+        }
+        return StampPhase{static_cast<int>(base),
+                          (static_cast<float>(bank) + 0.5f) / static_cast<float>(banks)};
+    };
 
     struct TileBuffer {
         Image<TSpectral> buf;
@@ -1514,11 +1539,18 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                         }
                     }
 
+                    // The camera projects onto pixel-edge coordinates, in which pixel i covers
+                    // [i, i + 1) - the convention the path tracer samples in. Stamps and the
+                    // splat place light by pixel centers, which in those coordinates sit at
+                    // i + 0.5, so they work from the position half a pixel lower:
+                    const float center_x = star_p.x - 0.5f;
+                    const float center_y = star_p.y - 0.5f;
+
                     if (splat_wings) {
-                        const int bx = static_cast<int>(std::floor(star_p.x));
-                        const int by = static_cast<int>(std::floor(star_p.y));
-                        const float fx = star_p.x - static_cast<float>(bx);
-                        const float fy = star_p.y - static_cast<float>(by);
+                        const int bx = static_cast<int>(std::floor(center_x));
+                        const int by = static_cast<int>(std::floor(center_y));
+                        const float fx = center_x - static_cast<float>(bx);
+                        const float fy = center_y - static_cast<float>(by);
 
                         const float w00 = (1.f - fx) * (1.f - fy);
                         const float w10 = fx * (1.f - fy);
@@ -1538,21 +1570,19 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                     }
 
                     if (stamp_radius > 0) {
-                        float floor_x = std::floor(star_p.x);
-                        float floor_y = std::floor(star_p.y);
-                        float frac_x = star_p.x - floor_x;
-                        float frac_y = star_p.y - floor_y;
+                        const StampPhase phase_x = nearest_stamp_phase(center_x);
+                        const StampPhase phase_y = nearest_stamp_phase(center_y);
 
                         int eff_r = item.effective_radius;
 
                         if (use_defocus) {
                             const Image<float>& kernel =
-                                camera->aperture_->get_defocus_kernel(frac_x, frac_y);
+                                camera->aperture_->get_defocus_kernel(phase_x.phase, phase_y.phase);
 
                             int k_offset = camera->aperture_->get_defocus_half_extent() - eff_r;
                             int crop_dim = 2 * eff_r + 1;
-                            int start_x = static_cast<int>(floor_x) - eff_r;
-                            int start_y = static_cast<int>(floor_y) - eff_r;
+                            int start_x = phase_x.base - eff_r;
+                            int start_y = phase_y.base - eff_r;
 
                             // Clamp to local tile bounds
                             int kx_begin = std::max(0, local_x0 - start_x);
@@ -1570,13 +1600,14 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                                 }
                             }
                         } else {
-                            const Image<TSpectral>& kernel = camera->get_psf_kernel(frac_x, frac_y);
+                            const Image<TSpectral>& kernel =
+                                camera->get_psf_kernel(phase_x.phase, phase_y.phase);
 
                             int k_offset = stamp_radius - eff_r;
                             int crop_dim = 2 * eff_r + 1;
 
-                            int start_x = static_cast<int>(floor_x) - eff_r;
-                            int start_y = static_cast<int>(floor_y) - eff_r;
+                            int start_x = phase_x.base - eff_r;
+                            int start_y = phase_y.base - eff_r;
 
                             int kx_begin = std::max(0, local_x0 - start_x);
                             int kx_end = std::min(crop_dim, local_x1 - start_x);
@@ -1598,8 +1629,9 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                             }
                         }
                     } else {
-                        int px = static_cast<int>(std::round(star_p.x));
-                        int py = static_cast<int>(std::round(star_p.y));
+                        // No kernel: all the light goes to the pixel the source falls in.
+                        int px = static_cast<int>(std::floor(star_p.x));
+                        int py = static_cast<int>(std::floor(star_p.y));
                         if (px >= local_x0 && px < local_x1 && py >= local_y0 && py < local_y1) {
                             local_buf(px - local_x0, py - local_y0) += power;
                         }

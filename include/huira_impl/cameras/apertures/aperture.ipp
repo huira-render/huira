@@ -31,7 +31,8 @@ void Aperture<TSpectral>::build_defocus_kernel(units::Diopter defocus,
     }
 
     defocus_cache_.radius = blur_radius_pixels;
-    defocus_cache_.half_extent = std::max(1, static_cast<int>(std::ceil(blur_radius_pixels)));
+    defocus_cache_.half_extent =
+        std::max(1, static_cast<int>(std::ceil(blur_radius_pixels + 0.5f)));
     defocus_cache_.banks = banks;
     defocus_cache_.dim = 2 * defocus_cache_.half_extent + 1;
 
