@@ -228,6 +228,27 @@ inline void bind_camera_model_handle(py::module_& m)
              "hard cutoff radius (0 = none).")
         .def("disable_harvey_shack_scatter", &HandleType::disable_harvey_shack_scatter)
 
+        // Optics kernels
+        .def("precompute",
+             &HandleType::precompute,
+             py::call_guard<py::gil_scoped_release>(),
+             "Build everything the camera's optics need for the next render (PSF and defocus "
+             "stamps, convolution kernels and their spectra) now, so that the time is not spent "
+             "in the render. Only what is out of date is rebuilt.")
+        .def("is_precomputed",
+             &HandleType::is_precomputed,
+             "Whether everything the next render needs from the camera's optics is built and "
+             "up to date.")
+        .def("set_auto_precompute",
+             &HandleType::set_auto_precompute,
+             py::arg("auto_precompute") = true,
+             "Choose what a render does when the camera's optics are out of date: build them "
+             "and log the time taken (True, the default), or raise (False), which guarantees "
+             "that no render includes that time.")
+        .def("auto_precompute",
+             &HandleType::auto_precompute,
+             "Whether a render builds out-of-date optics itself. See set_auto_precompute().")
+
         // Depth of field
         .def("enable_depth_of_field",
              &HandleType::enable_depth_of_field,

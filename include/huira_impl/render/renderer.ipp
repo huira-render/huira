@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <atomic>
+#include <cassert>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -38,6 +39,10 @@ void Renderer<TSpectral>::render(SceneView<TSpectral>& scene_view,
 
     frame_buffer.clear();
 
+    // The optics kernels are built (or rebuilt) here if out of date, before anything is timed,
+    // or this throws if the camera's auto precompute is disabled. See CameraModel::precompute().
+    camera->precompute_for_render_();
+
     Image<TSpectral> ray_traced_power = this->path_trace_(scene_view, frame_buffer);
 
     Image<TSpectral> star_wing_splat(0, 0, TSpectral{0});
@@ -54,8 +59,7 @@ void Renderer<TSpectral>::render(SceneView<TSpectral>& scene_view,
         // No source landed in frame, so the splat is empty and its wings are too. The
         // core/wing blend below still has to run: it rescales the core by 1 - f_s.
         if (!image_is_zero_(star_wing_splat)) {
-            this->convolve_cached_(
-                star_wing_splat, camera->get_psf_wings_kernel(), *camera, wings_convolver_);
+            camera->apply_wings_convolution_(star_wing_splat);
         }
         const float f_s = camera->scatter_fraction_;
         const float core_weight = 1.f - f_s;
@@ -981,27 +985,22 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
         // Convolution is linear, so convolving the components independently keeps
         // total == direct + indirect exactly.
         //
-        // The kernel is fetched unconditionally even when nothing needs convolving, so
-        // that its (potentially very expensive) generation still happens on the first
-        // frame rather than stalling whichever later frame first has content in view.
-        const Image<TSpectral>& psf = camera->get_psf_convolution_kernel();
-
         // An empty field of view leaves these buffers identically zero, and a zero
         // image convolves to a zero image. Skipping the transforms in that case is
         // exact, and it is the difference between a frame-sized FFT pair per component
-        // and nothing at all.
+        // and nothing at all. (The kernel and its spectrum were built by render(), whether
+        // or not they are used here, so a frame with nothing in view does not leave the
+        // build to whichever later frame first has.)
         if (frame_buffer.has_received_power() && !image_is_zero_(received_power)) {
-            this->convolve_cached_(received_power, psf, *camera, psf_convolver_);
+            camera->apply_psf_convolution_(received_power);
         }
         if (frame_buffer.has_received_direct_power() &&
             !image_is_zero_(frame_buffer.received_direct_power())) {
-            this->convolve_cached_(
-                frame_buffer.received_direct_power(), psf, *camera, psf_convolver_);
+            camera->apply_psf_convolution_(frame_buffer.received_direct_power());
         }
         if (frame_buffer.has_received_indirect_power() &&
             !image_is_zero_(frame_buffer.received_indirect_power())) {
-            this->convolve_cached_(
-                frame_buffer.received_indirect_power(), psf, *camera, psf_convolver_);
+            camera->apply_psf_convolution_(frame_buffer.received_indirect_power());
         }
     }
 
@@ -1125,20 +1124,25 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
         return received_power;
     }
 
-    // Determine the stamp radius based on camera settings:
-    bool use_defocus = camera->aperture_->has_defocus();
+    // Determine the stamp based on camera settings. render() has brought the camera's
+    // kernels up to date: the defocus stamps are empty when in focus, and when they are not
+    // they replace the PSF's.
+    const DefocusKernel<TSpectral>& defocus = camera->defocus_kernel_;
+    const bool use_defocus = !defocus.empty();
 
     // Scattered-light wings for unresolved sources:
     const bool splat_wings = camera->convolve_psf_ && camera->scatter_enabled_ && !use_defocus;
     if (splat_wings) {
         wing_splat = Image<TSpectral>(fb_width, fb_height, TSpectral{0});
     }
-    bool use_psf_direct = camera->has_psf() && !use_defocus;
+    const bool use_psf_direct = camera->has_psf() && !use_defocus;
+    const PSF<TSpectral>* psf = use_psf_direct ? camera->psf_.get() : nullptr;
+    assert(!use_psf_direct || psf != nullptr);
     int stamp_radius = 0;
     if (use_defocus) {
-        stamp_radius = camera->aperture_->get_defocus_half_extent();
+        stamp_radius = defocus.half_extent();
     } else if (use_psf_direct) {
-        stamp_radius = camera->get_psf_radius();
+        stamp_radius = psf->get_radius();
     }
 
     const auto& times = scene_view.temporal_samples_;
@@ -1155,7 +1159,7 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
     RadiusLUTConfig radius_config;
     std::vector<RadiusLUTEntry> radius_lut;
     if (use_psf_direct && stamp_radius > 1) {
-        const Image<TSpectral>& center_kernel = camera->get_psf_kernel(0.0f, 0.0f);
+        const Image<TSpectral>& center_kernel = psf->get_kernel(0.0f, 0.0f);
 
         // On-axis area is conservative:
         float representative_area =
@@ -1452,8 +1456,7 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
     // Polyphase stamp kernels hold the kernel pre-shifted by bank / banks of a pixel. Each
     // source uses the nearest bank, which keeps the quantization error unbiased (within half a
     // bank either way)
-    const int stamp_banks = !use_defocus ? (use_psf_direct ? camera->psf_->get_banks() : 0)
-                                         : camera->aperture_->get_defocus_banks();
+    const int stamp_banks = use_defocus ? defocus.banks() : (use_psf_direct ? psf->get_banks() : 0);
     struct StampPhase {
         int base;    ///< Pixel the kernel's center pixel lands on.
         float phase; ///< Fraction for get_kernel(), mid-way through the chosen bank.
@@ -1576,10 +1579,9 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                         int eff_r = item.effective_radius;
 
                         if (use_defocus) {
-                            const Image<float>& kernel =
-                                camera->aperture_->get_defocus_kernel(phase_x.phase, phase_y.phase);
+                            const Image<float>& kernel = defocus.get(phase_x.phase, phase_y.phase);
 
-                            int k_offset = camera->aperture_->get_defocus_half_extent() - eff_r;
+                            int k_offset = defocus.half_extent() - eff_r;
                             int crop_dim = 2 * eff_r + 1;
                             int start_x = phase_x.base - eff_r;
                             int start_y = phase_y.base - eff_r;
@@ -1601,7 +1603,7 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                             }
                         } else {
                             const Image<TSpectral>& kernel =
-                                camera->get_psf_kernel(phase_x.phase, phase_y.phase);
+                                psf->get_kernel(phase_x.phase, phase_y.phase);
 
                             int k_offset = stamp_radius - eff_r;
                             int crop_dim = 2 * eff_r + 1;
@@ -1693,9 +1695,8 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                       });
 
     if (use_defocus && camera->convolve_psf_) {
-        const Image<TSpectral>& psf = camera->get_psf_convolution_kernel();
         if (!image_is_zero_(received_power)) {
-            this->convolve_cached_(received_power, psf, *camera, psf_convolver_);
+            camera->apply_psf_convolution_(received_power);
         }
     }
 
@@ -1739,46 +1740,4 @@ bool Renderer<TSpectral>::image_is_zero_(const Image<TSpectral>& image)
     return !nonzero.load(std::memory_order_relaxed);
 }
 
-/**
- * @brief Convolve an image with a camera kernel, reusing a cached kernel spectrum.
- *
- * Behaviour matches Image::convolve() exactly, including its small-kernel dispatch;
- * only the lifetime of the FFT plan and kernel spectrum differs.
- *
- * @param image Image convolved in place.
- * @param kernel Convolution kernel.
- * @param camera Camera the kernel came from, used to detect kernel changes.
- * @param cache Persistent convolver to reuse.
- */
-template <IsSpectral TSpectral>
-void Renderer<TSpectral>::convolve_cached_(Image<TSpectral>& image,
-                                           const Image<TSpectral>& kernel,
-                                           const CameraModel<TSpectral>& camera,
-                                           ConvolverCache& cache)
-{
-    const int kw = kernel.width();
-    const int kh = kernel.height();
-
-    if (kw * kh <= 25) {
-        image.convolve(kernel);
-        return;
-    }
-
-    const std::uint64_t version = camera.psf_kernel_version();
-    if (!cache.valid || cache.camera != static_cast<const void*>(&camera) ||
-        cache.kernel_version != version || cache.image_width != image.width() ||
-        cache.image_height != image.height() || cache.kernel_width != kw ||
-        cache.kernel_height != kh) {
-        cache.convolver.set_kernel(kernel, image.resolution());
-        cache.camera = static_cast<const void*>(&camera);
-        cache.kernel_version = version;
-        cache.image_width = image.width();
-        cache.image_height = image.height();
-        cache.kernel_width = kw;
-        cache.kernel_height = kh;
-        cache.valid = true;
-    }
-
-    cache.convolver.apply(image);
-}
 } // namespace huira

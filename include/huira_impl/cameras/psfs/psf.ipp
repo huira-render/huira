@@ -8,11 +8,72 @@
 #include "huira/util/logger.hpp"
 #include "tbb/blocked_range2d.h"
 #include "tbb/parallel_for.h"
+#include "tbb/task_arena.h"
 
 namespace huira {
 
 /**
- * @brief Builds the polyphase kernel cache for the PSF.
+ * @brief Checks that a polyphase cache of the given size is valid and fits in memory.
+ *
+ * The cache stores (banks * banks) subpixel-shifted kernels, generated from an intermediate
+ * super-resolution LUT of (dim * 64)^2 samples. Both scale steeply with radius: this path is
+ * designed for the compact PSF core used when stamping unresolved sources (radius ~4-64).
+ * Frame-wide kernels for whole-image convolution should use generate_convolution_kernel()
+ * instead, which builds a single centered kernel with no subpixel banks and no
+ * super-resolution intermediate.
+ *
+ * @param radius The kernel radius in pixels.
+ * @param banks The number of polyphase banks per axis.
+ * @throws std::runtime_error if either is less than 1, or the cache would exceed 4 GiB.
+ */
+template <IsSpectral TSpectral>
+void PSF<TSpectral>::check_polyphase_size(int radius, int banks)
+{
+    if (radius < 1 || banks < 1) {
+        HUIRA_THROW_ERROR("PSF - Polyphase radius and banks must both be at least 1: radius " +
+                          std::to_string(radius) + ", banks " + std::to_string(banks));
+    }
+    const std::size_t dim = 2 * static_cast<std::size_t>(radius) + 1;
+    const std::size_t lut_res = std::max<std::size_t>(2048, dim * 64);
+    const std::size_t lut_bytes = lut_res * lut_res * sizeof(TSpectral);
+    const std::size_t bank_bytes = static_cast<std::size_t>(banks) *
+                                   static_cast<std::size_t>(banks) * dim * dim * sizeof(TSpectral);
+    constexpr std::size_t MAX_BYTES = std::size_t{4} * 1024 * 1024 * 1024; // 4 GiB
+    if (lut_bytes + bank_bytes > MAX_BYTES) {
+        HUIRA_THROW_ERROR(
+            "PSF - Polyphase radius " + std::to_string(radius) + " with " + std::to_string(banks) +
+            "x" + std::to_string(banks) + " banks requires " +
+            std::to_string((lut_bytes + bank_bytes) >> 30) +
+            " GiB. The polyphase cache is intended for the compact stamping core; for "
+            "large frame-wide convolution kernels use "
+            "CameraModel::set_psf_convolution_radius() / "
+            "PSF::generate_convolution_kernel() instead.");
+    }
+}
+
+/**
+ * @brief Sets the size of the polyphase cache, which is built when first used.
+ *
+ * Discards any cache already built. Use ensure_polyphase_cache() to build it ahead of time.
+ *
+ * @param radius The kernel radius in pixels.
+ * @param banks The number of polyphase banks per axis.
+ */
+template <IsSpectral TSpectral>
+void PSF<TSpectral>::set_polyphase_size(int radius, int banks)
+{
+    check_polyphase_size(radius, banks);
+
+    std::lock_guard<std::mutex> lock(cache_mutex_);
+    cache_.radius = radius;
+    cache_.banks = banks;
+    cache_.dim = 2 * radius + 1;
+    cache_.kernels.clear();
+    cache_built_.store(false, std::memory_order_release);
+}
+
+/**
+ * @brief Builds the polyphase kernel cache for the PSF now.
  *
  * Allocates and fills the cache with polyphase kernels for efficient PSF evaluation.
  *
@@ -22,50 +83,45 @@ namespace huira {
 template <IsSpectral TSpectral>
 void PSF<TSpectral>::build_polyphase_cache(int radius, int banks)
 {
-    // The polyphase cache stores (banks * banks) subpixel-shifted kernels, generated from an
-    // intermediate super-resolution LUT of (dim * 64)^2 samples. Both scale steeply with
-    // radius: this path is designed for the compact PSF core used when stamping unresolved
-    // sources (radius ~4-64). Frame-wide kernels for whole-image convolution should use
-    // generate_convolution_kernel() instead, which builds a single centered kernel with no
-    // subpixel banks and no super-resolution intermediate.
-    {
-        const std::size_t dim = 2 * static_cast<std::size_t>(radius) + 1;
-        const std::size_t lut_res = std::max<std::size_t>(2048, dim * 64);
-        const std::size_t lut_bytes = lut_res * lut_res * sizeof(TSpectral);
-        const std::size_t bank_bytes = static_cast<std::size_t>(banks) *
-                                       static_cast<std::size_t>(banks) * dim * dim *
-                                       sizeof(TSpectral);
-        constexpr std::size_t MAX_BYTES = std::size_t{4} * 1024 * 1024 * 1024; // 4 GiB
-        if (lut_bytes + bank_bytes > MAX_BYTES) {
-            HUIRA_THROW_ERROR(
-                "PSF::build_polyphase_cache - radius " + std::to_string(radius) + " with " +
-                std::to_string(banks) + "x" + std::to_string(banks) + " banks requires " +
-                std::to_string((lut_bytes + bank_bytes) >> 30) +
-                " GiB. The polyphase cache is intended for the compact stamping core; for "
-                "large frame-wide convolution kernels use "
-                "CameraModel::set_psf_convolution_radius() / "
-                "PSF::generate_convolution_kernel() instead.");
-        }
+    set_polyphase_size(radius, banks);
+    ensure_polyphase_cache();
+}
+
+/**
+ * @brief Builds the polyphase cache if it has not been built for its current size.
+ *
+ * Thread-safe: concurrent callers wait for a single build. Does nothing if no size has been
+ * set.
+ */
+template <IsSpectral TSpectral>
+void PSF<TSpectral>::ensure_polyphase_cache() const
+{
+    if (cache_built_.load(std::memory_order_acquire)) {
+        return;
+    }
+    std::lock_guard<std::mutex> lock(cache_mutex_);
+    if (cache_built_.load(std::memory_order_relaxed) || cache_.banks < 1) {
+        return;
     }
 
-    cache_.radius = radius;
-    cache_.banks = banks;
-    cache_.dim = 2 * radius + 1;
-
-    // Resize the vector to hold (banks * banks) images
-    cache_.kernels.resize(static_cast<std::size_t>(banks * banks));
-
-    for (auto& img : cache_.kernels) {
+    // Building fills the cache, which is logically part of the PSF's (lazily computed) value;
+    // PSFs are only ever created as non-const objects, so casting away const here is safe.
+    auto& self = const_cast<PSF<TSpectral>&>(*this);
+    self.cache_.kernels.resize(static_cast<std::size_t>(cache_.banks * cache_.banks));
+    for (auto& img : self.cache_.kernels) {
         img = Image<TSpectral>(cache_.dim, cache_.dim);
     }
-
-    generate_polyphase_data_();
+    // Isolated, so that while this thread waits for the parallel build it cannot pick up
+    // another task that also needs this cache (it would deadlock on the lock it holds).
+    tbb::this_task_arena::isolate([&] { self.generate_polyphase_data_(); });
+    cache_built_.store(true, std::memory_order_release);
 }
 
 /**
  * @brief Retrieves the polyphase kernel for the given normalized coordinates.
  *
- * Returns the cached kernel corresponding to the specified subpixel position.
+ * Returns the cached kernel corresponding to the specified subpixel position, building the
+ * cache first if needed.
  *
  * @param u Normalized horizontal coordinate in [0, 1].
  * @param v Normalized vertical coordinate in [0, 1].
@@ -74,8 +130,9 @@ void PSF<TSpectral>::build_polyphase_cache(int radius, int banks)
 template <IsSpectral TSpectral>
 const Image<TSpectral>& PSF<TSpectral>::get_kernel(float u, float v) const
 {
+    ensure_polyphase_cache();
     if (cache_.kernels.empty()) {
-        HUIRA_THROW_ERROR("PSF::get_kernel() - Polyphase cache is empty.");
+        HUIRA_THROW_ERROR("PSF::get_kernel() - No polyphase cache size has been set.");
     }
 
     // Convert 0.0-1.0 fraction to 0-(banks-1) integer index
