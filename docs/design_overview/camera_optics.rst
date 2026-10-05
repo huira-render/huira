@@ -78,9 +78,10 @@ What a render does
 Before it starts, a render checks that the camera's kernels are up to date. If they are, it goes
 ahead. If they are not:
 
-- By default it builds them, as ``precompute()`` would, and logs how long that took: as
-  information if ``precompute()`` has never been called on the camera, and as a warning if it
-  has, since the camera has then changed since it was last precomputed.
+- By default it builds them, as ``precompute()`` would, and logs how long that took. That is a
+  warning the first time after ``precompute()`` was called, since the camera has then changed
+  since it was last precomputed, and information otherwise, so that a camera changed on every
+  frame (a focus pull, say) does not warn on every frame.
 - With ``set_auto_precompute(false)`` it throws. Use this when no render may include that time,
   such as a timed or hardware-in-the-loop run, and call ``precompute()`` after every change.
 
@@ -103,8 +104,10 @@ change rebuilt the defocus stamps. Convolution kernels were built during the fir
 used them. Now no setter builds anything, and the time is spent once, in ``precompute()`` or
 the first render.
 
-Rendered images are unchanged, except that the defocus blur radius is computed in double
-precision, which moves defocused stamps by around a billionth of their value.
+Building kernels lazily changes no rendered image, except that the defocus blur radius is
+computed in double precision, which moves defocused stamps by around a billionth of their
+value. (Other changes in v0.9.10 do change images; see :doc:`pixel_conventions` and
+:doc:`aperture`.)
 
 The defocus stamps have moved from the aperture to the camera: ``Aperture`` now only describes
 the aperture's shape (``rasterize_shape()``), and ``build_defocus_kernel()``,

@@ -23,7 +23,8 @@ units::Millimeter CameraModelHandle<TSpectral>::focal_length() const
 }
 
 /**
- * @brief Set the f-stop (aperture ratio) of the camera.
+ * @brief Set the f-stop (focal ratio) of the camera. The aperture diameter this gives is kept if
+ * the focal length later changes; see CameraModel::set_fstop().
  * @param fstop F-stop value
  */
 template <IsSpectral TSpectral>
@@ -33,13 +34,31 @@ void CameraModelHandle<TSpectral>::set_fstop(float fstop) const
 }
 
 /**
- * @brief Get the f-stop (aperture ratio) of the camera.
+ * @brief Get the f-stop (focal ratio) of the camera.
  * @return float F-stop value
  */
 template <IsSpectral TSpectral>
 float CameraModelHandle<TSpectral>::fstop() const
 {
     return this->get_()->fstop();
+}
+
+/**
+ * @brief Set the aperture's diameter, which is kept if the focal length changes. See
+ * CameraModel::set_aperture_diameter().
+ * @param diameter The aperture's diameter.
+ */
+template <IsSpectral TSpectral>
+void CameraModelHandle<TSpectral>::set_aperture_diameter(units::Millimeter diameter) const
+{
+    this->get_()->set_aperture_diameter(diameter);
+}
+
+/// Get the aperture's diameter.
+template <IsSpectral TSpectral>
+units::Millimeter CameraModelHandle<TSpectral>::aperture_diameter() const
+{
+    return this->get_()->aperture_diameter();
 }
 
 /**
@@ -115,8 +134,9 @@ void CameraModelHandle<TSpectral>::set_sensor(Args&&... args) const
  * @param resolution Sensor resolution
  * @param pitch_x Pixel pitch in x direction (micrometers)
  * @param pitch_y Pixel pitch in y direction (micrometers)
- * @param cx Principal point x coordinate (must be within resolution bounds)
- * @param cy Principal point y coordinate (must be within resolution bounds)
+ * @param cx Principal point x coordinate, in the camera's pixel convention (see
+ *           set_pixel_convention()). Defaults to the center of the sensor.
+ * @param cy Principal point y coordinate, likewise.
  */
 template <IsSpectral TSpectral>
 void CameraModelHandle<TSpectral>::configure_sensor_from_pitch(
@@ -137,8 +157,9 @@ void CameraModelHandle<TSpectral>::configure_sensor_from_pitch(
  * @param resolution Sensor resolution
  * @param width Sensor width in millimeters
  * @param height Sensor height in millimeters
- * @param cx Principal point x coordinate (must be within resolution bounds)
- * @param cy Principal point y coordinate (must be within resolution bounds)
+ * @param cx Principal point x coordinate, in the camera's pixel convention (see
+ *           set_pixel_convention()). Defaults to the center of the sensor.
+ * @param cy Principal point y coordinate, likewise.
  */
 template <IsSpectral TSpectral>
 void CameraModelHandle<TSpectral>::configure_sensor_from_size(
@@ -152,7 +173,8 @@ void CameraModelHandle<TSpectral>::configure_sensor_from_size(
 }
 
 /**
- * @brief Set the intrinsic matrix for the camera.
+ * @brief Set the intrinsic matrix for the camera. Mat3 is indexed K[column][row], so cx is
+ * K[2][0]; see CameraModel::set_intrinsic_matrix().
  * @param intrinsic_matrix 3x3 intrinsic matrix
  * @param resolution Sensor resolution
  * @param anchor_focal_length Anchor focal length in millimeters
@@ -166,13 +188,14 @@ void CameraModelHandle<TSpectral>::set_intrinsic_matrix(const Mat3<float>& intri
 }
 
 /**
- * @brief Set the intrinsic parameters for the camera.
- * @param fx Focal length in x direction
- * @param fy Focal length in y direction
- * @param cx Principal point x coordinate
- * @param cy Principal point y coordinate
+ * @brief Set the intrinsic parameters for the camera. See CameraModel::set_intrinsics().
+ * @param fx Focal length in x direction, in pixels
+ * @param fy Focal length in y direction, in pixels
+ * @param cx Principal point x coordinate, in the camera's pixel convention
+ * @param cy Principal point y coordinate, in the camera's pixel convention
  * @param resolution Sensor resolution
  * @param anchor_focal_length Anchor focal length in millimeters
+ * @param skew Skew, in pixels; 0 for perpendicular pixel axes.
  */
 template <IsSpectral TSpectral>
 void CameraModelHandle<TSpectral>::set_intrinsics(float fx,
@@ -180,9 +203,10 @@ void CameraModelHandle<TSpectral>::set_intrinsics(float fx,
                                                   float cx,
                                                   float cy,
                                                   const Resolution& resolution,
-                                                  units::Millimeter anchor_focal_length)
+                                                  units::Millimeter anchor_focal_length,
+                                                  float skew)
 {
-    this->get_()->set_intrinsics(fx, fy, cx, cy, resolution, anchor_focal_length);
+    this->get_()->set_intrinsics(fx, fy, cx, cy, resolution, anchor_focal_length, skew);
 }
 
 /**
@@ -458,10 +482,12 @@ void CameraModelHandle<TSpectral>::disable_veiling_glare() const
 
 /**
  * @brief Set Harvey-Shack scatter parameters.
- * @param scatter_fraction Fraction of light scattered (0 to 1)
- * @param falloff_exponent Exponent for scatter falloff (typically > 1)
- * @param r0 Radius at which scatter fraction is measured (default 0.5)
- * @param radius Maximum scatter radius in pixels (default 0, meaning infinite)
+ * @param scatter_fraction Fraction of light scattered, in [0, 1)
+ * @param falloff_exponent Power-law exponent of the falloff (typically 2 to 3)
+ * @param r0 Shoulder radius in pixels: the profile is flat within it and falls off as
+ *        r^-falloff_exponent beyond it (default 0.5)
+ * @param radius Cutoff radius in pixels (default 0: none, beyond the convolution kernel's own
+ *        radius)
  */
 template <IsSpectral TSpectral>
 void CameraModelHandle<TSpectral>::set_harvey_shack_scatter(float scatter_fraction,
@@ -556,12 +582,12 @@ void CameraModelHandle<TSpectral>::set_focus_distance(units::Meter focus_distanc
 }
 
 /**
- * @brief Focus the camera by vergence, the reciprocal of the focus distance.
+ * @brief Focus the camera in diopters: the reciprocal of the focus distance.
  *
  * 0 focuses at infinity and negative values focus past infinity. See
  * CameraModel::set_focus_diopters().
  *
- * @param diopters Focus vergence (diopters).
+ * @param diopters The reciprocal of the focus distance (diopters).
  */
 template <IsSpectral TSpectral>
 void CameraModelHandle<TSpectral>::set_focus_diopters(units::Diopter diopters) const
@@ -590,7 +616,7 @@ units::Meter CameraModelHandle<TSpectral>::focus_distance() const
     return this->get_()->focus_distance();
 }
 
-/// Get the focus as a vergence: the reciprocal of focus_distance(), 0 at infinity.
+/// Get the focus in diopters: the reciprocal of focus_distance(), 0 at infinity.
 template <IsSpectral TSpectral>
 units::Diopter CameraModelHandle<TSpectral>::focus_diopters() const
 {

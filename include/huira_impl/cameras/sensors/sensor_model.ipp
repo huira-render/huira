@@ -1,4 +1,7 @@
 
+#include <cmath>
+#include <string>
+
 #include "huira/core/types.hpp"
 #include "huira/util/logger.hpp"
 
@@ -8,21 +11,85 @@ namespace huira {
  * @brief Constructs a SensorModel with the given configuration.
  *
  * @param config The sensor configuration parameters.
- * @throws std::runtime_error if the resolution or pixel pitch is invalid.
+ * @throws std::runtime_error if any parameter is invalid; see the setters.
  */
 template <IsSpectral TSpectral>
-SensorModel<TSpectral>::SensorModel(SensorConfig<TSpectral> config) : config_{config}
+SensorModel<TSpectral>::SensorModel(SensorConfig<TSpectral> config)
 {
-    if (config.resolution.x < 0 || config.resolution.y < 0) {
-        HUIRA_THROW_ERROR("SensorModel::SensorModel - Invalid resolution: " +
-                          std::to_string(config.resolution.x) + "x" +
-                          std::to_string(config.resolution.y));
-    }
+    // Each setter checks its own value:
+    set_resolution(config.resolution);
+    set_pixel_pitch(config.pitch_x, config.pitch_y);
+    set_quantum_efficiency(config.quantum_efficiency);
+    set_full_well_capacity(config.full_well_capacity);
+    set_simulate_noise(config.simulate_noise);
+    set_read_noise(config.read_noise);
+    set_dark_current(config.dark_current);
+    set_bias_level_dn(config.bias_level_dn);
+    set_bit_depth(config.bit_depth);
+    set_conversion_gain(config.gain);
+    set_unity_db(config.unity_db);
+    set_rotation(config.rotation);
+}
 
-    if (config.pitch_x.to_si() <= 0 || config.pitch_y.to_si() <= 0) {
-        HUIRA_THROW_ERROR("SensorModel::SensorModel - Pixel pitch must be positive: " +
-                          std::to_string(config.pitch_x.to_si()) + "m x " +
-                          std::to_string(config.pitch_y.to_si()) + "m");
+/**
+ * @brief Checks that a resolution has at least one pixel in each direction.
+ *
+ * @param resolution The resolution to check.
+ * @param caller Name for the error message.
+ * @throws std::runtime_error if it does not.
+ */
+template <IsSpectral TSpectral>
+void SensorModel<TSpectral>::check_resolution(const Resolution& resolution,
+                                              const std::string& caller)
+{
+    if (resolution.x < 1 || resolution.y < 1) {
+        HUIRA_THROW_ERROR(caller + " - Resolution must be at least 1x1: " +
+                          std::to_string(resolution.x) + "x" + std::to_string(resolution.y));
+    }
+}
+
+/**
+ * @brief Checks that pixel pitches are positive and finite.
+ *
+ * @param pitch_x The horizontal pixel pitch.
+ * @param pitch_y The vertical pixel pitch.
+ * @param caller Name for the error message.
+ * @throws std::runtime_error if either is not.
+ */
+template <IsSpectral TSpectral>
+void SensorModel<TSpectral>::check_pixel_pitch(units::Micrometer pitch_x,
+                                               units::Micrometer pitch_y,
+                                               const std::string& caller)
+{
+    // Checked as stored, in single precision, so that a value that rounds to 0 or infinity
+    // there is caught too:
+    const float x = pitch_x.to_si_f();
+    const float y = pitch_y.to_si_f();
+    if (!(x > 0.f) || !std::isfinite(x) || !(y > 0.f) || !std::isfinite(y)) {
+        HUIRA_THROW_ERROR(caller + " - Pixel pitch must be positive and finite: " +
+                          std::to_string(pitch_x.to_si()) + " m x " +
+                          std::to_string(pitch_y.to_si()) + " m");
+    }
+}
+
+/**
+ * @brief Checks that sensor dimensions are positive and finite.
+ *
+ * @param width The sensor width.
+ * @param height The sensor height.
+ * @param caller Name for the error message.
+ * @throws std::runtime_error if either is not.
+ */
+template <IsSpectral TSpectral>
+void SensorModel<TSpectral>::check_sensor_size(units::Millimeter width,
+                                               units::Millimeter height,
+                                               const std::string& caller)
+{
+    const double w = width.to_si();
+    const double h = height.to_si();
+    if (!(w > 0.0) || !std::isfinite(w) || !(h > 0.0) || !std::isfinite(h)) {
+        HUIRA_THROW_ERROR(caller + " - Sensor size must be positive and finite: " +
+                          std::to_string(w) + " m x " + std::to_string(h) + " m");
     }
 }
 
@@ -30,15 +97,12 @@ SensorModel<TSpectral>::SensorModel(SensorConfig<TSpectral> config) : config_{co
  * @brief Sets the sensor resolution.
  *
  * @param resolution The new sensor resolution (width x height).
- * @throws std::runtime_error if the resolution is invalid.
+ * @throws std::runtime_error if the resolution is not at least 1x1.
  */
 template <IsSpectral TSpectral>
 void SensorModel<TSpectral>::set_resolution(Resolution resolution)
 {
-    if (resolution.x < 0 || resolution.y < 0) {
-        HUIRA_THROW_ERROR("SensorModel::set_resolution - Invalid resolution: " +
-                          std::to_string(resolution.x) + "x" + std::to_string(resolution.y));
-    }
+    check_resolution(resolution, "SensorModel::set_resolution");
     config_.resolution = resolution;
 }
 
@@ -47,17 +111,12 @@ void SensorModel<TSpectral>::set_resolution(Resolution resolution)
  *
  * @param pitch_x The horizontal pixel pitch in micrometers.
  * @param pitch_y The vertical pixel pitch in micrometers.
- * @throws std::runtime_error if either pitch is invalid.
+ * @throws std::runtime_error if either pitch is not positive and finite.
  */
 template <IsSpectral TSpectral>
 void SensorModel<TSpectral>::set_pixel_pitch(units::Micrometer pitch_x, units::Micrometer pitch_y)
 {
-    if (pitch_x.to_si() <= 0 || std::isinf(pitch_x.to_si()) || std::isnan(pitch_x.to_si()) ||
-        pitch_y.to_si() <= 0 || std::isinf(pitch_y.to_si()) || std::isnan(pitch_y.to_si())) {
-        HUIRA_THROW_ERROR("SensorModel::set_pixel_pitch - Pixel pitch must be positive: " +
-                          std::to_string(pitch_x.to_si()) + "m x " +
-                          std::to_string(pitch_y.to_si()) + "m");
-    }
+    check_pixel_pitch(pitch_x, pitch_y, "SensorModel::set_pixel_pitch");
     config_.pitch_x = pitch_x;
     config_.pitch_y = pitch_y;
 }
@@ -85,12 +144,7 @@ Vec2<float> SensorModel<TSpectral>::pixel_pitch() const
 template <IsSpectral TSpectral>
 void SensorModel<TSpectral>::set_sensor_size(units::Millimeter width, units::Millimeter height)
 {
-    if (width.to_si() <= 0 || std::isinf(width.to_si()) || std::isnan(width.to_si()) ||
-        height.to_si() <= 0 || std::isinf(height.to_si()) || std::isnan(height.to_si())) {
-        HUIRA_THROW_ERROR("SensorModel::set_sensor_size - Sensor size must be positive: " +
-                          std::to_string(width.to_si()) + "m x " + std::to_string(height.to_si()) +
-                          "m");
-    }
+    check_sensor_size(width, height, "SensorModel::set_sensor_size");
     units::Meter pitch_x(width.to_si() / static_cast<double>(config_.resolution.x));
     units::Meter pitch_y(height.to_si() / static_cast<double>(config_.resolution.y));
     set_pixel_pitch(pitch_x, pitch_y);
@@ -196,14 +250,15 @@ void SensorModel<TSpectral>::set_bias_level_dn(float bias_level_dn)
  * @brief Sets the bit depth of the sensor.
  *
  * @param bit_depth The bit depth (number of bits per pixel).
- * @throws std::runtime_error if the value is invalid.
+ * @throws std::runtime_error if the value is not between 1 and 64.
  */
 template <IsSpectral TSpectral>
 void SensorModel<TSpectral>::set_bit_depth(int bit_depth)
 {
-    if (bit_depth <= 0) {
-        HUIRA_THROW_ERROR("SensorModel::set_bit_depth - Bit depth must be a positive integer: " +
-                          std::to_string(bit_depth) + " bits");
+    if (bit_depth < 1 || bit_depth > MAX_BIT_DEPTH) {
+        HUIRA_THROW_ERROR("SensorModel::set_bit_depth - Bit depth must be between 1 and " +
+                          std::to_string(MAX_BIT_DEPTH) + ": " + std::to_string(bit_depth) +
+                          " bits");
     }
     config_.bit_depth = bit_depth;
 }
@@ -245,10 +300,28 @@ void SensorModel<TSpectral>::set_unity_db(float unity_db)
  * @brief Sets the gain in dB for the sensor.
  *
  * @param gain_db The gain in decibels.
+ * @throws std::runtime_error if the value is not finite, or gives a conversion gain that is not a
+ *         positive finite value.
  */
 template <IsSpectral TSpectral>
 void SensorModel<TSpectral>::set_gain_db(float gain_db)
 {
     config_.set_gain_db(gain_db);
+}
+
+/**
+ * @brief Sets the rotation of the sensor about the optical axis.
+ *
+ * @param angle The rotation angle.
+ * @throws std::runtime_error if the angle is not finite.
+ */
+template <IsSpectral TSpectral>
+void SensorModel<TSpectral>::set_rotation(units::Radian angle)
+{
+    if (!std::isfinite(angle.to_si())) {
+        HUIRA_THROW_ERROR("SensorModel::set_rotation - Rotation must be finite: " +
+                          std::to_string(angle.to_si()) + " rad");
+    }
+    config_.rotation = angle;
 }
 } // namespace huira

@@ -1,6 +1,9 @@
 
 #pragma once
 
+#include <span>
+#include <string>
+
 #include "huira/cameras/distortion/distortion.hpp"
 #include "huira/concepts/numeric_concepts.hpp"
 #include "huira/concepts/spectral_concepts.hpp"
@@ -12,6 +15,10 @@ namespace huira {
  * @brief Coefficients for OpenCV lens distortion model.
  *
  * Holds the radial, tangential, and thin prism distortion coefficients for the OpenCV model.
+ *
+ * The constructor takes them grouped by kind (k1 to k6, then p1, p2, then s1 to s4), which is
+ * not the order of OpenCV's distortion vector. For a vector from OpenCV (k1, k2, p1, p2, k3,
+ * ...), use from_opencv().
  */
 struct OpenCVCoefficients : public DistortionCoefficients {
     // Radial distortion coefficients
@@ -49,6 +56,42 @@ struct OpenCVCoefficients : public DistortionCoefficients {
         : k1(k1_val), k2(k2_val), k3(k3_val), k4(k4_val), k5(k5_val), k6(k6_val), p1(p1_val),
           p2(p2_val), s1(s1_val), s2(s2_val), s3(s3_val), s4(s4_val)
     {
+    }
+
+    /**
+     * @brief Coefficients from a distortion vector as OpenCV gives it: (k1, k2, p1, p2[, k3[,
+     * k4, k5, k6[, s1, s2, s3, s4[, tau_x, tau_y]]]]), of 4, 5, 8, 12 or 14 elements.
+     *
+     * @throws std::runtime_error for any other length, or non-zero tilt terms (tau_x, tau_y),
+     *         since a tilted sensor is not modelled.
+     */
+    static OpenCVCoefficients from_opencv(std::span<const double> coefficients)
+    {
+        const std::size_t n = coefficients.size();
+        if (n != 4 && n != 5 && n != 8 && n != 12 && n != 14) {
+            HUIRA_THROW_ERROR("OpenCVCoefficients::from_opencv - OpenCV distortion vectors have "
+                              "4, 5, 8, 12 or 14 elements, not " +
+                              std::to_string(n));
+        }
+        if (n == 14 && (coefficients[12] != 0.0 || coefficients[13] != 0.0)) {
+            HUIRA_THROW_ERROR("OpenCVCoefficients::from_opencv - The tilted sensor terms "
+                              "(tau_x, tau_y) are not supported");
+        }
+        auto at = [&](std::size_t i) { return i < n ? coefficients[i] : 0.0; };
+        OpenCVCoefficients c;
+        c.k1 = at(0);
+        c.k2 = at(1);
+        c.p1 = at(2);
+        c.p2 = at(3);
+        c.k3 = at(4);
+        c.k4 = at(5);
+        c.k5 = at(6);
+        c.k6 = at(7);
+        c.s1 = at(8);
+        c.s2 = at(9);
+        c.s3 = at(10);
+        c.s4 = at(11);
+        return c;
     }
 };
 

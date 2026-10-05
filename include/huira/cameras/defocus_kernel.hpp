@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstddef>
+#include <limits>
 #include <vector>
 
 #include "huira/cameras/apertures/aperture.hpp"
@@ -24,7 +26,14 @@ namespace huira {
 template <IsSpectral TSpectral>
 class DefocusKernel {
   public:
-    void build(const Aperture<TSpectral>& aperture, float radius_pixels, int banks);
+    /// Memory the stamps of one blur may take before fewer banks are used. See build().
+    static constexpr std::size_t DEFAULT_BUDGET_BYTES = std::size_t{256} * 1024 * 1024;
+
+    void build(const Aperture<TSpectral>& aperture,
+               float radius_pixels,
+               int max_banks,
+               int max_half_extent = std::numeric_limits<int>::max(),
+               std::size_t budget_bytes = DEFAULT_BUDGET_BYTES);
     void clear();
 
     /// True when there is no blur to apply (in focus, or not built).

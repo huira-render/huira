@@ -3,6 +3,7 @@
 #include "huira/cameras/distortion/brown_distortion.hpp"
 #include "huira/cameras/distortion/opencv_distortion.hpp"
 #include "huira/cameras/distortion/owen_distortion.hpp"
+#include "pybind11/numpy.h"
 #include "pybind11/pybind11.h"
 
 namespace py = pybind11;
@@ -64,7 +65,20 @@ inline void bind_distortion_coefficients(py::module_& m)
              py::arg("s3"),
              py::arg("s4"),
              "Construct OpenCV distortion coefficients with radial (k1-k6), tangential (p1, p2), "
-             "and thin prism (s1-s4) parameters")
+             "and thin prism (s1-s4) parameters, in that order, which is not the order of "
+             "OpenCV's distortion vector: for that, use from_opencv().")
+        .def_static(
+            "from_opencv",
+            [](py::array_t<double, py::array::c_style | py::array::forcecast> coefficients) {
+                const auto buf = coefficients.request();
+                const auto* values = static_cast<const double*>(buf.ptr);
+                return OpenCVCoefficients::from_opencv(
+                    std::span<const double>(values, static_cast<std::size_t>(buf.size)));
+            },
+            py::arg("coefficients"),
+            "Coefficients from a distortion vector as OpenCV gives it (e.g. from "
+            "cv2.calibrateCamera): (k1, k2, p1, p2[, k3[, k4, k5, k6[, s1, s2, s3, s4[, tau_x, "
+            "tau_y]]]]), of 4, 5, 8, 12 or 14 elements, in any shape. The tilt terms must be 0.")
         .def_readwrite("k1", &OpenCVCoefficients::k1, "First radial distortion coefficient")
         .def_readwrite("k2", &OpenCVCoefficients::k2, "Second radial distortion coefficient")
         .def_readwrite("k3", &OpenCVCoefficients::k3, "Third radial distortion coefficient")

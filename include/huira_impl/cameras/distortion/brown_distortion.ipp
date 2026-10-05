@@ -11,11 +11,15 @@ namespace huira {
  * @brief Constructs a BrownDistortion with the given coefficients.
  *
  * @param coefficients The Brown distortion coefficients (radial and tangential).
+ * @throws std::runtime_error if any coefficient is not finite.
  */
 template <IsSpectral TSpectral>
 BrownDistortion<TSpectral>::BrownDistortion(BrownCoefficients coefficients)
     : coefficients_(coefficients)
 {
+    this->check_coefficients_(
+        {coefficients.k1, coefficients.k2, coefficients.k3, coefficients.p1, coefficients.p2},
+        "BrownDistortion");
 }
 
 /**
