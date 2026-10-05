@@ -204,7 +204,7 @@ typename Renderer<TSpectral>::DirectionCone Renderer<TSpectral>::tile_direction_
             const float tx = static_cast<float>(i) / static_cast<float>(GRID - 1);
             const Pixel pixel{x0 + tx * (x1 - x0), y0 + ty * (y1 - y0)};
             dirs[static_cast<std::size_t>(j * GRID + i)] =
-                glm::normalize(camera.cast_ray(pixel).direction());
+                glm::normalize(camera.sensor_ray_(pixel).direction());
         }
     }
 
@@ -498,7 +498,7 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                             float sy = static_cast<float>(y) + sampler.get_1d();
 
                             // Generate camera ray from pixel coordinates:
-                            Ray<TSpectral> ray = camera->cast_ray(Pixel{sx, sy}, sampler);
+                            Ray<TSpectral> ray = camera->sensor_ray_(Pixel{sx, sy}, sampler);
 
                             // Motion blur: randomize time sample per ray
                             if (has_motion_blur) {
@@ -1253,7 +1253,7 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
             pixels.assign(params.size(), Pixel{});
             for (std::size_t k = 0; k < params.size(); ++k) {
                 Vec3<float> dir = arc.evaluate(params[k]);
-                pixels[k] = camera->project_point(dir);
+                pixels[k] = camera->project_to_sensor_(dir);
             }
 
             // Adaptive subdivision: bisect intervals where pixel distance > threshold
@@ -1269,7 +1269,7 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                     if (dist > max_pixel_step) {
                         float t_mid = (params[k - 1] + params[k]) / 2.0f;
                         Vec3<float> dir_mid = arc.evaluate(t_mid);
-                        Pixel p_mid = camera->project_point(dir_mid);
+                        Pixel p_mid = camera->project_to_sensor_(dir_mid);
 
                         params.insert(params.begin() + static_cast<std::ptrdiff_t>(k), t_mid);
                         pixels.insert(pixels.begin() + static_cast<std::ptrdiff_t>(k), p_mid);

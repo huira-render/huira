@@ -10,6 +10,7 @@
 #include "huira/cameras/distortion/distortion.hpp"
 #include "huira/cameras/distortion/opencv_distortion.hpp"
 #include "huira/cameras/distortion/owen_distortion.hpp"
+#include "huira/cameras/pixel_convention.hpp"
 #include "huira/cameras/psfs/psf.hpp"
 #include "huira/cameras/sensors/sensor_model.hpp"
 #include "huira/concepts/numeric_concepts.hpp"
@@ -153,6 +154,12 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
 
     float defocus_blur_radius() const;
 
+    void set_pixel_convention(PixelConvention convention);
+
+    /// Get the pixel coordinate convention used for the principal point, project_point() and
+    /// cast_ray(). See PixelConvention.
+    PixelConvention pixel_convention() const { return pixel_convention_; }
+
     Pixel project_point(const Vec3<float>& point_camera_coords) const;
     Pixel try_project_point(const Vec3<float>& point_camera_coords) const;
 
@@ -254,8 +261,25 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
 
     float fx_;
     float fy_;
+    /// Principal point in sensor coordinates; resolved by compute_intrinsics_().
     float cx_;
     float cy_;
+
+    /// The principal point as it was given, in pixel_convention_; unset means the center of
+    /// the sensor, whatever its resolution. Kept as given so that the result does not depend on
+    /// whether the convention is set before or after it.
+    std::optional<float> principal_x_;
+    std::optional<float> principal_y_;
+    PixelConvention pixel_convention_{};
+    void set_principal_point_(std::optional<float> cx,
+                              std::optional<float> cy,
+                              const Resolution& resolution);
+
+    // Sensor-coordinate versions of the public projection and ray functions, for internal use
+    // (the renderer works in sensor coordinates throughout). See PixelConvention.
+    Pixel project_to_sensor_(const Vec3<float>& point_camera_coords) const;
+    Ray<TSpectral> sensor_ray_(const Pixel& sensor_position, Sampler<float>& sampler) const;
+    Ray<TSpectral> sensor_ray_(const Pixel& sensor_position) const;
     float rx_;
     float ry_;
 

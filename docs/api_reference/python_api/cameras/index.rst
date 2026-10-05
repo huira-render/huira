@@ -5,3 +5,4 @@ Camera API
    :hidden:
 
    distortion_coeffs
+   pixel_convention
