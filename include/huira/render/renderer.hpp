@@ -7,7 +7,6 @@
 #include <vector>
 
 #include "huira/concepts/spectral_concepts.hpp"
-#include "huira/images/fft_convolver.hpp"
 #include "huira/render/frame_buffer.hpp"
 #include "huira/sampling/sampler.hpp"
 #include "huira/scene/scene_view.hpp"
@@ -92,24 +91,6 @@ class Renderer {
         return scene_view.lights_;
     }
 
-    /// @brief A persistent FFT convolver plus the configuration it was built for.
-    struct ConvolverCache {
-        ConvolverCache() = default;
-        ConvolverCache(const ConvolverCache&) = delete;
-        ConvolverCache& operator=(const ConvolverCache&) = delete;
-        ConvolverCache(ConvolverCache&&) = delete;
-        ConvolverCache& operator=(ConvolverCache&&) = delete;
-
-        FftConvolver<TSpectral> convolver;
-        const void* camera = nullptr;
-        std::uint64_t kernel_version = 0;
-        int image_width = 0;
-        int image_height = 0;
-        int kernel_width = 0;
-        int kernel_height = 0;
-        bool valid = false;
-    };
-
     /// A set of ray directions, as a cone about a unit axis.
     struct DirectionCone {
         Vec3<float> axis{0.f, 0.f, 1.f};
@@ -125,19 +106,6 @@ class Renderer {
         const CameraModel<TSpectral>& camera, float x0, float y0, float x1, float y1) const;
 
     [[nodiscard]] static bool image_is_zero_(const Image<TSpectral>& image);
-
-    void convolve_cached_(Image<TSpectral>& image,
-                          const Image<TSpectral>& kernel,
-                          const CameraModel<TSpectral>& camera,
-                          ConvolverCache& cache);
-
-    /// Scattered-light wings applied to the unresolved splat buffer, once per frame.
-    ConvolverCache wings_convolver_;
-
-    /// Composite PSF from get_psf_convolution_kernel(), shared by the path-traced
-    /// image and the defocus path: same kernel and same resolution, so one cached
-    /// spectrum serves both.
-    ConvolverCache psf_convolver_;
 
     RandomSampler<float> sampler_;
 

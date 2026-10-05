@@ -8,7 +8,7 @@
 namespace huira {
 
 /**
- * @brief Constructs a MeasuredPSF from sampled data and builds its polyphase cache.
+ * @brief Constructs a MeasuredPSF from sampled data. Its polyphase cache is built on first use.
  *
  * @param data Measured PSF samples, centered on the image.
  * @param samples_per_pixel Measurement samples per sensor pixel per axis (>= 1 recommended; must
@@ -52,7 +52,7 @@ MeasuredPSF<TSpectral>::MeasuredPSF(const Image<TSpectral>& data,
                           " sensor pixels");
     }
 
-    this->build_polyphase_cache(radius, banks);
+    this->set_polyphase_size(radius, banks); // built on first use
 }
 
 /**

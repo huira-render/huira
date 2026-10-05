@@ -1,11 +1,16 @@
 #pragma once
 
+#include <array>
+#include <cstddef>
 #include <cstdint>
+#include <initializer_list>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 
 #include "huira/cameras/apertures/aperture.hpp"
+#include "huira/cameras/defocus_kernel.hpp"
 #include "huira/cameras/distortion/brown_distortion.hpp"
 #include "huira/cameras/distortion/distortion.hpp"
 #include "huira/cameras/distortion/opencv_distortion.hpp"
@@ -17,6 +22,7 @@
 #include "huira/concepts/spectral_concepts.hpp"
 #include "huira/core/types.hpp"
 #include "huira/geometry/ray.hpp"
+#include "huira/images/fft_convolver.hpp"
 #include "huira/render/frame_buffer.hpp"
 #include "huira/render/frustum.hpp"
 #include "huira/sampling/sampler.hpp"
@@ -39,6 +45,11 @@ class Renderer;
  * focal length, f-stop, sensor resolution, pixel pitch, and more. The camera can project 3D points
  * to the image plane, compute projected aperture area, and supports both analytic and PSF-based
  * point spread functions. All units are SI unless otherwise noted.
+ *
+ * The kernels the camera's optics need for rendering (PSF stamps, defocus stamps, convolution
+ * kernels and their spectra) are derived from its settings and built when first needed, not
+ * by the setters. precompute() builds them ahead of time; see there for what a render does
+ * when they are out of date.
  *
  * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
@@ -121,23 +132,22 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
                                   float radius = 0.f);
     void disable_harvey_shack_scatter();
 
-    /// Check if the camera model has a PSF.
-    bool has_psf() const { return psf_ != nullptr; }
+    /// Check if the camera model has a PSF: the aperture's (see use_aperture_psf()), or one that
+    /// was set.
+    bool has_psf() const { return use_aperture_psf_ || psf_ != nullptr; }
 
-    /// Get the PSF kernel at the specified image coordinates.
-    const Image<TSpectral>& get_psf_kernel(float u, float v) const
-    {
-        return psf_->get_kernel(u, v);
-    }
-
-    /// Get the PSF radius.
-    int get_psf_radius() const { return psf_->get_radius(); }
+    const Image<TSpectral>& get_psf_kernel(float u, float v);
+    int get_psf_radius() const;
 
     const Image<TSpectral>& get_psf_convolution_kernel();
     const Image<TSpectral>& get_psf_wings_kernel();
 
-    /// Monotonic counter identifying the current PSF/scatter kernel configuration.
-    [[nodiscard]] std::uint64_t psf_kernel_version() const noexcept { return psf_kernel_version_; }
+    void precompute();
+    [[nodiscard]] bool is_precomputed() const;
+    void set_auto_precompute(bool auto_precompute = true);
+
+    /// Whether a render builds out-of-date optics kernels itself. See set_auto_precompute().
+    [[nodiscard]] bool auto_precompute() const { return auto_precompute_; }
 
     /// Enable or disable depth of field for the camera model.
     void enable_depth_of_field(bool depth_of_field = true) { depth_of_field_ = depth_of_field; }
@@ -209,31 +219,102 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     std::unique_ptr<SensorModel<TSpectral>> sensor_;
     std::unique_ptr<Aperture<TSpectral>> aperture_;
     std::unique_ptr<Distortion<TSpectral>> distortion_ = nullptr;
+    /// The core PSF. With use_aperture_psf_ it is the aperture's diffraction PSF, made from the
+    /// current optics when needed (see ensure_diffraction_()); otherwise it is the one set.
     std::unique_ptr<PSF<TSpectral>> psf_ = nullptr;
+    bool use_aperture_psf_ = false;
+    int aperture_psf_radius_ = 0;
+    int aperture_psf_banks_ = 0;
     bool convolve_psf_ = false;
 
-    // Whole-image convolution kernel: a single centered kernel, built lazily from psf_ and cached.
+    // Whole-image convolution kernel: a single centered kernel, made from psf_ and the
+    // scattered-light wings, and its spectrum at the sensor's resolution.
     int psf_convolution_radius_ = 0;
     Image<TSpectral> psf_convolution_kernel_;
-    bool psf_convolution_kernel_valid_ = false;
+    FftConvolver<TSpectral> psf_convolver_;
 
     // Scattered-light wings kernel alone (unit energy), used by the renderer to apply wings
     // to unresolved sources whose compact core is stamped rather than convolved.
     Image<TSpectral> psf_wings_kernel_;
-    bool psf_wings_kernel_valid_ = false;
+    FftConvolver<TSpectral> wings_convolver_;
 
-    /// Invalidate the cached PSF convolution and wings kernels.
-    void invalidate_psf_kernels_()
+    /// Stamps for the defocus blur of unresolved sources; empty when in focus.
+    DefocusKernel<TSpectral> defocus_kernel_;
+    static constexpr int DEFOCUS_BANKS_ = 16;
+
+    /// The settings the optics kernels are derived from. Each kernel depends on some of them,
+    /// and is rebuilt only when one of those has changed since it was built.
+    enum class OpticsInput : std::size_t {
+        FocalLength,
+        PixelPitch,
+        Resolution,
+        Aperture,
+        Focus,
+        CorePSF,
+        Convolution,
+        Scatter,
+        Count
+    };
+
+    /// Counts optics changes. Starts at 1, so that a built_at of 0 means never built.
+    std::uint64_t optics_version_ = 1;
+
+    /// The version at which each input last changed.
+    std::array<std::uint64_t, static_cast<std::size_t>(OpticsInput::Count)> optics_changed_at_{};
+
+    void optics_changed_(OpticsInput input)
     {
-        psf_convolution_kernel_valid_ = false;
-        psf_wings_kernel_valid_ = false;
-        ++psf_kernel_version_;
+        optics_changed_at_[static_cast<std::size_t>(input)] = ++optics_version_;
     }
 
-    /// See psf_kernel_version(). Starts at 1 so that 0 is usable as "never seen".
-    std::uint64_t psf_kernel_version_ = 1;
+    bool stale_(std::uint64_t built_at, std::initializer_list<OpticsInput> inputs) const;
+    bool diffraction_stale_(std::uint64_t built_at) const;
+    bool convolution_stale_(std::uint64_t built_at) const;
+    bool wings_stale_(std::uint64_t built_at) const;
 
-    bool use_aperture_psf_ = false;
+    // The version each kernel was built at; 0 for never.
+    std::uint64_t diffraction_built_at_ = 0;
+    std::uint64_t defocus_built_at_ = 0;
+    std::uint64_t convolution_kernel_built_at_ = 0;
+    std::uint64_t convolution_spectrum_built_at_ = 0;
+    std::uint64_t wings_kernel_built_at_ = 0;
+    std::uint64_t wings_spectrum_built_at_ = 0;
+
+    // The geometry compute_intrinsics_() last saw, to tell which inputs a change touched.
+    float optics_focal_length_ = 0.f;
+    Vec2<float> optics_pixel_pitch_{0.f, 0.f};
+    int optics_width_ = 0;
+    int optics_height_ = 0;
+
+    bool auto_precompute_ = true;
+    bool explicitly_precomputed_ = false;
+
+    /// Held while building optics kernels or applying a convolution spectrum, so that renders
+    /// sharing this camera on different threads do not race.
+    mutable std::mutex optics_mutex_;
+
+    // Each builds its kernel if it is out of date. optics_mutex_ must be held.
+    void ensure_diffraction_();
+    void ensure_polyphase_();
+    void ensure_defocus_();
+    void ensure_convolution_kernel_();
+    void ensure_convolution_spectrum_();
+    void ensure_wings_kernel_();
+    void ensure_wings_spectrum_();
+    int convolution_radius_(const char* caller) const;
+
+    // optics_mutex_ must be held.
+    void precompute_locked_();
+    bool is_precomputed_locked_() const;
+
+    /// Kernels up to this many pixels are applied directly, as Image::convolve() does, and
+    /// larger ones through their spectrum.
+    static constexpr int DIRECT_CONVOLUTION_MAX_AREA_ = 25;
+
+    // For the renderer:
+    void precompute_for_render_();
+    void apply_psf_convolution_(Image<TSpectral>& image) const;
+    void apply_wings_convolution_(Image<TSpectral>& image) const;
 
     enum class FocusReference { Distance, Diopters, SensorOffset };
     FocusReference focus_reference_ = FocusReference::Distance;

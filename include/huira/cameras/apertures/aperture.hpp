@@ -14,7 +14,8 @@ namespace huira {
 /**
  * @brief Abstract base class for optical apertures.
  *
- * Defines the interface for all aperture types, including area management and PSF creation.
+ * Defines the interface for all aperture types: area, sampling (for depth of field), the
+ * diffraction PSF it produces, and its shape (for defocus blur).
  *
  * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
@@ -34,37 +35,24 @@ class Aperture {
                                                      int radius,
                                                      int banks) = 0;
 
-    void build_defocus_kernel(units::Diopter defocus,
-                              units::Meter focal_length,
-                              units::Meter pitch_x,
-                              units::Meter pitch_y,
-                              int banks);
-
-    const Image<float>& get_defocus_kernel(float u, float v) const;
-
-    float get_defocus_radius() const { return defocus_cache_.radius; }
-    int get_defocus_half_extent() const { return defocus_cache_.half_extent; }
-    int get_defocus_banks() const { return defocus_cache_.banks; }
-    bool has_defocus() const { return defocus_cache_.radius > 0; }
-
     virtual units::Meter get_bounding_radius() const = 0;
 
-  protected:
-    struct PolyphaseCache {
-        float radius = 0.f;
-        int half_extent = 0;
-        int banks = 0;
-        int dim = 0;
-        std::vector<Image<float>> kernels;
-    } defocus_cache_;
-
-    virtual void rasterize_kernel_(Image<float>& kernel,
-                                   float radius_pixels,
-                                   float offset_x,
-                                   float offset_y) = 0;
-
-  private:
-    void generate_polyphase_data_();
+    /**
+     * @brief Rasterize the aperture's shape as antialiased pixel coverage.
+     *
+     * The defocus blur of a point source is the aperture's shape, scaled. The shape is drawn
+     * with its bounding radius scaled to radius_pixels, centered offset_x, offset_y pixels
+     * beyond the center of the kernel's center pixel. The kernel is not cleared or normalized.
+     *
+     * @param kernel Square kernel to draw into, of odd size.
+     * @param radius_pixels Bounding radius of the drawn shape, in pixels.
+     * @param offset_x Horizontal offset of the shape's center from the center pixel, in pixels.
+     * @param offset_y Vertical offset of the shape's center from the center pixel, in pixels.
+     */
+    virtual void rasterize_shape(Image<float>& kernel,
+                                 float radius_pixels,
+                                 float offset_x,
+                                 float offset_y) const = 0;
 };
 
 template <typename T>
@@ -77,5 +65,3 @@ struct is_aperture<Derived<TSpectral>> : std::true_type {};
 template <typename T>
 concept IsAperture = is_aperture<T>::value;
 } // namespace huira
-
-#include "huira_impl/cameras/apertures/aperture.ipp"

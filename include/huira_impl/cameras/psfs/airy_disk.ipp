@@ -27,7 +27,7 @@ AiryDisk<TSpectral>::AiryDisk(units::Meter focal_length,
     : f_number_(focal_length.to_si() / aperture_diameter.to_si()),
       pixel_pitch_(pitch_x.to_si(), pitch_y.to_si())
 {
-    this->build_polyphase_cache(radius, banks);
+    this->set_polyphase_size(radius, banks); // built on first use
 }
 
 /**

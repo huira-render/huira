@@ -494,6 +494,44 @@ const Image<TSpectral>& CameraModelHandle<TSpectral>::get_psf_convolution_kernel
 }
 
 /**
+ * @brief Build everything the camera's optics need for the next render, now, so that the time
+ * is not spent in the render. See CameraModel::precompute().
+ */
+template <IsSpectral TSpectral>
+void CameraModelHandle<TSpectral>::precompute() const
+{
+    this->get_()->precompute();
+}
+
+/**
+ * @brief Whether everything the next render needs from the camera's optics is built and up to
+ * date. See CameraModel::is_precomputed().
+ */
+template <IsSpectral TSpectral>
+bool CameraModelHandle<TSpectral>::is_precomputed() const
+{
+    return this->get_()->is_precomputed();
+}
+
+/**
+ * @brief Choose whether a render builds out-of-date optics kernels itself (the default) or
+ * throws. See CameraModel::set_auto_precompute().
+ * @param auto_precompute True for the render to build them, false to throw.
+ */
+template <IsSpectral TSpectral>
+void CameraModelHandle<TSpectral>::set_auto_precompute(bool auto_precompute) const
+{
+    this->get_()->set_auto_precompute(auto_precompute);
+}
+
+/// Whether a render builds out-of-date optics kernels itself. See set_auto_precompute().
+template <IsSpectral TSpectral>
+bool CameraModelHandle<TSpectral>::auto_precompute() const
+{
+    return this->get_()->auto_precompute();
+}
+
+/**
  * @brief Enable or disable depth of field effects.
  * @param depth_of_field True to enable depth of field, false to disable
  */
