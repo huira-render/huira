@@ -64,8 +64,7 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     void set_opencv_distortion(OpenCVCoefficients coeffs);
     void set_owen_distortion(OwenCoefficients coeffs);
 
-    /// Delete the current distortion model.
-    void delete_distortion() { distortion_ = nullptr; }
+    void delete_distortion();
 
     template <IsSensor<TSpectral> TSensor, typename... Args>
     void set_sensor(Args&&... args);
@@ -192,8 +191,7 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     /// Create a frame buffer matching the sensor resolution.
     FrameBuffer<TSpectral> make_frame_buffer() const { return FrameBuffer<TSpectral>(res()); }
 
-    /// Enable or disable the Blender convention for the camera model.
-    void use_blender_convention(bool value = true) { blender_convention_ = value; }
+    void use_blender_convention(bool value = true);
 
     /// Check if the Blender convention is enabled for the camera model.
     bool is_blender_convention() const { return blender_convention_; }
@@ -262,6 +260,10 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     float ry_;
 
     bool is_explicit_matrix_ = false;
+
+    /// Recompute everything derived from the camera's geometry settings. Every setter that
+    /// changes focal length, sensor, principal point, distortion or axis convention calls this,
+    /// so the result does not depend on the order the settings were made in.
     void compute_intrinsics_();
 
     bool depth_of_field_ = false;
@@ -269,8 +271,12 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     template <IsFloatingPoint TFloat>
     Vec3<TFloat> pixel_to_direction_(const Pixel& pixel) const;
 
+    /// Unit ray directions at every pixel corner, (width + 1) x (height + 1) of them, so that
+    /// bilinear lookup covers the whole sensor, [0, width] x [0, height]. Empty without
+    /// distortion, when directions are computed directly.
     Image<Vec3<float>> distortion_field_;
     void compute_distortion_field_();
+    Vec3<float> ray_direction_(const Pixel& pixel) const;
 
     Image<float> pixel_solid_angles_;
     void compute_pixel_solid_angles_();
