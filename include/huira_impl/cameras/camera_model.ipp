@@ -6,6 +6,8 @@
 #include "huira/cameras/psfs/harvey_shack_scatter.hpp"
 #include "huira/cameras/psfs/measured_psf.hpp"
 #include "huira/cameras/sensors/simple_sensor.hpp"
+#include "tbb/blocked_range.h"
+#include "tbb/parallel_for.h"
 
 namespace huira {
 /**
@@ -66,8 +68,30 @@ template <IsDistortion<TSpectral> TDistortion, typename... Args>
 void CameraModel<TSpectral>::set_distortion(Args&&... args)
 {
     distortion_ = std::make_unique<TDistortion>(std::forward<Args>(args)...);
-    compute_distortion_field_();
-    compute_frustum_();
+    compute_intrinsics_();
+}
+
+/**
+ * @brief Delete the current distortion model.
+ */
+template <IsSpectral TSpectral>
+void CameraModel<TSpectral>::delete_distortion()
+{
+    distortion_ = nullptr;
+    compute_intrinsics_();
+}
+
+/**
+ * @brief Enable or disable the Blender convention for the camera model.
+ *
+ * In the Blender convention the camera looks along -Z with +Y up, rather than along +Z with
+ * +Y down. The image itself is the same either way.
+ */
+template <IsSpectral TSpectral>
+void CameraModel<TSpectral>::use_blender_convention(bool value)
+{
+    blender_convention_ = value;
+    compute_intrinsics_();
 }
 
 /**
@@ -803,14 +827,7 @@ Ray<TSpectral> CameraModel<TSpectral>::cast_ray(const Pixel& pixel, Sampler<floa
     assert(pixel[0] >= 0 && pixel[0] < rx_ && pixel[1] >= 0 && pixel[1] < ry_);
 
     Vec3<float> origin{0, 0, 0};
-    Vec3<float> direction{0, 0, 1};
-    if (distortion_) {
-        float u = pixel[0] / static_cast<float>(rx_ - 1);
-        float v = pixel[1] / static_cast<float>(ry_ - 1);
-        direction = distortion_field_.sample_bilinear<WrapMode::Clamp>(u, v);
-    } else {
-        direction = pixel_to_direction_<float>(pixel);
-    }
+    Vec3<float> direction = ray_direction_(pixel);
 
     if (depth_of_field_) {
         Vec2<float> aperture_sample = aperture_->sample(sampler);
@@ -845,17 +862,23 @@ Ray<TSpectral> CameraModel<TSpectral>::cast_ray(const Pixel& pixel) const
     // the last tile's far corner lies exactly on that edge.
     assert(pixel[0] >= 0 && pixel[0] <= rx_ && pixel[1] >= 0 && pixel[1] <= ry_);
 
-    Vec3<float> origin{0, 0, 0};
-    Vec3<float> direction{0, 0, 1};
-    if (distortion_) {
-        float u = pixel[0] / static_cast<float>(rx_ - 1);
-        float v = pixel[1] / static_cast<float>(ry_ - 1);
-        direction = distortion_field_.sample_bilinear<WrapMode::Clamp>(u, v);
-    } else {
-        direction = pixel_to_direction_<float>(pixel);
-    }
+    return Ray<TSpectral>{Vec3<float>{0, 0, 0}, glm::normalize(ray_direction_(pixel))};
+}
 
-    return Ray<TSpectral>{origin, glm::normalize(direction)};
+/**
+ * @brief Direction (not normalized) of the pinhole ray through a sensor position.
+ *
+ * Without distortion this is computed exactly. With distortion it is interpolated from the
+ * precomputed directions at every pixel corner, which span the whole sensor, so positions
+ * anywhere in [0, width] x [0, height] are interpolated rather than clamped.
+ */
+template <IsSpectral TSpectral>
+Vec3<float> CameraModel<TSpectral>::ray_direction_(const Pixel& pixel) const
+{
+    if (!distortion_) {
+        return pixel_to_direction_<float>(pixel);
+    }
+    return distortion_field_.sample_bilinear<WrapMode::Clamp>(pixel[0] / rx_, pixel[1] / ry_);
 }
 
 template <IsSpectral TSpectral>
@@ -940,6 +963,9 @@ void CameraModel<TSpectral>::compute_intrinsics_()
         fy_ = focal_length_ / sensor_->pixel_pitch().y;
     }
 
+    // The frustum and solid angles both look up ray directions, so the distortion field they
+    // read through cast_ray() has to be current first:
+    compute_distortion_field_();
     compute_frustum_();
     compute_pixel_solid_angles_();
 
@@ -978,16 +1004,25 @@ Vec3<TFloat> CameraModel<TSpectral>::pixel_to_direction_(const Pixel& pixel) con
 template <IsSpectral TSpectral>
 void CameraModel<TSpectral>::compute_distortion_field_()
 {
-    Resolution res = sensor_->resolution();
-
-    distortion_field_ = Image<Vec3<float>>(res, Vec3<float>{0, 0, 0});
-
-    for (int x = 0; x < res.x; ++x) {
-        for (int y = 0; y < res.y; ++y) {
-            Pixel pixel{static_cast<float>(x), static_cast<float>(y)};
-            distortion_field_(x, y) = glm::normalize(pixel_to_direction_<float>(pixel));
-        }
+    if (!distortion_) {
+        distortion_field_ = Image<Vec3<float>>(0, 0);
+        return;
     }
+
+    // One entry per pixel corner, so the field reaches the far edges of the last column and
+    // row; with one per pixel, lookups beyond the last pixel's left/top edge were clamped.
+    const Resolution res = sensor_->resolution();
+    distortion_field_ = Image<Vec3<float>>(res.x + 1, res.y + 1, Vec3<float>{0, 0, 0});
+
+    tbb::parallel_for(
+        tbb::blocked_range<int>(0, res.y + 1), [&](const tbb::blocked_range<int>& rows) {
+            for (int y = rows.begin(); y < rows.end(); ++y) {
+                for (int x = 0; x <= res.x; ++x) {
+                    Pixel pixel{static_cast<float>(x), static_cast<float>(y)};
+                    distortion_field_(x, y) = glm::normalize(pixel_to_direction_<float>(pixel));
+                }
+            }
+        });
 }
 
 template <IsSpectral TSpectral>
@@ -996,25 +1031,27 @@ void CameraModel<TSpectral>::compute_pixel_solid_angles_()
     Resolution res = sensor_->resolution();
 
     pixel_solid_angles_ = Image<float>(res, 0.f);
-    for (int x = 0; x < res.x; ++x) {
-        for (int y = 0; y < res.y; ++y) {
-            // Calculate normalized directions to pixel corners
-            Vec3<double> c0 = glm::normalize(
-                pixel_to_direction_<double>(Pixel{static_cast<float>(x), static_cast<float>(y)}));
-            Vec3<double> c1 = glm::normalize(pixel_to_direction_<double>(
-                Pixel{static_cast<float>(x + 1), static_cast<float>(y)}));
-            Vec3<double> c2 = glm::normalize(pixel_to_direction_<double>(
-                Pixel{static_cast<float>(x + 1), static_cast<float>(y + 1)}));
-            Vec3<double> c3 = glm::normalize(pixel_to_direction_<double>(
-                Pixel{static_cast<float>(x), static_cast<float>(y + 1)}));
+    tbb::parallel_for(tbb::blocked_range<int>(0, res.y), [&](const tbb::blocked_range<int>& rows) {
+        for (int y = rows.begin(); y < rows.end(); ++y) {
+            for (int x = 0; x < res.x; ++x) {
+                // Calculate normalized directions to pixel corners
+                Vec3<double> c0 = glm::normalize(pixel_to_direction_<double>(
+                    Pixel{static_cast<float>(x), static_cast<float>(y)}));
+                Vec3<double> c1 = glm::normalize(pixel_to_direction_<double>(
+                    Pixel{static_cast<float>(x + 1), static_cast<float>(y)}));
+                Vec3<double> c2 = glm::normalize(pixel_to_direction_<double>(
+                    Pixel{static_cast<float>(x + 1), static_cast<float>(y + 1)}));
+                Vec3<double> c3 = glm::normalize(pixel_to_direction_<double>(
+                    Pixel{static_cast<float>(x), static_cast<float>(y + 1)}));
 
-            // Compute solid angle as sum of two triangular areas
-            double omega1 = triangle_solid_angle_(c0, c1, c2);
-            double omega2 = triangle_solid_angle_(c0, c2, c3);
+                // Compute solid angle as sum of two triangular areas
+                double omega1 = triangle_solid_angle_(c0, c1, c2);
+                double omega2 = triangle_solid_angle_(c0, c2, c3);
 
-            pixel_solid_angles_(x, y) = static_cast<float>(omega1 + omega2);
+                pixel_solid_angles_(x, y) = static_cast<float>(omega1 + omega2);
+            }
         }
-    }
+    });
 }
 
 template <IsSpectral TSpectral>
@@ -1061,37 +1098,54 @@ void CameraModel<TSpectral>::compute_frustum_()
         ydir = Vec3<float>{0, -1, 0};
     }
 
-    // Initialize the frustum side planes:
+    // The side planes pass through the optical center and contain the image's y axis (left and
+    // right) or x axis (top and bottom). For the whole sensor to be inside, each has to pass
+    // through the boundary point that reaches furthest out on its side, measured as the
+    // tangent of its angle from the forward axis. Every pixel corner on the boundary is a
+    // candidate, out to the far edges at x = width and y = height. (The most oblique point
+    // along each edge is not enough: with pincushion distortion the middle of an edge can reach
+    // further out than its corners.)
+    constexpr float INF_ = std::numeric_limits<float>::infinity();
+    float min_tan_x = INF_;
+    float max_tan_x = -INF_;
+    float min_tan_y = INF_;
+    float max_tan_y = -INF_;
     Vec3<float> left_extrema{0, 0, 0};
-    float left_min_dot = 100.f;
-
     Vec3<float> right_extrema{0, 0, 0};
-    float right_min_dot = 100.f;
-
     Vec3<float> top_extrema{0, 0, 0};
-    float top_min_dot = 100.f;
-
     Vec3<float> bottom_extrema{0, 0, 0};
-    float bottom_min_dot = 100.f;
 
-    auto update = [&](int i, int j, Vec3<float>& extrema, float& min_dot) {
-        Ray<TSpectral> ray = cast_ray(i, j);
-        Vec3<float> direction = ray.direction();
-        float d = glm::dot(direction, zdir);
-        if (d < min_dot) {
-            extrema = direction;
-            min_dot = d;
+    auto visit = [&](int x, int y) {
+        const Vec3<float> direction =
+            glm::normalize(ray_direction_(Pixel{static_cast<float>(x), static_cast<float>(y)}));
+        const float forward = glm::dot(direction, zdir);
+        const float tan_x = glm::dot(direction, xdir) / forward;
+        const float tan_y = glm::dot(direction, ydir) / forward;
+        if (tan_x < min_tan_x) {
+            min_tan_x = tan_x;
+            left_extrema = direction;
+        }
+        if (tan_x > max_tan_x) {
+            max_tan_x = tan_x;
+            right_extrema = direction;
+        }
+        if (tan_y < min_tan_y) {
+            min_tan_y = tan_y;
+            top_extrema = direction;
+        }
+        if (tan_y > max_tan_y) {
+            max_tan_y = tan_y;
+            bottom_extrema = direction;
         }
     };
 
-    // Loop over all edge-pixels
-    for (int i = 0; i < res.x; ++i) {
-        update(i, 0, top_extrema, top_min_dot);
-        update(i, res.y - 1, bottom_extrema, bottom_min_dot);
+    for (int x = 0; x <= res.x; ++x) {
+        visit(x, 0);
+        visit(x, res.y);
     }
-    for (int j = 1; j < res.y - 1; ++j) {
-        update(0, j, left_extrema, left_min_dot);
-        update(res.x - 1, j, right_extrema, right_min_dot);
+    for (int y = 1; y < res.y; ++y) {
+        visit(0, y);
+        visit(res.x, y);
     }
 
     // Form the frustum planes:
