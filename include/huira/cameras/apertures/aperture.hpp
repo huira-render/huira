@@ -44,6 +44,7 @@ class Aperture {
 
     float get_defocus_radius() const { return defocus_cache_.radius; }
     int get_defocus_half_extent() const { return defocus_cache_.half_extent; }
+    int get_defocus_banks() const { return defocus_cache_.banks; }
     bool has_defocus() const { return defocus_cache_.radius > 0; }
 
     virtual units::Meter get_bounding_radius() const = 0;

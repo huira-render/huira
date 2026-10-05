@@ -16,6 +16,7 @@ set(UNIT_TESTS
     huira/core/test_transform.cpp
 
     huira/render/test_region_culling.cpp
+    huira/render/test_unresolved_position.cpp
 
     huira/scene/test_node_rates.cpp
 
