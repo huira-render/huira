@@ -39,11 +39,10 @@ class CircularAperture : public Aperture<TSpectral> {
 
     units::Meter get_bounding_radius() const override;
 
-  protected:
-    void rasterize_kernel_(Image<float>& kernel,
-                           float radius_pixels,
-                           float offset_x,
-                           float offset_y) override;
+    void rasterize_shape(Image<float>& kernel,
+                         float radius_pixels,
+                         float offset_x,
+                         float offset_y) const override;
 
   private:
     float area_ = 1.f;

@@ -117,11 +117,15 @@ units::Meter CircularAperture<TSpectral>::get_bounding_radius() const
     return units::Meter(radius_);
 }
 
+/**
+ * @brief Draws a disk of the given radius as antialiased coverage. See
+ * Aperture::rasterize_shape().
+ */
 template <IsSpectral TSpectral>
-void CircularAperture<TSpectral>::rasterize_kernel_(Image<float>& kernel,
-                                                    float radius_pixels,
-                                                    float offset_x,
-                                                    float offset_y)
+void CircularAperture<TSpectral>::rasterize_shape(Image<float>& kernel,
+                                                  float radius_pixels,
+                                                  float offset_x,
+                                                  float offset_y) const
 {
     const int dim = kernel.width();
     const float cx = static_cast<float>(dim / 2) + 0.5f + offset_x;

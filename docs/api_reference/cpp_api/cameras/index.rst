@@ -5,6 +5,7 @@ Cameras
    :maxdepth: 1
 
    camera_model
+   defocus_kernel
    pixel_convention
    apertures/index
    distortions/index
