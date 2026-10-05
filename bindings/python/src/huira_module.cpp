@@ -2,6 +2,7 @@
 #include <string>
 
 #include "huira/cameras/distortion_coeffs_py.ipp"
+#include "huira/cameras/pixel_convention_py.ipp"
 #include "huira/concepts/spectral_concepts.hpp"
 #include "huira/core/interval_py.ipp"
 #include "huira/core/rotation_py.ipp"
@@ -117,6 +118,7 @@ PYBIND11_MODULE(_huira, m)
     huira::spice::bind_spice(m);
 
     huira::bind_distortion_coefficients(m);
+    huira::bind_pixel_convention(m);
 
     huira::bind_fits_metadata(m);
     huira::bind_common_images(m);

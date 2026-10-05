@@ -23,9 +23,7 @@ CameraModel<TSpectral>::CameraModel()
     units::Meter diameter(this->focal_length_ / 2.8f);
     this->sensor_ = std::make_unique<SimpleSensor<TSpectral>>();
     this->aperture_ = std::make_unique<CircularAperture<TSpectral>>(diameter);
-    cx_ = static_cast<float>(sensor_->resolution().x) * 0.5f;
-    cy_ = static_cast<float>(sensor_->resolution().y) * 0.5f;
-    compute_intrinsics_();
+    compute_intrinsics_(); // principal point unset: the center of the sensor
 }
 
 /**
@@ -95,6 +93,53 @@ void CameraModel<TSpectral>::use_blender_convention(bool value)
 }
 
 /**
+ * @brief Set the pixel coordinate convention the camera's users work in.
+ *
+ * Applies to the principal point passed to configure_sensor_from_pitch(),
+ * configure_sensor_from_size(), set_intrinsics() and set_intrinsic_matrix(), and to the
+ * positions project_point() returns and cast_ray() takes. The default,
+ * PixelConvention::opencv(), puts the center of the top-left pixel at (0, 0) with y down. See
+ * PixelConvention for the others.
+ *
+ * It can be set before or after the principal point: a principal point is kept as given and
+ * read in whichever convention is current. Nothing rendered changes unless a principal point
+ * was given, since the default principal point is the center of the sensor in every
+ * convention.
+ *
+ * @param convention The convention, e.g. PixelConvention::fits().
+ */
+template <IsSpectral TSpectral>
+void CameraModel<TSpectral>::set_pixel_convention(PixelConvention convention)
+{
+    pixel_convention_ = convention;
+    compute_intrinsics_();
+}
+
+/**
+ * @brief Validate and store a principal point as given (unset means the sensor's center).
+ */
+template <IsSpectral TSpectral>
+void CameraModel<TSpectral>::set_principal_point_(std::optional<float> cx,
+                                                  std::optional<float> cy,
+                                                  const Resolution& resolution)
+{
+    if ((cx && !std::isfinite(*cx)) || (cy && !std::isfinite(*cy))) {
+        HUIRA_THROW_ERROR("CameraModel - Principal point (cx, cy) must be finite numeric values.");
+    }
+
+    const float width = static_cast<float>(resolution.x);
+    const float height = static_cast<float>(resolution.y);
+    if ((cx && (*cx < -width || *cx > 2.f * width)) ||
+        (cy && (*cy < -height || *cy > 2.f * height))) {
+        HUIRA_LOG_WARNING("Principal point is significantly outside the sensor resolution. Ensure "
+                          "this intended for an off-axis projection.");
+    }
+
+    principal_x_ = cx;
+    principal_y_ = cy;
+}
+
+/**
  * @brief Set Brown-Conrady distortion coefficients.
  * @param coeffs Brown distortion coefficients
  */
@@ -147,8 +192,9 @@ void CameraModel<TSpectral>::set_sensor(Args&&... args)
  * @param resolution Sensor resolution
  * @param pitch_x Pixel pitch in x direction (micrometers)
  * @param pitch_y Pixel pitch in y direction (micrometers)
- * @param cx Principal point x coordinate (must be within resolution bounds)
- * @param cy Principal point y coordinate (must be within resolution bounds)
+ * @param cx Principal point x coordinate, in the camera's pixel convention (see
+ *           set_pixel_convention()). Defaults to the center of the sensor.
+ * @param cy Principal point y coordinate, likewise.
  */
 template <IsSpectral TSpectral>
 void CameraModel<TSpectral>::configure_sensor_from_pitch(const Resolution& resolution,
@@ -166,24 +212,7 @@ void CameraModel<TSpectral>::configure_sensor_from_pitch(const Resolution& resol
     }
     sensor_->set_pixel_pitch(pitch_x, pitch_y.value());
 
-    float final_cx = cx.value_or(static_cast<float>(resolution.x) * 0.5f);
-    float final_cy = cy.value_or(static_cast<float>(resolution.y) * 0.5f);
-
-    if (std::isnan(final_cx) || std::isnan(final_cy) || std::isinf(final_cx) ||
-        std::isinf(final_cy)) {
-        HUIRA_THROW_ERROR("CameraModel - Principal point (cx, cy) must be finite numeric values.");
-    }
-
-    if (final_cx < -static_cast<float>(resolution.x) ||
-        final_cx > static_cast<float>(resolution.x) * 2.0f ||
-        final_cy < -static_cast<float>(resolution.y) ||
-        final_cy > static_cast<float>(resolution.y) * 2.0f) {
-        HUIRA_LOG_WARNING("Principal point is significantly outside the sensor resolution. Ensure "
-                          "this intended for an off-axis projection.");
-    }
-
-    cx_ = final_cx;
-    cy_ = final_cy;
+    set_principal_point_(cx, cy, resolution);
 
     compute_intrinsics_();
 }
@@ -196,8 +225,9 @@ void CameraModel<TSpectral>::configure_sensor_from_pitch(const Resolution& resol
  * @param resolution Sensor resolution
  * @param width Sensor width in millimeters
  * @param height Sensor height in millimeters
- * @param cx Principal point x coordinate (must be within resolution bounds)
- * @param cy Principal point y coordinate (must be within resolution bounds)
+ * @param cx Principal point x coordinate, in the camera's pixel convention (see
+ *           set_pixel_convention()). Defaults to the center of the sensor.
+ * @param cy Principal point y coordinate, likewise.
  */
 template <IsSpectral TSpectral>
 void CameraModel<TSpectral>::configure_sensor_from_size(const Resolution& resolution,
@@ -220,24 +250,7 @@ void CameraModel<TSpectral>::configure_sensor_from_size(const Resolution& resolu
         sensor_->set_pixel_pitch(units::Meter(pixel_size_x), units::Meter(pixel_size_y));
     }
 
-    float final_cx = cx.value_or(static_cast<float>(resolution.x) * 0.5f);
-    float final_cy = cy.value_or(static_cast<float>(resolution.y) * 0.5f);
-
-    if (std::isnan(final_cx) || std::isnan(final_cy) || std::isinf(final_cx) ||
-        std::isinf(final_cy)) {
-        HUIRA_THROW_ERROR("CameraModel - Principal point (cx, cy) must be finite numeric values.");
-    }
-
-    if (final_cx < -static_cast<float>(resolution.x) ||
-        final_cx > static_cast<float>(resolution.x) * 2.0f ||
-        final_cy < -static_cast<float>(resolution.y) ||
-        final_cy > static_cast<float>(resolution.y) * 2.0f) {
-        HUIRA_LOG_WARNING("Principal point is significantly outside the sensor resolution. Ensure "
-                          "this intended for an off-axis projection.");
-    }
-
-    cx_ = final_cx;
-    cy_ = final_cy;
+    set_principal_point_(cx, cy, resolution);
 
     compute_intrinsics_();
 }
@@ -263,10 +276,15 @@ void CameraModel<TSpectral>::set_intrinsic_matrix(const Mat3<float>& intrinsic_m
 
 /**
  * @brief Set the intrinsic parameters for the camera.
+ *
+ * The principal point is read in the camera's pixel convention (see set_pixel_convention()),
+ * so a calibration can be passed in the convention of the tool that produced it. fx and fy are
+ * scales, and mean the same in every convention.
+ *
  * @param fx Focal length in x direction
  * @param fy Focal length in y direction
- * @param cx Principal point x coordinate
- * @param cy Principal point y coordinate
+ * @param cx Principal point x coordinate, in the camera's pixel convention
+ * @param cy Principal point y coordinate, in the camera's pixel convention
  * @param resolution Sensor resolution
  * @param anchor_focal_length Anchor focal length in millimeters
  */
@@ -282,8 +300,7 @@ void CameraModel<TSpectral>::set_intrinsics(float fx,
 
     fx_ = fx;
     fy_ = fy;
-    cx_ = cx;
-    cy_ = cy;
+    set_principal_point_(cx, cy, resolution);
     sensor_->set_resolution(resolution);
     focal_length_ = anchor_focal_length.to_si_f();
 
@@ -791,10 +808,22 @@ void CameraModel<TSpectral>::update_focus_()
  *
  * Uses the pinhole camera model and applies distortion if present.
  * @param point_camera_coords 3D point in camera coordinates (meters)
- * @return Pixel 2D point on the image plane (pixels)
+ * @return Pixel 2D point on the image plane, in the camera's pixel convention (see
+ * set_pixel_convention()).
  */
 template <IsSpectral TSpectral>
 Pixel CameraModel<TSpectral>::project_point(const Vec3<float>& point_camera_coords) const
+{
+    return pixel_convention_.from_sensor(project_to_sensor_(point_camera_coords),
+                                         sensor_->resolution());
+}
+
+/**
+ * @brief Project a point in camera coordinates to sensor coordinates (pixel i covers
+ * [i, i + 1), y down), whatever the pixel convention.
+ */
+template <IsSpectral TSpectral>
+Pixel CameraModel<TSpectral>::project_to_sensor_(const Vec3<float>& point_camera_coords) const
 {
     float sign_y = 1.0f;
     float depth = point_camera_coords.z;
@@ -821,8 +850,47 @@ Pixel CameraModel<TSpectral>::try_project_point(const Vec3<float>& point_camera_
     return project_point(point_camera_coords);
 }
 
+/**
+ * @brief Cast a camera ray through a position on the image, sampling the aperture when depth
+ * of field is enabled.
+ *
+ * @param pixel Position in the camera's pixel convention (see set_pixel_convention()).
+ * @param sampler Sampler for the aperture position.
+ */
 template <IsSpectral TSpectral>
 Ray<TSpectral> CameraModel<TSpectral>::cast_ray(const Pixel& pixel, Sampler<float>& sampler) const
+{
+    return sensor_ray_(pixel_convention_.to_sensor(pixel, sensor_->resolution()), sampler);
+}
+
+/**
+ * @brief Cast a pinhole camera ray through a position on the image.
+ *
+ * @param pixel Position in the camera's pixel convention (see set_pixel_convention()).
+ */
+template <IsSpectral TSpectral>
+Ray<TSpectral> CameraModel<TSpectral>::cast_ray(const Pixel& pixel) const
+{
+    return sensor_ray_(pixel_convention_.to_sensor(pixel, sensor_->resolution()));
+}
+
+/**
+ * @brief Cast a pinhole camera ray through integer coordinates (x, y) in the camera's pixel
+ * convention: with the default, PixelConvention::opencv(), the center of pixel (x, y).
+ */
+template <IsSpectral TSpectral>
+Ray<TSpectral> CameraModel<TSpectral>::cast_ray(int x, int y) const
+{
+    return cast_ray(Pixel{static_cast<float>(x), static_cast<float>(y)});
+}
+
+/**
+ * @brief cast_ray() in sensor coordinates (pixel i covers [i, i + 1), y down), for internal
+ * use: the renderer samples pixels in sensor coordinates.
+ */
+template <IsSpectral TSpectral>
+Ray<TSpectral> CameraModel<TSpectral>::sensor_ray_(const Pixel& pixel,
+                                                   Sampler<float>& sampler) const
 {
     assert(pixel[0] >= 0 && pixel[0] < rx_ && pixel[1] >= 0 && pixel[1] < ry_);
 
@@ -854,8 +922,11 @@ Ray<TSpectral> CameraModel<TSpectral>::cast_ray(const Pixel& pixel, Sampler<floa
     return Ray<TSpectral>{origin, glm::normalize(direction)};
 }
 
+/**
+ * @brief Pinhole cast_ray() in sensor coordinates, for internal use.
+ */
 template <IsSpectral TSpectral>
-Ray<TSpectral> CameraModel<TSpectral>::cast_ray(const Pixel& pixel) const
+Ray<TSpectral> CameraModel<TSpectral>::sensor_ray_(const Pixel& pixel) const
 {
     // Pixel coordinates are continuous and the sensor spans [0, rx_] x [0, ry_], so the far
     // edge is a valid position. Region culling relies on this: it samples tile corners, and
@@ -882,16 +953,9 @@ Vec3<float> CameraModel<TSpectral>::ray_direction_(const Pixel& pixel) const
 }
 
 template <IsSpectral TSpectral>
-Ray<TSpectral> CameraModel<TSpectral>::cast_ray(int x, int y) const
-{
-    Pixel pixel{static_cast<float>(x), static_cast<float>(y)};
-    return cast_ray(pixel);
-}
-
-template <IsSpectral TSpectral>
 float CameraModel<TSpectral>::pixel_radiance_to_power(int x, int y) const
 {
-    Ray<TSpectral> ray = cast_ray(x, y);
+    Ray<TSpectral> ray = sensor_ray_(Pixel{static_cast<float>(x), static_cast<float>(y)});
     return pixel_solid_angles_(x, y) * this->get_projected_aperture_area(ray.direction());
 }
 
@@ -963,8 +1027,15 @@ void CameraModel<TSpectral>::compute_intrinsics_()
         fy_ = focal_length_ / sensor_->pixel_pitch().y;
     }
 
-    // The frustum and solid angles both look up ray directions, so the distortion field they
-    // read through cast_ray() has to be current first:
+    // The principal point as given is in the pixel convention; everything below works in sensor
+    // coordinates. Unset, it is the center of the sensor, which is the same in every convention.
+    const Pixel given{principal_x_.value_or(0.f), principal_y_.value_or(0.f)};
+    const Pixel sensor = pixel_convention_.to_sensor(given, sensor_->resolution());
+    cx_ = principal_x_ ? sensor.x : rx_ * 0.5f;
+    cy_ = principal_y_ ? sensor.y : ry_ * 0.5f;
+
+    // The frustum reads ray directions from the distortion field, so the field has to be
+    // current first:
     compute_distortion_field_();
     compute_frustum_();
     compute_pixel_solid_angles_();

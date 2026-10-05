@@ -9,3 +9,4 @@ An overview of Huira's architecture and the physics involved.
    light_transport
    aberration_frames
    sensor_modeling
+   pixel_conventions

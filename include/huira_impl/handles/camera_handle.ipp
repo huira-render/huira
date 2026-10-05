@@ -574,9 +574,27 @@ float CameraModelHandle<TSpectral>::defocus_blur_radius() const
 }
 
 /**
+ * @brief Set the pixel coordinate convention used for the principal point and projected
+ * positions. The default is PixelConvention::opencv(). See CameraModel::set_pixel_convention().
+ * @param convention The convention, e.g. PixelConvention::fits().
+ */
+template <IsSpectral TSpectral>
+void CameraModelHandle<TSpectral>::set_pixel_convention(PixelConvention convention) const
+{
+    this->get_()->set_pixel_convention(convention);
+}
+
+/// Get the pixel coordinate convention used for the principal point and projected positions.
+template <IsSpectral TSpectral>
+PixelConvention CameraModelHandle<TSpectral>::pixel_convention() const
+{
+    return this->get_()->pixel_convention();
+}
+
+/**
  * @brief Project a 3D point in camera coordinates onto the image plane.
  * @param point_camera_coords 3D point in camera coordinates (meters)
- * @return Pixel 2D point on the image plane (pixels)
+ * @return Pixel 2D point on the image plane, in the camera's pixel convention
  */
 template <IsSpectral TSpectral>
 Pixel CameraModelHandle<TSpectral>::project_point(const Vec3<float>& point_camera_coords) const

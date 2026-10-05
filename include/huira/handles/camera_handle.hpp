@@ -130,6 +130,9 @@ class CameraModelHandle : public Handle<CameraModel<TSpectral>> {
 
     float defocus_blur_radius() const;
 
+    void set_pixel_convention(PixelConvention convention) const;
+    PixelConvention pixel_convention() const;
+
     Pixel project_point(const Vec3<float>& point_camera_coords) const;
 
     FrameBuffer<TSpectral> make_frame_buffer() const;

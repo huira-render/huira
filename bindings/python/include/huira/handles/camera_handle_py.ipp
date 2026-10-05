@@ -53,7 +53,8 @@ inline void bind_camera_model_handle(py::module_& m)
             py::arg("cx") = py::none(),
             py::arg("cy") = py::none(),
             "Configure sensor using a resolution tuple (width, height) and pixel pitch. pitch_y "
-            "defaults to pitch_x (square pixels). cx/cy default to center.")
+            "defaults to pitch_x (square pixels). cx/cy are in the camera's pixel convention "
+            "(see set_pixel_convention) and default to the center of the sensor.")
 
         .def(
             "configure_sensor_from_size",
@@ -79,7 +80,8 @@ inline void bind_camera_model_handle(py::module_& m)
             py::arg("cx") = py::none(),
             py::arg("cy") = py::none(),
             "Configure sensor using a resolution tuple (width, height) and physical size. height "
-            "defaults to maintaining square pixels. cx/cy default to center.")
+            "defaults to maintaining square pixels. cx/cy are in the camera's pixel convention "
+            "(see set_pixel_convention) and default to the center of the sensor.")
 
         .def(
             "set_intrinsic_matrix",
@@ -95,7 +97,8 @@ inline void bind_camera_model_handle(py::module_& m)
             py::arg("resolution"),
             py::arg("anchor_focal_length"),
             "Explicitly set the 3x3 intrinsic matrix with a resolution tuple and physical focal "
-            "length anchor.")
+            "length anchor. The principal point is in the camera's pixel convention (see "
+            "set_pixel_convention).")
 
         .def(
             "set_intrinsics",
@@ -120,7 +123,21 @@ inline void bind_camera_model_handle(py::module_& m)
             py::arg("resolution"),
             py::arg("anchor_focal_length"),
             "Explicitly set mathematical intrinsics with a resolution tuple and physical focal "
-            "length anchor.")
+            "length anchor. cx/cy are in the camera's pixel convention (see "
+            "set_pixel_convention).")
+
+        // Pixel coordinate convention
+        .def("set_pixel_convention",
+             &HandleType::set_pixel_convention,
+             py::arg("convention"),
+             "Set the pixel coordinate convention for the principal point (cx, cy) and projected "
+             "positions, e.g. huira.PixelConvention.fits(). The default is "
+             "huira.PixelConvention.opencv(): the top-left pixel's center is (0, 0), y down. "
+             "May be set before or after the principal point; changes nothing rendered unless a "
+             "principal point was given.")
+        .def("pixel_convention",
+             &HandleType::pixel_convention,
+             "The pixel coordinate convention for the principal point and projected positions.")
 
         // Distortion
         .def("set_brown_conrady_distortion",
