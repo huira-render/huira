@@ -22,6 +22,11 @@ elseif(UNIX AND NOT APPLE)
 	if (CMAKE_BUILD_TYPE STREQUAL "Debug")
 		set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -O0")
 
+		# libstdc++'s precondition and bounds checks (e.g. std::vector::operator[] in range,
+		# std::normal_distribution's stddev > 0), so that the tests catch violations. Unlike
+		# _GLIBCXX_DEBUG this does not change the ABI.
+		add_compile_definitions(_GLIBCXX_ASSERTIONS)
+
 	elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
         set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
     	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
