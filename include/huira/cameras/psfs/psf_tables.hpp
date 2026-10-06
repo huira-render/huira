@@ -2,8 +2,10 @@
 
 #include <array>
 #include <cstddef>
+#include <optional>
 #include <vector>
 
+#include "huira/cameras/psfs/psf_profile.hpp"
 #include "huira/concepts/spectral_concepts.hpp"
 #include "huira/images/image.hpp"
 
@@ -11,7 +13,7 @@ namespace huira {
 
 /**
  * @brief Tables that give the light an unresolved source puts in each pixel, for a radially
- * symmetric point spread function with a profile per channel.
+ * symmetric point spread function with a profile per channel: diffraction, and scattered light.
  *
  * Every pixel's value is the PSF integrated over that pixel, for a source at its exact position:
  * nothing is rounded to a grid of positions. Three representations of each channel's profile
@@ -24,7 +26,8 @@ namespace huira {
  *   projection on the line from the source, taken a little further out to allow for the
  *   circles' curvature across the pixel. Two antiderivatives of the profile, tabulated, make
  *   this four lookups.
- * - Beyond: the profile's far field, averaged over its rings and over the pixel.
+ * - Beyond: the profile's far field, averaged over its rings and over the pixel. Scattered light
+ *   has no rings, so it is taken as it is, averaged over the pixel.
  *
  * Neighbouring representations agree to 0.1%, and are blended over BLEND_WIDTH so that no seam
  * forms. Beyond the antiderivatives' reach (twice the frame's diagonal, for a camera's tables)
@@ -56,10 +59,22 @@ class PsfTables {
     struct Channel {
         /// Where the far field takes over.
         double far_radius = 0.0;
-        /// The profile's mean far out, averaged over its rings, is this over r^3.
+        /// The profile far out, averaged over its rings, is this over r^3, plus the scattered
+        /// light.
         double far_coefficient = 0.0;
+        /// The fraction of the light scattered, and how.
+        double scatter_fraction = 0.0;
+        std::optional<detail::ScatterProfile> scatter;
         /// Spacing of the antiderivatives' nodes.
         double step = 0.25;
+    };
+
+    /// Harvey-Shack scattered light, in pixel widths: see detail::ScatterProfile.
+    struct Scatter {
+        double fraction = 0.0;
+        double slope = 2.0;
+        double shoulder = 1.0;
+        std::optional<double> outer;
     };
 
     template <class Profile>
@@ -67,7 +82,11 @@ class PsfTables {
               const std::vector<Channel>& channels,
               const Layout& layout);
 
-    static PsfTables airy(double fnumber, double pitch_x, double pitch_y, double reach);
+    static PsfTables airy(double fnumber,
+                          double pitch_x,
+                          double pitch_y,
+                          double reach,
+                          const std::optional<Scatter>& scatter = std::nullopt);
 
     [[nodiscard]] TSpectral pixel(double dx, double dy) const;
     [[nodiscard]] Image<TSpectral> image(int radius, double x_offset, double y_offset) const;
@@ -99,6 +118,8 @@ class PsfTables {
         double limit = 0.0;
         double far_radius = 0.0;
         double far_coefficient = 0.0;
+        double scatter_fraction = 0.0;
+        std::optional<detail::ScatterProfile> scatter;
         std::vector<std::array<double, 4>> nodes;
     };
 
