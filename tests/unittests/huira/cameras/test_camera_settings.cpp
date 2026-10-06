@@ -69,18 +69,6 @@ struct WarningLog {
     WarningLog& operator=(const WarningLog&) = delete;
 };
 
-/// Exposes what the radiance-to-power factor is made from.
-struct CameraProbe : CameraModel<RGB> {
-    using CameraModel<RGB>::pixel_solid_angles_;
-
-    CameraProbe() = default;
-
-    CameraProbe(const CameraProbe&) = delete;
-    CameraProbe(CameraProbe&&) = delete;
-    CameraProbe& operator=(const CameraProbe&) = delete;
-    CameraProbe& operator=(CameraProbe&&) = delete;
-};
-
 } // namespace
 
 TEST_CASE("The intrinsic matrix is read as GLM lays it out", "[cameras][intrinsics]")
@@ -399,17 +387,41 @@ TEST_CASE("A pixel's radiance-to-power factor uses the direction to its center",
 {
     // A wide field, so that the direction to a corner pixel's corner and to its center differ
     // by about 0.4 degrees:
-    CameraProbe camera;
+    CameraModel<RGB> camera;
     camera.configure_sensor_from_pitch(Resolution{64, 64}, units::Micrometer(100.0));
     camera.set_focal_length(units::Millimeter(5.0));
 
-    for (const auto& [x, y] : {std::pair{0, 0}, {63, 0}, {17, 40}, {63, 63}}) {
-        // cast_ray(x, y) goes through the center of pixel (x, y) in the default convention:
-        const float expected =
-            camera.pixel_solid_angles_(x, y) *
-            camera.get_projected_aperture_area(camera.cast_ray(x, y).direction());
-        INFO("pixel (" << x << ", " << y << ")");
-        CHECK(close(camera.pixel_radiance_to_power(x, y), expected, 1e-6));
+    // The solid angle of the spherical triangle between three unit vectors (Van Oosterom and
+    // Strackee):
+    auto triangle = [](const Vec3<double>& a, const Vec3<double>& b, const Vec3<double>& c) {
+        const double numerator = std::abs(glm::dot(a, glm::cross(b, c)));
+        const double denominator = 1.0 + glm::dot(a, b) + glm::dot(b, c) + glm::dot(c, a);
+        return 2.0 * std::atan2(numerator, denominator);
+    };
+    auto direction = [&](float px, float py) {
+        return glm::normalize(Vec3<double>(camera.cast_ray(Pixel{px, py}).direction()));
+    };
+
+    for (bool built : {false, true}) {
+        if (built) {
+            camera.precompute(); // the table, which gives the same values
+        }
+        for (const auto& [x, y] : {std::pair{0, 0}, {63, 0}, {17, 40}, {63, 63}}) {
+            // Pixel (x, y) is centered at (x, y) in the default convention, its corners half a
+            // pixel away:
+            const float fx = static_cast<float>(x);
+            const float fy = static_cast<float>(y);
+            const Vec3<double> c00 = direction(fx - 0.5f, fy - 0.5f);
+            const Vec3<double> c10 = direction(fx + 0.5f, fy - 0.5f);
+            const Vec3<double> c11 = direction(fx + 0.5f, fy + 0.5f);
+            const Vec3<double> c01 = direction(fx - 0.5f, fy + 0.5f);
+            const double solid_angle = triangle(c00, c10, c11) + triangle(c00, c11, c01);
+            const double expected =
+                solid_angle * static_cast<double>(camera.get_projected_aperture_area(
+                                  camera.cast_ray(x, y).direction()));
+            INFO("pixel (" << x << ", " << y << "), table built: " << built);
+            CHECK(close(camera.pixel_radiance_to_power(x, y), expected, 1e-4));
+        }
     }
 }
 

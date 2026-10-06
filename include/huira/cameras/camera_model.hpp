@@ -1,9 +1,11 @@
 #pragma once
 
 #include <array>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <initializer_list>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -50,9 +52,11 @@ class Renderer;
  * point spread functions. All units are SI unless otherwise noted.
  *
  * The kernels the camera's optics need for rendering (PSF stamps, defocus stamps, convolution
- * kernels and their spectra) are derived from its settings and built when first needed, not
- * by the setters. precompute() builds them ahead of time; see there for what a render does
- * when they are out of date.
+ * kernels and their spectra), and the tables of its geometry (each pixel's ray direction and
+ * solid angle, and the view frustum), are derived from its settings and built when first
+ * needed, not by the setters, which are therefore cheap. precompute() builds them ahead of
+ * time; see there for what a render does when they are out of date. Getters give the same
+ * results either way.
  *
  * Settings can be made in any order, with one exception: the aperture. Until it is set, the
  * camera is f/2.8 at whatever focal length it has. set_fstop() and set_aperture_diameter() fix
@@ -220,8 +224,13 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     Ray<TSpectral> cast_ray(const Pixel& pixel) const;
     Ray<TSpectral> cast_ray(int x, int y) const;
 
-    /// Get the frustum representing the camera's field of view.
-    const Frustum<TSpectral>& view_frustum() const { return view_frustum_; }
+    /// Get the frustum representing the camera's field of view. Found from the image's boundary
+    /// when first needed after a change (see precompute()).
+    const Frustum<TSpectral>& view_frustum() const
+    {
+        ensure_frustum_();
+        return view_frustum_;
+    }
 
     float pixel_radiance_to_power(int x, int y) const;
 
@@ -429,8 +438,11 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     // Sensor-coordinate versions of the public projection and ray functions, for internal use
     // (the renderer works in sensor coordinates throughout). See PixelConvention.
     Pixel project_to_sensor_(const Vec3<float>& point_camera_coords) const;
-    Ray<TSpectral> sensor_ray_(const Pixel& sensor_position, Sampler<float>& sampler) const;
-    Ray<TSpectral> sensor_ray_(const Pixel& sensor_position) const;
+    // use_field: interpolate the direction from the distortion field when it is up to date, as
+    // the renderer does; cast_ray() computes it directly. See ray_direction_().
+    Ray<TSpectral>
+    sensor_ray_(const Pixel& sensor_position, Sampler<float>& sampler, bool use_field = true) const;
+    Ray<TSpectral> sensor_ray_(const Pixel& sensor_position, bool use_field = true) const;
     float rx_;
     float ry_;
 
@@ -450,9 +462,11 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     void set_aperture_area_(units::Meter diameter);
     void focal_length_changed_(float previous_focal_length);
 
-    /// Recompute everything derived from the camera's geometry settings. Every setter that
-    /// changes focal length, sensor, principal point, distortion or axis convention calls this,
-    /// so the result does not depend on the order the settings were made in.
+    /// Resolve the intrinsics (fx, fy, cx, cy, skew) from the geometry settings, and mark the
+    /// geometry tables out of date. Every setter that changes focal length, sensor, principal
+    /// point, distortion or axis convention calls this, so the result does not depend on the
+    /// order the settings were made in. It is cheap: the tables are built when needed (see
+    /// ensure_pixel_geometry_() and ensure_frustum_()).
     void compute_intrinsics_();
 
     bool depth_of_field_ = true;
@@ -460,35 +474,96 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     template <IsFloatingPoint TFloat>
     Vec3<TFloat> pixel_to_direction_(const Pixel& pixel) const;
 
+    // ---- Geometry tables ----
+    //
+    // Derived from the intrinsics and distortion, per pixel or along the image's boundary, and
+    // costly to build for a large sensor with distortion (seconds). Setters only mark them out
+    // of date (geometry_version_); they are built when first needed: by precompute() or a
+    // render, or, for the frustum, by a getter that needs it. Getters that need a single value
+    // (cast_ray(), pixel_radiance_to_power()) compute it directly while the tables are out of
+    // date, the same way the tables do, so every getter gives the same result whether or not
+    // they have been built. Built under geometry_mutex_; readers check their stamp, which is
+    // atomic, so renders on several threads can share a camera.
+
+    /// What the tables depend on. A change of distortion model, which is an object, counts as
+    /// a change of distortion_version_.
+    struct GeometryKey {
+        float fx = 0.f;
+        float fy = 0.f;
+        float cx = 0.f;
+        float cy = 0.f;
+        float skew = 0.f;
+        float rx = 0.f;
+        float ry = 0.f;
+        bool blender = false;
+        std::uint64_t distortion_version = 0;
+        bool operator==(const GeometryKey&) const = default;
+    };
+    std::uint64_t distortion_version_ = 0;
+
+    /// The version of the geometry settings, set by compute_intrinsics_(): a new one when they
+    /// change, or, when they change back to what a table was built with, that table's. So
+    /// setting a value to what it already is, or back to what it was, rebuilds nothing.
+    GeometryKey geometry_key_{};
+    std::uint64_t geometry_version_ = 0;
+    std::uint64_t next_geometry_version_ = 1;
+    static constexpr std::uint64_t NEVER_BUILT_ = std::numeric_limits<std::uint64_t>::max();
+    mutable std::mutex geometry_mutex_;
+
+    /// The per-pixel tables: built together, from one pass over the pixel corners.
+    mutable std::atomic<std::uint64_t> pixel_geometry_built_at_{NEVER_BUILT_};
+    mutable GeometryKey pixel_geometry_built_key_{};
+    [[nodiscard]] bool pixel_geometry_current_() const
+    {
+        return pixel_geometry_built_at_.load(std::memory_order_acquire) == geometry_version_;
+    }
+    void ensure_pixel_geometry_() const;
+    void build_pixel_geometry_() const;
+
     /// Unit ray directions at every pixel corner, (width + 1) x (height + 1) of them, so that
     /// bilinear lookup covers the whole sensor, [0, width] x [0, height]. Empty without
     /// distortion, when directions are computed directly.
-    Image<Vec3<float>> distortion_field_;
-    void compute_distortion_field_();
-    Vec3<float> ray_direction_(const Pixel& pixel) const;
+    mutable Image<Vec3<float>> distortion_field_;
+
+    /// Each pixel's power per unit radiance and aperture area: its solid angle times the
+    /// cosine of the angle between the optical axis and the pixel's center. See
+    /// pixel_radiance_to_power().
+    mutable Image<float> pixel_geometry_factors_;
+    double pixel_geometry_factor_(int x, int y) const;
+    double pixel_geometry_factor_(const Vec3<double>& c00,
+                                  const Vec3<double>& c10,
+                                  const Vec3<double>& c11,
+                                  const Vec3<double>& c01) const;
+    Vec3<double> corner_direction_(int x, int y) const;
+
+    /// Direction (not normalized) of the pinhole ray through a sensor position: interpolated
+    /// from the distortion field when use_field and it is up to date, computed directly
+    /// otherwise.
+    Vec3<float> ray_direction_(const Pixel& pixel, bool use_field = true) const;
 
     /// The first pixel corner (sensor coordinates) where the distortion has no inverse, which
     /// makes the camera unusable until a setting changes; empty when there is none. Found by
-    /// compute_distortion_field_(), and reported by check_distortion_().
-    std::optional<Pixel> distortion_failure_;
+    /// build_pixel_geometry_(), and reported by check_distortion_().
+    mutable std::optional<Pixel> distortion_failure_;
     void check_distortion_(const std::string& caller) const;
     [[noreturn]] void throw_no_inverse_(const std::string& caller,
                                         const Pixel& sensor_position) const;
-
-    Image<float> pixel_solid_angles_;
-    void compute_pixel_solid_angles_();
 
     Vec3<double> tangent_(const Vec3<double>& p0, const Vec3<double>& p1) const;
     double triangle_solid_angle_(const Vec3<double>& c0,
                                  const Vec3<double>& c1,
                                  const Vec3<double>& c2) const;
 
-    Frustum<TSpectral> view_frustum_;
-    void compute_frustum_();
+    /// The view frustum, and the bounds it is made from.
+    mutable std::atomic<std::uint64_t> frustum_built_at_{NEVER_BUILT_};
+    mutable GeometryKey frustum_built_key_{};
+    mutable Frustum<TSpectral> view_frustum_;
+    void ensure_frustum_() const;
+    void build_frustum_() const;
 
     /// Where the view frustum's side planes are, as the tangent of their angle from the forward
     /// axis along the image's x and y axes, and the largest change in that tangent one pixel
-    /// makes at the image's boundary. Found by compute_frustum_().
+    /// makes at the image's boundary. Found by build_frustum_().
     struct FrustumBounds {
         Vec3<float> xdir{1, 0, 0};
         Vec3<float> ydir{0, 1, 0};
@@ -499,8 +574,12 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
         float max_tan_y = 0.f;
         float tan_per_pixel = 0.f;
     };
-    FrustumBounds frustum_bounds_;
+    mutable FrustumBounds frustum_bounds_;
     Frustum<TSpectral> frustum_from_bounds_(float widen_tan) const;
+
+    /// Both tables up to date.
+    [[nodiscard]] bool geometry_current_() const;
+    void ensure_geometry_() const;
 
     /// The view frustum widened by at least the given number of pixels on every side, to cull
     /// sources whose light reaches into the image from just outside it.

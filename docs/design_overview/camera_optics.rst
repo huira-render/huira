@@ -3,7 +3,8 @@ Precomputing Camera Optics
 ==========================
 
 TLDR: a camera builds the kernels its optics need (PSF stamps, defocus stamps, convolution
-kernels) when they are first needed, not when it is configured. Call ``precompute()`` once the
+kernels) and the tables of its geometry (each pixel's ray direction and solid angle) when they
+are first needed, not when it is configured, so setters are cheap. Call ``precompute()`` once the
 camera is set up, so that the first render is not slower than the rest. If you don't, the
 render does it for you and says so in the log; ``set_auto_precompute(false)`` makes it throw
 instead.
@@ -40,14 +41,29 @@ kernel is built from the settings it depends on, and rebuilt only when one of th
      - With Harvey-Shack scatter: unresolved sources in focus
      - The PSF's stamp size, ``set_psf_convolution_radius()`` and
        ``set_harvey_shack_scatter()``. The spectrum also depends on the resolution.
+   * - Pixel geometry: each pixel corner's ray direction (with distortion), and each pixel's
+       solid angle
+     - Tracing rays through the pixels, and converting radiance to the power each pixel
+       receives
+     - The focal length, sensor (resolution and pitch), intrinsics, distortion, pixel
+       convention and axis convention
+   * - View frustum
+     - Culling unresolved sources and geometry outside the view
+     - As for the pixel geometry, along the image's boundary only
 
 Veiling glare needs nothing precomputed.
 
 Only what the current settings use is built: while unresolved sources are out of focus, for
 example, the PSF stamps are not built (the defocus stamps replace them), and changing the
 f-stop does not rebuild them until they are needed again. Settings nothing depends on, such as
-the pixel convention, distortion or veiling glare, never make the camera out of date, and
-neither does setting a value to what it already is.
+veiling glare or the sensor's noise, never make the camera out of date, and neither does setting
+a value to what it already is.
+
+Getters never build the per-pixel tables, and give the same values whether they have been
+built or not: ``cast_ray()`` computes its ray directly, and ``pixel_radiance_to_power()``
+computes the pixel the way the table does until the table is built. ``in_fov()``,
+``try_project_point()`` and ``view_frustum()`` build the frustum, which takes only the image's
+boundary, when first called after a change.
 
 Usage
 -----
@@ -105,6 +121,14 @@ stamps, every later change to the focal length or f-stop built them again, and e
 change rebuilt the defocus stamps. Convolution kernels were built during the first render that
 used them. Now no setter builds anything, and the time is spent once, in ``precompute()`` or
 the first render.
+
+The geometry tables were rebuilt by every setter that changes the camera's geometry: setting the
+focal length of a 4096 x 4096 camera with distortion took about 8 seconds, every time, and
+constructing a camera built tables for its default 1024 x 1024 sensor. Now setters take
+microseconds, and the tables are built once, in one pass over the pixel corners, in about a third
+of the time (each corner's direction was found five times). With distortion, ``cast_ray()``
+computes its ray exactly rather than interpolating it, and the tables are computed in double
+precision; rays and each pixel's radiometry change by less than a millionth.
 
 Building kernels lazily changes no rendered image, except that the defocus blur radius is
 computed in double precision, which moves defocused stamps by around a billionth of their
