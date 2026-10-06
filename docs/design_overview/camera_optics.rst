@@ -90,7 +90,8 @@ were made in.
 
 Setters check their own values straight away: ``use_aperture_psf(0)``, for example, throws
 then rather than at the render. Settings that make sense alone but not together, such as PSF
-convolution with neither a PSF nor scattering, are reported by ``precompute()`` or the render.
+convolution with neither a PSF nor scattering, or a lens distortion that folds over inside the
+image at the current focal length and sensor, are reported by ``precompute()`` or the render.
 
 Renders on several threads may share a camera: the first to find it out of date builds the
 kernels while the others wait. Changing a camera while it is rendering is not supported.

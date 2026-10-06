@@ -10,6 +10,7 @@ set(UNIT_TESTS
     huira/cameras/test_camera_geometry.cpp
     huira/cameras/test_camera_precompute.cpp
     huira/cameras/test_camera_settings.cpp
+    huira/cameras/test_distortion.cpp
     huira/cameras/test_psf_composite.cpp
     huira/cameras/test_measured_psf.cpp
     huira/cameras/test_pixel_convention.cpp

@@ -418,6 +418,14 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     void compute_distortion_field_();
     Vec3<float> ray_direction_(const Pixel& pixel) const;
 
+    /// The first pixel corner (sensor coordinates) where the distortion has no inverse, which
+    /// makes the camera unusable until a setting changes; empty when there is none. Found by
+    /// compute_distortion_field_(), and reported by check_distortion_().
+    std::optional<Pixel> distortion_failure_;
+    void check_distortion_(const std::string& caller) const;
+    [[noreturn]] void throw_no_inverse_(const std::string& caller,
+                                        const Pixel& sensor_position) const;
+
     Image<float> pixel_solid_angles_;
     void compute_pixel_solid_angles_();
 

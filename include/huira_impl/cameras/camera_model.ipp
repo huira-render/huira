@@ -98,6 +98,13 @@ void CameraModel<TSpectral>::check_focal_length_(float focal_length,
 /**
  * @brief Set the distortion model for the camera.
  *
+ * The distortion has to have an inverse over the whole image: every position on the sensor has
+ * to be where some ray lands. A model can fail that at the edges of a wide field, where it folds
+ * over or stops short of the image's corners, which depends on the focal length and sensor as
+ * well as the coefficients. Since those can be set in any order, a failure is not reported
+ * here but by precompute(), a render, or cast_ray() and pixel_radiance_to_power() at the
+ * position concerned, until a setting changes that fixes it.
+ *
  * @tparam TDistortion Distortion model type
  * @tparam Args Constructor arguments for the distortion model
  * @param args Arguments to construct the distortion model
@@ -733,11 +740,13 @@ void CameraModel<TSpectral>::disable_harvey_shack_scatter()
  * blur replaces them.
  *
  * @throws std::runtime_error if the settings are inconsistent, e.g. PSF convolution is enabled
- *         with neither a PSF nor scattering.
+ *         with neither a PSF nor scattering, or the lens distortion has no inverse somewhere in
+ *         the image at this focal length and sensor (see set_distortion()).
  */
 template <IsSpectral TSpectral>
 void CameraModel<TSpectral>::precompute()
 {
+    check_distortion_("CameraModel::precompute");
     std::lock_guard<std::mutex> lock(optics_mutex_);
     explicitly_precomputed_ = true;
     if (is_precomputed_locked_()) {
@@ -788,6 +797,7 @@ void CameraModel<TSpectral>::set_auto_precompute(bool auto_precompute)
 template <IsSpectral TSpectral>
 void CameraModel<TSpectral>::precompute_for_render_()
 {
+    check_distortion_("Renderer::render");
     std::lock_guard<std::mutex> lock(optics_mutex_);
     if (is_precomputed_locked_()) {
         return;
@@ -1419,11 +1429,19 @@ Pixel CameraModel<TSpectral>::try_project_point(const Vec3<float>& point_camera_
  *
  * @param pixel Position in the camera's pixel convention (see set_pixel_convention()).
  * @param sampler Sampler for the aperture position.
+ * @throws std::runtime_error if the lens distortion has no inverse at the position (see
+ *         set_distortion()).
  */
 template <IsSpectral TSpectral>
 Ray<TSpectral> CameraModel<TSpectral>::cast_ray(const Pixel& pixel, Sampler<float>& sampler) const
 {
-    return sensor_ray_(pixel_convention_.to_sensor(pixel, sensor_->resolution()), sampler);
+    const Pixel sensor_position = pixel_convention_.to_sensor(pixel, sensor_->resolution());
+    const Ray<TSpectral> ray = sensor_ray_(sensor_position, sampler);
+    if (!std::isfinite(ray.direction().x) || !std::isfinite(ray.direction().y) ||
+        !std::isfinite(ray.direction().z)) {
+        throw_no_inverse_("CameraModel::cast_ray", sensor_position);
+    }
+    return ray;
 }
 
 /**
@@ -1432,11 +1450,19 @@ Ray<TSpectral> CameraModel<TSpectral>::cast_ray(const Pixel& pixel, Sampler<floa
  * The position may be anywhere, including outside the image.
  *
  * @param pixel Position in the camera's pixel convention (see set_pixel_convention()).
+ * @throws std::runtime_error if the lens distortion has no inverse at the position (see
+ *         set_distortion()).
  */
 template <IsSpectral TSpectral>
 Ray<TSpectral> CameraModel<TSpectral>::cast_ray(const Pixel& pixel) const
 {
-    return sensor_ray_(pixel_convention_.to_sensor(pixel, sensor_->resolution()));
+    const Pixel sensor_position = pixel_convention_.to_sensor(pixel, sensor_->resolution());
+    const Ray<TSpectral> ray = sensor_ray_(sensor_position);
+    if (!std::isfinite(ray.direction().x) || !std::isfinite(ray.direction().y) ||
+        !std::isfinite(ray.direction().z)) {
+        throw_no_inverse_("CameraModel::cast_ray", sensor_position);
+    }
+    return ray;
 }
 
 /**
@@ -1517,14 +1543,21 @@ Vec3<float> CameraModel<TSpectral>::ray_direction_(const Pixel& pixel) const
  *
  * @param x Pixel column.
  * @param y Pixel row, from the top.
+ * @throws std::runtime_error if the lens distortion has no inverse at the pixel (see
+ *         set_distortion()).
  */
 template <IsSpectral TSpectral>
 float CameraModel<TSpectral>::pixel_radiance_to_power(int x, int y) const
 {
     // Pixel (x, y) covers [x, x + 1) x [y, y + 1) in sensor coordinates:
-    const Ray<TSpectral> ray =
-        sensor_ray_(Pixel{static_cast<float>(x) + 0.5f, static_cast<float>(y) + 0.5f});
-    return pixel_solid_angles_(x, y) * this->get_projected_aperture_area(ray.direction());
+    const Pixel center{static_cast<float>(x) + 0.5f, static_cast<float>(y) + 0.5f};
+    const Ray<TSpectral> ray = sensor_ray_(center);
+    const float factor =
+        pixel_solid_angles_(x, y) * this->get_projected_aperture_area(ray.direction());
+    if (!std::isfinite(factor)) {
+        throw_no_inverse_("CameraModel::pixel_radiance_to_power", center);
+    }
+    return factor;
 }
 
 template <IsSpectral TSpectral>
@@ -1759,6 +1792,7 @@ Vec3<TFloat> CameraModel<TSpectral>::pixel_to_direction_(const Pixel& pixel) con
 template <IsSpectral TSpectral>
 void CameraModel<TSpectral>::compute_distortion_field_()
 {
+    distortion_failure_.reset();
     if (!distortion_) {
         distortion_field_ = Image<Vec3<float>>(0, 0);
         return;
@@ -1778,6 +1812,55 @@ void CameraModel<TSpectral>::compute_distortion_field_()
                 }
             }
         });
+
+    // Where the distortion has no inverse, the directions are NaN. Keep the first such corner,
+    // in reading order, for check_distortion_() to report:
+    for (int y = 0; y <= res.y && !distortion_failure_; ++y) {
+        for (int x = 0; x <= res.x; ++x) {
+            const Vec3<float>& direction = distortion_field_(x, y);
+            if (!std::isfinite(direction.x) || !std::isfinite(direction.y) ||
+                !std::isfinite(direction.z)) {
+                distortion_failure_ = Pixel{static_cast<float>(x), static_cast<float>(y)};
+                break;
+            }
+        }
+    }
+}
+
+/**
+ * @brief Throw if the lens distortion has no inverse somewhere on the sensor, at the current
+ * focal length and sensor. See set_distortion().
+ *
+ * @param caller Name for the error message.
+ */
+template <IsSpectral TSpectral>
+void CameraModel<TSpectral>::check_distortion_(const std::string& caller) const
+{
+    if (distortion_failure_) {
+        throw_no_inverse_(caller, *distortion_failure_);
+    }
+}
+
+/**
+ * @brief Throw for a position where the lens distortion has no inverse.
+ *
+ * @param caller Name for the error message.
+ * @param sensor_position The position, in sensor coordinates; reported in the camera's pixel
+ *        convention.
+ */
+template <IsSpectral TSpectral>
+void CameraModel<TSpectral>::throw_no_inverse_(const std::string& caller,
+                                               const Pixel& sensor_position) const
+{
+    const Pixel position = pixel_convention_.from_sensor(sensor_position, sensor_->resolution());
+    const std::string model = distortion_ ? " (" + distortion_->get_type_name() + ")" : "";
+    HUIRA_THROW_ERROR(
+        caller + " - The lens distortion" + model + " has no inverse at image position (" +
+        detail::short_number(static_cast<double>(position.x)) + ", " +
+        detail::short_number(static_cast<double>(position.y)) +
+        "): no ray lands there, because the distortion model folds over or stops short of it. "
+        "Check the distortion coefficients, and that they were calibrated for this focal length "
+        "and sensor.");
 }
 
 template <IsSpectral TSpectral>
