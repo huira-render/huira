@@ -263,11 +263,17 @@ inline void bind_camera_model_handle(py::module_& m)
         // PSF
         .def("use_aperture_psf",
              py::overload_cast<bool>(&HandleType::use_aperture_psf, py::const_),
-             py::arg("value"))
+             py::arg("value"),
+             "True uses the aperture's diffraction pattern as the PSF, with the default stamp "
+             "size if it was not already in use (and keeps its stamp size if it was). False "
+             "stops using it, leaving no PSF; a PSF set with set_measured_psf() is left as it "
+             "is.")
         .def("use_aperture_psf",
              py::overload_cast<int, int>(&HandleType::use_aperture_psf, py::const_),
-             py::arg("radius") = 64,
-             py::arg("banks") = 16)
+             py::arg("radius") = CameraModel<TSpectral>::DEFAULT_PSF_RADIUS,
+             py::arg("banks") = CameraModel<TSpectral>::DEFAULT_PSF_BANKS,
+             "Use the aperture's diffraction pattern as the PSF, with stamps of the given "
+             "radius in pixels and subpixel positions per axis for unresolved sources.")
         .def("enable_psf_convolution",
              &HandleType::enable_psf_convolution,
              py::arg("convolve_psf") = true)
@@ -281,12 +287,16 @@ inline void bind_camera_model_handle(py::module_& m)
              &HandleType::set_measured_psf,
              py::arg("data"),
              py::arg("samples_per_pixel"),
+             py::arg("sampling"),
              py::arg("radius") = 0,
-             py::arg("banks") = 16,
+             py::arg("banks") = CameraModel<TSpectral>::DEFAULT_PSF_BANKS,
              "Use a measured (user-supplied) PSF as the camera's core PSF. 'data' is an Image "
              "of centered PSF samples; 'samples_per_pixel' is the measurement sampling density "
-             "per sensor pixel per axis. radius=0 auto-selects the largest stamping radius "
-             "covered by the measurement (capped at 64).")
+             "per sensor pixel per axis; 'sampling' says what the samples are: "
+             "PSFSampling.PointSampled for the PSF's intensity at points (an optical design "
+             "tool's output), PSFSampling.PixelIntegrated for the light a pixel centered there "
+             "receives (a star image taken with the sensor itself). radius=0 auto-selects the "
+             "largest stamping radius covered by the measurement (capped at 64).")
 
         // Stray light
         .def("set_veiling_glare",

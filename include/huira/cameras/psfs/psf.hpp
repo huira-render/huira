@@ -34,6 +34,16 @@ class PSF {
 
     virtual TSpectral evaluate(float x, float y) = 0;
 
+    /**
+     * @brief Whether evaluate() gives the light a pixel centered at (x, y) receives, rather than
+     * the PSF's intensity at that point.
+     *
+     * Stamps and convolution kernels integrate a PSF's intensity over each pixel. One that is
+     * already integrated over a pixel (see PSFSampling::PixelIntegrated) is instead taken at
+     * each pixel's center, so that it is not integrated twice.
+     */
+    [[nodiscard]] virtual bool is_pixel_integrated() const { return false; }
+
     void set_polyphase_size(int radius, int banks);
     void build_polyphase_cache(int radius, int banks);
     void ensure_polyphase_cache() const;
@@ -68,6 +78,7 @@ class PSF {
 
   private:
     void generate_polyphase_data_();
+    void fill_pixel_integrated_bank_(int bx, int by);
     void normalize_kernel_(Image<TSpectral>& kernel, const TSpectral& total_energy);
 
     mutable std::mutex cache_mutex_;

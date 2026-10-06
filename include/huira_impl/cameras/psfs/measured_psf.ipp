@@ -13,6 +13,8 @@ namespace huira {
  * @param data Measured PSF samples, centered on the image.
  * @param samples_per_pixel Measurement samples per sensor pixel per axis (>= 1 recommended; must
  *                          be positive).
+ * @param sampling What the samples are: the PSF's intensity at points, or the light a pixel
+ *                 centered there receives (see PSFSampling).
  * @param radius Polyphase stamping kernel radius in sensor pixels. A value of 0 selects the largest
  *               radius covered by the measurement, capped at 64.
  * @param banks Number of polyphase banks per axis for subpixel stamping.
@@ -20,9 +22,10 @@ namespace huira {
 template <IsSpectral TSpectral>
 MeasuredPSF<TSpectral>::MeasuredPSF(const Image<TSpectral>& data,
                                     float samples_per_pixel,
+                                    PSFSampling sampling,
                                     int radius,
                                     int banks)
-    : data_(data), samples_per_pixel_(samples_per_pixel),
+    : data_(data), samples_per_pixel_(samples_per_pixel), sampling_(sampling),
       center_x_(static_cast<float>(data.width() - 1) * 0.5f),
       center_y_(static_cast<float>(data.height() - 1) * 0.5f), measured_radius_(0)
 {
@@ -58,7 +61,8 @@ MeasuredPSF<TSpectral>::MeasuredPSF(const Image<TSpectral>& data,
 /**
  * @brief Evaluates the measured PSF at the given sensor-pixel offset from center.
  *
- * Bilinearly interpolates the measured samples; returns zero outside the measured extent.
+ * Bilinearly interpolates the measured samples; returns zero outside the measured extent. For
+ * pixel-integrated samples this is the light a pixel centered at the offset receives.
  *
  * @param x Horizontal offset from the PSF center in sensor pixel coordinates.
  * @param y Vertical offset from the PSF center in sensor pixel coordinates.

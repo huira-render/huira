@@ -142,6 +142,24 @@ PYBIND11_MODULE(_huira, m)
         .value("STOCHASTIC", huira::AlphaMode::Stochastic)
         .value("EXPECTED", huira::AlphaMode::Expected);
 
+    // What a measured PSF's samples are (CameraModelHandle.set_measured_psf()):
+    py::enum_<huira::PSFSampling>(m,
+                                  "PSFSampling",
+                                  "What the values of a measured PSF are, so "
+                                  "that they become pixel values correctly.")
+        .value("PointSampled",
+               huira::PSFSampling::PointSampled,
+               "The PSF's brightness at each sample's position: a PSF from an optical design "
+               "software, from a model, or measured with pixels much smaller than the simulated "
+               "sensor's.  Huira interpolates between the samples and adds up the pattern over "
+               "each pixel.  Sample it finely, 4 or more samples per pixel.")
+        .value("PixelIntegrated",
+               huira::PSFSampling::PixelIntegrated,
+               "What a pixel of the simulated sensor collects with its center at each sample: a "
+               "star image taken with that sensor (1 sample per pixel), or an effective PSF "
+               "combined from many such images at subpixel offsets (more). The pixel's area is "
+               "already included, so Huira uses the values as they are.");
+
     // Bind RGB spectral specializations:
     auto rgb = m.def_submodule("rgb", "RGB (3-bin) spectral specialization");
     bind_spectral<huira::RGB>(rgb);

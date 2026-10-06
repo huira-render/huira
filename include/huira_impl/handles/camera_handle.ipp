@@ -416,16 +416,24 @@ void CameraModelHandle<TSpectral>::set_psf(Args&&... args) const
 }
 
 /**
- * @brief Use the aperture to generate a PSF (point spread function).
- * @param value True to enable aperture PSF, false to disable
+ * @brief Use the aperture's diffraction pattern as the PSF (point spread function), or stop.
+ *
+ * True uses it, with the default stamp size if it was not already in use (and keeps its stamp
+ * size if it was). False stops using it, leaving no PSF; a PSF set with set_psf() or
+ * set_measured_psf() is left as it is.
+ *
+ * @param value True to use the aperture's PSF, false to stop using it.
  */
 template <IsSpectral TSpectral>
 void CameraModelHandle<TSpectral>::use_aperture_psf(bool value) const
 {
+    auto& camera = *this->get_();
     if (value) {
-        this->get_()->use_aperture_psf();
-    } else {
-        this->get_()->delete_psf();
+        if (!camera.use_aperture_psf_) {
+            camera.use_aperture_psf();
+        }
+    } else if (camera.use_aperture_psf_) {
+        camera.delete_psf();
     }
 }
 
@@ -470,16 +478,19 @@ void CameraModelHandle<TSpectral>::delete_psf() const
  *
  * @param data Measured PSF samples, centered on the image.
  * @param samples_per_pixel Measurement samples per sensor pixel per axis.
+ * @param sampling What the samples are: the PSF's intensity at points, or the light a pixel
+ *                 centered there receives (see PSFSampling).
  * @param radius Polyphase stamping kernel radius in sensor pixels (0 = auto).
  * @param banks Number of polyphase banks per axis for subpixel stamping.
  */
 template <IsSpectral TSpectral>
 void CameraModelHandle<TSpectral>::set_measured_psf(const Image<TSpectral>& data,
                                                     float samples_per_pixel,
+                                                    PSFSampling sampling,
                                                     int radius,
                                                     int banks) const
 {
-    this->get_()->set_measured_psf(data, samples_per_pixel, radius, banks);
+    this->get_()->set_measured_psf(data, samples_per_pixel, sampling, radius, banks);
 }
 
 /**
