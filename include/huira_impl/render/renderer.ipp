@@ -297,7 +297,9 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
     occluder_mask_ = Image<uint8_t>(fb_width, fb_height, uint8_t{0});
     std::atomic<bool> any_occluder{false};
 
-    // Empty-scene fast path (when no geometry is loaded, skip tracing entirely):
+    // Empty-scene fast path (when no geometry is loaded, skip tracing entirely). The frame is
+    // nothing but a uniform sky, which the PSF convolution leaves as it is (see "PSF
+    // convolution" below), so it is not convolved.
     if (scene_view.tlas_is_empty() && (background == nullptr || background->size() <= 1)) {
         const TSpectral env =
             (background == nullptr || background->size() == 0) ? TSpectral{0.f} : (*background)[0];
@@ -390,6 +392,11 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
         (background == nullptr || background->size() == 0) ? TSpectral{0.f} : (*background)[0];
     const Vec3<float> miss_normal_tile = glm::normalize(Vec3<float>{0.f});
 
+    // Whether a uniform sky is kept out of the PSF convolution, and so which pixels saw nothing
+    // but sky (every ray through them missed): see "PSF convolution" below.
+    const bool split_sky = camera->convolve_psf_ && uniform_background && miss_radiance.max() > 0.f;
+    Image<uint8_t> saw_only_sky(split_sky ? fb_width : 0, split_sky ? fb_height : 0, uint8_t{0});
+
     std::atomic<int> culled_tiles{0};
     std::atomic<int> validation_failures{0};
 
@@ -463,6 +470,9 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                                     scene_view.camera_to_world_[0].apply_to_direction(
                                         miss_normal_tile);
                             }
+                            if (split_sky) {
+                                saw_only_sky(x, y) = uint8_t{1};
+                            }
                             // Depth and the occluder mask keep their cleared values,
                             // matching a tile in which every sample missed.
                         }
@@ -488,6 +498,7 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
 
                         float closest_depth = std::numeric_limits<float>::infinity();
                         bool primary_occluder = false;
+                        bool pixel_hit_geometry = false; ///< By any of its rays.
                         std::size_t geometry_id = std::numeric_limits<std::size_t>::max();
                         TSpectral albedo_total{0};
                         Vec3<float> camera_normals{0};
@@ -637,6 +648,7 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                                 }
 
                                 tile_hit_geometry = true;
+                                pixel_hit_geometry = true;
 
                                 const auto& mapping = scene_view.instance_mappings_[hit.inst_id];
 
@@ -907,6 +919,10 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                             any_occluder.store(true, std::memory_order_relaxed);
                         }
 
+                        if (split_sky && !pixel_hit_geometry) {
+                            saw_only_sky(x, y) = uint8_t{1};
+                        }
+
                         if (frame_buffer.has_depth()) {
                             if (closest_depth < std::numeric_limits<float>::infinity()) {
                                 frame_buffer.depth()(x, y) = closest_depth;
@@ -982,26 +998,91 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
     }
     occluder_mask_valid_ = true;
 
+    // PSF convolution.
+    //
+    // Write R for the frame as traced, and S for the frame the sky alone would give: each
+    // pixel's radiance-to-power factor times the sky's radiance L. Convolution (written *) is
+    // linear, so convolving R with the PSF P gives
+    //
+    //     P * R  =  P * S  +  P * (R - S).
+    //
+    // The convolution only sees the frame: everything beyond its edges counts as black. That is
+    // right for R - S, the light that geometry in the frame adds to the sky (or blocks from it,
+    // where R - S is negative). It is wrong for S. The sky continues beyond the frame, and a
+    // uniform sky convolved with a PSF that sums to one gives the sky back, but computed on the
+    // frame alone, P * S darkens toward the frame's edges instead: by 18% in the corners with
+    // scattered light that reaches half the frame. So with a uniform sky, the frame is
+    // convolved as
+    //
+    //     S  +  P * (R - S),
+    //
+    // which takes the known result for the sky, and convolves the rest as before.
+    //
+    // Pixels that geometry covers only partly need no separate coverage (alpha) channel. A ray
+    // that misses brings L, and contributes L - L = 0 to R - S; a ray that hits brings the
+    // radiance of what it hit, and contributes that minus L. So where k of a pixel's n rays hit
+    // things of mean radiance B, R - S is (k / n) (B - L) times the pixel's factor: weighted by
+    // the fraction covered.
+    //
+    // Where every ray missed, R - S is zero, and it is set to exactly zero, which averaging and
+    // then subtracting in floating point only nearly gives. With nothing but sky in view it is
+    // zero everywhere, and the convolution is skipped (see step 2).
+    //
+    // The sky is direct light, so the direct component is split the same way; the indirect
+    // component holds none of it. A background image is not uniform, so a frame with one is
+    // convolved as it is, and the image darkens toward the frame's edges.
     if (camera->convolve_psf_) {
-        // Convolution is linear, so convolving the components independently keeps
-        // total == direct + indirect exactly.
-        //
-        // An empty field of view leaves these buffers identically zero, and a zero
-        // image convolves to a zero image. Skipping the transforms in that case is
-        // exact, and it is the difference between a frame-sized FFT pair per component
-        // and nothing at all. (The kernel and its spectrum were built by render(), whether
-        // or not they are used here, so a frame with nothing in view does not leave the
-        // build to whichever later frame first has.)
-        if (frame_buffer.has_received_power() && !image_is_zero_(received_power)) {
+        const bool has_power = frame_buffer.has_received_power();
+        const bool has_direct = frame_buffer.has_received_direct_power();
+
+        // Calls f(x, y, s) for every pixel, in parallel, with s the pixel's value in S:
+        auto for_each_pixel_with_sky = [&](auto&& f) {
+            tbb::parallel_for(
+                tbb::blocked_range<int>(0, fb_height), [&](const tbb::blocked_range<int>& rows) {
+                    for (int y = rows.begin(); y < rows.end(); ++y) {
+                        for (int x = 0; x < fb_width; ++x) {
+                            f(x, y, camera->pixel_radiance_to_power(x, y) * miss_radiance);
+                        }
+                    }
+                });
+        };
+
+        // With a uniform sky, R becomes R - S:
+        if (split_sky) {
+            for_each_pixel_with_sky([&](int x, int y, const TSpectral& sky) {
+                const bool only_sky = saw_only_sky(x, y) != 0;
+                if (has_power) {
+                    received_power(x, y) = only_sky ? TSpectral{0.f} : received_power(x, y) - sky;
+                }
+                if (has_direct) {
+                    TSpectral& direct = frame_buffer.received_direct_power()(x, y);
+                    direct = only_sky ? TSpectral{0.f} : direct - sky;
+                }
+            });
+        }
+
+        // Convolve, each component on its own, which keeps total == direct + indirect exactly.
+        if (has_power && !image_is_zero_(received_power)) {
             camera->apply_psf_convolution_(received_power);
         }
-        if (frame_buffer.has_received_direct_power() &&
-            !image_is_zero_(frame_buffer.received_direct_power())) {
+        if (has_direct && !image_is_zero_(frame_buffer.received_direct_power())) {
             camera->apply_psf_convolution_(frame_buffer.received_direct_power());
         }
         if (frame_buffer.has_received_indirect_power() &&
             !image_is_zero_(frame_buffer.received_indirect_power())) {
             camera->apply_psf_convolution_(frame_buffer.received_indirect_power());
+        }
+
+        // With a uniform sky, P * (R - S) becomes S + P * (R - S):
+        if (split_sky) {
+            for_each_pixel_with_sky([&](int x, int y, const TSpectral& sky) {
+                if (has_power) {
+                    received_power(x, y) += sky;
+                }
+                if (has_direct) {
+                    frame_buffer.received_direct_power()(x, y) += sky;
+                }
+            });
         }
     }
 
