@@ -22,6 +22,7 @@ set(_huira_py_sources
     huira/units.py
     huira/rgb.py
     huira/visible8.py
+    huira/swir8.py
 )
 
 foreach(_src ${_huira_py_sources})
@@ -67,6 +68,7 @@ install(FILES huira/__init__.py DESTINATION ${HUIRA_PYTHON_INSTALL_DIR})
 install(FILES huira/units.py DESTINATION ${HUIRA_PYTHON_INSTALL_DIR})
 install(FILES huira/rgb.py DESTINATION ${HUIRA_PYTHON_INSTALL_DIR})
 install(FILES huira/visible8.py DESTINATION ${HUIRA_PYTHON_INSTALL_DIR})
+install(FILES huira/swir8.py DESTINATION ${HUIRA_PYTHON_INSTALL_DIR})
 install(FILES huira/cli.py DESTINATION ${HUIRA_PYTHON_INSTALL_DIR})
 install(DIRECTORY "${CMAKE_SOURCE_DIR}/data/"
     DESTINATION ${HUIRA_PYTHON_INSTALL_DIR}/data

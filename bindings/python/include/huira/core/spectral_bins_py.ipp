@@ -170,8 +170,8 @@ inline void bind_spectral_bins(py::module_& m)
         .def(
             "to_list",
             [](const TSpectral& self) {
-                std::vector<float> out(N);
-                for (std::size_t i = 0; i < N; ++i) {
+                std::vector<float> out(TSpectral::size());
+                for (std::size_t i = 0; i < TSpectral::size(); ++i) {
                     out[i] = self[i];
                 }
                 return out;

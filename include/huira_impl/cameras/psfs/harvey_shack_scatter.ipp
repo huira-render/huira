@@ -20,12 +20,12 @@ HarveyShackScatter<TSpectral>::HarveyShackScatter(float falloff_exponent,
     : falloff_exponent_(falloff_exponent), r0_inv_sq_(0.f),
       cutoff_radius_sq_(cutoff_radius * cutoff_radius)
 {
-    if (!(falloff_exponent > 0.f) || std::isnan(falloff_exponent)) {
+    if (!(falloff_exponent > 0.f) || !std::isfinite(falloff_exponent)) {
         HUIRA_THROW_ERROR(
             "HarveyShackScatter - Falloff exponent must be a positive finite value: " +
             std::to_string(falloff_exponent));
     }
-    if (!(r0 > 0.f) || std::isnan(r0)) {
+    if (!(r0 > 0.f) || !std::isfinite(r0)) {
         HUIRA_THROW_ERROR("HarveyShackScatter - r0 must be a positive finite value: " +
                           std::to_string(r0));
     }

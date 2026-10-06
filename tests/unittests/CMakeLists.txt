@@ -17,6 +17,7 @@ set(UNIT_TESTS
     huira/cameras/test_sensor_readout.cpp
 
     huira/core/test_rotation.cpp
+    huira/core/test_spectral_conversion.cpp
     huira/core/test_time.cpp
     huira/core/test_transform.cpp
 

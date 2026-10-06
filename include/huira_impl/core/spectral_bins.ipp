@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <array>
 #include <iostream>
 #include <string>
@@ -799,8 +800,21 @@ TSpectral convert_rgb_to_spectral(const RGB& rgb)
         // Determine overlap between TSpectral's full range and RGB's full range
         constexpr double spectral_min = TSpectral::get_bin(0).min_wavelength;
         constexpr double spectral_max = TSpectral::get_bin(TSpectral::size() - 1).max_wavelength;
-        constexpr double rgb_min = RGB::get_bin(0).min_wavelength; // 380nm (blue bin min)
-        constexpr double rgb_max = RGB::get_bin(0).max_wavelength; // 750nm (red bin max)
+        // RGB's bins are listed red, green, blue, so its range spans all three:
+        constexpr double rgb_min = [] {
+            double lowest = RGB::get_bin(0).min_wavelength;
+            for (std::size_t i = 1; i < RGB::size(); ++i) {
+                lowest = std::min(lowest, RGB::get_bin(i).min_wavelength);
+            }
+            return lowest;
+        }(); // 380 nm
+        constexpr double rgb_max = [] {
+            double highest = RGB::get_bin(0).max_wavelength;
+            for (std::size_t i = 1; i < RGB::size(); ++i) {
+                highest = std::max(highest, RGB::get_bin(i).max_wavelength);
+            }
+            return highest;
+        }(); // 750 nm
 
         constexpr double overlap_min = std::max(spectral_min, rgb_min);
         constexpr double overlap_max = std::min(spectral_max, rgb_max);
