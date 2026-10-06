@@ -124,7 +124,8 @@ inline constexpr std::size_t NEAR_TABLE_BUDGET = std::size_t{64} * 1024 * 1024;
  *
  * A profile is called as profile(r) for the light per unit area at a distance r from the source
  * (in pixel widths, for a total of 1), and profile.slope(r) for its derivative. Both must be
- * safe to call from several threads.
+ * safe to call from several threads. Far out, the profile must match its channel's far field:
+ * far_coefficient / r^3, averaged over the rings, plus the scattered light.
  *
  * @param profiles One profile per channel.
  * @param channels What the tables need to know of each channel's profile beyond the near table.
@@ -154,9 +155,12 @@ PsfTables<TSpectral>::PsfTables(const std::vector<Profile>& profiles,
     }
     for (const Channel& channel : channels) {
         if (!(channel.step > 0.0) || !std::isfinite(channel.step) ||
-            !(channel.far_radius >= layout.near_radius) || !(channel.far_coefficient >= 0.0)) {
-            HUIRA_THROW_ERROR("PsfTables - Each channel needs a positive step, and a far radius "
-                              "beyond the near table");
+            !(channel.far_radius >= layout.near_radius) || !(channel.far_coefficient >= 0.0) ||
+            !(channel.scatter_fraction >= 0.0 && channel.scatter_fraction < 1.0) ||
+            (channel.scatter_fraction > 0.0 && !channel.scatter.has_value())) {
+            HUIRA_THROW_ERROR("PsfTables - Each channel needs a positive step, a far radius "
+                              "beyond the near table, and a scatter profile for any light "
+                              "scattered");
         }
     }
 
@@ -169,7 +173,7 @@ PsfTables<TSpectral>::PsfTables(const std::vector<Profile>& profiles,
 
 /**
  * @brief Tables for a circular aperture's diffraction pattern, averaged over each spectral bin's
- * wavelengths.
+ * wavelengths, with scattered light if given.
  *
  * The layout follows the optics. The near table's pitch puts NEAR_SAMPLES_PER_PERIOD points in
  * the pattern's finest period, lambda N at the bluest wavelength; its radius is where the
@@ -177,17 +181,23 @@ PsfTables<TSpectral>::PsfTables(const std::vector<Profile>& profiles,
  * detail (lambda N at the reddest) out and at least PROJECTION_MIN_RADIUS pixels, plus the
  * blend.
  * Each channel's far field takes over where its rings, averaged over the bin's wavelengths and
- * over a pixel, fall below 0.1% of the mean.
+ * over a pixel, fall below 0.1% of the mean. Scattered light takes NEAR_SAMPLES_PER_SHOULDER
+ * points across its shoulder, if that is finer.
  *
  * @param fnumber The aperture's f-number.
  * @param pitch_x Pixel width in meters.
  * @param pitch_y Pixel height in meters.
  * @param reach How far from a source, in pixel widths, the projected integrals are tabulated.
- * @throws std::runtime_error if the f-number or a pitch is not positive and finite.
+ * @param scatter Scattered light, in pixel widths; the same in every channel.
+ * @throws std::runtime_error if the f-number or a pitch is not positive and finite, or the
+ *         scattered light is invalid (see detail::ScatterProfile).
  */
 template <IsSpectral TSpectral>
-PsfTables<TSpectral>
-PsfTables<TSpectral>::airy(double fnumber, double pitch_x, double pitch_y, double reach)
+PsfTables<TSpectral> PsfTables<TSpectral>::airy(double fnumber,
+                                                double pitch_x,
+                                                double pitch_y,
+                                                double reach,
+                                                const std::optional<Scatter>& scatter)
 {
     if (!(fnumber > 0.0) || !std::isfinite(fnumber) || !(pitch_x > 0.0) ||
         !std::isfinite(pitch_x) || !(pitch_y > 0.0) || !std::isfinite(pitch_y)) {
@@ -206,9 +216,17 @@ PsfTables<TSpectral>::airy(double fnumber, double pitch_x, double pitch_y, doubl
     constexpr double FAR_FIELD_RINGS = 400.0;
     constexpr double STRIP_STEPS_PER_PERIOD = 4.0;
     constexpr double MAX_STRIP_STEP = 0.5;
+    constexpr double NEAR_SAMPLES_PER_SHOULDER = 4.0;
+
+    const double scatter_fraction =
+        scatter.has_value() && scatter->fraction > 0.0 ? scatter->fraction : 0.0;
+    std::optional<detail::ScatterProfile> scatter_profile;
+    if (scatter_fraction > 0.0) {
+        scatter_profile.emplace(scatter->shoulder, scatter->slope, scatter->outer);
+    }
 
     const double aspect = pitch_y / pitch_x;
-    std::vector<detail::AiryBandProfile> profiles;
+    std::vector<detail::OpticsProfile> profiles;
     profiles.reserve(TSpectral::size());
     double finest = 0.0;
     double coarsest = std::numeric_limits<double>::infinity();
@@ -217,7 +235,8 @@ PsfTables<TSpectral>::airy(double fnumber, double pitch_x, double pitch_y, doubl
         // Cutoff frequencies, in cycles per pixel width, at the bin's two ends:
         const double blue = pitch_x / (bin.min_wavelength * fnumber);
         const double red = pitch_x / (bin.max_wavelength * fnumber);
-        profiles.emplace_back(blue, red);
+        profiles.emplace_back(
+            detail::AiryBandProfile(blue, red), scatter_fraction, scatter_profile);
         finest = std::max(finest, blue);
         coarsest = std::min(coarsest, red);
     }
@@ -227,10 +246,12 @@ PsfTables<TSpectral>::airy(double fnumber, double pitch_x, double pitch_y, doubl
     layout.reach = reach;
     layout.near_radius =
         std::ceil(std::max(PROJECTION_MIN_RADIUS, PROJECTION_PERIODS / coarsest)) + BLEND_WIDTH;
-    const double finest_per_pixel = finest * std::max(1.0, aspect);
-    layout.near_samples =
-        2 *
-        std::max(1, static_cast<int>(std::ceil(NEAR_SAMPLES_PER_PERIOD * finest_per_pixel / 2.0)));
+    double samples_wanted = NEAR_SAMPLES_PER_PERIOD * finest * std::max(1.0, aspect);
+    if (scatter_fraction > 0.0) {
+        samples_wanted = std::max(
+            samples_wanted, NEAR_SAMPLES_PER_SHOULDER * std::max(1.0, aspect) / scatter->shoulder);
+    }
+    layout.near_samples = 2 * std::max(1, static_cast<int>(std::ceil(samples_wanted / 2.0)));
 
     // Very fast optics need a fine pitch over a near table that cannot shrink below
     // PROJECTION_MIN_RADIUS: past a budget, the pitch is made coarser.
@@ -257,13 +278,16 @@ PsfTables<TSpectral>::airy(double fnumber, double pitch_x, double pitch_y, doubl
 
     std::vector<Channel> channels(TSpectral::size());
     for (std::size_t channel = 0; channel < TSpectral::size(); ++channel) {
-        const double blue = profiles[channel].cutoff_blue();
-        const double red = profiles[channel].cutoff_red();
+        const double blue = profiles[channel].diffraction().cutoff_blue();
+        const double red = profiles[channel].diffraction().cutoff_red();
         const double through = std::min(1.0, 1.0 / (PI<double>() * red * std::min(1.0, aspect)));
         const double rings = blue > red ? FAR_FIELD_RINGS * through / (blue - red)
                                         : std::numeric_limits<double>::infinity();
         channels[channel].far_radius = std::max(layout.near_radius + BLEND_WIDTH, rings);
-        channels[channel].far_coefficient = profiles[channel].far_field_coefficient();
+        channels[channel].far_coefficient =
+            (1.0 - scatter_fraction) * profiles[channel].diffraction().far_field_coefficient();
+        channels[channel].scatter_fraction = scatter_fraction;
+        channels[channel].scatter = scatter_profile;
         channels[channel].step = std::min(MAX_STRIP_STEP, 1.0 / (STRIP_STEPS_PER_PERIOD * blue));
     }
     return PsfTables(profiles, channels, layout);
@@ -400,6 +424,8 @@ typename PsfTables<TSpectral>::Strip PsfTables<TSpectral>::build_strip_(const Pr
     strip.step = channel.step;
     strip.far_radius = channel.far_radius;
     strip.far_coefficient = channel.far_coefficient;
+    strip.scatter_fraction = channel.scatter_fraction;
+    strip.scatter = channel.scatter;
     strip.limit = std::min(channel.far_radius, std::max(reach, near_radius_));
 
     // A pixel's projected integral reads the antiderivatives within half its projected width of
@@ -443,8 +469,9 @@ typename PsfTables<TSpectral>::Strip PsfTables<TSpectral>::build_strip_(const Pr
         }
     });
 
-    // Summed downward from the far field's tails, kappa / (2 r^2) and kappa / (2 r), with
-    // Neumaier's compensation.
+    // Summed downward from the diffraction far field's tails, kappa / (2 r^2) and kappa / (2 r),
+    // with Neumaier's compensation. Scattered light's tails are left out: a constant in F1 and a
+    // straight line in F2 drop out of the differences the projected integrals take.
     const double last = strip.start + static_cast<double>(count - 1) * strip.step;
     double f1 = channel.far_coefficient / (2.0 * last * last);
     double f2 = channel.far_coefficient / (2.0 * last);
@@ -607,20 +634,30 @@ double PsfTables<TSpectral>::strip_value_(const Strip& strip, double dx, double 
 }
 
 /**
- * @brief One channel's light in a pixel from the profile's far field, averaged over its rings:
- * kappa / r^3, averaged over the pixel to second order. Averaging over a side w adds w^2 / 24 of
- * the second derivative along it.
+ * @brief One channel's light in a pixel from the profile's far field: the diffraction pattern's
+ * kappa / r^3, averaged over its rings, and the scattered light, both averaged over the pixel to
+ * second order. Averaging over a side w adds w^2 / 24 of the second derivative along it; for a
+ * radial f(r) that is f'' cos^2 + f' sin^2 / r along x, and likewise along y.
  */
 template <IsSpectral TSpectral>
 double PsfTables<TSpectral>::far_value_(const Strip& strip, double dx, double dy, double r) const
 {
     const double cosine = dx / r;
     const double sine = aspect_ * dy / r;
+    const double cos2 = cosine * cosine;
+    const double sin2 = sine * sine;
+    const double aspect2 = aspect_ * aspect_;
     const double r2 = r * r;
     // (d2/dx2 + aspect^2 d2/dy2) of r^-3, over r^-3, times r^2:
-    const double laplacian =
-        (15.0 * cosine * cosine - 3.0) + aspect_ * aspect_ * (15.0 * sine * sine - 3.0);
-    return aspect_ * strip.far_coefficient / (r2 * r) * (1.0 + laplacian / (24.0 * r2));
+    const double laplacian = (15.0 * cos2 - 3.0) + aspect2 * (15.0 * sin2 - 3.0);
+    double value = strip.far_coefficient / (r2 * r) * (1.0 + laplacian / (24.0 * r2));
+    if (strip.scatter_fraction > 0.0) {
+        const auto [s, first, second] = strip.scatter->derivatives(r);
+        const double along_x = second * cos2 + first * sin2 / r;
+        const double along_y = second * sin2 + first * cos2 / r;
+        value += strip.scatter_fraction * (s + (along_x + aspect2 * along_y) / 24.0);
+    }
+    return aspect_ * value;
 }
 
 /**
