@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cstddef>
 #include <memory>
 #include <string>
@@ -47,6 +48,26 @@ void NameRegistry<T>::remove(std::shared_ptr<T> object)
     name_registry_.erase(object->name());
 
     HUIRA_LOG_INFO("Scene - Deleted: " + object->get_info());
+}
+
+/**
+ * @brief Remove an object from the registry if it is in it.
+ *
+ * For registries that hold only some of the scene's objects of a kind: the scene's nodes, for
+ * example, are only registered when they have a name to be found by (see
+ * Scene::register_node_name_()).
+ *
+ * @param object Shared pointer to object
+ * @return Whether it was in the registry.
+ */
+template <typename T>
+bool NameRegistry<T>::remove_if_present(const std::shared_ptr<T>& object)
+{
+    if (std::find(objects_.begin(), objects_.end(), object) == objects_.end()) {
+        return false;
+    }
+    remove(object);
+    return true;
 }
 
 /**
