@@ -479,19 +479,27 @@ inline void bind_scene(py::module_& m)
             "set_background_radiance",
             static_cast<void (SceneType::*)(Image<TSpectral>)>(&SceneType::set_background_radiance),
             py::arg("background"),
-            "Set background radiance from an Image")
+            "Set the background radiance from an equirectangular Image, looked up by the "
+            "direction a ray leaves the scene in. With PSF convolution enabled, it is convolved "
+            "with the rest of the frame as it is, and so darkens toward the frame's edges. A "
+            "1 x 1 image is a uniform sky.")
 
         // set_background_radiance — TSpectral
         .def("set_background_radiance",
              static_cast<void (SceneType::*)(TSpectral)>(&SceneType::set_background_radiance),
              py::arg("background"),
-             "Set background radiance from a spectral value")
+             "Set a uniform background radiance from a spectral value. With PSF convolution "
+             "enabled, the sky is convolved as if it continued beyond the frame's edges, which "
+             "leaves it as it is. Only the light that geometry adds to the sky, or blocks from "
+             "it, is spread by the PSF, and with nothing but sky in view the convolution is "
+             "skipped.")
 
         // set_background_radiance — float
         .def("set_background_radiance",
              static_cast<void (SceneType::*)(float)>(&SceneType::set_background_radiance),
              py::arg("background"),
-             "Set background radiance from a total power float")
+             "Set a uniform background radiance from its total, spread over the spectrum. See "
+             "the spectral overload for how it meets the PSF convolution.")
 
         // =============================================================
         // Textures

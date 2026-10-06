@@ -954,18 +954,36 @@ MediumHandle<TSpectral> Scene<TSpectral>::add_medium(std::shared_ptr<Medium<TSpe
     return MediumHandle<TSpectral>{medium};
 }
 
+/**
+ * @brief Set the radiance of the sky behind everything in the scene.
+ *
+ * An image is an equirectangular map, looked up by the direction a ray leaves the scene in. A
+ * single value (or a 1 x 1 image) is a uniform sky.
+ *
+ * With PSF convolution enabled (CameraModel::enable_psf_convolution()), a uniform sky is
+ * convolved as if it continued beyond the frame's edges, which leaves it as it is: a PSF that
+ * sums to one gives a uniform sky back. Only the light that geometry adds to the sky, or blocks
+ * from it, is spread by the PSF, and with nothing but sky in view the convolution is skipped. A
+ * background image is convolved with the rest of the frame as it is, and so darkens toward the
+ * frame's edges, where the sky beyond them is missing.
+ *
+ * @param background The radiance, as an equirectangular map.
+ */
 template <IsSpectral TSpectral>
 void Scene<TSpectral>::set_background_radiance(Image<TSpectral> background)
 {
     background_ = std::make_shared<Image<TSpectral>>(std::move(background));
 }
 
+/// @brief Set a uniform sky. See set_background_radiance(Image<TSpectral>).
 template <IsSpectral TSpectral>
 void Scene<TSpectral>::set_background_radiance(TSpectral background)
 {
     background_ = std::make_shared<Image<TSpectral>>(1, 1, background);
 }
 
+/// @brief Set a uniform sky, from its total radiance spread over the spectrum (see
+/// SpectralBins::from_total()). See set_background_radiance(Image<TSpectral>).
 template <IsSpectral TSpectral>
 void Scene<TSpectral>::set_background_radiance(float background)
 {
