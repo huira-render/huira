@@ -170,10 +170,18 @@ struct SensorConfig {
      */
     float gain_db() const { return unity_db - 20.f * std::log10(gain); }
 
+    /**
+     * @brief The default quantum efficiency: 0.5 in the bluest bin, falling in proportion to
+     * photon energy towards the red.
+     *
+     * Proportional to photon energy, a pixel collects the same number of electrons for the same
+     * power in every bin, so the default sensor is white balanced. Normalized to its peak, rather
+     * than its sum, its sensitivity does not depend on how many bins the spectral type has.
+     */
     constexpr TSpectral default_qe() const
     {
         TSpectral qe = TSpectral::photon_energies();
-        return 0.5 * qe / qe.total();
+        return 0.5 * qe / qe.max();
     }
 };
 
@@ -265,9 +273,10 @@ class SensorModel {
         return readout_count_.fetch_add(1, std::memory_order_relaxed);
     }
 
-    /// Largest bit depth accepted: that of the widest integer type. Real ADCs are far narrower
-    /// (scientific sensors reach 16 to 18 bits); this only rules out nonsense.
-    static constexpr int MAX_BIT_DEPTH = 64;
+    /// Largest bit depth accepted: the sensor response is a float in [0, 1], which holds every
+    /// digital number exactly up to 24 bits. Real ADCs are narrower (scientific sensors reach 16
+    /// to 18 bits).
+    static constexpr int MAX_BIT_DEPTH = 24;
 
     friend class CameraModel<TSpectral>;
 };
