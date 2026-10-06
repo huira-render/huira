@@ -249,3 +249,21 @@ TEST_CASE("The default quantum efficiency is white balanced and peaks at 0.5", "
     check(RGB{});
     check(Visible8{});
 }
+
+TEST_CASE("Disabling the sensor response leaves the received power enabled", "[cameras][sensor]")
+{
+    // It used to disable the received power too, even when that had been enabled on its own.
+    CameraModel<RGB> camera;
+    camera.configure_sensor_from_pitch(Resolution{4, 4}, units::Micrometer(5.0));
+    auto frame_buffer = camera.make_frame_buffer();
+    frame_buffer.enable_received_power();
+    frame_buffer.enable_sensor_response();
+    frame_buffer.enable_sensor_response(false);
+    CHECK_FALSE(frame_buffer.has_sensor_response());
+    CHECK(frame_buffer.has_received_power());
+
+    // Enabling it still enables the received power it reads out:
+    auto other = camera.make_frame_buffer();
+    other.enable_sensor_response();
+    CHECK(other.has_received_power());
+}
