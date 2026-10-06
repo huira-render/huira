@@ -57,7 +57,7 @@ int main(int argc, char** argv)
     camera_model.set_sensor_bit_depth(12);
     camera_model.set_sensor_quantum_efficiency(0.8);
     camera_model.set_sensor_full_well_capacity(20000);
-    camera_model.set_sensor_simulate_noise(false);
+    camera_model.enable_sensor_noise(false);
     std::cout << "Sensor: " << camera_model.sensor_bit_depth() << " bits, "
               << camera_model.sensor_full_well_capacity() << " e- full well, QE "
               << camera_model.sensor_quantum_efficiency()[0] << "\n";

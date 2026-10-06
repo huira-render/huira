@@ -44,7 +44,7 @@ int main(int argc, char** argv)
     auto camera_model = scene.new_camera_model();
     camera_model.set_focal_length(125_mm);
     camera_model.set_fstop(3.30f);
-    camera_model.set_sensor_rotation(90_deg);
+    camera_model.set_sensor_roll(90_deg);
     camera_model.configure_sensor_from_pitch({1024, 1024}, 8.5_um, 8.5_um);
     camera_model.set_sensor_bit_depth(14);
     camera_model.set_focus_diopters(0.0025_dpt);

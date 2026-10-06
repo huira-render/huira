@@ -99,7 +99,7 @@ A pixel saturates at whichever limit it reaches first: the full well, at :math:`
 Noise off
 ---------
 
-``set_simulate_noise(false)`` (``set_sensor_simulate_noise(False)`` in Python) removes what is random: shot noise and read noise. Each pixel then collects the expected number of electrons, signal and dark current together. The dark current's electrons and the bias are still added, since they are not noise, and the result is still quantized.
+``enable_sensor_noise(false)`` on the camera (``enable_noise(false)`` on a ``SensorModel``; ``enable_sensor_noise(False)`` in Python) removes what is random: shot noise and read noise. Each pixel then collects the expected number of electrons, signal and dark current together. The dark current's electrons and the bias are still added, since they are not noise, and the result is still quantized.
 
 
 Missing data
@@ -146,3 +146,13 @@ These change the images a sensor produces:
   Visible8 and 5.1x for SWIR8.
 - Each sensor has its own reproducible noise (see Random numbers); bit depths above 24 are
   rejected.
+
+These change the API (each old name fails with a message naming the new one):
+
+- ``set_sensor_simulate_noise()`` is ``enable_sensor_noise()``, and ``SensorModel``'s
+  ``set_simulate_noise()`` and ``simulate_noise()`` are ``enable_noise()`` and
+  ``noise_enabled()``.
+- The sensor's rotation about the optical axis is its roll: ``set_sensor_rotation()`` is
+  ``set_sensor_roll()``, and ``SensorModel``'s ``set_rotation()`` and ``rotation()`` are
+  ``set_roll()`` and ``roll()``. ``CameraModel::sensor_rotation()``, which returned the rotation
+  rather than the angle, is ``sensor_orientation()``, which a tilted sensor will add to.

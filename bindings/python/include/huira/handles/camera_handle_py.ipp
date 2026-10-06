@@ -1,6 +1,9 @@
 #pragma once
 
+#include <iomanip>
 #include <map>
+#include <optional>
+#include <sstream>
 #include <string>
 
 #include "huira/handles/camera_handle.hpp"
@@ -24,6 +27,8 @@ inline const std::map<std::string, std::string>& removed_camera_methods()
          "v0.9.4. Use configure_sensor_from_pitch() or configure_sensor_from_size() instead."},
         {"set_sensor_pixel_pitch", "v0.9.4. Use configure_sensor_from_pitch() instead."},
         {"set_sensor_size", "v0.9.4. Use configure_sensor_from_size() instead."},
+        {"set_sensor_rotation", "v0.9.10. Use set_sensor_roll() instead."},
+        {"set_sensor_simulate_noise", "v0.9.10. Use enable_sensor_noise() instead."},
     };
     return removed;
 }
@@ -277,9 +282,9 @@ inline void bind_camera_model_handle(py::module_& m)
         .def("set_sensor_full_well_capacity",
              &HandleType::set_sensor_full_well_capacity,
              py::arg("fwc"))
-        .def("set_sensor_simulate_noise",
-             &HandleType::set_sensor_simulate_noise,
-             py::arg("simulate_noise"),
+        .def("enable_sensor_noise",
+             &HandleType::enable_sensor_noise,
+             py::arg("noise") = true,
              "Turn the sensor's shot noise and read noise on (the default) or off. Off, each "
              "pixel collects the expected number of electrons; the dark current's electrons and "
              "the bias are still added, since they are not noise.")
@@ -306,9 +311,10 @@ inline void bind_camera_model_handle(py::module_& m)
         .def("sensor_full_well_capacity",
              &HandleType::sensor_full_well_capacity,
              "The sensor's full well capacity, in electrons.")
-        .def("sensor_simulate_noise",
-             &HandleType::sensor_simulate_noise,
-             "Whether the sensor simulates noise.")
+        .def("sensor_noise_enabled",
+             &HandleType::sensor_noise_enabled,
+             "Whether the sensor's shot noise and read noise are on (the default). See "
+             "enable_sensor_noise().")
         .def("sensor_read_noise",
              &HandleType::sensor_read_noise,
              "The sensor's read noise, in electrons.")
@@ -326,18 +332,26 @@ inline void bind_camera_model_handle(py::module_& m)
         .def("sensor_unity_db",
              &HandleType::sensor_unity_db,
              "The gain, in decibels, at which the sensor's conversion gain is unity.")
-        .def("sensor_rotation",
-             &HandleType::sensor_rotation,
-             "The sensor's rotation about the optical axis, in Radian.")
 
-        // Sensor rotation
+        // Sensor orientation
         .def(
-            "set_sensor_rotation",
+            "set_sensor_roll",
             [](const HandleType& self, const py::object& angle) {
-                self.set_sensor_rotation(detail::unit_from_py<units::Radian>(angle));
+                self.set_sensor_roll(detail::unit_from_py<units::Radian>(angle));
             },
             py::arg("angle"),
-            "Set sensor rotation (accepts any angle unit, e.g. Radian, Degree)")
+            "Set the sensor's roll about the optical axis (any angle unit, e.g. Degree). The "
+            "sensor's x axis is turned by the angle toward its y axis, so with OpenCV's axes "
+            "(the default) a positive roll turns the scene counterclockwise in the image. The "
+            "camera's pose is unchanged; projections and rays are in the sensor's axes.")
+        .def("sensor_roll",
+             &HandleType::sensor_roll,
+             "The sensor's roll about the optical axis, in Radian. See set_sensor_roll().")
+        .def("sensor_orientation",
+             &HandleType::sensor_orientation,
+             "The sensor's orientation relative to the camera, as a huira.Rotation from the "
+             "sensor's axes (in which projections and rays are given) to the camera's: the roll "
+             "about the optical axis.")
 
         // PSF
         .def("use_aperture_psf",
@@ -450,22 +464,23 @@ inline void bind_camera_model_handle(py::module_& m)
         .def("precompute",
              &HandleType::precompute,
              py::call_guard<py::gil_scoped_release>(),
-             "Build everything the camera's optics need for the next render (PSF and defocus "
-             "stamps, convolution kernels and their spectra) now, so that the time is not spent "
-             "in the render. Only what is out of date is rebuilt.")
+             "Build everything the camera needs for the next render now (the tables of its "
+             "geometry, PSF and defocus stamps, convolution kernels and their spectra), so that "
+             "the time is not spent in the render. Only what is out of date is rebuilt.")
         .def("is_precomputed",
              &HandleType::is_precomputed,
-             "Whether everything the next render needs from the camera's optics is built and "
-             "up to date.")
-        .def("set_auto_precompute",
-             &HandleType::set_auto_precompute,
+             "Whether everything the next render needs from the camera is built and up to "
+             "date.")
+        .def("enable_auto_precompute",
+             &HandleType::enable_auto_precompute,
              py::arg("auto_precompute") = true,
-             "Choose what a render does when the camera's optics are out of date: build them "
+             "Choose what a render does when the camera is out of date: build what it needs "
              "and log the time taken (True, the default), or raise (False), which guarantees "
              "that no render includes that time.")
-        .def("auto_precompute",
-             &HandleType::auto_precompute,
-             "Whether a render builds out-of-date optics itself. See set_auto_precompute().")
+        .def("auto_precompute_enabled",
+             &HandleType::auto_precompute_enabled,
+             "Whether a render builds an out-of-date camera itself. See "
+             "enable_auto_precompute().")
 
         // Depth of field
         .def("enable_depth_of_field",
@@ -553,7 +568,18 @@ inline void bind_camera_model_handle(py::module_& m)
             py::arg("x"),
             py::arg("y"),
             "Cast a pinhole camera ray, in camera coordinates, through position (x, y) on the "
-            "image, in the camera's pixel convention. The position may be outside the image.")
+            "image, in the camera's pixel convention. The position may be outside the image. "
+            "Raises where the lens distortion has no inverse; see try_cast_ray().")
+        .def(
+            "try_cast_ray",
+            [](const HandleType& self, float x, float y) -> py::object {
+                const std::optional<Ray<TSpectral>> ray = self.try_cast_ray(Pixel{x, y});
+                return ray ? py::cast(*ray) : py::none();
+            },
+            py::arg("x"),
+            py::arg("y"),
+            "As cast_ray(), but None where the lens distortion has no inverse, rather than "
+            "raising.")
 
         // Make the FrameBuffer
         .def("make_frame_buffer", &HandleType::make_frame_buffer)
@@ -564,13 +590,35 @@ inline void bind_camera_model_handle(py::module_& m)
              py::arg("value") = true,
              "Use Blender's camera convention (-z forward, y up) rather than OpenCV's (z "
              "forward, y down, the default).")
-        .def("is_blender_convention",
-             &HandleType::is_blender_convention,
+        .def("uses_blender_convention",
+             &HandleType::uses_blender_convention,
              "Whether the camera uses Blender's convention (-z forward, y up).")
+
+        .def("describe",
+             &HandleType::describe,
+             "A summary of the camera's settings, one per line, for reading (print(camera) "
+             "shows it too). The format may change.")
+        .def("__str__",
+             [](const HandleType& self) {
+                 return self.valid() ? self.describe()
+                                     : std::string("<CameraModelHandle: invalid>");
+             })
 
         .def("valid", &HandleType::valid)
         .def("__bool__", &HandleType::valid)
-        .def("__repr__", [](const HandleType&) { return "<CameraModelHandle>"; })
+        .def("__repr__",
+             [](const HandleType& self) {
+                 if (!self.valid()) {
+                     return std::string("<CameraModelHandle: invalid>");
+                 }
+                 const Resolution r = self.resolution();
+                 std::ostringstream out;
+                 out << std::setprecision(4)
+                     << "<CameraModelHandle: " << self.focal_length().to_si() * 1e3 << " mm f/"
+                     << std::setprecision(3) << self.fstop() << ", " << r.width << "x" << r.height
+                     << " px>";
+                 return out.str();
+             })
 
         // Methods removed in earlier versions do not exist, so hasattr() is False for them, but
         // using one names what replaced it. (Python calls __getattr__ only for names it cannot
