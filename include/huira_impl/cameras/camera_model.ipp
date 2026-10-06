@@ -220,6 +220,13 @@ void CameraModel<TSpectral>::set_owen_distortion(OwenCoefficients coeffs)
 /**
  * @brief Set the sensor model for the camera.
  *
+ * The new sensor brings its own resolution and pixel pitch. If they are the old sensor's (a new
+ * noise model for the same sensor, say), the intrinsics are kept: the principal point, skew and
+ * any intrinsic matrix. If not, those were set for a different sensor and no longer apply, so
+ * they are reset, with a warning: the principal point to the center of the new sensor, the skew
+ * to 0, and fx and fy to the focal length over the new pitch. The focal length, aperture,
+ * distortion and focus belong to the lens and are kept either way.
+ *
  * @tparam TSensor Sensor model type
  * @tparam Args Constructor arguments for the sensor
  * @param args Arguments to construct the sensor
@@ -228,7 +235,39 @@ template <IsSpectral TSpectral>
 template <IsSensor<TSpectral> TSensor, typename... Args>
 void CameraModel<TSpectral>::set_sensor(Args&&... args)
 {
-    sensor_ = std::make_unique<TSensor>(std::forward<Args>(args)...);
+    auto sensor = std::make_unique<TSensor>(std::forward<Args>(args)...);
+
+    const Resolution old_resolution = sensor_->resolution();
+    const Resolution new_resolution = sensor->resolution();
+    const Vec2<float> old_pitch = sensor_->pixel_pitch();
+    const Vec2<float> new_pitch = sensor->pixel_pitch();
+    auto same = [](float a, float b) { return std::abs(a - b) <= 1e-6f * std::max(a, b); };
+    const bool same_geometry = new_resolution.x == old_resolution.x &&
+                               new_resolution.y == old_resolution.y &&
+                               same(new_pitch.x, old_pitch.x) && same(new_pitch.y, old_pitch.y);
+    const bool intrinsics_set =
+        principal_x_ || principal_y_ || shear_ != 0.f || is_explicit_matrix_;
+
+    if (!same_geometry && intrinsics_set) {
+        auto describe = [](const Resolution& resolution, const Vec2<float>& pitch) {
+            return std::to_string(resolution.x) + "x" + std::to_string(resolution.y) +
+                   " pixels of " + detail::short_number(static_cast<double>(pitch.x) * 1e6) +
+                   " x " + detail::short_number(static_cast<double>(pitch.y) * 1e6) + " um";
+        };
+        HUIRA_LOG_WARNING("CameraModel::set_sensor - The new sensor has " +
+                          describe(new_resolution, new_pitch) + ", not " +
+                          describe(old_resolution, old_pitch) +
+                          ", so the principal point, skew and intrinsic matrix set for the old "
+                          "one have been reset: the principal point to the center of the new "
+                          "sensor, the skew to 0, and fx and fy to the focal length over the "
+                          "pitch. Set them again for the new sensor if needed.");
+        principal_x_.reset();
+        principal_y_.reset();
+        shear_ = 0.f;
+        is_explicit_matrix_ = false;
+    }
+
+    sensor_ = std::move(sensor);
     compute_intrinsics_();
 }
 

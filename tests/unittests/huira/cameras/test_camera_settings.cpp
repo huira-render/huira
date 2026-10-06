@@ -458,3 +458,76 @@ TEST_CASE("OpenCV distortion follows OpenCV's model and coefficient order", "[ca
     tilted[12] = 0.01;
     CHECK_THROWS(OpenCVCoefficients::from_opencv(tilted));
 }
+
+TEST_CASE("A new sensor keeps the intrinsics only if it has the same geometry",
+          "[cameras][sensor][intrinsics]")
+{
+    // Calibrated intrinsics, with an off-center principal point and skew:
+    auto calibrated = [] {
+        auto camera = std::make_unique<CameraModel<RGB>>();
+        camera->set_intrinsics(
+            5000.f, 5100.f, 10.5f, 7.25f, Resolution{32, 24}, units::Millimeter(50.0), 3.f);
+        return camera;
+    };
+    const Vec3<float> point{0.001f, 0.002f, 1.f};
+
+    SECTION("A new noise model for the same sensor keeps them")
+    {
+        WarningLog warnings;
+        auto camera = calibrated();
+        const Pixel before = camera->project_point(point);
+
+        SimpleSensorConfig<RGB> config;
+        config.resolution = camera->resolution();
+        config.pitch_x = units::Millimeter(50.0 / 5000.0);
+        config.pitch_y = units::Millimeter(50.0 / 5100.0);
+        config.read_noise = 3.f;
+        camera->set_sensor<SimpleSensor<RGB>>(config);
+
+        const Pixel after = camera->project_point(point);
+        CHECK(close(after.x, before.x, 1e-6));
+        CHECK(close(after.y, before.y, 1e-6));
+        CHECK(warnings.messages.empty());
+    }
+
+    SECTION("A sensor of another size resets them, and says so")
+    {
+        // They used to be kept: the principal point and skew of the old sensor applied to the
+        // new one, and fx and fy no longer matched the focal length and the new pitch.
+        WarningLog warnings;
+        auto camera = calibrated();
+
+        SimpleSensorConfig<RGB> config;
+        config.resolution = Resolution{64, 48};
+        config.pitch_x = units::Micrometer(5.0);
+        config.pitch_y = units::Micrometer(5.0);
+        camera->set_sensor<SimpleSensor<RGB>>(config);
+
+        // The optical axis lands at the center of the new sensor (pixel centers at integers):
+        const Pixel axis = camera->project_point(Vec3<float>{0.f, 0.f, 1.f});
+        CHECK(close(axis.x, 31.5, 1e-6));
+        CHECK(close(axis.y, 23.5, 1e-6));
+
+        // fx = fy = 50 mm / 5 um = 10000 px, and no skew:
+        const Pixel p = camera->project_point(point);
+        CHECK(close(p.x - axis.x, 10.0, 1e-5));
+        CHECK(close(p.y - axis.y, 20.0, 1e-5));
+        CHECK(close(camera->focal_length().to_si(), 0.05, 1e-6));
+
+        REQUIRE(warnings.messages.size() == 1);
+        INFO(warnings.messages[0]);
+        CHECK(warnings.messages[0].find("principal point") != std::string::npos);
+        CHECK(warnings.messages[0].find("64x48") != std::string::npos);
+    }
+
+    SECTION("Without intrinsics set, there is nothing to reset or warn about")
+    {
+        WarningLog warnings;
+        CameraModel<RGB> camera;
+        SimpleSensorConfig<RGB> config;
+        config.resolution = Resolution{16, 16};
+        camera.set_sensor<SimpleSensor<RGB>>(config);
+        CHECK(warnings.messages.empty());
+        CHECK(camera.resolution().x == 16);
+    }
+}
