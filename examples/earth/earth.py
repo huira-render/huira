@@ -147,6 +147,9 @@ def main():
     num_blur_samples = 1
     scene_view = SceneView(scene, exposure, navcam, huira.ObservationMode.GEOMETRIC_STATE, num_blur_samples)
     
+    # Build the camera's optics kernels now rather than in the render:
+    camera_model.precompute()
+
     # Render the current scene view
     renderer.render(scene_view, frame_buffer)
     

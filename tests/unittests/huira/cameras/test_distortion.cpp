@@ -70,8 +70,8 @@ double total(const Image<RGB>& image)
 /// (where it undistorts to a normalized radius of 1.27), whose radial factor has a pole at
 /// 1.4037. The camera's frustum, which bounds the image in tangent space, reaches 1.44 at its
 /// corners, past it.
-const OpenCVCoefficients WIDE_RATIONAL(-0.29, 0.1, -0.08, 0.27, -0.04, -0.18, 0.0, 0.0, 0.0, 0.0,
-                                       0.0, 0.0);
+const OpenCVCoefficients
+    WIDE_RATIONAL(-0.29, 0.1, -0.08, 0.27, -0.04, -0.18, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
 
 /// Calls f and returns the message it throws, or "" if it does not.
 template <typename F>
@@ -274,9 +274,8 @@ TEST_CASE("A source past an OpenCV model's pole does not appear in the image",
     Interval exposure{Time::from_et(0.0), Time::from_et(0.001)};
     auto render_at = [&](double tan_x, double tan_y) {
         constexpr double RANGE = 1000.0;
-        source.set_position(units::Meter(tan_x * RANGE),
-                            units::Meter(tan_y * RANGE),
-                            units::Meter(RANGE));
+        source.set_position(
+            units::Meter(tan_x * RANGE), units::Meter(tan_y * RANGE), units::Meter(RANGE));
         auto frame_buffer = camera_model.make_frame_buffer();
         frame_buffer.enable_received_power();
         SceneView<RGB> scene_view(scene, exposure, camera, ObservationMode::GEOMETRIC_STATE);
@@ -335,4 +334,51 @@ TEST_CASE("Rays cast through a strongly distorted image project back where they 
         CHECK(round_trip_error(p) < 1e-2);
     }
     CHECK(round_trip_error(Pixel{-3.f, -2.f}) < 1e-3);
+}
+
+TEST_CASE("Undistortion does not jump across a folded band to a branch beyond it",
+          "[cameras][distortion]")
+{
+    // r (1 - 0.5 r^2 + 0.1 r^4) rises to 0.6 at r = 1, folds back to 0.566 at r = 1.41, and rises
+    // again beyond. Targets past 0.6 have no inverse in the image, but a single Newton step
+    // could cross the folded band and land on the outer branch: 1.0 gave r = 1.92.
+    const BrownDistortion<RGB> brown(BrownCoefficients(-0.5, 0.1, 0.0, 0.0, 0.0));
+    CHECK(is_nan(brown.undistort(Pixel{0.8f, 0.f})));
+    CHECK(is_nan(brown.undistort(Pixel{1.0f, 0.f})));
+    CHECK(is_nan(brown.undistort(Pixel{0.f, 1.0f})));
+
+    const Pixel inside = brown.undistort(Pixel{0.5f, 0.f});
+    REQUIRE_FALSE(is_nan(inside));
+    CHECK(inside.x < 1.f);
+    CHECK(distance(brown.distort(inside), Pixel{0.5f, 0.f}) < 1e-6);
+}
+
+TEST_CASE("A distortion's error names the position in full", "[cameras][distortion]")
+{
+    // Positions were written to 4 significant figures, so (0.5, 1536.5) read (0.5, 1536).
+    CameraModel<RGB> camera;
+    camera.configure_sensor_from_pitch(Resolution{2048, 1536}, units::Micrometer(3.125));
+    camera.set_focal_length(units::Millimeter(4.0)); // the corners at a normalized radius of 1
+    camera.set_brown_conrady_distortion(BrownCoefficients(-0.3, 0.0, 0.0, 0.0, 0.0));
+    camera.set_pixel_convention(PixelConvention::fits());
+    camera.delete_psf();
+
+    const std::string message = thrown_message([&] { camera.precompute(); });
+    INFO(message);
+    CHECK(message.find("(0.5, 1536.5)") != std::string::npos);
+}
+
+TEST_CASE("A camera whose distortion has no inverse anywhere on its boundary sees nothing",
+          "[cameras][distortion]")
+{
+    // Its frustum's planes were NaN, which every direction passed: in_fov() was true for a
+    // direction at right angles to the view, and try_project_point() gave a position for it.
+    CameraModel<RGB> camera;
+    wide_field(camera, -0.3);
+    camera.set_focal_length(units::Millimeter(2.0)); // even the edges' middles are out of reach
+
+    CHECK_FALSE(camera.in_fov(Vec3<float>{1.f, 0.f, 0.f}));
+    const Pixel p = camera.try_project_point(Vec3<float>{5.f, 0.f, 1.f});
+    CHECK(is_nan(p));
+    CHECK_THROWS(camera.precompute());
 }

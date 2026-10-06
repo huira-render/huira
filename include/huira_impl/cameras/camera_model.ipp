@@ -25,6 +25,15 @@ inline std::string short_number(double value)
     out << value;
     return out.str();
 }
+
+/// A position on the image, in full: 4095.5, not 4096 (as short_number() would round it).
+inline std::string position_number(double value)
+{
+    std::ostringstream out;
+    out.precision(10);
+    out << value;
+    return out.str();
+}
 } // namespace detail
 
 /**
@@ -2015,8 +2024,8 @@ void CameraModel<TSpectral>::throw_no_inverse_(const std::string& caller,
     const std::string model = distortion_ ? " (" + distortion_->get_type_name() + ")" : "";
     HUIRA_THROW_ERROR(
         caller + " - The lens distortion" + model + " has no inverse at image position (" +
-        detail::short_number(static_cast<double>(position.x)) + ", " +
-        detail::short_number(static_cast<double>(position.y)) +
+        detail::position_number(static_cast<double>(position.x)) + ", " +
+        detail::position_number(static_cast<double>(position.y)) +
         "): no ray lands there, because the distortion model folds over or stops short of it. "
         "Check the distortion coefficients, and that they were calibrated for this focal length "
         "and sensor.");

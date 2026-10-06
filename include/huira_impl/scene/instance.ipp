@@ -77,7 +77,7 @@ void Instance<TSpectral>::look_at(const Node<TSpectral>& target, const Vec3<doub
 
     // Set the node to defer rotation evaluation to our new callback
     this->template set_custom_rotation_callback<LookAtCallback<TSpectral>>(
-        this, &target, up, is_blender);
+        this, target, up, is_blender);
 }
 
 /**

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cmath>
+#include <memory>
 
 #include "glm/glm.hpp"
 #include "huira/concepts/spectral_concepts.hpp"
@@ -10,6 +11,7 @@
 #include "huira/core/types.hpp"
 #include "huira/scene/node.hpp"
 #include "huira/scene/state_callbacks/state_callbacks.hpp"
+#include "huira/util/logger.hpp"
 
 namespace huira {
 
@@ -133,21 +135,30 @@ template <IsSpectral TSpectral>
 class LookAtCallback : public LookAtCallbackBase<TSpectral> {
   public:
     LookAtCallback(const Node<TSpectral>* self,
-                   const Node<TSpectral>* target,
+                   const Node<TSpectral>& target,
                    const Vec3<double>& up_vector,
                    bool is_blender)
-        : LookAtCallbackBase<TSpectral>(self, up_vector, is_blender), target_(target)
+        : LookAtCallbackBase<TSpectral>(self, up_vector, is_blender),
+          target_(target.weak_from_this())
     {
     }
 
   protected:
+    /// The target is held weakly: it may be deleted from the scene while this node still looks
+    /// at it, and is then reported rather than read from freed memory.
     Vec3<double> resolve_target_position_(const Time& t) const override
     {
-        return target_->get_ssb_transform_(t, t).position;
+        const std::shared_ptr<const Node<TSpectral>> target = target_.lock();
+        if (!target || !target->is_scene_owned()) {
+            HUIRA_THROW_ERROR("look_at - The node this one looks at has been deleted from the "
+                              "scene. Call look_at() again with another target, or set the "
+                              "node's rotation.");
+        }
+        return target->get_ssb_transform_(t, t).position;
     }
 
   private:
-    const Node<TSpectral>* target_;
+    std::weak_ptr<const Node<TSpectral>> target_;
 };
 
 /**

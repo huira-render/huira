@@ -338,7 +338,7 @@ void SensorModel<TSpectral>::set_rotation(units::Radian angle)
  *
  * Sensors get distinct seeds by default, in the order they are made, so that two cameras never
  * share their noise unless given the same seed. A sensor set with CameraModel::set_sensor() is
- * a new sensor, with a new seed.
+ * a new sensor, with a new seed, and so is a copy of a sensor (it has the same settings).
  *
  * @param seed Any value.
  */

@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cmath>
+#include <utility>
 
 #include "catch2/catch_test_macros.hpp"
 #include "huira/cameras/camera_model.hpp"
@@ -251,4 +252,46 @@ TEST_CASE("An oversampled pixel-integrated measurement gives the pixel response 
         // Taken as point samples, it is integrated over the pixel a second time, and blurred:
         CHECK(error(points.get_kernel(frac + 1e-4f, 1e-4f), frac) > 5e-4);
     }
+}
+
+TEST_CASE("A measured PSF's last row and column are part of it", "[cameras][psf][measured]")
+{
+    // They were taken as outside the measurement, while the first were not: at the default
+    // radius (the measurement's extent) a pixel-integrated PSF lost its right and bottom edge
+    // pixels, which moved the centroid of a source on a pixel's center by 0.11 px.
+    Image<RGB> data(9, 9);
+    for (int y = 0; y < 9; ++y) {
+        for (int x = 0; x < 9; ++x) {
+            const float dx = static_cast<float>(x - 4);
+            const float dy = static_cast<float>(y - 4);
+            data(x, y) = RGB{std::exp(-0.125f * (dx * dx + dy * dy))}; // sigma = 2 px
+        }
+    }
+    MeasuredPSF<RGB> psf(data, 1.f, PSFSampling::PixelIntegrated, 0, 4);
+    REQUIRE(psf.get_radius() == 4);
+
+    CHECK(psf.evaluate(4.f, 0.f)[0] == data(8, 4)[0]);
+    CHECK(psf.evaluate(0.f, 4.f)[0] == data(4, 8)[0]);
+    CHECK(psf.evaluate(4.01f, 0.f)[0] == 0.f);
+
+    auto centroid = [](const Image<RGB>& kernel) {
+        double cx = 0.0;
+        double cy = 0.0;
+        double total = 0.0;
+        for (int y = 0; y < kernel.height(); ++y) {
+            for (int x = 0; x < kernel.width(); ++x) {
+                const double v = static_cast<double>(kernel(x, y)[0]);
+                cx += v * (x - 4);
+                cy += v * (y - 4);
+                total += v;
+            }
+        }
+        return std::pair<double, double>{cx / total, cy / total};
+    };
+    const auto [stamp_x, stamp_y] = centroid(psf.get_kernel(0.f, 0.f));
+    CHECK(std::fabs(stamp_x) < 1e-6);
+    CHECK(std::fabs(stamp_y) < 1e-6);
+    const auto [kernel_x, kernel_y] = centroid(psf.generate_convolution_kernel(4));
+    CHECK(std::fabs(kernel_x) < 1e-6);
+    CHECK(std::fabs(kernel_y) < 1e-6);
 }

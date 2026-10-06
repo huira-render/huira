@@ -358,3 +358,43 @@ TEST_CASE("Received power that is not finite reads out as NaN", "[cameras][senso
         CHECK(std::isfinite(response(0, 0)[0]));
     }
 }
+
+TEST_CASE("Reading out a sensor response without received power throws", "[cameras][sensor]")
+{
+    // It wrote nothing, silently: the sensor read out an empty image.
+    CameraModel<RGB> camera;
+    camera.configure_sensor_from_pitch(Resolution{4, 4}, units::Micrometer(5.0));
+    auto frame_buffer = camera.make_frame_buffer();
+    frame_buffer.enable_sensor_response();
+    frame_buffer.enable_received_power(false);
+    CHECK_THROWS(camera.readout(frame_buffer, units::Second(1.0)));
+}
+
+TEST_CASE("A copied sensor has the same settings and noise of its own", "[cameras][sensor]")
+{
+    // Sensors could not be copied, so set_sensor<T>(an existing sensor) did not compile.
+    SensorProbe camera;
+    camera.configure_sensor_from_pitch(Resolution{16, 16}, units::Micrometer(5.0));
+    camera.sensor_->set_read_noise(3.f);
+    camera.sensor_->set_bit_depth(14);
+
+    SensorProbe other;
+    other.set_sensor<SimpleSensor<RGB>>(
+        *dynamic_cast<const SimpleSensor<RGB>*>(camera.sensor_.get()));
+    CHECK(other.sensor_->read_noise() == 3.f);
+    CHECK(other.sensor_->bit_depth() == 14);
+    CHECK(other.resolution().width == 16);
+    CHECK(other.sensor_->noise_seed() != camera.sensor_->noise_seed());
+
+    auto read = [](SensorProbe& probe) {
+        auto frame_buffer = probe.make_frame_buffer();
+        frame_buffer.enable_sensor_response();
+        expect_electrons(probe, frame_buffer, 100.0);
+        return read_dn(probe, frame_buffer);
+    };
+    CHECK(read(camera) != read(other)); // noise of its own
+
+    camera.sensor_->set_noise_seed(5);
+    other.sensor_->set_noise_seed(5);
+    CHECK(read(camera) == read(other)); // the same seed gives the same noise
+}

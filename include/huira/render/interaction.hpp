@@ -104,16 +104,4 @@ offset_spawn_point(const Vec3<float>& p, const Vec3<float>& n, float p_err) noex
     return p + n * p_err;
 }
 
-/**
- * @brief Offsets an intersection point along a normal to prevent self-intersection artifacts.
- * @deprecated Superseded by same-ray continuation (Ray::tnear + advance_ray_t) for
- *             direction-preserving rays and offset_spawn_point() for respawned rays.
- *             Its fixed 256-ULP displacement exceeds scene feature sizes at planetary
- *             camera-relative ranges (~8.2 km at 3.8e8 m). Retained temporarily for
- *             any out-of-tree callers; remove once none remain.
- */
-template <IsFloatingPoint T>
-inline Vec3<T> offset_intersection_(Vec3<T> intersection, const Vec3<T>& N);
 } // namespace huira
-
-#include "huira_impl/render/interaction.ipp"

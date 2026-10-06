@@ -797,24 +797,21 @@ TSpectral convert_rgb_to_spectral(const RGB& rgb)
     if constexpr (std::same_as<TSpectral, RGB>) {
         return rgb;
     } else {
-        // Determine overlap between TSpectral's full range and RGB's full range
-        constexpr double spectral_min = TSpectral::get_bin(0).min_wavelength;
-        constexpr double spectral_max = TSpectral::get_bin(TSpectral::size() - 1).max_wavelength;
-        // RGB's bins are listed red, green, blue, so its range spans all three:
-        constexpr double rgb_min = [] {
-            double lowest = RGB::get_bin(0).min_wavelength;
-            for (std::size_t i = 1; i < RGB::size(); ++i) {
-                lowest = std::min(lowest, RGB::get_bin(i).min_wavelength);
+        // Determine overlap between TSpectral's full range and RGB's full range. Bins may be
+        // listed in any order (RGB's are red, green, blue), so each range spans all its bins:
+        constexpr auto range_of = []<typename TBins>() {
+            double lowest = TBins::get_bin(0).min_wavelength;
+            double highest = TBins::get_bin(0).max_wavelength;
+            for (std::size_t i = 1; i < TBins::size(); ++i) {
+                lowest = std::min(lowest, TBins::get_bin(i).min_wavelength);
+                highest = std::max(highest, TBins::get_bin(i).max_wavelength);
             }
-            return lowest;
-        }(); // 380 nm
-        constexpr double rgb_max = [] {
-            double highest = RGB::get_bin(0).max_wavelength;
-            for (std::size_t i = 1; i < RGB::size(); ++i) {
-                highest = std::max(highest, RGB::get_bin(i).max_wavelength);
-            }
-            return highest;
-        }(); // 750 nm
+            return std::pair<double, double>{lowest, highest};
+        };
+        constexpr double spectral_min = range_of.template operator()<TSpectral>().first;
+        constexpr double spectral_max = range_of.template operator()<TSpectral>().second;
+        constexpr double rgb_min = range_of.template operator()<RGB>().first;  // 380 nm
+        constexpr double rgb_max = range_of.template operator()<RGB>().second; // 750 nm
 
         constexpr double overlap_min = std::max(spectral_min, rgb_min);
         constexpr double overlap_max = std::min(spectral_max, rgb_max);

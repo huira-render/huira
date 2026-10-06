@@ -5,4 +5,4 @@ RayHit
    :members:
    :undoc-members:
 
-.. doxygenfunction:: huira::offset_intersection_
+.. doxygenfunction:: huira::offset_spawn_point

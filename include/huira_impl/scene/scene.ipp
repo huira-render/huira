@@ -816,6 +816,21 @@ void Scene<TSpectral>::delete_model(const ModelHandle<TSpectral>& model_handle)
 {
     auto model_shared = model_handle.get();
     prune_graph_references_(model_shared.get());
+
+    // The model's nodes leave the scene too: the named ones are in the node registry (see
+    // ModelLoader), which would otherwise keep them alive, and their handles become invalid.
+    if (model_shared->root_node_) {
+        std::function<void(const std::shared_ptr<Node<TSpectral>>&)> release =
+            [&](const std::shared_ptr<Node<TSpectral>>& node) {
+                for (const auto& child : node->get_children()) {
+                    release(child);
+                }
+                node_registry_.remove_if_present(node);
+                node->set_scene_owned(false);
+            };
+        release(model_shared->root_node_);
+    }
+
     models_.remove(model_shared);
 }
 
@@ -1198,6 +1213,16 @@ void Scene<TSpectral>::prune_graph_references_(TAssetPtr target_ptr)
     };
     if (root_node_) {
         prune_references(root_node_.get());
+    }
+
+    // Loaded models have graphs of their own, outside the scene's, whose instances refer to the
+    // model's primitives (and could refer to other assets): an instance left referring to a
+    // deleted asset would be rendered from freed memory.
+    for (const auto& model : models_) {
+        if (model && model->root_node_ &&
+            static_cast<const void*>(model.get()) != static_cast<const void*>(target_ptr)) {
+            prune_references(model->root_node_.get());
+        }
     }
 }
 
