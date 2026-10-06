@@ -431,6 +431,28 @@ inline void bind_camera_model_handle(py::module_& m)
              "falloff exponent (typically 2-3), shoulder radius r0 (pixels), and optional "
              "hard cutoff radius (0 = none).")
         .def("disable_harvey_shack_scatter", &HandleType::disable_harvey_shack_scatter)
+        .def(
+            "set_scatter",
+            [](const HandleType& self,
+               float fraction,
+               float slope,
+               const py::object& shoulder_angle,
+               const py::object& outer_angle) {
+                std::optional<units::Radian> outer;
+                if (!outer_angle.is_none()) {
+                    outer = detail::unit_from_py<units::Radian>(outer_angle);
+                }
+                self.set_scatter(
+                    fraction, slope, detail::unit_from_py<units::Radian>(shoulder_angle), outer);
+            },
+            py::arg("fraction"),
+            py::arg("slope"),
+            py::arg("shoulder_angle"),
+            py::arg("outer_angle") = py::none(),
+            "Set scattered light in angles (any angle unit, e.g. Arcsecond): 'fraction' of each "
+            "source's light spreads as (1 + (theta / shoulder_angle)^2)^(-slope / 2), falling "
+            "as theta^-(slope + 2) beyond 'outer_angle'. A slope of 2 or less needs an outer "
+            "angle. Replaces set_harvey_shack_scatter(); included in psf_image().")
 
         .def("get_psf_radius",
              &HandleType::get_psf_radius,

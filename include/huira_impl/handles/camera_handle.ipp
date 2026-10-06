@@ -671,6 +671,18 @@ void CameraModelHandle<TSpectral>::disable_harvey_shack_scatter() const
     this->get_()->disable_harvey_shack_scatter();
 }
 
+/**
+ * @brief Set scattered light in angles. See CameraModel::set_scatter().
+ */
+template <IsSpectral TSpectral>
+void CameraModelHandle<TSpectral>::set_scatter(float fraction,
+                                               float slope,
+                                               units::Radian shoulder_angle,
+                                               std::optional<units::Radian> outer_angle) const
+{
+    this->get_()->set_scatter(fraction, slope, shoulder_angle, outer_angle);
+}
+
 /// Get the radius in pixels of the PSF's stamps for unresolved sources; 0 without a PSF.
 template <IsSpectral TSpectral>
 int CameraModelHandle<TSpectral>::get_psf_radius() const

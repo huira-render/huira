@@ -3,7 +3,9 @@
 #include <cmath>
 #include <cstddef>
 #include <limits>
+#include <optional>
 #include <random>
+#include <string>
 #include <vector>
 
 #include "catch2/catch_test_macros.hpp"
@@ -151,6 +153,47 @@ CameraModel<Visible8>& jupiter_camera()
     static_cast<void>(configured);
     return camera;
 }
+
+/// Harvey-Shack scattered light in pixels, written out independently of the library's: its
+/// total found by integrating 2 pi r S(r) on panels growing by half each, out to a billion times
+/// its outer radius, and in closed form beyond.
+class ReferenceScatter {
+  public:
+    ReferenceScatter(double shoulder, double slope, double outer)
+        : shoulder_{shoulder}, slope_{slope}, outer_{outer}
+    {
+        const auto ring = [&](double r) { return 2.0 * PI * r * shape(r); };
+        double total = reference::gauss_legendre(ring, 0.0, shoulder, 64);
+        double start = shoulder;
+        const double end = 1e9 * std::max(shoulder, outer);
+        while (start < end) {
+            total += reference::gauss_legendre(ring, start, 1.5 * start, 4);
+            start *= 1.5;
+        }
+        // Beyond, S falls as a^s r^-n, with n = s, or s + 2 times b^2 beyond an outer radius.
+        const double falloff = outer > 0.0 ? slope + 2.0 : slope;
+        const double scale = std::pow(shoulder, slope) * (outer > 0.0 ? outer * outer : 1.0);
+        total += 2.0 * PI * scale * std::pow(start, 2.0 - falloff) / (falloff - 2.0);
+        peak_ = 1.0 / total;
+    }
+
+    double operator()(double r) const { return peak_ * shape(r); }
+
+  private:
+    double shape(double r) const
+    {
+        double value = std::pow(1.0 + r * r / (shoulder_ * shoulder_), -0.5 * slope_);
+        if (outer_ > 0.0) {
+            value /= 1.0 + r * r / (outer_ * outer_);
+        }
+        return value;
+    }
+
+    double shoulder_;
+    double slope_;
+    double outer_;
+    double peak_ = 1.0;
+};
 
 } // namespace
 
@@ -355,4 +398,151 @@ TEST_CASE("psf_image() without the aperture's PSF", "[cameras][psf]")
         CHECK_THROWS(camera.psf_image(CameraModel<RGB>::MAX_PSF_IMAGE_RADIUS + 1));
         CHECK_THROWS(camera.psf_image(2, std::numeric_limits<float>::quiet_NaN()));
     }
+}
+
+TEST_CASE("Scattered light's profile holds all of its light", "[cameras][psf][scatter]")
+{
+    struct Case {
+        double shoulder;
+        double slope;
+        double outer;
+    };
+    for (const Case& c : {Case{0.5, 3.0, 0.0},
+                          Case{1.0, 2.2, 0.0},
+                          Case{2.0, 2.0, 300.0},
+                          Case{1.0, 1.2, 50.0},
+                          Case{5.0, 0.5, 40.0}}) {
+        const detail::ScatterProfile profile(
+            c.shoulder, c.slope, c.outer > 0.0 ? std::optional<double>(c.outer) : std::nullopt);
+        const ReferenceScatter exact(c.shoulder, c.slope, c.outer);
+        INFO("shoulder " << c.shoulder << ", slope " << c.slope << ", outer " << c.outer);
+        double worst = 0.0;
+        for (double r = 0.0; r < 1e4; r = 1.2 * r + 0.01) {
+            worst = std::max(worst, std::abs(profile(r) / exact(r) - 1.0));
+        }
+        CHECK(worst < 1e-12);
+
+        // The derivatives against central differences, whose own error is about 1e-5.
+        for (double r : {0.3, 2.0, 17.0, 150.0}) {
+            const double step = 1e-4 * std::max(r, c.shoulder);
+            const std::array<double, 3> d = profile.derivatives(r);
+            const double first = (profile(r + step) - profile(r - step)) / (2.0 * step);
+            const double second =
+                (profile(r + step) - 2.0 * profile(r) + profile(r - step)) / (step * step);
+            const double scale = d[0] / std::max(r, c.shoulder);
+            CHECK(std::abs(d[1] - first) < 1e-5 * scale);
+            CHECK(std::abs(d[2] - second) < 1e-4 * scale / std::max(r, c.shoulder));
+        }
+    }
+}
+
+TEST_CASE("psf_image() includes scattered light set in angles", "[cameras][psf][scatter]")
+{
+    CameraModel<RGB> camera;
+    configure(camera, JUPITER, Resolution{512, 512});
+    const units::Arcsecond shoulder(20.0);
+    const units::Degree outer(1.0);
+    camera.set_scatter(0.05f, 1.8f, shoulder, outer);
+
+    // An angle lands f theta from the source: 50 mm over 8.5 um pixels.
+    const auto check = [&](double focal_length) {
+        const double pixels_per_radian = focal_length / JUPITER.pitch_x;
+        const ReferenceScatter scatter(
+            shoulder.to_si() * pixels_per_radian, 1.8, outer.to_si() * pixels_per_radian);
+        const double x_offset = 0.21;
+        const double y_offset = -0.36;
+        const Image<RGB> image =
+            camera.psf_image(150, static_cast<float>(x_offset), static_cast<float>(y_offset));
+        double worst = 0.0;
+        for (const auto& pixel : sample_pixels(4, 150, 80, 23)) {
+            const double dx = pixel[0] - x_offset;
+            const double dy = pixel[1] - y_offset;
+            for (std::size_t channel = 0; channel < RGB::size(); ++channel) {
+                const reference::AiryBand airy = reference_airy<RGB>(JUPITER, channel);
+                const auto density = [&](double r) { return 0.95 * airy(r) + 0.05 * scatter(r); };
+                const double exact = reference::pixel_light(density, dx, dy, 0.02);
+                const double light =
+                    static_cast<double>(image(pixel[0] + 150, pixel[1] + 150)[channel]);
+                worst = std::max(
+                    worst, std::abs(light - exact) / scale<RGB>(JUPITER, channel, dx, dy, exact));
+            }
+        }
+        return worst;
+    };
+    CHECK(check(0.05) < 1e-3);
+
+    // The scattered light follows the focal length.
+    camera.set_focal_length(100_mm);
+    camera.set_fstop(static_cast<float>(JUPITER.fnumber));
+    CHECK(check(0.1) < 1e-3);
+    CHECK(camera.describe().find("arcsec") != std::string::npos);
+}
+
+TEST_CASE("set_scatter() checks its arguments", "[cameras][psf][scatter]")
+{
+    CameraModel<RGB> camera;
+    const units::Arcsecond shoulder(10.0);
+    const units::Degree outer(2.0);
+    const float nan = std::numeric_limits<float>::quiet_NaN();
+    CHECK_THROWS(camera.set_scatter(-0.1f, 2.5f, shoulder));
+    CHECK_THROWS(camera.set_scatter(1.f, 2.5f, shoulder));
+    CHECK_THROWS(camera.set_scatter(nan, 2.5f, shoulder));
+    CHECK_THROWS(camera.set_scatter(0.01f, 0.f, shoulder, outer));
+    CHECK_THROWS(camera.set_scatter(0.01f, nan, shoulder, outer));
+    CHECK_THROWS(camera.set_scatter(0.01f, 2.5f, units::Arcsecond(0.0)));
+    CHECK_THROWS(camera.set_scatter(0.01f, 2.5f, units::Degree(90.0)));
+    CHECK_THROWS(camera.set_scatter(0.01f, 2.5f, shoulder, units::Arcsecond(5.0)));
+    CHECK_THROWS(camera.set_scatter(0.01f, 2.5f, shoulder, units::Degree(90.0)));
+
+    // A slope of 2 or less has no finite total without an outer angle.
+    CHECK_THROWS(camera.set_scatter(0.01f, 2.f, shoulder));
+    CHECK_THROWS(camera.set_scatter(0.01f, 1.5f, shoulder));
+    CHECK_NOTHROW(camera.set_scatter(0.01f, 1.5f, shoulder, outer));
+    CHECK_NOTHROW(camera.set_scatter(0.01f, 2.5f, shoulder));
+    CHECK_NOTHROW(camera.set_scatter(0.f, 2.5f, shoulder));
+}
+
+TEST_CASE("psf_image() does not take scattered light set in pixels", "[cameras][psf][scatter]")
+{
+    CameraModel<RGB> camera;
+    configure(camera, JUPITER, Resolution{64, 64});
+    camera.set_harvey_shack_scatter(0.05f, 2.5f);
+    CHECK_THROWS(camera.psf_image(2));
+
+    // Set in angles, it replaces the earlier setting.
+    camera.set_scatter(0.05f, 2.5f, units::Arcsecond(20.0));
+    CHECK_NOTHROW(camera.psf_image(2));
+}
+
+TEST_CASE("Renders use scattered light set in angles at its size in pixels",
+          "[cameras][psf][scatter]")
+{
+    // 50 mm over 8.5 um pixels: 20 arcsec is 0.5704 px and 1 degree 102.66 px.
+    CameraModel<RGB> in_angles;
+    configure(in_angles, JUPITER, Resolution{128, 128});
+    in_angles.set_psf_convolution_radius(40);
+    in_angles.set_scatter(0.05f, 1.8f, units::Arcsecond(20.0), units::Degree(1.0));
+
+    CameraModel<RGB> in_pixels;
+    configure(in_pixels, JUPITER, Resolution{128, 128});
+    in_pixels.set_psf_convolution_radius(40);
+    const double pixels_per_radian = 0.05 / JUPITER.pitch_x;
+    in_pixels.set_harvey_shack_scatter(
+        0.05f,
+        1.8f,
+        static_cast<float>(units::Arcsecond(20.0).to_si() * pixels_per_radian),
+        static_cast<float>(units::Degree(1.0).to_si() * pixels_per_radian));
+
+    const Image<RGB>& angles = in_angles.get_psf_wings_kernel();
+    const Image<RGB>& pixels = in_pixels.get_psf_wings_kernel();
+    REQUIRE(angles.width() == pixels.width());
+    double worst = 0.0;
+    for (int y = 0; y < angles.height(); ++y) {
+        for (int x = 0; x < angles.width(); ++x) {
+            worst = std::max(worst,
+                             std::abs(static_cast<double>(angles(x, y)[0] - pixels(x, y)[0])) /
+                                 static_cast<double>(pixels(x, y)[0]));
+        }
+    }
+    CHECK(worst < 1e-5);
 }

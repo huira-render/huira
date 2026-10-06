@@ -799,13 +799,14 @@ const Image<TSpectral>& CameraModel<TSpectral>::get_psf_kernel(float u, float v)
  * Each pixel holds the fraction of the source's light, in each channel, that falls on it: the
  * PSF integrated over the pixel, for the source at its exact position. The PSF is the aperture's
  * diffraction pattern, averaged evenly over each spectral bin's wavelengths, for a circular
- * aperture; scattered light and defocus are not included. See PsfTables for how it is computed
- * and how accurate it is.
+ * aperture, with scattered light set with set_scatter(); defocus is not included. See PsfTables
+ * for how it is computed and how accurate it is.
  *
- * With no PSF (see delete_psf()), the pixel the source falls in holds all of its light.
+ * With no PSF (see delete_psf()) and no scattered light, the pixel the source falls in holds all
+ * of its light.
  *
  * The tables are built the first time they are needed after the optics change: the focal
- * length, aperture, pixel pitch or resolution. That can take a second or two.
+ * length, aperture, pixel pitch, resolution or scattered light. That can take a second or two.
  *
  * @param radius The image is 2 radius + 1 pixels square, centered on the pixel the source is
  *        offset from.
@@ -813,7 +814,8 @@ const Image<TSpectral>& CameraModel<TSpectral>::get_psf_kernel(float u, float v)
  * @param y_offset Its position below the center pixel's center, in pixels.
  * @return The image. Each channel sums to the part of the source's light that falls within it.
  * @throws std::runtime_error if the radius is negative or over MAX_PSF_IMAGE_RADIUS, an offset
- *         is not finite, or the PSF was set with set_psf() or set_measured_psf().
+ *         is not finite, the PSF was set with set_psf() or set_measured_psf(), the scattered light
+ *         with set_harvey_shack_scatter(), or there is scattered light but no PSF.
  */
 template <IsSpectral TSpectral>
 Image<TSpectral> CameraModel<TSpectral>::psf_image(int radius, float x_offset, float y_offset)
@@ -825,6 +827,15 @@ Image<TSpectral> CameraModel<TSpectral>::psf_image(int radius, float x_offset, f
     if (!std::isfinite(x_offset) || !std::isfinite(y_offset)) {
         HUIRA_THROW_ERROR("CameraModel::psf_image - The offsets must be finite: " +
                           std::to_string(x_offset) + ", " + std::to_string(y_offset));
+    }
+    if (scatter_enabled_ && !scatter_in_angles_) {
+        HUIRA_THROW_ERROR("CameraModel::psf_image - Scattered light set with "
+                          "set_harvey_shack_scatter() is not supported; set it with "
+                          "set_scatter()");
+    }
+    if (!has_psf() && scatter_enabled_) {
+        HUIRA_THROW_ERROR("CameraModel::psf_image - Scattered light without a PSF is not "
+                          "supported");
     }
     if (!has_psf()) {
         const int size = 2 * radius + 1;
@@ -955,10 +966,11 @@ void CameraModel<TSpectral>::set_harvey_shack_scatter(float scatter_fraction,
         HUIRA_THROW_ERROR("CameraModel::set_harvey_shack_scatter - Radius must be non-negative: " +
                           std::to_string(radius));
     }
-    if (scatter_fraction == scatter_fraction_ && falloff_exponent == scatter_falloff_exponent_ &&
-        r0 == r0_ && radius == scatter_radius_) {
+    if (!scatter_in_angles_ && scatter_fraction == scatter_fraction_ &&
+        falloff_exponent == scatter_falloff_exponent_ && r0 == r0_ && radius == scatter_radius_) {
         return;
     }
+    scatter_in_angles_ = false;
     scatter_fraction_ = scatter_fraction;
     scatter_falloff_exponent_ = falloff_exponent;
     r0_ = r0;
@@ -974,6 +986,99 @@ template <IsSpectral TSpectral>
 void CameraModel<TSpectral>::disable_harvey_shack_scatter()
 {
     set_harvey_shack_scatter(0.f, 2.f, 0.5f, 0.f);
+}
+
+/**
+ * @brief Set scattered light: Harvey-Shack wings around every source, in angles.
+ *
+ * A fraction of each source's light leaves the diffraction pattern and spreads as
+ *
+ *     S(theta) = K (1 + (theta / theta_0)^2)^(-slope / 2) (1 + (theta / theta_1)^2)^(-1)
+ *
+ * with theta the angle from the source, theta_0 the shoulder angle and theta_1 the outer angle:
+ * flat within the shoulder, falling as theta^-slope beyond it, and as theta^-(slope + 2) beyond
+ * the outer angle, if one is given. K makes the scattered light total the fraction. Measured
+ * stray light around stars often falls with a slope of 2 to 3 (King 1971, Racine 1996).
+ *
+ * Without an outer angle the light totals a finite amount only for a slope over 2, so a slope of
+ * 2 or less needs one. The outer angle bends the wings down smoothly rather than cutting them
+ * off, so that they leave no edge in an image. An angle theta lands f theta from the source on
+ * the sensor, within 0.1% below 3 degrees.
+ *
+ * The scattered light follows the focal length and pixel pitch. It replaces scattered light set
+ * with set_harvey_shack_scatter(), and is included in psf_image(). Until the renderer draws
+ * sources from the PSF's tables, renders use the earlier wings kernel with the shoulder and the
+ * outer angle (as a cutoff) in pixels.
+ *
+ * @param fraction Fraction of the light scattered, in [0, 1); 0 for none.
+ * @param slope How fast the wings fall beyond the shoulder; positive.
+ * @param shoulder_angle The angle within which the wings are flat; positive.
+ * @param outer_angle The angle beyond which they fall faster, beyond the shoulder; none by
+ *        default.
+ * @throws std::runtime_error if an argument is out of range, an angle is not below 90 degrees,
+ *         or the slope is 2 or less without an outer angle.
+ */
+template <IsSpectral TSpectral>
+void CameraModel<TSpectral>::set_scatter(float fraction,
+                                         float slope,
+                                         units::Radian shoulder_angle,
+                                         std::optional<units::Radian> outer_angle)
+{
+    const std::string caller = "CameraModel::set_scatter - ";
+    const double shoulder = shoulder_angle.to_si();
+    const double outer = outer_angle.has_value() ? outer_angle->to_si() : 0.0;
+    const double right_angle = 0.5 * PI<double>();
+    if (!(fraction >= 0.f && fraction < 1.f)) {
+        HUIRA_THROW_ERROR(caller + "The fraction must be in [0, 1): " + std::to_string(fraction));
+    }
+    if (!(slope > 0.f) || !std::isfinite(slope)) {
+        HUIRA_THROW_ERROR(caller +
+                          "The slope must be positive and finite: " + std::to_string(slope));
+    }
+    if (!(shoulder > 0.0 && shoulder < right_angle)) {
+        HUIRA_THROW_ERROR(caller + "The shoulder angle must be above 0 and below 90 degrees: " +
+                          std::to_string(shoulder) + " rad");
+    }
+    if (outer_angle.has_value() && !(outer > shoulder && outer < right_angle)) {
+        HUIRA_THROW_ERROR(caller +
+                          "The outer angle must be beyond the shoulder and below 90 "
+                          "degrees: " +
+                          std::to_string(outer) + " rad, shoulder " + std::to_string(shoulder) +
+                          " rad");
+    }
+    if (!outer_angle.has_value() && !(slope > 2.f)) {
+        HUIRA_THROW_ERROR(caller +
+                          "A slope of 2 or less needs an outer angle, or the scattered "
+                          "light has no finite total: slope " +
+                          std::to_string(slope));
+    }
+    if (scatter_in_angles_ && fraction == scatter_fraction_ && slope == scatter_falloff_exponent_ &&
+        shoulder == scatter_shoulder_angle_ && outer == scatter_outer_angle_) {
+        return;
+    }
+    scatter_in_angles_ = true;
+    scatter_fraction_ = fraction;
+    scatter_falloff_exponent_ = slope;
+    scatter_shoulder_angle_ = shoulder;
+    scatter_outer_angle_ = outer;
+    scatter_enabled_ = fraction > 0.f;
+    optics_changed_(OpticsInput::Scatter);
+}
+
+/**
+ * @brief The scattered light's shoulder and cutoff radius in pixels, as the wings kernel takes
+ * them: as set with set_harvey_shack_scatter(), or from set_scatter()'s angles.
+ */
+template <IsSpectral TSpectral>
+std::array<float, 2> CameraModel<TSpectral>::scatter_pixels_() const
+{
+    if (!scatter_in_angles_) {
+        return {r0_, scatter_radius_};
+    }
+    const double pixels_per_radian =
+        static_cast<double>(focal_length_) / static_cast<double>(sensor_->pixel_pitch().x);
+    return {static_cast<float>(scatter_shoulder_angle_ * pixels_per_radian),
+            static_cast<float>(scatter_outer_angle_ * pixels_per_radian)};
 }
 
 /**
@@ -1199,8 +1304,11 @@ bool CameraModel<TSpectral>::diffraction_stale_(std::uint64_t built_at) const
 template <IsSpectral TSpectral>
 bool CameraModel<TSpectral>::convolution_stale_(std::uint64_t built_at) const
 {
+    // Scattered light set in angles is sized in pixels by the focal length and pitch.
     return diffraction_stale_(built_at) ||
-           stale_(built_at, {OpticsInput::Convolution, OpticsInput::Scatter});
+           stale_(built_at, {OpticsInput::Convolution, OpticsInput::Scatter}) ||
+           (scatter_in_angles_ &&
+            stale_(built_at, {OpticsInput::FocalLength, OpticsInput::PixelPitch}));
 }
 
 /// The wings kernel is sized from the convolution radius, or the core PSF's.
@@ -1214,7 +1322,9 @@ bool CameraModel<TSpectral>::wings_stale_(std::uint64_t built_at) const
                   {OpticsInput::CorePSF, OpticsInput::Convolution, OpticsInput::Scatter}) ||
            (automatic_radius &&
             stale_(built_at,
-                   {OpticsInput::FocalLength, OpticsInput::PixelPitch, OpticsInput::Aperture}));
+                   {OpticsInput::FocalLength, OpticsInput::PixelPitch, OpticsInput::Aperture})) ||
+           (scatter_in_angles_ &&
+            stale_(built_at, {OpticsInput::FocalLength, OpticsInput::PixelPitch}));
 }
 
 /**
@@ -1287,7 +1397,8 @@ void CameraModel<TSpectral>::ensure_psf_tables_()
                                           {OpticsInput::FocalLength,
                                            OpticsInput::PixelPitch,
                                            OpticsInput::Aperture,
-                                           OpticsInput::Resolution})) {
+                                           OpticsInput::Resolution,
+                                           OpticsInput::Scatter})) {
         return;
     }
     const auto start = std::chrono::steady_clock::now();
@@ -1297,8 +1408,21 @@ void CameraModel<TSpectral>::ensure_psf_tables_()
     const double reach = 2.0 * std::hypot(static_cast<double>(resolution.x),
                                           aspect * static_cast<double>(resolution.y));
     const double fnumber = static_cast<double>(focal_length_) / aperture_diameter().to_si();
+    std::optional<typename PsfTables<TSpectral>::Scatter> scatter;
+    if (scatter_enabled_ && scatter_in_angles_) {
+        // An angle theta from the source lands f theta from it on the sensor.
+        const double pixels_per_radian =
+            static_cast<double>(focal_length_) / static_cast<double>(pitch.x);
+        scatter = typename PsfTables<TSpectral>::Scatter{
+            static_cast<double>(scatter_fraction_),
+            static_cast<double>(scatter_falloff_exponent_),
+            scatter_shoulder_angle_ * pixels_per_radian,
+            scatter_outer_angle_ > 0.0
+                ? std::optional<double>(scatter_outer_angle_ * pixels_per_radian)
+                : std::nullopt};
+    }
     psf_tables_ = std::make_shared<const PsfTables<TSpectral>>(PsfTables<TSpectral>::airy(
-        fnumber, static_cast<double>(pitch.x), static_cast<double>(pitch.y), reach));
+        fnumber, static_cast<double>(pitch.x), static_cast<double>(pitch.y), reach, scatter));
     psf_tables_built_at_ = optics_version_;
 
     const std::chrono::duration<double> elapsed = std::chrono::steady_clock::now() - start;
@@ -1364,7 +1488,8 @@ void CameraModel<TSpectral>::ensure_convolution_kernel_()
     // PSF remains normalized to unit energy:
     //     psf_total = (1 - f_s) * core + f_s * wings
     if (scatter_enabled_ && scatter_fraction_ > 0.f) {
-        HarveyShackScatter<TSpectral> scatter(scatter_falloff_exponent_, r0_, scatter_radius_);
+        const auto [r0, cutoff] = scatter_pixels_();
+        HarveyShackScatter<TSpectral> scatter(scatter_falloff_exponent_, r0, cutoff);
         Image<TSpectral> wings = scatter.generate_convolution_kernel(radius);
 
         const float f_s = scatter_fraction_;
@@ -1412,7 +1537,8 @@ void CameraModel<TSpectral>::ensure_wings_kernel_()
     if (!wings_stale_(wings_kernel_built_at_)) {
         return;
     }
-    HarveyShackScatter<TSpectral> scatter(scatter_falloff_exponent_, r0_, scatter_radius_);
+    const auto [r0, cutoff] = scatter_pixels_();
+    HarveyShackScatter<TSpectral> scatter(scatter_falloff_exponent_, r0, cutoff);
     psf_wings_kernel_ = scatter.generate_convolution_kernel(radius);
     wings_kernel_built_at_ = optics_version_;
 }
@@ -2615,7 +2741,19 @@ std::string CameraModel<TSpectral>::describe() const
     }
     out << "\n";
     out << "  Scatter:    ";
-    if (scatter_enabled_) {
+    if (scatter_enabled_ && scatter_in_angles_) {
+        const auto [shoulder, outer] = scatter_pixels_();
+        constexpr double ARCSEC_PER_RADIAN = 648000.0 / PI<double>();
+        out << "Harvey-Shack, fraction " << num(scatter_fraction_) << ", slope "
+            << num(scatter_falloff_exponent_) << ", shoulder "
+            << num(static_cast<float>(scatter_shoulder_angle_ * ARCSEC_PER_RADIAN)) << " arcsec ("
+            << num(shoulder) << " px)";
+        if (scatter_outer_angle_ > 0.0) {
+            out << ", steeper beyond "
+                << num(static_cast<float>(scatter_outer_angle_ * ARCSEC_PER_RADIAN)) << " arcsec ("
+                << num(outer) << " px)";
+        }
+    } else if (scatter_enabled_) {
         out << "Harvey-Shack, fraction " << num(scatter_fraction_) << ", falloff exponent "
             << num(scatter_falloff_exponent_) << ", r0 " << num(r0_) << " px";
         if (scatter_radius_ > 0.f) {

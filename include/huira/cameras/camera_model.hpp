@@ -179,6 +179,10 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
                                   float r0 = 0.5f,
                                   float radius = 0.f);
     void disable_harvey_shack_scatter();
+    void set_scatter(float fraction,
+                     float slope,
+                     units::Radian shoulder_angle,
+                     std::optional<units::Radian> outer_angle = std::nullopt);
 
     /// Check if the camera model has a PSF: the aperture's diffraction pattern (the default; see
     /// use_aperture_psf()), or one that was set. False after delete_psf().
@@ -469,6 +473,14 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     float r0_ = 0.5f;
     float scatter_radius_ = 0.f;
     bool scatter_enabled_ = false;
+
+    /// Whether the scattered light was set in angles, with set_scatter(), rather than in pixels.
+    /// Its shoulder and outer angles, in radians (0 for no outer angle), then replace r0_ and
+    /// scatter_radius_, which follow from them.
+    bool scatter_in_angles_ = false;
+    double scatter_shoulder_angle_ = 0.0;
+    double scatter_outer_angle_ = 0.0;
+    std::array<float, 2> scatter_pixels_() const;
 
     float fx_;
     float fy_;

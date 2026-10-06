@@ -147,6 +147,10 @@ class CameraModelHandle : public Handle<CameraModel<TSpectral>> {
                                   float r0 = 0.5f,
                                   float radius = 0.f) const;
     void disable_harvey_shack_scatter() const;
+    void set_scatter(float fraction,
+                     float slope,
+                     units::Radian shoulder_angle,
+                     std::optional<units::Radian> outer_angle = std::nullopt) const;
 
     int get_psf_radius() const;
     const Image<TSpectral>& get_psf_kernel(float u, float v) const;
