@@ -123,6 +123,7 @@ template <IsDistortion<TSpectral> TDistortion, typename... Args>
 void CameraModel<TSpectral>::set_distortion(Args&&... args)
 {
     distortion_ = std::make_unique<TDistortion>(std::forward<Args>(args)...);
+    ++distortion_version_;
     compute_intrinsics_();
 }
 
@@ -132,7 +133,10 @@ void CameraModel<TSpectral>::set_distortion(Args&&... args)
 template <IsSpectral TSpectral>
 void CameraModel<TSpectral>::delete_distortion()
 {
-    distortion_ = nullptr;
+    if (distortion_) {
+        distortion_ = nullptr;
+        ++distortion_version_;
+    }
     compute_intrinsics_();
 }
 
@@ -846,16 +850,20 @@ void CameraModel<TSpectral>::disable_harvey_shack_scatter()
 }
 
 /**
- * @brief Build everything the camera's optics need for the next render, now.
+ * @brief Build everything the camera's optics and geometry need for the next render, now.
  *
  * The kernels a render uses are derived from the camera's settings: the PSF's stamps for
  * unresolved sources (see use_aperture_psf() and set_psf()), the defocus blur's stamps (see
  * set_focus_distance()), and the whole-image convolution kernels and their spectra (see
- * enable_psf_convolution() and set_harvey_shack_scatter()). The setters only record settings,
- * so they can be made in any order, and each kernel is rebuilt only when a setting it depends
- * on has changed: refocusing, for example, does not rebuild the PSF's stamps.
+ * enable_psf_convolution() and set_harvey_shack_scatter()). So are the tables of the camera's
+ * geometry: each pixel's ray direction with distortion, and its solid angle, and the view
+ * frustum, which depend on the focal length, sensor, intrinsics, distortion and axis
+ * convention. The setters only record settings, so they are cheap and can be made in any
+ * order, and each kernel or table is rebuilt only when a setting it depends on has changed:
+ * refocusing, for example, does not rebuild the PSF's stamps.
  *
- * Building can take a while, for a large PSF or convolution kernel. Calling this once the
+ * Building can take a while, for a large PSF or convolution kernel, or a large sensor with
+ * distortion. Calling this once the
  * camera is configured keeps that time out of the first render, so that every render takes
  * comparable time, as a timed or hardware-in-the-loop run needs.
  *
@@ -874,25 +882,28 @@ void CameraModel<TSpectral>::disable_harvey_shack_scatter()
 template <IsSpectral TSpectral>
 void CameraModel<TSpectral>::precompute()
 {
-    check_distortion_("CameraModel::precompute");
     std::lock_guard<std::mutex> lock(optics_mutex_);
     explicitly_precomputed_ = true;
-    if (is_precomputed_locked_()) {
+    if (geometry_current_() && is_precomputed_locked_()) {
+        check_distortion_("CameraModel::precompute");
         return;
     }
 
     const auto start = std::chrono::steady_clock::now();
+    ensure_geometry_();
+    check_distortion_("CameraModel::precompute");
     tbb::this_task_arena::isolate([&] { precompute_locked_(); });
     const std::chrono::duration<double> elapsed = std::chrono::steady_clock::now() - start;
-    HUIRA_LOG_INFO("CameraModel - Precomputed the camera's optics in " +
+    HUIRA_LOG_INFO("CameraModel - Precomputed the camera's geometry and optics in " +
                    std::to_string(elapsed.count()) + " seconds");
 }
 
 /**
- * @brief Whether everything the next render needs from the camera's optics is built and up to
- * date.
+ * @brief Whether everything the next render needs from the camera's optics and geometry is
+ * built and up to date.
  *
- * True after precompute(), until a setting changes that a kernel the render uses depends on.
+ * True after precompute(), until a setting changes that a kernel or table the render uses
+ * depends on.
  * Setting a value to what it already is changes nothing. Also true when the settings need
  * nothing built.
  */
@@ -900,7 +911,7 @@ template <IsSpectral TSpectral>
 bool CameraModel<TSpectral>::is_precomputed() const
 {
     std::lock_guard<std::mutex> lock(optics_mutex_);
-    return is_precomputed_locked_();
+    return geometry_current_() && is_precomputed_locked_();
 }
 
 /**
@@ -925,18 +936,20 @@ void CameraModel<TSpectral>::set_auto_precompute(bool auto_precompute)
 template <IsSpectral TSpectral>
 void CameraModel<TSpectral>::precompute_for_render_()
 {
-    check_distortion_("Renderer::render");
     std::lock_guard<std::mutex> lock(optics_mutex_);
-    if (is_precomputed_locked_()) {
+    if (geometry_current_() && is_precomputed_locked_()) {
+        check_distortion_("Renderer::render");
         return;
     }
     if (!auto_precompute_) {
-        HUIRA_THROW_ERROR("Renderer::render - The camera's optics are out of date and auto "
-                          "precompute is disabled. Call precompute() on the camera after "
-                          "changing it, before rendering.");
+        HUIRA_THROW_ERROR("Renderer::render - The camera's geometry or optics are out of date "
+                          "and auto precompute is disabled. Call precompute() on the camera "
+                          "after changing it, before rendering.");
     }
 
     const auto start = std::chrono::steady_clock::now();
+    ensure_geometry_();
+    check_distortion_("Renderer::render");
     tbb::this_task_arena::isolate([&] { precompute_locked_(); });
     const std::chrono::duration<double> elapsed = std::chrono::steady_clock::now() - start;
     const std::string seconds = std::to_string(elapsed.count());
@@ -945,12 +958,13 @@ void CameraModel<TSpectral>::precompute_for_render_()
         // frame. Later rebuilds are logged as information until precompute() is called again.
         explicitly_precomputed_ = false;
         HUIRA_LOG_WARNING("CameraModel - The camera changed after precompute() was called, so "
-                          "this render rebuilt its optics, taking " +
+                          "this render rebuilt its geometry and optics, taking " +
                           seconds +
                           " seconds. Call precompute() after changing the camera to keep this "
                           "out of the render.");
     } else {
-        HUIRA_LOG_INFO("CameraModel - Precomputed the camera's optics for this render in " +
+        HUIRA_LOG_INFO("CameraModel - Precomputed the camera's geometry and optics for this "
+                       "render in " +
                        seconds +
                        " seconds. Call precompute() after configuring the camera to do this "
                        "before rendering.");
@@ -1604,7 +1618,7 @@ template <IsSpectral TSpectral>
 Ray<TSpectral> CameraModel<TSpectral>::cast_ray(const Pixel& pixel, Sampler<float>& sampler) const
 {
     const Pixel sensor_position = pixel_convention_.to_sensor(pixel, sensor_->resolution());
-    const Ray<TSpectral> ray = sensor_ray_(sensor_position, sampler);
+    const Ray<TSpectral> ray = sensor_ray_(sensor_position, sampler, false);
     if (!std::isfinite(ray.direction().x) || !std::isfinite(ray.direction().y) ||
         !std::isfinite(ray.direction().z)) {
         throw_no_inverse_("CameraModel::cast_ray", sensor_position);
@@ -1615,7 +1629,8 @@ Ray<TSpectral> CameraModel<TSpectral>::cast_ray(const Pixel& pixel, Sampler<floa
 /**
  * @brief Cast a pinhole camera ray through a position on the image.
  *
- * The position may be anywhere, including outside the image.
+ * The position may be anywhere, including outside the image. The direction is computed exactly
+ * (with distortion, by inverting it), so it needs nothing built (see precompute()).
  *
  * @param pixel Position in the camera's pixel convention (see set_pixel_convention()).
  * @throws std::runtime_error if the lens distortion has no inverse at the position (see
@@ -1625,7 +1640,7 @@ template <IsSpectral TSpectral>
 Ray<TSpectral> CameraModel<TSpectral>::cast_ray(const Pixel& pixel) const
 {
     const Pixel sensor_position = pixel_convention_.to_sensor(pixel, sensor_->resolution());
-    const Ray<TSpectral> ray = sensor_ray_(sensor_position);
+    const Ray<TSpectral> ray = sensor_ray_(sensor_position, false);
     if (!std::isfinite(ray.direction().x) || !std::isfinite(ray.direction().y) ||
         !std::isfinite(ray.direction().z)) {
         throw_no_inverse_("CameraModel::cast_ray", sensor_position);
@@ -1649,10 +1664,11 @@ Ray<TSpectral> CameraModel<TSpectral>::cast_ray(int x, int y) const
  */
 template <IsSpectral TSpectral>
 Ray<TSpectral> CameraModel<TSpectral>::sensor_ray_(const Pixel& pixel,
-                                                   Sampler<float>& sampler) const
+                                                   Sampler<float>& sampler,
+                                                   bool use_field) const
 {
     Vec3<float> origin{0, 0, 0};
-    Vec3<float> direction = ray_direction_(pixel);
+    Vec3<float> direction = ray_direction_(pixel, use_field);
 
     if (depth_of_field_) {
         Vec2<float> aperture_sample = aperture_->sample(sampler);
@@ -1683,23 +1699,24 @@ Ray<TSpectral> CameraModel<TSpectral>::sensor_ray_(const Pixel& pixel,
  * @brief Pinhole cast_ray() in sensor coordinates, for internal use.
  */
 template <IsSpectral TSpectral>
-Ray<TSpectral> CameraModel<TSpectral>::sensor_ray_(const Pixel& pixel) const
+Ray<TSpectral> CameraModel<TSpectral>::sensor_ray_(const Pixel& pixel, bool use_field) const
 {
-    return Ray<TSpectral>{Vec3<float>{0, 0, 0}, glm::normalize(ray_direction_(pixel))};
+    return Ray<TSpectral>{Vec3<float>{0, 0, 0}, glm::normalize(ray_direction_(pixel, use_field))};
 }
 
 /**
  * @brief Direction (not normalized) of the pinhole ray through a sensor position.
  *
- * Without distortion this is computed exactly. With distortion it is interpolated from the
- * precomputed directions at every pixel corner, which span the whole sensor, [0, width] x
- * [0, height]. Beyond the sensor, it is computed exactly too, by undistorting.
+ * Without distortion this is computed exactly. With distortion, for the renderer, it is
+ * interpolated from the directions at every pixel corner (the distortion field), which span the
+ * whole sensor, [0, width] x [0, height], when use_field and the field is up to date (see
+ * precompute()); otherwise, and beyond the sensor, it is computed exactly, by undistorting.
  */
 template <IsSpectral TSpectral>
-Vec3<float> CameraModel<TSpectral>::ray_direction_(const Pixel& pixel) const
+Vec3<float> CameraModel<TSpectral>::ray_direction_(const Pixel& pixel, bool use_field) const
 {
     const bool on_sensor = pixel[0] >= 0.f && pixel[0] <= rx_ && pixel[1] >= 0.f && pixel[1] <= ry_;
-    if (!distortion_ || !on_sensor) {
+    if (!distortion_ || !on_sensor || !use_field || !pixel_geometry_current_()) {
         return pixel_to_direction_<float>(pixel);
     }
     return distortion_field_.sample_bilinear<WrapMode::Clamp>(pixel[0] / rx_, pixel[1] / ry_);
@@ -1709,6 +1726,9 @@ Vec3<float> CameraModel<TSpectral>::ray_direction_(const Pixel& pixel) const
  * @brief The power a pixel receives per unit of radiance: its solid angle times the aperture
  * area projected along the direction to the pixel's center.
  *
+ * Read from a table that precompute() and renders build; until then, computed directly, the
+ * same way.
+ *
  * @param x Pixel column.
  * @param y Pixel row, from the top.
  * @throws std::runtime_error if the lens distortion has no inverse at the pixel (see
@@ -1717,13 +1737,15 @@ Vec3<float> CameraModel<TSpectral>::ray_direction_(const Pixel& pixel) const
 template <IsSpectral TSpectral>
 float CameraModel<TSpectral>::pixel_radiance_to_power(int x, int y) const
 {
-    // Pixel (x, y) covers [x, x + 1) x [y, y + 1) in sensor coordinates:
-    const Pixel center{static_cast<float>(x) + 0.5f, static_cast<float>(y) + 0.5f};
-    const Ray<TSpectral> ray = sensor_ray_(center);
-    const float factor =
-        pixel_solid_angles_(x, y) * this->get_projected_aperture_area(ray.direction());
+    // From the table when it is up to date (always, in a render), else computed the same way:
+    const float geometry = pixel_geometry_current_()
+                               ? pixel_geometry_factors_(x, y)
+                               : static_cast<float>(pixel_geometry_factor_(x, y));
+    const float factor = geometry * this->aperture_->get_area().to_si_f();
     if (!std::isfinite(factor)) {
-        throw_no_inverse_("CameraModel::pixel_radiance_to_power", center);
+        // Pixel (x, y) covers [x, x + 1) x [y, y + 1) in sensor coordinates:
+        throw_no_inverse_("CameraModel::pixel_radiance_to_power",
+                          Pixel{static_cast<float>(x) + 0.5f, static_cast<float>(y) + 0.5f});
     }
     return factor;
 }
@@ -1735,7 +1757,7 @@ bool CameraModel<TSpectral>::in_fov(const Vec3<float>& point) const
     if (len2 < 1e-12f) {
         return false;
     }
-    return view_frustum_.contains(point);
+    return view_frustum().contains(point);
 }
 
 /**
@@ -1901,11 +1923,22 @@ void CameraModel<TSpectral>::compute_intrinsics_()
     cx_ = principal_x_ ? sensor.x : rx_ * 0.5f;
     cy_ = principal_y_ ? sensor.y : ry_ * 0.5f;
 
-    // The frustum reads ray directions from the distortion field, so the field has to be
-    // current first:
-    compute_distortion_field_();
-    compute_frustum_();
-    compute_pixel_solid_angles_();
+    // The geometry tables follow from these, and are rebuilt when next needed if they changed.
+    // Changed back to what a table was built with, they are that table's version again:
+    const GeometryKey key{
+        fx_, fy_, cx_, cy_, skew_, rx_, ry_, blender_convention_, distortion_version_};
+    if (key != geometry_key_ || geometry_version_ == 0) {
+        geometry_key_ = key;
+        const std::uint64_t pixel_built = pixel_geometry_built_at_.load(std::memory_order_acquire);
+        const std::uint64_t frustum_built = frustum_built_at_.load(std::memory_order_acquire);
+        if (pixel_built != NEVER_BUILT_ && key == pixel_geometry_built_key_) {
+            geometry_version_ = pixel_built;
+        } else if (frustum_built != NEVER_BUILT_ && key == frustum_built_key_) {
+            geometry_version_ = frustum_built;
+        } else {
+            geometry_version_ = next_geometry_version_++;
+        }
+    }
 
     // Every focal length change comes through here, and a sensor offset focus depends on it:
     update_focus_();
@@ -1957,39 +1990,140 @@ Vec3<TFloat> CameraModel<TSpectral>::pixel_to_direction_(const Pixel& pixel) con
     return direction;
 }
 
+/**
+ * @brief Build the geometry tables if they are out of date: the per-pixel tables and the view
+ * frustum. Thread-safe.
+ */
 template <IsSpectral TSpectral>
-void CameraModel<TSpectral>::compute_distortion_field_()
+void CameraModel<TSpectral>::ensure_geometry_() const
 {
-    distortion_failure_.reset();
-    if (!distortion_) {
-        distortion_field_ = Image<Vec3<float>>(0, 0);
+    ensure_pixel_geometry_();
+    ensure_frustum_();
+}
+
+template <IsSpectral TSpectral>
+bool CameraModel<TSpectral>::geometry_current_() const
+{
+    return pixel_geometry_current_() &&
+           frustum_built_at_.load(std::memory_order_acquire) == geometry_version_;
+}
+
+/**
+ * @brief Build the per-pixel tables (the distortion field and the pixels' geometry factors) if
+ * they are out of date. Thread-safe: concurrent callers wait for a single build.
+ */
+template <IsSpectral TSpectral>
+void CameraModel<TSpectral>::ensure_pixel_geometry_() const
+{
+    if (pixel_geometry_current_()) {
         return;
     }
+    std::lock_guard<std::mutex> lock(geometry_mutex_);
+    if (pixel_geometry_current_()) {
+        return;
+    }
+    // Isolated, so that while this thread waits for the parallel build it cannot pick up
+    // another task that needs the tables (it would deadlock on the lock it holds).
+    tbb::this_task_arena::isolate([&] { build_pixel_geometry_(); });
+    pixel_geometry_built_key_ = geometry_key_;
+    pixel_geometry_built_at_.store(geometry_version_, std::memory_order_release);
+}
 
-    // One entry per pixel corner, so the field reaches the far edges of the last column and
-    // row; with one per pixel, lookups beyond the last pixel's left/top edge were clamped.
+/**
+ * @brief The unit direction of the pinhole ray through pixel corner (x, y), in sensor
+ * coordinates; NaN where the distortion has no inverse.
+ */
+template <IsSpectral TSpectral>
+Vec3<double> CameraModel<TSpectral>::corner_direction_(int x, int y) const
+{
+    return glm::normalize(
+        pixel_to_direction_<double>(Pixel{static_cast<float>(x), static_cast<float>(y)}));
+}
+
+/**
+ * @brief A pixel's power per unit radiance and aperture area, from the unit directions of its
+ * corners (c00 at (x, y), c10 at (x + 1, y), c11 at (x + 1, y + 1), c01 at (x, y + 1)): its
+ * solid angle, as two spherical triangles, times the cosine of the angle between the optical
+ * axis and its center, which foreshortens the aperture. The center's direction is the mean of
+ * the corners', as interpolating the distortion field gives it.
+ */
+template <IsSpectral TSpectral>
+double CameraModel<TSpectral>::pixel_geometry_factor_(const Vec3<double>& c00,
+                                                      const Vec3<double>& c10,
+                                                      const Vec3<double>& c11,
+                                                      const Vec3<double>& c01) const
+{
+    const double solid_angle =
+        triangle_solid_angle_(c00, c10, c11) + triangle_solid_angle_(c00, c11, c01);
+    const Vec3<double> center = glm::normalize(c00 + c10 + c11 + c01);
+    return solid_angle * std::abs(center.z);
+}
+
+/**
+ * @brief Pixel (x, y)'s geometry factor, computed directly: as the table holds it.
+ */
+template <IsSpectral TSpectral>
+double CameraModel<TSpectral>::pixel_geometry_factor_(int x, int y) const
+{
+    return pixel_geometry_factor_(corner_direction_(x, y),
+                                  corner_direction_(x + 1, y),
+                                  corner_direction_(x + 1, y + 1),
+                                  corner_direction_(x, y + 1));
+}
+
+/**
+ * @brief Build the per-pixel tables in one pass over the pixel corners: each corner's direction
+ * is found once, and serves the distortion field and the four pixels that share it.
+ */
+template <IsSpectral TSpectral>
+void CameraModel<TSpectral>::build_pixel_geometry_() const
+{
     const Resolution res = sensor_->resolution();
-    distortion_field_ = Image<Vec3<float>>(res.x + 1, res.y + 1, Vec3<float>{0, 0, 0});
+    distortion_failure_.reset();
+    distortion_field_ = distortion_ ? Image<Vec3<float>>(res.x + 1, res.y + 1, Vec3<float>{0.f})
+                                    : Image<Vec3<float>>(0, 0);
+    pixel_geometry_factors_ = Image<float>(res, 0.f);
 
-    tbb::parallel_for(
-        tbb::blocked_range<int>(0, res.y + 1), [&](const tbb::blocked_range<int>& rows) {
-            for (int y = rows.begin(); y < rows.end(); ++y) {
+    // Each block of pixel rows finds the corner rows above and below them; the field's corner
+    // rows are written by the block holding them (the last corner row by the last block).
+    tbb::parallel_for(tbb::blocked_range<int>(0, res.y), [&](const tbb::blocked_range<int>& rows) {
+        const auto width = static_cast<std::size_t>(res.x) + 1;
+        std::vector<Vec3<double>> upper(width);
+        std::vector<Vec3<double>> lower(width);
+        auto corner_row = [&](int y, std::vector<Vec3<double>>& row) {
+            for (int x = 0; x <= res.x; ++x) {
+                row[static_cast<std::size_t>(x)] = corner_direction_(x, y);
+            }
+            if (distortion_ && (y < rows.end() || y == res.y)) {
                 for (int x = 0; x <= res.x; ++x) {
-                    Pixel pixel{static_cast<float>(x), static_cast<float>(y)};
-                    distortion_field_(x, y) = glm::normalize(pixel_to_direction_<float>(pixel));
+                    distortion_field_(x, y) = Vec3<float>(row[static_cast<std::size_t>(x)]);
                 }
             }
-        });
+        };
+
+        corner_row(rows.begin(), upper);
+        for (int y = rows.begin(); y < rows.end(); ++y) {
+            corner_row(y + 1, lower);
+            for (int x = 0; x < res.x; ++x) {
+                const auto i = static_cast<std::size_t>(x);
+                pixel_geometry_factors_(x, y) = static_cast<float>(
+                    pixel_geometry_factor_(upper[i], upper[i + 1], lower[i + 1], lower[i]));
+            }
+            std::swap(upper, lower);
+        }
+    });
 
     // Where the distortion has no inverse, the directions are NaN. Keep the first such corner,
     // in reading order, for check_distortion_() to report:
-    for (int y = 0; y <= res.y && !distortion_failure_; ++y) {
-        for (int x = 0; x <= res.x; ++x) {
-            const Vec3<float>& direction = distortion_field_(x, y);
-            if (!std::isfinite(direction.x) || !std::isfinite(direction.y) ||
-                !std::isfinite(direction.z)) {
-                distortion_failure_ = Pixel{static_cast<float>(x), static_cast<float>(y)};
-                break;
+    if (distortion_) {
+        for (int y = 0; y <= res.y && !distortion_failure_; ++y) {
+            for (int x = 0; x <= res.x; ++x) {
+                const Vec3<float>& direction = distortion_field_(x, y);
+                if (!std::isfinite(direction.x) || !std::isfinite(direction.y) ||
+                    !std::isfinite(direction.z)) {
+                    distortion_failure_ = Pixel{static_cast<float>(x), static_cast<float>(y)};
+                    break;
+                }
             }
         }
     }
@@ -2004,6 +2138,7 @@ void CameraModel<TSpectral>::compute_distortion_field_()
 template <IsSpectral TSpectral>
 void CameraModel<TSpectral>::check_distortion_(const std::string& caller) const
 {
+    ensure_pixel_geometry_();
     if (distortion_failure_) {
         throw_no_inverse_(caller, *distortion_failure_);
     }
@@ -2029,35 +2164,6 @@ void CameraModel<TSpectral>::throw_no_inverse_(const std::string& caller,
         "): no ray lands there, because the distortion model folds over or stops short of it. "
         "Check the distortion coefficients, and that they were calibrated for this focal length "
         "and sensor.");
-}
-
-template <IsSpectral TSpectral>
-void CameraModel<TSpectral>::compute_pixel_solid_angles_()
-{
-    Resolution res = sensor_->resolution();
-
-    pixel_solid_angles_ = Image<float>(res, 0.f);
-    tbb::parallel_for(tbb::blocked_range<int>(0, res.y), [&](const tbb::blocked_range<int>& rows) {
-        for (int y = rows.begin(); y < rows.end(); ++y) {
-            for (int x = 0; x < res.x; ++x) {
-                // Calculate normalized directions to pixel corners
-                Vec3<double> c0 = glm::normalize(pixel_to_direction_<double>(
-                    Pixel{static_cast<float>(x), static_cast<float>(y)}));
-                Vec3<double> c1 = glm::normalize(pixel_to_direction_<double>(
-                    Pixel{static_cast<float>(x + 1), static_cast<float>(y)}));
-                Vec3<double> c2 = glm::normalize(pixel_to_direction_<double>(
-                    Pixel{static_cast<float>(x + 1), static_cast<float>(y + 1)}));
-                Vec3<double> c3 = glm::normalize(pixel_to_direction_<double>(
-                    Pixel{static_cast<float>(x), static_cast<float>(y + 1)}));
-
-                // Compute solid angle as sum of two triangular areas
-                double omega1 = triangle_solid_angle_(c0, c1, c2);
-                double omega2 = triangle_solid_angle_(c0, c2, c3);
-
-                pixel_solid_angles_(x, y) = static_cast<float>(omega1 + omega2);
-            }
-        }
-    });
 }
 
 template <IsSpectral TSpectral>
@@ -2091,8 +2197,30 @@ double CameraModel<TSpectral>::triangle_solid_angle_(const Vec3<double>& c0,
     return angle0 + angle1 + angle2 - PI<double>();
 }
 
+/**
+ * @brief Build the view frustum if it is out of date. Thread-safe.
+ */
 template <IsSpectral TSpectral>
-void CameraModel<TSpectral>::compute_frustum_()
+void CameraModel<TSpectral>::ensure_frustum_() const
+{
+    if (frustum_built_at_.load(std::memory_order_acquire) == geometry_version_) {
+        return;
+    }
+    std::lock_guard<std::mutex> lock(geometry_mutex_);
+    if (frustum_built_at_.load(std::memory_order_acquire) == geometry_version_) {
+        return;
+    }
+    build_frustum_();
+    frustum_built_key_ = geometry_key_;
+    frustum_built_at_.store(geometry_version_, std::memory_order_release);
+}
+
+/**
+ * @brief Find the view frustum from the ray directions around the image's boundary, computed
+ * directly (2 (width + height) of them).
+ */
+template <IsSpectral TSpectral>
+void CameraModel<TSpectral>::build_frustum_() const
 {
     Resolution res = sensor_->resolution();
 
@@ -2117,7 +2245,7 @@ void CameraModel<TSpectral>::compute_frustum_()
 
     auto tangents = [&](int x, int y) {
         const Vec3<float> direction =
-            ray_direction_(Pixel{static_cast<float>(x), static_cast<float>(y)});
+            pixel_to_direction_<float>(Pixel{static_cast<float>(x), static_cast<float>(y)});
         const float forward = glm::dot(direction, bounds.zdir);
         return Vec2<float>{glm::dot(direction, bounds.xdir) / forward,
                            glm::dot(direction, bounds.ydir) / forward};
@@ -2184,6 +2312,7 @@ Frustum<TSpectral> CameraModel<TSpectral>::frustum_from_bounds_(float widen_tan)
 template <IsSpectral TSpectral>
 Frustum<TSpectral> CameraModel<TSpectral>::view_frustum_with_margin_(float pixels) const
 {
+    ensure_frustum_();
     // A pixel can span a larger angle beyond the boundary than at it (barrel distortion
     // compresses the edge of the field), so the margin is doubled to be safe. Sources that the
     // wider frustum lets through but whose light lands nowhere in the image are dropped once

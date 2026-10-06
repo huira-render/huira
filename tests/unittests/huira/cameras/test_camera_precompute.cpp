@@ -1,7 +1,9 @@
 #include <atomic>
+#include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <limits>
+#include <vector>
 
 #include "catch2/catch_test_macros.hpp"
 #include "huira/huira.hpp"
@@ -116,9 +118,11 @@ TEST_CASE("Setters record settings, and precompute() builds what a render would 
     CHECK(camera.has_psf());
     CHECK_FALSE(camera.is_precomputed());
 
-    // Without a PSF, and in focus, there is nothing to build. Until convolution is turned back
-    // on below, only unresolved sources use the PSF.
+    // Without a PSF, and in focus, there are no optics kernels to build, only the geometry
+    // tables. Until convolution is turned back on below, only unresolved sources use the PSF.
     camera.delete_psf();
+    CHECK_FALSE(camera.is_precomputed());
+    camera.precompute();
     CHECK(camera.is_precomputed());
     camera.enable_psf_convolution(false);
 
@@ -142,8 +146,10 @@ TEST_CASE("Setters record settings, and precompute() builds what a render would 
     REQUIRE(camera.defocus_blur_radius() == 0.f);
     CHECK(camera.is_precomputed());
 
-    // The PSF's stamps do not depend on the resolution...
+    // The PSF's stamps do not depend on the resolution, though the geometry tables do...
     camera.configure_sensor_from_pitch(Resolution{40, 36}, units::Micrometer(10.0));
+    CHECK_FALSE(camera.is_precomputed());
+    camera.precompute();
     CHECK(camera.is_precomputed());
 
     // ...but do on the aperture, focal length, pixel pitch and their own size:
@@ -287,8 +293,8 @@ TEST_CASE("Invalid PSF settings are rejected when made, and inconsistent ones wh
 
     // With neither a PSF nor scattering, convolution has nothing to do:
     camera.enable_psf_convolution();
-    CHECK(camera.is_precomputed());
     CHECK_NOTHROW(camera.precompute());
+    CHECK(camera.is_precomputed());
 
     // Scattering without a PSF has no size until a convolution radius is set:
     camera.set_harvey_shack_scatter(0.05f, 2.5f);
@@ -388,4 +394,124 @@ TEST_CASE("The image does not depend on the order of the settings or on how they
         CHECK(identical(render_source(psf_first, true), reference));
         CHECK(identical(render_source(psf_first, false), reference));
     }
+}
+
+namespace {
+
+/// A wide camera with strong barrel distortion, whose geometry tables take a while to build.
+void distorted_camera(CameraModel<RGB>& camera, int resolution)
+{
+    camera.configure_sensor_from_pitch(Resolution{resolution, resolution},
+                                       units::Micrometer(4096.0 / resolution));
+    camera.set_focal_length(units::Millimeter(12.0));
+    camera.set_brown_conrady_distortion(BrownCoefficients(-0.05, 0.01, 0.0, 0.0, 0.0));
+    camera.delete_psf();
+}
+
+} // namespace
+
+TEST_CASE("Geometry setters are cheap, and the tables are built once when needed",
+          "[cameras][precompute][geometry]")
+{
+    // Every setter that changes the geometry rebuilt each pixel's ray direction and solid angle:
+    // about 2 s per call for this camera on 2 cores.
+    CameraModel<RGB> camera;
+    distorted_camera(camera, 2048);
+
+    const auto start = std::chrono::steady_clock::now();
+    for (int i = 0; i < 20; ++i) {
+        camera.set_focal_length(units::Millimeter(12.0 + 0.01 * i));
+        camera.configure_sensor_from_pitch(Resolution{2048, 2048},
+                                           units::Micrometer(2.0),
+                                           std::nullopt,
+                                           1024.f + static_cast<float>(i),
+                                           1024.f);
+    }
+    const std::chrono::duration<double> elapsed = std::chrono::steady_clock::now() - start;
+    CHECK(elapsed.count() < 1.0);
+    CHECK_FALSE(camera.is_precomputed());
+
+    camera.precompute();
+    CHECK(camera.is_precomputed());
+
+    // Setting the geometry to what it is, or changing it and back, rebuilds nothing:
+    camera.set_focal_length(units::Millimeter(12.19));
+    camera.use_blender_convention(true);
+    camera.use_blender_convention(false);
+    CHECK(camera.is_precomputed());
+}
+
+TEST_CASE("Geometry getters give the same values whether the tables are built or not",
+          "[cameras][precompute][geometry]")
+{
+    CameraModel<RGB> camera;
+    distorted_camera(camera, 64);
+
+    struct Values {
+        std::vector<float> radiance_to_power;
+        std::vector<Vec3<float>> rays;
+        std::vector<Pixel> projections;
+        std::vector<int> in_view;
+    };
+    auto read = [&] {
+        Values v;
+        for (int y = 0; y < 64; y += 7) {
+            for (int x = 0; x < 64; x += 5) {
+                v.radiance_to_power.push_back(camera.pixel_radiance_to_power(x, y));
+                const Ray<RGB> ray = camera.cast_ray(
+                    Pixel{static_cast<float>(x) + 0.3f, static_cast<float>(y) - 0.2f});
+                v.rays.push_back(ray.direction());
+                const Vec3<float> point = ray.direction() * 7.f;
+                v.projections.push_back(camera.try_project_point(point));
+                v.in_view.push_back(
+                    camera.in_fov(Vec3<float>{0.1f * static_cast<float>(x - 32), 0.f, 1.f}) ? 1
+                                                                                            : 0);
+            }
+        }
+        return v;
+    };
+
+    const Values lazy = read();
+    CHECK_FALSE(camera.is_precomputed()); // the getters built no per-pixel table
+    camera.precompute();
+    const Values built = read();
+
+    CHECK(lazy.radiance_to_power == built.radiance_to_power);
+    CHECK(lazy.rays == built.rays);
+    for (std::size_t i = 0; i < lazy.projections.size(); ++i) {
+        CHECK(lazy.projections[i].x == built.projections[i].x);
+        CHECK(lazy.projections[i].y == built.projections[i].y);
+    }
+    CHECK(lazy.in_view == built.in_view);
+}
+
+TEST_CASE("Geometry getters can be called from several threads at once",
+          "[cameras][precompute][geometry]")
+{
+    CameraModel<RGB> camera;
+    distorted_camera(camera, 256);
+    camera.precompute();
+    const float expected = camera.pixel_radiance_to_power(10, 20);
+    camera.set_focal_length(units::Millimeter(13.0));
+    camera.set_focal_length(units::Millimeter(12.0)); // back: the tables are current again
+    REQUIRE(camera.is_precomputed());
+    camera.set_focal_length(units::Millimeter(12.5));
+
+    std::atomic<int> mismatches{0};
+    const float changed = [&] {
+        CameraModel<RGB> reference;
+        distorted_camera(reference, 256);
+        reference.set_focal_length(units::Millimeter(12.5));
+        return reference.pixel_radiance_to_power(10, 20);
+    }();
+    CHECK(changed != expected);
+    tbb::parallel_for(0, 64, [&](int i) {
+        if (i % 8 == 0) {
+            camera.precompute(); // builds the tables while others read
+        }
+        if (camera.pixel_radiance_to_power(10, 20) != changed || !camera.in_fov({0.f, 0.f, 1.f})) {
+            mismatches.fetch_add(1);
+        }
+    });
+    CHECK(mismatches.load() == 0);
 }
