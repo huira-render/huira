@@ -799,27 +799,40 @@ const Image<TSpectral>& CameraModel<TSpectral>::get_psf_kernel(float u, float v)
  * Each pixel holds the fraction of the source's light, in each channel, that falls on it: the
  * PSF integrated over the pixel, for the source at its exact position. The PSF is the aperture's
  * diffraction pattern, averaged evenly over each spectral bin's wavelengths, for a circular
- * aperture, with scattered light set with set_scatter(); defocus is not included. See PsfTables
- * for how it is computed and how accurate it is.
+ * aperture, with scattered light set with set_scatter(), blurred by defocus as the focus
+ * setting blurs a point at the given range: a uniform disc, the aperture's image out of focus
+ * (see set_focus_distance()). Without a range the point is a star, at infinity. The blur is
+ * applied however small, and not at all with depth of field off (see enable_depth_of_field()).
+ * See PsfTables for how it is computed and how accurate it is.
  *
- * With no PSF (see delete_psf()) and no scattered light, the pixel the source falls in holds all
- * of its light.
+ * With no PSF (see delete_psf()), no scattered light and no defocus, the pixel the source falls
+ * in holds all of its light.
  *
- * The tables are built the first time they are needed after the optics change: the focal
- * length, aperture, pixel pitch, resolution or scattered light. That can take a second or two.
+ * The tables for stars are built the first time they are needed after the optics change: the
+ * focal length, aperture, pixel pitch, resolution, scattered light or focus. Tables for a range
+ * are built on each call. Either can take a second or two.
  *
  * @param radius The image is 2 radius + 1 pixels square, centered on the pixel the source is
  *        offset from.
  * @param x_offset The source's position right of the center pixel's center, in pixels.
  * @param y_offset Its position below the center pixel's center, in pixels.
+ * @param range The source's distance from the camera, for its defocus; none for a star.
  * @return The image. Each channel sums to the part of the source's light that falls within it.
  * @throws std::runtime_error if the radius is negative or over MAX_PSF_IMAGE_RADIUS, an offset
- *         is not finite, the PSF was set with set_psf() or set_measured_psf(), the scattered light
- *         with set_harvey_shack_scatter(), or there is scattered light but no PSF.
+ *         is not finite, the range is not positive, the PSF was set with set_psf() or
+ *         set_measured_psf(), the scattered light with set_harvey_shack_scatter(), or there is
+ *         scattered light or defocus but no PSF.
  */
 template <IsSpectral TSpectral>
-Image<TSpectral> CameraModel<TSpectral>::psf_image(int radius, float x_offset, float y_offset)
+Image<TSpectral> CameraModel<TSpectral>::psf_image(int radius,
+                                                   float x_offset,
+                                                   float y_offset,
+                                                   std::optional<units::Meter> range)
 {
+    if (range.has_value() && !(range->to_si() > 0.0)) {
+        HUIRA_THROW_ERROR("CameraModel::psf_image - The range must be positive: " +
+                          std::to_string(range->to_si()) + " m");
+    }
     if (radius < 0 || radius > MAX_PSF_IMAGE_RADIUS) {
         HUIRA_THROW_ERROR("CameraModel::psf_image - The radius must be from 0 to " +
                           std::to_string(MAX_PSF_IMAGE_RADIUS) + ": " + std::to_string(radius));
@@ -836,6 +849,10 @@ Image<TSpectral> CameraModel<TSpectral>::psf_image(int radius, float x_offset, f
     if (!has_psf() && scatter_enabled_) {
         HUIRA_THROW_ERROR("CameraModel::psf_image - Scattered light without a PSF is not "
                           "supported");
+    }
+    if (!has_psf() && blur_pixels_(range.has_value() ? 1.0 / range->to_si() : 0.0) >=
+                          PsfTables<TSpectral>::MIN_BLUR) {
+        HUIRA_THROW_ERROR("CameraModel::psf_image - Defocus without a PSF is not supported");
     }
     if (!has_psf()) {
         const int size = 2 * radius + 1;
@@ -855,8 +872,12 @@ Image<TSpectral> CameraModel<TSpectral>::psf_image(int radius, float x_offset, f
     std::shared_ptr<const PsfTables<TSpectral>> tables;
     {
         std::lock_guard<std::mutex> lock(optics_mutex_);
-        tbb::this_task_arena::isolate([&] { ensure_psf_tables_(); });
-        tables = psf_tables_;
+        tbb::this_task_arena::isolate([&] {
+            ensure_psf_tables_();
+            const double star_blur = blur_pixels_(0.0);
+            const double blur = range.has_value() ? blur_pixels_(1.0 / range->to_si()) : star_blur;
+            tables = blur == star_blur ? psf_tables_ : build_psf_tables_(blur);
+        });
     }
     return tables->image(radius, static_cast<double>(x_offset), static_cast<double>(y_offset));
 }
@@ -1385,10 +1406,7 @@ void CameraModel<TSpectral>::ensure_defocus_()
 }
 
 /**
- * @brief Build the tables psf_image() reads, if they are out of date.
- *
- * A source lights pixels up to a frame's diagonal away and can lie as far outside the frame, so
- * the tables reach twice the diagonal.
+ * @brief Build the tables psf_image() reads for stars, if they are out of date.
  */
 template <IsSpectral TSpectral>
 void CameraModel<TSpectral>::ensure_psf_tables_()
@@ -1398,9 +1416,41 @@ void CameraModel<TSpectral>::ensure_psf_tables_()
                                            OpticsInput::PixelPitch,
                                            OpticsInput::Aperture,
                                            OpticsInput::Resolution,
-                                           OpticsInput::Scatter})) {
+                                           OpticsInput::Scatter,
+                                           OpticsInput::Focus})) {
         return;
     }
+    psf_tables_ = build_psf_tables_(blur_pixels_(0.0));
+    psf_tables_built_at_ = optics_version_;
+}
+
+/**
+ * @brief The radius, in pixel widths, of the defocus blur of a point at 1 / inverse_range
+ * (0 for infinity): the aperture's radius times the focal length times the difference in
+ * vergence between the point and the focus. See defocus_blur_radius(), which this is without
+ * its threshold. 0 with depth of field off.
+ */
+template <IsSpectral TSpectral>
+double CameraModel<TSpectral>::blur_pixels_(double inverse_range) const
+{
+    if (!depth_of_field_) {
+        return 0.0;
+    }
+    const double vergence = focus_diopters().to_si() - inverse_range;
+    return std::abs(vergence) * static_cast<double>(focal_length_) *
+           aperture_->get_bounding_radius().to_si() / static_cast<double>(sensor_->pixel_pitch().x);
+}
+
+/**
+ * @brief Build the tables for the current optics and the given blur, in pixel widths.
+ *
+ * A source lights pixels up to a frame's diagonal away and can lie as far outside the frame, so
+ * the tables reach twice the diagonal.
+ */
+template <IsSpectral TSpectral>
+std::shared_ptr<const PsfTables<TSpectral>>
+CameraModel<TSpectral>::build_psf_tables_(double blur) const
+{
     const auto start = std::chrono::steady_clock::now();
     const Vec2<float> pitch = sensor_->pixel_pitch();
     const Resolution resolution = sensor_->resolution();
@@ -1421,18 +1471,18 @@ void CameraModel<TSpectral>::ensure_psf_tables_()
                 ? std::optional<double>(scatter_outer_angle_ * pixels_per_radian)
                 : std::nullopt};
     }
-    psf_tables_ = std::make_shared<const PsfTables<TSpectral>>(PsfTables<TSpectral>::airy(
-        fnumber, static_cast<double>(pitch.x), static_cast<double>(pitch.y), reach, scatter));
-    psf_tables_built_at_ = optics_version_;
+    auto tables = std::make_shared<const PsfTables<TSpectral>>(PsfTables<TSpectral>::airy(
+        fnumber, static_cast<double>(pitch.x), static_cast<double>(pitch.y), reach, scatter, blur));
 
     const std::chrono::duration<double> elapsed = std::chrono::steady_clock::now() - start;
     std::ostringstream message;
     message << "CameraModel - Built the PSF's tables in " << std::fixed << std::setprecision(2)
             << elapsed.count()
-            << " seconds: " << static_cast<double>(psf_tables_->memory_bytes()) / (1024.0 * 1024.0)
-            << " MiB, near table to " << psf_tables_->near_radius() << " pixels at 1/"
-            << psf_tables_->near_samples() << " pixel";
+            << " seconds: " << static_cast<double>(tables->memory_bytes()) / (1024.0 * 1024.0)
+            << " MiB, near table to " << tables->near_radius() << " pixels at 1/"
+            << tables->near_samples() << " pixel, blur " << blur << " pixels";
     HUIRA_LOG_INFO(message.str());
+    return tables;
 }
 
 /**
