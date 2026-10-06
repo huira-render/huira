@@ -10,9 +10,13 @@
 using namespace huira;
 using namespace huira::units::literals;
 
-#if defined(__clang__) && __has_warning("-Wallocator-wrappers")
+// __has_warning is clang's: GCC and MSVC cannot parse it, even after a false defined() test, so
+// it is in a group of its own that they skip.
+#if defined(__clang__)
+#if __has_warning("-Wallocator-wrappers")
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wallocator-wrappers"
+#endif
 #endif
 
 // This test executable counts the memory allocated with new, so that a test can find the most a
@@ -153,6 +157,8 @@ TEST_CASE("Rendering unresolved sources takes memory for the frame, whatever the
     CHECK(peak < 4 * frame_bytes);
 }
 
-#if defined(__clang__) && __has_warning("-Wallocator-wrappers")
+#if defined(__clang__)
+#if __has_warning("-Wallocator-wrappers")
 #pragma clang diagnostic pop
+#endif
 #endif

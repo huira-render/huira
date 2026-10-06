@@ -79,14 +79,13 @@ inline void bind_spectral(py::module_& m)
     huira::bind_medium_handle<TSpectral>(m);
 
     // --- Images ---
-    std::string img_name = "Image_" + m.attr("__name__").cast<std::string>();
-    huira::bind_image<TSpectral>(m, img_name.c_str());
-    huira::bind_image_bundle<TSpectral>(m, "ImageBundle_" + m.attr("__name__").cast<std::string>());
+    // Each spectral submodule has its own: huira.rgb.Image, huira.visible8.Image and so on.
+    huira::bind_image<TSpectral>(m, "Image");
+    huira::bind_image_bundle<TSpectral>(m, "ImageBundle");
     huira::bind_rgb_to_spectral<TSpectral>(m);
 
     // --- Spectral texture handle ---
-    std::string tex_name = "TextureHandle_" + m.attr("__name__").cast<std::string>();
-    huira::bind_texture_handle<TSpectral>(m, tex_name.c_str());
+    huira::bind_texture_handle<TSpectral>(m, "TextureHandle");
 
     // --- Rendering ---
     huira::bind_frame_buffer<TSpectral>(m);

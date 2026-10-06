@@ -115,6 +115,7 @@ void render_positions(Stamp stamp, const PixelConvention& convention, Check chec
         camera_model.use_aperture_psf(12, 16);
     } else {
         camera_model.set_fstop(4.0f);
+        camera_model.delete_psf(); // the aperture's, by default
     }
     if (stamp == Stamp::Defocus) {
         // About a 2 px blur radius.
@@ -177,6 +178,7 @@ render_windows(Stamp stamp, Vec2<double> source, const std::vector<Window>& wind
     } else {
         // About a 6 px blur radius.
         camera_model.set_fstop(4.0f);
+        camera_model.delete_psf(); // the aperture's, by default
         camera_model.set_focus_sensor_offset(units::Micrometer(480.0));
     }
     auto camera = scene.root.new_instance(camera_model);

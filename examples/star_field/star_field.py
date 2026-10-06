@@ -42,9 +42,17 @@ def main():
     camera_model.set_fstop(3.30)
     camera_model.set_sensor_rotation(deg(90))
     camera_model.configure_sensor_from_pitch((1024, 1024), um(8.5))
-    camera_model.use_aperture_psf(32, 16)
     camera_model.set_sensor_bit_depth(14)
     camera_model.set_focus_diopters(dpt(0.0025))
+
+    # The aperture's diffraction pattern is the PSF by default, in stamps sized to hold about
+    # 99% of the light (use_aperture_psf(radius, banks) gives a size of your own, and
+    # delete_psf() puts each star in a single pixel). Depth of field is on by default too, so
+    # the stars are defocused by the focus set above. Building the stamps takes a moment, so it
+    # is done here rather than in the render:
+    camera_model.precompute()
+    print(f"PSF stamp radius: {camera_model.get_psf_radius()} px")
+    print(f"Defocus blur radius: {camera_model.defocus_blur_radius()} px")
     
     # Set the observation time
     time = huira.Time("2016-09-19T16:22:05.728")

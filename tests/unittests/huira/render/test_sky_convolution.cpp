@@ -154,8 +154,8 @@ TEST_CASE("The frame is convolved as if a uniform sky continued beyond its edges
 TEST_CASE("A background image is convolved even with nothing else in view", "[render][psf]")
 {
     // A 5 x 5 texel bright patch, 2.5 degrees across, straight ahead in a 0.5 degree
-    // equirectangular map, seen by a wide camera (0.57 degrees per pixel) at f/32, whose Airy
-    // pattern's first dark ring is 2.1 px out. Only a uniform sky is split off.
+    // equirectangular map, seen by a wide camera (0.57 degrees per pixel) at f/64, whose Airy
+    // pattern's first dark ring is 4.3 px out. Only a uniform sky is split off.
     auto render_patch = [](bool convolve) {
         Scene<RGB> scene;
         Image<RGB> background(720, 360, RGB{0.f});
@@ -169,8 +169,8 @@ TEST_CASE("A background image is convolved even with nothing else in view", "[re
         auto camera_model = scene.new_camera_model();
         camera_model.configure_sensor_from_pitch({64, 64}, 10_um);
         camera_model.set_focal_length(1_mm);
-        camera_model.set_fstop(32.0f);
-        camera_model.use_aperture_psf(8, 4);
+        camera_model.set_fstop(64.0f);
+        camera_model.use_aperture_psf(12, 4);
         camera_model.enable_psf_convolution(convolve);
         auto camera = scene.root.new_instance(camera_model);
 

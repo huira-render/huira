@@ -27,6 +27,7 @@ void wide_field(CameraModel<RGB>& camera, double k1)
     camera.configure_sensor_from_pitch(Resolution{64, 48}, units::Micrometer(100.0));
     camera.set_focal_length(units::Millimeter(4.0));
     camera.set_brown_conrady_distortion(BrownCoefficients(k1, 0.0, 0.0, 0.0, 0.0));
+    camera.delete_psf(); // the aperture's, by default: not needed here, and slow to build
 }
 
 /// Calls f and returns the message it throws, or "" if it does not.
