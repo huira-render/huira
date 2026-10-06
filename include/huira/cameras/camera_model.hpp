@@ -437,6 +437,26 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     Frustum<TSpectral> view_frustum_;
     void compute_frustum_();
 
+    /// Where the view frustum's side planes are, as the tangent of their angle from the forward
+    /// axis along the image's x and y axes, and the largest change in that tangent one pixel
+    /// makes at the image's boundary. Found by compute_frustum_().
+    struct FrustumBounds {
+        Vec3<float> xdir{1, 0, 0};
+        Vec3<float> ydir{0, 1, 0};
+        Vec3<float> zdir{0, 0, 1};
+        float min_tan_x = 0.f;
+        float max_tan_x = 0.f;
+        float min_tan_y = 0.f;
+        float max_tan_y = 0.f;
+        float tan_per_pixel = 0.f;
+    };
+    FrustumBounds frustum_bounds_;
+    Frustum<TSpectral> frustum_from_bounds_(float widen_tan) const;
+
+    /// The view frustum widened by at least the given number of pixels on every side, to cull
+    /// sources whose light reaches into the image from just outside it.
+    Frustum<TSpectral> view_frustum_with_margin_(float pixels) const;
+
     bool blender_convention_ = false;
 
     friend class CameraModelHandle<TSpectral>;
