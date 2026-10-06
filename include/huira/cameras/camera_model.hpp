@@ -21,6 +21,7 @@
 #include "huira/cameras/pixel_convention.hpp"
 #include "huira/cameras/psfs/measured_psf.hpp"
 #include "huira/cameras/psfs/psf.hpp"
+#include "huira/cameras/psfs/psf_tables.hpp"
 #include "huira/cameras/sensors/sensor_model.hpp"
 #include "huira/concepts/numeric_concepts.hpp"
 #include "huira/concepts/spectral_concepts.hpp"
@@ -81,6 +82,9 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     /// The smallest automatic stamp radius for the aperture's diffraction pattern, in pixels.
     /// See use_aperture_psf().
     static constexpr int MIN_AUTO_PSF_RADIUS = 16;
+
+    /// The largest radius psf_image() takes, in pixels.
+    static constexpr int MAX_PSF_IMAGE_RADIUS = 16384;
 
     CameraModel();
 
@@ -189,6 +193,8 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
 
     const Image<TSpectral>& get_psf_convolution_kernel();
     const Image<TSpectral>& get_psf_wings_kernel();
+
+    Image<TSpectral> psf_image(int radius, float x_offset = 0.f, float y_offset = 0.f);
 
     void precompute();
     [[nodiscard]] bool is_precomputed() const;
@@ -354,6 +360,10 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     Image<TSpectral> psf_wings_kernel_;
     FftConvolver<TSpectral> wings_convolver_;
 
+    /// The tables that give an unresolved source's light in each pixel: see psf_image(). Shared,
+    /// so that an image can be read from them while they are rebuilt for new optics.
+    std::shared_ptr<const PsfTables<TSpectral>> psf_tables_;
+
     /// Stamps for the defocus blur of unresolved sources; empty when in focus.
     DefocusKernel<TSpectral> defocus_kernel_;
     static constexpr int DEFOCUS_BANKS_ = 16;
@@ -395,6 +405,7 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     std::uint64_t convolution_spectrum_built_at_ = 0;
     std::uint64_t wings_kernel_built_at_ = 0;
     std::uint64_t wings_spectrum_built_at_ = 0;
+    std::uint64_t psf_tables_built_at_ = 0;
 
     // The geometry compute_intrinsics_() last saw, to tell which inputs a change touched.
     float optics_focal_length_ = 0.f;
@@ -417,6 +428,7 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     void ensure_convolution_spectrum_();
     void ensure_wings_kernel_();
     void ensure_wings_spectrum_();
+    void ensure_psf_tables_();
     int convolution_radius_(const char* caller) const;
 
     // optics_mutex_ must be held.
