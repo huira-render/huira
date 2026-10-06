@@ -16,6 +16,7 @@
 #include "huira/cameras/distortion/opencv_distortion.hpp"
 #include "huira/cameras/distortion/owen_distortion.hpp"
 #include "huira/cameras/pixel_convention.hpp"
+#include "huira/cameras/psfs/measured_psf.hpp"
 #include "huira/cameras/psfs/psf.hpp"
 #include "huira/cameras/sensors/sensor_model.hpp"
 #include "huira/concepts/numeric_concepts.hpp"
@@ -64,6 +65,11 @@ class Renderer;
 template <IsSpectral TSpectral>
 class CameraModel : public SceneObject<CameraModel<TSpectral>> {
   public:
+    /// Stamp size for a PSF's stamps for unresolved sources, unless given: radius in pixels,
+    /// and subpixel positions per axis. See use_aperture_psf() and set_psf().
+    static constexpr int DEFAULT_PSF_RADIUS = 64;
+    static constexpr int DEFAULT_PSF_BANKS = 16;
+
     CameraModel();
 
     CameraModel(const CameraModel&) = delete;
@@ -126,10 +132,11 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
 
     void set_measured_psf(const Image<TSpectral>& data,
                           float samples_per_pixel,
+                          PSFSampling sampling,
                           int radius = 0,
-                          int banks = 16);
+                          int banks = DEFAULT_PSF_BANKS);
 
-    void use_aperture_psf(int radius = 64, int banks = 16);
+    void use_aperture_psf(int radius = DEFAULT_PSF_RADIUS, int banks = DEFAULT_PSF_BANKS);
 
     /// Enable or disable PSF convolution.
     void enable_psf_convolution(bool convolve_psf = true) { convolve_psf_ = convolve_psf; }

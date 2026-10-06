@@ -10,6 +10,11 @@
 using namespace huira;
 using namespace huira::units::literals;
 
+#if defined(__clang__) && __has_warning("-Wallocator-wrappers")
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wallocator-wrappers"
+#endif
+
 // This test executable counts the memory allocated with new, so that a test can find the most a
 // piece of code had allocated at once. Each block carries its size in a header in front of it.
 namespace {
@@ -147,3 +152,7 @@ TEST_CASE("Rendering unresolved sources takes memory for the frame, whatever the
          << static_cast<double>(peak) / static_cast<double>(frame_bytes) << " frames");
     CHECK(peak < 4 * frame_bytes);
 }
+
+#if defined(__clang__) && __has_warning("-Wallocator-wrappers")
+#pragma clang diagnostic pop
+#endif
