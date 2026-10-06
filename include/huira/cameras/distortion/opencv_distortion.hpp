@@ -101,6 +101,11 @@ struct OpenCVCoefficients : public DistortionCoefficients {
  * Implements the OpenCV distortion model with rational radial, tangential, and thin prism
  * coefficients.
  *
+ * The rational radial factor (1 + k1 r^2 + k2 r^4 + k3 r^6) / (1 + k4 r^2 + k5 r^4 + k6 r^6) has a
+ * pole where its denominator reaches 0, which can lie not far beyond the field a calibration with
+ * k4 to k6 was fitted to. The lens images nothing past it: distort() and undistort() return NaN
+ * there.
+ *
  * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>

@@ -1519,6 +1519,17 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                 float weight = dt;
                 const Pixel& p = pixels[k];
 
+                // A source whose light cannot reach the image is dropped here, before its
+                // position is converted to pixel indices, which it may not fit: it can be far
+                // beyond the image, or NaN, where the lens images nothing (past the pole of a
+                // rational distortion model). The margin is beyond the furthest a stamp or the
+                // wings' splat reaches.
+                const float margin = static_cast<float>(reach + 1);
+                if (!(p.x > -margin && p.x < static_cast<float>(fb_width) + margin &&
+                      p.y > -margin && p.y < static_cast<float>(fb_height) + margin)) {
+                    continue;
+                }
+
                 // The pixels the sample's light reaches: its stamp, the wings' bilinear splat,
                 // or, without either, the pixel it falls in. Stamps and the splat place light
                 // by pixel centers, which sit at i + 0.5 in the sensor coordinates the camera
