@@ -509,7 +509,10 @@ void CameraModel<TSpectral>::set_aperture(Args&&... args)
 /**
  * @brief Set the point spread function (PSF) model for the camera.
  *
- * Replaces the aperture's PSF, if it was in use (see use_aperture_psf()).
+ * Replaces the aperture's PSF, if it was in use (see use_aperture_psf()). A PSF that does not
+ * size its own stamps for unresolved sources (with PSF::set_polyphase_size(), as AiryDisk and
+ * MeasuredPSF do; HarveyShackScatter does not) gets the default size, DEFAULT_PSF_RADIUS and
+ * DEFAULT_PSF_BANKS.
  *
  * @tparam TPSF PSF model type
  * @tparam Args Constructor arguments for the PSF
@@ -519,7 +522,11 @@ template <IsSpectral TSpectral>
 template <IsPSF TPSF, typename... Args>
 void CameraModel<TSpectral>::set_psf(Args&&... args)
 {
-    psf_ = std::make_unique<TPSF>(std::forward<Args>(args)...);
+    auto psf = std::make_unique<TPSF>(std::forward<Args>(args)...);
+    if (psf->get_banks() < 1) {
+        psf->set_polyphase_size(DEFAULT_PSF_RADIUS, DEFAULT_PSF_BANKS);
+    }
+    psf_ = std::move(psf);
     use_aperture_psf_ = false;
     optics_changed_(OpticsInput::CorePSF);
 }
@@ -533,16 +540,20 @@ void CameraModel<TSpectral>::set_psf(Args&&... args)
  *
  * @param data Measured PSF samples, centered on the image.
  * @param samples_per_pixel Measurement samples per sensor pixel per axis.
+ * @param sampling What the samples are: the PSF's intensity at points, or the light a pixel
+ *                 centered there receives, such as a star image taken with the sensor itself
+ *                 (see PSFSampling).
  * @param radius Polyphase stamping kernel radius in sensor pixels (0 = auto).
  * @param banks Number of polyphase banks per axis for subpixel stamping.
  */
 template <IsSpectral TSpectral>
 void CameraModel<TSpectral>::set_measured_psf(const Image<TSpectral>& data,
                                               float samples_per_pixel,
+                                              PSFSampling sampling,
                                               int radius,
                                               int banks)
 {
-    this->set_psf<MeasuredPSF<TSpectral>>(data, samples_per_pixel, radius, banks);
+    this->set_psf<MeasuredPSF<TSpectral>>(data, samples_per_pixel, sampling, radius, banks);
 }
 
 /**

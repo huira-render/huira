@@ -151,10 +151,11 @@ const Image<TSpectral>& PSF<TSpectral>::get_kernel(float u, float v) const
  * @brief Generates a single centered kernel suitable for whole-image convolution.
  *
  * Unlike the polyphase cache, this produces exactly one kernel with zero subpixel offset, by
- * directly integrating evaluate() over each pixel with stratified sampling. There is no
- * super-resolution intermediate LUT and no bank multiplicity, so memory is dim^2 pixels
- * regardless of radius - large frame-wide kernels (radius of hundreds to thousands of pixels)
- * are practical. The result is normalized to unit energy per channel.
+ * directly integrating evaluate() over each pixel with stratified sampling (or, for a PSF that
+ * is already integrated over a pixel, see is_pixel_integrated(), taking it at each pixel's
+ * center). There is no super-resolution intermediate LUT and no bank multiplicity, so memory is
+ * dim^2 pixels regardless of radius - large frame-wide kernels (radius of hundreds to thousands
+ * of pixels) are practical. The result is normalized to unit energy per channel.
  *
  * evaluate() must be thread-safe: pixels are integrated in parallel.
  *
@@ -171,6 +172,7 @@ Image<TSpectral> PSF<TSpectral>::generate_convolution_kernel(int radius)
 
     const int dim = 2 * radius + 1;
     Image<TSpectral> kernel(dim, dim);
+    const bool pixel_integrated = is_pixel_integrated();
 
     // Same per-pixel integration quality as the polyphase path (16x16 stratified samples),
     // but sampling evaluate() directly instead of an interpolated super-resolution LUT:
@@ -185,6 +187,10 @@ Image<TSpectral> PSF<TSpectral>::generate_convolution_kernel(int radius)
                 const float pixel_center_y = static_cast<float>(y - radius);
                 for (int x = r.cols().begin(); x < r.cols().end(); ++x) {
                     const float pixel_center_x = static_cast<float>(x - radius);
+                    if (pixel_integrated) {
+                        kernel(x, y) = evaluate(pixel_center_x, pixel_center_y);
+                        continue;
+                    }
 
                     TSpectral integrated_val{};
                     for (int sy = 0; sy < INTEGRATION_STEPS; ++sy) {
@@ -227,11 +233,26 @@ Image<TSpectral> PSF<TSpectral>::generate_convolution_kernel(int radius)
  * @brief Generates the polyphase kernel data for the PSF.
  *
  * Fills the polyphase cache by evaluating the PSF at subpixel positions and integrating over each
- * pixel.
+ * pixel, or, for a PSF that is already integrated over a pixel (see is_pixel_integrated()), by
+ * taking it at each pixel's center.
  */
 template <IsSpectral TSpectral>
 void PSF<TSpectral>::generate_polyphase_data_()
 {
+    if (is_pixel_integrated()) {
+        // Bank (bx, by) is the stamp of a source bx / banks, by / banks of a pixel from the
+        // center of the stamp's middle pixel, as below.
+        tbb::parallel_for(tbb::blocked_range2d<int>(0, cache_.banks, 0, cache_.banks),
+                          [&](const tbb::blocked_range2d<int>& r) {
+                              for (int by = r.rows().begin(); by < r.rows().end(); ++by) {
+                                  for (int bx = r.cols().begin(); bx < r.cols().end(); ++bx) {
+                                      fill_pixel_integrated_bank_(bx, by);
+                                  }
+                              }
+                          });
+        return;
+    }
+
     // Dynamic Resolution Calculation
     constexpr int QUALITY_SAMPLES_1D = 64;
     int calculated_res = static_cast<int>(cache_.dim) * QUALITY_SAMPLES_1D;
@@ -358,6 +379,29 @@ void PSF<TSpectral>::generate_polyphase_data_()
 }
 
 /**
+ * @brief Fills one polyphase bank from a PSF that is already integrated over a pixel: each
+ * pixel's value is the PSF at its center, relative to the source.
+ */
+template <IsSpectral TSpectral>
+void PSF<TSpectral>::fill_pixel_integrated_bank_(int bx, int by)
+{
+    Image<TSpectral>& kernel = cache_.kernels[static_cast<std::size_t>(by * cache_.banks + bx)];
+    const float bank_offset_x = static_cast<float>(bx) / static_cast<float>(cache_.banks);
+    const float bank_offset_y = static_cast<float>(by) / static_cast<float>(cache_.banks);
+
+    TSpectral total_energy{};
+    for (int y = 0; y < cache_.dim; ++y) {
+        for (int x = 0; x < cache_.dim; ++x) {
+            const TSpectral value = evaluate(static_cast<float>(x - cache_.radius) - bank_offset_x,
+                                             static_cast<float>(y - cache_.radius) - bank_offset_y);
+            kernel(x, y) = value;
+            total_energy += value;
+        }
+    }
+    normalize_kernel_(kernel, total_energy);
+}
+
+/**
  * @brief Normalizes a kernel image so its total energy is unity.
  *
  * Scales the kernel so that the sum of all elements matches unity for each spectral channel.
@@ -378,7 +422,7 @@ void PSF<TSpectral>::normalize_kernel_(Image<TSpectral>& kernel, const TSpectral
     // Apply scale
     for (int y = 0; y < cache_.dim; ++y) {
         for (int x = 0; x < cache_.dim; ++x) {
-            kernel(y, x) *= scale;
+            kernel(x, y) *= scale;
         }
     }
 }

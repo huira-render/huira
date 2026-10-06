@@ -546,3 +546,29 @@ TEST_CASE("Harvey-Shack scatter rejects infinite parameters", "[cameras][validat
     CHECK_THROWS(camera.set_harvey_shack_scatter(0.1f, 2.5f, INF_F));
     CHECK_NOTHROW(camera.set_harvey_shack_scatter(0.1f, 2.5f, 0.5f));
 }
+
+TEST_CASE("use_aperture_psf(false) stops using the aperture's PSF, and only that", "[cameras][psf]")
+{
+    Scene<RGB> scene;
+    auto camera = scene.new_camera_model();
+    camera.configure_sensor_from_pitch({64, 64}, units::Micrometer(10.0));
+
+    // A measured PSF is left as it is. It used to be deleted.
+    Image<RGB> data(9, 9, RGB{0.f});
+    data(4, 4) = RGB{1.f};
+    camera.set_measured_psf(data, 1.f, PSFSampling::PixelIntegrated, 4);
+    camera.use_aperture_psf(false);
+    CHECK(camera.get_psf_radius() == 4);
+
+    // True keeps the aperture PSF's stamp size, if it is already in use. It used to reset it to
+    // the default.
+    camera.use_aperture_psf(8, 4);
+    camera.use_aperture_psf(true);
+    CHECK(camera.get_psf_radius() == 8);
+
+    camera.use_aperture_psf(false);
+    CHECK(camera.get_psf_radius() == 0);
+
+    camera.use_aperture_psf(true);
+    CHECK(camera.get_psf_radius() == CameraModel<RGB>::DEFAULT_PSF_RADIUS);
+}

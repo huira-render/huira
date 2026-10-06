@@ -107,11 +107,13 @@ class CameraModelHandle : public Handle<CameraModel<TSpectral>> {
 
     void set_measured_psf(const Image<TSpectral>& data,
                           float samples_per_pixel,
+                          PSFSampling sampling,
                           int radius = 0,
-                          int banks = 16) const;
+                          int banks = CameraModel<TSpectral>::DEFAULT_PSF_BANKS) const;
 
     void use_aperture_psf(bool value) const;
-    void use_aperture_psf(int radius = 64, int banks = 16) const;
+    void use_aperture_psf(int radius = CameraModel<TSpectral>::DEFAULT_PSF_RADIUS,
+                          int banks = CameraModel<TSpectral>::DEFAULT_PSF_BANKS) const;
     void enable_psf_convolution(bool convolve_psf = true) const;
     void set_psf_convolution_radius(int radius) const;
     void delete_psf() const;

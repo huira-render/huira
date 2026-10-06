@@ -206,3 +206,19 @@ TEST_CASE("Wings-only kernel for unresolved sources", "[cameras][psf][scatter]")
         REQUIRE(max_err < 1e-6f);
     }
 }
+
+TEST_CASE("A PSF shape set without a stamp size gets the default one", "[cameras][psf]")
+{
+    // HarveyShackScatter, like a user's own PSF class, does not size the stamps for unresolved
+    // sources. Set as the camera's PSF it used to have none: precompute() never finished building
+    // them, and the convolution kernel, sized from them, could not be made.
+    CameraModel<RGB> camera;
+    camera.set_focal_length(units::Millimeter(25.0));
+    camera.configure_sensor_from_size(Resolution{256, 256}, units::Millimeter(6.0));
+    camera.set_psf<HarveyShackScatter<RGB>>(2.5f, 0.5f);
+
+    CHECK(camera.get_psf_radius() == CameraModel<RGB>::DEFAULT_PSF_RADIUS);
+    const Image<RGB>& kernel = camera.get_psf_convolution_kernel();
+    CHECK(kernel.width() == 2 * CameraModel<RGB>::DEFAULT_PSF_RADIUS + 1);
+    CHECK(std::fabs(kernel_energy(kernel, 0) - 1.0) < 1e-4);
+}
