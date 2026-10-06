@@ -449,8 +449,9 @@ void CameraModelHandle<TSpectral>::use_aperture_psf(int radius, int banks) const
 }
 
 /**
- * @brief Convolve the specified PSF with rendered extended images.
- * @param convolve_psf True to enable convolving the PSF with rendered images.
+ * @brief Choose whether a PSF or scattered light that is set blurs resolved bodies. See
+ * CameraModel::enable_psf_convolution().
+ * @param convolve_psf True (the default) to blur resolved bodies, false to leave them sharp.
  */
 template <IsSpectral TSpectral>
 void CameraModelHandle<TSpectral>::enable_psf_convolution(bool convolve_psf) const

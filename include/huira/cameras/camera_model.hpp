@@ -138,7 +138,10 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
 
     void use_aperture_psf(int radius = DEFAULT_PSF_RADIUS, int banks = DEFAULT_PSF_BANKS);
 
-    /// Enable or disable PSF convolution.
+    /// Choose whether a PSF or scattered light that is set blurs resolved bodies (the path-traced
+    /// image). On by default. Off, bodies are sharp, and rendering is faster without the
+    /// whole-image convolution; unresolved sources, such as stars, get the PSF and scattered light
+    /// either way.
     void enable_psf_convolution(bool convolve_psf = true) { convolve_psf_ = convolve_psf; }
     void set_psf_convolution_radius(int radius);
     void delete_psf();
@@ -244,7 +247,14 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     bool use_aperture_psf_ = false;
     int aperture_psf_radius_ = 0;
     int aperture_psf_banks_ = 0;
-    bool convolve_psf_ = false;
+    bool convolve_psf_ = true;
+
+    /// Whether there is anything to blur with: a PSF, or scattered light.
+    bool has_psf_or_scatter_() const { return has_psf() || scatter_enabled_; }
+
+    /// Whether the path-traced image of resolved bodies is convolved with the PSF and scattered
+    /// light: see enable_psf_convolution().
+    bool convolves_bodies_() const { return convolve_psf_ && has_psf_or_scatter_(); }
 
     // Whole-image convolution kernel: a single centered kernel, made from psf_ and the
     // scattered-light wings, and its spectrum at the sensor's resolution.
