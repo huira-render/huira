@@ -333,15 +333,15 @@ TEST_CASE("A render precomputes a camera that is out of date, unless told not to
     };
 
     // By default the render builds what it needs:
-    CHECK(camera_model.auto_precompute());
+    CHECK(camera_model.auto_precompute_enabled());
     CHECK_FALSE(camera_model.is_precomputed());
     const Image<RGB> automatic = render();
     CHECK(camera_model.is_precomputed());
     CHECK(total(automatic) > 0.0);
 
     // Without auto precompute, an up-to-date camera renders...
-    camera_model.set_auto_precompute(false);
-    CHECK_FALSE(camera_model.auto_precompute());
+    camera_model.enable_auto_precompute(false);
+    CHECK_FALSE(camera_model.auto_precompute_enabled());
     CHECK(identical(render(), automatic));
 
     // ...and one that has changed since throws, until precomputed:

@@ -72,7 +72,7 @@ void Instance<TSpectral>::look_at(const Node<TSpectral>& target, const Vec3<doub
     // Check if the wrapped asset is a camera to determine conventions
     if (std::holds_alternative<CameraModel<TSpectral>*>(asset_)) {
         auto* camera = std::get<CameraModel<TSpectral>*>(asset_);
-        is_blender = camera->is_blender_convention();
+        is_blender = camera->uses_blender_convention();
     }
 
     // Set the node to defer rotation evaluation to our new callback
@@ -90,7 +90,7 @@ void Instance<TSpectral>::look_at(const Vec3<double>& target_position, const Vec
 {
     bool is_blender = false;
     if (std::holds_alternative<CameraModel<TSpectral>*>(asset_)) {
-        is_blender = std::get<CameraModel<TSpectral>*>(asset_)->is_blender_convention();
+        is_blender = std::get<CameraModel<TSpectral>*>(asset_)->uses_blender_convention();
     }
 
     this->template set_custom_rotation_callback<LookAtPositionCallback<TSpectral>>(

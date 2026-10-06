@@ -1332,12 +1332,12 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
         const Image<TSpectral>& center_kernel = psf->get_kernel(0.0f, 0.0f);
 
         const SensorModel<TSpectral>& sensor = *camera->sensor_;
-        const float read_noise = sensor.simulate_noise() ? sensor.read_noise() : 0.f;
+        const float read_noise = sensor.noise_enabled() ? sensor.read_noise() : 0.f;
         radius_config.threshold_electrons = 0.1f * std::max(read_noise, 1.f);
 
         // Per channel, the electrons a pixel collects over the exposure per unit irradiance and
         // stamp weight. The on-axis aperture area is the largest, so conservative:
-        const float area = camera->get_projected_aperture_area(Vec3<float>{0.f, 0.f, 1.f});
+        const float area = camera->projected_aperture_area(Vec3<float>{0.f, 0.f, 1.f});
         const auto exposure = static_cast<float>(scene_view.duration().to_si());
         const TSpectral photon_energies = TSpectral::photon_energies();
         const TSpectral qe = sensor.quantum_efficiency();
@@ -1635,7 +1635,7 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                 // Interpolate irradiance at this parameter value:
                 TSpectral irrad = item.interpolate_irradiances(params[k]);
                 Vec3<float> dir = arc.evaluate(params[k]);
-                float projected_area = camera->get_projected_aperture_area(dir);
+                float projected_area = camera->projected_aperture_area(dir);
                 TSpectral power = weight * irrad * projected_area;
 
                 if (test_occlusion) {

@@ -303,7 +303,7 @@ TEST_CASE("Sensors and distortion models check their parameters", "[cameras][val
     CHECK_THROWS(sensor.set_bit_depth(0));
     CHECK_THROWS(sensor.set_bit_depth(25)); // beyond what the float response holds exactly
     CHECK_NOTHROW(sensor.set_bit_depth(24));
-    CHECK_THROWS(sensor.set_rotation(units::Radian(NaN)));
+    CHECK_THROWS(sensor.set_roll(units::Radian(NaN)));
     CHECK_THROWS(sensor.set_gain_db(NaN_F));
     CHECK_THROWS(sensor.set_gain_db(1e6f)); // a conversion gain of 0
     CHECK(sensor.resolution().x == 1024);
@@ -417,7 +417,7 @@ TEST_CASE("A pixel's radiance-to-power factor uses the direction to its center",
             const Vec3<double> c01 = direction(fx - 0.5f, fy + 0.5f);
             const double solid_angle = triangle(c00, c10, c11) + triangle(c00, c11, c01);
             const double expected =
-                solid_angle * static_cast<double>(camera.get_projected_aperture_area(
+                solid_angle * static_cast<double>(camera.projected_aperture_area(
                                   camera.cast_ray(x, y).direction()));
             INFO("pixel (" << x << ", " << y << "), table built: " << built);
             CHECK(close(camera.pixel_radiance_to_power(x, y), expected, 1e-4));

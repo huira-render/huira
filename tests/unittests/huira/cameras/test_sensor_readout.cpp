@@ -285,7 +285,7 @@ TEST_CASE("The readout gives whole digital numbers", "[cameras][sensor]")
     frame_buffer.enable_sensor_response();
 
     for (const bool noise : {true, false}) {
-        camera.sensor_->set_simulate_noise(noise);
+        camera.sensor_->enable_noise(noise);
         expect_electrons(camera, frame_buffer, 1.0);
         for (double v : read_dn(camera, frame_buffer)) {
             REQUIRE(std::abs(v - std::round(v)) < 1e-3);
@@ -298,7 +298,7 @@ TEST_CASE("The readout gives whole digital numbers", "[cameras][sensor]")
 
     // Without noise, the expected electrons become DN by the gain, rounded:
     // (1234.5 + 1 dark) e- / 4.88 e-/DN + 10 DN = 263.18 -> 263.
-    camera.sensor_->set_simulate_noise(false);
+    camera.sensor_->enable_noise(false);
     expect_electrons(camera, frame_buffer, 1234.5);
     for (double v : read_dn(camera, frame_buffer)) {
         REQUIRE(std::abs(v - 263.0) < 1e-3);
@@ -326,7 +326,7 @@ TEST_CASE("Without noise, the dark current and bias still apply", "[cameras][sen
     electron_counter(camera);
     camera.sensor_->set_dark_current(50.f);
     camera.sensor_->set_bias_level_dn(100.f);
-    camera.sensor_->set_simulate_noise(false);
+    camera.sensor_->enable_noise(false);
     auto frame_buffer = camera.make_frame_buffer();
     frame_buffer.enable_sensor_response();
     frame_buffer.received_power().fill(RGB{0.f});
@@ -342,7 +342,7 @@ TEST_CASE("Received power that is not finite reads out as NaN", "[cameras][senso
     for (const bool noise : {true, false}) {
         SensorProbe camera;
         camera.configure_sensor_from_pitch(Resolution{4, 4}, units::Micrometer(5.0));
-        camera.sensor_->set_simulate_noise(noise);
+        camera.sensor_->enable_noise(noise);
         auto frame_buffer = camera.make_frame_buffer();
         frame_buffer.enable_sensor_response();
         frame_buffer.received_power().fill(RGB{1e-16f});

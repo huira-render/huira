@@ -205,6 +205,10 @@ TEST_CASE("A camera whose distortion has no inverse in the image reports it when
     CHECK(precompute.find("(-0.5, -0.5)") != std::string::npos); // the first pixel's corner
 
     CHECK_THROWS(camera.cast_ray(Pixel{0.f, 0.f}));
+    CHECK_FALSE(camera.try_cast_ray(Pixel{0.f, 0.f}).has_value()); // empty, rather than throwing
+    REQUIRE(camera.try_cast_ray(Pixel{31.5f, 23.5f}).has_value());
+    CHECK(camera.try_cast_ray(Pixel{31.5f, 23.5f})->direction() ==
+          camera.cast_ray(Pixel{31.5f, 23.5f}).direction());
     CHECK_THROWS(camera.pixel_radiance_to_power(0, 0));
     CHECK_NOTHROW(camera.cast_ray(Pixel{31.5f, 23.5f})); // the center is fine
 

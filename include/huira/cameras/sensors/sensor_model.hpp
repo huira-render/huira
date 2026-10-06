@@ -13,6 +13,7 @@
 #include "huira/render/frame_buffer.hpp"
 #include "huira/units/units.hpp"
 #include "huira/util/macros.hpp"
+#include "huira/util/removed_api.hpp"
 
 namespace huira {
 // Forward Declare
@@ -137,7 +138,8 @@ struct SensorConfig {
 
     float full_well_capacity = 20000.f; // e-
 
-    bool simulate_noise = true; // Shot and read noise; the dark current and bias apply either way
+    bool simulate_noise = true; // Shot and read noise (see SensorModel::enable_noise()); the dark
+                                // current and bias apply either way
     float read_noise = 10.f;    // e- RMS
     float dark_current = 1.f;   // e-/s
     float bias_level_dn = 10.f; // ADU
@@ -149,7 +151,8 @@ struct SensorConfig {
     // nearly the whole well is used, and saturated pixels read exactly the largest DN.
     float gain = 4.88f;
 
-    units::Radian rotation = units::Radian{0}; // Sensor rotation angle
+    units::Radian rotation =
+        units::Radian{0}; // Roll about the optical axis (see SensorModel::set_roll())
 
     float unity_db = 0.f; // Reference level for gain in dB
 
@@ -253,8 +256,10 @@ class SensorModel {
     /// Turn shot noise and read noise on (the default) or off. Off, a pixel collects the expected
     /// number of electrons; the dark current's electrons and the bias are still added, since they
     /// are not noise.
-    void set_simulate_noise(bool simulate_noise) { config_.simulate_noise = simulate_noise; }
-    bool simulate_noise() const { return config_.simulate_noise; }
+    void enable_noise(bool noise = true) { config_.simulate_noise = noise; }
+
+    /// Whether shot noise and read noise are on (the default). See enable_noise().
+    bool noise_enabled() const { return config_.simulate_noise; }
 
     void set_read_noise(float read_noise);
     float read_noise() const { return config_.read_noise; }
@@ -277,8 +282,10 @@ class SensorModel {
     void set_gain_db(float gain_db);
     float gain_db() const { return config_.gain_db(); }
 
-    void set_rotation(units::Radian angle);
-    units::Radian rotation() const { return config_.rotation; }
+    void set_roll(units::Radian angle);
+
+    /// The sensor's roll about the optical axis. See set_roll().
+    units::Radian roll() const { return config_.rotation; }
 
     void set_noise_seed(std::uint64_t seed);
 
@@ -295,6 +302,40 @@ class SensorModel {
     /// Convert the frame buffer's received power into its sensor response. Only called (via
     /// CameraModel::readout()) when the frame buffer has a sensor response to write into.
     virtual void readout(FrameBuffer<TSpectral>& fb, units::Second exposure_time) const = 0;
+
+    // Removed: calling these fails to compile, with what to use instead.
+    template <typename... Args>
+    void set_simulate_noise(Args&&...)
+    {
+        static_assert(detail::removed_api<Args...>,
+                      "SensorModel::set_simulate_noise() was removed in v0.9.10. Use "
+                      "enable_noise() instead.");
+    }
+
+    template <typename... Args>
+    bool simulate_noise(Args&&...) const
+    {
+        static_assert(detail::removed_api<Args...>,
+                      "SensorModel::simulate_noise() was removed in v0.9.10. Use noise_enabled() "
+                      "instead.");
+        return {};
+    }
+
+    template <typename... Args>
+    void set_rotation(Args&&...)
+    {
+        static_assert(detail::removed_api<Args...>,
+                      "SensorModel::set_rotation() was removed in v0.9.10. Use set_roll() "
+                      "instead.");
+    }
+
+    template <typename... Args>
+    units::Radian rotation(Args&&...) const
+    {
+        static_assert(detail::removed_api<Args...>,
+                      "SensorModel::rotation() was removed in v0.9.10. Use roll() instead.");
+        return {};
+    }
 
   protected:
     SensorConfig<TSpectral> config_;

@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <iomanip>
 #include <limits>
 #include <memory>
 #include <sstream>
@@ -529,13 +530,42 @@ void CameraModel<TSpectral>::set_intrinsics(float fx,
 }
 
 /**
- * @brief Get the sensor rotation as a Rotation object.
- * @return Rotation<double> Sensor rotation
+ * @brief Set the sensor's roll: its rotation about the optical axis, relative to the camera.
+ *
+ * The sensor's x axis is turned by the angle toward its y axis, so the scene turns the other
+ * way in the image: with OpenCV's axes (the default; x right, y down), a positive roll turns the
+ * scene counterclockwise in the image. The camera's pose, and so the direction it looks, is
+ * unchanged. Projections and rays (project_point(), cast_ray()) are in the sensor's axes.
+ *
+ * @param angle The roll angle (any angle unit).
+ * @throws std::runtime_error if the angle is not finite.
  */
 template <IsSpectral TSpectral>
-Rotation<double> CameraModel<TSpectral>::sensor_rotation() const
+void CameraModel<TSpectral>::set_sensor_roll(units::Radian angle)
 {
-    Mat3<double> rot_matrix = Rotation<double>::local_to_parent_z(sensor_->config_.rotation);
+    sensor_->set_roll(angle);
+}
+
+/**
+ * @brief The sensor's roll about the optical axis. See set_sensor_roll().
+ */
+template <IsSpectral TSpectral>
+units::Radian CameraModel<TSpectral>::sensor_roll() const
+{
+    return sensor_->roll();
+}
+
+/**
+ * @brief The sensor's orientation relative to the camera: the rotation from the sensor's axes,
+ * in which projections and rays are given, to the camera's.
+ *
+ * It is the roll about the optical axis (see set_sensor_roll()); a tilted sensor will add to
+ * it.
+ */
+template <IsSpectral TSpectral>
+Rotation<double> CameraModel<TSpectral>::sensor_orientation() const
+{
+    Mat3<double> rot_matrix = Rotation<double>::local_to_parent_z(sensor_->roll());
     return Rotation<double>::from_local_to_parent(rot_matrix);
 }
 
@@ -908,7 +938,7 @@ void CameraModel<TSpectral>::disable_harvey_shack_scatter()
  *
  * Without it, a render builds whatever is out of date itself and logs the time taken: as a
  * warning the first time after precompute() was called (the settings have then changed
- * since), and as information otherwise. set_auto_precompute(false) makes the render throw
+ * since), and as information otherwise. enable_auto_precompute(false) makes the render throw
  * instead.
  *
  * Only what the current settings use is built: for example, no PSF stamps while a defocus
@@ -954,23 +984,23 @@ bool CameraModel<TSpectral>::is_precomputed() const
 }
 
 /**
- * @brief Choose what a render does when the camera's optics kernels are out of date.
+ * @brief Choose what a render does when the camera's geometry or optics are out of date.
  *
  * Enabled by default: the render builds them, as precompute() would, and logs the time taken.
  * Disabled, the render throws instead, which guarantees that no render includes that time: a
  * timed or hardware-in-the-loop run can disable it and call precompute() after every change.
  *
- * @param auto_precompute True for the render to build out-of-date kernels, false to throw.
+ * @param auto_precompute True for the render to build what is out of date, false to throw.
  */
 template <IsSpectral TSpectral>
-void CameraModel<TSpectral>::set_auto_precompute(bool auto_precompute)
+void CameraModel<TSpectral>::enable_auto_precompute(bool auto_precompute)
 {
     auto_precompute_ = auto_precompute;
 }
 
 /**
  * @brief Called by the renderer before each render: makes sure the optics kernels are up to
- * date, as set_auto_precompute() chooses.
+ * date, as enable_auto_precompute() chooses.
  */
 template <IsSpectral TSpectral>
 void CameraModel<TSpectral>::precompute_for_render_()
@@ -1703,6 +1733,24 @@ Ray<TSpectral> CameraModel<TSpectral>::cast_ray(int x, int y) const
 }
 
 /**
+ * @brief As cast_ray(const Pixel&), but empty, rather than throwing, where the lens distortion
+ * has no inverse at the position (see set_distortion()).
+ *
+ * @param pixel Position in the camera's pixel convention (see set_pixel_convention()).
+ */
+template <IsSpectral TSpectral>
+std::optional<Ray<TSpectral>> CameraModel<TSpectral>::try_cast_ray(const Pixel& pixel) const
+{
+    const Pixel sensor_position = pixel_convention_.to_sensor(pixel, sensor_->resolution());
+    const Ray<TSpectral> ray = sensor_ray_(sensor_position, false);
+    if (!std::isfinite(ray.direction().x) || !std::isfinite(ray.direction().y) ||
+        !std::isfinite(ray.direction().z)) {
+        return std::nullopt;
+    }
+    return ray;
+}
+
+/**
  * @brief cast_ray() in sensor coordinates (pixel i covers [i, i + 1), y down), for internal
  * use: the renderer samples pixels in sensor coordinates.
  */
@@ -1805,12 +1853,12 @@ bool CameraModel<TSpectral>::in_fov(const Vec3<float>& point) const
 }
 
 /**
- * @brief Get the projected aperture area for a given direction.
- * @param direction Direction vector
- * @return float Projected aperture area
+ * @brief The aperture's area projected along a direction in camera coordinates, in square
+ * meters: its area times the cosine of the direction's angle from the optical axis.
+ * @param direction Direction vector (need not be normalized)
  */
 template <IsSpectral TSpectral>
-float CameraModel<TSpectral>::get_projected_aperture_area(const Vec3<float>& direction) const
+float CameraModel<TSpectral>::projected_aperture_area(const Vec3<float>& direction) const
 {
     float cosTheta = glm::dot(glm::normalize(direction), Vec3<float>{0, 0, 1});
     return this->aperture_->get_area().to_si_f() * std::abs(cosTheta);
@@ -2363,4 +2411,145 @@ Frustum<TSpectral> CameraModel<TSpectral>::view_frustum_with_margin_(float pixel
     // projected.
     return frustum_from_bounds_(2.f * pixels * frustum_bounds_.tan_per_pixel);
 }
+/**
+ * @brief A summary of the camera's settings, one per line, for reading: its optics, sensor,
+ * focus, PSF and conventions. Builds nothing. The format is for people, and may change.
+ */
+template <IsSpectral TSpectral>
+std::string CameraModel<TSpectral>::describe() const
+{
+    auto num = [](double value, int digits = 4) {
+        std::ostringstream out;
+        out << std::setprecision(digits) << value;
+        return out.str();
+    };
+    auto on_off = [](bool on) { return on ? std::string("on") : std::string("off"); };
+    constexpr double DEG_PER_RAD = 180.0 / PI<double>();
+    std::ostringstream out;
+
+    const Bin first = TSpectral::get_bin(0);
+    const Bin last = TSpectral::get_bin(TSpectral::size() - 1);
+    out << "CameraModel, " << TSpectral::size() << " spectral bins from "
+        << num(std::min(first.min_wavelength, last.min_wavelength) * 1e9) << " to "
+        << num(std::max(first.max_wavelength, last.max_wavelength) * 1e9) << " nm\n";
+
+    out << "  Optics:     focal length " << num(focal_length().to_si() * 1e3) << " mm, f/"
+        << num(fstop(), 3) << " (aperture " << num(aperture_diameter().to_si() * 1e3) << " mm)\n";
+
+    const Resolution pixels = sensor_->resolution();
+    const auto [pitch_x, pitch_y] = pixel_pitch();
+    out << "  Sensor:     " << pixels.width << " x " << pixels.height << " px of "
+        << num(pitch_x.to_si() * 1e6);
+    if (pitch_x.to_si() != pitch_y.to_si()) {
+        out << " x " << num(pitch_y.to_si() * 1e6);
+    }
+    out << " um (" << num(pixels.width * pitch_x.to_si() * 1e3) << " x "
+        << num(pixels.height * pitch_y.to_si() * 1e3) << " mm), roll "
+        << num(sensor_->roll().to_si() * DEG_PER_RAD) << " deg\n";
+
+    // Column-major: k[column][row].
+    const Mat3<float> k = intrinsic_matrix();
+    out << "  Intrinsics: fx " << num(k[0][0], 6) << ", fy " << num(k[1][1], 6) << ", cx "
+        << num(k[2][0], 6) << ", cy " << num(k[2][1], 6);
+    if (k[1][0] != 0.f) {
+        out << ", skew " << num(k[1][0], 6);
+    }
+    out << " px, in " << pixel_convention_.to_string() << "\n";
+
+    // Without distortion, from the principal point in sensor coordinates:
+    const double fov_x = (std::atan(static_cast<double>(cx_) / fx_) +
+                          std::atan((static_cast<double>(rx_) - cx_) / fx_)) *
+                         DEG_PER_RAD;
+    const double fov_y = (std::atan(static_cast<double>(cy_) / fy_) +
+                          std::atan((static_cast<double>(ry_) - cy_) / fy_)) *
+                         DEG_PER_RAD;
+    out << "  Field:      " << num(fov_x) << " x " << num(fov_y)
+        << " deg (pinhole, without distortion)\n";
+
+    out << "  Axes:       "
+        << (blender_convention_ ? "Blender (-z forward, y up)" : "OpenCV (z forward, y down)")
+        << "\n";
+
+    out << "  Distortion: ";
+    if (!distortion_) {
+        out << "none\n";
+    } else if (const auto* brown =
+                   dynamic_cast<const BrownCoefficients*>(distortion_->get_coefficients())) {
+        out << "Brown-Conrady, k1 " << num(brown->k1) << ", k2 " << num(brown->k2) << ", k3 "
+            << num(brown->k3) << ", p1 " << num(brown->p1) << ", p2 " << num(brown->p2) << "\n";
+    } else if (const auto* cv =
+                   dynamic_cast<const OpenCVCoefficients*>(distortion_->get_coefficients())) {
+        out << "OpenCV, k1-k6 " << num(cv->k1) << ", " << num(cv->k2) << ", " << num(cv->k3) << ", "
+            << num(cv->k4) << ", " << num(cv->k5) << ", " << num(cv->k6) << "; p1, p2 "
+            << num(cv->p1) << ", " << num(cv->p2) << "; s1-s4 " << num(cv->s1) << ", "
+            << num(cv->s2) << ", " << num(cv->s3) << ", " << num(cv->s4) << "\n";
+    } else if (const auto* owen =
+                   dynamic_cast<const OwenCoefficients*>(distortion_->get_coefficients())) {
+        out << "Owen, e1-e6 " << num(owen->e1) << ", " << num(owen->e2) << ", " << num(owen->e3)
+            << ", " << num(owen->e4) << ", " << num(owen->e5) << ", " << num(owen->e6) << "\n";
+    } else {
+        out << "custom\n";
+    }
+
+    out << "  Focus:      ";
+    const double focus = focus_distance().to_si();
+    if (std::isinf(focus) && focus > 0) {
+        out << "infinity";
+    } else if (focus < 0) {
+        out << "past infinity (" << num(focus_diopters().to_si()) << " diopters)";
+    } else {
+        out << num(focus) << " m";
+    }
+    out << ", depth of field " << on_off(depth_of_field_);
+    if (depth_of_field_ && defocus_blur_radius() > 0.f) {
+        out << ", unresolved sources blurred over " << num(defocus_blur_radius()) << " px";
+    }
+    out << "\n";
+
+    out << "  PSF:        ";
+    if (use_aperture_psf_) {
+        out << "the aperture's diffraction, stamps of radius " << get_psf_radius() << " px"
+            << (aperture_psf_radius_ == 0 ? " (automatic)" : "") << ", " << aperture_psf_banks_
+            << " subpixel positions";
+    } else if (psf_ != nullptr) {
+        out << (dynamic_cast<const MeasuredPSF<TSpectral>*>(psf_.get()) != nullptr ? "measured"
+                                                                                   : "custom")
+            << ", stamps of radius " << get_psf_radius() << " px";
+    } else {
+        out << "none";
+    }
+    out << "\n";
+    out << "  Scatter:    ";
+    if (scatter_enabled_) {
+        out << "Harvey-Shack, fraction " << num(scatter_fraction_) << ", falloff exponent "
+            << num(scatter_falloff_exponent_) << ", r0 " << num(r0_) << " px";
+        if (scatter_radius_ > 0.f) {
+            out << ", cut off at " << num(scatter_radius_) << " px";
+        }
+    } else {
+        out << "none";
+    }
+    out << "; veiling glare ";
+    out << (veiling_glare_enabled_ ? num(veiling_alpha_) : std::string("none")) << "\n";
+    out << "  Resolved bodies blurred by the PSF and scatter: " << on_off(convolve_psf_) << "\n";
+
+    const SensorModel<TSpectral>& sensor = *sensor_;
+    double qe = 0.0;
+    for (std::size_t i = 0; i < TSpectral::size(); ++i) {
+        qe += static_cast<double>(sensor.quantum_efficiency()[i]);
+    }
+    qe /= static_cast<double>(TSpectral::size());
+    out << "  Readout:    " << sensor.bit_depth() << "-bit, gain " << num(sensor.conversion_gain())
+        << " e-/DN, full well " << num(sensor.full_well_capacity(), 6) << " e-, bias "
+        << num(sensor.bias_level_dn()) << " DN, mean QE " << num(qe, 3) << "\n";
+    out << "  Noise:      " << on_off(sensor.noise_enabled()) << ", read noise "
+        << num(sensor.read_noise()) << " e-, dark current " << num(sensor.dark_current())
+        << " e-/s, seed " << sensor.noise_seed() << "\n";
+
+    out << "  Precomputed: " << (is_precomputed() ? "yes" : "no")
+        << (auto_precompute_ ? " (a render builds what is out of date)"
+                             : " (auto precompute off: a render throws if out of date)");
+    return out.str();
+}
+
 } // namespace huira

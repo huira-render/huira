@@ -6,7 +6,7 @@ TLDR: a camera builds the kernels its optics need (PSF stamps, defocus stamps, c
 kernels) and the tables of its geometry (each pixel's ray direction and solid angle) when they
 are first needed, not when it is configured, so setters are cheap. Call ``precompute()`` once the
 camera is set up, so that the first render is not slower than the rest. If you don't, the
-render does it for you and says so in the log; ``set_auto_precompute(false)`` makes it throw
+render does it for you and says so in the log; ``enable_auto_precompute(false)`` makes it throw
 instead.
 
 What is precomputed
@@ -98,7 +98,7 @@ ahead. If they are not:
   warning the first time after ``precompute()`` was called, since the camera has then changed
   since it was last precomputed, and information otherwise, so that a camera changed on every
   frame (a focus pull, say) does not warn on every frame.
-- With ``set_auto_precompute(false)`` it throws. Use this when no render may include that time,
+- With ``enable_auto_precompute(false)`` it throws. Use this when no render may include that time,
   such as a timed or hardware-in-the-loop run, and call ``precompute()`` after every change.
 
 The image is the same whichever way the kernels were built, and whatever order the settings

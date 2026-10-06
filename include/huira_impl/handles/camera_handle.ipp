@@ -266,12 +266,12 @@ void CameraModelHandle<TSpectral>::set_sensor_full_well_capacity(float fwc) cons
  * Off, each pixel collects the expected number of electrons. The dark current's electrons and
  * the bias are still added, since they are not noise.
  *
- * @param simulate_noise True to simulate noise, false not to
+ * @param noise True to simulate noise, false not to
  */
 template <IsSpectral TSpectral>
-void CameraModelHandle<TSpectral>::set_sensor_simulate_noise(bool simulate_noise) const
+void CameraModelHandle<TSpectral>::enable_sensor_noise(bool noise) const
 {
-    this->get_()->sensor_->set_simulate_noise(simulate_noise);
+    this->get_()->sensor_->enable_noise(noise);
 }
 
 /**
@@ -381,16 +381,13 @@ void CameraModelHandle<TSpectral>::set_sensor_unity_db(float unity_db) const
 }
 
 /**
- * @brief Set the sensor rotation angle.
- *
- * Rotates the sensor around the optical axis by the specified angle.
- *
- * @param angle Rotation angle
+ * @brief Set the sensor's roll about the optical axis. See CameraModel::set_sensor_roll().
+ * @param angle The roll angle (any angle unit).
  */
 template <IsSpectral TSpectral>
-void CameraModelHandle<TSpectral>::set_sensor_rotation(units::Radian angle) const
+void CameraModelHandle<TSpectral>::set_sensor_roll(units::Radian angle) const
 {
-    this->get_()->sensor_->set_rotation(angle);
+    this->get_()->set_sensor_roll(angle);
 }
 
 /**
@@ -428,11 +425,12 @@ float CameraModelHandle<TSpectral>::sensor_full_well_capacity() const
     return this->get_()->sensor_->full_well_capacity();
 }
 
-/// Get whether the sensor simulates noise.
+/// Whether the sensor's shot noise and read noise are on (the default). See
+/// enable_sensor_noise().
 template <IsSpectral TSpectral>
-bool CameraModelHandle<TSpectral>::sensor_simulate_noise() const
+bool CameraModelHandle<TSpectral>::sensor_noise_enabled() const
 {
-    return this->get_()->sensor_->simulate_noise();
+    return this->get_()->sensor_->noise_enabled();
 }
 
 /// Get the sensor's read noise, in electrons.
@@ -484,11 +482,18 @@ float CameraModelHandle<TSpectral>::sensor_unity_db() const
     return this->get_()->sensor_->unity_db();
 }
 
-/// Get the sensor's rotation about the optical axis.
+/// The sensor's roll about the optical axis. See CameraModel::set_sensor_roll().
 template <IsSpectral TSpectral>
-units::Radian CameraModelHandle<TSpectral>::sensor_rotation() const
+units::Radian CameraModelHandle<TSpectral>::sensor_roll() const
 {
-    return this->get_()->sensor_->rotation();
+    return this->get_()->sensor_roll();
+}
+
+/// The sensor's orientation relative to the camera. See CameraModel::sensor_orientation().
+template <IsSpectral TSpectral>
+Rotation<double> CameraModelHandle<TSpectral>::sensor_orientation() const
+{
+    return this->get_()->sensor_orientation();
 }
 
 /**
@@ -723,21 +728,21 @@ bool CameraModelHandle<TSpectral>::is_precomputed() const
 }
 
 /**
- * @brief Choose whether a render builds out-of-date optics kernels itself (the default) or
- * throws. See CameraModel::set_auto_precompute().
- * @param auto_precompute True for the render to build them, false to throw.
+ * @brief Choose whether a render builds an out-of-date camera itself (the default) or throws.
+ * See CameraModel::enable_auto_precompute().
+ * @param auto_precompute True for the render to build what is out of date, false to throw.
  */
 template <IsSpectral TSpectral>
-void CameraModelHandle<TSpectral>::set_auto_precompute(bool auto_precompute) const
+void CameraModelHandle<TSpectral>::enable_auto_precompute(bool auto_precompute) const
 {
-    this->get_()->set_auto_precompute(auto_precompute);
+    this->get_()->enable_auto_precompute(auto_precompute);
 }
 
-/// Whether a render builds out-of-date optics kernels itself. See set_auto_precompute().
+/// Whether a render builds an out-of-date camera itself. See enable_auto_precompute().
 template <IsSpectral TSpectral>
-bool CameraModelHandle<TSpectral>::auto_precompute() const
+bool CameraModelHandle<TSpectral>::auto_precompute_enabled() const
 {
-    return this->get_()->auto_precompute();
+    return this->get_()->auto_precompute_enabled();
 }
 
 /**
@@ -907,6 +912,16 @@ Ray<TSpectral> CameraModelHandle<TSpectral>::cast_ray(int x, int y) const
 }
 
 /**
+ * @brief As cast_ray(), but empty where the lens distortion has no inverse, rather than
+ * throwing. See CameraModel::try_cast_ray().
+ */
+template <IsSpectral TSpectral>
+std::optional<Ray<TSpectral>> CameraModelHandle<TSpectral>::try_cast_ray(const Pixel& pixel) const
+{
+    return this->get_()->try_cast_ray(pixel);
+}
+
+/**
  * @brief Create a new frame buffer with the camera's resolution.
  * @return FrameBuffer<TSpectral> Frame buffer
  */
@@ -928,8 +943,15 @@ void CameraModelHandle<TSpectral>::use_blender_convention(bool value) const
 
 /// Whether the camera uses Blender's convention (-z forward, y up).
 template <IsSpectral TSpectral>
-bool CameraModelHandle<TSpectral>::is_blender_convention() const
+bool CameraModelHandle<TSpectral>::uses_blender_convention() const
 {
-    return this->get_()->is_blender_convention();
+    return this->get_()->uses_blender_convention();
+}
+
+/// A summary of the camera's settings, one per line. See CameraModel::describe().
+template <IsSpectral TSpectral>
+std::string CameraModelHandle<TSpectral>::describe() const
+{
+    return this->get_()->describe();
 }
 } // namespace huira
