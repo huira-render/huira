@@ -12,6 +12,9 @@
 
 #include <fitsio.h>
 
+#include "huira/util/logger.hpp"
+#include "huira/util/paths.hpp"
+
 namespace huira {
 
 // =====================================================================
@@ -396,32 +399,62 @@ inline FitsMetadata read_fits_metadata(fitsfile* fptr)
     return m;
 }
 
-// Maximum ADU value for the full range of a given BITPIX.
-inline double bitpix_max(int bitpix)
+// The CFITSIO image type written for a bit_depth given to write_image_fits(): integers are
+// unsigned (16 and 32 bits are stored signed, offset by BZERO, which CFITSIO writes).
+inline int fits_image_type(int bit_depth)
 {
-    switch (bitpix) {
+    switch (bit_depth) {
     case 8:
-        return 255.0;
+        return BYTE_IMG;
     case 16:
-        return 32767.0;
+        return USHORT_IMG;
     case 32:
+        return ULONG_IMG;
+    case -64:
+        return DOUBLE_IMG;
+    case -32:
+    default:
+        return FLOAT_IMG;
+    }
+}
+
+// Largest value of an integer image of the given type: a CFITSIO image type, as
+// fits_image_type() and fits_get_img_equivtype() give, so that unsigned types stored with BZERO
+// are told apart from signed ones.
+inline double fits_type_max(int image_type)
+{
+    switch (image_type) {
+    case BYTE_IMG:
+        return 255.0;
+    case SBYTE_IMG:
+        return 127.0;
+    case SHORT_IMG:
+        return 32767.0;
+    case USHORT_IMG:
+        return 65535.0;
+    case LONG_IMG:
         return 2147483647.0;
+    case ULONG_IMG:
+        return 4294967295.0;
+    case LONGLONG_IMG:
+        return 9223372036854775807.0;
     default:
         return 1.0;
     }
 }
 
-inline long fits_blank_value(int bit_depth)
+// The value undefined (non-finite) pixels are written as, as stored on disk (BLANK is in stored
+// units, before BZERO): that of 0 ADU, which valid pixels then avoid.
+inline long fits_blank_value(int image_type)
 {
-    switch (bit_depth) {
-    case 8:
-        return 0; // reserve 0; clamp valid pixels to [1, 255]
-    case 16:
-        return -32768; // signed min, outside valid ADU range
-    case 32:
-        return -2147483648L;
+    switch (image_type) {
+    case USHORT_IMG:
+        return -32768L; // 0 ADU, offset by BZERO = 32768
+    case ULONG_IMG:
+        return -2147483648L; // 0 ADU, offset by BZERO = 2^31
+    case BYTE_IMG:
     default:
-        return 0; // float formats use NaN, not BLANK
+        return 0L;
     }
 }
 } // namespace detail
@@ -470,15 +503,23 @@ inline std::pair<Image<float>, FitsMetadata> read_image_fits(const fs::path& fil
     FitsMetadata metadata = detail::read_fits_metadata(ff.fptr);
 
     // --- Read pixel data ---
-    // CFITSIO converts any on-disk type to TFLOAT and applies BZERO/BSCALE.
+    // CFITSIO converts any on-disk type to double, applies BZERO/BSCALE, and returns undefined
+    // (BLANK) pixels as NaN. Double, so that 32-bit integers keep every bit until normalized.
     const long npixels = static_cast<long>(width) * height;
-    std::vector<float> buffer(static_cast<std::size_t>(npixels));
+    std::vector<double> buffer(static_cast<std::size_t>(npixels));
 
     long fpixel[2] = {1, 1};
     int anynul = 0;
+    double null_value = std::numeric_limits<double>::quiet_NaN();
 
-    fits_read_pix(ff.fptr, TFLOAT, fpixel, npixels, nullptr, buffer.data(), &anynul, &status);
+    fits_read_pix(ff.fptr, TDOUBLE, fpixel, npixels, &null_value, buffer.data(), &anynul, &status);
     detail::fits_check(status, "read pixels");
+
+    // The type the stored values represent once BZERO is applied (unsigned 16-bit for BITPIX 16
+    // with BZERO 32768, for example):
+    int equivalent_type = bitpix;
+    fits_get_img_equivtype(ff.fptr, &equivalent_type, &status);
+    detail::fits_check(status, "get image type");
 
     // --- Normalise integer data to [0, 1] ---
     //
@@ -497,12 +538,11 @@ inline std::pair<Image<float>, FitsMetadata> read_image_fits(const fs::path& fil
             // Infer sensor bit depth from SATURATE  (e.g. 4095 → 12)
             inferred_sensor_bits = static_cast<int>(std::round(std::log2(divisor + 1.0)));
         } else {
-            divisor = detail::bitpix_max(bitpix);
+            divisor = detail::fits_type_max(equivalent_type);
         }
 
-        const float inv = 1.0f / static_cast<float>(divisor);
         for (auto& px : buffer) {
-            px *= inv;
+            px /= divisor;
         }
     }
     // Float BITPIX (−32, −64): pass through as-is.
@@ -517,9 +557,9 @@ inline std::pair<Image<float>, FitsMetadata> read_image_fits(const fs::path& fil
 
     for (int y = 0; y < height; ++y) {
         const int fits_row = height - 1 - y;
-        const float* src = buffer.data() + static_cast<std::size_t>(fits_row * width);
+        const double* src = buffer.data() + static_cast<std::size_t>(fits_row * width);
         for (int x = 0; x < width; ++x) {
-            image(x, y) = src[x];
+            image(x, y) = static_cast<float>(src[x]);
         }
     }
 
@@ -573,7 +613,8 @@ inline void write_image_fits(const fs::path& filepath,
     //         fits_write_pix(fptr, TFLOAT, fpixel, w*h, plane_data, &status);
     //     }
 
-    fits_create_img(ff.fptr, bit_depth, 2, naxes, &status);
+    const int image_type = detail::fits_image_type(bit_depth);
+    fits_create_img(ff.fptr, image_type, 2, naxes, &status);
     detail::fits_check(status, "create image HDU");
 
     // --- Determine ADU scaling for integer BITPIX ---
@@ -585,8 +626,8 @@ inline void write_image_fits(const fs::path& filepath,
     //   • Otherwise → full BITPIX range, e.g. 65535 for BITPIX=16
     double adc_max = 0.0;
     if (is_integer) {
-        adc_max =
-            (sensor_bits > 0) ? (std::pow(2.0, sensor_bits) - 1.0) : detail::bitpix_max(bit_depth);
+        adc_max = (sensor_bits > 0) ? (std::pow(2.0, sensor_bits) - 1.0)
+                                    : detail::fits_type_max(image_type);
     }
 
     // --- Write metadata ---
@@ -608,37 +649,41 @@ inline void write_image_fits(const fs::path& filepath,
     detail::fits_check(status, "write metadata");
 
     // --- Prepare pixel buffer (flip to FITS bottom-up order) ---
+    // Double, so that 32-bit integers are written exactly.
     const long npixels = static_cast<long>(w) * h;
-    std::vector<float> buffer(static_cast<std::size_t>(npixels));
+    std::vector<double> buffer(static_cast<std::size_t>(npixels));
 
-    float actual_min = std::numeric_limits<float>::max();
-    float actual_max = -std::numeric_limits<float>::max();
-
-    long blank_value = 0;
-    if (is_integer) {
-        blank_value = detail::fits_blank_value(bit_depth);
-    }
-
+    // Undefined (non-finite) pixels: NaN in a float image; in an integer image, BLANK, the
+    // value of 0 ADU, which valid pixels are then kept above. Only then: without undefined
+    // pixels every value is used.
     bool has_blank = false;
+    if (is_integer) {
+        for (int y = 0; y < h && !has_blank; ++y) {
+            for (int x = 0; x < w; ++x) {
+                if (!std::isfinite(image(x, y))) {
+                    has_blank = true;
+                    break;
+                }
+            }
+        }
+    }
+    const double type_max = detail::fits_type_max(image_type);
+    const double lowest_valid = has_blank ? 1.0 : 0.0;
+
+    double actual_min = std::numeric_limits<double>::max();
+    double actual_max = -std::numeric_limits<double>::max();
+
     for (int y = 0; y < h; ++y) {
         const int fits_row = h - 1 - y;
-        float* dst = buffer.data() + static_cast<std::size_t>(fits_row * w);
+        double* dst = buffer.data() + static_cast<std::size_t>(fits_row * w);
         for (int x = 0; x < w; ++x) {
-            float px = image(x, y);
+            double px = static_cast<double>(image(x, y));
 
             if (!std::isfinite(px)) {
-                if (is_integer) {
-                    dst[x] = static_cast<float>(blank_value);
-                    has_blank = true;
-                } else {
-                    dst[x] = std::numeric_limits<float>::quiet_NaN();
-                }
+                dst[x] = is_integer ? 0.0 : std::numeric_limits<double>::quiet_NaN();
             } else {
                 if (is_integer) {
-                    float lo = (bit_depth == 8) ? 1.f : 0.f;
-                    px = std::clamp(px * static_cast<float>(adc_max),
-                                    lo,
-                                    static_cast<float>(detail::bitpix_max(bit_depth)));
+                    px = std::clamp(std::round(px * adc_max), lowest_valid, type_max);
                 }
                 dst[x] = px;
                 actual_min = std::min(actual_min, px);
@@ -659,16 +704,16 @@ inline void write_image_fits(const fs::path& filepath,
     }
 
     if (is_integer && has_blank) {
-        long blank_val = static_cast<long>(blank_value);
+        long blank_val = detail::fits_blank_value(image_type);
         fits_update_key(
             ff.fptr, TLONG, "BLANK", &blank_val, "Value representing undefined pixels", &status);
         detail::fits_check(status, "write BLANK keyword");
     }
 
     // --- Write pixels ---
-    // CFITSIO converts TFLOAT → on-disk BITPIX, quantising as needed.
+    // CFITSIO converts to the on-disk type, applying BZERO for unsigned 16- and 32-bit images.
     long fpixel[2] = {1, 1};
-    fits_write_pix(ff.fptr, TFLOAT, fpixel, npixels, buffer.data(), &status);
+    fits_write_pix(ff.fptr, TDOUBLE, fpixel, npixels, buffer.data(), &status);
     detail::fits_check(status, "write pixels");
 }
 
