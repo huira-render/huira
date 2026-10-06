@@ -22,6 +22,9 @@ set(UNIT_TESTS
     huira/core/test_time.cpp
     huira/core/test_transform.cpp
 
+    huira/materials/test_cook_torrance.cpp
+
+    huira/render/test_non_finite_radiance.cpp
     huira/render/test_psf_switch.cpp
     huira/render/test_region_culling.cpp
     huira/render/test_sky_convolution.cpp

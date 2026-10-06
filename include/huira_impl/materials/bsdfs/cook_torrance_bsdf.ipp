@@ -42,10 +42,9 @@ TSpectral CookTorranceBSDF<TSpectral>::eval(const Vec3<float>& wo,
 
     // Specular (Cook-Torrance microfacet with GGX NDF)
     Vec3<float> h = glm::normalize(wo + wi);
-    const float n_dot_h = std::max(glm::dot(n, h), 0.0f);
     const float wo_dot_h = std::max(glm::dot(wo, h), 0.0f);
 
-    const float D = ggx_D(n_dot_h, alpha2);
+    const float D = ggx_D(n, h, alpha2);
     const float G = smith_G2(n_dot_wo, n_dot_wi, alpha2);
     const TSpectral F = schlick_fresnel(wo_dot_h, f0);
 
@@ -152,10 +151,9 @@ float CookTorranceBSDF<TSpectral>::pdf(const Vec3<float>& wo,
     const float alpha2 = alpha * alpha;
 
     Vec3<float> h = glm::normalize(wo + wi);
-    const float n_dot_h = std::max(glm::dot(n, h), 0.0f);
 
     // Specular PDF: GGX VNDF
-    const float D = ggx_D(n_dot_h, alpha2);
+    const float D = ggx_D(n, h, alpha2);
     const float G1 = smith_G1(n_dot_wo, alpha2);
     const float spec_pdf = D * G1 / (4.0f * n_dot_wo);
 
@@ -167,12 +165,22 @@ float CookTorranceBSDF<TSpectral>::pdf(const Vec3<float>& wo,
     return spec_weight * spec_pdf + (1.0f - spec_weight) * diff_pdf;
 }
 
+/**
+ * @brief GGX D for the microfacet normal h, zero below the surface. The sine of h's angle from
+ * n comes from their cross product, which keeps its precision for the small angles a smooth
+ * surface's lobe spans (see sampling::ggx_distribution()).
+ */
 template <IsSpectral TSpectral>
-float CookTorranceBSDF<TSpectral>::ggx_D(float n_dot_h, float alpha2) noexcept
+float CookTorranceBSDF<TSpectral>::ggx_D(const Vec3<float>& n,
+                                         const Vec3<float>& h,
+                                         float alpha2) noexcept
 {
-    const float cos2 = n_dot_h * n_dot_h;
-    const float denom = cos2 * (alpha2 - 1.0f) + 1.0f;
-    return alpha2 / (std::numbers::pi_v<float> * denom * denom);
+    const float n_dot_h = glm::dot(n, h);
+    if (n_dot_h <= 0.0f) {
+        return 0.0f;
+    }
+    const Vec3<float> n_cross_h = glm::cross(n, h);
+    return sampling::ggx_distribution(n_dot_h * n_dot_h, glm::dot(n_cross_h, n_cross_h), alpha2);
 }
 
 template <IsSpectral TSpectral>
