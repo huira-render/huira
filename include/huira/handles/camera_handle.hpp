@@ -152,6 +152,7 @@ class CameraModelHandle : public Handle<CameraModel<TSpectral>> {
     const Image<TSpectral>& get_psf_kernel(float u, float v) const;
     const Image<TSpectral>& get_psf_convolution_kernel() const;
     const Image<TSpectral>& get_psf_wings_kernel() const;
+    Image<TSpectral> psf_image(int radius, float x_offset = 0.f, float y_offset = 0.f) const;
 
     void precompute() const;
     bool is_precomputed() const;

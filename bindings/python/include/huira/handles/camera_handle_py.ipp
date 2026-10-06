@@ -460,6 +460,17 @@ inline void bind_camera_model_handle(py::module_& m)
             "A copy of the scattered light's kernel alone (unit energy per channel), building "
             "it first if needed. Requires Harvey-Shack scatter.")
 
+        .def("psf_image",
+             &HandleType::psf_image,
+             py::arg("radius"),
+             py::arg("x_offset") = 0.f,
+             py::arg("y_offset") = 0.f,
+             py::call_guard<py::gil_scoped_release>(),
+             "The light an unresolved source puts in each pixel around it, per channel: the "
+             "aperture's diffraction pattern, averaged over each spectral bin and integrated over "
+             "each pixel, for the source (x_offset, y_offset) pixels from the center pixel's "
+             "center. The image is 2 radius + 1 pixels square. With no PSF, the pixel the "
+             "source falls in holds all its light.")
         // Optics kernels
         .def("precompute",
              &HandleType::precompute,

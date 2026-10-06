@@ -689,6 +689,17 @@ const Image<TSpectral>& CameraModelHandle<TSpectral>::get_psf_kernel(float u, fl
 }
 
 /**
+ * @brief The light an unresolved source puts in each pixel around it, per channel. See
+ * CameraModel::psf_image().
+ */
+template <IsSpectral TSpectral>
+Image<TSpectral>
+CameraModelHandle<TSpectral>::psf_image(int radius, float x_offset, float y_offset) const
+{
+    return this->get_()->psf_image(radius, x_offset, y_offset);
+}
+
+/**
  * @brief Get the whole-image convolution kernel: the PSF and scattered light together. See
  * CameraModel::get_psf_convolution_kernel().
  */
