@@ -23,6 +23,8 @@ namespace huira {
 //       Values are returned as-is (physical / flux units).
 //       Consult metadata.bunit for the physical unit.
 //
+//   Undefined pixels (BLANK in an integer image) are returned as NaN.
+//
 // The returned FitsMetadata is populated from every recognised header
 // keyword; unrecognised keywords land in custom_keywords.
 // -------------------------------------------------------------------------
@@ -48,6 +50,11 @@ std::pair<Image<float>, FitsMetadata> read_image_fits(const fs::path& filepath);
 // If sensor_bit_depth is 0 (not set), the full BITPIX range is used
 // (e.g. 0–65535 for BITPIX=16).  The SATURATE, DATAMIN, and DATAMAX
 // keywords are written automatically.
+//
+// Non-finite pixels are written as NaN in a float image. In an integer
+// image they are written as 0 ADU, which the BLANK keyword marks as
+// undefined; valid pixels are then written as at least 1 ADU. Without
+// non-finite pixels every value, 0 included, is available.
 //
 // For float BITPIX, pixel values are written verbatim with no scaling.
 // -------------------------------------------------------------------------

@@ -27,6 +27,7 @@ set(UNIT_TESTS
     huira/scene/test_scene_deletion.cpp
 
     huira/images/test_convolution.cpp
+    huira/images/test_fits_io.cpp
 
     huira/units/test_units.cpp
 )
