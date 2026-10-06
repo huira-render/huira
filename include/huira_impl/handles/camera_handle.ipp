@@ -369,6 +369,27 @@ void CameraModelHandle<TSpectral>::set_sensor_rotation(units::Radian angle) cons
 }
 
 /**
+ * @brief Seed the sensor's noise, so that its frames can be reproduced.
+ *
+ * Setting the same seed again repeats the same sequence of frames. Sensors get distinct seeds by
+ * default. See SensorModel::set_noise_seed().
+ *
+ * @param seed Any value.
+ */
+template <IsSpectral TSpectral>
+void CameraModelHandle<TSpectral>::set_sensor_noise_seed(std::uint64_t seed) const
+{
+    this->get_()->sensor_->set_noise_seed(seed);
+}
+
+/// Get the seed of the sensor's noise. See set_sensor_noise_seed().
+template <IsSpectral TSpectral>
+std::uint64_t CameraModelHandle<TSpectral>::sensor_noise_seed() const
+{
+    return this->get_()->sensor_->noise_seed();
+}
+
+/**
  * @brief Set the aperture model for the camera.
  * @tparam TAperture Aperture model type
  * @tparam Args Constructor arguments for the aperture
