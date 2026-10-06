@@ -276,7 +276,11 @@ inline void bind_camera_model_handle(py::module_& m)
              "radius in pixels and subpixel positions per axis for unresolved sources.")
         .def("enable_psf_convolution",
              &HandleType::enable_psf_convolution,
-             py::arg("convolve_psf") = true)
+             py::arg("convolve_psf") = true,
+             "Choose whether a PSF or scattered light that is set blurs resolved bodies (the "
+             "path-traced image). On by default. Off, bodies are sharp, and rendering is faster "
+             "without the whole-image convolution; unresolved sources, such as stars, get the "
+             "PSF and scattered light either way.")
         .def("delete_psf", &HandleType::delete_psf)
         .def("set_psf_convolution_radius",
              &HandleType::set_psf_convolution_radius,

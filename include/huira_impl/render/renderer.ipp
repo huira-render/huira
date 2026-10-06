@@ -394,7 +394,8 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
 
     // Whether a uniform sky is kept out of the PSF convolution, and so which pixels saw nothing
     // but sky (every ray through them missed): see "PSF convolution" below.
-    const bool split_sky = camera->convolve_psf_ && uniform_background && miss_radiance.max() > 0.f;
+    const bool split_sky =
+        camera->convolves_bodies_() && uniform_background && miss_radiance.max() > 0.f;
     Image<uint8_t> saw_only_sky(split_sky ? fb_width : 0, split_sky ? fb_height : 0, uint8_t{0});
 
     std::atomic<int> culled_tiles{0};
@@ -998,7 +999,8 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
     }
     occluder_mask_valid_ = true;
 
-    // PSF convolution.
+    // PSF convolution, of resolved bodies with the PSF and scattered light, unless
+    // CameraModel::enable_psf_convolution(false).
     //
     // Write R for the frame as traced, and S for the frame the sky alone would give: each
     // pixel's radiance-to-power factor times the sky's radiance L. Convolution (written *) is
@@ -1031,7 +1033,7 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
     // The sky is direct light, so the direct component is split the same way; the indirect
     // component holds none of it. A background image is not uniform, so a frame with one is
     // convolved as it is, and the image darkens toward the frame's edges.
-    if (camera->convolve_psf_) {
+    if (camera->convolves_bodies_()) {
         const bool has_power = frame_buffer.has_received_power();
         const bool has_direct = frame_buffer.has_received_direct_power();
 
@@ -1212,8 +1214,9 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
     const DefocusKernel<TSpectral>& defocus = camera->defocus_kernel_;
     const bool use_defocus = !defocus.empty();
 
-    // Scattered-light wings for unresolved sources:
-    const bool splat_wings = camera->convolve_psf_ && camera->scatter_enabled_ && !use_defocus;
+    // Scattered-light wings for unresolved sources, whether or not resolved bodies are
+    // convolved (see CameraModel::enable_psf_convolution()):
+    const bool splat_wings = camera->scatter_enabled_ && !use_defocus;
     if (splat_wings) {
         wing_splat = Image<TSpectral>(fb_width, fb_height, TSpectral{0});
     }
@@ -1734,7 +1737,9 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
             }
         });
 
-    if (use_defocus && camera->convolve_psf_) {
+    // Out of focus, the defocus stamps are blurred by the PSF and scattered light together,
+    // whether or not resolved bodies are convolved:
+    if (use_defocus && camera->has_psf_or_scatter_()) {
         if (!image_is_zero_(received_power)) {
             camera->apply_psf_convolution_(received_power);
         }

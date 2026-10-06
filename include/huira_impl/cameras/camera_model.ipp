@@ -789,9 +789,9 @@ void CameraModel<TSpectral>::disable_harvey_shack_scatter()
  * Only what the current settings use is built: for example, no PSF stamps while a defocus
  * blur replaces them.
  *
- * @throws std::runtime_error if the settings are inconsistent, e.g. PSF convolution is enabled
- *         with neither a PSF nor scattering, or the lens distortion has no inverse somewhere in
- *         the image at this focal length and sensor (see set_distortion()).
+ * @throws std::runtime_error if the settings are inconsistent, e.g. scattering is enabled
+ *         without a PSF and without set_psf_convolution_radius(), or the lens distortion has no
+ *         inverse somewhere in the image at this focal length and sensor (see set_distortion()).
  */
 template <IsSpectral TSpectral>
 void CameraModel<TSpectral>::precompute()
@@ -887,17 +887,19 @@ void CameraModel<TSpectral>::precompute_locked_()
 {
     ensure_defocus_();
 
-    // Unresolved sources get the defocus blur instead of the PSF when out of focus, and their
-    // wings are then in the convolution kernel:
+    // Unresolved sources in focus get the PSF's stamps, and the scattered-light wings. Out of
+    // focus they get the defocus blur's stamps instead, which the convolution kernel (the PSF
+    // and the wings together) then blurs. Resolved bodies get the convolution kernel too,
+    // unless enable_psf_convolution(false).
     const bool defocused = !defocus_kernel_.empty();
     if (has_psf() && !defocused) {
         ensure_polyphase_();
     }
-    if (convolve_psf_) {
+    if (scatter_enabled_ && !defocused) {
+        ensure_wings_spectrum_();
+    }
+    if (convolves_bodies_() || (defocused && has_psf_or_scatter_())) {
         ensure_convolution_spectrum_();
-        if (scatter_enabled_ && !defocused) {
-            ensure_wings_spectrum_();
-        }
     }
 }
 
@@ -931,16 +933,15 @@ bool CameraModel<TSpectral>::is_precomputed_locked_() const
 
     // The spectra depend on everything their kernels do, so they are current only if the
     // kernels are too:
-    if (convolve_psf_) {
-        if (convolution_stale_(convolution_spectrum_built_at_) ||
-            stale_(convolution_spectrum_built_at_, {OpticsInput::Resolution})) {
-            return false;
-        }
-        if (scatter_enabled_ && !defocused &&
-            (wings_stale_(wings_spectrum_built_at_) ||
-             stale_(wings_spectrum_built_at_, {OpticsInput::Resolution}))) {
-            return false;
-        }
+    if (scatter_enabled_ && !defocused &&
+        (wings_stale_(wings_spectrum_built_at_) ||
+         stale_(wings_spectrum_built_at_, {OpticsInput::Resolution}))) {
+        return false;
+    }
+    if ((convolves_bodies_() || (defocused && has_psf_or_scatter_())) &&
+        (convolution_stale_(convolution_spectrum_built_at_) ||
+         stale_(convolution_spectrum_built_at_, {OpticsInput::Resolution}))) {
+        return false;
     }
     return true;
 }

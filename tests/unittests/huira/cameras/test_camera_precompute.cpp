@@ -112,8 +112,11 @@ TEST_CASE("Setters record settings, and precompute() builds what a render would 
     CameraModel<RGB> camera;
     configure_sensor(camera);
 
-    // No PSF, in focus and no convolution: nothing to build.
+    // No PSF and in focus: nothing to build, even though resolved bodies are convolved by
+    // default (with nothing). Until that is turned back on below, only unresolved sources use
+    // the PSF.
     CHECK(camera.is_precomputed());
+    camera.enable_psf_convolution(false);
 
     camera.use_aperture_psf(6, 4);
     CHECK_FALSE(camera.is_precomputed());
@@ -126,8 +129,7 @@ TEST_CASE("Setters record settings, and precompute() builds what a render would 
     camera.use_blender_convention(true);
     camera.use_blender_convention(false);
     camera.set_veiling_glare(0.1f);
-    camera.set_harvey_shack_scatter(0.05f, 2.5f); // only used by convolution, which is off
-    camera.set_psf_convolution_radius(12);
+    camera.set_psf_convolution_radius(12); // only used by convolution, which is off
     camera.set_fstop(8.f);
     camera.set_focal_length(units::Millimeter(50.0));
     camera.use_aperture_psf(6, 4);
@@ -163,7 +165,8 @@ TEST_CASE("Setters record settings, and precompute() builds what a render would 
     camera.precompute();
     CHECK(camera.is_precomputed());
 
-    // Out of focus, unresolved sources get the defocus blur instead of the PSF:
+    // Out of focus, unresolved sources get the defocus blur's stamps instead of the PSF's,
+    // blurred by the PSF through the convolution kernel:
     camera.set_focus_sensor_offset(units::Micrometer(400.0));
     REQUIRE(camera.defocus_blur_radius() > 1.f);
     CHECK_FALSE(camera.is_precomputed());
@@ -175,18 +178,27 @@ TEST_CASE("Setters record settings, and precompute() builds what a render would 
     camera.precompute();
     CHECK(camera.is_precomputed());
 
-    // so the PSF's stamps are not needed while it is...
+    // so a new PSF needs a new convolution kernel while it is (and not its stamps)...
     camera.use_aperture_psf(6, 4);
+    CHECK_FALSE(camera.is_precomputed());
+    camera.precompute();
     CHECK(camera.is_precomputed());
 
-    // ...and are again when it is back in focus:
+    // ...and its stamps when it is back in focus:
     camera.set_focus_distance(units::Meter(INF));
     CHECK_FALSE(camera.is_precomputed());
     camera.precompute();
     CHECK(camera.is_precomputed());
 
-    // Convolution needs its kernels and their spectra, which depend on the scatter settings
-    // and convolution radius, and on the resolution too:
+    // Scattered light reaches unresolved sources whether or not bodies are convolved, through
+    // the wings' kernel and its spectrum:
+    camera.set_harvey_shack_scatter(0.05f, 2.5f);
+    CHECK_FALSE(camera.is_precomputed());
+    camera.precompute();
+    CHECK(camera.is_precomputed());
+
+    // Convolving bodies needs the convolution kernel and its spectrum, which depend on the
+    // scatter settings and convolution radius, and on the resolution too:
     camera.enable_psf_convolution();
     CHECK_FALSE(camera.is_precomputed());
     camera.precompute();
@@ -208,9 +220,15 @@ TEST_CASE("Setters record settings, and precompute() builds what a render would 
     camera.enable_psf_convolution(false);
     CHECK(camera.is_precomputed());
 
-    // Removing the PSF leaves nothing to build:
+    // Removing the PSF resizes the wings, which take the convolution radius instead...
     camera.delete_psf();
     CHECK_FALSE(camera.has_psf());
+    CHECK_FALSE(camera.is_precomputed());
+    camera.precompute();
+    CHECK(camera.is_precomputed());
+
+    // ...and without scattered light there is nothing left to build:
+    camera.disable_harvey_shack_scatter();
     CHECK(camera.is_precomputed());
 }
 
@@ -261,10 +279,18 @@ TEST_CASE("Invalid PSF settings are rejected when made, and inconsistent ones wh
     CHECK(camera.get_psf_radius() == 0);
     CHECK_THROWS(camera.get_psf_kernel(0.5f, 0.5f));
 
-    // Convolution with neither a PSF nor scattering:
+    // With neither a PSF nor scattering, convolution has nothing to do:
     camera.enable_psf_convolution();
+    CHECK(camera.is_precomputed());
+    CHECK_NOTHROW(camera.precompute());
+
+    // Scattering without a PSF has no size until a convolution radius is set:
+    camera.set_harvey_shack_scatter(0.05f, 2.5f);
     CHECK_FALSE(camera.is_precomputed());
     CHECK_THROWS(camera.precompute());
+    camera.set_psf_convolution_radius(8);
+    CHECK_NOTHROW(camera.precompute());
+    CHECK(camera.is_precomputed());
 }
 
 TEST_CASE("A render precomputes a camera that is out of date, unless told not to",

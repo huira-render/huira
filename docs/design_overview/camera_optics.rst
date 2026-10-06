@@ -30,12 +30,12 @@ kernel is built from the settings it depends on, and rebuilt only when one of th
      - Unresolved sources out of focus (a blur of half a pixel or more)
      - The focal length, pixel pitch, aperture and focus
    * - Convolution kernel, and its spectrum
-     - ``enable_psf_convolution()``: the path-traced image, and unresolved sources out of
-       focus
+     - With a PSF or Harvey-Shack scatter: the path-traced image of resolved bodies (unless
+       ``enable_psf_convolution(false)``), and unresolved sources out of focus
      - Whatever the PSF depends on, ``set_psf_convolution_radius()`` and
        ``set_harvey_shack_scatter()``. The spectrum also depends on the resolution.
    * - Scattered-light wings, and their spectrum
-     - ``enable_psf_convolution()`` with Harvey-Shack scatter: unresolved sources in focus
+     - With Harvey-Shack scatter: unresolved sources in focus
      - The PSF's stamp size, ``set_psf_convolution_radius()`` and
        ``set_harvey_shack_scatter()``. The spectrum also depends on the resolution.
 
