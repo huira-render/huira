@@ -1,3 +1,5 @@
+#include <algorithm>
+#include <cmath>
 #include <limits>
 
 #include "huira/concepts/numeric_concepts.hpp"
@@ -99,6 +101,9 @@ float integer_to_float(T value, float min_range, float max_range)
 template <IsUnsignedInteger T>
 T float_to_integer(float value, float min_range, float max_range)
 {
+    if (!std::isfinite(value)) {
+        return T{0}; // no integer stands for a value that is not finite
+    }
     float normalized = (value - min_range) / (max_range - min_range);
     normalized = std::clamp(normalized, 0.0f, 1.0f);
     return static_cast<T>(normalized * static_cast<float>(std::numeric_limits<T>::max()) + 0.5f);
@@ -107,6 +112,9 @@ T float_to_integer(float value, float min_range, float max_range)
 template <IsSignedInteger T>
 T float_to_integer(float value, float min_range, float max_range)
 {
+    if (!std::isfinite(value)) {
+        return std::numeric_limits<T>::min(); // as min_range would be
+    }
     float type_min = static_cast<float>(std::numeric_limits<T>::min());
     float type_max = static_cast<float>(std::numeric_limits<T>::max());
 

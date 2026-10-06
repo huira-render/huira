@@ -34,6 +34,7 @@ set(UNIT_TESTS
 
     huira/images/test_convolution.cpp
     huira/images/test_fits_io.cpp
+    huira/images/test_image_output.cpp
 
     huira/units/test_units.cpp
 )
