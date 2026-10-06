@@ -14,6 +14,7 @@
 #include "huira/images/io/color_space.hpp"
 #include "huira/images/io/convert_pixel.hpp"
 #include "huira/images/io/io_util.hpp"
+#include "huira/images/io/pixel_encoding.hpp"
 #include "huira/util/logger.hpp"
 #include "tiffio.h"
 
@@ -44,7 +45,26 @@ struct TIFFData {
     uint16_t photometric = PHOTOMETRIC_MINISBLACK;
     bool has_alpha = false;
     int alpha_index = -1;
+
+    int bits_per_sample = 8;
+    bool is_float = false;
+
+    /// A sensor's bit depth, from a MaxSampleValue tag of 2^bits - 1 below the type's maximum
+    /// (as write_image_tiff() writes for a sensor's digital numbers); 0 otherwise.
+    int sensor_bits = 0;
 };
+
+/// Set a TIFF reader's bundle's encoding and bit depths from what the file held.
+template <IsImagePixel PixelT>
+void set_tiff_bundle_info_(const TIFFData& tiff_data, ImageBundle<PixelT>& bundle)
+{
+    // Integer TIFFs are, by convention, sRGB pictures, unless they hold a sensor's digital
+    // numbers; float TIFFs hold linear values:
+    bundle.color_space = (tiff_data.is_float || tiff_data.sensor_bits > 0) ? ColorSpaceHint::Linear
+                                                                           : ColorSpaceHint::sRGB;
+    bundle.bit_depth = (tiff_data.bits_per_sample == 8) ? 8 : 16;
+    bundle.image.set_sensor_bit_depth(tiff_data.sensor_bits);
+}
 
 // =========================================================================
 // TIFFClientOpen memory I/O callbacks
@@ -304,6 +324,28 @@ inline TIFFData read_tiff_raw_(const unsigned char* data, std::size_t size)
         }
     }
 
+    // MaxSampleValue: the largest value the samples take, for samples that do not use their
+    // type's whole range, such as a 12-bit sensor's DN in 16 bits (0 to 4095). They are then
+    // normalized by it, and if it is 2^bits - 1 it gives the sensor's bit depth.
+    double sample_max = 0.0;
+    int sensor_bits = 0;
+    if (!is_float) {
+        sample_max = (bits_per_sample == 32)
+                         ? static_cast<double>(std::numeric_limits<uint32_t>::max())
+                         : static_cast<double>((1u << bits_per_sample) - 1u);
+        uint16_t max_sample_value = 0;
+        if (TIFFGetField(tif.get(), TIFFTAG_MAXSAMPLEVALUE, &max_sample_value) == 1 &&
+            max_sample_value > 0 && static_cast<double>(max_sample_value) < sample_max) {
+            sample_max = static_cast<double>(max_sample_value);
+            const unsigned int next = static_cast<unsigned int>(max_sample_value) + 1u;
+            if ((next & (next - 1u)) == 0u) {
+                while ((1u << sensor_bits) < next) {
+                    ++sensor_bits;
+                }
+            }
+        }
+    }
+
     // Prepare output channels
     std::size_t num_channels = static_cast<std::size_t>(samples_per_pixel);
     std::size_t num_pixels = static_cast<std::size_t>(width) * static_cast<std::size_t>(height);
@@ -320,16 +362,15 @@ inline TIFFData read_tiff_raw_(const unsigned char* data, std::size_t size)
             std::memcpy(&val, ptr + byte_offset, sizeof(float));
             return val;
         } else if (bits_per_sample == 8) {
-            return static_cast<float>(ptr[byte_offset]) / 255.0f;
+            return static_cast<float>(static_cast<double>(ptr[byte_offset]) / sample_max);
         } else if (bits_per_sample == 16) {
             uint16_t val;
             std::memcpy(&val, ptr + byte_offset, sizeof(uint16_t));
-            return static_cast<float>(val) / 65535.0f;
+            return static_cast<float>(static_cast<double>(val) / sample_max);
         } else { // 32-bit integer
             uint32_t val;
             std::memcpy(&val, ptr + byte_offset, sizeof(uint32_t));
-            return static_cast<float>(static_cast<double>(val) /
-                                      static_cast<double>(std::numeric_limits<uint32_t>::max()));
+            return static_cast<float>(static_cast<double>(val) / sample_max);
         }
     };
 
@@ -465,6 +506,9 @@ inline TIFFData read_tiff_raw_(const unsigned char* data, std::size_t size)
     tiff_data.photometric = photometric;
     tiff_data.has_alpha = has_alpha;
     tiff_data.alpha_index = alpha_index;
+    tiff_data.bits_per_sample = static_cast<int>(bits_per_sample);
+    tiff_data.is_float = is_float;
+    tiff_data.sensor_bits = sensor_bits;
 
     return tiff_data;
 }
@@ -474,7 +518,7 @@ inline TIFFData read_tiff_raw_(const unsigned char* data, std::size_t size)
 // =========================================================================
 
 /**
- * @brief Reads a TIFF from an in-memory buffer and returns linear RGB + optional alpha data.
+ * @brief Reads a TIFF from an in-memory buffer and returns RGB + optional alpha data.
  *
  * Interprets the TIFF data as RGB color:
  *   - 1-channel: promoted to RGB (equal values in all channels)
@@ -485,7 +529,7 @@ inline TIFFData read_tiff_raw_(const unsigned char* data, std::size_t size)
  * @param data Pointer to the TIFF data in memory
  * @param size Size of the data in bytes
  * @param read_alpha If false, alpha channel is not extracted even if present
- * @return An ImageBundle<RGB> containing the linear RGB image and an optional alpha image.
+ * @return An ImageBundle<RGB> containing the RGB image and an optional alpha image.
  */
 inline ImageBundle<RGB>
 read_image_tiff_rgb(const unsigned char* data, std::size_t size, bool read_alpha)
@@ -503,6 +547,7 @@ read_image_tiff_rgb(const unsigned char* data, std::size_t size, bool read_alpha
     bool extract_alpha = tiff_data.has_alpha && read_alpha;
 
     ImageBundle<RGB> bundle{Image<RGB>(tiff_data.resolution)};
+    set_tiff_bundle_info_(tiff_data, bundle);
 
     if (extract_alpha) {
         bundle.alpha = Image<float>(tiff_data.resolution, 1.0f);
@@ -540,7 +585,7 @@ read_image_tiff_rgb(const unsigned char* data, std::size_t size, bool read_alpha
 }
 
 /**
- * @brief Reads a TIFF file and returns linear RGB + optional alpha data.
+ * @brief Reads a TIFF file and returns RGB + optional alpha data.
  *
  * Convenience overload that reads the file into memory and forwards
  * to the buffer-based implementation.
@@ -556,7 +601,7 @@ inline ImageBundle<RGB> read_image_tiff_rgb(const fs::path& filepath, bool read_
 // =========================================================================
 
 /**
- * @brief Reads a TIFF from an in-memory buffer and returns linear mono + optional alpha data.
+ * @brief Reads a TIFF from an in-memory buffer and returns mono + optional alpha data.
  *
  * Interprets the TIFF data as single-channel:
  *   - 1-channel: returned directly
@@ -566,7 +611,7 @@ inline ImageBundle<RGB> read_image_tiff_rgb(const fs::path& filepath, bool read_
  * @param data Pointer to the TIFF data in memory
  * @param size Size of the data in bytes
  * @param read_alpha If false, alpha channel is not extracted even if present
- * @return An ImageBundle<float> containing the linear mono image and an optional alpha image.
+ * @return An ImageBundle<float> containing the mono image and an optional alpha image.
  */
 inline ImageBundle<float>
 read_image_tiff_mono(const unsigned char* data, std::size_t size, bool read_alpha)
@@ -584,6 +629,7 @@ read_image_tiff_mono(const unsigned char* data, std::size_t size, bool read_alph
     bool extract_alpha = tiff_data.has_alpha && read_alpha;
 
     ImageBundle<float> bundle{Image<float>(tiff_data.resolution)};
+    set_tiff_bundle_info_(tiff_data, bundle);
 
     if (extract_alpha) {
         bundle.alpha = Image<float>(tiff_data.resolution, 1.0f);
@@ -621,7 +667,7 @@ read_image_tiff_mono(const unsigned char* data, std::size_t size, bool read_alph
 }
 
 /**
- * @brief Reads a TIFF file and returns linear mono + optional alpha data.
+ * @brief Reads a TIFF file and returns mono + optional alpha data.
  *
  * Convenience overload that reads the file into memory and forwards
  * to the buffer-based implementation.
@@ -637,10 +683,109 @@ inline ImageBundle<float> read_image_tiff_mono(const fs::path& filepath, bool re
 // =========================================================================
 
 /**
- * @brief Writes an RGB image to a TIFF file with optional metadata.
+ * @brief Writes an image of color_channels samples per pixel (1, gray, or 3, RGB). sample(x, y,
+ * c) gives channel c of pixel (x, y). Values: see write_image_tiff().
+ */
+template <typename TBundle, typename TSample>
+void write_tiff_impl_(const fs::path& filepath,
+                      const TBundle& bundle,
+                      uint16_t color_channels,
+                      const std::string& description,
+                      const std::string& artist,
+                      TSample&& sample)
+{
+    HUIRA_LOG_INFO("write_image_tiff - Writing " +
+                   std::string(color_channels == 1 ? "mono" : "RGB") + " TIFF to " +
+                   filepath.string());
+
+    if (bundle.bit_depth != 8 && bundle.bit_depth != 16) {
+        HUIRA_THROW_ERROR("write_image_tiff - Bit depth must be 8 or 16");
+    }
+    if (bundle.image.width() == 0 || bundle.image.height() == 0) {
+        HUIRA_THROW_ERROR("write_image_tiff - Cannot write empty image: " + filepath.string());
+    }
+
+    const detail::IntegerEncoding encoding(
+        bundle.bit_depth, bundle.image.sensor_bit_depth(), bundle.scaling);
+    detail::NonFiniteCounter non_finite;
+
+    make_path(filepath);
+
+    ScopedTIFF tif(TIFFOpen(filepath.string().c_str(), "w"));
+    if (!tif) {
+        HUIRA_THROW_ERROR("write_image_tiff - Failed to open file for writing: " +
+                          filepath.string());
+    }
+
+    uint32_t width = static_cast<uint32_t>(bundle.image.width());
+    uint32_t height = static_cast<uint32_t>(bundle.image.height());
+
+    TIFFSetField(tif.get(), TIFFTAG_IMAGEWIDTH, width);
+    TIFFSetField(tif.get(), TIFFTAG_IMAGELENGTH, height);
+    TIFFSetField(tif.get(), TIFFTAG_SAMPLESPERPIXEL, color_channels);
+    TIFFSetField(tif.get(), TIFFTAG_BITSPERSAMPLE, static_cast<uint16_t>(bundle.bit_depth));
+    TIFFSetField(tif.get(), TIFFTAG_ORIENTATION, ORIENTATION_TOPLEFT);
+    TIFFSetField(tif.get(), TIFFTAG_PLANARCONFIG, PLANARCONFIG_CONTIG);
+    TIFFSetField(tif.get(),
+                 TIFFTAG_PHOTOMETRIC,
+                 color_channels == 1 ? PHOTOMETRIC_MINISBLACK : PHOTOMETRIC_RGB);
+    TIFFSetField(tif.get(), TIFFTAG_SAMPLEFORMAT, SAMPLEFORMAT_UINT);
+    TIFFSetField(tif.get(), TIFFTAG_SOFTWARE, "Huira Image Library");
+
+    // A sensor's DN that do not fill the file's range: the largest they can be.
+    if (encoding.counts() && encoding.shift == 0 && encoding.sensor_bits < encoding.file_bits) {
+        TIFFSetField(
+            tif.get(), TIFFTAG_MAXSAMPLEVALUE, static_cast<uint16_t>(encoding.sensor_max()));
+    }
+
+    if (!description.empty()) {
+        TIFFSetField(tif.get(), TIFFTAG_IMAGEDESCRIPTION, description.c_str());
+    }
+    if (!artist.empty()) {
+        TIFFSetField(tif.get(), TIFFTAG_ARTIST, artist.c_str());
+    }
+
+    const std::size_t bytes_per_sample = static_cast<std::size_t>(bundle.bit_depth) / 8;
+    std::vector<unsigned char> scanline(width * color_channels * bytes_per_sample);
+
+    for (uint32_t y = 0; y < height; ++y) {
+        for (uint32_t x = 0; x < width; ++x) {
+            for (uint16_t c = 0; c < color_channels; ++c) {
+                const float value = sample(static_cast<int>(x), static_cast<int>(y), c);
+                const std::uint64_t stored = non_finite.not_finite(value) ? 0 : encoding.raw(value);
+                const std::size_t offset =
+                    (static_cast<std::size_t>(x) * color_channels + c) * bytes_per_sample;
+                if (bundle.bit_depth == 8) {
+                    scanline[offset] = static_cast<uint8_t>(stored);
+                } else {
+                    const auto stored16 = static_cast<uint16_t>(stored);
+                    std::memcpy(&scanline[offset], &stored16, 2);
+                }
+            }
+        }
+
+        if (TIFFWriteScanline(tif.get(), scanline.data(), y) < 0) {
+            HUIRA_THROW_ERROR("write_image_tiff - Failed to write scanline " + std::to_string(y));
+        }
+    }
+
+    non_finite.warn("write_image_tiff", filepath.string());
+}
+
+/**
+ * @brief Writes an RGB image to a TIFF file, of 8 or 16 bits per sample (bundle.bit_depth),
+ * with optional metadata.
+ *
+ * An image with a sensor bit depth, such as a sensor response, is written as the sensor's
+ * digital numbers (DN), unless bundle.scaling is PixelScaling::FullRange: as they are (a 12-bit
+ * sensor's 0 to 4095, in 16 bits), with the MaxSampleValue tag giving the largest (4095), which
+ * read_image_tiff_rgb() and read_image_tiff_mono() use to normalize them back; or, for a sensor
+ * with more bits than the file, with the lowest bits dropped. Other images are stretched over
+ * the file's range, rounded: 1 becomes 255 or 65535. Values that are not finite are written as
+ * 0, with a warning. Nothing is converted between color encodings (see linear_to_srgb()).
  *
  * @param filepath Output file path
- * @param An ImageBundle<RGB> containing the image to write
+ * @param bundle An ImageBundle<RGB> containing the image to write
  * @param description Optional image description metadata
  * @param artist Optional artist metadata
  */
@@ -649,138 +794,26 @@ inline void write_image_tiff(const fs::path& filepath,
                              const std::string& description,
                              const std::string& artist)
 {
-    HUIRA_LOG_INFO("write_image_tiff - Writing RGB TIFF to " + filepath.string());
-
-    if (bundle.bit_depth != 8 && bundle.bit_depth != 16) {
-        HUIRA_THROW_ERROR("write_image_tiff - Bit depth must be 8 or 16");
-    }
-
-    make_path(filepath);
-
-    ScopedTIFF tif(TIFFOpen(filepath.string().c_str(), "w"));
-    if (!tif) {
-        HUIRA_THROW_ERROR("write_image_tiff - Failed to open file for writing: " +
-                          filepath.string());
-    }
-
-    uint32_t width = static_cast<uint32_t>(bundle.image.width());
-    uint32_t height = static_cast<uint32_t>(bundle.image.height());
-
-    TIFFSetField(tif.get(), TIFFTAG_IMAGEWIDTH, width);
-    TIFFSetField(tif.get(), TIFFTAG_IMAGELENGTH, height);
-    TIFFSetField(tif.get(), TIFFTAG_SAMPLESPERPIXEL, 3);
-    TIFFSetField(tif.get(), TIFFTAG_BITSPERSAMPLE, static_cast<uint16_t>(bundle.bit_depth));
-    TIFFSetField(tif.get(), TIFFTAG_ORIENTATION, ORIENTATION_TOPLEFT);
-    TIFFSetField(tif.get(), TIFFTAG_PLANARCONFIG, PLANARCONFIG_CONTIG);
-    TIFFSetField(tif.get(), TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_RGB);
-    TIFFSetField(tif.get(), TIFFTAG_SAMPLEFORMAT, SAMPLEFORMAT_UINT);
-    TIFFSetField(tif.get(), TIFFTAG_SOFTWARE, "Huira Image Library");
-
-    if (!description.empty()) {
-        TIFFSetField(tif.get(), TIFFTAG_IMAGEDESCRIPTION, description.c_str());
-    }
-    if (!artist.empty()) {
-        TIFFSetField(tif.get(), TIFFTAG_ARTIST, artist.c_str());
-    }
-
-    std::size_t bytes_per_sample = static_cast<std::size_t>(bundle.bit_depth) / 8;
-    std::size_t scanline_size = width * 3 * bytes_per_sample;
-    std::vector<unsigned char> scanline(scanline_size);
-
-    for (uint32_t y = 0; y < height; ++y) {
-        for (uint32_t x = 0; x < width; ++x) {
-            RGB pixel = bundle.image(static_cast<int>(x), static_cast<int>(y));
-            std::size_t offset = x * 3 * bytes_per_sample;
-
-            if (bundle.bit_depth == 8) {
-                scanline[offset + 0] =
-                    static_cast<uint8_t>(std::clamp(pixel[0] * 255.0f, 0.0f, 255.0f));
-                scanline[offset + 1] =
-                    static_cast<uint8_t>(std::clamp(pixel[1] * 255.0f, 0.0f, 255.0f));
-                scanline[offset + 2] =
-                    static_cast<uint8_t>(std::clamp(pixel[2] * 255.0f, 0.0f, 255.0f));
-            } else {
-                uint16_t r = static_cast<uint16_t>(std::clamp(pixel[0] * 65535.0f, 0.0f, 65535.0f));
-                uint16_t g = static_cast<uint16_t>(std::clamp(pixel[1] * 65535.0f, 0.0f, 65535.0f));
-                uint16_t b = static_cast<uint16_t>(std::clamp(pixel[2] * 65535.0f, 0.0f, 65535.0f));
-                std::memcpy(&scanline[offset + 0], &r, 2);
-                std::memcpy(&scanline[offset + 2], &g, 2);
-                std::memcpy(&scanline[offset + 4], &b, 2);
-            }
-        }
-
-        if (TIFFWriteScanline(tif.get(), scanline.data(), y) < 0) {
-            HUIRA_THROW_ERROR("write_image_tiff - Failed to write scanline " + std::to_string(y));
-        }
-    }
+    write_tiff_impl_(filepath, bundle, 3, description, artist, [&](int x, int y, uint16_t c) {
+        return bundle.image(x, y)[c];
+    });
 }
+
 /**
- * @brief Writes a monochrome float image to a TIFF file with optional metadata.
+ * @brief Writes a monochrome image to a TIFF file with optional metadata. See the RGB overload.
  */
 inline void write_image_tiff(const fs::path& filepath,
                              const ImageBundle<float>& bundle,
                              const std::string& description,
                              const std::string& artist)
 {
-    HUIRA_LOG_INFO("write_image_tiff - Writing mono TIFF to " + filepath.string());
-
-    if (bundle.bit_depth != 8 && bundle.bit_depth != 16) {
-        HUIRA_THROW_ERROR("write_image_tiff - Bit depth must be 8 or 16");
-    }
-
-    make_path(filepath);
-
-    ScopedTIFF tif(TIFFOpen(filepath.string().c_str(), "w"));
-    if (!tif) {
-        HUIRA_THROW_ERROR("write_image_tiff - Failed to open file for writing: " +
-                          filepath.string());
-    }
-
-    uint32_t width = static_cast<uint32_t>(bundle.image.width());
-    uint32_t height = static_cast<uint32_t>(bundle.image.height());
-
-    TIFFSetField(tif.get(), TIFFTAG_IMAGEWIDTH, width);
-    TIFFSetField(tif.get(), TIFFTAG_IMAGELENGTH, height);
-    TIFFSetField(tif.get(), TIFFTAG_SAMPLESPERPIXEL, 1);
-    TIFFSetField(tif.get(), TIFFTAG_BITSPERSAMPLE, static_cast<uint16_t>(bundle.bit_depth));
-    TIFFSetField(tif.get(), TIFFTAG_ORIENTATION, ORIENTATION_TOPLEFT);
-    TIFFSetField(tif.get(), TIFFTAG_PLANARCONFIG, PLANARCONFIG_CONTIG);
-    TIFFSetField(tif.get(), TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_MINISBLACK);
-    TIFFSetField(tif.get(), TIFFTAG_SAMPLEFORMAT, SAMPLEFORMAT_UINT);
-    TIFFSetField(tif.get(), TIFFTAG_SOFTWARE, "Huira Image Library");
-
-    if (!description.empty()) {
-        TIFFSetField(tif.get(), TIFFTAG_IMAGEDESCRIPTION, description.c_str());
-    }
-    if (!artist.empty()) {
-        TIFFSetField(tif.get(), TIFFTAG_ARTIST, artist.c_str());
-    }
-
-    std::size_t bytes_per_sample = static_cast<std::size_t>(bundle.bit_depth) / 8;
-    std::size_t scanline_size = width * bytes_per_sample;
-    std::vector<unsigned char> scanline(scanline_size);
-
-    for (uint32_t y = 0; y < height; ++y) {
-        for (uint32_t x = 0; x < width; ++x) {
-            float pixel = bundle.image(static_cast<int>(x), static_cast<int>(y));
-
-            if (bundle.bit_depth == 8) {
-                scanline[x] = static_cast<uint8_t>(std::clamp(pixel * 255.0f, 0.0f, 255.0f));
-            } else {
-                uint16_t value =
-                    static_cast<uint16_t>(std::clamp(pixel * 65535.0f, 0.0f, 65535.0f));
-                std::memcpy(&scanline[x * 2], &value, 2);
-            }
-        }
-
-        if (TIFFWriteScanline(tif.get(), scanline.data(), y) < 0) {
-            HUIRA_THROW_ERROR("write_image_tiff - Failed to write scanline " + std::to_string(y));
-        }
-    }
+    write_tiff_impl_(filepath, bundle, 1, description, artist, [&](int x, int y, uint16_t) {
+        return bundle.image(x, y);
+    });
 }
 
 /**
- * @brief Writes a spectral image to a TIFF file by converting to mono.
+ * @brief Writes a spectral image to a TIFF file by converting to mono: the mean of its channels.
  */
 template <IsSpectral TSpectral>
 inline void write_image_tiff(const fs::path& filepath,
@@ -788,7 +821,6 @@ inline void write_image_tiff(const fs::path& filepath,
                              const std::string& description,
                              const std::string& artist)
 {
-    // Convert spectral to mono by taking the average of channels
     Image<float> mono_image(bundle.image.resolution());
     for (int y = 0; y < bundle.image.height(); ++y) {
         for (int x = 0; x < bundle.image.width(); ++x) {
@@ -796,6 +828,7 @@ inline void write_image_tiff(const fs::path& filepath,
         }
     }
 
-    write_image_tiff(filepath, mono_image, bundle.bit_depth, description, artist);
+    ImageBundle<float> mono_bundle(bundle, std::move(mono_image));
+    write_image_tiff(filepath, mono_bundle, description, artist);
 }
 } // namespace huira

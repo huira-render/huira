@@ -35,8 +35,10 @@ inline std::uint64_t next_default_noise_seed()
  *
  * A SplitMix64 generator, started from a key made of the sensor's noise seed, the readout's
  * number and the row. A frame's noise therefore depends only on those: not on other sensors,
- * on threads, or on the order rows are read out in. It is self-contained, so it gives the same
- * numbers with every standard library, which std::normal_distribution and the like do not.
+ * on threads, or on the order rows are read out in. Its integers are the same with every
+ * standard library, unlike std::normal_distribution and the like; the normal and Poisson draws
+ * made from them go through std::log, std::exp and the like, which can differ in the last bit
+ * between platforms, so frames repeat exactly on one platform and toolchain.
  */
 class SensorRandom {
   public:
@@ -135,14 +137,17 @@ struct SensorConfig {
 
     float full_well_capacity = 20000.f; // e-
 
-    bool simulate_noise = true; // Whether to simulate noise in the sensor readout
+    bool simulate_noise = true; // Shot and read noise; the dark current and bias apply either way
     float read_noise = 10.f;    // e- RMS
     float dark_current = 1.f;   // e-/s
     float bias_level_dn = 10.f; // ADU
 
     int bit_depth = 12;
 
-    float gain = 1.22f; // e-/ADU
+    // e-/ADU. Matched to the full well, slightly below full_well_capacity / (2^bit_depth - 1 -
+    // bias_level_dn) = 4.896, so the ADC saturates just before the well is full (at 19935 e-):
+    // nearly the whole well is used, and saturated pixels read exactly the largest DN.
+    float gain = 4.88f;
 
     units::Radian rotation = units::Radian{0}; // Sensor rotation angle
 
@@ -219,6 +224,9 @@ class SensorModel {
     void set_full_well_capacity(float fwc);
     float full_well_capacity() const { return config_.full_well_capacity; }
 
+    /// Turn shot noise and read noise on (the default) or off. Off, a pixel collects the expected
+    /// number of electrons; the dark current's electrons and the bias are still added, since they
+    /// are not noise.
     void set_simulate_noise(bool simulate_noise) { config_.simulate_noise = simulate_noise; }
     bool simulate_noise() const { return config_.simulate_noise; }
 
@@ -276,9 +284,11 @@ class SensorModel {
         return readout_count_.fetch_add(1, std::memory_order_relaxed);
     }
 
-    /// Largest bit depth accepted: the sensor response is a float in [0, 1], which holds every
-    /// digital number exactly up to 24 bits. Real ADCs are narrower (scientific sensors reach 16
-    /// to 18 bits).
+    /// Largest bit depth accepted. The sensor response holds DN / (2^bit_depth - 1) as a float,
+    /// from which every DN is recovered exactly, by round(value * (2^bit_depth - 1)), up to 24
+    /// bits (a float's significand). This limits how the response is stored, not the physics:
+    /// the ADC clamps every DN to 2^bit_depth - 1. Real ADCs are narrower (scientific sensors
+    /// reach 16 to 18 bits).
     static constexpr int MAX_BIT_DEPTH = 24;
 
     friend class CameraModel<TSpectral>;

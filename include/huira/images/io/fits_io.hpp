@@ -12,21 +12,29 @@ namespace huira {
 // -------------------------------------------------------------------------
 // Read a single-plane FITS image into Image<float>.
 //
-//   • Integer BITPIX (8, 16, 32):
-//       CFITSIO applies BZERO/BSCALE automatically.  The raw ADU values
-//       are then normalised to [0, 1] by dividing by the SATURATE keyword
-//       (if present) or the maximum value for that BITPIX type.
-//       The returned Image has its sensor_bit_depth set if SATURATE is
-//       present in the header.
+//   CFITSIO applies BZERO/BSCALE, so values are first the file's physical
+//   values (a sensor's DN, for a sensor response write_image_fits() wrote).
+//   They are then normalised:
 //
-//   • Float BITPIX (−32, −64):
-//       Values are returned as-is (physical / flux units).
-//       Consult metadata.bunit for the physical unit.
+//   • With ADCBITS (a sensor's bit depth, which write_image_fits() writes
+//     for a sensor response), at any BITPIX: divided by 2^ADCBITS - 1, as
+//     the sensor response held them, and the returned Image has its
+//     sensor_bit_depth set to ADCBITS.
 //
-//   Undefined pixels (BLANK in an integer image) are returned as NaN.
+//   • Otherwise, integer BITPIX (8, 16, 32): divided by the SATURATE
+//     keyword (if present) or the maximum value for that BITPIX type. If
+//     SATURATE is 2^bits - 1, the Image's sensor_bit_depth is set to bits.
+//
+//   • Otherwise, float BITPIX (−32, −64): returned as they are (physical /
+//     flux units; consult metadata.bunit for the unit).
+//
+//   Undefined pixels (BLANK in an integer image, NaN in a float one) are
+//   returned as NaN.
 //
 // The returned FitsMetadata is populated from every recognised header
-// keyword; unrecognised keywords land in custom_keywords.
+// keyword; unrecognised keywords land in custom_keywords. Keywords that
+// describe how the data are stored (BITPIX, BZERO, BSCALE, BLANK, ADCBITS,
+// ...) are not returned as custom keywords.
 // -------------------------------------------------------------------------
 std::pair<Image<float>, FitsMetadata> read_image_fits(const fs::path& filepath);
 
@@ -42,26 +50,46 @@ std::pair<Image<float>, FitsMetadata> read_image_fits(const fs::path& filepath);
 //
 //   metadata     Optional FitsMetadata to embed in the header.
 //
-// For integer BITPIX, the image's sensor_bit_depth() determines how
-// floats in [0, 1] are mapped back to ADU counts:
+//   scaling      For an image with a sensor bit depth (a sensor response):
+//                Counts (default) writes the sensor's digital numbers;
+//                FullRange writes it as any other image.
 //
-//   adu = pixel * (2^sensor_bit_depth - 1)
+// A sensor response (an image whose sensor_bit_depth() is set, as a sensor
+// readout sets it) holds DN / (2^bits - 1). Unless scaling is FullRange,
+// the file holds the DN themselves, at every BITPIX:
 //
-// If sensor_bit_depth is 0 (not set), the full BITPIX range is used
-// (e.g. 0–65535 for BITPIX=16).  The SATURATE, DATAMIN, and DATAMAX
-// keywords are written automatically.
+//   • Integer BITPIX with at least the sensor's bits: the DN as they are
+//     (0–4095 for a 12-bit sensor in a 16-bit file).
+//   • Integer BITPIX with fewer bits than the sensor: the lowest bits are
+//     dropped, and BSCALE = 2^(sensor bits - BITPIX) scales the stored
+//     values back to DN, so every FITS reader sees DN (in steps of BSCALE).
+//   • Float BITPIX: the DN as floating-point values.
 //
-// Non-finite pixels are written as NaN in a float image. In an integer
-// image they are written as 0 ADU, which the BLANK keyword marks as
-// undefined; valid pixels are then written as at least 1 ADU. Without
-// non-finite pixels every value, 0 included, is available.
+//   SATURATE (2^bits - 1, the ADC ceiling in DN), ADCBITS (the bit depth)
+//   and BUNIT = 'adu' (unless metadata gives a unit) are written, so that
+//   read_image_fits() returns the sensor response as it was.
 //
-// For float BITPIX, pixel values are written verbatim with no scaling.
+// Any other image is written, in an integer BITPIX, with its values in
+// [0, 1] stretched over the type's range (SATURATE is then the type's
+// maximum), and in a float BITPIX as it is.
+//
+// Undefined (non-finite) pixels are NaN in a float image. In an integer
+// image they are marked by BLANK: the type's largest value when the data
+// leave it spare (a sensor with fewer bits than the file), otherwise 0, and
+// valid pixels are then written as at least one step above it.
+//
+// The writer sets the keywords that describe the data from the image, and
+// ignores them in metadata (which may have come from another file): BZERO,
+// BSCALE, BLANK, DATAMIN, DATAMAX (the range of the defined pixels, in
+// physical values; not written if there are none), ADCBITS, and SATURATE
+// (except for a float image that is not a sensor response, whose SATURATE
+// is metadata's).
 // -------------------------------------------------------------------------
 void write_image_fits(const fs::path& filepath,
                       const Image<float>& image,
                       int bit_depth = -32,
-                      const FitsMetadata& metadata = {});
+                      const FitsMetadata& metadata = {},
+                      PixelScaling scaling = PixelScaling::Counts);
 
 // TODO (multi-band): Read a FITS data cube (NAXIS3 > 1) into separate
 //   per-plane images.  Each plane becomes one Image<float>.

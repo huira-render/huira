@@ -8,6 +8,7 @@
 #include "huira/images/color_map.hpp"
 #include "huira/images/image.hpp"
 #include "huira/images/io/color_space.hpp"
+#include "huira/images/io/fits_io.hpp"
 #include "huira/images/io/jpeg_io.hpp"
 #include "huira/images/io/png_io.hpp"
 #include "huira/images/io/read_image.hpp"
@@ -252,13 +253,21 @@ inline void bind_image_io(py::module_& m)
         "write_png",
         [](const fs::path& p, const ImageBundle<float>& bundle) { write_image_png(p, bundle); },
         py::arg("filepath"),
-        py::arg("bundle"));
+        py::arg("bundle"),
+        "Write a PNG of bundle.bit_depth (8 or 16) bits. Values are written as they are, "
+        "labelled with bundle.color_space (convert with linear_to_srgb for a picture). A sensor "
+        "response is written as its DN (scaled by left-bit replication, with an sBIT chunk) "
+        "unless bundle.scaling is FullRange. Values that are not finite are written as 0.");
 
     m.def(
         "write_png",
         [](const fs::path& p, const ImageBundle<RGB>& bundle) { write_image_png(p, bundle); },
         py::arg("filepath"),
-        py::arg("bundle"));
+        py::arg("bundle"),
+        "Write a PNG of bundle.bit_depth (8 or 16) bits. Values are written as they are, "
+        "labelled with bundle.color_space (convert with linear_to_srgb for a picture). A sensor "
+        "response is written as its DN (scaled by left-bit replication, with an sBIT chunk) "
+        "unless bundle.scaling is FullRange. Values that are not finite are written as 0.");
 
     // ================ //
     // === JPEG I/O === //
@@ -322,7 +331,9 @@ inline void bind_image_io(py::module_& m)
         py::arg("bundle"),
         py::arg("description") = "",
         py::arg("artist") = "",
-        "Write a Float Bundle to a TIFF file");
+        "Write a Float Bundle to a TIFF file of bundle.bit_depth (8 or 16) bits. A sensor "
+        "response is written as its raw DN (0-4095 for 12 bits), with MaxSampleValue, unless "
+        "bundle.scaling is FullRange. Values that are not finite are written as 0.");
 
     m.def(
         "write_tiff",
@@ -334,7 +345,40 @@ inline void bind_image_io(py::module_& m)
         py::arg("bundle"),
         py::arg("description") = "",
         py::arg("artist") = "",
-        "Write an RGB Bundle to a TIFF file");
+        "Write an RGB Bundle to a TIFF file. See the Float Bundle overload.");
+
+    // ================ //
+    // === FITS I/O === //
+    // ================ //
+    m.def(
+        "read_fits",
+        [](const fs::path& path) {
+            auto [image, metadata] = read_image_fits(path);
+            return py::make_tuple(std::move(image), std::move(metadata));
+        },
+        py::arg("filepath"),
+        "Read a single-plane FITS image: returns (Image_f32, FitsMetadata). A sensor response "
+        "written by write_fits (with ADCBITS) comes back as it was, DN / (2^bits - 1), with its "
+        "sensor_bit_depth; other integer images are normalized by SATURATE or their type's range; "
+        "other float images are returned as they are. Undefined pixels are NaN.");
+
+    m.def(
+        "write_fits",
+        [](const fs::path& path,
+           const Image<float>& image,
+           int bit_depth,
+           const FitsMetadata& metadata,
+           PixelScaling scaling) { write_image_fits(path, image, bit_depth, metadata, scaling); },
+        py::arg("filepath"),
+        py::arg("image"),
+        py::arg("bit_depth") = -32,
+        py::arg("metadata") = FitsMetadata{},
+        py::arg("scaling") = PixelScaling::Counts,
+        "Write an Image_f32 to FITS, with BITPIX 8, 16 or 32 (unsigned integers), -32 or -64 "
+        "(floats). A sensor response (an image with a sensor_bit_depth) is written as the "
+        "sensor's digital numbers at every BITPIX, unless scaling is FullRange; with fewer bits "
+        "than the sensor, the lowest are dropped and BSCALE scales the stored values back to DN. "
+        "Undefined pixels are NaN in a float file and BLANK in an integer one.");
 
     // ========================================== //
     // === Generic Image I/O (Format Agnostic) === //
@@ -467,7 +511,8 @@ void bind_image_bundle(py::module_& m, const std::string& class_name)
         .def_readwrite("alpha", &Bundle::alpha)
         .def_readwrite("color_space", &Bundle::color_space)
         .def_readwrite("gamma_value", &Bundle::gamma_value)
-        .def_readwrite("bit_depth", &Bundle::bit_depth);
+        .def_readwrite("bit_depth", &Bundle::bit_depth)
+        .def_readwrite("scaling", &Bundle::scaling);
 
     py::implicitly_convertible<Img, Bundle>();
 }
@@ -483,6 +528,14 @@ inline void bind_common_images(py::module_& m)
         .value("Gamma", ColorSpaceHint::Gamma)
         .value("Unknown", ColorSpaceHint::Unknown)
         .export_values();
+
+    py::enum_<PixelScaling>(m,
+                            "PixelScaling",
+                            "How an image with a sensor bit depth (a sensor response) is written: "
+                            "Counts, as the sensor's digital numbers (the default), or FullRange, "
+                            "stretched over the file's range for display.")
+        .value("Counts", PixelScaling::Counts)
+        .value("FullRange", PixelScaling::FullRange);
 
     // Scalar images
     bind_image<float>(m, "Image_f32");

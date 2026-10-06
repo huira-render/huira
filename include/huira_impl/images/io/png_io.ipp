@@ -16,6 +16,7 @@
 #include "huira/images/io/color_space.hpp"
 #include "huira/images/io/convert_pixel.hpp"
 #include "huira/images/io/io_util.hpp"
+#include "huira/images/io/pixel_encoding.hpp"
 #include "huira/util/logger.hpp"
 #include "huira/util/paths.hpp"
 
@@ -82,9 +83,27 @@ struct PNGData {
 
     png_byte final_bit_depth = 8;
 
+    /// The sBIT chunk's significant bits for the color (or gray) samples, when it gives one
+    /// number for all of them; 0 without it. A sensor's DN, scaled up to the file's bits by
+    /// left-bit replication (see write_image_png()), are the samples' top bits.
+    int significant_bits = 0;
+
     bool has_alpha = false;
     bool is_gray = false;
 };
+
+/// A sample as a value in [0, 1]: with significant bits, the DN they hold over the largest DN
+/// (as a sensor response holds them); otherwise over the file's range.
+inline float png_sample_to_float_(std::uint32_t sample, int file_bits, int significant_bits)
+{
+    if (significant_bits > 0 && significant_bits <= file_bits) {
+        const std::uint32_t dn = sample >> (file_bits - significant_bits);
+        return static_cast<float>(static_cast<double>(dn) /
+                                  static_cast<double>((std::uint64_t{1} << significant_bits) - 1));
+    }
+    return static_cast<float>(static_cast<double>(sample) /
+                              static_cast<double>((std::uint64_t{1} << file_bits) - 1));
+}
 
 /**
  * @brief State for libpng custom memory read callback.
@@ -188,6 +207,20 @@ inline PNGData read_png_raw_(const unsigned char* data, std::size_t size)
 
     Resolution resolution{static_cast<int>(width), static_cast<int>(height)};
 
+    // Significant bits (sBIT), for samples of 8 or 16 bits that are not palette indices:
+    int significant_bits = 0;
+    png_color_8p sig_bit = nullptr;
+    if (bit_depth >= 8 && color_type != PNG_COLOR_TYPE_PALETTE &&
+        png_get_sBIT(png_ptr, info_ptr, &sig_bit) != 0 && sig_bit != nullptr) {
+        const bool gray = (color_type & PNG_COLOR_MASK_COLOR) == 0;
+        const int bits = gray ? sig_bit->gray : sig_bit->red;
+        const bool uniform =
+            gray || (sig_bit->green == sig_bit->red && sig_bit->blue == sig_bit->red);
+        if (uniform && bits > 0 && bits <= bit_depth) {
+            significant_bits = bits;
+        }
+    }
+
     // Expand palette to RGB(A)
     if (color_type == PNG_COLOR_TYPE_PALETTE) {
         png_set_palette_to_rgb(png_ptr);
@@ -250,6 +283,7 @@ inline PNGData read_png_raw_(const unsigned char* data, std::size_t size)
     png_data.row_bytes = row_bytes;
     png_data.color_info = color_info;
     png_data.final_bit_depth = final_bit_depth;
+    png_data.significant_bits = significant_bits;
     png_data.has_alpha = has_alpha;
     png_data.is_gray = is_gray;
 
@@ -292,12 +326,12 @@ void read_color_space(PngColorInfo color_info, ImageBundle<PixelT>& bundle)
 // =========================================================================
 
 /**
- * @brief Reads a PNG from an in-memory buffer and returns linear RGB + alpha data.
+ * @brief Reads a PNG from an in-memory buffer and returns RGB + alpha data.
  *
  * @param data Pointer to the PNG data in memory
  * @param size Size of the data in bytes
  * @param read_alpha Whether to load the alpha channel if present (default: true)
- * @return An ImageBundle<RGB> containing the linear RGB image and an optional alpha image.
+ * @return An ImageBundle<RGB> containing the RGB image and an optional alpha image.
  */
 inline ImageBundle<RGB> read_image_png(const unsigned char* data, std::size_t size, bool read_alpha)
 {
@@ -306,6 +340,8 @@ inline ImageBundle<RGB> read_image_png(const unsigned char* data, std::size_t si
     ImageBundle<RGB> bundle{Image<RGB>(png_data.resolution)};
 
     read_color_space(png_data.color_info, bundle);
+    bundle.image.set_sensor_bit_depth(png_data.significant_bits);
+    bundle.bit_depth = png_data.final_bit_depth;
 
     png_data.has_alpha = read_alpha && png_data.has_alpha;
     if (png_data.has_alpha) {
@@ -321,7 +357,13 @@ inline ImageBundle<RGB> read_image_png(const unsigned char* data, std::size_t si
                 const png_byte* byte_ptr = png_data.raw_data.data() + y_u * png_data.row_bytes +
                                            x_u * png_data.channels * 2;
 
-                auto read_u16 = [](const png_byte* p) -> float {
+                const int sbits = png_data.significant_bits;
+                auto read_u16 = [sbits](const png_byte* p) -> float {
+                    std::uint16_t val;
+                    std::memcpy(&val, p, sizeof(std::uint16_t));
+                    return png_sample_to_float_(val, 16, sbits);
+                };
+                auto read_alpha_u16 = [](const png_byte* p) -> float {
                     std::uint16_t val;
                     std::memcpy(&val, p, sizeof(std::uint16_t));
                     return integer_to_float<std::uint16_t>(val);
@@ -340,19 +382,19 @@ inline ImageBundle<RGB> read_image_png(const unsigned char* data, std::size_t si
                 if (png_data.has_alpha) {
                     std::size_t alpha_byte_offset =
                         static_cast<std::size_t>(png_data.is_gray ? 2 : 6);
-                    bundle.alpha(x, y) = read_u16(byte_ptr + alpha_byte_offset);
+                    bundle.alpha(x, y) = read_alpha_u16(byte_ptr + alpha_byte_offset);
                 }
             } else {
                 const png_byte* ptr =
                     png_data.raw_data.data() + y_u * png_data.row_bytes + x_u * png_data.channels;
 
                 if (png_data.is_gray) {
-                    float mono = integer_to_float<std::uint8_t>(ptr[0]);
+                    float mono = png_sample_to_float_(ptr[0], 8, png_data.significant_bits);
                     bundle.image(x, y) = RGB{mono, mono, mono};
                 } else {
-                    float r = integer_to_float<std::uint8_t>(ptr[0]);
-                    float g = integer_to_float<std::uint8_t>(ptr[1]);
-                    float b = integer_to_float<std::uint8_t>(ptr[2]);
+                    float r = png_sample_to_float_(ptr[0], 8, png_data.significant_bits);
+                    float g = png_sample_to_float_(ptr[1], 8, png_data.significant_bits);
+                    float b = png_sample_to_float_(ptr[2], 8, png_data.significant_bits);
                     bundle.image(x, y) = RGB{r, g, b};
                 }
 
@@ -368,7 +410,7 @@ inline ImageBundle<RGB> read_image_png(const unsigned char* data, std::size_t si
 }
 
 /**
- * @brief Reads a PNG file and returns linear RGB + alpha data.
+ * @brief Reads a PNG file and returns RGB + alpha data.
  *
  * Convenience overload that reads the file into memory and forwards
  * to the buffer-based implementation.
@@ -384,12 +426,12 @@ inline ImageBundle<RGB> read_image_png(const fs::path& filepath, bool read_alpha
 // =========================================================================
 
 /**
- * @brief Reads a PNG from an in-memory buffer and returns linear mono + alpha data.
+ * @brief Reads a PNG from an in-memory buffer and returns mono + alpha data.
  *
  * @param data Pointer to the PNG data in memory
  * @param size Size of the data in bytes
  * @param read_alpha Whether to load the alpha channel if present (default: true)
- * @return An ImageBundle<float> containing the linear mono image and an optional alpha image.
+ * @return An ImageBundle<float> containing the mono image and an optional alpha image.
  */
 inline ImageBundle<float>
 read_image_png_mono(const unsigned char* data, std::size_t size, bool read_alpha)
@@ -399,6 +441,8 @@ read_image_png_mono(const unsigned char* data, std::size_t size, bool read_alpha
     ImageBundle<float> bundle{Image<float>(png_data.resolution)};
 
     read_color_space(png_data.color_info, bundle);
+    bundle.image.set_sensor_bit_depth(png_data.significant_bits);
+    bundle.bit_depth = png_data.final_bit_depth;
 
     png_data.has_alpha = read_alpha && png_data.has_alpha;
 
@@ -415,7 +459,13 @@ read_image_png_mono(const unsigned char* data, std::size_t size, bool read_alpha
                 const png_byte* byte_ptr = png_data.raw_data.data() + y_u * png_data.row_bytes +
                                            x_u * png_data.channels * 2;
 
-                auto read_u16 = [](const png_byte* p) -> float {
+                const int sbits = png_data.significant_bits;
+                auto read_u16 = [sbits](const png_byte* p) -> float {
+                    std::uint16_t val;
+                    std::memcpy(&val, p, sizeof(std::uint16_t));
+                    return png_sample_to_float_(val, 16, sbits);
+                };
+                auto read_alpha_u16 = [](const png_byte* p) -> float {
                     std::uint16_t val;
                     std::memcpy(&val, p, sizeof(std::uint16_t));
                     return integer_to_float<std::uint16_t>(val);
@@ -434,19 +484,19 @@ read_image_png_mono(const unsigned char* data, std::size_t size, bool read_alpha
                 if (png_data.has_alpha) {
                     std::size_t alpha_byte_offset =
                         static_cast<std::size_t>(png_data.is_gray ? 2 : 6);
-                    bundle.alpha(x, y) = read_u16(byte_ptr + alpha_byte_offset);
+                    bundle.alpha(x, y) = read_alpha_u16(byte_ptr + alpha_byte_offset);
                 }
             } else {
                 const png_byte* ptr =
                     png_data.raw_data.data() + y_u * png_data.row_bytes + x_u * png_data.channels;
 
                 if (png_data.is_gray) {
-                    float mono = integer_to_float<std::uint8_t>(ptr[0]);
+                    float mono = png_sample_to_float_(ptr[0], 8, png_data.significant_bits);
                     bundle.image(x, y) = mono;
                 } else {
-                    float r = integer_to_float<std::uint8_t>(ptr[0]);
-                    float g = integer_to_float<std::uint8_t>(ptr[1]);
-                    float b = integer_to_float<std::uint8_t>(ptr[2]);
+                    float r = png_sample_to_float_(ptr[0], 8, png_data.significant_bits);
+                    float g = png_sample_to_float_(ptr[1], 8, png_data.significant_bits);
+                    float b = png_sample_to_float_(ptr[2], 8, png_data.significant_bits);
                     bundle.image(x, y) = (r + g + b) / 3.f;
                 }
 
@@ -462,7 +512,7 @@ read_image_png_mono(const unsigned char* data, std::size_t size, bool read_alpha
 }
 
 /**
- * @brief Reads a PNG file and returns linear mono + alpha data.
+ * @brief Reads a PNG file and returns mono + alpha data.
  *
  * Convenience overload that reads the file into memory and forwards
  * to the buffer-based implementation.
@@ -476,18 +526,18 @@ inline ImageBundle<float> read_image_png_mono(const fs::path& filepath, bool rea
 // =========================================================================
 // Writers
 // =========================================================================
-inline void write_image_png(const fs::path& filepath, const ImageBundle<float>& output_image)
-{
-    Image<RGB> rgb_pixels(output_image.image.resolution());
-    for (std::size_t i = 0; i < output_image.image.size(); ++i) {
-        float val = output_image.image[i];
-        rgb_pixels[i] = RGB{val, val, val};
-    }
-    ImageBundle<RGB> output_image_rgb(output_image, std::move(rgb_pixels));
-    write_image_png(filepath, output_image_rgb);
-}
 
-inline void write_image_png(const fs::path& filepath, const ImageBundle<RGB>& output_image)
+/**
+ * @brief Writes an image of color_channels samples per pixel (1, gray, or 3, RGB), plus alpha
+ * if the bundle has it. sample(x, y, c) gives channel c of pixel (x, y).
+ *
+ * Values: see write_image_png().
+ */
+template <typename TBundle, typename TSample>
+void write_png_impl_(const fs::path& filepath,
+                     const TBundle& output_image,
+                     unsigned int color_channels,
+                     TSample&& sample)
 {
     HUIRA_LOG_INFO("write_image_png - Writing to: " + filepath.string());
     if (output_image.image.width() == 0 || output_image.image.height() == 0) {
@@ -512,10 +562,39 @@ inline void write_image_png(const fs::path& filepath, const ImageBundle<RGB>& ou
                           std::to_string(output_image.bit_depth));
     }
 
+    const detail::IntegerEncoding encoding(
+        output_image.bit_depth, output_image.image.sensor_bit_depth(), output_image.scaling);
+    const detail::IntegerEncoding alpha_encoding(
+        output_image.bit_depth, 0, PixelScaling::FullRange);
+    detail::NonFiniteCounter non_finite;
+
+    // A sensor's DN with no more bits than the file are scaled up by left-bit replication, and
+    // sBIT records how many bits they have; with more, the lowest bits are dropped.
+    auto encode = [&](float value) -> std::uint32_t {
+        if (non_finite.not_finite(value)) {
+            return 0;
+        }
+        if (!encoding.counts()) {
+            return static_cast<std::uint32_t>(encoding.full_range(value));
+        }
+        const std::uint64_t dn = encoding.dn(value);
+        if (encoding.shift > 0) {
+            return static_cast<std::uint32_t>(dn >> encoding.shift);
+        }
+        return static_cast<std::uint32_t>(
+            detail::replicate_bits(dn, encoding.sensor_bits, encoding.file_bits));
+    };
+    auto encode_alpha = [&](float value) -> std::uint32_t {
+        return std::isfinite(value) ? static_cast<std::uint32_t>(alpha_encoding.full_range(value))
+                                    : 0;
+    };
+
     make_path(filepath);
 
-    int color_type = has_alpha ? PNG_COLOR_TYPE_RGB_ALPHA : PNG_COLOR_TYPE_RGB;
-    unsigned int channels = has_alpha ? 4 : 3;
+    const bool gray = (color_channels == 1);
+    int color_type = gray ? (has_alpha ? PNG_COLOR_TYPE_GRAY_ALPHA : PNG_COLOR_TYPE_GRAY)
+                          : (has_alpha ? PNG_COLOR_TYPE_RGB_ALPHA : PNG_COLOR_TYPE_RGB);
+    const unsigned int channels = color_channels + (has_alpha ? 1u : 0u);
 
     int width = output_image.image.width();
     int height = output_image.image.height();
@@ -548,6 +627,10 @@ inline void write_image_png(const fs::path& filepath, const ImageBundle<RGB>& ou
         HUIRA_THROW_ERROR("write_image_png - Failed to create PNG info struct");
     }
 
+    // Row buffers are allocated before setjmp, so that a longjmp out of libpng leaks nothing.
+    std::vector<std::uint16_t> row16(static_cast<std::size_t>(width) * channels);
+    std::vector<std::uint8_t> row8(static_cast<std::size_t>(width) * channels);
+
 #ifdef _MSC_VER
 #pragma warning(push)
 #pragma warning(disable : 4611 5039)
@@ -573,7 +656,7 @@ inline void write_image_png(const fs::path& filepath, const ImageBundle<RGB>& ou
                  PNG_COMPRESSION_TYPE_DEFAULT,
                  PNG_FILTER_TYPE_DEFAULT);
 
-    // Write the colorspace:
+    // Label the encoding the values have (nothing is converted):
     switch (output_image.color_space) {
     case ColorSpaceHint::sRGB:
         png_set_sRGB(png_ptr, info_ptr, PNG_sRGB_INTENT_PERCEPTUAL);
@@ -592,59 +675,76 @@ inline void write_image_png(const fs::path& filepath, const ImageBundle<RGB>& ou
         break;
     }
 
+    // A sensor's bit depth, when it fits in the file's:
+    if (encoding.counts() && encoding.shift == 0) {
+        png_color_8 sig_bit{};
+        const auto bits = static_cast<png_byte>(encoding.sensor_bits);
+        sig_bit.red = sig_bit.green = sig_bit.blue = sig_bit.gray = bits;
+        sig_bit.alpha = static_cast<png_byte>(output_image.bit_depth);
+        png_set_sBIT(png_ptr, info_ptr, &sig_bit);
+    }
+
     png_write_info(png_ptr, info_ptr);
 
     if (output_image.bit_depth == 16) {
         png_set_swap(png_ptr);
     }
 
-    if (output_image.bit_depth == 16) {
-        std::vector<std::uint16_t> row_data(static_cast<std::size_t>(width) * channels);
-
-        for (int y = 0; y < height; ++y) {
-            for (int x = 0; x < width; ++x) {
-                std::size_t x_u = static_cast<std::size_t>(x);
-                const RGB& pixel = output_image.image(x, y);
-
-                row_data[x_u * channels + 0] = float_to_integer<std::uint16_t>(pixel[0]);
-                row_data[x_u * channels + 1] = float_to_integer<std::uint16_t>(pixel[1]);
-                row_data[x_u * channels + 2] = float_to_integer<std::uint16_t>(pixel[2]);
-
-                if (has_alpha) {
-                    row_data[x_u * channels + 3] =
-                        float_to_integer<std::uint16_t>(output_image.alpha(x, y));
-                }
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            const std::size_t base = static_cast<std::size_t>(x) * channels;
+            for (unsigned int c = 0; c < color_channels; ++c) {
+                const std::uint32_t value = encode(sample(x, y, c));
+                row16[base + c] = static_cast<std::uint16_t>(value);
+                row8[base + c] = static_cast<std::uint8_t>(value);
             }
-
-            png_bytep row_ptr = reinterpret_cast<png_bytep>(row_data.data());
-            png_write_row(png_ptr, row_ptr);
-        }
-    } else {
-        std::vector<std::uint8_t> row_data(static_cast<std::size_t>(width) * channels);
-
-        for (int y = 0; y < height; ++y) {
-            for (int x = 0; x < width; ++x) {
-                std::size_t x_u = static_cast<std::size_t>(x);
-                const RGB& pixel = output_image.image(x, y);
-
-                row_data[x_u * channels + 0] = float_to_integer<std::uint8_t>(pixel[0]);
-                row_data[x_u * channels + 1] = float_to_integer<std::uint8_t>(pixel[1]);
-                row_data[x_u * channels + 2] = float_to_integer<std::uint8_t>(pixel[2]);
-
-                if (has_alpha) {
-                    row_data[x_u * channels + 3] =
-                        float_to_integer<std::uint8_t>(output_image.alpha(x, y));
-                }
+            if (has_alpha) {
+                const std::uint32_t value = encode_alpha(output_image.alpha(x, y));
+                row16[base + color_channels] = static_cast<std::uint16_t>(value);
+                row8[base + color_channels] = static_cast<std::uint8_t>(value);
             }
-
-            png_bytep row_ptr = row_data.data();
-            png_write_row(png_ptr, row_ptr);
         }
+        png_bytep row_ptr = (output_image.bit_depth == 16)
+                                ? reinterpret_cast<png_bytep>(row16.data())
+                                : reinterpret_cast<png_bytep>(row8.data());
+        png_write_row(png_ptr, row_ptr);
     }
 
     png_write_end(png_ptr, nullptr);
     png_destroy_write_struct(&png_ptr, &info_ptr);
     fclose(fp);
+
+    non_finite.warn("write_image_png", filepath.string());
+}
+
+/**
+ * @brief Writes a gray image (with optional alpha) to a PNG file, of 8 or 16 bits per sample
+ * (bundle.bit_depth).
+ *
+ * Values are written as they are, labelled with the bundle's color_space (nothing is converted;
+ * see linear_to_srgb()). An image with a sensor bit depth, such as a sensor response, is written
+ * as the sensor's digital numbers (DN) unless bundle.scaling is PixelScaling::FullRange: scaled
+ * up to the file's bits by left-bit replication, as the PNG specification recommends, with an
+ * sBIT chunk giving the sensor's bit depth, so that DN = value >> (file bits - sensor bits)
+ * exactly (read_image_png() does this); or, for a sensor with more bits than the file, with the
+ * lowest bits dropped. Other images are stretched over the file's range: 1 becomes 255 or 65535.
+ * Values that are not finite are written as 0, with a warning.
+ */
+inline void write_image_png(const fs::path& filepath, const ImageBundle<float>& output_image)
+{
+    write_png_impl_(filepath, output_image, 1, [&](int x, int y, unsigned int /*c*/) {
+        return output_image.image(x, y);
+    });
+}
+
+/**
+ * @brief Writes an RGB image (with optional alpha) to a PNG file. See the gray overload.
+ */
+inline void write_image_png(const fs::path& filepath, const ImageBundle<RGB>& output_image)
+{
+    write_png_impl_(filepath, output_image, 3, [&](int x, int y, unsigned int c) {
+        return output_image.image(x, y)[c];
+    });
 }
 
 } // namespace huira

@@ -6,6 +6,7 @@
 
 #include "huira/concepts/pixel_concepts.hpp"
 #include "huira/images/image.hpp"
+#include "huira/images/io/io_util.hpp"
 
 namespace huira {
 

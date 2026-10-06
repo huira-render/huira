@@ -560,6 +560,7 @@ Image<float> Image<PixelT>::get_channel(std::size_t channel) const
     }
 
     Image<float> output(this->resolution());
+    output.set_sensor_bit_depth(sensor_bit_depth_); // a channel of a sensor response is DN too
     for (std::size_t i = 0; i < this->size(); ++i) {
         if constexpr (ImagePixelTraits<PixelT>::channels == 1) {
             output[i] = static_cast<float>(data_[i]);
