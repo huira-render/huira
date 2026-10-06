@@ -705,10 +705,12 @@ const Image<TSpectral>& CameraModelHandle<TSpectral>::get_psf_kernel(float u, fl
  * CameraModel::psf_image().
  */
 template <IsSpectral TSpectral>
-Image<TSpectral>
-CameraModelHandle<TSpectral>::psf_image(int radius, float x_offset, float y_offset) const
+Image<TSpectral> CameraModelHandle<TSpectral>::psf_image(int radius,
+                                                         float x_offset,
+                                                         float y_offset,
+                                                         std::optional<units::Meter> range) const
 {
-    return this->get_()->psf_image(radius, x_offset, y_offset);
+    return this->get_()->psf_image(radius, x_offset, y_offset, range);
 }
 
 /**

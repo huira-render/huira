@@ -198,7 +198,10 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     const Image<TSpectral>& get_psf_convolution_kernel();
     const Image<TSpectral>& get_psf_wings_kernel();
 
-    Image<TSpectral> psf_image(int radius, float x_offset = 0.f, float y_offset = 0.f);
+    Image<TSpectral> psf_image(int radius,
+                               float x_offset = 0.f,
+                               float y_offset = 0.f,
+                               std::optional<units::Meter> range = std::nullopt);
 
     void precompute();
     [[nodiscard]] bool is_precomputed() const;
@@ -433,6 +436,8 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     void ensure_wings_kernel_();
     void ensure_wings_spectrum_();
     void ensure_psf_tables_();
+    std::shared_ptr<const PsfTables<TSpectral>> build_psf_tables_(double blur) const;
+    double blur_pixels_(double inverse_range) const;
     int convolution_radius_(const char* caller) const;
 
     // optics_mutex_ must be held.
