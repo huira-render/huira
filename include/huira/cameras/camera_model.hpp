@@ -30,6 +30,7 @@
 #include "huira/sampling/sampler.hpp"
 #include "huira/scene/node.hpp"
 #include "huira/scene/scene_object.hpp"
+#include "huira/util/logger.hpp"
 
 namespace huira {
 template <IsSpectral TSpectral>
@@ -230,10 +231,19 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     ///
     /// Does nothing when the frame buffer's sensor response is disabled: there is nowhere to
     /// put the result, and sensor models write into it unconditionally.
+    ///
+    /// @throws std::runtime_error if the sensor response is enabled but the received power it
+    ///         reads out is not (FrameBuffer::enable_received_power(false) after
+    ///         enable_sensor_response()).
     void readout(FrameBuffer<TSpectral>& fb, units::Second exposure_time) const
     {
         if (!fb.has_sensor_response()) {
             return;
+        }
+        if (!fb.has_received_power()) {
+            HUIRA_THROW_ERROR("CameraModel::readout - The frame buffer's sensor response is "
+                              "enabled, but not the received power it reads out. Enable it "
+                              "(enable_received_power()), or disable the sensor response.");
         }
         sensor_->readout(fb, exposure_time);
     }

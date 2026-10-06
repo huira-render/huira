@@ -78,6 +78,9 @@ def main():
     # Create a scene view over the exposure interval
     scene_view = SceneView(scene, exposure, navcam, huira.ObservationMode.GEOMETRIC_STATE)
     
+    # Build the camera's optics kernels now rather than in the render:
+    camera_model.precompute()
+
     # Render the current scene view
     renderer.render(scene_view, frame_buffer)
     

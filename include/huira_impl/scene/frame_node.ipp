@@ -60,12 +60,16 @@ void FrameNode<TSpectral>::delete_child(std::weak_ptr<Node<TSpectral>> child_wea
         // The child and everything below it leave the scene: their handles become invalid, and
         // the scene's node registry, which holds the nodes that have names to be found by (those
         // loaded from model files), lets go of them. Nodes made through the API are not in it.
+        // A loaded model's own graph belongs to no scene (scene_ is null); Scene::delete_model()
+        // releases its registered nodes.
         std::function<void(const std::shared_ptr<Node<TSpectral>>&)> release =
             [&](const std::shared_ptr<Node<TSpectral>>& node) {
                 for (const auto& descendant : node->get_children()) {
                     release(descendant);
                 }
-                this->scene_->node_registry_.remove_if_present(node);
+                if (this->scene_ != nullptr) {
+                    this->scene_->node_registry_.remove_if_present(node);
+                }
                 node->set_scene_owned(false);
             };
         release(child);

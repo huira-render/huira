@@ -19,13 +19,16 @@ Frustum<TSpectral>::Frustum(const std::vector<Vec3<float>>& plane_normals)
  * @brief Test whether a direction vector lies inside the frustum.
  *
  * @param direction The direction to test.
- * @return True if the direction is on the positive side of all planes.
+ * @return True if the direction is on the positive side of all planes; false if it, or a plane,
+ *         is NaN.
  */
 template <IsSpectral TSpectral>
 bool Frustum<TSpectral>::contains(const Vec3<float>& direction) const
 {
+    // Written so that NaN, in the direction or in a plane (a camera whose distortion has no
+    // inverse anywhere on the image's boundary has no frustum), counts as outside:
     for (const auto& normal : plane_normals_) {
-        if (glm::dot(normal, direction) < 0.0f) {
+        if (!(glm::dot(normal, direction) >= 0.0f)) {
             return false;
         }
     }

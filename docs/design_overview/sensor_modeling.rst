@@ -113,7 +113,7 @@ Random numbers
 
 Each camera's sensor has its own noise seed (``set_sensor_noise_seed()``; sensors get distinct
 seeds by default, in the order they are made, so seed a sensor explicitly for noise that does not
-depend on what else was made before it). The noise of a row of a readout is drawn from random
+depend on what else was made before it; a copy of a sensor has the same settings and a new seed). The noise of a row of a readout is drawn from random
 numbers determined by the seed, the number of readouts the sensor has made since the seed was
 set, and the row. A frame's noise therefore does not depend on other cameras, threads or the
 order rows are read out in; successive frames differ; and setting the same seed again repeats
