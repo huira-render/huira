@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstddef>
 #include <string>
+#include <vector>
 
 #include "catch2/catch_test_macros.hpp"
 #include "huira/huira.hpp"
@@ -145,6 +146,66 @@ void render_positions(Stamp stamp, const PixelConvention& convention, Check chec
     }
 }
 
+/// A camera of REFERENCE_SIZE pixels square, with the optical axis at its center, that the
+/// windows below are placed on.
+constexpr int REFERENCE_SIZE = 192;
+
+/// A camera of the given resolution whose pixel (0, 0) is the reference camera's pixel
+/// (offset_x, offset_y). All share pitch, focal length and optical axis, so a source falls at
+/// the same subpixel position in each, a whole number of pixels apart.
+struct Window {
+    const char* where;
+    Resolution resolution;
+    int offset_x;
+    int offset_y;
+};
+
+/// Renders one unresolved source with the camera of each window in turn. The source is given by
+/// where it falls on the reference camera, in sensor coordinates.
+std::vector<Image<RGB>>
+render_windows(Stamp stamp, Vec2<double> source, const std::vector<Window>& windows)
+{
+    Scene<RGB> scene;
+    auto camera_model = scene.new_camera_model();
+    // In this convention pixel edges are at integers, the same as sensor coordinates:
+    camera_model.set_pixel_convention(PixelConvention::colmap());
+    camera_model.configure_sensor_from_pitch(windows.front().resolution, 10_um);
+    camera_model.set_focal_length(50_mm);
+    if (stamp == Stamp::Airy) {
+        camera_model.set_fstop(32.0f);
+        camera_model.use_aperture_psf(12, 16);
+    } else {
+        // About a 6 px blur radius.
+        camera_model.set_fstop(4.0f);
+        camera_model.set_focus_sensor_offset(units::Micrometer(480.0));
+    }
+    auto camera = scene.root.new_instance(camera_model);
+
+    const double axis = REFERENCE_SIZE / 2.0;
+    auto emitter = scene.root.new_instance(scene.new_unresolved_emitter(units::Watt(1.0)));
+    emitter.set_position(units::Meter((source.x - axis) / FOCAL_PIXELS * RANGE),
+                         units::Meter((source.y - axis) / FOCAL_PIXELS * RANGE),
+                         units::Meter(RANGE));
+
+    Renderer<RGB> renderer;
+    Interval exposure{Time::from_et(0.0), Time::from_et(0.001)};
+    std::vector<Image<RGB>> images;
+    for (const Window& window : windows) {
+        // Only the sensor changes, so the PSF is built once:
+        camera_model.configure_sensor_from_pitch(window.resolution,
+                                                 10_um,
+                                                 std::nullopt,
+                                                 static_cast<float>(axis - window.offset_x),
+                                                 static_cast<float>(axis - window.offset_y));
+        auto frame_buffer = camera_model.make_frame_buffer();
+        frame_buffer.enable_received_power();
+        SceneView<RGB> scene_view(scene, exposure, camera, ObservationMode::GEOMETRIC_STATE);
+        renderer.render(scene_view, frame_buffer);
+        images.push_back(frame_buffer.received_power());
+    }
+    return images;
+}
+
 } // namespace
 
 TEST_CASE("Unresolved sources land where the camera projects them", "[render][unresolved]")
@@ -202,6 +263,58 @@ TEST_CASE("Unresolved sources land where the camera projects them", "[render][un
                     CHECK(std::abs(c.y - nearest_bank(p.y)) < 0.025);
                 });
             }
+        }
+    }
+}
+
+TEST_CASE("A source's light is the same wherever it falls relative to tiles and the image's edges",
+          "[render][unresolved]")
+{
+    // Unresolved sources are rendered in 64 px tiles. A source straddling tiles has to be
+    // stamped by each of them, and one just outside the image still lights its edge: before,
+    // its light was dropped, because only sources projecting inside the image were rendered.
+    const Vec2<double> source{96.3, 96.7};
+
+    // The reference camera holds the whole stamp, in the middle of a tile. The others are 128 px
+    // square, 2 x 2 tiles, and placed so that the source falls...
+    const std::vector<Window> windows{
+        Window{"reference", {REFERENCE_SIZE, REFERENCE_SIZE}, 0, 0},
+        Window{"on the corner of four tiles", {128, 128}, 32, 32},            // at (64.3, 64.7)
+        Window{"just beyond the left edge", {128, 128}, 99, 32},              // at (-2.7, 64.7)
+        Window{"just beyond the top-left corner", {128, 128}, 99, 99},        // at (-2.7, -2.3)
+        Window{"just beyond the bottom-right corner", {128, 128}, -34, -34}}; // (130.3, 130.7)
+
+    for (Stamp stamp : {Stamp::Airy, Stamp::Defocus}) {
+        const std::vector<Image<RGB>> images = render_windows(stamp, source, windows);
+        const Image<RGB>& reference = images.front();
+        double peak = 0.0;
+        for (std::size_t i = 0; i < reference.size(); ++i) {
+            peak = std::max(peak, static_cast<double>(reference[i][0]));
+        }
+        REQUIRE(peak > 0.0);
+
+        for (std::size_t w = 1; w < windows.size(); ++w) {
+            const Window& window = windows[w];
+            const Image<RGB>& image = images[w];
+            INFO((stamp == Stamp::Airy ? "Airy PSF stamp, " : "Defocus disk stamp, ")
+                 << "source " << window.where);
+            CHECK(total(image) > 0.0);
+
+            // Every pixel matches the reference's, and is dark beyond it:
+            double worst = 0.0;
+            for (int y = 0; y < image.height(); ++y) {
+                for (int x = 0; x < image.width(); ++x) {
+                    const int rx = x + window.offset_x;
+                    const int ry = y + window.offset_y;
+                    const bool in_reference =
+                        rx >= 0 && rx < REFERENCE_SIZE && ry >= 0 && ry < REFERENCE_SIZE;
+                    const double expected =
+                        in_reference ? static_cast<double>(reference(rx, ry)[0]) : 0.0;
+                    worst =
+                        std::max(worst, std::abs(static_cast<double>(image(x, y)[0]) - expected));
+                }
+            }
+            CHECK(worst <= 1e-5 * peak);
         }
     }
 }
