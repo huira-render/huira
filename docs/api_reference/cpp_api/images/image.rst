@@ -11,3 +11,11 @@ Image
    :members:
    :undoc-members:
    :protected-members:
+
+.. doxygenstruct:: huira::ImageBundle
+   :members:
+   :undoc-members:
+
+.. doxygenenum:: huira::ColorSpaceHint
+
+.. doxygenenum:: huira::PixelScaling

@@ -261,8 +261,12 @@ void CameraModelHandle<TSpectral>::set_sensor_full_well_capacity(float fwc) cons
 }
 
 /**
- * @brief Enable or disable sensor noise simulation.
- * @param simulate_noise True to enable noise simulation, false to disable
+ * @brief Turn the sensor's shot noise and read noise on (the default) or off.
+ *
+ * Off, each pixel collects the expected number of electrons. The dark current's electrons and
+ * the bias are still added, since they are not noise.
+ *
+ * @param simulate_noise True to simulate noise, false not to
  */
 template <IsSpectral TSpectral>
 void CameraModelHandle<TSpectral>::set_sensor_simulate_noise(bool simulate_noise) const

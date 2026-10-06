@@ -5,6 +5,7 @@
 
 #include "huira/core/spectral_bins.hpp"
 #include "huira/images/image.hpp"
+#include "huira/images/io/io_util.hpp"
 
 namespace huira {
 ImageBundle<RGB> read_image_png(const fs::path& filepath, bool read_alpha = true);

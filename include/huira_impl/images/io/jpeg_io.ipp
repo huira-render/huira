@@ -10,6 +10,7 @@
 #include "huira/images/io/color_space.hpp"
 #include "huira/images/io/convert_pixel.hpp"
 #include "huira/images/io/io_util.hpp"
+#include "huira/images/io/pixel_encoding.hpp"
 #include "huira/util/logger.hpp"
 #include "huira/util/paths.hpp"
 
@@ -98,20 +99,22 @@ inline JPEGData read_jpeg_raw_(const unsigned char* data, std::size_t size, bool
 // =========================================================================
 
 /**
- * @brief Reads a JPEG from an in-memory buffer and returns linear RGB data.
+ * @brief Reads a JPEG from an in-memory buffer and returns its RGB data.
  *
- * Converts from sRGB to linear light. Grayscale JPEGs are promoted to RGB
- * by TurboJPEG during decompression.
+ * The values are returned as stored, in [0, 1], labelled sRGB (color_space), which JPEG images
+ * are by convention; nothing is converted (see srgb_to_linear()). Grayscale JPEGs are promoted to
+ * RGB by TurboJPEG during decompression.
  *
  * @param data Pointer to the JPEG data in memory
  * @param size Size of the data in bytes
- * @return An ImageBundle<RGB> containing the linear RGB image.
+ * @return An ImageBundle<RGB> containing the RGB image.
  */
 inline ImageBundle<RGB> read_image_jpeg(const unsigned char* data, std::size_t size)
 {
     auto jpeg_data = read_jpeg_raw_(data, size);
 
     ImageBundle<RGB> bundle{Image<RGB>(jpeg_data.resolution)};
+    bundle.color_space = ColorSpaceHint::sRGB;
 
     constexpr int channels = 3;
 
@@ -134,13 +137,13 @@ inline ImageBundle<RGB> read_image_jpeg(const unsigned char* data, std::size_t s
 }
 
 /**
- * @brief Reads a JPEG file and returns linear RGB data.
+ * @brief Reads a JPEG file and returns its RGB data.
  *
  * Convenience overload that reads the file into memory and forwards
  * to the buffer-based implementation.
  *
  * @param filepath Path to the JPEG file to read
- * @return An ImageBundle<RGB> containing the linear RGB image.
+ * @return An ImageBundle<RGB> containing the RGB image.
  */
 inline ImageBundle<RGB> read_image_jpeg(const fs::path& filepath)
 {
@@ -153,19 +156,20 @@ inline ImageBundle<RGB> read_image_jpeg(const fs::path& filepath)
 // =========================================================================
 
 /**
- * @brief Reads a JPEG from an in-memory buffer and returns linear mono data.
+ * @brief Reads a JPEG from an in-memory buffer and returns mono data.
  *
- * Converts from sRGB to linear light, then averages the RGB channels.
+ * The values are returned as stored (decoded to gray), labelled sRGB; nothing is converted.
  *
  * @param data Pointer to the JPEG data in memory
  * @param size Size of the data in bytes
- * @return An ImageBundle<float> containing the linear mono image.
+ * @return An ImageBundle<float> containing the mono image.
  */
 inline ImageBundle<float> read_image_jpeg_mono(const unsigned char* data, std::size_t size)
 {
     auto jpeg_data = read_jpeg_raw_(data, size, true);
 
     ImageBundle<float> bundle{Image<float>(jpeg_data.resolution)};
+    bundle.color_space = ColorSpaceHint::sRGB;
 
     for (std::size_t i = 0; i < static_cast<std::size_t>(jpeg_data.width * jpeg_data.height); ++i) {
         bundle.image[i] = integer_to_float<std::uint8_t>(jpeg_data.raw_data[i]);
@@ -175,13 +179,13 @@ inline ImageBundle<float> read_image_jpeg_mono(const unsigned char* data, std::s
 }
 
 /**
- * @brief Reads a JPEG file and returns linear mono data.
+ * @brief Reads a JPEG file and returns mono data.
  *
  * Convenience overload that reads the file into memory and forwards
  * to the buffer-based implementation.
  *
  * @param filepath Path to the JPEG file to read
- * @return An ImageBundle<float> containing the linear mono image.
+ * @return An ImageBundle<float> containing the mono image.
  */
 inline ImageBundle<float> read_image_jpeg_mono(const fs::path& filepath)
 {
@@ -194,13 +198,17 @@ inline ImageBundle<float> read_image_jpeg_mono(const fs::path& filepath)
 // =========================================================================
 
 /**
- * @brief Writes a linear RGB image to a JPEG file (sRGB encoded).
+ * @brief Writes an RGB image to an 8-bit JPEG file.
  *
- * Converts the image from linear color space to sRGB and compresses it
- * using TurboJPEG. The function automatically creates necessary directories.
+ * Values in [0, 1] are stretched over 0 to 255 and compressed using TurboJPEG; nothing is
+ * converted, and JPEG files are taken to be sRGB, so convert a linear image with
+ * linear_to_srgb() first for it to display correctly. JPEG is lossy and 8-bit, so it is for
+ * pictures: a sensor's digital numbers are not kept (use FITS, PNG or TIFF for those). Values
+ * that are not finite are written as 0, with a warning. The function automatically creates
+ * necessary directories.
  *
  * @param filepath Path where the JPEG file will be written
- * @param image An ImageBundle<RGB> with the linear RGB image to write
+ * @param image An ImageBundle<RGB> with the RGB image to write
  * @param quality JPEG compression quality (1-100, default 95)
  * @throws std::runtime_error if the file cannot be created, the image is empty,
  *         quality is invalid, or if any error occurs during writing
@@ -224,7 +232,8 @@ write_image_jpeg(const fs::path& filepath, const ImageBundle<RGB>& output_image,
     int width = output_image.image.width();
     int height = output_image.image.height();
 
-    // Convert linear RGB to sRGB 8-bit
+    // To 8 bits (the values are written as they are):
+    detail::NonFiniteCounter non_finite;
     constexpr int channels = 3;
     std::vector<unsigned char> srgb_data(static_cast<std::size_t>(width) *
                                          static_cast<std::size_t>(height) * channels);
@@ -236,9 +245,10 @@ write_image_jpeg(const fs::path& filepath, const ImageBundle<RGB>& output_image,
                               channels;
             const RGB& pixel = output_image.image(x, y);
 
-            srgb_data[idx + 0] = float_to_integer<uint8_t>(pixel[0]);
-            srgb_data[idx + 1] = float_to_integer<uint8_t>(pixel[1]);
-            srgb_data[idx + 2] = float_to_integer<uint8_t>(pixel[2]);
+            for (std::size_t c = 0; c < 3; ++c) {
+                srgb_data[idx + c] =
+                    non_finite.not_finite(pixel[c]) ? 0 : float_to_integer<uint8_t>(pixel[c]);
+            }
         }
     }
 
@@ -296,15 +306,17 @@ write_image_jpeg(const fs::path& filepath, const ImageBundle<RGB>& output_image,
         HUIRA_THROW_ERROR("write_image_jpeg - Failed to write complete JPEG data: " +
                           filepath.string());
     }
+
+    non_finite.warn("write_image_jpeg", filepath.string());
 }
 
 /**
- * @brief Writes a linear mono image to a JPEG file (sRGB encoded).
+ * @brief Writes a mono image to an 8-bit JPEG file. See the RGB overload.
  *
  * Convenience overload that promotes a mono image to RGB before writing.
  *
  * @param filepath Path where the JPEG file will be written
- * @param image An ImageBundle<float> with the linear mono image to write
+ * @param image An ImageBundle<float> with the mono image to write
  * @param quality JPEG compression quality (1-100, default 95)
  */
 inline void

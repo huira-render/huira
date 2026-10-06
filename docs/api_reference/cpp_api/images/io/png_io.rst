@@ -13,10 +13,6 @@ PNG I/O
 
 
 
-.. doxygenfunction:: huira::write_image_png(const fs::path&, const Image<RGB>&, int)
+.. doxygenfunction:: huira::write_image_png(const fs::path&, const ImageBundle<RGB>&)
 
-.. doxygenfunction:: huira::write_image_png(const fs::path&, const Image<RGB>&, const Image<float>&, int)
-
-.. doxygenfunction:: huira::write_image_png(const fs::path&, const Image<float>&, int)
-
-.. doxygenfunction:: huira::write_image_png(const fs::path&, const Image<float>&, const Image<float>&, int)
+.. doxygenfunction:: huira::write_image_png(const fs::path&, const ImageBundle<float>&)

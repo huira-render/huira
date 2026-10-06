@@ -15,9 +15,9 @@ Reading
 Writing
 -------
 
-.. doxygenfunction:: huira::write_image_tiff(const fs::path&, const Image<RGB>&, int, const std::string&, const std::string&)
+.. doxygenfunction:: huira::write_image_tiff(const fs::path&, const ImageBundle<RGB>&, const std::string&, const std::string&)
 
-.. doxygenfunction:: huira::write_image_tiff(const fs::path&, const Image<float>&, int, const std::string&, const std::string&)
+.. doxygenfunction:: huira::write_image_tiff(const fs::path&, const ImageBundle<float>&, const std::string&, const std::string&)
 
-.. doxygenfunction:: huira::write_image_tiff(const fs::path&, const Image<TSpectral>&, int, const std::string&, const std::string&)
+.. doxygenfunction:: huira::write_image_tiff(const fs::path&, const ImageBundle<TSpectral>&, const std::string&, const std::string&)
 

@@ -2,8 +2,16 @@
 
 #include <cmath>
 
+#include "huira/core/spectral_bins.hpp"
+#include "huira/images/image.hpp"
+
 namespace huira {
 enum class ColorSpace { Linear, sRGB, Gamma };
+
+// Conversions between linear values (what Huira renders) and the sRGB encoding. Nothing in Huira
+// converts by itself: readers return the values a file holds, and writers write the values they
+// are given, labelled with ImageBundle::color_space. Convert explicitly, e.g. a rendered image
+// with linear_to_srgb() before writing it as a picture to view.
 
 inline float srgb_to_linear(float s)
 {
@@ -38,7 +46,8 @@ inline ImageBundle<RGB> linear_to_srgb(const ImageBundle<RGB>& linear_bundle)
                                    linear_to_srgb(linear_pixel[2])};
         }
     }
-    ImageBundle<RGB> output_bundle(std::move(srgb_image), linear_bundle.alpha);
+    // A new image: sRGB values are not a sensor's DN, so it has no sensor bit depth.
+    ImageBundle<RGB> output_bundle(linear_bundle, std::move(srgb_image));
     output_bundle.color_space = ColorSpaceHint::sRGB;
     return output_bundle;
 }
@@ -52,7 +61,8 @@ inline ImageBundle<float> linear_to_srgb(const ImageBundle<float>& linear_bundle
             srgb_image(x, y) = linear_to_srgb(linear_pixel);
         }
     }
-    ImageBundle<float> output_bundle(std::move(srgb_image), linear_bundle.alpha);
+    // A new image: sRGB values are not a sensor's DN, so it has no sensor bit depth.
+    ImageBundle<float> output_bundle(linear_bundle, std::move(srgb_image));
     output_bundle.color_space = ColorSpaceHint::sRGB;
     return output_bundle;
 }
@@ -68,7 +78,7 @@ inline ImageBundle<RGB> srgb_to_linear(const ImageBundle<RGB>& srgb_bundle)
                                      srgb_to_linear(srgb_pixel[2])};
         }
     }
-    ImageBundle<RGB> output_bundle(std::move(linear_image), srgb_bundle.alpha);
+    ImageBundle<RGB> output_bundle(srgb_bundle, std::move(linear_image));
     output_bundle.color_space = ColorSpaceHint::Linear;
     return output_bundle;
 }
@@ -82,7 +92,7 @@ inline ImageBundle<float> srgb_to_linear(const ImageBundle<float>& srgb_bundle)
             linear_image(x, y) = srgb_to_linear(srgb_pixel);
         }
     }
-    ImageBundle<float> output_bundle(std::move(linear_image), srgb_bundle.alpha);
+    ImageBundle<float> output_bundle(srgb_bundle, std::move(linear_image));
     output_bundle.color_space = ColorSpaceHint::Linear;
     return output_bundle;
 }

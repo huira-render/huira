@@ -29,8 +29,26 @@ Scalar Images
    :undoc-members:
 
 
+Image Bundles
+-------------
+
+.. autoclass:: huira.ImageBundle_f32
+   :members:
+   :undoc-members:
+
+.. autoclass:: huira.ColorSpaceHint
+   :members:
+   :undoc-members:
+
+.. autoclass:: huira.PixelScaling
+   :members:
+   :undoc-members:
+
+
 Image I/O
 ---------
+
+See :doc:`/design_overview/image_output` for how a sensor response is written to each format.
 
 .. autofunction:: huira.read_png
 
@@ -51,3 +69,8 @@ Image I/O
 .. autofunction:: huira.read_tiff_mono
 
 .. autofunction:: huira.write_tiff
+
+
+.. autofunction:: huira.read_fits
+
+.. autofunction:: huira.write_fits

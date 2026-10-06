@@ -294,6 +294,8 @@ inline ImageBundle<RGB> read_image_hdr(const unsigned char* data, std::size_t si
     auto hdr_data = read_hdr_raw_(data, size);
 
     ImageBundle<RGB> bundle{Image<RGB>(hdr_data.resolution)};
+    // Radiance HDR holds linear values:
+    bundle.color_space = ColorSpaceHint::Linear;
     for (int y = 0; y < hdr_data.height; ++y) {
         for (int x = 0; x < hdr_data.width; ++x) {
             std::size_t idx =
@@ -342,6 +344,8 @@ inline ImageBundle<float> read_image_hdr_mono(const unsigned char* data, std::si
     auto hdr_data = read_hdr_raw_(data, size);
 
     ImageBundle<float> bundle{Image<float>(hdr_data.resolution)};
+    // Radiance HDR holds linear values:
+    bundle.color_space = ColorSpaceHint::Linear;
 
     for (int y = 0; y < hdr_data.height; ++y) {
         for (int x = 0; x < hdr_data.width; ++x) {

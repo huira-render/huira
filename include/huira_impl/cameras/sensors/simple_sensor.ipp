@@ -1,27 +1,41 @@
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
+#include <string>
 #include <type_traits>
 
 #include "huira/concepts/spectral_concepts.hpp"
 #include "huira/images/image.hpp"
 #include "huira/render/frame_buffer.hpp"
 #include "huira/units/units.hpp"
+#include "huira/util/logger.hpp"
 #include "tbb/blocked_range.h"
 #include "tbb/parallel_for.h"
 
 namespace huira {
 
 /**
- * @brief Simulates the sensor readout, including noise and the ADC.
+ * @brief Simulates the sensor readout, from the received power to digital numbers (DN).
  *
  * For each pixel (each channel, for RGB): the received energy becomes photons and, through the
  * quantum efficiency, signal electrons, to which the dark current's electrons are added. With
  * noise simulated, the electrons collected are drawn from a Poisson distribution of that mean
- * (shot noise), clamped to the full well, and then the read noise is added; the bias is added
- * after the gain. The result is clamped to the ADC's range and normalized to [0, 1]. See
+ * (shot noise); without, they are the mean. They are clamped to the full well, and the read
+ * noise is added (with noise simulated). The ADC divides by the gain, adds the bias, rounds to a
+ * whole number of DN and clamps to its range, [0, 2^bit_depth - 1]. The response holds
+ * DN / (2^bit_depth - 1), so its values are exact fractions of whole DN, and the image records
+ * the bit depth (Image::sensor_bit_depth()) for the image writers. See
  * docs/design_overview/sensor_modeling.rst.
+ *
+ * Turning noise off removes only what is random: shot noise and read noise. The dark current's
+ * electrons and the bias are not noise, and are applied either way.
+ *
+ * A pixel whose received power is not finite (NaN or infinite) has no meaningful response: it
+ * reads out as NaN, which the image writers record as missing data, and a warning gives the
+ * number of such pixels.
  *
  * Rows are read out in parallel. The noise is reproducible: see set_noise_seed().
  *
@@ -42,22 +56,28 @@ void SimpleSensor<TSpectral>::readout(FrameBuffer<TSpectral>& fb, units::Second 
     const double max_dn = std::pow(2.0, static_cast<double>(config.bit_depth)) - 1.0;
 
     const bool noise = config.simulate_noise;
-    const double dark_e =
-        noise ? static_cast<double>(config.dark_current) * static_cast<double>(dt) : 0.0;
-    const double bias = noise ? static_cast<double>(config.bias_level_dn) : 0.0;
+    const double dark_e = static_cast<double>(config.dark_current) * static_cast<double>(dt);
+    const double bias = static_cast<double>(config.bias_level_dn);
     const double read_noise = noise ? static_cast<double>(config.read_noise) : 0.0;
     const double full_well = static_cast<double>(config.full_well_capacity);
     const double gain = static_cast<double>(config.gain);
 
+    std::atomic<std::size_t> non_finite{0};
+
     // Expected electrons to the normalized response:
     auto respond = [&](double expected_e, detail::SensorRandom& random) {
+        if (!std::isfinite(expected_e)) {
+            non_finite.fetch_add(1, std::memory_order_relaxed);
+            return std::numeric_limits<float>::quiet_NaN();
+        }
         double electrons = noise ? random.poisson(expected_e) : expected_e;
         electrons = std::min(electrons, full_well);
         if (read_noise > 0.0) {
             electrons += read_noise * random.normal();
         }
-        const double dn = electrons / gain + bias;
-        return static_cast<float>(std::clamp(dn, 0.0, max_dn) / max_dn);
+        // The ADC: to whole DN, within its range.
+        const double dn = std::clamp(std::round(electrons / gain + bias), 0.0, max_dn);
+        return static_cast<float>(dn / max_dn);
     };
 
     const std::uint64_t readout_number = this->next_readout_number_();
@@ -86,5 +106,13 @@ void SimpleSensor<TSpectral>::readout(FrameBuffer<TSpectral>& fb, units::Second 
                 }
             }
         });
+
+    const std::size_t missing = non_finite.load(std::memory_order_relaxed);
+    if (missing > 0) {
+        HUIRA_LOG_WARNING("SimpleSensor::readout - " + std::to_string(missing) +
+                          " pixel value(s) received a power that is not finite (NaN or "
+                          "infinite), and read out as NaN. This points to a problem upstream, "
+                          "such as a material or light returning a non-finite radiance.");
+    }
 }
 } // namespace huira

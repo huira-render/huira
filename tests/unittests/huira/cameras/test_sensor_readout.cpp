@@ -1,5 +1,6 @@
 #include <cmath>
 #include <cstddef>
+#include <limits>
 #include <thread>
 #include <vector>
 
@@ -273,4 +274,87 @@ TEST_CASE("Disabling the sensor response leaves the received power enabled", "[c
     auto other = camera.make_frame_buffer();
     other.enable_sensor_response();
     CHECK(other.has_received_power());
+}
+
+TEST_CASE("The readout gives whole digital numbers", "[cameras][sensor]")
+{
+    // The ADC's output was continuous: e.g. 0.82 DN for one electron at 1.22 e-/DN.
+    SensorProbe camera;
+    camera.configure_sensor_from_pitch(Resolution{32, 32}, units::Micrometer(5.0));
+    auto frame_buffer = camera.make_frame_buffer();
+    frame_buffer.enable_sensor_response();
+
+    for (const bool noise : {true, false}) {
+        camera.sensor_->set_simulate_noise(noise);
+        expect_electrons(camera, frame_buffer, 1.0);
+        for (double v : read_dn(camera, frame_buffer)) {
+            REQUIRE(std::abs(v - std::round(v)) < 1e-3);
+        }
+        expect_electrons(camera, frame_buffer, 1234.5);
+        for (double v : read_dn(camera, frame_buffer)) {
+            REQUIRE(std::abs(v - std::round(v)) < 1e-3);
+        }
+    }
+
+    // Without noise, the expected electrons become DN by the gain, rounded:
+    // (1234.5 + 1 dark) e- / 4.88 e-/DN + 10 DN = 263.18 -> 263.
+    camera.sensor_->set_simulate_noise(false);
+    expect_electrons(camera, frame_buffer, 1234.5);
+    for (double v : read_dn(camera, frame_buffer)) {
+        REQUIRE(std::abs(v - 263.0) < 1e-3);
+    }
+}
+
+TEST_CASE("The default gain matches the ADC's range to the full well", "[cameras][sensor]")
+{
+    // At 1.22 e-/DN, the ADC saturated at about 5000 e-, a quarter of the 20000 e- full well.
+    // Now it saturates just before the well is full, within 1% of it.
+    const SensorConfig<RGB> config;
+    const double max_dn = std::pow(2.0, config.bit_depth) - 1.0;
+    const double adc_saturation_e =
+        (max_dn - static_cast<double>(config.bias_level_dn)) * static_cast<double>(config.gain);
+    const double full_well = static_cast<double>(config.full_well_capacity);
+    CHECK(adc_saturation_e <= full_well);
+    CHECK(adc_saturation_e > 0.99 * full_well);
+}
+
+TEST_CASE("Without noise, the dark current and bias still apply", "[cameras][sensor]")
+{
+    // Turning noise off also removed the bias and the dark current, which are not noise, so a
+    // noiseless frame was darker than the mean of a noisy one.
+    SensorProbe camera;
+    electron_counter(camera);
+    camera.sensor_->set_dark_current(50.f);
+    camera.sensor_->set_bias_level_dn(100.f);
+    camera.sensor_->set_simulate_noise(false);
+    auto frame_buffer = camera.make_frame_buffer();
+    frame_buffer.enable_sensor_response();
+    frame_buffer.received_power().fill(RGB{0.f});
+
+    for (double v : read_dn(camera, frame_buffer)) {
+        REQUIRE(std::abs(v - 150.0) < 1e-3); // 50 e- of dark current over 1 s, at 1 e-/DN, + 100
+    }
+}
+
+TEST_CASE("Received power that is not finite reads out as NaN", "[cameras][sensor]")
+{
+    // With noise on it read out as the bias, a plausible dark pixel that hid the problem.
+    for (const bool noise : {true, false}) {
+        SensorProbe camera;
+        camera.configure_sensor_from_pitch(Resolution{4, 4}, units::Micrometer(5.0));
+        camera.sensor_->set_simulate_noise(noise);
+        auto frame_buffer = camera.make_frame_buffer();
+        frame_buffer.enable_sensor_response();
+        frame_buffer.received_power().fill(RGB{1e-16f});
+        frame_buffer.received_power()(1, 1) = RGB{std::nanf(""), 1e-16f, 1e-16f};
+        frame_buffer.received_power()(2, 2) =
+            RGB{std::numeric_limits<float>::infinity(), 1e-16f, 1e-16f};
+
+        camera.readout(frame_buffer, units::Second(1.0));
+        const Image<RGB>& response = frame_buffer.sensor_response();
+        CHECK(std::isnan(response(1, 1)[0]));
+        CHECK(std::isnan(response(2, 2)[0]));
+        CHECK(std::isfinite(response(1, 1)[1]));
+        CHECK(std::isfinite(response(0, 0)[0]));
+    }
 }

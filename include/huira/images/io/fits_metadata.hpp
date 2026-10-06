@@ -60,10 +60,14 @@ struct FitsMetadata {
     // -- Data range ---------------------------------------------------
     //
     // These are standard FITS keywords written by real instruments.
-    // DATAMIN / DATAMAX are the actual min/max pixel values in the file
-    // (in stored units, i.e. ADU for integer BITPIX).
+    // DATAMIN / DATAMAX are the actual min/max of the defined pixel values
+    // in the file (physical values: DN for a sensor response).
     // SATURATE is the saturation level of the detector (e.g. 4095 for
-    // a 12-bit ADC).  The FITS writer populates these automatically.
+    // a 12-bit ADC).
+    //
+    // read_image_fits() fills them from the file. write_image_fits() sets
+    // them from the image it writes and ignores these fields, except
+    // SATURATE for a float image that is not a sensor response.
 
     std::optional<double> datamin;  // DATAMIN  – minimum pixel value
     std::optional<double> datamax;  // DATAMAX  – maximum pixel value

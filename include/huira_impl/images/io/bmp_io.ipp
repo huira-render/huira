@@ -154,18 +154,20 @@ inline BMPData read_bmp_raw_(const unsigned char* data, std::size_t size)
 // =========================================================================
 
 /**
- * @brief Reads a BMP from an in-memory buffer and returns linear RGB + alpha data.
+ * @brief Reads a BMP from an in-memory buffer and returns RGB + alpha data.
  *
  * @param data Pointer to the BMP data in memory
  * @param size Size of the data in bytes
  * @param read_alpha Whether to load the alpha channel if present (default: true)
- * @return An ImageBundle<RGB> containing the linear RGB image and an optional alpha image.
+ * @return An ImageBundle<RGB> containing the RGB image and an optional alpha image.
  */
 inline ImageBundle<RGB> read_image_bmp(const unsigned char* data, std::size_t size, bool read_alpha)
 {
     auto bmp_data = read_bmp_raw_(data, size);
 
     ImageBundle<RGB> bundle{Image<RGB>(bmp_data.resolution)};
+    // Stored values, labelled with the encoding they have (nothing is converted):
+    bundle.color_space = ColorSpaceHint::sRGB;
 
     bmp_data.has_alpha = read_alpha && bmp_data.has_alpha;
 
@@ -196,14 +198,14 @@ inline ImageBundle<RGB> read_image_bmp(const unsigned char* data, std::size_t si
 }
 
 /**
- * @brief Reads a BMP file and returns linear RGB + alpha data.
+ * @brief Reads a BMP file and returns RGB + alpha data.
  *
  * Convenience overload that reads the file into memory and forwards
  * to the buffer-based implementation.
  *
  * @param filepath Path to the BMP file to read
  * @param read_alpha Whether to load the alpha channel if present (default: true)
- * @return An ImageBundle<RGB> containing the linear RGB image and an optional alpha image.
+ * @return An ImageBundle<RGB> containing the RGB image and an optional alpha image.
  */
 inline ImageBundle<RGB> read_image_bmp(const fs::path& filepath, bool read_alpha)
 {
@@ -216,14 +218,14 @@ inline ImageBundle<RGB> read_image_bmp(const fs::path& filepath, bool read_alpha
 // =========================================================================
 
 /**
- * @brief Reads a BMP from an in-memory buffer and returns linear mono + alpha data.
+ * @brief Reads a BMP from an in-memory buffer and returns mono + alpha data.
  *
- * RGB channels are averaged after linearization to produce mono output.
+ * RGB channels are averaged to produce mono output.
  *
  * @param data Pointer to the BMP data in memory
  * @param size Size of the data in bytes
  * @param read_alpha Whether to load the alpha channel if present (default: true)
- * @return An ImageBundle<float> containing the linear mono image and an optional alpha image.
+ * @return An ImageBundle<float> containing the mono image and an optional alpha image.
  */
 inline ImageBundle<float>
 read_image_bmp_mono(const unsigned char* data, std::size_t size, bool read_alpha)
@@ -231,6 +233,8 @@ read_image_bmp_mono(const unsigned char* data, std::size_t size, bool read_alpha
     auto bmp_data = read_bmp_raw_(data, size);
 
     ImageBundle<float> bundle{Image<float>(bmp_data.resolution)};
+    // Stored values, labelled with the encoding they have (nothing is converted):
+    bundle.color_space = ColorSpaceHint::sRGB;
 
     bmp_data.has_alpha = read_alpha && bmp_data.has_alpha;
 
@@ -261,14 +265,14 @@ read_image_bmp_mono(const unsigned char* data, std::size_t size, bool read_alpha
 }
 
 /**
- * @brief Reads a BMP file and returns linear mono + alpha data.
+ * @brief Reads a BMP file and returns mono + alpha data.
  *
  * Convenience overload that reads the file into memory and forwards
  * to the buffer-based implementation.
  *
  * @param filepath Path to the BMP file to read
  * @param read_alpha Whether to load the alpha channel if present (default: true)
- * @return An ImageBundle<float> containing the linear mono image and an optional alpha image.
+ * @return An ImageBundle<float> containing the mono image and an optional alpha image.
  */
 inline ImageBundle<float> read_image_bmp_mono(const fs::path& filepath, bool read_alpha)
 {

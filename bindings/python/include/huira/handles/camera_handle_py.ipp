@@ -279,7 +279,10 @@ inline void bind_camera_model_handle(py::module_& m)
              py::arg("fwc"))
         .def("set_sensor_simulate_noise",
              &HandleType::set_sensor_simulate_noise,
-             py::arg("simulate_noise"))
+             py::arg("simulate_noise"),
+             "Turn the sensor's shot noise and read noise on (the default) or off. Off, each "
+             "pixel collects the expected number of electrons; the dark current's electrons and "
+             "the bias are still added, since they are not noise.")
         .def("set_sensor_read_noise", &HandleType::set_sensor_read_noise, py::arg("read_noise"))
         .def("set_sensor_dark_current",
              &HandleType::set_sensor_dark_current,
