@@ -1,5 +1,8 @@
 #pragma once
 
+#include <map>
+#include <string>
+
 #include "huira/handles/camera_handle.hpp"
 #include "huira/units/units_py.ipp"
 #include "pybind11/numpy.h"
@@ -9,6 +12,22 @@
 namespace py = pybind11;
 
 namespace huira {
+namespace detail {
+/// CameraModelHandle methods removed from the Python API, with when and what to use instead.
+inline const std::map<std::string, std::string>& removed_camera_methods()
+{
+    static const std::map<std::string, std::string> removed{
+        {"set_diopters", "v0.9.10. Use set_focus_diopters() instead."},
+        {"get_diopters", "v0.9.10. Use focus_diopters() instead."},
+        {"get_focus_distance", "v0.9.10. Use focus_distance() instead."},
+        {"set_sensor_resolution",
+         "v0.9.4. Use configure_sensor_from_pitch() or configure_sensor_from_size() instead."},
+        {"set_sensor_pixel_pitch", "v0.9.4. Use configure_sensor_from_pitch() instead."},
+        {"set_sensor_size", "v0.9.4. Use configure_sensor_from_size() instead."},
+    };
+    return removed;
+}
+} // namespace detail
 
 template <typename TSpectral>
 inline void bind_camera_model_handle(py::module_& m)
@@ -365,41 +384,19 @@ inline void bind_camera_model_handle(py::module_& m)
         .def("__bool__", &HandleType::valid)
         .def("__repr__", [](const HandleType&) { return "<CameraModelHandle>"; })
 
-        // ========================== //
-        // === DEPRECATED METHODS === //
-        // ========================== //
-        .def(
-            "set_diopters",
-            [](const HandleType& self, const py::object& dpts) {
-                throw std::runtime_error("API BREAKING CHANGE: set_diopters was removed in "
-                                         "v0.9.10. Use set_focus_diopters() instead.");
-            },
-            py::arg("diopters"))
-        .def("get_diopters",
-             [](const HandleType& self) {
-                 throw std::runtime_error("API BREAKING CHANGE: get_diopters was removed in "
-                                          "v0.9.10. Use focus_diopters() instead.");
-             })
-        .def("get_focus_distance",
-             [](const HandleType& self) {
-                 throw std::runtime_error("API BREAKING CHANGE: get_focus_distance was removed in "
-                                          "v0.9.10. Use focus_distance() instead.");
-             })
-        .def("set_sensor_resolution",
-             [](HandleType&, py::args, py::kwargs) {
-                 throw std::runtime_error(
-                     "API BREAKING CHANGE: set_sensor_resolution was removed in v0.9.4. "
-                     "Use configure_sensor_from_pitch() or configure_sensor_from_size() instead.");
-             })
-        .def("set_sensor_pixel_pitch",
-             [](HandleType&, py::args, py::kwargs) {
-                 throw std::runtime_error(
-                     "API BREAKING CHANGE: set_sensor_pixel_pitch was removed in v0.9.4. "
-                     "Use configure_sensor_from_pitch() instead.");
-             })
-        .def("set_sensor_size", [](HandleType&, py::args, py::kwargs) {
-            throw std::runtime_error("API BREAKING CHANGE: set_sensor_size was removed in v0.9.4. "
-                                     "Use configure_sensor_from_size() instead.");
+        // Methods removed in earlier versions do not exist, so hasattr() is False for them, but
+        // using one names what replaced it. (Python calls __getattr__ only for names it cannot
+        // find otherwise.)
+        .def("__getattr__", [](const py::object& self, const std::string& name) -> py::object {
+            const auto& removed = detail::removed_camera_methods();
+            const auto it = removed.find(name);
+            if (it != removed.end()) {
+                throw py::attribute_error("API BREAKING CHANGE: " + name + " was removed in " +
+                                          it->second);
+            }
+            throw py::attribute_error(
+                "'" + py::str(py::type::of(self).attr("__name__")).cast<std::string>() +
+                "' object has no attribute '" + name + "'");
         });
 }
 } // namespace huira
