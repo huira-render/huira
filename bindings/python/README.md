@@ -22,9 +22,9 @@ Initial work on Huira has been on the basic architecture as well as distribution
 
 If there are features you wish to see, that you don't see listed here, please feel free to submit a [Feature Request](https://github.com/huira-render/huira/issues/new?template=feature_request.md)
 
-### Currently Stable Features (as of v0.9.9)
+### Currently Stable Features (as of v0.9.10)
 - Radiometrically accurate rendering
-- Planetary BRDFS including Lambertian, Oren-Nayar, Cook-Torrance, McEwen, Lommel-Seeliger
+- Planetary BRDFs including Lambertian, Oren-Nayar, Cook-Torrance, McEwen, Lommel-Seeliger
 - Basic volumetric rendering of planetary atmospheres
 - Calibrated camera distortion models and common camera controls
 - Modeling of Point Spread Functions (diffraction and optical scattering)
@@ -40,9 +40,9 @@ If there are features you wish to see, that you don't see listed here, please fe
 ### Features Coming Soon (Order of Priority)
 | Feature | Status | Expected by | Version |
 | --- | --- | --- | --- |
-| SRP and Unresolved 3d Models | In-Progress | TBD | v0.9.10 |
-| Digital Elevation Maps | In-Progress | TBD | v0.9.11 |
-| Level-of-Detail | Designed | TBD | v0.9.12 |
+| SRP and Unresolved 3d Models | In-Progress | TBD | v0.9.11 |
+| Digital Elevation Maps | In-Progress | TBD | v0.9.12 |
+| Level-of-Detail | Designed | TBD | v0.9.13 |
 | LIDAR simulation | Planned | TBD | v1.0.X |
 | Comprehensive Tutorials | In-Progress | TBD | v1.0.X |
 | TLE support | Licensing | - | - |
@@ -60,15 +60,26 @@ Vira is also available on a [personal fork by the original author](https://githu
 If you use Huira in published work, please cite it. On the [Huira GitHub page](https://github.com/huira-render/huira), click **Cite this repository** in the sidebar for APA and BibTeX, or use:
 
 ```bibtex
-@misc{gnam_huira,
-  author       = {Gnam, Christopher},
-  title        = {Huira},
-  year         = {2026},
-  howpublished = {\url{https://github.com/huira-render/huira}}
+@software{gnam_huira,
+  author    = {Gnam, Christopher},
+  title     = {Huira},
+  year      = {2026},
+  url       = {https://github.com/huira-render/huira}
 }
 ```
 
 Please also note which version of Huira you used.
+
+## Use of AI Tools
+
+As the physical correctness of this library is critical, I feel it's important to acknowledge that AI coding assistants have been used during Huira's development. This has primarily been for:
+- Boilerplate
+- CI configuration and packaging
+- Documentation
+
+AI has also been involved in the development of several algorithms, and used as a "sounding board" during architectural brainstorming.
+
+With that said, every architecture and design decision in Huira is my own (and the core architecture was established before any AI usage). Every line of AI-generated code has been reviewed by me before being merged.
 
 ## License
 Huira is licensed under the [MIT License](https://github.com/huira-render/huira/blob/main/LICENSE)
