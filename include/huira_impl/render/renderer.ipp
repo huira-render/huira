@@ -27,6 +27,22 @@
 
 namespace huira {
 
+namespace detail {
+
+/// Whether every channel of a spectral value is finite: neither NaN nor infinite.
+template <IsSpectral TSpectral>
+[[nodiscard]] inline bool all_finite(const TSpectral& value)
+{
+    for (std::size_t c = 0; c < TSpectral::size(); ++c) {
+        if (!std::isfinite(value[c])) {
+            return false;
+        }
+    }
+    return true;
+}
+
+} // namespace detail
+
 template <IsSpectral TSpectral>
 void Renderer<TSpectral>::render(SceneView<TSpectral>& scene_view,
                                  FrameBuffer<TSpectral>& frame_buffer)
@@ -402,6 +418,10 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
     std::atomic<int> culled_tiles{0};
     std::atomic<int> validation_failures{0};
 
+    // Samples whose radiance was not finite, and pixels left with none that was:
+    std::atomic<std::size_t> dropped_samples{0};
+    std::atomic<std::size_t> pixels_without_estimate{0};
+
     tbb::parallel_for(
         tbb::blocked_range<int>(0, num_tiles), [&](const tbb::blocked_range<int>& range) {
             for (int tile_idx = range.begin(); tile_idx < range.end(); ++tile_idx) {
@@ -483,6 +503,8 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                 }
 
                 bool tile_hit_geometry = false;
+                std::size_t tile_dropped_samples = 0;
+                std::size_t tile_pixels_without_estimate = 0;
 
                 // Per-tile RNG seeded from tile index for reproducibility:
                 RandomSampler<float> sampler(static_cast<unsigned int>(tile_idx));
@@ -507,10 +529,13 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
 
                         TSpectral mean{0};
                         TSpectral M2{0}; // sum of squared deviations
-                        int samples_taken = 0;
+                        int samples_drawn = 0;
+                        int samples_taken = 0; ///< Those with a finite radiance.
                         float inv_samples = 0.0f;
 
                         for (int s = 0; s < spp_; ++s) {
+                            ++samples_drawn;
+
                             // Jittered sub-pixel sample:
                             float sx = static_cast<float>(x) + sampler.get_1d();
                             float sy = static_cast<float>(y) + sampler.get_1d();
@@ -621,6 +646,19 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                                         prev_bsdf_pdf = ps.p;
                                         continue;
 
+                                    } else if (std::isinf(t_seg)) {
+                                        // The ray leaves the scene without leaving the medium
+                                        // it entered, as it does after passing through a
+                                        // surface that encloses nothing (an alpha-cut panel,
+                                        // say): every primitive carries a medium, a vacuum by
+                                        // default. Over an infinite path the transmittance is 1
+                                        // in a vacuum and 0 otherwise; computed as below, it
+                                        // would be exp(-0 * inf) / exp(-0 * inf): NaN.
+                                        TSpectral Tr{0.f};
+                                        for (std::size_t c = 0; c < TSpectral::size(); ++c) {
+                                            Tr[c] = (ext[c] > 0.f) ? 0.f : 1.f;
+                                        }
+                                        throughput = throughput * Tr;
                                     } else {
                                         TSpectral Tr{0.f};
                                         for (std::size_t c = 0; c < TSpectral::size(); ++c) {
@@ -878,7 +916,10 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
 
                             TSpectral sample_radiance = direct_radiance + indirect_radiance;
 
-                            if (std::isnan(sample_radiance[0])) {
+                            // A sample whose radiance is not finite, in any channel, is left
+                            // out of the pixel's average, and counted (see the warning below).
+                            if (!detail::all_finite(sample_radiance)) {
+                                ++tile_dropped_samples;
                                 continue;
                             }
 
@@ -908,13 +949,25 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                                 }
                             }
                         }
-                        float inv_spp = 1.0f / static_cast<float>(samples_taken);
-
-                        // Average over samples and write to frame buffer:
-                        TSpectral avg_radiance = pixel_radiance * inv_spp;
-                        TSpectral direct_radiance = pixel_direct_radiance * inv_spp;
-                        TSpectral indirect_radiance = pixel_indirect_radiance * inv_spp;
-                        Vec3<float> avg_camera_normals = glm::normalize(camera_normals * inv_spp);
+                        // Average over samples and write to frame buffer. The radiance is
+                        // averaged over the samples kept; a pixel with none has no estimate of
+                        // it, and is NaN, which the sensor's readout reports. What the rays hit
+                        // first (albedo, normals) is averaged over every sample.
+                        const bool has_estimate = samples_taken > 0;
+                        if (!has_estimate) {
+                            ++tile_pixels_without_estimate;
+                        }
+                        const float inv_spp =
+                            has_estimate ? 1.0f / static_cast<float>(samples_taken) : 0.0f;
+                        const float inv_drawn = 1.0f / static_cast<float>(samples_drawn);
+                        const TSpectral no_estimate{std::numeric_limits<float>::quiet_NaN()};
+                        TSpectral avg_radiance =
+                            has_estimate ? pixel_radiance * inv_spp : no_estimate;
+                        TSpectral direct_radiance =
+                            has_estimate ? pixel_direct_radiance * inv_spp : no_estimate;
+                        TSpectral indirect_radiance =
+                            has_estimate ? pixel_indirect_radiance * inv_spp : no_estimate;
+                        Vec3<float> avg_camera_normals = glm::normalize(camera_normals * inv_drawn);
 
                         if (primary_occluder) {
                             occluder_mask_(x, y) = uint8_t{1};
@@ -932,7 +985,7 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                         }
 
                         if (frame_buffer.has_albedo()) {
-                            frame_buffer.albedo()(x, y) = albedo_total * inv_spp;
+                            frame_buffer.albedo()(x, y) = albedo_total * inv_drawn;
                         }
 
                         if (frame_buffer.has_geometry_ids()) {
@@ -969,8 +1022,27 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                 if (tile_culled && tile_hit_geometry) {
                     validation_failures.fetch_add(1, std::memory_order_relaxed);
                 }
+                if (tile_dropped_samples > 0) {
+                    dropped_samples.fetch_add(tile_dropped_samples, std::memory_order_relaxed);
+                    pixels_without_estimate.fetch_add(tile_pixels_without_estimate,
+                                                      std::memory_order_relaxed);
+                }
             }
         });
+
+    const std::size_t dropped = dropped_samples.load();
+    if (dropped > 0) {
+        const std::size_t empty = pixels_without_estimate.load();
+        HUIRA_LOG_WARNING(
+            "Renderer::render - " + std::to_string(dropped) +
+            " sample(s) had a radiance that is not finite (NaN or infinite), and were left out "
+            "of their pixels' averages" +
+            (empty > 0
+                 ? ", and " + std::to_string(empty) + " pixel(s) had no other sample, so are NaN"
+                 : std::string{}) +
+            ". This points to a problem upstream, such as a material or light returning a "
+            "non-finite radiance.");
+    }
 
     // Dilate the occluder mask by one pixel (for safety margin)
     if (any_occluder.load(std::memory_order_relaxed)) {

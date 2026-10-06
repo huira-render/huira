@@ -77,7 +77,8 @@ class CookTorranceBSDF final : public BSDF<TSpectral> {
     /// Minimum roughness to prevent numerical singularity at perfect specularity.
     static constexpr float min_roughness_ = 0.01f;
 
-    [[nodiscard]] static float ggx_D(float n_dot_h, float alpha2) noexcept;
+    [[nodiscard]] static float
+    ggx_D(const Vec3<float>& n, const Vec3<float>& h, float alpha2) noexcept;
 
     [[nodiscard]] static float smith_G1(float n_dot_v, float alpha2) noexcept;
 

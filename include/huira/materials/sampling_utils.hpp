@@ -86,6 +86,29 @@ struct MicrofacetSample {
 };
 
 /**
+ * @brief The GGX (Trowbridge-Reitz) normal distribution D(h), from the squared cosine and sine
+ * of the angle between the microfacet normal h and the surface normal.
+ *
+ * D = alpha^2 / (pi (cos^2 (alpha^2 - 1) + 1)^2), computed here as alpha^2 / (pi (sin^2 +
+ * cos^2 alpha^2)^2). The two are equal, but the first, in float, loses alpha^2 on smooth
+ * surfaces: near h = n it subtracts numbers close to 1, whose rounding error (6e-8) is as large
+ * as alpha^2 at roughness 0.016, and below roughness 0.013, alpha^2 - 1 rounds to -1, leaving a
+ * denominator of 0 and an infinite D. Give sin^2 as computed directly (from a cross product, or
+ * from local coordinates), not as 1 - cos^2: cos rounds to 1 within 2.4e-4 rad of the normal,
+ * which would flatten the lobe of a surface smoother than that, and make it reflect several
+ * times the light it should (18 times at roughness 0.01).
+ *
+ * @param cos2 Squared cosine of the angle between h and the normal (h above the surface)
+ * @param sin2 Squared sine of that angle
+ * @param alpha2 Roughness to the fourth power (alpha = roughness^2)
+ */
+[[nodiscard]] inline float ggx_distribution(float cos2, float sin2, float alpha2) noexcept
+{
+    const float denom = sin2 + cos2 * alpha2;
+    return alpha2 / (std::numbers::pi_v<float> * denom * denom);
+}
+
+/**
  * @brief Samples a microfacet normal from the GGX (Trowbridge-Reitz) distribution.
  * PDF (with respect to half-vector) = D(h) * cos(theta_h)
  */
@@ -95,15 +118,18 @@ ggx_sample_half_vector(float u1, float u2, float roughness) noexcept
     const float alpha = roughness * roughness;
     const float alpha2 = alpha * alpha;
 
-    const float cos_theta2 = (1.0f - u1) / (1.0f + (alpha2 - 1.0f) * u1);
+    // tan^2 = alpha^2 u1 / (1 - u1): the usual cos^2 = (1 - u1) / (1 + (alpha^2 - 1) u1) is 1
+    // for every u1 on smooth surfaces (see ggx_distribution()).
+    const float tan_theta2 = alpha2 * u1 / std::max(1.0f - u1, 1e-7f);
+    const float cos_theta2 = 1.0f / (1.0f + tan_theta2);
+    const float sin_theta2 = tan_theta2 * cos_theta2;
     const float cos_theta = std::sqrt(cos_theta2);
-    const float sin_theta = std::sqrt(std::max(0.0f, 1.0f - cos_theta2));
+    const float sin_theta = std::sqrt(sin_theta2);
     const float phi = 2.0f * std::numbers::pi_v<float> * u2;
 
     const Vec3<float> h = {sin_theta * std::cos(phi), sin_theta * std::sin(phi), cos_theta};
 
-    const float denom = cos_theta2 * (alpha2 - 1.0f) + 1.0f;
-    const float D = alpha2 / (std::numbers::pi_v<float> * denom * denom);
+    const float D = ggx_distribution(cos_theta2, sin_theta2, alpha2);
     const float pdf = D * cos_theta;
 
     return {.half_vector = h, .pdf = std::max(pdf, 1e-8f)};
@@ -146,10 +172,8 @@ ggx_vndf_sample(const Vec3<float>& wo, float roughness, float u1, float u2) noex
         glm::normalize(Vec3<float>{alpha * Nh.x, alpha * Nh.y, std::max(0.0f, Nh.z)});
 
     const float cos_theta_h = h.z;
-    const float cos_theta_h2 = cos_theta_h * cos_theta_h;
     const float alpha2 = alpha * alpha;
-    const float denom_D = cos_theta_h2 * (alpha2 - 1.0f) + 1.0f;
-    const float D = alpha2 / (std::numbers::pi_v<float> * denom_D * denom_D);
+    const float D = ggx_distribution(cos_theta_h * cos_theta_h, h.x * h.x + h.y * h.y, alpha2);
 
     const float cos_theta_o = wo.z;
     const float cos_theta_o2 = cos_theta_o * cos_theta_o;

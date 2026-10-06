@@ -6,6 +6,8 @@
 #include <memory>
 #include <sstream>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include "huira/cameras/apertures/circular_aperture.hpp"
 #include "huira/cameras/psfs/harvey_shack_scatter.hpp"
@@ -33,6 +35,43 @@ inline std::string position_number(double value)
     out.precision(10);
     out << value;
     return out.str();
+}
+
+/**
+ * @brief Convolve an image in place with convolve(image), leaving out the pixels that are not
+ * finite (NaN or infinite in any channel), and warn if there were any.
+ *
+ * A convolution spreads every pixel over the kernel, and one through FFTs mixes every pixel
+ * into every other: a single NaN pixel would make the whole image NaN. The pixels that are not
+ * finite are taken as no light for the convolution, and put back as they were afterwards, so
+ * that they stay where they are (the sensor's readout reports them), and the rest of the image
+ * is convolved as if they were black.
+ */
+template <IsSpectral TSpectral, typename Convolve>
+void convolve_finite_pixels(Image<TSpectral>& image, const char* what, Convolve&& convolve)
+{
+    std::vector<std::pair<std::size_t, TSpectral>> not_finite;
+    for (std::size_t i = 0; i < image.size(); ++i) {
+        for (std::size_t c = 0; c < TSpectral::size(); ++c) {
+            if (!std::isfinite(image[i][c])) {
+                not_finite.emplace_back(i, image[i]);
+                image[i] = TSpectral{0.f};
+                break;
+            }
+        }
+    }
+
+    convolve(image);
+
+    if (!not_finite.empty()) {
+        for (const auto& [i, value] : not_finite) {
+            image[i] = value;
+        }
+        HUIRA_LOG_WARNING(std::string{"CameraModel - "} + std::to_string(not_finite.size()) +
+                          " pixel(s) were not finite (NaN or infinite) before the " + what +
+                          " convolution. They were left out of it, so whatever light they had "
+                          "is missing from the pixels around them, and they stay as they were.");
+    }
 }
 } // namespace detail
 
@@ -1280,14 +1319,16 @@ void CameraModel<TSpectral>::ensure_wings_spectrum_()
 template <IsSpectral TSpectral>
 void CameraModel<TSpectral>::apply_psf_convolution_(Image<TSpectral>& image) const
 {
-    const Image<TSpectral>& kernel = psf_convolution_kernel_;
-    if (kernel.width() * kernel.height() <= DIRECT_CONVOLUTION_MAX_AREA_) {
-        image.convolve(kernel);
-        return;
-    }
-    // The convolver's working buffers are shared:
-    std::lock_guard<std::mutex> lock(optics_mutex_);
-    tbb::this_task_arena::isolate([&] { psf_convolver_.apply(image); });
+    detail::convolve_finite_pixels(image, "PSF", [this](Image<TSpectral>& finite) {
+        const Image<TSpectral>& kernel = psf_convolution_kernel_;
+        if (kernel.width() * kernel.height() <= DIRECT_CONVOLUTION_MAX_AREA_) {
+            finite.convolve(kernel);
+            return;
+        }
+        // The convolver's working buffers are shared:
+        std::lock_guard<std::mutex> lock(optics_mutex_);
+        tbb::this_task_arena::isolate([&] { psf_convolver_.apply(finite); });
+    });
 }
 
 /**
@@ -1297,13 +1338,16 @@ void CameraModel<TSpectral>::apply_psf_convolution_(Image<TSpectral>& image) con
 template <IsSpectral TSpectral>
 void CameraModel<TSpectral>::apply_wings_convolution_(Image<TSpectral>& image) const
 {
-    const Image<TSpectral>& kernel = psf_wings_kernel_;
-    if (kernel.width() * kernel.height() <= DIRECT_CONVOLUTION_MAX_AREA_) {
-        image.convolve(kernel);
-        return;
-    }
-    std::lock_guard<std::mutex> lock(optics_mutex_);
-    tbb::this_task_arena::isolate([&] { wings_convolver_.apply(image); });
+    detail::convolve_finite_pixels(
+        image, "scattered-light wings", [this](Image<TSpectral>& finite) {
+            const Image<TSpectral>& kernel = psf_wings_kernel_;
+            if (kernel.width() * kernel.height() <= DIRECT_CONVOLUTION_MAX_AREA_) {
+                finite.convolve(kernel);
+                return;
+            }
+            std::lock_guard<std::mutex> lock(optics_mutex_);
+            tbb::this_task_arena::isolate([&] { wings_convolver_.apply(finite); });
+        });
 }
 
 /**
