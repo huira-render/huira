@@ -57,7 +57,7 @@ def main():
     camera_model.set_sensor_bit_depth(12)
     camera_model.set_sensor_quantum_efficiency(0.8)
     camera_model.set_sensor_full_well_capacity(20000)
-    camera_model.set_sensor_simulate_noise(False)
+    camera_model.enable_sensor_noise(False)
     print(f"Sensor: {camera_model.sensor_bit_depth()} bits, "
           f"{camera_model.sensor_full_well_capacity()} e- full well, "
           f"QE {camera_model.sensor_quantum_efficiency()}")

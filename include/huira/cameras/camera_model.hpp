@@ -33,6 +33,7 @@
 #include "huira/scene/node.hpp"
 #include "huira/scene/scene_object.hpp"
 #include "huira/util/logger.hpp"
+#include "huira/util/removed_api.hpp"
 
 namespace huira {
 template <IsSpectral TSpectral>
@@ -133,7 +134,9 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
                         units::Millimeter anchor_focal_length,
                         float skew = 0.f);
 
-    Rotation<double> sensor_rotation() const;
+    void set_sensor_roll(units::Radian angle);
+    units::Radian sensor_roll() const;
+    Rotation<double> sensor_orientation() const;
 
     std::pair<units::Micrometer, units::Micrometer> pixel_pitch() const;
     Mat3<float> intrinsic_matrix() const;
@@ -189,10 +192,11 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
 
     void precompute();
     [[nodiscard]] bool is_precomputed() const;
-    void set_auto_precompute(bool auto_precompute = true);
+    void enable_auto_precompute(bool auto_precompute = true);
 
-    /// Whether a render builds out-of-date optics kernels itself. See set_auto_precompute().
-    [[nodiscard]] bool auto_precompute() const { return auto_precompute_; }
+    /// Whether a render builds an out-of-date camera itself (the default). See
+    /// enable_auto_precompute().
+    [[nodiscard]] bool auto_precompute_enabled() const { return auto_precompute_; }
 
     void enable_depth_of_field(bool depth_of_field = true);
 
@@ -223,6 +227,7 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     Ray<TSpectral> cast_ray(const Pixel& pixel, Sampler<float>& sampler) const;
     Ray<TSpectral> cast_ray(const Pixel& pixel) const;
     Ray<TSpectral> cast_ray(int x, int y) const;
+    std::optional<Ray<TSpectral>> try_cast_ray(const Pixel& pixel) const;
 
     /// Get the frustum representing the camera's field of view. Found from the image's boundary
     /// when first needed after a change (see precompute()).
@@ -257,22 +262,63 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
         sensor_->readout(fb, exposure_time);
     }
 
-    float get_projected_aperture_area(const Vec3<float>& direction) const;
+    float projected_aperture_area(const Vec3<float>& direction) const;
 
     /// Get the sensor resolution.
     Resolution resolution() const { return sensor_->resolution(); }
-    Resolution res() const { return sensor_->resolution(); }
 
     /// Get the type of the camera model.
     std::string type() const override { return "CameraModel"; }
 
     /// Create a frame buffer matching the sensor resolution.
-    FrameBuffer<TSpectral> make_frame_buffer() const { return FrameBuffer<TSpectral>(res()); }
+    FrameBuffer<TSpectral> make_frame_buffer() const
+    {
+        return FrameBuffer<TSpectral>(resolution());
+    }
 
     void use_blender_convention(bool value = true);
 
-    /// Check if the Blender convention is enabled for the camera model.
-    bool is_blender_convention() const { return blender_convention_; }
+    /// Whether the camera uses Blender's axes (-z forward, y up) rather than OpenCV's (z forward,
+    /// y down, the default). See use_blender_convention().
+    bool uses_blender_convention() const { return blender_convention_; }
+
+    std::string describe() const;
+
+    // Removed: calling these fails to compile, with what to use instead.
+    template <typename... Args>
+    Rotation<double> sensor_rotation(Args&&...) const
+    {
+        static_assert(detail::removed_api<Args...>,
+                      "CameraModel::sensor_rotation() was removed in v0.9.10. Use "
+                      "sensor_orientation() for the rotation, or sensor_roll() for the angle.");
+        return {};
+    }
+
+    template <typename... Args>
+    bool is_blender_convention(Args&&...) const
+    {
+        static_assert(detail::removed_api<Args...>,
+                      "is_blender_convention() was removed in v0.9.10. Use "
+                      "uses_blender_convention() instead.");
+        return {};
+    }
+
+    template <typename... Args>
+    float get_projected_aperture_area(Args&&...) const
+    {
+        static_assert(detail::removed_api<Args...>,
+                      "get_projected_aperture_area() was removed in v0.9.10. Use "
+                      "projected_aperture_area() instead.");
+        return {};
+    }
+
+    template <typename... Args>
+    Resolution res(Args&&...) const
+    {
+        static_assert(detail::removed_api<Args...>,
+                      "CameraModel::res() was removed in v0.9.10. Use resolution() instead.");
+        return resolution();
+    }
 
   protected:
     float focal_length_ = .05f;

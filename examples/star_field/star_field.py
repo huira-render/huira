@@ -40,7 +40,7 @@ def main():
     camera_model = scene.new_camera_model()
     camera_model.set_focal_length(mm(125))
     camera_model.set_fstop(3.30)
-    camera_model.set_sensor_rotation(deg(90))
+    camera_model.set_sensor_roll(deg(90))
     camera_model.configure_sensor_from_pitch((1024, 1024), um(8.5))
     camera_model.set_sensor_bit_depth(14)
     camera_model.set_focus_diopters(dpt(0.0025))

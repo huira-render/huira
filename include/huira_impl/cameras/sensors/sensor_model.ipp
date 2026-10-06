@@ -21,14 +21,14 @@ SensorModel<TSpectral>::SensorModel(SensorConfig<TSpectral> config)
     set_pixel_pitch(config.pitch_x, config.pitch_y);
     set_quantum_efficiency(config.quantum_efficiency);
     set_full_well_capacity(config.full_well_capacity);
-    set_simulate_noise(config.simulate_noise);
+    enable_noise(config.simulate_noise);
     set_read_noise(config.read_noise);
     set_dark_current(config.dark_current);
     set_bias_level_dn(config.bias_level_dn);
     set_bit_depth(config.bit_depth);
     set_conversion_gain(config.gain);
     set_unity_db(config.unity_db);
-    set_rotation(config.rotation);
+    set_roll(config.rotation);
 }
 
 /**
@@ -314,16 +314,19 @@ void SensorModel<TSpectral>::set_gain_db(float gain_db)
 }
 
 /**
- * @brief Sets the rotation of the sensor about the optical axis.
+ * @brief Sets the sensor's roll: its rotation about the optical axis, relative to the camera.
  *
- * @param angle The rotation angle.
+ * The sensor's x axis is turned by the angle toward its y axis, so the scene turns the other
+ * way in the image. See CameraModel::set_sensor_roll().
+ *
+ * @param angle The roll angle (any angle unit).
  * @throws std::runtime_error if the angle is not finite.
  */
 template <IsSpectral TSpectral>
-void SensorModel<TSpectral>::set_rotation(units::Radian angle)
+void SensorModel<TSpectral>::set_roll(units::Radian angle)
 {
     if (!std::isfinite(angle.to_si())) {
-        HUIRA_THROW_ERROR("SensorModel::set_rotation - Rotation must be finite: " +
+        HUIRA_THROW_ERROR("SensorModel::set_roll - Roll must be finite: " +
                           std::to_string(angle.to_si()) + " rad");
     }
     config_.rotation = angle;

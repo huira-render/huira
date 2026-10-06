@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <string>
 #include <utility>
 
 #include "huira/cameras/camera_model.hpp"
@@ -90,7 +91,7 @@ class CameraModelHandle : public Handle<CameraModel<TSpectral>> {
     void set_sensor_quantum_efficiency(double qe) const;
     void set_sensor_quantum_efficiency(TSpectral qe) const;
     void set_sensor_full_well_capacity(float fwc) const;
-    void set_sensor_simulate_noise(bool simulate_noise) const;
+    void enable_sensor_noise(bool noise = true) const;
     void set_sensor_read_noise(float read_noise) const;
     void set_sensor_dark_current(float dark_current) const;
     void set_sensor_bias_level(float bias_level) const;
@@ -99,14 +100,14 @@ class CameraModelHandle : public Handle<CameraModel<TSpectral>> {
     void set_sensor_gain_db(float gain_db) const;
     void set_sensor_unity_db(float unity_db) const;
 
-    void set_sensor_rotation(units::Radian angle) const;
+    void set_sensor_roll(units::Radian angle) const;
 
     void set_sensor_noise_seed(std::uint64_t seed) const;
     std::uint64_t sensor_noise_seed() const;
 
     TSpectral sensor_quantum_efficiency() const;
     float sensor_full_well_capacity() const;
-    bool sensor_simulate_noise() const;
+    bool sensor_noise_enabled() const;
     float sensor_read_noise() const;
     float sensor_dark_current() const;
     float sensor_bias_level() const;
@@ -114,7 +115,8 @@ class CameraModelHandle : public Handle<CameraModel<TSpectral>> {
     float sensor_conversion_gain() const;
     float sensor_gain_db() const;
     float sensor_unity_db() const;
-    units::Radian sensor_rotation() const;
+    units::Radian sensor_roll() const;
+    Rotation<double> sensor_orientation() const;
 
     template <IsAperture TAperture, typename... Args>
     void set_aperture(Args&&... args) const;
@@ -153,8 +155,8 @@ class CameraModelHandle : public Handle<CameraModel<TSpectral>> {
 
     void precompute() const;
     bool is_precomputed() const;
-    void set_auto_precompute(bool auto_precompute = true) const;
-    bool auto_precompute() const;
+    void enable_auto_precompute(bool auto_precompute = true) const;
+    bool auto_precompute_enabled() const;
 
     void enable_depth_of_field(bool depth_of_field = true) const;
     bool depth_of_field_enabled() const;
@@ -179,11 +181,14 @@ class CameraModelHandle : public Handle<CameraModel<TSpectral>> {
     Ray<TSpectral> cast_ray(const Pixel& pixel) const;
     Ray<TSpectral> cast_ray(const Pixel& pixel, Sampler<float>& sampler) const;
     Ray<TSpectral> cast_ray(int x, int y) const;
+    std::optional<Ray<TSpectral>> try_cast_ray(const Pixel& pixel) const;
 
     FrameBuffer<TSpectral> make_frame_buffer() const;
 
     void use_blender_convention(bool value = true) const;
-    bool is_blender_convention() const;
+    bool uses_blender_convention() const;
+
+    std::string describe() const;
 
     friend class Scene<TSpectral>;
     friend class SceneView<TSpectral>;
@@ -211,6 +216,22 @@ class CameraModelHandle : public Handle<CameraModel<TSpectral>> {
         static_assert(detail::removed_api<Args...>,
                       "get_focus_distance() was removed in v0.9.10. Use focus_distance() instead.");
         return {};
+    }
+
+    template <typename... Args>
+    void set_sensor_rotation(Args&&...) const
+    {
+        static_assert(detail::removed_api<Args...>,
+                      "set_sensor_rotation() was removed in v0.9.10. Use set_sensor_roll() "
+                      "instead.");
+    }
+
+    template <typename... Args>
+    void set_sensor_simulate_noise(Args&&...) const
+    {
+        static_assert(detail::removed_api<Args...>,
+                      "set_sensor_simulate_noise() was removed in v0.9.10. Use "
+                      "enable_sensor_noise() instead.");
     }
 
     template <typename... Args>
