@@ -11,6 +11,7 @@
 #include "huira/cameras/distortion/brown_distortion.hpp"
 #include "huira/cameras/distortion/opencv_distortion.hpp"
 #include "huira/cameras/distortion/owen_distortion.hpp"
+#include "huira/cameras/psfs/psf_tables.hpp"
 #include "huira/cameras/sensors/sensor_model.hpp"
 #include "huira/cameras/sensors/simple_sensor.hpp"
 
@@ -72,6 +73,7 @@ template class OwenDistortion<TestSpectral>;
 template class SimpleSensor<TestSpectral>;
 template class CameraModel<TestSpectral>;
 template class DefocusKernel<TestSpectral>;
+template class PsfTables<TestSpectral>;
 
 template class Ray<TestSpectral>;
 template class Rotation<TestFloat>;

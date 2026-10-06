@@ -792,6 +792,64 @@ const Image<TSpectral>& CameraModel<TSpectral>::get_psf_kernel(float u, float v)
     return psf_->get_kernel(u, v);
 }
 
+/**
+ * @brief The light an unresolved source puts in each pixel around it, per channel, as the PSF's
+ * tables give it.
+ *
+ * Each pixel holds the fraction of the source's light, in each channel, that falls on it: the
+ * PSF integrated over the pixel, for the source at its exact position. The PSF is the aperture's
+ * diffraction pattern, averaged evenly over each spectral bin's wavelengths, for a circular
+ * aperture; scattered light and defocus are not included. See PsfTables for how it is computed
+ * and how accurate it is.
+ *
+ * With no PSF (see delete_psf()), the pixel the source falls in holds all of its light.
+ *
+ * The tables are built the first time they are needed after the optics change: the focal
+ * length, aperture, pixel pitch or resolution. That can take a second or two.
+ *
+ * @param radius The image is 2 radius + 1 pixels square, centered on the pixel the source is
+ *        offset from.
+ * @param x_offset The source's position right of the center pixel's center, in pixels.
+ * @param y_offset Its position below the center pixel's center, in pixels.
+ * @return The image. Each channel sums to the part of the source's light that falls within it.
+ * @throws std::runtime_error if the radius is negative or over MAX_PSF_IMAGE_RADIUS, an offset
+ *         is not finite, or the PSF was set with set_psf() or set_measured_psf().
+ */
+template <IsSpectral TSpectral>
+Image<TSpectral> CameraModel<TSpectral>::psf_image(int radius, float x_offset, float y_offset)
+{
+    if (radius < 0 || radius > MAX_PSF_IMAGE_RADIUS) {
+        HUIRA_THROW_ERROR("CameraModel::psf_image - The radius must be from 0 to " +
+                          std::to_string(MAX_PSF_IMAGE_RADIUS) + ": " + std::to_string(radius));
+    }
+    if (!std::isfinite(x_offset) || !std::isfinite(y_offset)) {
+        HUIRA_THROW_ERROR("CameraModel::psf_image - The offsets must be finite: " +
+                          std::to_string(x_offset) + ", " + std::to_string(y_offset));
+    }
+    if (!has_psf()) {
+        const int size = 2 * radius + 1;
+        Image<TSpectral> image(size, size, TSpectral{0.f});
+        const auto x = static_cast<long>(std::floor(static_cast<double>(x_offset) + 0.5)) + radius;
+        const auto y = static_cast<long>(std::floor(static_cast<double>(y_offset) + 0.5)) + radius;
+        if (x >= 0 && x < size && y >= 0 && y < size) {
+            image(static_cast<int>(x), static_cast<int>(y)) = TSpectral{1.f};
+        }
+        return image;
+    }
+    if (!use_aperture_psf_) {
+        HUIRA_THROW_ERROR("CameraModel::psf_image - Only the aperture's diffraction pattern is "
+                          "supported, not a PSF set with set_psf() or set_measured_psf()");
+    }
+
+    std::shared_ptr<const PsfTables<TSpectral>> tables;
+    {
+        std::lock_guard<std::mutex> lock(optics_mutex_);
+        tbb::this_task_arena::isolate([&] { ensure_psf_tables_(); });
+        tables = psf_tables_;
+    }
+    return tables->image(radius, static_cast<double>(x_offset), static_cast<double>(y_offset));
+}
+
 /// Get the radius in pixels of the PSF's stamps for unresolved sources; 0 without a PSF.
 template <IsSpectral TSpectral>
 int CameraModel<TSpectral>::get_psf_radius() const
@@ -1214,6 +1272,43 @@ void CameraModel<TSpectral>::ensure_defocus_()
     const int reach = std::max(sensor_->resolution().x, sensor_->resolution().y) + 1;
     defocus_kernel_.build(*aperture_, radius, DEFOCUS_BANKS_, reach);
     defocus_built_at_ = optics_version_;
+}
+
+/**
+ * @brief Build the tables psf_image() reads, if they are out of date.
+ *
+ * A source lights pixels up to a frame's diagonal away and can lie as far outside the frame, so
+ * the tables reach twice the diagonal.
+ */
+template <IsSpectral TSpectral>
+void CameraModel<TSpectral>::ensure_psf_tables_()
+{
+    if (psf_tables_ != nullptr && !stale_(psf_tables_built_at_,
+                                          {OpticsInput::FocalLength,
+                                           OpticsInput::PixelPitch,
+                                           OpticsInput::Aperture,
+                                           OpticsInput::Resolution})) {
+        return;
+    }
+    const auto start = std::chrono::steady_clock::now();
+    const Vec2<float> pitch = sensor_->pixel_pitch();
+    const Resolution resolution = sensor_->resolution();
+    const double aspect = static_cast<double>(pitch.y) / static_cast<double>(pitch.x);
+    const double reach = 2.0 * std::hypot(static_cast<double>(resolution.x),
+                                          aspect * static_cast<double>(resolution.y));
+    const double fnumber = static_cast<double>(focal_length_) / aperture_diameter().to_si();
+    psf_tables_ = std::make_shared<const PsfTables<TSpectral>>(PsfTables<TSpectral>::airy(
+        fnumber, static_cast<double>(pitch.x), static_cast<double>(pitch.y), reach));
+    psf_tables_built_at_ = optics_version_;
+
+    const std::chrono::duration<double> elapsed = std::chrono::steady_clock::now() - start;
+    std::ostringstream message;
+    message << "CameraModel - Built the PSF's tables in " << std::fixed << std::setprecision(2)
+            << elapsed.count()
+            << " seconds: " << static_cast<double>(psf_tables_->memory_bytes()) / (1024.0 * 1024.0)
+            << " MiB, near table to " << psf_tables_->near_radius() << " pixels at 1/"
+            << psf_tables_->near_samples() << " pixel";
+    HUIRA_LOG_INFO(message.str());
 }
 
 /**
