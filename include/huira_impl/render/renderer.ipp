@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <utility>
 #include <vector>
 
 #include "tbb/blocked_range.h"
@@ -1099,9 +1100,9 @@ struct RenderItem {
  * The rendering pipeline:
  * 1. Collects all stars and unresolved objects into a unified list
  * 2. Builds a radius LUT and assigns per-source effective PSF radii based on irradiance
- * 3. Projects sources to screen space and bins them into tiles
- * 4. Renders each tile in parallel into local buffers
- * 5. Combines tile buffers into the final frame buffer
+ * 3. Projects sources to screen space, including those just outside the image whose stamps
+ *    reach into it, and lists each in every tile its stamp reaches
+ * 4. Renders the tiles in parallel, each writing only its own pixels of the frame
  *
  * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  * @param scene_view The scene view containing stars and unresolved objects
@@ -1183,34 +1184,60 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
 
     std::vector<RenderItem<TSpectral>> items;
 
-    // Create the screens-pace tiles for parallel rendering:
+    // Sources are rendered in screen-space tiles, in parallel. Each source is listed in every
+    // tile its light reaches, and each tile writes only its own pixels, straight into the
+    // frame: memory is the frame and the lists, whatever the stamps' size.
     constexpr int TILE_SIZE = 64;
 
     int tiles_x = (fb_width + TILE_SIZE - 1) / TILE_SIZE;
     int tiles_y = (fb_height + TILE_SIZE - 1) / TILE_SIZE;
     int num_tiles = tiles_x * tiles_y;
 
-    float res_x = static_cast<float>(camera->resolution().x);
-    float res_y = static_cast<float>(camera->resolution().y);
-
-    // Process arcs into tiles:
-    struct ProjectedItem {
-        std::size_t item_idx;
-        Pixel projected;
-        float weight;
-        TSpectral irradiance;
-        Vec3<float> direction;
-        float range; ///< Distance to the source, for the occlusion query's far limit.
-        float time;  ///< Shutter parameter in [0, 1], for motion-blurred occluders.
+    // Polyphase stamp kernels hold the kernel pre-shifted by bank / banks of a pixel. Each
+    // source uses the nearest bank, which keeps the quantization error unbiased (within half a
+    // bank either way)
+    const int stamp_banks = use_defocus ? defocus.banks() : (use_psf_direct ? psf->get_banks() : 0);
+    struct StampPhase {
+        int base;    ///< Pixel the kernel's center pixel lands on.
+        float phase; ///< Fraction for get_kernel(), mid-way through the chosen bank.
+    };
+    auto nearest_stamp_phase = [stamp_banks](float center) {
+        const long banks = static_cast<long>(stamp_banks);
+        const long k = std::lround(static_cast<double>(center) * static_cast<double>(banks));
+        long base = k / banks;
+        long bank = k % banks;
+        if (bank < 0) {
+            bank += banks;
+            base -= 1;
+        }
+        return StampPhase{static_cast<int>(base),
+                          (static_cast<float>(bank) + 0.5f) / static_cast<float>(banks)};
     };
 
-    std::vector<std::vector<ProjectedItem>> tile_bins(static_cast<std::size_t>(num_tiles));
+    // A source's light reaches its stamp's radius beyond the pixel it is anchored to, and the
+    // wings' splat one pixel; sources that far outside the image still light its edge. The
+    // frustum they are culled against is widened by that much.
+    const int reach = std::max(stamp_radius, 1) + 1;
+    const Frustum<TSpectral> frustum = camera->view_frustum_with_margin_(static_cast<float>(reach));
+
+    // Occlusion of unresolved sources by resolved geometry:
+    const bool test_occlusion = unresolved_occlusion_ && !scene_view.primitives_.empty();
+    const bool mask_available = occluder_mask_valid_ && occluder_mask_.width() == fb_width &&
+                                occluder_mask_.height() == fb_height;
+
+    /// One sample of a source's (possibly motion-blurred) arc, with the power it delivers.
+    struct Sample {
+        std::size_t item_idx;
+        Pixel projected; ///< Sensor coordinates.
+        TSpectral power;
+    };
 
     float max_pixel_step = 0.75f; // TODO Make this configurable
 
-    // Per-thread working storage for the cull-and-bin pass below. Every buffer here
-    // is reused across sources, so the pass allocates a bounded amount of memory
-    // regardless of catalogue size.
+    // Per-thread working storage for the cull-and-bin pass below. Every buffer here is reused
+    // across sources, so the pass allocates a bounded amount of memory regardless of catalogue
+    // size. The samples a pass makes, and the (tile, sample) pairs that list them in every tile
+    // they reach, go into its batch.
     struct BinScratch {
         std::vector<Vec3<float>> directions;
         TrajectoryArc arc;
@@ -1218,18 +1245,23 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
         std::vector<float> params;
         std::vector<Pixel> pixels;
     };
+    struct Batch {
+        std::vector<RenderItem<TSpectral>> items;
+        std::vector<Sample> samples;
+        std::vector<std::pair<std::uint32_t, std::uint32_t>> tile_samples;
+    };
 
-    // Bin one source's visible arc into per-tile lists. Factored out so that stars
-    // and unresolved objects share exactly the same code path, in exactly the same
-    // order, as the single loop this replaces.
+    // Sample one source's visible arc, find the power each sample delivers, and list it in the
+    // tiles it reaches. Stars and unresolved objects share exactly this code path.
     auto bin_item = [&](const RenderItem<TSpectral>& item,
                         std::size_t item_index,
                         BinScratch& scratch,
-                        std::vector<std::vector<ProjectedItem>>& bins) {
+                        RandomSampler<float>& sampler,
+                        Batch& batch) {
         const auto& arc = item.arc;
 
         // Clip arc to frustum:
-        const auto& visible_intervals = camera->view_frustum().clip_arc(arc, scratch.clip);
+        const auto& visible_intervals = frustum.clip_arc(arc, scratch.clip);
         if (visible_intervals.empty()) {
             return;
         }
@@ -1307,29 +1339,89 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                 // overbrightening partially visible streaks (e.g. corner streaks under
                 // boresight rotation) by 1 / visible_fraction:
                 float weight = dt;
+                const Pixel& p = pixels[k];
+
+                // The pixels the sample's light reaches: its stamp, the wings' bilinear splat,
+                // or, without either, the pixel it falls in. Stamps and the splat place light
+                // by pixel centers, which sit at i + 0.5 in the sensor coordinates the camera
+                // projects to, so they work from the position half a pixel lower.
+                const float center_x = p.x - 0.5f;
+                const float center_y = p.y - 0.5f;
+                int x_lo = static_cast<int>(std::floor(center_x));
+                int y_lo = static_cast<int>(std::floor(center_y));
+                int x_hi = x_lo + 1;
+                int y_hi = y_lo + 1;
+                if (stamp_radius > 0) {
+                    const int r = item.effective_radius;
+                    const int base_x = nearest_stamp_phase(center_x).base;
+                    const int base_y = nearest_stamp_phase(center_y).base;
+                    x_lo = std::min(x_lo, base_x - r);
+                    x_hi = std::max(x_hi, base_x + r);
+                    y_lo = std::min(y_lo, base_y - r);
+                    y_hi = std::max(y_hi, base_y + r);
+                } else if (!splat_wings) {
+                    x_lo = x_hi = static_cast<int>(std::floor(p.x));
+                    y_lo = y_hi = static_cast<int>(std::floor(p.y));
+                }
+                x_lo = std::max(x_lo, 0);
+                y_lo = std::max(y_lo, 0);
+                x_hi = std::min(x_hi, fb_width - 1);
+                y_hi = std::min(y_hi, fb_height - 1);
+                if (x_lo > x_hi || y_lo > y_hi) {
+                    continue; // nothing reaches the image
+                }
 
                 // Interpolate irradiance at this parameter value:
                 TSpectral irrad = item.interpolate_irradiances(params[k]);
-                float source_range = item.interpolate_ranges(params[k]);
                 Vec3<float> dir = arc.evaluate(params[k]);
-                const Pixel& p = pixels[k];
-                if (p.x < 0.f || p.x > res_x || p.y < 0.f || p.y > res_y) {
-                    continue;
+                float projected_area = camera->get_projected_aperture_area(dir);
+                TSpectral power = weight * irrad * projected_area;
+
+                if (test_occlusion) {
+                    // The occluder mask covers the image; beyond it, always test.
+                    const bool on_image = p.x >= 0.f && p.x < static_cast<float>(fb_width) &&
+                                          p.y >= 0.f && p.y < static_cast<float>(fb_height);
+                    const bool maybe_occluded =
+                        !mask_available || !on_image ||
+                        occluder_mask_(std::clamp(static_cast<int>(p.x), 0, fb_width - 1),
+                                       std::clamp(static_cast<int>(p.y), 0, fb_height - 1)) != 0;
+                    if (maybe_occluded) {
+                        Ray<TSpectral> occlusion_ray(Vec3<float>{0.f, 0.f, 0.f},
+                                                     glm::normalize(dir));
+
+                        // params[k] is the arc parameter over the full exposure on [0, 1],
+                        // which is the same parameterization the intersectors take as their
+                        // motion-blur time, so the occlusion query for this sample sees the
+                        // scene as it was at the instant this piece of the streak was laid
+                        // down - not a union of the occluder over the whole exposure.
+                        TSpectral transmittance =
+                            scene_view.evaluate_transmittance(occlusion_ray,
+                                                              item.interpolate_ranges(params[k]),
+                                                              MediumStack<TSpectral>{},
+                                                              sampler,
+                                                              params[k],
+                                                              AlphaMode::Expected);
+
+                        if (transmittance.max() <= 0.f) {
+                            continue;
+                        }
+                        power = power * transmittance;
+                    }
                 }
 
-                int tx = std::clamp(static_cast<int>(p.x) / TILE_SIZE, 0, tiles_x - 1);
-                int ty = std::clamp(static_cast<int>(p.y) / TILE_SIZE, 0, tiles_y - 1);
-
-                // params[k] is the arc parameter over the full exposure on [0, 1],
-                // which is the same parameterization the intersectors take as their
-                // motion-blur time, so the occlusion query for this sample sees the
-                // scene as it was at the instant this piece of the streak was laid
-                // down - not a union of the occluder over the whole exposure.
-                bins[static_cast<std::size_t>(ty * tiles_x + tx)].push_back(
-                    {item_index, p, weight, irrad, dir, source_range, params[k]});
+                const auto sample_index = static_cast<std::uint32_t>(batch.samples.size());
+                batch.samples.push_back({item_index, p, power});
+                for (int ty = y_lo / TILE_SIZE; ty <= y_hi / TILE_SIZE; ++ty) {
+                    for (int tx = x_lo / TILE_SIZE; tx <= x_hi / TILE_SIZE; ++tx) {
+                        batch.tile_samples.emplace_back(
+                            static_cast<std::uint32_t>(ty * tiles_x + tx), sample_index);
+                    }
+                }
             }
         }
     };
+
+    std::vector<Batch> batches;
 
     if (!star_field.empty()) {
         const std::size_t n_stars = star_field.size();
@@ -1337,12 +1429,7 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
 
         constexpr std::size_t CHUNK = 4096;
         const std::size_t num_chunks = (n_stars + CHUNK - 1) / CHUNK;
-
-        struct Chunk {
-            std::vector<RenderItem<TSpectral>> items;
-            std::vector<std::vector<ProjectedItem>> bins;
-        };
-        std::vector<Chunk> chunks(num_chunks);
+        batches.resize(num_chunks);
 
         tbb::parallel_for(
             tbb::blocked_range<std::size_t>(0, num_chunks),
@@ -1351,8 +1438,9 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                 scratch.directions.resize(n_samples);
 
                 for (std::size_t c = range.begin(); c != range.end(); ++c) {
-                    Chunk& chunk = chunks[c];
-                    chunk.bins.resize(static_cast<std::size_t>(num_tiles));
+                    Batch& batch = batches[c];
+                    // Seeded by chunk, so that occlusion tests do not depend on scheduling:
+                    RandomSampler<float> sampler(static_cast<unsigned int>(c));
 
                     const std::size_t begin = c * CHUNK;
                     const std::size_t end = std::min(begin + CHUNK, n_stars);
@@ -1365,7 +1453,7 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                         // Cheap rejection before anything is allocated. This is the
                         // same frustum test the binning pass performs; running it here
                         // only decides whether a RenderItem is worth building.
-                        if (camera->view_frustum().clip_arc(scratch.arc, scratch.clip).empty()) {
+                        if (frustum.clip_arc(scratch.arc, scratch.clip).empty()) {
                             continue;
                         }
 
@@ -1379,45 +1467,19 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                             stamp_radius);
                         assign_radius(item);
 
-                        chunk.items.push_back(std::move(item));
-                        bin_item(chunk.items.back(), chunk.items.size() - 1, scratch, chunk.bins);
+                        batch.items.push_back(std::move(item));
+                        bin_item(
+                            batch.items.back(), batch.items.size() - 1, scratch, sampler, batch);
                     }
                 }
             });
-
-        // Merge in chunk order, rebasing each chunk's item indices.
-        std::size_t total_items = 0;
-        for (const auto& chunk : chunks) {
-            total_items += chunk.items.size();
-        }
-        items.reserve(total_items + scene_view.unresolved_objects_.size());
-
-        for (auto& chunk : chunks) {
-            const std::size_t base = items.size();
-            for (auto& item : chunk.items) {
-                items.push_back(std::move(item));
-            }
-            if (chunk.bins.empty()) {
-                continue;
-            }
-            for (std::size_t t = 0; t < static_cast<std::size_t>(num_tiles); ++t) {
-                auto& src = chunk.bins[t];
-                if (src.empty()) {
-                    continue;
-                }
-                auto& dst = tile_bins[t];
-                dst.reserve(dst.size() + src.size());
-                for (auto& proj : src) {
-                    proj.item_idx += base;
-                    dst.push_back(proj);
-                }
-            }
-        }
     }
 
-    // Unresolved objects (separate from stars):
+    // Unresolved objects (separate from stars). Their irradiances are found one object at a
+    // time, and then they are binned in parallel, one batch each:
     if (!scene_view.unresolved_objects_.empty()) {
-        BinScratch scratch;
+        std::vector<RenderItem<TSpectral>> objects;
+        objects.reserve(scene_view.unresolved_objects_.size());
         for (const auto& instance : scene_view.unresolved_objects_) {
             std::vector<Vec3<float>> directions(instance.transforms.size());
             std::vector<TSpectral> irradiances(instance.transforms.size());
@@ -1432,120 +1494,91 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
             RenderItem<TSpectral> item(
                 std::move(arc), std::move(irradiances), std::move(ranges), stamp_radius);
             assign_radius(item);
+            objects.push_back(std::move(item));
+        }
 
-            items.push_back(std::move(item));
-            bin_item(items.back(), items.size() - 1, scratch, tile_bins);
+        const std::size_t first_batch = batches.size();
+        batches.resize(first_batch + objects.size());
+        tbb::parallel_for(tbb::blocked_range<std::size_t>(0, objects.size()),
+                          [&](const tbb::blocked_range<std::size_t>& range) {
+                              BinScratch scratch;
+                              for (std::size_t i = range.begin(); i != range.end(); ++i) {
+                                  Batch& batch = batches[first_batch + i];
+                                  RandomSampler<float> sampler(
+                                      static_cast<unsigned int>(first_batch + i));
+                                  batch.items.push_back(std::move(objects[i]));
+                                  bin_item(batch.items.back(), 0, scratch, sampler, batch);
+                              }
+                          });
+    }
+
+    // Merge the batches in order, and sort their (tile, sample) pairs into one list per tile
+    // (offsets into a single index array), keeping the order sources were binned in:
+    std::vector<Sample> samples;
+    std::vector<std::size_t> tile_offsets(static_cast<std::size_t>(num_tiles) + 1, 0);
+    {
+        std::size_t total_items = 0;
+        std::size_t total_samples = 0;
+        for (const Batch& batch : batches) {
+            total_items += batch.items.size();
+            total_samples += batch.samples.size();
+            for (const auto& [tile, sample] : batch.tile_samples) {
+                ++tile_offsets[tile + 1];
+            }
+        }
+        items.reserve(total_items);
+        samples.reserve(total_samples);
+        for (std::size_t t = 0; t < static_cast<std::size_t>(num_tiles); ++t) {
+            tile_offsets[t + 1] += tile_offsets[t];
+        }
+    }
+    std::vector<std::uint32_t> tile_sample_indices(tile_offsets.back());
+    {
+        std::vector<std::size_t> fill(tile_offsets.begin(), tile_offsets.end() - 1);
+        for (Batch& batch : batches) {
+            const std::size_t item_base = items.size();
+            const auto sample_base = static_cast<std::uint32_t>(samples.size());
+            for (auto& item : batch.items) {
+                items.push_back(std::move(item));
+            }
+            for (Sample& sample : batch.samples) {
+                sample.item_idx += item_base;
+                samples.push_back(sample);
+            }
+            for (const auto& [tile, sample] : batch.tile_samples) {
+                tile_sample_indices[fill[tile]++] = sample_base + sample;
+            }
+            batch = Batch{}; // release as we go
         }
     }
 
-    if (items.empty()) {
+    if (samples.empty()) {
         wing_splat = Image<TSpectral>(0, 0, TSpectral{0});
         return received_power;
     }
 
-    // Render tiles in parallel:
-    const bool test_occlusion = unresolved_occlusion_ && !scene_view.primitives_.empty();
-    const bool mask_available = occluder_mask_valid_ && occluder_mask_.width() == fb_width &&
-                                occluder_mask_.height() == fb_height;
-
-    // Sources are binned by the pixel that contains them, but stamps and the bilinear splat are
-    // anchored at pixel-center coordinates half a pixel lower (see below), so they can start
-    // one pixel before the binned pixel.
-    const int margin = stamp_radius + 1;
-
-    // Polyphase stamp kernels hold the kernel pre-shifted by bank / banks of a pixel. Each
-    // source uses the nearest bank, which keeps the quantization error unbiased (within half a
-    // bank either way)
-    const int stamp_banks = use_defocus ? defocus.banks() : (use_psf_direct ? psf->get_banks() : 0);
-    struct StampPhase {
-        int base;    ///< Pixel the kernel's center pixel lands on.
-        float phase; ///< Fraction for get_kernel(), mid-way through the chosen bank.
-    };
-    auto nearest_stamp_phase = [stamp_banks](float center) {
-        const long banks = static_cast<long>(stamp_banks);
-        const long k = std::lround(static_cast<double>(center) * static_cast<double>(banks));
-        long base = k / banks;
-        long bank = k % banks;
-        if (bank < 0) {
-            bank += banks;
-            base -= 1;
-        }
-        return StampPhase{static_cast<int>(base),
-                          (static_cast<float>(bank) + 0.5f) / static_cast<float>(banks)};
-    };
-
-    struct TileBuffer {
-        Image<TSpectral> buf;
-        Image<TSpectral> splat;
-        int origin_x = 0;
-        int origin_y = 0;
-        int local_w = 0;
-        int local_h = 0;
-    };
-
-    std::vector<TileBuffer> tile_buffers(static_cast<std::size_t>(num_tiles));
-
+    // Render the tiles in parallel, each into its own pixels of the frame:
     tbb::parallel_for(
         tbb::blocked_range<int>(0, num_tiles), [&](const tbb::blocked_range<int>& range) {
             for (int tile_idx = range.begin(); tile_idx < range.end(); ++tile_idx) {
-                const auto& bin = tile_bins[static_cast<std::size_t>(tile_idx)];
-                if (bin.empty()) {
+                const std::size_t first = tile_offsets[static_cast<std::size_t>(tile_idx)];
+                const std::size_t last = tile_offsets[static_cast<std::size_t>(tile_idx) + 1];
+                if (first == last) {
                     continue;
                 }
 
-                int tile_y = tile_idx / tiles_x;
-                int tile_x = tile_idx % tiles_x;
+                const int tile_x0 = (tile_idx % tiles_x) * TILE_SIZE;
+                const int tile_y0 = (tile_idx / tiles_x) * TILE_SIZE;
+                const int tile_x1 = std::min(fb_width, tile_x0 + TILE_SIZE);
+                const int tile_y1 = std::min(fb_height, tile_y0 + TILE_SIZE);
 
-                int tile_x0 = tile_x * TILE_SIZE;
-                int tile_y0 = tile_y * TILE_SIZE;
+                for (std::size_t k = first; k < last; ++k) {
+                    const Sample& sample = samples[tile_sample_indices[k]];
+                    const auto& item = items[sample.item_idx];
+                    const Pixel& star_p = sample.projected;
+                    const TSpectral& power = sample.power;
 
-                int local_x0 = std::max(0, tile_x0 - margin);
-                int local_y0 = std::max(0, tile_y0 - margin);
-                int local_x1 = std::min(fb_width, tile_x0 + TILE_SIZE + margin);
-                int local_y1 = std::min(fb_height, tile_y0 + TILE_SIZE + margin);
-
-                int local_w = local_x1 - local_x0;
-                int local_h = local_y1 - local_y0;
-
-                Image<TSpectral> local_buf(local_w, local_h);
-                Image<TSpectral> local_splat(splat_wings ? local_w : 0, splat_wings ? local_h : 0);
-
-                RandomSampler<float> sampler(static_cast<unsigned int>(tile_idx));
-
-                for (const auto& proj : bin) {
-                    const auto& item = items[proj.item_idx];
-                    const Pixel& star_p = proj.projected;
-
-                    float projected_area = camera->get_projected_aperture_area(proj.direction);
-                    TSpectral power = proj.weight * proj.irradiance * projected_area;
-
-                    if (test_occlusion) {
-                        const int mx = std::clamp(static_cast<int>(star_p.x), 0, fb_width - 1);
-                        const int my = std::clamp(static_cast<int>(star_p.y), 0, fb_height - 1);
-
-                        if (!mask_available || occluder_mask_(mx, my) != 0) {
-                            Ray<TSpectral> occlusion_ray(Vec3<float>{0.f, 0.f, 0.f},
-                                                         glm::normalize(proj.direction));
-
-                            TSpectral transmittance =
-                                scene_view.evaluate_transmittance(occlusion_ray,
-                                                                  proj.range,
-                                                                  MediumStack<TSpectral>{},
-                                                                  sampler,
-                                                                  proj.time,
-                                                                  AlphaMode::Expected);
-
-                            if (transmittance.max() <= 0.f) {
-                                continue;
-                            }
-                            power = power * transmittance;
-                        }
-                    }
-
-                    // The camera projects onto pixel-edge coordinates, in which pixel i covers
-                    // [i, i + 1) - the convention the path tracer samples in. Stamps and the
-                    // splat place light by pixel centers, which in those coordinates sit at
-                    // i + 0.5, so they work from the position half a pixel lower:
+                    // Stamps and the splat place light by pixel centers (see bin_item):
                     const float center_x = star_p.x - 0.5f;
                     const float center_y = star_p.y - 0.5f;
 
@@ -1561,9 +1594,9 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                         const float w11 = fx * fy;
 
                         auto splat_at = [&](int px, int py, float w) {
-                            if (w > 0.f && px >= local_x0 && px < local_x1 && py >= local_y0 &&
-                                py < local_y1) {
-                                local_splat(px - local_x0, py - local_y0) += power * w;
+                            if (w > 0.f && px >= tile_x0 && px < tile_x1 && py >= tile_y0 &&
+                                py < tile_y1) {
+                                wing_splat(px, py) += power * w;
                             }
                         };
                         splat_at(bx, by, w00);
@@ -1576,123 +1609,49 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                         const StampPhase phase_x = nearest_stamp_phase(center_x);
                         const StampPhase phase_y = nearest_stamp_phase(center_y);
 
-                        int eff_r = item.effective_radius;
+                        const int eff_r = item.effective_radius;
+                        const int start_x = phase_x.base - eff_r;
+                        const int start_y = phase_y.base - eff_r;
+
+                        // The part of the (cropped) stamp inside this tile:
+                        const int crop_dim = 2 * eff_r + 1;
+                        const int kx_begin = std::max(0, tile_x0 - start_x);
+                        const int kx_end = std::min(crop_dim, tile_x1 - start_x);
+                        const int ky_begin = std::max(0, tile_y0 - start_y);
+                        const int ky_end = std::min(crop_dim, tile_y1 - start_y);
 
                         if (use_defocus) {
                             const Image<float>& kernel = defocus.get(phase_x.phase, phase_y.phase);
-
-                            int k_offset = defocus.half_extent() - eff_r;
-                            int crop_dim = 2 * eff_r + 1;
-                            int start_x = phase_x.base - eff_r;
-                            int start_y = phase_y.base - eff_r;
-
-                            // Clamp to local tile bounds
-                            int kx_begin = std::max(0, local_x0 - start_x);
-                            int kx_end = std::min(crop_dim, local_x1 - start_x);
-                            int ky_begin = std::max(0, local_y0 - start_y);
-                            int ky_end = std::min(crop_dim, local_y1 - start_y);
-
+                            const int k_offset = defocus.half_extent() - eff_r;
                             for (int ky = ky_begin; ky < ky_end; ++ky) {
-                                int ly = start_y + ky - local_y0;
                                 for (int kx = kx_begin; kx < kx_end; ++kx) {
-                                    int lx = start_x + kx - local_x0;
                                     // Note: scalar kernel * spectral power
-                                    local_buf(lx, ly) +=
+                                    received_power(start_x + kx, start_y + ky) +=
                                         power * kernel(kx + k_offset, ky + k_offset);
                                 }
                             }
                         } else {
                             const Image<TSpectral>& kernel =
                                 psf->get_kernel(phase_x.phase, phase_y.phase);
-
-                            int k_offset = stamp_radius - eff_r;
-                            int crop_dim = 2 * eff_r + 1;
-
-                            int start_x = phase_x.base - eff_r;
-                            int start_y = phase_y.base - eff_r;
-
-                            int kx_begin = std::max(0, local_x0 - start_x);
-                            int kx_end = std::min(crop_dim, local_x1 - start_x);
-
-                            int ky_begin = std::max(0, local_y0 - start_y);
-                            int ky_end = std::min(crop_dim, local_y1 - start_y);
-
+                            const int k_offset = stamp_radius - eff_r;
                             for (int ky = ky_begin; ky < ky_end; ++ky) {
-                                int img_y = start_y + ky;
-                                int ly = img_y - local_y0;
-
                                 for (int kx = kx_begin; kx < kx_end; ++kx) {
-                                    int img_x = start_x + kx;
-                                    int lx = img_x - local_x0;
-
-                                    local_buf(lx, ly) +=
+                                    received_power(start_x + kx, start_y + ky) +=
                                         power * kernel(kx + k_offset, ky + k_offset);
                                 }
                             }
                         }
                     } else {
                         // No kernel: all the light goes to the pixel the source falls in.
-                        int px = static_cast<int>(std::floor(star_p.x));
-                        int py = static_cast<int>(std::floor(star_p.y));
-                        if (px >= local_x0 && px < local_x1 && py >= local_y0 && py < local_y1) {
-                            local_buf(px - local_x0, py - local_y0) += power;
+                        const int px = static_cast<int>(std::floor(star_p.x));
+                        const int py = static_cast<int>(std::floor(star_p.y));
+                        if (px >= tile_x0 && px < tile_x1 && py >= tile_y0 && py < tile_y1) {
+                            received_power(px, py) += power;
                         }
                     }
                 }
-
-                auto& tb = tile_buffers[static_cast<std::size_t>(tile_idx)];
-                tb.buf = std::move(local_buf);
-                tb.splat = std::move(local_splat);
-                tb.origin_x = local_x0;
-                tb.origin_y = local_y0;
-                tb.local_w = local_w;
-                tb.local_h = local_h;
             }
         });
-
-    // Combine all Tiles:
-    std::vector<std::vector<int>> row_tiles(static_cast<std::size_t>(fb_height));
-    for (int t = 0; t < num_tiles; ++t) {
-        const auto& tb = tile_buffers[static_cast<std::size_t>(t)];
-        if (tb.local_w == 0) {
-            continue;
-        }
-        for (int y = tb.origin_y; y < tb.origin_y + tb.local_h; ++y) {
-            row_tiles[static_cast<std::size_t>(y)].push_back(t);
-        }
-    }
-
-    tbb::parallel_for(tbb::blocked_range<int>(0, fb_height),
-                      [&](const tbb::blocked_range<int>& range) {
-                          for (int y = range.begin(); y < range.end(); ++y) {
-                              for (int t : row_tiles[static_cast<std::size_t>(y)]) {
-                                  const auto& tb = tile_buffers[static_cast<std::size_t>(t)];
-                                  int ly = y - tb.origin_y;
-                                  for (int lx = 0; lx < tb.local_w; ++lx) {
-                                      const TSpectral& val = tb.buf(lx, ly);
-                                      bool nonzero = false;
-                                      for (std::size_t c = 0; c < TSpectral::size(); ++c) {
-                                          if (val[c] != 0.0f) {
-                                              nonzero = true;
-                                              break;
-                                          }
-                                      }
-                                      if (nonzero) {
-                                          received_power(tb.origin_x + lx, y) += val;
-                                      }
-                                      if (splat_wings) {
-                                          const TSpectral& sval = tb.splat(lx, ly);
-                                          for (std::size_t c = 0; c < TSpectral::size(); ++c) {
-                                              if (sval[c] != 0.0f) {
-                                                  wing_splat(tb.origin_x + lx, y) += sval;
-                                                  break;
-                                              }
-                                          }
-                                      }
-                                  }
-                              }
-                          }
-                      });
 
     if (use_defocus && camera->convolve_psf_) {
         if (!image_is_zero_(received_power)) {

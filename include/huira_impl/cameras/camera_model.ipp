@@ -1967,12 +1967,10 @@ void CameraModel<TSpectral>::compute_frustum_()
 {
     Resolution res = sensor_->resolution();
 
-    Vec3<float> xdir{1, 0, 0};
-    Vec3<float> ydir{0, 1, 0};
-    Vec3<float> zdir{0, 0, 1};
+    FrustumBounds bounds;
     if (blender_convention_) {
-        zdir = Vec3<float>{0, 0, -1};
-        ydir = Vec3<float>{0, -1, 0};
+        bounds.zdir = Vec3<float>{0, 0, -1};
+        bounds.ydir = Vec3<float>{0, -1, 0};
     }
 
     // The side planes pass through the optical center and contain the image's y axis (left and
@@ -1983,36 +1981,42 @@ void CameraModel<TSpectral>::compute_frustum_()
     // along each edge is not enough: with pincushion distortion the middle of an edge can reach
     // further out than its corners.)
     constexpr float INF_ = std::numeric_limits<float>::infinity();
-    float min_tan_x = INF_;
-    float max_tan_x = -INF_;
-    float min_tan_y = INF_;
-    float max_tan_y = -INF_;
-    Vec3<float> left_extrema{0, 0, 0};
-    Vec3<float> right_extrema{0, 0, 0};
-    Vec3<float> top_extrema{0, 0, 0};
-    Vec3<float> bottom_extrema{0, 0, 0};
+    bounds.min_tan_x = INF_;
+    bounds.max_tan_x = -INF_;
+    bounds.min_tan_y = INF_;
+    bounds.max_tan_y = -INF_;
 
-    auto visit = [&](int x, int y) {
+    auto tangents = [&](int x, int y) {
         const Vec3<float> direction =
-            glm::normalize(ray_direction_(Pixel{static_cast<float>(x), static_cast<float>(y)}));
-        const float forward = glm::dot(direction, zdir);
-        const float tan_x = glm::dot(direction, xdir) / forward;
-        const float tan_y = glm::dot(direction, ydir) / forward;
-        if (tan_x < min_tan_x) {
-            min_tan_x = tan_x;
-            left_extrema = direction;
+            ray_direction_(Pixel{static_cast<float>(x), static_cast<float>(y)});
+        const float forward = glm::dot(direction, bounds.zdir);
+        return Vec2<float>{glm::dot(direction, bounds.xdir) / forward,
+                           glm::dot(direction, bounds.ydir) / forward};
+    };
+
+    // Comparisons skip the NaN directions of a distortion with no inverse there, which
+    // precompute() reports.
+    auto visit = [&](int x, int y) {
+        const Vec2<float> t = tangents(x, y);
+        bounds.min_tan_x = std::min(bounds.min_tan_x, t.x);
+        bounds.max_tan_x = std::max(bounds.max_tan_x, t.x);
+        bounds.min_tan_y = std::min(bounds.min_tan_y, t.y);
+        bounds.max_tan_y = std::max(bounds.max_tan_y, t.y);
+
+        // The angle a pixel spans at the boundary, one pixel inward along each axis this
+        // corner is at the boundary of:
+        auto step_to = [&](int inward_x, int inward_y) {
+            const Vec2<float> inward = tangents(inward_x, inward_y);
+            const float step = std::max(std::abs(inward.x - t.x), std::abs(inward.y - t.y));
+            if (step > bounds.tan_per_pixel) {
+                bounds.tan_per_pixel = step;
+            }
+        };
+        if (x == 0 || x == res.x) {
+            step_to(x == 0 ? 1 : res.x - 1, y);
         }
-        if (tan_x > max_tan_x) {
-            max_tan_x = tan_x;
-            right_extrema = direction;
-        }
-        if (tan_y < min_tan_y) {
-            min_tan_y = tan_y;
-            top_extrema = direction;
-        }
-        if (tan_y > max_tan_y) {
-            max_tan_y = tan_y;
-            bottom_extrema = direction;
+        if (y == 0 || y == res.y) {
+            step_to(x, y == 0 ? 1 : res.y - 1);
         }
     };
 
@@ -2025,13 +2029,36 @@ void CameraModel<TSpectral>::compute_frustum_()
         visit(res.x, y);
     }
 
-    // Form the frustum planes:
-    Vec3<float> left_normal = glm::normalize(glm::cross(ydir, left_extrema));
-    Vec3<float> right_normal = glm::normalize(glm::cross(right_extrema, ydir));
-    Vec3<float> top_normal = glm::normalize(glm::cross(top_extrema, xdir));
-    Vec3<float> bottom_normal = glm::normalize(glm::cross(xdir, bottom_extrema));
+    frustum_bounds_ = bounds;
+    view_frustum_ = frustum_from_bounds_(0.f);
+}
 
-    view_frustum_ =
-        Frustum<TSpectral>({zdir, left_normal, right_normal, top_normal, bottom_normal});
+template <IsSpectral TSpectral>
+Frustum<TSpectral> CameraModel<TSpectral>::frustum_from_bounds_(float widen_tan) const
+{
+    const FrustumBounds& b = frustum_bounds_;
+
+    // Each side plane contains the image's y axis (left and right) or x axis (top and bottom),
+    // and the direction at its tangent, moved out by widen_tan:
+    const Vec3<float> left = b.xdir * (b.min_tan_x - widen_tan) + b.zdir;
+    const Vec3<float> right = b.xdir * (b.max_tan_x + widen_tan) + b.zdir;
+    const Vec3<float> top = b.ydir * (b.min_tan_y - widen_tan) + b.zdir;
+    const Vec3<float> bottom = b.ydir * (b.max_tan_y + widen_tan) + b.zdir;
+
+    return Frustum<TSpectral>({b.zdir,
+                               glm::normalize(glm::cross(b.ydir, left)),
+                               glm::normalize(glm::cross(right, b.ydir)),
+                               glm::normalize(glm::cross(top, b.xdir)),
+                               glm::normalize(glm::cross(b.xdir, bottom))});
+}
+
+template <IsSpectral TSpectral>
+Frustum<TSpectral> CameraModel<TSpectral>::view_frustum_with_margin_(float pixels) const
+{
+    // A pixel can span a larger angle beyond the boundary than at it (barrel distortion
+    // compresses the edge of the field), so the margin is doubled to be safe. Sources that the
+    // wider frustum lets through but whose light lands nowhere in the image are dropped once
+    // projected.
+    return frustum_from_bounds_(2.f * pixels * frustum_bounds_.tan_per_pixel);
 }
 } // namespace huira
