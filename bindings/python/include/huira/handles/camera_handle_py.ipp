@@ -223,6 +223,14 @@ inline void bind_camera_model_handle(py::module_& m)
         .def("set_sensor_conversion_gain", &HandleType::set_sensor_conversion_gain, py::arg("gain"))
         .def("set_sensor_gain_db", &HandleType::set_sensor_gain_db, py::arg("gain_db"))
         .def("set_sensor_unity_db", &HandleType::set_sensor_unity_db, py::arg("unity_db"))
+        .def("set_sensor_noise_seed",
+             &HandleType::set_sensor_noise_seed,
+             py::arg("seed"),
+             "Seed the sensor's noise. Setting the same seed again repeats the same sequence of "
+             "frames; sensors get distinct seeds by default.")
+        .def("sensor_noise_seed",
+             &HandleType::sensor_noise_seed,
+             "The seed of the sensor's noise. See set_sensor_noise_seed().")
 
         // Sensor rotation
         .def(
