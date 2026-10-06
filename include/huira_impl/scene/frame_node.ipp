@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <functional>
 #include <memory>
 #include <string>
 
@@ -55,7 +56,20 @@ void FrameNode<TSpectral>::delete_child(std::weak_ptr<Node<TSpectral>> child_wea
     auto it = std::find(children_.begin(), children_.end(), child);
     if (it != children_.end()) {
         HUIRA_LOG_INFO(this->get_info() + " - Deleting " + child->get_info());
-        this->scene_->node_registry_.remove(child);
+
+        // The child and everything below it leave the scene: their handles become invalid, and
+        // the scene's node registry, which holds the nodes that have names to be found by (those
+        // loaded from model files), lets go of them. Nodes made through the API are not in it.
+        std::function<void(const std::shared_ptr<Node<TSpectral>>&)> release =
+            [&](const std::shared_ptr<Node<TSpectral>>& node) {
+                for (const auto& descendant : node->get_children()) {
+                    release(descendant);
+                }
+                this->scene_->node_registry_.remove_if_present(node);
+                node->set_scene_owned(false);
+            };
+        release(child);
+
         children_.erase(it);
     }
 }

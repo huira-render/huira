@@ -19,6 +19,7 @@ class NameRegistry {
   public:
     void add(std::shared_ptr<T> object, std::string name);
     void remove(std::shared_ptr<T> object);
+    bool remove_if_present(const std::shared_ptr<T>& object);
     void set_name(std::shared_ptr<T> object, std::string name);
 
     std::size_t size() const { return objects_.size(); }
