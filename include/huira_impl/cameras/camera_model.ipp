@@ -721,12 +721,12 @@ void CameraModel<TSpectral>::set_harvey_shack_scatter(float scatter_fraction,
                           "the range [0, 1): " +
                           std::to_string(scatter_fraction));
     }
-    if (!(falloff_exponent > 0.f) || std::isnan(falloff_exponent)) {
+    if (!(falloff_exponent > 0.f) || !std::isfinite(falloff_exponent)) {
         HUIRA_THROW_ERROR("CameraModel::set_harvey_shack_scatter - Falloff exponent must be a "
                           "positive finite value: " +
                           std::to_string(falloff_exponent));
     }
-    if (!(r0 > 0.f) || std::isnan(r0)) {
+    if (!(r0 > 0.f) || !std::isfinite(r0)) {
         HUIRA_THROW_ERROR("CameraModel::set_harvey_shack_scatter - r0 must be a positive finite "
                           "value: " +
                           std::to_string(r0));

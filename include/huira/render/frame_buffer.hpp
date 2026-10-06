@@ -91,9 +91,17 @@ class FrameBuffer {
     Image<TSpectral>& received_power() { return received_power_; }
     bool has_received_power() const { return has_(received_power_); }
 
+    /**
+     * @brief Enable or disable the sensor response.
+     *
+     * Enabling it also enables received_power(), which the sensor reads out. Disabling it leaves
+     * received_power() as it is.
+     */
     void enable_sensor_response(bool enable = true)
     {
-        enable_(received_power_, TSpectral{0}, enable); // Sensor response requires received power
+        if (enable) {
+            enable_(received_power_, TSpectral{0}, true);
+        }
         enable_(sensor_response_, SensorT{}, enable);
     }
     Image<SensorT>& sensor_response() { return sensor_response_; }

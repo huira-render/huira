@@ -531,3 +531,18 @@ TEST_CASE("A new sensor keeps the intrinsics only if it has the same geometry",
         CHECK(camera.resolution().x == 16);
     }
 }
+
+TEST_CASE("Harvey-Shack scatter rejects infinite parameters", "[cameras][validation][scatter]")
+{
+    // An infinite r0 made the profile flat, and an infinite exponent made it a single point;
+    // both were accepted, despite the messages asking for finite values.
+    CHECK_THROWS(HarveyShackScatter<RGB>(INF_F, 0.5f));
+    CHECK_THROWS(HarveyShackScatter<RGB>(2.5f, INF_F));
+    CHECK_NOTHROW(HarveyShackScatter<RGB>(2.5f, 0.5f));
+
+    CameraModel<RGB> camera;
+    camera.configure_sensor_from_pitch(Resolution{8, 8}, units::Micrometer(10.0));
+    CHECK_THROWS(camera.set_harvey_shack_scatter(0.1f, INF_F));
+    CHECK_THROWS(camera.set_harvey_shack_scatter(0.1f, 2.5f, INF_F));
+    CHECK_NOTHROW(camera.set_harvey_shack_scatter(0.1f, 2.5f, 0.5f));
+}
