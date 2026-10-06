@@ -324,4 +324,25 @@ void SensorModel<TSpectral>::set_rotation(units::Radian angle)
     }
     config_.rotation = angle;
 }
+/**
+ * @brief Seed the sensor's noise.
+ *
+ * Each readout draws its noise from random numbers determined by the seed, by how many readouts
+ * the sensor has made since the seed was set, and by the row. So a frame's noise does not depend
+ * on other cameras, threads or render order, successive frames differ, and setting the same seed
+ * again repeats the same sequence of frames.
+ *
+ * Sensors get distinct seeds by default, in the order they are made, so that two cameras never
+ * share their noise unless given the same seed. A sensor set with CameraModel::set_sensor() is
+ * a new sensor, with a new seed.
+ *
+ * @param seed Any value.
+ */
+template <IsSpectral TSpectral>
+void SensorModel<TSpectral>::set_noise_seed(std::uint64_t seed)
+{
+    noise_seed_ = seed;
+    readout_count_.store(0, std::memory_order_relaxed);
+}
+
 } // namespace huira

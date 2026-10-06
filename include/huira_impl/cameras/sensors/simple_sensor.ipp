@@ -1,62 +1,29 @@
+#include <algorithm>
+#include <cmath>
 #include <cstddef>
-#include <random>
+#include <cstdint>
+#include <type_traits>
 
 #include "huira/concepts/spectral_concepts.hpp"
 #include "huira/images/image.hpp"
 #include "huira/render/frame_buffer.hpp"
 #include "huira/units/units.hpp"
+#include "tbb/blocked_range.h"
+#include "tbb/parallel_for.h"
 
 namespace huira {
 
 /**
- * @brief Simulates noise and ADC quantization for a sensor pixel.
+ * @brief Simulates the sensor readout, including noise and the ADC.
  *
- * Adds shot noise, clamps to full well, applies read noise, and quantizes to digital number (DN).
+ * For each pixel (each channel, for RGB): the received energy becomes photons and, through the
+ * quantum efficiency, signal electrons, to which the dark current's electrons are added. With
+ * noise simulated, the electrons collected are drawn from a Poisson distribution of that mean
+ * (shot noise), clamped to the full well, and then the read noise is added; the bias is added
+ * after the gain. The result is clamped to the ADC's range and normalized to [0, 1]. See
+ * docs/design_overview/sensor_modeling.rst.
  *
- * @param signal_e Signal electrons.
- * @param dark_e Dark current electrons.
- * @param config Sensor configuration.
- * @param max_dn Maximum digital number (saturation level).
- * @param rng Random number generator.
- * @param read_noise_dist Normal distribution for read noise.
- * @return Normalized intensity in [0, 1].
- */
-template <IsSpectral TSpectral>
-inline float noise_and_adc(float signal_e,
-                           float dark_e,
-                           const SensorConfig<TSpectral>& config,
-                           float max_dn,
-                           std::mt19937& rng,
-                           std::normal_distribution<float>& read_noise_dist)
-{
-
-    // Shot Noise (Approximation of Poisson):
-    float accumulated_e = signal_e + dark_e;
-
-    float bias = 0.f;
-    if (config.simulate_noise) {
-        std::normal_distribution<float> shot_dist(0.0f, std::sqrt(accumulated_e));
-        accumulated_e += shot_dist(rng);
-        accumulated_e += read_noise_dist(rng);
-        bias = config.bias_level_dn;
-    }
-
-    // Clamp to Full Well Capacity:
-    accumulated_e = std::min(accumulated_e, config.full_well_capacity);
-
-    // System Gain & Quantization (ADC)
-    float dn_value = (accumulated_e / config.gain) + bias;
-    // float intensity = std::max(0.f, std::floor(std::min(dn_value, max_dn))) / max_dn;
-    float intensity = std::clamp(dn_value, 0.f, max_dn) / max_dn;
-
-    return intensity;
-}
-
-/**
- * @brief Simulates the sensor readout process, including noise and quantization.
- *
- * Converts received power to electrons, applies quantum efficiency, adds noise, and quantizes the
- * result.
+ * Rows are read out in parallel. The noise is reproducible: see set_noise_seed().
  *
  * @param fb The frame buffer containing received power and where the sensor response will be
  * written.
@@ -65,52 +32,59 @@ inline float noise_and_adc(float signal_e,
 template <IsSpectral TSpectral>
 void SimpleSensor<TSpectral>::readout(FrameBuffer<TSpectral>& fb, units::Second exposure_time) const
 {
-    Image<TSpectral>& received_power = fb.received_power();
+    const Image<TSpectral>& received_power = fb.received_power();
     auto& output = fb.sensor_response();
     output.set_sensor_bit_depth(this->config_.bit_depth);
 
-    float dt = static_cast<float>(exposure_time.to_si());
-
-    // TODO Move this somewhere else?
-    static std::mt19937 rng(1);
-    std::normal_distribution<float> read_noise_dist(0.0f, this->config_.read_noise);
-
+    const SensorConfig<TSpectral>& config = this->config_;
+    const float dt = static_cast<float>(exposure_time.to_si());
     const TSpectral photon_energy = TSpectral::photon_energies();
-    float max_dn = std::pow(2.f, static_cast<float>(this->config_.bit_depth)) - 1.f;
+    const double max_dn = std::pow(2.0, static_cast<double>(config.bit_depth)) - 1.0;
 
-    float dark_e = 0.f;
-    if (this->config_.simulate_noise) {
-        dark_e = this->config_.dark_current * dt;
-    }
+    const bool noise = config.simulate_noise;
+    const double dark_e =
+        noise ? static_cast<double>(config.dark_current) * static_cast<double>(dt) : 0.0;
+    const double bias = noise ? static_cast<double>(config.bias_level_dn) : 0.0;
+    const double read_noise = noise ? static_cast<double>(config.read_noise) : 0.0;
+    const double full_well = static_cast<double>(config.full_well_capacity);
+    const double gain = static_cast<double>(config.gain);
 
-    for (int y = 0; y < received_power.height(); ++y) {
-        for (int x = 0; x < received_power.width(); ++x) {
-
-            // Power to energy
-            TSpectral received_energy = received_power(x, y) * dt;
-
-            // Photon Conversion
-            TSpectral photons = received_energy / photon_energy;
-
-            // Quantum Efficiency
-            TSpectral electrons = photons * this->config_.quantum_efficiency;
-
-            // Compute Noise and ADC:
-            if constexpr (std::is_same_v<TSpectral, RGB>) {
-                RGB signal_e{electrons[0], electrons[1], electrons[2]};
-
-                RGB pixel_value;
-                for (std::size_t i = 0; i < 3; ++i) {
-                    pixel_value[i] = noise_and_adc(
-                        signal_e[i], dark_e, this->config_, max_dn, rng, read_noise_dist);
-                }
-                output(x, y) = pixel_value;
-            } else {
-                float signal_e = electrons.total();
-                output(x, y) =
-                    noise_and_adc(signal_e, dark_e, this->config_, max_dn, rng, read_noise_dist);
-            }
+    // Expected electrons to the normalized response:
+    auto respond = [&](double expected_e, detail::SensorRandom& random) {
+        double electrons = noise ? random.poisson(expected_e) : expected_e;
+        electrons = std::min(electrons, full_well);
+        if (read_noise > 0.0) {
+            electrons += read_noise * random.normal();
         }
-    }
+        const double dn = electrons / gain + bias;
+        return static_cast<float>(std::clamp(dn, 0.0, max_dn) / max_dn);
+    };
+
+    const std::uint64_t readout_number = this->next_readout_number_();
+    const int width = received_power.width();
+    tbb::parallel_for(
+        tbb::blocked_range<int>(0, received_power.height()),
+        [&](const tbb::blocked_range<int>& rows) {
+            for (int y = rows.begin(); y < rows.end(); ++y) {
+                detail::SensorRandom random(
+                    this->noise_seed_, readout_number, static_cast<std::uint64_t>(y));
+                for (int x = 0; x < width; ++x) {
+                    // Power to energy, to photons, to signal electrons:
+                    const TSpectral photons = received_power(x, y) * dt / photon_energy;
+                    const TSpectral electrons = photons * config.quantum_efficiency;
+
+                    if constexpr (std::is_same_v<TSpectral, RGB>) {
+                        RGB value;
+                        for (std::size_t c = 0; c < 3; ++c) {
+                            value[c] = respond(static_cast<double>(electrons[c]) + dark_e, random);
+                        }
+                        output(x, y) = value;
+                    } else {
+                        output(x, y) =
+                            respond(static_cast<double>(electrons.total()) + dark_e, random);
+                    }
+                }
+            }
+        });
 }
 } // namespace huira

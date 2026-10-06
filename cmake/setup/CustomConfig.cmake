@@ -204,6 +204,10 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 
         # Cross-compilation false positive from system compiler defaults
         -Wno-poison-system-directories
+
+        # Thread safety: keep the normal checks, but don't require every function that
+        # locks a mutex to declare REQUIRES(!mutex) (an opt-in, stricter mode)
+        -Wno-thread-safety-negative
     )
     
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")

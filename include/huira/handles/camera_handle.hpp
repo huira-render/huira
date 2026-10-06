@@ -1,6 +1,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <optional>
 
 #include "huira/cameras/camera_model.hpp"
@@ -93,6 +94,9 @@ class CameraModelHandle : public Handle<CameraModel<TSpectral>> {
     void set_sensor_unity_db(float unity_db) const;
 
     void set_sensor_rotation(units::Radian angle) const;
+
+    void set_sensor_noise_seed(std::uint64_t seed) const;
+    std::uint64_t sensor_noise_seed() const;
 
     template <IsAperture TAperture, typename... Args>
     void set_aperture(Args&&... args) const;
