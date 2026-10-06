@@ -37,11 +37,19 @@ int main(int argc, char** argv)
     camera_model.use_blender_convention();
     camera_model.set_focal_length(50_mm);
     camera_model.configure_sensor_from_size({1920, 1080}, 36_mm);
-    camera_model.use_aperture_psf();
     camera_model.set_sensor_bias_level(10.f);
     camera_model.set_fstop(16);
-    // camera_model.enable_depth_of_field();
-    // camera_model.set_focus_distance(1_m);
+
+    // The aperture's diffraction pattern is the PSF by default, and blurs the rendered gateway
+    // too (enable_psf_convolution(false) would leave it sharp). Depth of field is on by default,
+    // with the focus at infinity: at about 56 m, the gateway is in focus to well under a pixel.
+    // To focus closer, which blurs what is far away instead:
+    // camera_model.set_focus_distance(20_m);
+
+    // The camera matrix, as set_intrinsic_matrix() takes it (Mat3 is indexed [column][row]):
+    const huira::Mat3<float> K = camera_model.intrinsic_matrix();
+    std::cout << "fx = " << K[0][0] << ", fy = " << K[1][1] << ", cx = " << K[2][0]
+              << ", cy = " << K[2][1] << " (pixels)\n";
 
     // Create an instance of the camera and model
     auto navcam = scene.root.new_instance(camera_model);

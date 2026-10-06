@@ -209,6 +209,27 @@ void CameraModelHandle<TSpectral>::set_intrinsics(float fx,
     this->get_()->set_intrinsics(fx, fy, cx, cy, resolution, anchor_focal_length, skew);
 }
 
+/// Get the camera matrix, in the camera's pixel convention. See CameraModel::intrinsic_matrix().
+template <IsSpectral TSpectral>
+Mat3<float> CameraModelHandle<TSpectral>::intrinsic_matrix() const
+{
+    return this->get_()->intrinsic_matrix();
+}
+
+/// Get the sensor's resolution.
+template <IsSpectral TSpectral>
+Resolution CameraModelHandle<TSpectral>::resolution() const
+{
+    return this->get_()->resolution();
+}
+
+/// Get the pixel pitch, along x and along y.
+template <IsSpectral TSpectral>
+std::pair<units::Micrometer, units::Micrometer> CameraModelHandle<TSpectral>::pixel_pitch() const
+{
+    return this->get_()->pixel_pitch();
+}
+
 /**
  * @brief Set the sensor quantum efficiency.
  * @param qe Quantum efficiency value
@@ -389,6 +410,83 @@ std::uint64_t CameraModelHandle<TSpectral>::sensor_noise_seed() const
     return this->get_()->sensor_->noise_seed();
 }
 
+/// Get the sensor's quantum efficiency, per spectral bin.
+template <IsSpectral TSpectral>
+TSpectral CameraModelHandle<TSpectral>::sensor_quantum_efficiency() const
+{
+    return this->get_()->sensor_->quantum_efficiency();
+}
+
+/// Get the sensor's full well capacity, in electrons.
+template <IsSpectral TSpectral>
+float CameraModelHandle<TSpectral>::sensor_full_well_capacity() const
+{
+    return this->get_()->sensor_->full_well_capacity();
+}
+
+/// Get whether the sensor simulates noise.
+template <IsSpectral TSpectral>
+bool CameraModelHandle<TSpectral>::sensor_simulate_noise() const
+{
+    return this->get_()->sensor_->simulate_noise();
+}
+
+/// Get the sensor's read noise, in electrons.
+template <IsSpectral TSpectral>
+float CameraModelHandle<TSpectral>::sensor_read_noise() const
+{
+    return this->get_()->sensor_->read_noise();
+}
+
+/// Get the sensor's dark current, in electrons per second.
+template <IsSpectral TSpectral>
+float CameraModelHandle<TSpectral>::sensor_dark_current() const
+{
+    return this->get_()->sensor_->dark_current();
+}
+
+/// Get the sensor's bias level, in digital numbers.
+template <IsSpectral TSpectral>
+float CameraModelHandle<TSpectral>::sensor_bias_level() const
+{
+    return this->get_()->sensor_->bias_level_dn();
+}
+
+/// Get the sensor's bit depth.
+template <IsSpectral TSpectral>
+int CameraModelHandle<TSpectral>::sensor_bit_depth() const
+{
+    return this->get_()->sensor_->bit_depth();
+}
+
+/// Get the sensor's conversion gain, in electrons per digital number.
+template <IsSpectral TSpectral>
+float CameraModelHandle<TSpectral>::sensor_conversion_gain() const
+{
+    return this->get_()->sensor_->conversion_gain();
+}
+
+/// Get the sensor's gain, in decibels. See set_sensor_gain_db().
+template <IsSpectral TSpectral>
+float CameraModelHandle<TSpectral>::sensor_gain_db() const
+{
+    return this->get_()->sensor_->gain_db();
+}
+
+/// Get the gain, in decibels, at which the sensor's conversion gain is unity.
+template <IsSpectral TSpectral>
+float CameraModelHandle<TSpectral>::sensor_unity_db() const
+{
+    return this->get_()->sensor_->unity_db();
+}
+
+/// Get the sensor's rotation about the optical axis.
+template <IsSpectral TSpectral>
+units::Radian CameraModelHandle<TSpectral>::sensor_rotation() const
+{
+    return this->get_()->sensor_->rotation();
+}
+
 /**
  * @brief Set the aperture model for the camera.
  * @tparam TAperture Aperture model type
@@ -418,9 +516,10 @@ void CameraModelHandle<TSpectral>::set_psf(Args&&... args) const
 /**
  * @brief Use the aperture's diffraction pattern as the PSF (point spread function), or stop.
  *
- * True uses it, with the default stamp size if it was not already in use (and keeps its stamp
- * size if it was). False stops using it, leaving no PSF; a PSF set with set_psf() or
- * set_measured_psf() is left as it is.
+ * The aperture's PSF is the default. True uses it, with the automatic stamp size if it was not
+ * already in use (and keeps its stamp size if it was). False stops using it, leaving no PSF; a
+ * PSF set with set_psf() or set_measured_psf() is left as it is. (In the interim: the API
+ * rework replaces this, when diffraction and the PSF as a whole are set separately.)
  *
  * @param value True to use the aperture's PSF, false to stop using it.
  */
@@ -438,9 +537,10 @@ void CameraModelHandle<TSpectral>::use_aperture_psf(bool value) const
 }
 
 /**
- * @brief Use the aperture to generate a PSF (point spread function).
- * @param radius PSF kernel radius
- * @param banks Number of PSF banks
+ * @brief Use the aperture's diffraction pattern as the PSF (the default), with the given stamp
+ * size. See CameraModel::use_aperture_psf().
+ * @param radius Radius in pixels of the stamps for unresolved sources; 0 for automatic.
+ * @param banks Subpixel positions per axis the stamps are made for.
  */
 template <IsSpectral TSpectral>
 void CameraModelHandle<TSpectral>::use_aperture_psf(int radius, int banks) const
@@ -466,12 +566,34 @@ void CameraModelHandle<TSpectral>::set_psf_convolution_radius(int radius) const
 }
 
 /**
- * @brief Delete the PSF and disable aperture PSF usage.
+ * @brief Remove the PSF, the aperture's diffraction pattern (the default) included. See
+ * CameraModel::delete_psf().
  */
 template <IsSpectral TSpectral>
 void CameraModelHandle<TSpectral>::delete_psf() const
 {
     this->get_()->delete_psf();
+}
+
+/// Whether the PSF is the aperture's diffraction pattern (the default).
+template <IsSpectral TSpectral>
+bool CameraModelHandle<TSpectral>::uses_aperture_psf() const
+{
+    return this->get_()->uses_aperture_psf();
+}
+
+/// Whether the camera has a PSF: the aperture's (the default), or one that was set.
+template <IsSpectral TSpectral>
+bool CameraModelHandle<TSpectral>::has_psf() const
+{
+    return this->get_()->has_psf();
+}
+
+/// Whether a PSF or scattered light that is set blurs resolved bodies (the default).
+template <IsSpectral TSpectral>
+bool CameraModelHandle<TSpectral>::psf_convolution_enabled() const
+{
+    return this->get_()->psf_convolution_enabled();
 }
 
 /**
@@ -540,16 +662,40 @@ void CameraModelHandle<TSpectral>::disable_harvey_shack_scatter() const
     this->get_()->disable_harvey_shack_scatter();
 }
 
+/// Get the radius in pixels of the PSF's stamps for unresolved sources; 0 without a PSF.
 template <IsSpectral TSpectral>
 int CameraModelHandle<TSpectral>::get_psf_radius() const
 {
     return this->get_()->get_psf_radius();
 }
 
+/**
+ * @brief Get the PSF's stamp for an unresolved source at a subpixel position, building the
+ * stamps first if needed. See CameraModel::get_psf_kernel().
+ */
+template <IsSpectral TSpectral>
+const Image<TSpectral>& CameraModelHandle<TSpectral>::get_psf_kernel(float u, float v) const
+{
+    return this->get_()->get_psf_kernel(u, v);
+}
+
+/**
+ * @brief Get the whole-image convolution kernel: the PSF and scattered light together. See
+ * CameraModel::get_psf_convolution_kernel().
+ */
 template <IsSpectral TSpectral>
 const Image<TSpectral>& CameraModelHandle<TSpectral>::get_psf_convolution_kernel() const
 {
     return this->get_()->get_psf_convolution_kernel();
+}
+
+/**
+ * @brief Get the scattered light's kernel alone. See CameraModel::get_psf_wings_kernel().
+ */
+template <IsSpectral TSpectral>
+const Image<TSpectral>& CameraModelHandle<TSpectral>::get_psf_wings_kernel() const
+{
+    return this->get_()->get_psf_wings_kernel();
 }
 
 /**
@@ -591,13 +737,20 @@ bool CameraModelHandle<TSpectral>::auto_precompute() const
 }
 
 /**
- * @brief Enable or disable depth of field effects.
- * @param depth_of_field True to enable depth of field, false to disable
+ * @brief Turn depth of field on (the default) or off. See CameraModel::enable_depth_of_field().
+ * @param depth_of_field True to turn depth of field on, false to turn it off.
  */
 template <IsSpectral TSpectral>
 void CameraModelHandle<TSpectral>::enable_depth_of_field(bool depth_of_field) const
 {
     this->get_()->enable_depth_of_field(depth_of_field);
+}
+
+/// Whether depth of field is on (the default).
+template <IsSpectral TSpectral>
+bool CameraModelHandle<TSpectral>::depth_of_field_enabled() const
+{
+    return this->get_()->depth_of_field_enabled();
 }
 
 /**
@@ -700,6 +853,56 @@ Pixel CameraModelHandle<TSpectral>::project_point(const Vec3<float>& point_camer
 }
 
 /**
+ * @brief Project a 3D point in camera coordinates onto the image plane, if it is in the field
+ * of view.
+ * @return The position in the camera's pixel convention, or NaN in both coordinates for a point
+ *         outside the field of view.
+ */
+template <IsSpectral TSpectral>
+Pixel CameraModelHandle<TSpectral>::try_project_point(const Vec3<float>& point_camera_coords) const
+{
+    return this->get_()->try_project_point(point_camera_coords);
+}
+
+/// Whether a point in camera coordinates is in the camera's field of view.
+template <IsSpectral TSpectral>
+bool CameraModelHandle<TSpectral>::in_fov(const Vec3<float>& point_camera_coords) const
+{
+    return this->get_()->in_fov(point_camera_coords);
+}
+
+/**
+ * @brief Cast a pinhole camera ray through a position on the image, in the camera's pixel
+ * convention. See CameraModel::cast_ray().
+ */
+template <IsSpectral TSpectral>
+Ray<TSpectral> CameraModelHandle<TSpectral>::cast_ray(const Pixel& pixel) const
+{
+    return this->get_()->cast_ray(pixel);
+}
+
+/**
+ * @brief Cast a camera ray through a position on the image, sampling the aperture when depth
+ * of field is on. See CameraModel::cast_ray().
+ */
+template <IsSpectral TSpectral>
+Ray<TSpectral> CameraModelHandle<TSpectral>::cast_ray(const Pixel& pixel,
+                                                      Sampler<float>& sampler) const
+{
+    return this->get_()->cast_ray(pixel, sampler);
+}
+
+/**
+ * @brief Cast a pinhole camera ray through integer coordinates in the camera's pixel
+ * convention. See CameraModel::cast_ray().
+ */
+template <IsSpectral TSpectral>
+Ray<TSpectral> CameraModelHandle<TSpectral>::cast_ray(int x, int y) const
+{
+    return this->get_()->cast_ray(x, y);
+}
+
+/**
  * @brief Create a new frame buffer with the camera's resolution.
  * @return FrameBuffer<TSpectral> Frame buffer
  */
@@ -710,12 +913,19 @@ FrameBuffer<TSpectral> CameraModelHandle<TSpectral>::make_frame_buffer() const
 }
 
 /**
- * @brief Set whether to use Blender's camera convention (z forward, y up).
+ * @brief Set whether to use Blender's camera convention (-z forward, y up).
  * @param value True to use Blender convention
  */
 template <IsSpectral TSpectral>
 void CameraModelHandle<TSpectral>::use_blender_convention(bool value) const
 {
     this->get_()->use_blender_convention(value);
+}
+
+/// Whether the camera uses Blender's convention (-z forward, y up).
+template <IsSpectral TSpectral>
+bool CameraModelHandle<TSpectral>::is_blender_convention() const
+{
+    return this->get_()->is_blender_convention();
 }
 } // namespace huira

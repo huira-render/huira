@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <utility>
 
 #include "huira/cameras/camera_model.hpp"
 #include "huira/cameras/distortion/brown_distortion.hpp"
@@ -82,6 +83,10 @@ class CameraModelHandle : public Handle<CameraModel<TSpectral>> {
                         units::Millimeter anchor_focal_length,
                         float skew = 0.f);
 
+    Mat3<float> intrinsic_matrix() const;
+    Resolution resolution() const;
+    std::pair<units::Micrometer, units::Micrometer> pixel_pitch() const;
+
     void set_sensor_quantum_efficiency(double qe) const;
     void set_sensor_quantum_efficiency(TSpectral qe) const;
     void set_sensor_full_well_capacity(float fwc) const;
@@ -99,6 +104,18 @@ class CameraModelHandle : public Handle<CameraModel<TSpectral>> {
     void set_sensor_noise_seed(std::uint64_t seed) const;
     std::uint64_t sensor_noise_seed() const;
 
+    TSpectral sensor_quantum_efficiency() const;
+    float sensor_full_well_capacity() const;
+    bool sensor_simulate_noise() const;
+    float sensor_read_noise() const;
+    float sensor_dark_current() const;
+    float sensor_bias_level() const;
+    int sensor_bit_depth() const;
+    float sensor_conversion_gain() const;
+    float sensor_gain_db() const;
+    float sensor_unity_db() const;
+    units::Radian sensor_rotation() const;
+
     template <IsAperture TAperture, typename... Args>
     void set_aperture(Args&&... args) const;
 
@@ -112,9 +129,12 @@ class CameraModelHandle : public Handle<CameraModel<TSpectral>> {
                           int banks = CameraModel<TSpectral>::DEFAULT_PSF_BANKS) const;
 
     void use_aperture_psf(bool value) const;
-    void use_aperture_psf(int radius = CameraModel<TSpectral>::DEFAULT_PSF_RADIUS,
+    void use_aperture_psf(int radius = 0,
                           int banks = CameraModel<TSpectral>::DEFAULT_PSF_BANKS) const;
+    bool uses_aperture_psf() const;
+    bool has_psf() const;
     void enable_psf_convolution(bool convolve_psf = true) const;
+    bool psf_convolution_enabled() const;
     void set_psf_convolution_radius(int radius) const;
     void delete_psf() const;
 
@@ -127,7 +147,9 @@ class CameraModelHandle : public Handle<CameraModel<TSpectral>> {
     void disable_harvey_shack_scatter() const;
 
     int get_psf_radius() const;
+    const Image<TSpectral>& get_psf_kernel(float u, float v) const;
     const Image<TSpectral>& get_psf_convolution_kernel() const;
+    const Image<TSpectral>& get_psf_wings_kernel() const;
 
     void precompute() const;
     bool is_precomputed() const;
@@ -135,6 +157,7 @@ class CameraModelHandle : public Handle<CameraModel<TSpectral>> {
     bool auto_precompute() const;
 
     void enable_depth_of_field(bool depth_of_field = true) const;
+    bool depth_of_field_enabled() const;
 
     void set_focus_distance(units::Meter focus_distance) const;
     void set_focus_diopters(units::Diopter diopters) const;
@@ -150,10 +173,17 @@ class CameraModelHandle : public Handle<CameraModel<TSpectral>> {
     PixelConvention pixel_convention() const;
 
     Pixel project_point(const Vec3<float>& point_camera_coords) const;
+    Pixel try_project_point(const Vec3<float>& point_camera_coords) const;
+    bool in_fov(const Vec3<float>& point_camera_coords) const;
+
+    Ray<TSpectral> cast_ray(const Pixel& pixel) const;
+    Ray<TSpectral> cast_ray(const Pixel& pixel, Sampler<float>& sampler) const;
+    Ray<TSpectral> cast_ray(int x, int y) const;
 
     FrameBuffer<TSpectral> make_frame_buffer() const;
 
     void use_blender_convention(bool value = true) const;
+    bool is_blender_convention() const;
 
     friend class Scene<TSpectral>;
     friend class SceneView<TSpectral>;

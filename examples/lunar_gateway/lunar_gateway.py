@@ -37,6 +37,16 @@ def main():
     camera_model.configure_sensor_from_size((1920, 1080), mm(36))
     camera_model.set_fstop(16)
 
+    # The aperture's diffraction pattern is the PSF by default, and blurs the rendered gateway
+    # too (enable_psf_convolution(False) would leave it sharp). Depth of field is on by default,
+    # with the focus at infinity: at about 56 m, the gateway is in focus to well under a pixel.
+    # To focus closer, which blurs what is far away instead:
+    # camera_model.set_focus_distance(m(20))
+
+    # The camera matrix, as set_intrinsic_matrix() takes it:
+    print("Camera matrix (pixels):")
+    print(camera_model.intrinsic_matrix())
+
     # Create an instance of the camera
     navcam = scene.root.new_instance(camera_model)
     navcam.set_position(m(40), m(-40), m(0))

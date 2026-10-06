@@ -569,6 +569,7 @@ TEST_CASE("use_aperture_psf(false) stops using the aperture's PSF, and only that
     camera.use_aperture_psf(false);
     CHECK(camera.get_psf_radius() == 0);
 
+    // Back on, it has the automatic stamp size, at least 16 px:
     camera.use_aperture_psf(true);
-    CHECK(camera.get_psf_radius() == CameraModel<RGB>::DEFAULT_PSF_RADIUS);
+    CHECK(camera.get_psf_radius() == CameraModel<RGB>::MIN_AUTO_PSF_RADIUS);
 }

@@ -46,9 +46,17 @@ int main(int argc, char** argv)
     camera_model.set_fstop(3.30f);
     camera_model.set_sensor_rotation(90_deg);
     camera_model.configure_sensor_from_pitch({1024, 1024}, 8.5_um, 8.5_um);
-    camera_model.use_aperture_psf(32, 16);
     camera_model.set_sensor_bit_depth(14);
     camera_model.set_focus_diopters(0.0025_dpt);
+
+    // The aperture's diffraction pattern is the PSF by default, in stamps sized to hold about
+    // 99% of the light (use_aperture_psf(radius, banks) gives a size of your own, and
+    // delete_psf() puts each star in a single pixel). Depth of field is on by default too, so
+    // the stars are defocused by the focus set above. Building the stamps takes a moment, so it
+    // is done here rather than in the render:
+    camera_model.precompute();
+    std::cout << "PSF stamp radius: " << camera_model.get_psf_radius() << " px\n"
+              << "Defocus blur radius: " << camera_model.defocus_blur_radius() << " px\n";
 
     // Set the observation time
     huira::Time time("2016-09-19T16:22:05.728");

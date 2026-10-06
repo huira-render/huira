@@ -112,9 +112,13 @@ TEST_CASE("Setters record settings, and precompute() builds what a render would 
     CameraModel<RGB> camera;
     configure_sensor(camera);
 
-    // No PSF and in focus: nothing to build, even though resolved bodies are convolved by
-    // default (with nothing). Until that is turned back on below, only unresolved sources use
-    // the PSF.
+    // The aperture's PSF is the default, and resolved bodies are convolved with it by default:
+    CHECK(camera.has_psf());
+    CHECK_FALSE(camera.is_precomputed());
+
+    // Without a PSF, and in focus, there is nothing to build. Until convolution is turned back
+    // on below, only unresolved sources use the PSF.
+    camera.delete_psf();
     CHECK(camera.is_precomputed());
     camera.enable_psf_convolution(false);
 
@@ -272,7 +276,9 @@ TEST_CASE("Invalid PSF settings are rejected when made, and inconsistent ones wh
     CameraModel<RGB> camera;
     configure_sensor(camera);
 
-    CHECK_THROWS(camera.use_aperture_psf(0, 16));
+    camera.delete_psf(); // the aperture's, by default
+
+    CHECK_THROWS(camera.use_aperture_psf(-1, 16)); // 0 is automatic
     CHECK_THROWS(camera.use_aperture_psf(8, 0));
     CHECK_THROWS(camera.use_aperture_psf(4096, 16)); // stamps beyond 4 GiB
     CHECK_FALSE(camera.has_psf());

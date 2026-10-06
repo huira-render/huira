@@ -58,6 +58,12 @@ def main():
     camera_model.set_sensor_quantum_efficiency(0.8)
     camera_model.set_sensor_full_well_capacity(20000)
     camera_model.set_sensor_simulate_noise(False)
+    print(f"Sensor: {camera_model.sensor_bit_depth()} bits, "
+          f"{camera_model.sensor_full_well_capacity()} e- full well, "
+          f"QE {camera_model.sensor_quantum_efficiency()}")
+
+    # The aperture's diffraction pattern is the PSF by default, and blurs the rendered Earth
+    # (enable_psf_convolution(False) would leave it sharp).
 
     # Huira uses the OpenCV convention by default, which is
     # +z forward, +y down.  Blender uses -z forward, +y up.

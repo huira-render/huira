@@ -8,6 +8,7 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <utility>
 
 #include "huira/cameras/apertures/aperture.hpp"
 #include "huira/cameras/defocus_kernel.hpp"
@@ -66,9 +67,14 @@ template <IsSpectral TSpectral>
 class CameraModel : public SceneObject<CameraModel<TSpectral>> {
   public:
     /// Stamp size for a PSF's stamps for unresolved sources, unless given: radius in pixels,
-    /// and subpixel positions per axis. See use_aperture_psf() and set_psf().
+    /// and subpixel positions per axis. See use_aperture_psf() and set_psf(). The radius is
+    /// also the largest the aperture's automatic stamp radius gets.
     static constexpr int DEFAULT_PSF_RADIUS = 64;
     static constexpr int DEFAULT_PSF_BANKS = 16;
+
+    /// The smallest automatic stamp radius for the aperture's diffraction pattern, in pixels.
+    /// See use_aperture_psf().
+    static constexpr int MIN_AUTO_PSF_RADIUS = 16;
 
     CameraModel();
 
@@ -124,6 +130,9 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
 
     Rotation<double> sensor_rotation() const;
 
+    std::pair<units::Micrometer, units::Micrometer> pixel_pitch() const;
+    Mat3<float> intrinsic_matrix() const;
+
     template <IsAperture TAperture, typename... Args>
     void set_aperture(Args&&... args);
 
@@ -136,13 +145,18 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
                           int radius = 0,
                           int banks = DEFAULT_PSF_BANKS);
 
-    void use_aperture_psf(int radius = DEFAULT_PSF_RADIUS, int banks = DEFAULT_PSF_BANKS);
+    void use_aperture_psf(int radius = 0, int banks = DEFAULT_PSF_BANKS);
 
     /// Choose whether a PSF or scattered light that is set blurs resolved bodies (the path-traced
     /// image). On by default. Off, bodies are sharp, and rendering is faster without the
     /// whole-image convolution; unresolved sources, such as stars, get the PSF and scattered light
     /// either way.
     void enable_psf_convolution(bool convolve_psf = true) { convolve_psf_ = convolve_psf; }
+
+    /// Whether a PSF or scattered light that is set blurs resolved bodies (the default). See
+    /// enable_psf_convolution().
+    bool psf_convolution_enabled() const { return convolve_psf_; }
+
     void set_psf_convolution_radius(int radius);
     void delete_psf();
 
@@ -154,9 +168,13 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
                                   float radius = 0.f);
     void disable_harvey_shack_scatter();
 
-    /// Check if the camera model has a PSF: the aperture's (see use_aperture_psf()), or one that
-    /// was set.
+    /// Check if the camera model has a PSF: the aperture's diffraction pattern (the default; see
+    /// use_aperture_psf()), or one that was set. False after delete_psf().
     bool has_psf() const { return use_aperture_psf_ || psf_ != nullptr; }
+
+    /// Whether the PSF is the aperture's diffraction pattern (the default). See
+    /// use_aperture_psf().
+    bool uses_aperture_psf() const { return use_aperture_psf_; }
 
     const Image<TSpectral>& get_psf_kernel(float u, float v);
     int get_psf_radius() const;
@@ -171,8 +189,10 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     /// Whether a render builds out-of-date optics kernels itself. See set_auto_precompute().
     [[nodiscard]] bool auto_precompute() const { return auto_precompute_; }
 
-    /// Enable or disable depth of field for the camera model.
-    void enable_depth_of_field(bool depth_of_field = true) { depth_of_field_ = depth_of_field; }
+    void enable_depth_of_field(bool depth_of_field = true);
+
+    /// Whether depth of field is on (the default). See enable_depth_of_field().
+    bool depth_of_field_enabled() const { return depth_of_field_; }
 
     // Focus. The three setters are alternative ways of specifying the same state, and all
     // three getters are always available and mutually consistent, whichever was set.
@@ -241,12 +261,14 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     std::unique_ptr<SensorModel<TSpectral>> sensor_;
     std::unique_ptr<Aperture<TSpectral>> aperture_;
     std::unique_ptr<Distortion<TSpectral>> distortion_ = nullptr;
-    /// The core PSF. With use_aperture_psf_ it is the aperture's diffraction PSF, made from the
-    /// current optics when needed (see ensure_diffraction_()); otherwise it is the one set.
+    /// The core PSF. With use_aperture_psf_ (the default) it is the aperture's diffraction PSF,
+    /// made from the current optics when needed (see ensure_diffraction_()); otherwise it is the
+    /// one set.
     std::unique_ptr<PSF<TSpectral>> psf_ = nullptr;
-    bool use_aperture_psf_ = false;
-    int aperture_psf_radius_ = 0;
-    int aperture_psf_banks_ = 0;
+    bool use_aperture_psf_ = true;
+    int aperture_psf_radius_ = 0; ///< 0 for automatic: see aperture_psf_stamp_radius_().
+    int aperture_psf_banks_ = DEFAULT_PSF_BANKS;
+    int aperture_psf_stamp_radius_() const;
     bool convolve_psf_ = true;
 
     /// Whether there is anything to blur with: a PSF, or scattered light.
@@ -423,7 +445,7 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     /// so the result does not depend on the order the settings were made in.
     void compute_intrinsics_();
 
-    bool depth_of_field_ = false;
+    bool depth_of_field_ = true;
 
     template <IsFloatingPoint TFloat>
     Vec3<TFloat> pixel_to_direction_(const Pixel& pixel) const;

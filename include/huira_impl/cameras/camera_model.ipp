@@ -488,6 +488,37 @@ Rotation<double> CameraModel<TSpectral>::sensor_rotation() const
 }
 
 /**
+ * @brief Get the pixel pitch.
+ * @return The pitch along x and along y.
+ */
+template <IsSpectral TSpectral>
+std::pair<units::Micrometer, units::Micrometer> CameraModel<TSpectral>::pixel_pitch() const
+{
+    const Vec2<float> pitch = sensor_->pixel_pitch();
+    return {units::Meter(static_cast<double>(pitch.x)), units::Meter(static_cast<double>(pitch.y))};
+}
+
+/**
+ * @brief Get the camera matrix K = [[fx, s, cx], [0, fy, cy], [0, 0, 1]], as set_intrinsics() and
+ * set_intrinsic_matrix() take it: in pixels, with the principal point (cx, cy) in the camera's
+ * pixel convention (see set_pixel_convention()).
+ *
+ * Mat3 is column-major (GLM), so it is indexed K[column][row]: cx is K[2][0] and cy K[2][1].
+ */
+template <IsSpectral TSpectral>
+Mat3<float> CameraModel<TSpectral>::intrinsic_matrix() const
+{
+    const Pixel principal = pixel_convention_.from_sensor(Pixel{cx_, cy_}, sensor_->resolution());
+    Mat3<float> k{1.f}; // identity
+    k[0][0] = fx_;
+    k[1][1] = fy_;
+    k[1][0] = shear_ * fx_; // the skew as given, in the pixel convention
+    k[2][0] = principal.x;
+    k[2][1] = principal.y;
+    return k;
+}
+
+/**
  * @brief Set the aperture model for the camera.
  *
  * The aperture's size is kept if the focal length later changes, so the f-number follows the
@@ -557,19 +588,35 @@ void CameraModel<TSpectral>::set_measured_psf(const Image<TSpectral>& data,
 }
 
 /**
- * @brief Use the aperture's diffraction pattern as the PSF (point spread function).
+ * @brief Use the aperture's diffraction pattern as the PSF (point spread function), with the
+ * given stamp size.
+ *
+ * This is the default, with an automatic stamp radius: so this sets the stamp size, or brings
+ * the aperture's PSF back after set_psf() or delete_psf(). (In the interim: the API rework
+ * replaces this, when diffraction and the PSF as a whole are set separately.)
  *
  * The PSF follows the aperture, focal length and pixel pitch: it is made from their values at
  * the time it is needed (see precompute()), so they can be set before or after this.
  *
- * @param radius Radius in pixels of the stamps used for unresolved sources.
+ * The automatic stamp radius holds about 99% of the light: for a circular aperture's Airy
+ * pattern that is 20.4 lambda N, at the longest of the spectral type's wavelengths, plus a
+ * pixel. It is at least MIN_AUTO_PSF_RADIUS and at most DEFAULT_PSF_RADIUS pixels; light
+ * beyond the stamp is folded into it, since each stamp is normalized.
+ *
+ * @param radius Radius in pixels of the stamps used for unresolved sources; 0 for automatic.
  * @param banks Subpixel positions per axis the stamps are made for.
- * @throws std::runtime_error if either is less than 1, or the stamps would exceed 4 GiB.
+ * @throws std::runtime_error if the radius is negative, the banks less than 1, or the stamps
+ *         would exceed 4 GiB.
  */
 template <IsSpectral TSpectral>
 void CameraModel<TSpectral>::use_aperture_psf(int radius, int banks)
 {
-    PSF<TSpectral>::check_polyphase_size(radius, banks);
+    if (radius < 0) {
+        HUIRA_THROW_ERROR("CameraModel::use_aperture_psf - Radius must be non-negative (0 for "
+                          "automatic): " +
+                          std::to_string(radius));
+    }
+    PSF<TSpectral>::check_polyphase_size(radius == 0 ? 1 : radius, banks);
     if (use_aperture_psf_ && radius == aperture_psf_radius_ && banks == aperture_psf_banks_) {
         return;
     }
@@ -668,13 +715,35 @@ template <IsSpectral TSpectral>
 int CameraModel<TSpectral>::get_psf_radius() const
 {
     if (use_aperture_psf_) {
-        return aperture_psf_radius_;
+        return aperture_psf_stamp_radius_();
     }
     return psf_ != nullptr ? psf_->get_radius() : 0;
 }
 
+/// The aperture PSF's stamp radius: as set, or automatic (see use_aperture_psf()).
+template <IsSpectral TSpectral>
+int CameraModel<TSpectral>::aperture_psf_stamp_radius_() const
+{
+    if (aperture_psf_radius_ > 0) {
+        return aperture_psf_radius_;
+    }
+    double longest_wavelength = 0.0;
+    for (std::size_t i = 0; i < TSpectral::size(); ++i) {
+        longest_wavelength = std::max(longest_wavelength, TSpectral::get_bin(i).center_wavelength);
+    }
+    const double fnumber =
+        static_cast<double>(focal_length_) / (2.0 * aperture_->get_bounding_radius().to_si());
+    const double pitch = std::min(sensor_->pixel_pitch().x, sensor_->pixel_pitch().y);
+    constexpr double RADIUS_99_PERCENT = 20.4; // in units of lambda N, for an Airy pattern
+    const double radius = std::ceil(RADIUS_99_PERCENT * longest_wavelength * fnumber / pitch) + 1;
+    return static_cast<int>(std::clamp(
+        radius, static_cast<double>(MIN_AUTO_PSF_RADIUS), static_cast<double>(DEFAULT_PSF_RADIUS)));
+}
+
 /**
- * @brief Delete the PSF and disable aperture PSF usage.
+ * @brief Remove the PSF, the aperture's diffraction pattern (the default) included: unresolved
+ * sources then put all their light in the pixel they fall in. use_aperture_psf() brings the
+ * aperture's back.
  */
 template <IsSpectral TSpectral>
 void CameraModel<TSpectral>::delete_psf()
@@ -988,7 +1057,14 @@ bool CameraModel<TSpectral>::convolution_stale_(std::uint64_t built_at) const
 template <IsSpectral TSpectral>
 bool CameraModel<TSpectral>::wings_stale_(std::uint64_t built_at) const
 {
-    return stale_(built_at, {OpticsInput::CorePSF, OpticsInput::Convolution, OpticsInput::Scatter});
+    // The aperture PSF's automatic stamp radius follows the optics:
+    const bool automatic_radius =
+        use_aperture_psf_ && aperture_psf_radius_ == 0 && psf_convolution_radius_ == 0;
+    return stale_(built_at,
+                  {OpticsInput::CorePSF, OpticsInput::Convolution, OpticsInput::Scatter}) ||
+           (automatic_radius &&
+            stale_(built_at,
+                   {OpticsInput::FocalLength, OpticsInput::PixelPitch, OpticsInput::Aperture}));
 }
 
 /**
@@ -1004,7 +1080,7 @@ void CameraModel<TSpectral>::ensure_diffraction_()
     psf_ = aperture_->make_psf(units::Meter(focal_length_),
                                units::Meter(pitch.x),
                                units::Meter(pitch.y),
-                               aperture_psf_radius_,
+                               aperture_psf_stamp_radius_(),
                                aperture_psf_banks_);
     diffraction_built_at_ = optics_version_;
 }
@@ -1333,14 +1409,45 @@ units::Micrometer CameraModel<TSpectral>::focus_sensor_offset() const
 }
 
 /**
+ * @brief Turn depth of field on (the default) or off.
+ *
+ * On, the camera has the focus that set_focus_distance(), set_focus_diopters() or
+ * set_focus_sensor_offset() gave it (at infinity unless set): resolved bodies are traced with
+ * rays from across the aperture, which blurs whatever is out of focus, and unresolved sources
+ * are blurred by their defocus (see defocus_blur_radius()). Off, everything is in focus, as
+ * through a pinhole, whatever the focus setting.
+ *
+ * Rays from across the aperture are noisier where bodies are out of focus, and need more
+ * samples per pixel to look clean: with focus at infinity, bodies closer than about the
+ * aperture's diameter over the angle a pixel spans (for 50 mm at f/2.8 and 8.5 um pixels,
+ * about 100 m).
+ *
+ * @param depth_of_field True to turn depth of field on, false to turn it off.
+ */
+template <IsSpectral TSpectral>
+void CameraModel<TSpectral>::enable_depth_of_field(bool depth_of_field)
+{
+    if (depth_of_field == depth_of_field_) {
+        return;
+    }
+    depth_of_field_ = depth_of_field;
+    optics_changed_(OpticsInput::Focus); // unresolved sources' defocus follows it
+}
+
+/**
  * @brief Get the radius, in pixels, of the defocus blur applied to unresolved sources.
  *
  * This is the blur of a point at infinity for the current focus, aperture, focal length and
- * pixel pitch. It is 0 when the blur is under half a pixel, which is treated as in focus.
+ * pixel pitch. It is 0 when the blur is under half a pixel, which is treated as in focus, and
+ * when depth of field is off (see enable_depth_of_field()).
  */
 template <IsSpectral TSpectral>
 float CameraModel<TSpectral>::defocus_blur_radius() const
 {
+    if (!depth_of_field_) {
+        return 0.f;
+    }
+
     // Depth of field sends light from a point at infinity through aperture point a to the
     // sensor position for direction a / d off the point's own, for focus distance d. Over an
     // aperture of bounding radius R that is a disk of radius R * f * |vergence|: exactly what

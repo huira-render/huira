@@ -27,6 +27,20 @@ inline const std::map<std::string, std::string>& removed_camera_methods()
     };
     return removed;
 }
+
+/// A 3-vector from Python: a huira.Vec3, or any sequence or array of three numbers.
+inline Vec3<float> vec3f_from_py(const py::object& obj)
+{
+    if (py::isinstance<Vec3<double>>(obj)) {
+        return Vec3<float>(obj.cast<Vec3<double>>());
+    }
+    const auto array = py::array_t<double, py::array::c_style | py::array::forcecast>::ensure(obj);
+    if (!array || array.size() != 3) {
+        throw py::value_error("Expected a huira.Vec3, or a sequence of three numbers");
+    }
+    const double* v = array.data();
+    return {static_cast<float>(v[0]), static_cast<float>(v[1]), static_cast<float>(v[2])};
+}
 } // namespace detail
 
 template <typename TSpectral>
@@ -197,6 +211,39 @@ inline void bind_camera_model_handle(py::module_& m)
             "are in the camera's pixel convention (see set_pixel_convention); skew is 0 for "
             "perpendicular pixel axes.")
 
+        .def(
+            "intrinsic_matrix",
+            [](const HandleType& self) {
+                // GLM is column-major, K[col][row]; NumPy is row-major.
+                const Mat3<float> k = self.intrinsic_matrix();
+                py::array_t<double> matrix({3, 3});
+                auto values = matrix.mutable_unchecked<2>();
+                for (py::ssize_t row = 0; row < 3; ++row) {
+                    for (py::ssize_t col = 0; col < 3; ++col) {
+                        values(row, col) =
+                            static_cast<double>(k[static_cast<int>(col)][static_cast<int>(row)]);
+                    }
+                }
+                return matrix;
+            },
+            "The camera matrix [[fx, s, cx], [0, fy, cy], [0, 0, 1]] as a 3x3 NumPy array, "
+            "row by row, as set_intrinsic_matrix() takes it: in pixels, with the principal "
+            "point in the camera's pixel convention (see set_pixel_convention).")
+        .def(
+            "resolution",
+            [](const HandleType& self) {
+                const Resolution r = self.resolution();
+                return py::make_tuple(r.width, r.height);
+            },
+            "The sensor's resolution, as a tuple (width, height).")
+        .def(
+            "pixel_pitch",
+            [](const HandleType& self) {
+                const auto [x, y] = self.pixel_pitch();
+                return py::make_tuple(x, y);
+            },
+            "The pixel pitch, as a tuple (along x, along y) of Micrometer.")
+
         // Pixel coordinate convention
         .def("set_pixel_convention",
              &HandleType::set_pixel_convention,
@@ -250,6 +297,35 @@ inline void bind_camera_model_handle(py::module_& m)
         .def("sensor_noise_seed",
              &HandleType::sensor_noise_seed,
              "The seed of the sensor's noise. See set_sensor_noise_seed().")
+        .def("sensor_quantum_efficiency",
+             &HandleType::sensor_quantum_efficiency,
+             "The sensor's quantum efficiency, per spectral bin.")
+        .def("sensor_full_well_capacity",
+             &HandleType::sensor_full_well_capacity,
+             "The sensor's full well capacity, in electrons.")
+        .def("sensor_simulate_noise",
+             &HandleType::sensor_simulate_noise,
+             "Whether the sensor simulates noise.")
+        .def("sensor_read_noise",
+             &HandleType::sensor_read_noise,
+             "The sensor's read noise, in electrons.")
+        .def("sensor_dark_current",
+             &HandleType::sensor_dark_current,
+             "The sensor's dark current, in electrons per second.")
+        .def("sensor_bias_level",
+             &HandleType::sensor_bias_level,
+             "The sensor's bias level, in digital numbers.")
+        .def("sensor_bit_depth", &HandleType::sensor_bit_depth, "The sensor's bit depth.")
+        .def("sensor_conversion_gain",
+             &HandleType::sensor_conversion_gain,
+             "The sensor's conversion gain, in electrons per digital number.")
+        .def("sensor_gain_db", &HandleType::sensor_gain_db, "The sensor's gain, in decibels.")
+        .def("sensor_unity_db",
+             &HandleType::sensor_unity_db,
+             "The gain, in decibels, at which the sensor's conversion gain is unity.")
+        .def("sensor_rotation",
+             &HandleType::sensor_rotation,
+             "The sensor's rotation about the optical axis, in Radian.")
 
         // Sensor rotation
         .def(
@@ -264,16 +340,25 @@ inline void bind_camera_model_handle(py::module_& m)
         .def("use_aperture_psf",
              py::overload_cast<bool>(&HandleType::use_aperture_psf, py::const_),
              py::arg("value"),
-             "True uses the aperture's diffraction pattern as the PSF, with the default stamp "
-             "size if it was not already in use (and keeps its stamp size if it was). False "
-             "stops using it, leaving no PSF; a PSF set with set_measured_psf() is left as it "
-             "is.")
+             "The aperture's diffraction pattern is the PSF by default. True uses it, with the "
+             "automatic stamp size if it was not already in use (and keeps its stamp size if it "
+             "was). False stops using it, leaving no PSF; a PSF set with set_measured_psf() is "
+             "left as it is. (In the interim: this goes when diffraction and the PSF as a whole "
+             "are set separately.)")
         .def("use_aperture_psf",
              py::overload_cast<int, int>(&HandleType::use_aperture_psf, py::const_),
-             py::arg("radius") = CameraModel<TSpectral>::DEFAULT_PSF_RADIUS,
+             py::arg("radius") = 0,
              py::arg("banks") = CameraModel<TSpectral>::DEFAULT_PSF_BANKS,
-             "Use the aperture's diffraction pattern as the PSF, with stamps of the given "
-             "radius in pixels and subpixel positions per axis for unresolved sources.")
+             "Use the aperture's diffraction pattern as the PSF (the default), with stamps of "
+             "the given radius in pixels (0: automatic, holding about 99% of the light, from "
+             "16 to 64 px) and subpixel positions per axis for unresolved sources.")
+        .def("uses_aperture_psf",
+             &HandleType::uses_aperture_psf,
+             "Whether the PSF is the aperture's diffraction pattern (the default).")
+        .def("has_psf",
+             &HandleType::has_psf,
+             "Whether the camera has a PSF: the aperture's (the default), or one that was set. "
+             "False after delete_psf().")
         .def("enable_psf_convolution",
              &HandleType::enable_psf_convolution,
              py::arg("convolve_psf") = true,
@@ -281,7 +366,15 @@ inline void bind_camera_model_handle(py::module_& m)
              "path-traced image). On by default. Off, bodies are sharp, and rendering is faster "
              "without the whole-image convolution; unresolved sources, such as stars, get the "
              "PSF and scattered light either way.")
-        .def("delete_psf", &HandleType::delete_psf)
+        .def("psf_convolution_enabled",
+             &HandleType::psf_convolution_enabled,
+             "Whether a PSF or scattered light that is set blurs resolved bodies (the "
+             "default). See enable_psf_convolution().")
+        .def("delete_psf",
+             &HandleType::delete_psf,
+             "Remove the PSF, the aperture's diffraction pattern (the default) included: "
+             "unresolved sources then put all their light in the pixel they fall in. "
+             "use_aperture_psf() brings the aperture's back.")
         .def("set_psf_convolution_radius",
              &HandleType::set_psf_convolution_radius,
              py::arg("radius"),
@@ -294,13 +387,14 @@ inline void bind_camera_model_handle(py::module_& m)
              py::arg("sampling"),
              py::arg("radius") = 0,
              py::arg("banks") = CameraModel<TSpectral>::DEFAULT_PSF_BANKS,
-             "Use a measured (user-supplied) PSF as the camera's core PSF. 'data' is an Image "
-             "of centered PSF samples; 'samples_per_pixel' is the measurement sampling density "
-             "per sensor pixel per axis; 'sampling' says what the samples are: "
-             "PSFSampling.PointSampled for the PSF's intensity at points (an optical design "
-             "tool's output), PSFSampling.PixelIntegrated for the light a pixel centered there "
-             "receives (a star image taken with the sensor itself). radius=0 auto-selects the "
-             "largest stamping radius covered by the measurement (capped at 64).")
+             "Use a measured (user-supplied) PSF as the camera's core PSF, in place of the "
+             "aperture's. 'data' is an Image of centered PSF samples; 'samples_per_pixel' is "
+             "the measurement sampling density per sensor pixel per axis; 'sampling' says what "
+             "the samples are (see PSFSampling): PSFSampling.PixelIntegrated if the data came "
+             "from the sensor being simulated, such as a star's image, and otherwise almost "
+             "always PSFSampling.PointSampled, such as optical design software's PSF. radius=0 "
+             "auto-selects the largest stamping radius covered by the measurement (capped at "
+             "64).")
 
         // Stray light
         .def("set_veiling_glare",
@@ -320,6 +414,34 @@ inline void bind_camera_model_handle(py::module_& m)
              "falloff exponent (typically 2-3), shoulder radius r0 (pixels), and optional "
              "hard cutoff radius (0 = none).")
         .def("disable_harvey_shack_scatter", &HandleType::disable_harvey_shack_scatter)
+
+        .def("get_psf_radius",
+             &HandleType::get_psf_radius,
+             "Radius in pixels of the PSF's stamps for unresolved sources; 0 without a PSF.")
+        .def(
+            "get_psf_kernel",
+            [](const HandleType& self, float u, float v) {
+                return Image<TSpectral>(self.get_psf_kernel(u, v));
+            },
+            py::arg("u") = 0.f,
+            py::arg("v") = 0.f,
+            py::call_guard<py::gil_scoped_release>(),
+            "A copy of the PSF's stamp for an unresolved source at subpixel position (u, v) "
+            "in [0, 1), building the stamps first if needed.")
+        .def(
+            "get_psf_convolution_kernel",
+            [](const HandleType& self) {
+                return Image<TSpectral>(self.get_psf_convolution_kernel());
+            },
+            py::call_guard<py::gil_scoped_release>(),
+            "A copy of the whole-image convolution kernel (the PSF and scattered light "
+            "together, unit energy per channel), building it first if needed.")
+        .def(
+            "get_psf_wings_kernel",
+            [](const HandleType& self) { return Image<TSpectral>(self.get_psf_wings_kernel()); },
+            py::call_guard<py::gil_scoped_release>(),
+            "A copy of the scattered light's kernel alone (unit energy per channel), building "
+            "it first if needed. Requires Harvey-Shack scatter.")
 
         // Optics kernels
         .def("precompute",
@@ -345,7 +467,15 @@ inline void bind_camera_model_handle(py::module_& m)
         // Depth of field
         .def("enable_depth_of_field",
              &HandleType::enable_depth_of_field,
-             py::arg("depth_of_field") = true)
+             py::arg("depth_of_field") = true,
+             "Turn depth of field on (the default) or off. On, the camera has the focus set "
+             "(at infinity unless set): resolved bodies are traced with rays from across the "
+             "aperture, which blurs whatever is out of focus, and unresolved sources are "
+             "blurred by their defocus. Off, everything is in focus, as through a pinhole. "
+             "Out-of-focus bodies need more samples per pixel to look clean.")
+        .def("depth_of_field_enabled",
+             &HandleType::depth_of_field_enabled,
+             "Whether depth of field is on (the default).")
 
         // Focus
         .def(
@@ -388,11 +518,52 @@ inline void bind_camera_model_handle(py::module_& m)
              "Radius in pixels of the defocus blur applied to unresolved sources (0 if in "
              "focus).")
 
+        // Projection and rays
+        .def(
+            "project_point",
+            [](const HandleType& self, const py::object& point) {
+                const Pixel p = self.project_point(detail::vec3f_from_py(point));
+                return py::make_tuple(p.x, p.y);
+            },
+            py::arg("point"),
+            "Project a point in camera coordinates (meters; a huira.Vec3 or three numbers) "
+            "onto the image, as a tuple (x, y) in the camera's pixel convention.")
+        .def(
+            "try_project_point",
+            [](const HandleType& self, const py::object& point) {
+                const Pixel p = self.try_project_point(detail::vec3f_from_py(point));
+                return py::make_tuple(p.x, p.y);
+            },
+            py::arg("point"),
+            "As project_point(), but (nan, nan) for a point outside the field of view.")
+        .def(
+            "in_fov",
+            [](const HandleType& self, const py::object& point) {
+                return self.in_fov(detail::vec3f_from_py(point));
+            },
+            py::arg("point"),
+            "Whether a point in camera coordinates (a huira.Vec3 or three numbers) is in the "
+            "field of view.")
+        .def(
+            "cast_ray",
+            [](const HandleType& self, float x, float y) { return self.cast_ray(Pixel{x, y}); },
+            py::arg("x"),
+            py::arg("y"),
+            "Cast a pinhole camera ray, in camera coordinates, through position (x, y) on the "
+            "image, in the camera's pixel convention. The position may be outside the image.")
+
         // Make the FrameBuffer
         .def("make_frame_buffer", &HandleType::make_frame_buffer)
 
         // Blender convention
-        .def("use_blender_convention", &HandleType::use_blender_convention, py::arg("value") = true)
+        .def("use_blender_convention",
+             &HandleType::use_blender_convention,
+             py::arg("value") = true,
+             "Use Blender's camera convention (-z forward, y up) rather than OpenCV's (z "
+             "forward, y down, the default).")
+        .def("is_blender_convention",
+             &HandleType::is_blender_convention,
+             "Whether the camera uses Blender's convention (-z forward, y up).")
 
         .def("valid", &HandleType::valid)
         .def("__bool__", &HandleType::valid)

@@ -32,6 +32,8 @@ Image<RGB> render(const Setup& setup)
     camera_model.set_fstop(8.0f);
     if (setup.psf) {
         camera_model.use_aperture_psf(6, 4);
+    } else {
+        camera_model.delete_psf(); // the aperture's, by default
     }
     if (setup.scatter) {
         camera_model.set_harvey_shack_scatter(0.1f, 2.5f, 0.5f);
@@ -42,6 +44,9 @@ Image<RGB> render(const Setup& setup)
     }
     if (setup.defocus) {
         camera_model.set_focus_sensor_offset(units::Micrometer(480.0));
+    } else {
+        // On by default: the ball at 10 m would be blurred by 3 px even with focus at infinity.
+        camera_model.enable_depth_of_field(false);
     }
     auto camera = scene.root.new_instance(camera_model);
 
