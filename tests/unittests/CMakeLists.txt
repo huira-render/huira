@@ -21,6 +21,7 @@ set(UNIT_TESTS
     huira/core/test_time.cpp
     huira/core/test_transform.cpp
 
+    huira/render/test_psf_switch.cpp
     huira/render/test_region_culling.cpp
     huira/render/test_sky_convolution.cpp
     huira/render/test_unresolved_memory.cpp
