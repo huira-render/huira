@@ -40,6 +40,8 @@ set(UNIT_TESTS
     huira/images/test_image_output.cpp
 
     huira/units/test_units.cpp
+
+    reference/test_airy_reference.cpp
 )
 
 ##############################
@@ -106,6 +108,9 @@ endif()
 ##############################
 function(add_unit_test test_name source_file)
     add_executable(${test_name} ${source_file})
+
+    # Tests include shared test code, such as the independent reference in reference/, from here
+    target_include_directories(${test_name} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
     
     target_link_libraries(${test_name} 
         PRIVATE 
