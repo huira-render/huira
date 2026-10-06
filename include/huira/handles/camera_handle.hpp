@@ -12,6 +12,7 @@
 #include "huira/handles/handle.hpp"
 #include "huira/images/image.hpp"
 #include "huira/units/units.hpp"
+#include "huira/util/removed_api.hpp"
 
 namespace huira {
 template <IsSpectral TSpectral>
@@ -156,39 +157,53 @@ class CameraModelHandle : public Handle<CameraModel<TSpectral>> {
     friend class SceneView<TSpectral>;
     friend class FrameHandle<TSpectral>;
 
-    // DEPRECATED
-    [[deprecated("set_diopters() was renamed v0.9.10.  Use set_focus_diopters() instead.")]]
-    void set_diopters(units::Diopter diopters) const;
+    // Removed: calling these fails to compile, with what to use instead.
+    template <typename... Args>
+    void set_diopters(Args&&...) const
+    {
+        static_assert(detail::removed_api<Args...>,
+                      "set_diopters() was removed in v0.9.10. Use set_focus_diopters() instead.");
+    }
 
-    [[deprecated("get_diopters() was renamed in v0.9.10.  Use focus_diopters() instead.")]]
-    units::Diopter get_diopters() const;
+    template <typename... Args>
+    units::Diopter get_diopters(Args&&...) const
+    {
+        static_assert(detail::removed_api<Args...>,
+                      "get_diopters() was removed in v0.9.10. Use focus_diopters() instead.");
+        return {};
+    }
 
-    [[deprecated("get_focus_distance() was renamed in v0.9.10.  Use focus_distance() instead.")]]
-    units::Meter get_focus_distance() const;
+    template <typename... Args>
+    units::Meter get_focus_distance(Args&&...) const
+    {
+        static_assert(detail::removed_api<Args...>,
+                      "get_focus_distance() was removed in v0.9.10. Use focus_distance() instead.");
+        return {};
+    }
 
-    [[deprecated("set_sensor_resolution was removed in v0.9.4.  Use configure_sensor_from_pitch() "
-                 "or configure_sensor_from_size() instead.")]]
-    void set_sensor_resolution(Resolution resolution) const;
+    template <typename... Args>
+    void set_sensor_resolution(Args&&...) const
+    {
+        static_assert(detail::removed_api<Args...>,
+                      "set_sensor_resolution() was removed in v0.9.4. Use "
+                      "configure_sensor_from_pitch() or configure_sensor_from_size() instead.");
+    }
 
-    [[deprecated("set_sensor_resolution was removed in v0.9.4.  Use configure_sensor_from_pitch() "
-                 "or configure_sensor_from_size() instead.")]]
-    void set_sensor_resolution(int width, int height) const;
+    template <typename... Args>
+    void set_sensor_pixel_pitch(Args&&...) const
+    {
+        static_assert(detail::removed_api<Args...>,
+                      "set_sensor_pixel_pitch() was removed in v0.9.4. Use "
+                      "configure_sensor_from_pitch() instead.");
+    }
 
-    [[deprecated("set_sensor_pixel_pitch was removed in v0.9.4.  Use configure_sensor_from_pitch() "
-                 "instead.")]]
-    void set_sensor_pixel_pitch(units::Millimeter pitch_x, units::Millimeter pitch_y) const;
-
-    [[deprecated("set_sensor_pixel_pitch was removed in v0.9.4.  Use configure_sensor_from_pitch() "
-                 "instead.")]]
-    void set_sensor_pixel_pitch(units::Millimeter pitch) const;
-
-    [[deprecated(
-        "set_sensor_size was removed in v0.9.4.  Use configure_sensor_from_size() instead.")]]
-    void set_sensor_size(units::Millimeter width, units::Millimeter height) const;
-
-    [[deprecated(
-        "set_sensor_size was removed in v0.9.4.  Use configure_sensor_from_size() instead.")]]
-    void set_sensor_size(units::Millimeter width) const;
+    template <typename... Args>
+    void set_sensor_size(Args&&...) const
+    {
+        static_assert(detail::removed_api<Args...>,
+                      "set_sensor_size() was removed in v0.9.4. Use configure_sensor_from_size() "
+                      "instead.");
+    }
 };
 } // namespace huira
 
