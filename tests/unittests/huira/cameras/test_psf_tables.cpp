@@ -195,6 +195,87 @@ class ReferenceScatter {
     double peak_ = 1.0;
 };
 
+/// The band-averaged Airy pattern blurred by a uniform disc, by Hankel transform: the inverse
+/// of its optical transfer function, the band-averaged circular aperture's (in closed form)
+/// times the disc's jinc. An independent method from the library's, which works in real space.
+/// Tabulated with its slope every sixteenth of the finest period, for cubic Hermite lookup.
+class ReferenceDefocus {
+  public:
+    ReferenceDefocus(double blue, double red, double blur, double extent)
+        : blue_{blue}, red_{red}, blur_{blur}, step_{1.0 / (16.0 * blue)}
+    {
+        for (double r = 0.0; r <= extent + 2.0 * step_; r += step_) {
+            values_.push_back(transform(r, false));
+            slopes_.push_back(transform(r, true));
+        }
+    }
+
+    double operator()(double r) const
+    {
+        const double u = r / step_;
+        const auto k = std::min(static_cast<std::size_t>(u), values_.size() - 2);
+        const double t = u - static_cast<double>(k);
+        const double t2 = t * t;
+        const double t3 = t2 * t;
+        return (2.0 * t3 - 3.0 * t2 + 1.0) * values_[k] + (t3 - 2.0 * t2 + t) * step_ * slopes_[k] +
+               (3.0 * t2 - 2.0 * t3) * values_[k + 1] + (t3 - t2) * step_ * slopes_[k + 1];
+    }
+
+  private:
+    /// The transfer function at nu cycles per pixel: the circular aperture's,
+    /// (2 / pi) (acos q - q sqrt(1 - q^2)) for q = nu / c, averaged evenly over 1 / c.
+    double transfer(double nu) const
+    {
+        const auto integral = [](double q) {
+            q = std::min(q, 1.0);
+            const double root = std::sqrt(std::max(0.0, 1.0 - q * q));
+            return 2.0 / PI * (q * std::acos(q) - root + root * root * root / 3.0);
+        };
+        if (nu * (1.0 / blue_) >= 1.0) {
+            return 0.0;
+        }
+        return (integral(nu / red_) - integral(nu / blue_)) / (nu * (1.0 / red_ - 1.0 / blue_));
+    }
+
+    /// The profile, or its slope, at r: 2 pi times the integral of H(nu) J0(2 pi nu r) nu.
+    double transform(double r, bool slope) const
+    {
+        const auto integrand = [&](double nu) {
+            const double z = 2.0 * PI * blur_ * nu;
+            const double jinc = 2.0 * reference::bessel_j(1, z) / z;
+            const double x = 2.0 * PI * nu * r;
+            const double h = transfer(nu) * jinc * nu;
+            return slope ? -h * 2.0 * PI * nu * reference::bessel_j(1, x)
+                         : h * reference::bessel_j(0, x);
+        };
+        // The integrand turns over r + blur times per cycle per pixel; two panels a turn. The
+        // transfer function has a kink at the red cutoff.
+        const double turns = r + blur_ + 1.0;
+        const int below = 4 + static_cast<int>(std::ceil(2.0 * red_ * turns));
+        const int above = 4 + static_cast<int>(std::ceil(2.0 * (blue_ - red_) * turns));
+        return 2.0 * PI *
+               (reference::gauss_legendre(integrand, 1e-12, red_, below) +
+                reference::gauss_legendre(integrand, red_, blue_, above));
+    }
+
+    double blue_;
+    double red_;
+    double blur_;
+    double step_;
+    std::vector<double> values_;
+    std::vector<double> slopes_;
+};
+
+/// Diopters of focus that blur a star by the given radius, in pixels, in the Jupiter camera at
+/// 50 mm: the aperture's radius, 50 / 3.3 / 2 mm, times f, over the pitch, per diopter.
+double diopters_for_blur(double blur)
+{
+    const double focal_length = 0.05;
+    const double per_diopter =
+        focal_length * (focal_length / JUPITER.fnumber / 2.0) / JUPITER.pitch_x;
+    return blur / per_diopter;
+}
+
 } // namespace
 
 TEST_CASE("The PSF tables' Bessel functions and band average match the reference", "[cameras][psf]")
@@ -545,4 +626,115 @@ TEST_CASE("Renders use scattered light set in angles at its size in pixels",
         }
     }
     CHECK(worst < 1e-5);
+}
+
+TEST_CASE("psf_image() blurs a star by its defocus", "[cameras][psf][defocus]")
+{
+    CameraModel<RGB> camera;
+    configure(camera, JUPITER, Resolution{256, 256});
+    constexpr double BLUR = 2.0;
+    camera.set_focus_diopters(units::Diopter(diopters_for_blur(BLUR)));
+    constexpr int RADIUS = 5;
+    const double x_offset = 0.27;
+    const double y_offset = -0.41;
+    const Image<RGB> image =
+        camera.psf_image(RADIUS, static_cast<float>(x_offset), static_cast<float>(y_offset));
+
+    // Across the disc, its edge and 3 pixels beyond, against the Hankel transform.
+    for (std::size_t channel : {std::size_t{0}, std::size_t{2}}) {
+        const Bin bin = RGB::get_bin(channel);
+        const double blue = JUPITER.pitch_x / (bin.min_wavelength * JUPITER.fnumber);
+        const double red = JUPITER.pitch_x / (bin.max_wavelength * JUPITER.fnumber);
+        const ReferenceDefocus exact(blue, red, BLUR, RADIUS * std::sqrt(2.0) + 1.0);
+        double worst = 0.0;
+        double peak = 0.0;
+        for (int y = -RADIUS; y <= RADIUS; ++y) {
+            for (int x = -RADIUS; x <= RADIUS; ++x) {
+                if (std::hypot(x, y) > RADIUS) {
+                    continue;
+                }
+                const double expected =
+                    reference::pixel_light(exact, x - x_offset, y - y_offset, 0.25 / blue);
+                const double light = static_cast<double>(image(x + RADIUS, y + RADIUS)[channel]);
+                peak = std::max(peak, expected);
+                worst = std::max(worst, std::abs(light - expected));
+            }
+        }
+        INFO("channel " << channel);
+        CHECK(worst < 1e-5 * peak);
+    }
+}
+
+TEST_CASE("psf_image()'s defocus is continuous from focus", "[cameras][psf][defocus]")
+{
+    CameraModel<RGB> camera;
+    configure(camera, JUPITER, Resolution{128, 128});
+    const auto image_at = [&](double blur) {
+        camera.set_focus_diopters(units::Diopter(diopters_for_blur(blur)));
+        return camera.psf_image(6, 0.3f, 0.1f);
+    };
+    const auto difference = [](const Image<RGB>& a, const Image<RGB>& b) {
+        double worst = 0.0;
+        double peak = 0.0;
+        for (int y = 0; y < a.height(); ++y) {
+            for (int x = 0; x < a.width(); ++x) {
+                for (std::size_t c = 0; c < RGB::size(); ++c) {
+                    worst = std::max(worst, std::abs(static_cast<double>(a(x, y)[c] - b(x, y)[c])));
+                    peak = std::max(peak, static_cast<double>(b(x, y)[c]));
+                }
+            }
+        }
+        return worst / peak;
+    };
+    const Image<RGB> focused = image_at(0.0);
+    // Either side of the smallest blur applied, and a blur a hundredth of a pixel, change the
+    // image by about (pi c b)^2 / 2 of its peak.
+    CHECK(difference(image_at(0.99e-4), focused) < 1e-5);
+    CHECK(difference(image_at(1.01e-4), focused) < 1e-5);
+    CHECK(difference(image_at(0.01), focused) < 2e-2);
+    CHECK(difference(image_at(0.01), focused) > 1e-4);
+}
+
+TEST_CASE("psf_image() blurs a source at a range by its own defocus", "[cameras][psf][defocus]")
+{
+    CameraModel<RGB> camera;
+    configure(camera, JUPITER, Resolution{128, 128});
+    const Image<RGB> focused = camera.psf_image(8, 0.2f, 0.4f);
+
+    // Focused at 10 m: a source there is sharp, a star is not.
+    camera.set_focus_distance(units::Meter(10.0));
+    const Image<RGB> at_focus = camera.psf_image(8, 0.2f, 0.4f, units::Meter(10.0));
+    const Image<RGB> star = camera.psf_image(8, 0.2f, 0.4f);
+    double same = 0.0;
+    double blurred = 0.0;
+    for (int y = 0; y < focused.height(); ++y) {
+        for (int x = 0; x < focused.width(); ++x) {
+            same =
+                std::max(same, std::abs(static_cast<double>(at_focus(x, y)[0] - focused(x, y)[0])));
+            blurred =
+                std::max(blurred, std::abs(static_cast<double>(star(x, y)[0] - focused(x, y)[0])));
+        }
+    }
+    CHECK(same < 1e-7);
+    CHECK(blurred > 0.1);
+
+    // A star's blur here is 4.46 px: the image holds what the disc puts in it.
+    double sum = 0.0;
+    for (int y = 0; y < star.height(); ++y) {
+        for (int x = 0; x < star.width(); ++x) {
+            sum += static_cast<double>(star(x, y)[0]);
+        }
+    }
+    CHECK(sum > 0.99);
+    CHECK(sum < 1.0);
+
+    // With depth of field off there is no blur.
+    camera.enable_depth_of_field(false);
+    const Image<RGB> off = camera.psf_image(8, 0.2f, 0.4f);
+    CHECK(std::abs(static_cast<double>(off(8, 8)[0] - focused(8, 8)[0])) < 1e-7);
+
+    camera.enable_depth_of_field(true);
+    CHECK_THROWS(camera.psf_image(8, 0.f, 0.f, units::Meter(0.0)));
+    camera.delete_psf();
+    CHECK_THROWS(camera.psf_image(8));
 }

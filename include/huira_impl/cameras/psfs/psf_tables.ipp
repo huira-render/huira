@@ -4,10 +4,12 @@
 #include <cstddef>
 #include <cstdlib>
 #include <limits>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "huira/cameras/psfs/airy_band.hpp"
+#include "huira/cameras/psfs/psf_profile.hpp"
 #include "huira/core/constants.hpp"
 #include "huira/util/logger.hpp"
 #include "tbb/blocked_range.h"
@@ -124,8 +126,8 @@ inline constexpr std::size_t NEAR_TABLE_BUDGET = std::size_t{64} * 1024 * 1024;
  *
  * A profile is called as profile(r) for the light per unit area at a distance r from the source
  * (in pixel widths, for a total of 1), and profile.slope(r) for its derivative. Both must be
- * safe to call from several threads. Far out, the profile must match its channel's far field:
- * far_coefficient / r^3, averaged over the rings, plus the scattered light.
+ * safe to call from several threads. profile.far_field(r) gives the profile far out, averaged
+ * over any rings, with its first two derivatives; it is used beyond the channel's far radius.
  *
  * @param profiles One profile per channel.
  * @param channels What the tables need to know of each channel's profile beyond the near table.
@@ -155,12 +157,9 @@ PsfTables<TSpectral>::PsfTables(const std::vector<Profile>& profiles,
     }
     for (const Channel& channel : channels) {
         if (!(channel.step > 0.0) || !std::isfinite(channel.step) ||
-            !(channel.far_radius >= layout.near_radius) || !(channel.far_coefficient >= 0.0) ||
-            !(channel.scatter_fraction >= 0.0 && channel.scatter_fraction < 1.0) ||
-            (channel.scatter_fraction > 0.0 && !channel.scatter.has_value())) {
-            HUIRA_THROW_ERROR("PsfTables - Each channel needs a positive step, a far radius "
-                              "beyond the near table, and a scatter profile for any light "
-                              "scattered");
+            !(channel.far_radius >= layout.near_radius)) {
+            HUIRA_THROW_ERROR("PsfTables - Each channel needs a positive step, and a far radius "
+                              "beyond the near table");
         }
     }
 
@@ -184,26 +183,34 @@ PsfTables<TSpectral>::PsfTables(const std::vector<Profile>& profiles,
  * over a pixel, fall below 0.1% of the mean. Scattered light takes NEAR_SAMPLES_PER_SHOULDER
  * points across its shoulder, if that is finer.
  *
+ * A blur, defocus's uniform disc, widens the near table by up to MAX_NEAR_BLUR, and moves each
+ * channel's far field out to where the blurred profile is smooth: see detail::DefocusedProfile.
+ *
  * @param fnumber The aperture's f-number.
  * @param pitch_x Pixel width in meters.
  * @param pitch_y Pixel height in meters.
  * @param reach How far from a source, in pixel widths, the projected integrals are tabulated.
  * @param scatter Scattered light, in pixel widths; the same in every channel.
- * @throws std::runtime_error if the f-number or a pitch is not positive and finite, or the
- *         scattered light is invalid (see detail::ScatterProfile).
+ * @param blur The radius of defocus's blur disc in pixel widths; below MIN_BLUR, in focus.
+ * @throws std::runtime_error if the f-number or a pitch is not positive and finite, the blur is
+ *         negative or not finite, or the scattered light is invalid (see
+ *         detail::ScatterProfile).
  */
 template <IsSpectral TSpectral>
 PsfTables<TSpectral> PsfTables<TSpectral>::airy(double fnumber,
                                                 double pitch_x,
                                                 double pitch_y,
                                                 double reach,
-                                                const std::optional<Scatter>& scatter)
+                                                const std::optional<Scatter>& scatter,
+                                                double blur)
 {
     if (!(fnumber > 0.0) || !std::isfinite(fnumber) || !(pitch_x > 0.0) ||
-        !std::isfinite(pitch_x) || !(pitch_y > 0.0) || !std::isfinite(pitch_y)) {
+        !std::isfinite(pitch_x) || !(pitch_y > 0.0) || !std::isfinite(pitch_y) || !(blur >= 0.0) ||
+        !std::isfinite(blur)) {
         HUIRA_THROW_ERROR("PsfTables::airy - The f-number and pixel pitch must be positive and "
-                          "finite");
+                          "finite, and the blur non-negative and finite");
     }
+    const bool defocused = blur >= MIN_BLUR;
     // From comparisons with the exact pixel integrals over a range of optics (f/2 to f/16, 5 to
     // 10 um pixels, Visible8 and RGB bins): cubic B-splines with 8 points to the finest period
     // keep every pixel within 0.03%; the projected integrals are within 0.07% beyond 28 periods
@@ -244,8 +251,9 @@ PsfTables<TSpectral> PsfTables<TSpectral>::airy(double fnumber,
     Layout layout;
     layout.aspect = aspect;
     layout.reach = reach;
-    layout.near_radius =
-        std::ceil(std::max(PROJECTION_MIN_RADIUS, PROJECTION_PERIODS / coarsest)) + BLEND_WIDTH;
+    layout.near_radius = std::ceil(std::max(PROJECTION_MIN_RADIUS, PROJECTION_PERIODS / coarsest) +
+                                   (defocused ? std::min(blur, MAX_NEAR_BLUR) : 0.0)) +
+                         BLEND_WIDTH;
     double samples_wanted = NEAR_SAMPLES_PER_PERIOD * finest * std::max(1.0, aspect);
     if (scatter_fraction > 0.0) {
         samples_wanted = std::max(
@@ -284,13 +292,27 @@ PsfTables<TSpectral> PsfTables<TSpectral>::airy(double fnumber,
         const double rings = blue > red ? FAR_FIELD_RINGS * through / (blue - red)
                                         : std::numeric_limits<double>::infinity();
         channels[channel].far_radius = std::max(layout.near_radius + BLEND_WIDTH, rings);
-        channels[channel].far_coefficient =
-            (1.0 - scatter_fraction) * profiles[channel].diffraction().far_field_coefficient();
-        channels[channel].scatter_fraction = scatter_fraction;
-        channels[channel].scatter = scatter_profile;
         channels[channel].step = std::min(MAX_STRIP_STEP, 1.0 / (STRIP_STEPS_PER_PERIOD * blue));
     }
-    return PsfTables(profiles, channels, layout);
+    if (!defocused) {
+        return PsfTables(profiles, channels, layout);
+    }
+
+    // Each channel blurred, from its rings out to where they have washed out; the blurred
+    // profile is smooth beyond the disc's edge plus the radius its rings are followed to.
+    std::vector<std::optional<detail::DefocusedProfile>> blurred(TSpectral::size());
+    tbb::parallel_for(std::size_t{0}, TSpectral::size(), [&](std::size_t channel) {
+        blurred[channel].emplace(
+            profiles[channel], blur, channels[channel].far_radius, std::max(reach, 1.0));
+    });
+    std::vector<detail::DefocusedProfile> defocused_profiles;
+    defocused_profiles.reserve(TSpectral::size());
+    for (std::size_t channel = 0; channel < TSpectral::size(); ++channel) {
+        defocused_profiles.push_back(*blurred[channel]);
+        channels[channel].far_radius = std::max(
+            layout.near_radius + BLEND_WIDTH, blur + blurred[channel]->ring_radius() + BLEND_WIDTH);
+    }
+    return PsfTables(defocused_profiles, channels, layout);
 }
 
 /**
@@ -423,10 +445,16 @@ typename PsfTables<TSpectral>::Strip PsfTables<TSpectral>::build_strip_(const Pr
     Strip strip;
     strip.step = channel.step;
     strip.far_radius = channel.far_radius;
-    strip.far_coefficient = channel.far_coefficient;
-    strip.scatter_fraction = channel.scatter_fraction;
-    strip.scatter = channel.scatter;
     strip.limit = std::min(channel.far_radius, std::max(reach, near_radius_));
+
+    // The far field, tabulated every 1% in r from the blend before the far radius; beyond the
+    // reach it continues as a power law.
+    constexpr double FAR_RATIO = 1.01;
+    const double far_start = std::max(channel.far_radius - BLEND_WIDTH - 1.0, 0.5);
+    strip.far = detail::RadialTable::logarithmic([&](double r) { return profile.far_field(r); },
+                                                 far_start,
+                                                 std::max(reach, 2.0 * far_start),
+                                                 FAR_RATIO);
 
     // A pixel's projected integral reads the antiderivatives within half its projected width of
     // its distance (at most half its diagonal), moved out by the curvature correction (at most
@@ -469,12 +497,11 @@ typename PsfTables<TSpectral>::Strip PsfTables<TSpectral>::build_strip_(const Pr
         }
     });
 
-    // Summed downward from the diffraction far field's tails, kappa / (2 r^2) and kappa / (2 r),
-    // with Neumaier's compensation. Scattered light's tails are left out: a constant in F1 and a
-    // straight line in F2 drop out of the differences the projected integrals take.
-    const double last = strip.start + static_cast<double>(count - 1) * strip.step;
-    double f1 = channel.far_coefficient / (2.0 * last * last);
-    double f2 = channel.far_coefficient / (2.0 * last);
+    // Summed downward with Neumaier's compensation, from 0 at the last node: what lies beyond is
+    // a constant in F1 and a straight line in F2, which drop out of the differences the
+    // projected integrals take.
+    double f1 = 0.0;
+    double f2 = 0.0;
     double f1_carry = 0.0;
     double f2_carry = 0.0;
     const auto add = [](double& sum, double& carry, double value) {
@@ -634,10 +661,10 @@ double PsfTables<TSpectral>::strip_value_(const Strip& strip, double dx, double 
 }
 
 /**
- * @brief One channel's light in a pixel from the profile's far field: the diffraction pattern's
- * kappa / r^3, averaged over its rings, and the scattered light, both averaged over the pixel to
- * second order. Averaging over a side w adds w^2 / 24 of the second derivative along it; for a
- * radial f(r) that is f'' cos^2 + f' sin^2 / r along x, and likewise along y.
+ * @brief One channel's light in a pixel from the profile's far field (averaged over any rings),
+ * averaged over the pixel to second order. Averaging over a side w adds w^2 / 24 of the second
+ * derivative along it; for a radial f(r) that is f'' cos^2 + f' sin^2 / r along x, and likewise
+ * along y.
  */
 template <IsSpectral TSpectral>
 double PsfTables<TSpectral>::far_value_(const Strip& strip, double dx, double dy, double r) const
@@ -646,18 +673,10 @@ double PsfTables<TSpectral>::far_value_(const Strip& strip, double dx, double dy
     const double sine = aspect_ * dy / r;
     const double cos2 = cosine * cosine;
     const double sin2 = sine * sine;
-    const double aspect2 = aspect_ * aspect_;
-    const double r2 = r * r;
-    // (d2/dx2 + aspect^2 d2/dy2) of r^-3, over r^-3, times r^2:
-    const double laplacian = (15.0 * cos2 - 3.0) + aspect2 * (15.0 * sin2 - 3.0);
-    double value = strip.far_coefficient / (r2 * r) * (1.0 + laplacian / (24.0 * r2));
-    if (strip.scatter_fraction > 0.0) {
-        const auto [s, first, second] = strip.scatter->derivatives(r);
-        const double along_x = second * cos2 + first * sin2 / r;
-        const double along_y = second * sin2 + first * cos2 / r;
-        value += strip.scatter_fraction * (s + (along_x + aspect2 * along_y) / 24.0);
-    }
-    return aspect_ * value;
+    const auto [value, first, second] = strip.far(r);
+    const double along_x = second * cos2 + first * sin2 / r;
+    const double along_y = second * sin2 + first * cos2 / r;
+    return aspect_ * (value + (along_x + aspect_ * aspect_ * along_y) / 24.0);
 }
 
 /**
@@ -711,7 +730,7 @@ std::size_t PsfTables<TSpectral>::memory_bytes() const
 {
     std::size_t bytes = near_.size() * sizeof(TSpectral);
     for (const Strip& strip : strips_) {
-        bytes += strip.nodes.size() * sizeof(strip.nodes[0]);
+        bytes += strip.nodes.size() * sizeof(strip.nodes[0]) + strip.far.memory_bytes();
     }
     return bytes;
 }
