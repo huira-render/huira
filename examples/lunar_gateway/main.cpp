@@ -89,6 +89,10 @@ int main(int argc, char** argv)
     auto scene_view = huira::SceneView<TSpectral>(
         scene, exposure_interval, navcam, huira::ObservationMode::GEOMETRIC_STATE, 3);
 
+    // Build the camera's optics kernels now rather than in the render (see
+    // CameraModel::precompute()):
+    camera_model.precompute();
+
     // Render the current scene view
     renderer.render(scene_view, frame_buffer);
 

@@ -75,13 +75,15 @@ TSpectral MeasuredPSF<TSpectral>::evaluate(float x, float y)
     const float sx = center_x_ + x * samples_per_pixel_;
     const float sy = center_y_ + y * samples_per_pixel_;
 
-    if (sx < 0.f || sy < 0.f || sx >= static_cast<float>(data_.width() - 1) ||
-        sy >= static_cast<float>(data_.height() - 1)) {
+    // The samples span [0, width - 1] x [0, height - 1], last ones included: a pixel-integrated
+    // PSF used at its full extent takes its edge pixels exactly on them.
+    if (sx < 0.f || sy < 0.f || sx > static_cast<float>(data_.width() - 1) ||
+        sy > static_cast<float>(data_.height() - 1)) {
         return TSpectral{0.f};
     }
 
-    const int x0 = static_cast<int>(sx);
-    const int y0 = static_cast<int>(sy);
+    const int x0 = std::min(static_cast<int>(sx), data_.width() - 2);
+    const int y0 = std::min(static_cast<int>(sy), data_.height() - 2);
     const float dx = sx - static_cast<float>(x0);
     const float dy = sy - static_cast<float>(y0);
 

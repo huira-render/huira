@@ -204,8 +204,34 @@ class SensorModel {
     SensorModel() = default;
     SensorModel(SensorConfig<TSpectral> config);
 
-    SensorModel(const SensorModel&) = delete;
-    SensorModel& operator=(const SensorModel&) = delete;
+    /// A copy has the same settings, but noise of its own: a new default noise seed (see
+    /// set_noise_seed()), and no readouts yet. Two sensors with the same seed would give
+    /// identical noise, which is rarely wanted; set the same seed on both for that.
+    SensorModel(const SensorModel& other) : config_(other.config_) {}
+    SensorModel& operator=(const SensorModel& other)
+    {
+        if (this != &other) {
+            config_ = other.config_;
+            noise_seed_ = detail::next_default_noise_seed();
+            readout_count_.store(0, std::memory_order_relaxed);
+        }
+        return *this;
+    }
+
+    /// Moving keeps the noise: the same sensor, somewhere else.
+    SensorModel(SensorModel&& other) noexcept
+        : config_(std::move(other.config_)), noise_seed_(other.noise_seed_),
+          readout_count_(other.readout_count_.load(std::memory_order_relaxed))
+    {
+    }
+    SensorModel& operator=(SensorModel&& other) noexcept
+    {
+        config_ = std::move(other.config_);
+        noise_seed_ = other.noise_seed_;
+        readout_count_.store(other.readout_count_.load(std::memory_order_relaxed),
+                             std::memory_order_relaxed);
+        return *this;
+    }
 
     virtual ~SensorModel() = default;
 

@@ -98,7 +98,11 @@ class Distortion {
      *    step scaled by t leaves (1 - t) of the residual. A step that lands far from that has
      *    crossed a fold or a pole, or jumped onto another sheet of the model, where it could
      *    converge to a point that distorts to the target but is not in the image. This also
-     *    makes every step bring the point closer.
+     *    makes every step bring the point closer;
+     *  - and whose midpoint is unfolded and where the linearized distortion puts it, likewise:
+     *    a step can otherwise jump right across a folded band onto a sheet beyond it that
+     *    unfolds again (barrel distortion whose higher terms turn it back outwards), and land
+     *    near the target there.
      *
      * Starting from the target, as before, failed for pincushion distortion that folds just
      * beyond the image: the image's edge distorts outwards past the fold, so the iteration
@@ -182,6 +186,17 @@ class Distortion {
                 }
                 const Jacobian candidate_jac = jacobian(candidate, distorted);
                 if (!unfolded(candidate_jac)) {
+                    continue;
+                }
+                // The checks above are at the point the step reaches. A step can still jump
+                // across a folded band onto a sheet beyond it that unfolds again, and land near
+                // the target there: so the step's midpoint must be unfolded and where the
+                // linearized distortion puts it too.
+                const Pixel_d midpoint = point + step * (0.5 * t);
+                const Pixel_d mid_distorted = distort(midpoint);
+                const Pixel_d mid_miss = (mid_distorted - goal) - residual * (1.0 - 0.5 * t);
+                if (!(squared(mid_miss) <= 0.0625 * t * t * residual_sq) ||
+                    !unfolded(jacobian(midpoint, mid_distorted))) {
                     continue;
                 }
                 point = candidate;

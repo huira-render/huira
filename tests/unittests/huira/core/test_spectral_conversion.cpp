@@ -28,3 +28,18 @@ TEST_CASE("RGB converts to a spectral type that covers only part of the visible 
     CHECK(swir[0] == 1.f);
     CHECK(swir[7] == 1.f);
 }
+
+TEST_CASE("RGB converts to a spectral type whose bins are listed red first", "[core][spectral]")
+{
+    // The conversion took the target's range from its first and last bins, as if they were in
+    // ascending order. Listed red first, the range came out negative, and every color fell back
+    // to gray.
+    using RedFirst = SpectralBins<2, 500, 600, 400, 500>;
+
+    const RedFirst blue = convert_rgb_to_spectral<RedFirst>(RGB{0.f, 0.f, 1.f});
+    CHECK(blue[0] == 0.f); // 500-600 nm: none of the blue
+    CHECK(blue[1] > 0.f);  // 400-500 nm
+    const RedFirst green = convert_rgb_to_spectral<RedFirst>(RGB{0.f, 1.f, 0.f});
+    CHECK(green[0] > 0.f);
+    CHECK(green[1] == 0.f);
+}

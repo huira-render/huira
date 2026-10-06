@@ -62,6 +62,7 @@ class Model : public SceneObject<Model<TSpectral>> {
 
     friend class ModelLoader<TSpectral>;
     friend class SceneView<TSpectral>;
+    friend class Scene<TSpectral>;
 };
 
 } // namespace huira

@@ -37,9 +37,11 @@ class SimpleSensor : public SensorModel<TSpectral> {
 
     ~SimpleSensor() override = default;
 
-    SimpleSensor(const SimpleSensor&) = delete;
-    SimpleSensor(SimpleSensor&&) = delete;
-    SimpleSensor& operator=(const SimpleSensor&) = delete;
+    /// A copy has the same settings and a noise seed of its own (see SensorModel).
+    SimpleSensor(const SimpleSensor&) = default;
+    SimpleSensor(SimpleSensor&&) noexcept = default;
+    SimpleSensor& operator=(const SimpleSensor&) = default;
+    SimpleSensor& operator=(SimpleSensor&&) noexcept = default;
 
     void readout(FrameBuffer<TSpectral>& fb, units::Second exposure_time) const override;
 };
