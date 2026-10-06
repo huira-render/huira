@@ -230,3 +230,22 @@ TEST_CASE("Read noise is added after the full well clamps the charge", "[cameras
     CHECK(std::abs(mean_of(dn) - 1100.0) < 1.0);
     CHECK(std::abs(std::sqrt(variance_of(dn)) - 10.0) < 0.5);
 }
+
+TEST_CASE("The default quantum efficiency is white balanced and peaks at 0.5", "[cameras][sensor]")
+{
+    // It used to sum to 0.5 over the bins, so each bin's share fell with the number of bins: a
+    // peak of 0.20 for RGB and 0.08 for Visible8.
+    auto check = [](auto spectral) {
+        using TSpectral = decltype(spectral);
+        const TSpectral qe = SensorConfig<TSpectral>{}.quantum_efficiency;
+        const TSpectral energies = TSpectral::photon_energies();
+        CHECK(std::abs(qe.max() - 0.5f) < 1e-6f);
+        // Proportional to photon energy, so equal power in each bin gives equal electrons:
+        for (std::size_t i = 0; i < TSpectral::size(); ++i) {
+            CHECK(std::abs(qe[i] / energies[i] - qe[0] / energies[0]) <
+                  1e-6f * qe[0] / energies[0]);
+        }
+    };
+    check(RGB{});
+    check(Visible8{});
+}

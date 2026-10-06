@@ -306,8 +306,8 @@ TEST_CASE("Sensors and distortion models check their parameters", "[cameras][val
     CHECK_THROWS(sensor.set_resolution(Resolution{0, 10}));
     CHECK_THROWS(sensor.set_pixel_pitch(units::Micrometer(INF), units::Micrometer(5.0)));
     CHECK_THROWS(sensor.set_bit_depth(0));
-    CHECK_THROWS(sensor.set_bit_depth(65));
-    CHECK_NOTHROW(sensor.set_bit_depth(64));
+    CHECK_THROWS(sensor.set_bit_depth(25)); // beyond what the float response holds exactly
+    CHECK_NOTHROW(sensor.set_bit_depth(24));
     CHECK_THROWS(sensor.set_rotation(units::Radian(NaN)));
     CHECK_THROWS(sensor.set_gain_db(NaN_F));
     CHECK_THROWS(sensor.set_gain_db(1e6f)); // a conversion gain of 0

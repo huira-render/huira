@@ -250,7 +250,8 @@ void SensorModel<TSpectral>::set_bias_level_dn(float bias_level_dn)
  * @brief Sets the bit depth of the sensor.
  *
  * @param bit_depth The bit depth (number of bits per pixel).
- * @throws std::runtime_error if the value is not between 1 and 64.
+ * @throws std::runtime_error if the value is not between 1 and 24: the sensor response is a
+ *         float in [0, 1], which holds every digital number exactly only up to 24 bits.
  */
 template <IsSpectral TSpectral>
 void SensorModel<TSpectral>::set_bit_depth(int bit_depth)
@@ -258,7 +259,8 @@ void SensorModel<TSpectral>::set_bit_depth(int bit_depth)
     if (bit_depth < 1 || bit_depth > MAX_BIT_DEPTH) {
         HUIRA_THROW_ERROR("SensorModel::set_bit_depth - Bit depth must be between 1 and " +
                           std::to_string(MAX_BIT_DEPTH) + ": " + std::to_string(bit_depth) +
-                          " bits");
+                          " bits. (The sensor response is a float in [0, 1], which holds every "
+                          "digital number exactly only up to 24 bits.)");
     }
     config_.bit_depth = bit_depth;
 }
