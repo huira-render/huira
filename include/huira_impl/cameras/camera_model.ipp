@@ -1538,7 +1538,8 @@ void CameraModel<TSpectral>::update_focus_()
  * Uses the pinhole camera model and applies distortion if present.
  * @param point_camera_coords 3D point in camera coordinates (meters)
  * @return Pixel 2D point on the image plane, in the camera's pixel convention (see
- * set_pixel_convention()).
+ * set_pixel_convention()), or NaN in both coordinates where the lens images nothing: past the
+ * pole of an OpenCV distortion model's rational radial factor.
  */
 template <IsSpectral TSpectral>
 Pixel CameraModel<TSpectral>::project_point(const Vec3<float>& point_camera_coords) const

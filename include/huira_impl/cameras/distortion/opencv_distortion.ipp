@@ -1,6 +1,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 #include "huira/concepts/numeric_concepts.hpp"
 #include "huira/concepts/spectral_concepts.hpp"
@@ -57,11 +58,15 @@ OpenCVDistortion<TSpectral>::compute_delta_(BasePixel<TFloat> homogeneous_coords
                                    static_cast<TFloat>(coefficients_.k5) * r4 +
                                    static_cast<TFloat>(coefficients_.k6) * r6;
 
-    // Prevent division by zero with sign-preserving clamping
-    const TFloat denominator =
-        (std::abs(denominator_raw) < static_cast<TFloat>(kMinDenominator))
-            ? std::copysign(static_cast<TFloat>(kMinDenominator), denominator_raw)
-            : denominator_raw;
+    // The denominator is 1 on the optical axis. Where it reaches 0 the model has a pole, beyond
+    // which it maps points back into the image (the radial factor jumps from +infinity to
+    // -infinity) although no ray from them lands there: the lens images nothing past it.
+    // Comparisons are false for NaN, so a NaN denominator has no image either.
+    if (!(denominator_raw > TFloat{0})) {
+        const TFloat nan = std::numeric_limits<TFloat>::quiet_NaN();
+        return BasePixel<TFloat>{nan, nan};
+    }
+    const TFloat denominator = std::max(denominator_raw, static_cast<TFloat>(kMinDenominator));
 
     const TFloat radial_factor = numerator / denominator;
 
@@ -86,7 +91,8 @@ OpenCVDistortion<TSpectral>::compute_delta_(BasePixel<TFloat> homogeneous_coords
  * Computes the distorted coordinates by adding the OpenCV distortion delta.
  *
  * @param homogeneous_coords The input pixel coordinates (homogeneous).
- * @return The distorted pixel coordinates.
+ * @return The distorted pixel coordinates, or NaN in both where the rational radial factor's
+ *         denominator is not positive: at or past its pole, where the lens images nothing.
  */
 template <IsSpectral TSpectral>
 Pixel OpenCVDistortion<TSpectral>::distort(Pixel homogeneous_coords) const
