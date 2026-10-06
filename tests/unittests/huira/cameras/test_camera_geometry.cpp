@@ -159,6 +159,7 @@ TEST_CASE("Unresolved sources in the last pixel column and row are rendered",
     auto camera_model = scene.new_camera_model();
     camera_model.configure_sensor_from_pitch({32, 32}, 10_um);
     camera_model.set_focal_length(50_mm);
+    camera_model.delete_psf(); // so that all of a source's light lands in its pixel
     auto camera = scene.root.new_instance(camera_model);
     auto source = scene.root.new_instance(scene.new_unresolved_emitter(units::Watt(1.0)));
 

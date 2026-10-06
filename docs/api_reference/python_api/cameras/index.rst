@@ -6,3 +6,4 @@ Camera API
 
    distortion_coeffs
    pixel_convention
+   psf_sampling

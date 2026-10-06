@@ -14,15 +14,24 @@ void bind_ray(py::module_& m)
 
     py::class_<RayT>(m, "Ray", "Ray with origin, direction, and precomputed reciprocal direction")
         .def(py::init<>())
-        .def(py::init<const Vec3<float>&, const Vec3<float>&>(),
+        // Vectors cross to Python as huira.Vec3, in double precision:
+        .def(py::init([](const Vec3<double>& origin, const Vec3<double>& direction) {
+                 return RayT(Vec3<float>(origin), Vec3<float>(direction));
+             }),
              py::arg("origin"),
              py::arg("direction"))
 
-        .def_property_readonly("origin", &RayT::origin)
-        .def_property_readonly("direction", &RayT::direction)
-        .def_property_readonly("reciprocal_direction", &RayT::reciprocal_direction)
+        .def_property_readonly("origin", [](const RayT& r) { return Vec3<double>(r.origin()); })
+        .def_property_readonly("direction",
+                               [](const RayT& r) { return Vec3<double>(r.direction()); })
+        .def_property_readonly("reciprocal_direction",
+                               [](const RayT& r) { return Vec3<double>(r.reciprocal_direction()); })
 
-        .def("at", &RayT::at, py::arg("t"), "Evaluate ray at parameter t: origin + t * direction")
+        .def(
+            "at",
+            [](const RayT& r, float t) { return Vec3<double>(r.at(t)); },
+            py::arg("t"),
+            "Evaluate ray at parameter t: origin + t * direction")
 
         .def("__repr__", [](const RayT& r) {
             std::ostringstream ss;
