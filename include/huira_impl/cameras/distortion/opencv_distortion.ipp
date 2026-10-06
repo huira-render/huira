@@ -95,39 +95,19 @@ Pixel OpenCVDistortion<TSpectral>::distort(Pixel homogeneous_coords) const
 }
 
 /**
- * @brief Removes OpenCV distortion from the given pixel coordinates.
+ * @brief Removes the OpenCV distortion from normalized image coordinates.
  *
- * Iteratively computes the undistorted coordinates using the OpenCV model.
+ * Inverts distort() by Newton's method (see Distortion::undistort_newton_()).
  *
- * @param homogeneous_coords The distorted pixel coordinates (homogeneous).
- * @return The undistorted pixel coordinates.
+ * @param homogeneous_coords The distorted point, in normalized image coordinates.
+ * @return The undistorted point, or NaN in both coordinates where the distortion has no inverse.
  */
 template <IsSpectral TSpectral>
 Pixel OpenCVDistortion<TSpectral>::undistort(Pixel homogeneous_coords) const
 {
-    BasePixel<double> homogeneous_coords_d{static_cast<double>(homogeneous_coords[0]),
-                                           static_cast<double>(homogeneous_coords[1])};
-    BasePixel<double> undistorted_coords_d = homogeneous_coords_d;
-
-    for (std::size_t i = 0; i < this->max_iterations_; ++i) {
-        const BasePixel<double> delta = compute_delta_<double>(undistorted_coords_d);
-        const BasePixel<double> new_coords = homogeneous_coords_d - delta;
-
-        // Check for convergence
-        const BasePixel<double> diff = new_coords - undistorted_coords_d;
-        const double error_sq = diff[0] * diff[0] + diff[1] * diff[1];
-
-        undistorted_coords_d = new_coords;
-
-        if (error_sq < this->tol_sq_) {
-            break;
-        }
-    }
-
-    Pixel undistorted_coords{static_cast<float>(undistorted_coords_d[0]),
-                             static_cast<float>(undistorted_coords_d[1])};
-
-    return undistorted_coords;
+    return this->undistort_newton_(homogeneous_coords, [this](const Pixel_d& point) {
+        return point + compute_delta_<double>(point);
+    });
 }
 
 } // namespace huira
