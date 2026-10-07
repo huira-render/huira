@@ -4,6 +4,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <limits>
 #include <utility>
 #include <vector>
@@ -1238,24 +1239,115 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
         return received_power;
     }
 
-    // Build the radius LUT up front so that per-source radii can be assigned as each
-    // source is created, rather than in a second pass over the whole catalogue.
+    // Stamps are cropped, per source, to the pixels its light would show in: those that receive
+    // at least a tenth of the sensor's read noise over the exposure, at the brightest the
+    // source gets (a tenth of an electron for a sensor without noise, or with under an electron
+    // of it). A motion-blurred source is sized as if all its light fell in one place, which keeps
+    // more than enough. A cropped stamp is scaled back to the whole stamp's energy (see
+    // crop_scale below), so that no light is lost, and is never cropped so far that its
+    // centroid moves by more than CROP_CENTROID_TOLERANCE: the light beyond a crop is not
+    // symmetric about the source, unless it is on a pixel's center, so cutting it pulls the
+    // centroid toward the pixel's center (by up to 0.07 px for an Airy pattern with its first
+    // dark ring 2 px out, cropped to 2 px). Renderer::set_stamp_cropping(false) stamps the whole
+    // PSF.
+    //
+    // The radius LUT is built up front so that per-source radii can be assigned as each source
+    // is created, rather than in a second pass over the whole catalogue.
     bool use_radius_lut = false;
     RadiusLUTConfig radius_config;
     std::vector<RadiusLUTEntry> radius_lut;
-    if (use_psf_direct && stamp_radius > 1) {
+    if (stamp_cropping_ && use_psf_direct && stamp_radius > 1) {
         const Image<TSpectral>& center_kernel = psf->get_kernel(0.0f, 0.0f);
 
-        // On-axis area is conservative:
-        float representative_area =
-            camera->get_projected_aperture_area(Vec3<float>{0.f, 0.f, -1.f});
+        const SensorModel<TSpectral>& sensor = *camera->sensor_;
+        const float read_noise = sensor.simulate_noise() ? sensor.read_noise() : 0.f;
+        radius_config.threshold_electrons = 0.1f * std::max(read_noise, 1.f);
 
-        // Per-channel photon energies:
-        TSpectral photon_energies = TSpectral::photon_energies();
+        // Per channel, the electrons a pixel collects over the exposure per unit irradiance and
+        // stamp weight. The on-axis aperture area is the largest, so conservative:
+        const float area = camera->get_projected_aperture_area(Vec3<float>{0.f, 0.f, 1.f});
+        const auto exposure = static_cast<float>(scene_view.duration().to_si());
+        const TSpectral photon_energies = TSpectral::photon_energies();
+        const TSpectral qe = sensor.quantum_efficiency();
+        TSpectral electrons_per_irradiance{0.f};
+        for (std::size_t c = 0; c < TSpectral::size(); ++c) {
+            if (photon_energies[c] > 0.f) {
+                electrons_per_irradiance[c] = area * exposure * qe[c] / photon_energies[c];
+            }
+        }
 
-        radius_lut = build_radius_lut(
-            center_kernel, stamp_radius, representative_area, photon_energies, radius_config);
+        radius_lut =
+            build_radius_lut(center_kernel, stamp_radius, electrons_per_irradiance, radius_config);
         use_radius_lut = true;
+    }
+
+    // For a stamp cropped to a radius, the scale that gives it back the whole stamp's energy:
+    // the whole stamp's sum over the cropped stamp's, per channel. Indexed by the bank (by *
+    // banks + bx, as PSF::get_kernel()) times (stamp_radius + 1), plus the radius. Also the
+    // smallest radius to which every bank can be cropped without its centroid moving by more
+    // than CROP_CENTROID_TOLERANCE, in any channel.
+    constexpr float CROP_CENTROID_TOLERANCE = 0.01f; // pixels
+    std::vector<TSpectral> crop_scale;
+    const auto crop_radii = static_cast<std::size_t>(stamp_radius) + 1;
+    if (use_radius_lut) {
+        const int banks = psf->get_banks();
+        crop_scale.assign(static_cast<std::size_t>(banks * banks) * crop_radii, TSpectral{1.f});
+        std::vector<int> smallest_radius(static_cast<std::size_t>(banks * banks), 0);
+        tbb::parallel_for(0, banks * banks, [&](int b) {
+            const float u = (static_cast<float>(b % banks) + 0.5f) / static_cast<float>(banks);
+            const float v = (static_cast<float>(b / banks) + 0.5f) / static_cast<float>(banks);
+            const Image<TSpectral>& kernel = psf->get_kernel(u, v);
+
+            // Sums, and first moments, over the pixels at each Chebyshev distance from the
+            // middle, accumulated out to each radius:
+            std::vector<TSpectral> within(crop_radii, TSpectral{0.f});
+            std::vector<TSpectral> moment_x(crop_radii, TSpectral{0.f});
+            std::vector<TSpectral> moment_y(crop_radii, TSpectral{0.f});
+            for (int y = 0; y < kernel.height(); ++y) {
+                for (int x = 0; x < kernel.width(); ++x) {
+                    const int dx = x - stamp_radius;
+                    const int dy = y - stamp_radius;
+                    const auto r = static_cast<std::size_t>(std::max(std::abs(dx), std::abs(dy)));
+                    within[r] += kernel(x, y);
+                    moment_x[r] += kernel(x, y) * static_cast<float>(dx);
+                    moment_y[r] += kernel(x, y) * static_cast<float>(dy);
+                }
+            }
+            for (std::size_t r = 1; r < crop_radii; ++r) {
+                within[r] += within[r - 1];
+                moment_x[r] += moment_x[r - 1];
+                moment_y[r] += moment_y[r - 1];
+            }
+
+            const std::size_t whole = crop_radii - 1;
+            std::size_t smallest = whole;
+            bool centroid_kept = true;
+            for (std::size_t r = whole + 1; r-- > 0;) {
+                TSpectral& scale = crop_scale[static_cast<std::size_t>(b) * crop_radii + r];
+                for (std::size_t c = 0; c < TSpectral::size(); ++c) {
+                    if (!(within[r][c] > 0.f)) {
+                        centroid_kept = false;
+                        continue;
+                    }
+                    scale[c] = within[whole][c] / within[r][c];
+                    const float shift_x =
+                        moment_x[r][c] / within[r][c] - moment_x[whole][c] / within[whole][c];
+                    const float shift_y =
+                        moment_y[r][c] / within[r][c] - moment_y[whole][c] / within[whole][c];
+                    if (std::abs(shift_x) > CROP_CENTROID_TOLERANCE ||
+                        std::abs(shift_y) > CROP_CENTROID_TOLERANCE) {
+                        centroid_kept = false;
+                    }
+                }
+                if (centroid_kept) {
+                    smallest = r;
+                }
+            }
+            smallest_radius[static_cast<std::size_t>(b)] = static_cast<int>(smallest);
+        });
+        radius_config.min_radius =
+            std::max(radius_config.min_radius,
+                     *std::max_element(smallest_radius.begin(), smallest_radius.end()));
     }
 
     // Per-source lookup - just a scalar comparison, no kernel traversal.
@@ -1284,6 +1376,7 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
     struct StampPhase {
         int base;    ///< Pixel the kernel's center pixel lands on.
         float phase; ///< Fraction for get_kernel(), mid-way through the chosen bank.
+        int bank;    ///< The chosen bank.
     };
     auto nearest_stamp_phase = [stamp_banks](float center) {
         const long banks = static_cast<long>(stamp_banks);
@@ -1295,7 +1388,8 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
             base -= 1;
         }
         return StampPhase{static_cast<int>(base),
-                          (static_cast<float>(bank) + 0.5f) / static_cast<float>(banks)};
+                          (static_cast<float>(bank) + 0.5f) / static_cast<float>(banks),
+                          static_cast<int>(bank)};
     };
 
     // A source's light reaches its stamp's radius beyond the pixel it is anchored to, and the
@@ -1718,10 +1812,19 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                             const Image<TSpectral>& kernel =
                                 psf->get_kernel(phase_x.phase, phase_y.phase);
                             const int k_offset = stamp_radius - eff_r;
+
+                            // A cropped stamp keeps the whole stamp's energy:
+                            TSpectral stamp_power = power;
+                            if (eff_r < stamp_radius && !crop_scale.empty()) {
+                                const auto bank = static_cast<std::size_t>(
+                                    phase_y.bank * stamp_banks + phase_x.bank);
+                                stamp_power *=
+                                    crop_scale[bank * crop_radii + static_cast<std::size_t>(eff_r)];
+                            }
                             for (int ky = ky_begin; ky < ky_end; ++ky) {
                                 for (int kx = kx_begin; kx < kx_end; ++kx) {
                                     received_power(start_x + kx, start_y + ky) +=
-                                        power * kernel(kx + k_offset, ky + k_offset);
+                                        stamp_power * kernel(kx + k_offset, ky + k_offset);
                                 }
                             }
                         }

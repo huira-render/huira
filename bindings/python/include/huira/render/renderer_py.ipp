@@ -30,6 +30,13 @@ void bind_renderer(py::module_& m)
         .def("set_unresolved_occlusion",
              &Renderer::set_unresolved_occlusion,
              py::arg("occlusion") = true)
+        .def("set_stamp_cropping",
+             &Renderer::set_stamp_cropping,
+             py::arg("enable") = true,
+             "Crop each unresolved source's PSF stamp to the pixels its light would show in (the "
+             "default): those receiving at least a tenth of the sensor's read noise over the "
+             "exposure. Cropped stamps keep all of the source's light, and never move its "
+             "centroid by more than 0.01 px. False always stamps the whole PSF.")
         .def("set_region_culling", &Renderer::set_region_culling, py::arg("enable") = true)
         .def("set_region_cull_margin_scale",
              &Renderer::set_region_cull_margin_scale,
