@@ -129,3 +129,9 @@ Three defaults change what is rendered in v0.9.10:
   blur (for 50 mm at f/2.8 and 8.5 um pixels, closer than about 100 m), and they need more
   samples per pixel to look clean. Unresolved sources' defocus now follows
   ``enable_depth_of_field()`` too.
+
+Faint unresolved sources' stamps are still cropped to the pixels their light would show in, but
+the crop is now judged by the electrons each pixel collects over the exposure, against a tenth
+of the sensor's read noise (it was by the photons per second), keeps all of the source's light
+(what lay beyond it used to be lost), and never moves the source's centroid by more than
+0.01 px. ``Renderer::set_stamp_cropping(false)`` stamps the whole PSF.

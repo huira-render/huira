@@ -6,12 +6,12 @@ namespace huira {
 /**
  * @brief Configuration parameters for the radius lookup table.
  *
- * Controls how the effective PSF radius is determined based on photon count thresholds
- * and minimum radius constraints.
+ * A source's stamp is cropped to the pixels it lights enough to show: see build_radius_lut().
  */
 struct RadiusLUTConfig {
-    float photon_threshold = 0.1f; // photon count that counts as "visible" (0.1 photons per second)
-    int min_radius = 1;            // never go below this
+    /// Signal in a pixel, in electrons over the whole exposure, below which it is cropped.
+    float threshold_electrons = 0.1f;
+    int min_radius = 1; ///< Never crop below this.
 };
 
 /**
@@ -28,25 +28,25 @@ struct RadiusLUTEntry {
 /**
  * @brief Build a lookup table mapping PSF radius to minimum irradiance thresholds.
  *
- * This function analyzes the PSF kernel to determine, for each radius from 1 to full_radius,
- * what minimum irradiance level would produce at least photon_threshold photons per second
- * at the highest-sensitivity pixel within that radius ring. The resulting LUT allows efficient
- * per-star radius culling: stars with low irradiance can use smaller PSF kernels without
- * visible quality loss.
+ * For each radius from 1 to full_radius, finds the least irradiance at which some pixel in
+ * that ring of the stamp (pixels at that Chebyshev distance from its center) receives at least
+ * config.threshold_electrons over the exposure, in any channel. A source is stamped out to the
+ * largest radius its irradiance reaches (see lookup_effective_radius()); the pixels beyond
+ * would receive less than the threshold.
  *
  * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
- * @param center_kernel The full PSF kernel centered at (0,0) offset
- * @param full_radius_signed The maximum PSF radius in pixels
- * @param area The projected aperture area for photon flux calculations
- * @param photon_energies Per-channel photon energies for flux-to-photon conversion
+ * @param center_kernel The full PSF stamp for a source at the center of a pixel
+ * @param full_radius_signed The stamp's radius in pixels
+ * @param electrons_per_irradiance Per channel, the electrons a pixel collects over the exposure
+ *        per unit of irradiance on the aperture and unit of stamp weight: aperture area times
+ *        exposure time times quantum efficiency, over the photon energy.
  * @param config Configuration parameters for LUT generation
  * @return std::vector<RadiusLUTEntry> Lookup table sorted by increasing radius
  */
 template <IsSpectral TSpectral>
 std::vector<RadiusLUTEntry> build_radius_lut(const Image<TSpectral>& center_kernel,
                                              int full_radius_signed,
-                                             float area,
-                                             const TSpectral& photon_energies,
+                                             const TSpectral& electrons_per_irradiance,
                                              const RadiusLUTConfig& config = {})
 {
     std::vector<RadiusLUTEntry> lut;
@@ -60,13 +60,6 @@ std::vector<RadiusLUTEntry> build_radius_lut(const Image<TSpectral>& center_kern
 
     lut.reserve(full_radius);
 
-    // Precompute per-channel conversion: area / photon_energy[c]
-    TSpectral conversion;
-    for (std::size_t c = 0; c < TSpectral::size(); ++c) {
-        float e = photon_energies[c];
-        conversion[c] = (e > 0.0f) ? (area / e) : 0.0f;
-    }
-
     // Helper: accumulate max sensitivity from a single kernel pixel.
     auto scan_pixel = [&](std::size_t kx, std::size_t ky, float& max_sensitivity) {
         if (kx >= k_w || ky >= k_h) {
@@ -74,7 +67,7 @@ std::vector<RadiusLUTEntry> build_radius_lut(const Image<TSpectral>& center_kern
         }
         const TSpectral& w = center_kernel(static_cast<int>(kx), static_cast<int>(ky));
         for (std::size_t c = 0; c < TSpectral::size(); ++c) {
-            float s = w[c] * conversion[c];
+            float s = w[c] * electrons_per_irradiance[c];
             max_sensitivity = std::max(max_sensitivity, s);
         }
     };
@@ -100,7 +93,7 @@ std::vector<RadiusLUTEntry> build_radius_lut(const Image<TSpectral>& center_kern
         }
 
         if (max_sensitivity > 0.0f) {
-            float min_irradiance = config.photon_threshold / max_sensitivity;
+            float min_irradiance = config.threshold_electrons / max_sensitivity;
             lut.push_back({static_cast<int>(r), min_irradiance});
         }
     }

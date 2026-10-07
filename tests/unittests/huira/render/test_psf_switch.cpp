@@ -105,12 +105,13 @@ double power_between(const Image<RGB>& image, double inner, double outer)
 
 TEST_CASE("Scattered light reaches stars whether or not bodies are convolved", "[render][psf]")
 {
-    // The wings used to need enable_psf_convolution() too. The Airy stamps reach 6 px; beyond
-    // 8 px there is only scattered light.
+    // The wings used to need enable_psf_convolution() too. The Airy stamps reach 6 px from the
+    // star's pixel, so beyond 8 px there is little but scattered light: about 1% of the light,
+    // where the stamps' corners hold under 0.01%.
     const Image<RGB> on = render({true, true, true});
     const Image<RGB> off = render({true, true, false});
     CHECK(identical(on, off));
-    CHECK(power_between(off, 8.0, SIZE) > 0.01 * power_between(off, 0.0, SIZE));
+    CHECK(power_between(off, 8.0, SIZE) > 0.005 * power_between(off, 0.0, SIZE));
 }
 
 TEST_CASE("Out of focus, stars are blurred by the PSF whether or not bodies are convolved",
