@@ -32,6 +32,9 @@ class HarveyShackScatter : public PSF<TSpectral> {
     HarveyShackScatter(float falloff_exponent, float r0, float cutoff_radius = 0.f);
     ~HarveyShackScatter() override = default;
 
+    HarveyShackScatter(const HarveyShackScatter&) = delete;
+    HarveyShackScatter& operator=(const HarveyShackScatter&) = delete;
+
     TSpectral evaluate(float x, float y) override;
 
   private:

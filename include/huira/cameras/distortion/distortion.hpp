@@ -98,10 +98,10 @@ class Distortion {
     template <typename TDistort>
     [[nodiscard]] Pixel undistort_newton_(Pixel target, const TDistort& distort) const
     {
-        constexpr float NaN = std::numeric_limits<float>::quiet_NaN();
         const Pixel_d goal{static_cast<double>(target.x), static_cast<double>(target.y)};
         if (!std::isfinite(goal.x) || !std::isfinite(goal.y)) {
-            return Pixel{NaN, NaN};
+            return Pixel{std::numeric_limits<float>::quiet_NaN(),
+                         std::numeric_limits<float>::quiet_NaN()};
         }
 
         auto squared = [](const Pixel_d& p) { return p.x * p.x + p.y * p.y; };
@@ -121,11 +121,14 @@ class Distortion {
             if (residual_sq <= tol_sq_) {
                 // Converged. A point where the distortion folds over images the wrong way
                 // round, so it is not where any ray lands: no inverse.
-                return (det > 0.0) ? Pixel{static_cast<float>(point.x), static_cast<float>(point.y)}
-                                   : Pixel{NaN, NaN};
+                Pixel a{static_cast<float>(point.x), static_cast<float>(point.y)};
+                Pixel b{std::numeric_limits<float>::quiet_NaN(),
+                        std::numeric_limits<float>::quiet_NaN()};
+                return (det > 0.0) ? a : b;
             }
             if (iteration == max_iterations_) {
-                return Pixel{NaN, NaN};
+                return Pixel{std::numeric_limits<float>::quiet_NaN(),
+                             std::numeric_limits<float>::quiet_NaN()};
             }
 
             Pixel_d step = residual * -1.0;
@@ -150,7 +153,8 @@ class Distortion {
                 step = step * 0.5;
             }
             if (!improved) {
-                return Pixel{NaN, NaN}; // stuck short of the target: no inverse
+                return Pixel{std::numeric_limits<float>::quiet_NaN(),
+                             std::numeric_limits<float>::quiet_NaN()};
             }
         }
     }

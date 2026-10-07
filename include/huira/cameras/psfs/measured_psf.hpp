@@ -72,6 +72,9 @@ class MeasuredPSF : public PSF<TSpectral> {
                 int banks = 16);
     ~MeasuredPSF() override = default;
 
+    MeasuredPSF(const MeasuredPSF&) = delete;
+    MeasuredPSF& operator=(const MeasuredPSF&) = delete;
+
     TSpectral evaluate(float x, float y) override;
 
     [[nodiscard]] bool is_pixel_integrated() const override

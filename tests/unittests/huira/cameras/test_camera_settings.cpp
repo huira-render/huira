@@ -72,6 +72,13 @@ struct WarningLog {
 /// Exposes what the radiance-to-power factor is made from.
 struct CameraProbe : CameraModel<RGB> {
     using CameraModel<RGB>::pixel_solid_angles_;
+
+    CameraProbe() = default;
+
+    CameraProbe(const CameraProbe&) = delete;
+    CameraProbe(CameraProbe&&) = delete;
+    CameraProbe& operator=(const CameraProbe&) = delete;
+    CameraProbe& operator=(CameraProbe&&) = delete;
 };
 
 } // namespace

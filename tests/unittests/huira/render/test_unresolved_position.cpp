@@ -156,7 +156,7 @@ constexpr int REFERENCE_SIZE = 192;
 /// the same subpixel position in each, a whole number of pixels apart.
 struct Window {
     const char* where;
-    Resolution resolution;
+    Resolution resolution{0, 0};
     int offset_x;
     int offset_y;
 };

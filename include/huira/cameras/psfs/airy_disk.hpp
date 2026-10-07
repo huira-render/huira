@@ -26,6 +26,11 @@ class AiryDisk : public PSF<TSpectral> {
              int banks);
     ~AiryDisk() override = default;
 
+    AiryDisk(const AiryDisk&) = delete;
+    AiryDisk(AiryDisk&&) = delete;
+    AiryDisk& operator=(const AiryDisk&) = delete;
+    AiryDisk& operator=(AiryDisk&&) = delete;
+
     TSpectral evaluate(float x, float y) override;
 
   private:

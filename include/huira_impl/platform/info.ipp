@@ -5,8 +5,7 @@
 #include <string>
 
 #ifdef _WIN32
-#include <Psapi.h>
-#include <Windows.h>
+#include "huira/platform/win32.hpp"
 #elif defined(__linux__)
 #include <fstream>
 #include <sstream>
@@ -46,8 +45,11 @@ std::string get_memory_usage()
     std::string output;
 
 #ifdef _WIN32
-    PROCESS_MEMORY_COUNTERS pmc;
-    if (GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc))) {
+    win32::ProcessMemoryCounters pmc{};
+    pmc.cb = sizeof(pmc);
+    if (win32::K32GetProcessMemoryInfo(win32::GetCurrentProcess(),
+                                       reinterpret_cast<::_PROCESS_MEMORY_COUNTERS*>(&pmc),
+                                       sizeof(pmc))) {
         output = "RAM usage: " + std::to_string(pmc.WorkingSetSize / 1024 / 1024) + " MB\n";
         output += "Peak RAM: " + std::to_string(pmc.PeakWorkingSetSize / 1024 / 1024) + " MB";
     } else {
