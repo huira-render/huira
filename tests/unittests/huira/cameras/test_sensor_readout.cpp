@@ -59,6 +59,13 @@ namespace {
 class SensorProbe : public CameraModel<RGB> {
   public:
     using CameraModel<RGB>::sensor_;
+
+    SensorProbe() = default;
+
+    SensorProbe(const SensorProbe&) = delete;
+    SensorProbe(SensorProbe&&) = delete;
+    SensorProbe& operator=(const SensorProbe&) = delete;
+    SensorProbe& operator=(SensorProbe&&) = delete;
 };
 
 /// Fill the received power so that each channel of each pixel expects the given number of signal

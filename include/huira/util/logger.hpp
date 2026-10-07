@@ -9,11 +9,8 @@
 #include <thread>
 #include <vector>
 
+#include "huira/platform/win32.hpp"
 #include "huira/util/macros.hpp"
-
-#ifdef _WIN32
-#include <Windows.h>
-#endif
 
 namespace huira {
 
@@ -115,7 +112,7 @@ class Logger {
     void install_crash_handlers();
 
 #ifdef _WIN32
-    static LONG WINAPI windows_exception_handler(EXCEPTION_POINTERS* exception_info);
+    static long __stdcall windows_exception_handler(::_EXCEPTION_POINTERS* exception_info);
 #endif
 
     std::vector<LogEntry> buffer_;
