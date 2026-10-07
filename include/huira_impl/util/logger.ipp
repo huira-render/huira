@@ -452,22 +452,22 @@ void Logger::handle_crash(int signal)
  * @param exception_info Windows exception information structure
  * @return LONG EXCEPTION_CONTINUE_SEARCH to continue exception handling
  */
-LONG WINAPI Logger::windows_exception_handler(EXCEPTION_POINTERS* exception_info)
+long __stdcall Logger::windows_exception_handler(::_EXCEPTION_POINTERS* exception_info)
 {
     auto& logger = Logger::instance();
     if (!logger.crash_handler_enabled_.load(std::memory_order_relaxed)) {
-        return EXCEPTION_CONTINUE_SEARCH;
+        return win32::exception_continue_search;
     }
 
     std::ostringstream oss;
     oss << "Windows exception caught: 0x" << std::hex << std::uppercase
-        << exception_info->ExceptionRecord->ExceptionCode;
+        << win32::unhandled_exception_code(exception_info);
     logger.log(LogLevel::Error, oss.str());
 
     std::string log_path = logger.dump_to_file();
     output_crash_report(log_path);
 
-    return EXCEPTION_CONTINUE_SEARCH;
+    return win32::exception_continue_search;
 }
 #endif
 
@@ -543,7 +543,7 @@ void Logger::install_crash_handlers()
     std::set_terminate(handle_terminate);
 
 #ifdef _WIN32
-    SetUnhandledExceptionFilter(windows_exception_handler);
+    win32::SetUnhandledExceptionFilter(windows_exception_handler);
 #endif
 
 #ifdef _MSC_VER

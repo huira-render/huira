@@ -199,6 +199,9 @@ class SensorModel {
     SensorModel() = default;
     SensorModel(SensorConfig<TSpectral> config);
 
+    SensorModel(const SensorModel&) = delete;
+    SensorModel& operator=(const SensorModel&) = delete;
+
     virtual ~SensorModel() = default;
 
     void set_resolution(Resolution resolution);

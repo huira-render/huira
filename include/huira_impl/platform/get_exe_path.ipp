@@ -3,7 +3,7 @@
 #include <limits.h>
 
 #ifdef _WIN32
-#include <Windows.h>
+#include "huira/platform/win32.hpp"
 #elif defined(__APPLE__)
 #include <mach-o/dyld.h>
 #include <unistd.h>
@@ -20,9 +20,9 @@ namespace huira {
 std::string get_executable_path()
 {
 #ifdef _WIN32
-    char path[MAX_PATH];
-    DWORD length = GetModuleFileNameA(nullptr, path, MAX_PATH);
-    if (length == 0) {
+    char path[win32::max_path];
+    win32::DWORD length = win32::max_path;
+    if (!win32::QueryFullProcessImageNameA(win32::GetCurrentProcess(), 0, path, &length)) {
         return "";
     }
     return std::string(path, length);

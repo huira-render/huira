@@ -37,6 +37,10 @@ class SimpleSensor : public SensorModel<TSpectral> {
 
     ~SimpleSensor() override = default;
 
+    SimpleSensor(const SimpleSensor&) = delete;
+    SimpleSensor(SimpleSensor&&) = delete;
+    SimpleSensor& operator=(const SimpleSensor&) = delete;
+
     void readout(FrameBuffer<TSpectral>& fb, units::Second exposure_time) const override;
 };
 } // namespace huira

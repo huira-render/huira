@@ -6,13 +6,7 @@
 #include <iomanip>
 #include <sstream>
 
-#ifdef _WIN32
-#include <ShlObj.h>
-#include <Windows.h>
-#elif defined(__APPLE__)
-#include <pwd.h>
-#include <unistd.h>
-#else
+#ifndef _WIN32
 #include <pwd.h>
 #include <unistd.h>
 #endif

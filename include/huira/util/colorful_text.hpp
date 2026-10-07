@@ -5,8 +5,9 @@
 #include "huira/util/macros.hpp"
 
 #ifdef _WIN32
-#include <Windows.h>
 #include <io.h>
+
+#include "huira/platform/win32.hpp"
 #define ISATTY _isatty
 #define FILENO _fileno
 #else
@@ -25,17 +26,18 @@ inline bool initialize_console_colors()
     static bool initialized = false;
     HUIRA_PER_MODULE_STATE_END
     if (!initialized) {
-        HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
-        HANDLE hErr = GetStdHandle(STD_ERROR_HANDLE);
+        namespace w = huira::win32;
+        w::HANDLE hOut = w::GetStdHandle(w::std_output_handle);
+        w::HANDLE hErr = w::GetStdHandle(w::std_error_handle);
 
-        DWORD modeOut = 0;
-        DWORD modeErr = 0;
+        w::DWORD modeOut = 0;
+        w::DWORD modeErr = 0;
 
-        if (GetConsoleMode(hOut, &modeOut)) {
-            SetConsoleMode(hOut, modeOut | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+        if (w::GetConsoleMode(hOut, &modeOut)) {
+            w::SetConsoleMode(hOut, modeOut | w::enable_virtual_terminal_processing);
         }
-        if (GetConsoleMode(hErr, &modeErr)) {
-            SetConsoleMode(hErr, modeErr | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+        if (w::GetConsoleMode(hErr, &modeErr)) {
+            w::SetConsoleMode(hErr, modeErr | w::enable_virtual_terminal_processing);
         }
 
         initialized = true;
