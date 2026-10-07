@@ -55,6 +55,19 @@ class Renderer {
     void set_unresolved_occlusion(bool occlusion = true) { unresolved_occlusion_ = occlusion; }
 
     /**
+     * @brief Crop each unresolved source's PSF stamp to the pixels its light would show in (the
+     * default), or always stamp the whole PSF.
+     *
+     * Cropped, a source's stamp keeps the pixels that receive at least a tenth of the sensor's
+     * read noise over the exposure (a tenth of an electron for a sensor without noise), and is
+     * scaled back to the whole stamp's energy, so that no light is lost: what lay beyond the
+     * crop is spread over the pixels kept. A stamp is never cropped so far that the source's
+     * centroid moves by more than 0.01 px. Faint stars then cost a few pixels each rather than
+     * the whole stamp.
+     */
+    void set_stamp_cropping(bool enable = true) { stamp_cropping_ = enable; }
+
+    /**
      * @brief Enable or disable skipping screen regions that provably contain no geometry.
      *
      * Enabled by default. Purely an optimization: the image is identical either way.
@@ -121,6 +134,7 @@ class Renderer {
     int max_bounces_ = 3;
 
     bool unresolved_occlusion_ = true;
+    bool stamp_cropping_ = true;
 
     bool region_culling_ = true;
     bool region_cull_validation_ = false;
