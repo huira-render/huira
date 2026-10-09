@@ -12,6 +12,8 @@ struct RadiusLUTConfig {
     /// Signal in a pixel, in electrons over the whole exposure, below which it is cropped.
     float threshold_electrons = 0.1f;
     int min_radius = 1; ///< Never crop below this.
+    /// Whether the sensor reads out the channels' sum (as all but RGB do), rather than each.
+    bool summed_readout = false;
 };
 
 /**
@@ -30,9 +32,10 @@ struct RadiusLUTEntry {
  *
  * For each radius from 1 to full_radius, finds the least irradiance at which some pixel in
  * that ring of the stamp (pixels at that Chebyshev distance from its center) receives at least
- * config.threshold_electrons over the exposure, in any channel. A source is stamped out to the
- * largest radius its irradiance reaches (see lookup_effective_radius()); the pixels beyond
- * would receive less than the threshold.
+ * config.threshold_electrons over the exposure, in any channel or, for a sensor that reads out
+ * their sum, in all of them together (taking every channel at the source's brightest). A source is
+ * stamped out to the largest radius its irradiance reaches (see lookup_effective_radius()); the
+ * pixels beyond would receive less than the threshold.
  *
  * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  * @param center_kernel The full PSF stamp for a source at the center of a pixel
@@ -66,9 +69,14 @@ std::vector<RadiusLUTEntry> build_radius_lut(const Image<TSpectral>& center_kern
             return;
         }
         const TSpectral& w = center_kernel(static_cast<int>(kx), static_cast<int>(ky));
+        float sum = 0.0f;
         for (std::size_t c = 0; c < TSpectral::size(); ++c) {
-            float s = w[c] * electrons_per_irradiance[c];
+            const float s = w[c] * electrons_per_irradiance[c];
             max_sensitivity = std::max(max_sensitivity, s);
+            sum += s;
+        }
+        if (config.summed_readout) {
+            max_sensitivity = std::max(max_sensitivity, sum);
         }
     };
 

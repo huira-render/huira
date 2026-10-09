@@ -1,7 +1,9 @@
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <cstdlib>
 #include <limits>
 #include <optional>
@@ -108,6 +110,13 @@ inline double quintic_hermite(double t,
            step * step * (h2 * second0 + h5 * second1);
 }
 
+/// A positive radius's exponent and leading bits of its mantissa, which grow with it: slices of
+/// the radii, each 2^-bits of its own scale wide.
+inline std::uint64_t radius_key(double r, int bits)
+{
+    return std::bit_cast<std::uint64_t>(r) >> (52 - bits);
+}
+
 /// The most nodes a channel's antiderivatives take (128 MB), far more than any frame needs.
 inline constexpr double MAX_STRIP_NODES = 4.0e6;
 
@@ -164,10 +173,92 @@ PsfTables<TSpectral>::PsfTables(const std::vector<Profile>& profiles,
     }
 
     build_near_(profiles);
-    strips_.resize(TSpectral::size());
-    tbb::parallel_for(std::size_t{0}, TSpectral::size(), [&](std::size_t channel) {
+
+    // The grid all channels share: the finest of their steps, from where the near table hands
+    // over to beyond where the farthest strip ends, and their far fields from where the first
+    // holds (see smooth_profile()). A pixel's projected integral reads the antiderivatives within
+    // half its projected width of its distance (at most half its diagonal), moved out by the
+    // curvature correction (at most (1 + aspect^2) / (24 r)).
+    constexpr double SMOOTH_FROM = 1.0;
+    const std::size_t channel_count = TSpectral::size();
+    grid_.step = std::numeric_limits<double>::infinity();
+    grid_.far_start = std::numeric_limits<double>::infinity();
+    double last_limit = 0.0;
+    for (std::size_t channel = 0; channel < channel_count; ++channel) {
+        grid_.step = std::min(grid_.step, channels[channel].step);
+        last_limit =
+            std::max(last_limit,
+                     std::min(channels[channel].far_radius, std::max(layout.reach, near_radius_)));
+        grid_.far_start =
+            std::min(grid_.far_start,
+                     std::min(std::max(channels[channel].far_radius - BLEND_WIDTH - 1.0, 0.5),
+                              std::max(SMOOTH_FROM, profiles[channel].smooth_from())));
+    }
+    const double half_diagonal = 0.5 * std::hypot(1.0, aspect_);
+    const double first = near_radius_ - BLEND_WIDTH;
+    const double curvature = (1.0 + aspect_ * aspect_) / (24.0 * first);
+    grid_.start = std::max(0.0, first - half_diagonal - 2.0 * grid_.step);
+    const double end = last_limit + half_diagonal + curvature + 2.0 * grid_.step;
+    const double count_wanted = std::ceil((end - grid_.start) / grid_.step) + 1.0;
+    if (count_wanted > psf_tables_detail::MAX_STRIP_NODES) {
+        HUIRA_THROW_ERROR("PsfTables - The projected integrals would need " +
+                          std::to_string(count_wanted) +
+                          " nodes; the reach or the PSF's detail is out of range");
+    }
+    grid_.count = static_cast<std::size_t>(count_wanted);
+    grid_.far_end = std::max(layout.reach, 2.0 * grid_.far_start);
+
+    strips_.resize(channel_count);
+    tbb::parallel_for(std::size_t{0}, channel_count, [&](std::size_t channel) {
         strips_[channel] = build_strip_(profiles[channel], channels[channel], layout.reach);
     });
+
+    // Channel by channel at each node, and the per-channel nodes released:
+    strip_nodes_.resize(grid_.count * channel_count * 4);
+    far_radii_ = strips_[0].far.radii();
+    far_inverse_steps_.resize(far_radii_.size() - 1);
+    for (std::size_t k = 0; k + 1 < far_radii_.size(); ++k) {
+        far_inverse_steps_[k] = 1.0 / (far_radii_[k + 1] - far_radii_[k]);
+    }
+    far_key_start_ = psf_tables_detail::radius_key(far_radii_.front(), FAR_KEY_BITS);
+    far_index_.resize(psf_tables_detail::radius_key(far_radii_.back(), FAR_KEY_BITS) -
+                      far_key_start_ + 1);
+    for (std::size_t key = 0, k = 0; key < far_index_.size(); ++key) {
+        const double slice_start =
+            std::bit_cast<double>((far_key_start_ + key) << (52 - FAR_KEY_BITS));
+        while (k + 2 < far_radii_.size() && far_radii_[k + 1] <= slice_start) {
+            ++k;
+        }
+        far_index_[key] = static_cast<std::uint32_t>(k);
+    }
+    std::vector<double> far_nodes(far_radii_.size() * channel_count * 3);
+    for (std::size_t channel = 0; channel < channel_count; ++channel) {
+        Strip& strip = strips_[channel];
+        for (std::size_t k = 0; k < grid_.count; ++k) {
+            for (std::size_t j = 0; j < 4; ++j) {
+                strip_nodes_[(k * channel_count + channel) * 4 + j] = strip.nodes[k][j];
+            }
+        }
+        const auto& far = strip.far.nodes();
+        for (std::size_t k = 0; k < far.size(); ++k) {
+            for (std::size_t j = 0; j < 3; ++j) {
+                far_nodes[(k * channel_count + channel) * 3 + j] = far[k][j];
+            }
+        }
+        strip_limit_[channel] = strip.limit;
+        far_blend_from_[channel] = strip.far_radius - BLEND_WIDTH;
+        smooth_from_[channel] = std::max(strip.far.start(), strip.smooth_from);
+        far_from_ = std::max(far_from_, std::min(strip.limit, strip.far_radius));
+        smooth_from_all_ = std::max(smooth_from_all_, smooth_from_[channel]);
+        strip.nodes = {};
+    }
+    build_far_basis_(far_nodes);
+
+    radials_.resize(channel_count);
+    tbb::parallel_for(std::size_t{0}, TSpectral::size(), [&](std::size_t channel) {
+        radials_[channel] = build_radial_(profiles[channel], strips_[channel]);
+    });
+    build_ring_deviation_();
 }
 
 /**
@@ -443,46 +534,30 @@ typename PsfTables<TSpectral>::Strip PsfTables<TSpectral>::build_strip_(const Pr
                                                                         double reach) const
 {
     Strip strip;
-    strip.step = channel.step;
     strip.far_radius = channel.far_radius;
     strip.limit = std::min(channel.far_radius, std::max(reach, near_radius_));
+    strip.smooth_from = profile.smooth_from();
 
-    // The far field, tabulated every 1% in r from the blend before the far radius; beyond the
-    // reach it continues as a power law.
+    // The far field, tabulated every 1% in r on the shared grid; beyond its end it continues
+    // as a power law.
     constexpr double FAR_RATIO = 1.01;
-    const double far_start = std::max(channel.far_radius - BLEND_WIDTH - 1.0, 0.5);
-    strip.far = detail::RadialTable::logarithmic([&](double r) { return profile.far_field(r); },
-                                                 far_start,
-                                                 std::max(reach, 2.0 * far_start),
-                                                 FAR_RATIO);
+    strip.far = detail::RadialTable::logarithmic(
+        [&](double r) { return profile.far_field(r); }, grid_.far_start, grid_.far_end, FAR_RATIO);
 
-    // A pixel's projected integral reads the antiderivatives within half its projected width of
-    // its distance (at most half its diagonal), moved out by the curvature correction (at most
-    // (1 + aspect^2) / (24 r)).
-    const double half_diagonal = 0.5 * std::hypot(1.0, aspect_);
-    const double first = near_radius_ - BLEND_WIDTH;
-    const double curvature = (1.0 + aspect_ * aspect_) / (24.0 * first);
-    strip.start = std::max(0.0, first - half_diagonal - 2.0 * strip.step);
-    const double end = strip.limit + half_diagonal + curvature + 2.0 * strip.step;
-    const double count_wanted = std::ceil((end - strip.start) / strip.step) + 1.0;
-    if (count_wanted > psf_tables_detail::MAX_STRIP_NODES) {
-        HUIRA_THROW_ERROR("PsfTables - The projected integrals would need " +
-                          std::to_string(count_wanted) +
-                          " nodes; the reach or the PSF's detail is out of range");
-    }
-    const auto count = static_cast<std::size_t>(count_wanted);
+    const std::size_t count = grid_.count;
+    const double step = grid_.step;
     strip.nodes.resize(count);
 
     // Each node's profile and slope, and the integrals over the interval above it of the
     // profile, and of the profile times the distance from the node.
     std::vector<std::array<double, 2>> pieces(count);
     tbb::parallel_for(std::size_t{0}, count, [&](std::size_t k) {
-        const double r = strip.start + static_cast<double>(k) * strip.step;
+        const double r = grid_.start + static_cast<double>(k) * step;
         strip.nodes[k][2] = profile(r);
         strip.nodes[k][3] = profile.slope(r);
         if (k + 1 < count) {
-            const double mid = r + 0.5 * strip.step;
-            const double half = 0.5 * strip.step;
+            const double mid = r + 0.5 * step;
+            const double half = 0.5 * step;
             double light = 0.0;
             double moment = 0.0;
             for (std::size_t i = 0; i < detail::airy_band_detail::GL8_NODES.size(); ++i) {
@@ -514,7 +589,7 @@ typename PsfTables<TSpectral>::Strip PsfTables<TSpectral>::build_strip_(const Pr
     for (std::size_t k = count - 1; k-- > 0;) {
         // F2(r) - F2(r + step) is the integral of F1 over the interval: step F1(r + step), plus
         // the profile's moment about r.
-        add(f2, f2_carry, strip.step * (f1 + f1_carry) + pieces[k][1]);
+        add(f2, f2_carry, step * (f1 + f1_carry) + pieces[k][1]);
         add(f1, f1_carry, pieces[k][0]);
         strip.nodes[k][0] = f2 + f2_carry;
         strip.nodes[k][1] = f1 + f1_carry;
@@ -548,44 +623,33 @@ TSpectral PsfTables<TSpectral>::near_value_(double dx, double dy) const
     const int j = static_cast<int>(v);
     const std::array<double, 4> wx = psf_tables_detail::bspline_weights(u - i);
     const std::array<double, 4> wy = psf_tables_detail::bspline_weights(v - j);
-    std::array<double, TSpectral::size()> sum{};
+    // In single precision, which holds the coefficients, a row at a time: the channels side by
+    // side, as vectors.
+    constexpr std::size_t N = TSpectral::size();
+    std::array<float, N> sum{};
     for (int b = 0; b < 4; ++b) {
+        std::array<float, N> row{};
         for (int a = 0; a < 4; ++a) {
-            const double weight = wx[static_cast<std::size_t>(a)] * wy[static_cast<std::size_t>(b)];
+            const auto weight = static_cast<float>(wx[static_cast<std::size_t>(a)]);
             const TSpectral& coefficient = near_[near_index_(i - 1 + a, j - 1 + b)];
-            for (std::size_t channel = 0; channel < TSpectral::size(); ++channel) {
-                sum[channel] += weight * static_cast<double>(coefficient[channel]);
+            for (std::size_t channel = 0; channel < N; ++channel) {
+                row[channel] += weight * coefficient[channel];
             }
+        }
+        const auto weight = static_cast<float>(wy[static_cast<std::size_t>(b)]);
+        for (std::size_t channel = 0; channel < N; ++channel) {
+            sum[channel] += weight * row[channel];
         }
     }
     TSpectral result{0.f};
-    for (std::size_t channel = 0; channel < TSpectral::size(); ++channel) {
-        result[channel] = static_cast<float>(sum[channel]);
+    for (std::size_t channel = 0; channel < N; ++channel) {
+        result[channel] = sum[channel];
     }
     return result;
 }
 
 /**
- * @brief One channel's light in a pixel beyond the near table: the projected integral, then the
- * far field, blended across the far radius.
- */
-template <IsSpectral TSpectral>
-double PsfTables<TSpectral>::outer_value_(const Strip& strip, double dx, double dy, double r) const
-{
-    if (r >= strip.limit) {
-        return far_value_(strip, dx, dy, r);
-    }
-    const double projected = strip_value_(strip, dx, dy, r);
-    const double blend_from = strip.far_radius - BLEND_WIDTH;
-    if (r <= blend_from) {
-        return projected;
-    }
-    const double weight = psf_tables_detail::smooth_step((r - blend_from) / BLEND_WIDTH);
-    return (1.0 - weight) * projected + weight * far_value_(strip, dx, dy, r);
-}
-
-/**
- * @brief One channel's light in a pixel from the profile integrated over the pixel's projection
+ * @brief Every channel's light in a pixel from the profile integrated over the pixel's projection
  * on the line from the source.
  *
  * Seen from far enough away, the circles of equal light cross the pixel as nearly straight
@@ -593,11 +657,16 @@ double PsfTables<TSpectral>::outer_value_(const Strip& strip, double dx, double 
  * source: a trapezoid, the convolution of the two boxes its sides project to. Two antiderivatives
  * of the profile make that a second difference. The circles' curvature moves their mean across
  * the pixel out by the mean square of the distance across, over 2r: that is where the profile
- * is taken.
+ * is taken. The channels share the nodes, so each distance is placed among them once.
  */
 template <IsSpectral TSpectral>
-double PsfTables<TSpectral>::strip_value_(const Strip& strip, double dx, double dy, double r) const
+void PsfTables<TSpectral>::strip_values_(double dx,
+                                         double dy,
+                                         double r,
+                                         const std::array<bool, TSpectral::size()>& wanted,
+                                         Values& values) const
 {
+    constexpr std::size_t N = TSpectral::size();
     const double cosine = dx / r;
     const double sine = aspect_ * dy / r;
     const double side_x = std::abs(cosine);
@@ -605,102 +674,565 @@ double PsfTables<TSpectral>::strip_value_(const Strip& strip, double dx, double 
     const double wide = std::max(side_x, side_y);
     const double narrow = std::min(side_x, side_y);
     const double center = r + (sine * sine + aspect_ * aspect_ * cosine * cosine) / (24.0 * r);
+    const double step = grid_.step;
+    const double last = static_cast<double>(grid_.count - 2);
 
-    // Position of a distance among the nodes.
-    const auto locate = [&](double distance, std::size_t& k, double& t) {
-        const double u = (distance - strip.start) / strip.step;
-        const double last = static_cast<double>(strip.nodes.size() - 2);
-        const double clamped = std::clamp(u, 0.0, last + 1.0);
-        k = static_cast<std::size_t>(std::min(std::floor(clamped), last));
-        t = clamped - static_cast<double>(k);
-    };
-    // F2, with F2' = -F1 and F2'' = the profile.
-    const auto second = [&](double distance) {
-        std::size_t k = 0;
-        double t = 0.0;
-        locate(distance, k, t);
-        const auto& a = strip.nodes[k];
-        const auto& b = strip.nodes[k + 1];
-        return psf_tables_detail::quintic_hermite(
-            t, strip.step, a[0], -a[1], a[2], b[0], -b[1], b[2]);
-    };
-    // F1, with F1' = -the profile and F1'' = -its slope.
-    const auto first = [&](double distance) {
-        std::size_t k = 0;
-        double t = 0.0;
-        locate(distance, k, t);
-        const auto& a = strip.nodes[k];
-        const auto& b = strip.nodes[k + 1];
-        return psf_tables_detail::quintic_hermite(
-            t, strip.step, a[1], -a[2], -a[3], b[1], -b[2], -b[3]);
-    };
-    const auto slope = [&](double distance) {
-        std::size_t k = 0;
-        double t = 0.0;
-        locate(distance, k, t);
-        return (1.0 - t) * strip.nodes[k][3] + t * strip.nodes[k + 1][3];
+    // Adds sign times F2 at a distance (with F2' = -F1, F2'' = the profile) to every channel's
+    // value, or with first, F1 (with F1' = -the profile, F1'' = -its slope).
+    const auto add = [&](double distance, double sign, bool first) {
+        const double u = std::clamp((distance - grid_.start) / step, 0.0, last + 1.0);
+        const auto k = static_cast<std::size_t>(std::min(std::floor(u), last));
+        const double t = u - static_cast<double>(k);
+        const double t2 = t * t;
+        const double t3 = t2 * t;
+        const double h0 = 1.0 - t3 * (10.0 - 15.0 * t + 6.0 * t2);
+        const double h1 = step * (t - t3 * (6.0 - 8.0 * t + 3.0 * t2));
+        const double h2 = step * step * 0.5 * t2 * (1.0 - 3.0 * t + 3.0 * t2 - t3);
+        const double h4 = step * t3 * (-4.0 + 7.0 * t - 3.0 * t2);
+        const double h5 = step * step * 0.5 * t3 * (1.0 - 2.0 * t + t2);
+        const double* a = &strip_nodes_[k * N * 4];
+        const double* b = a + N * 4;
+        for (std::size_t c = 0; c < N; ++c, a += 4, b += 4) {
+            if (!wanted[c]) {
+                continue;
+            }
+            const double value =
+                first
+                    ? h0 * a[1] + (1.0 - h0) * b[1] - h1 * a[2] - h4 * b[2] - h2 * a[3] - h5 * b[3]
+                    : h0 * a[0] + (1.0 - h0) * b[0] - h1 * a[1] - h4 * b[1] + h2 * a[2] + h5 * b[2];
+            values[c] += sign * value;
+        }
     };
 
+    values.fill(0.0);
     // Below this the trapezoid is nearly a box, and its second difference would lose digits:
     // the box's first difference, with its leading correction, is then within about 1e-6.
     constexpr double NARROW = 0.02;
     if (narrow >= NARROW) {
         const double outer = 0.5 * (wide + narrow);
         const double inner = 0.5 * (wide - narrow);
-        return aspect_ *
-               (second(center + outer) - second(center + inner) - second(center - inner) +
-                second(center - outer)) /
-               (wide * narrow);
+        add(center + outer, 1.0, false);
+        add(center + inner, -1.0, false);
+        add(center - inner, -1.0, false);
+        add(center - outer, 1.0, false);
+        const double scale = aspect_ / (wide * narrow);
+        for (double& value : values) {
+            value *= scale;
+        }
+        return;
     }
     const double near_edge = center - 0.5 * wide;
     const double far_edge = center + 0.5 * wide;
-    return aspect_ *
-           (first(near_edge) - first(far_edge) +
-            narrow * narrow / 24.0 * (slope(far_edge) - slope(near_edge))) /
-           wide;
+    add(near_edge, 1.0, true);
+    add(far_edge, -1.0, true);
+    // The correction: narrow^2 / 24 times the slope's difference across, linear between nodes.
+    const auto slope = [&](double distance, std::size_t c) {
+        const double u = std::clamp((distance - grid_.start) / step, 0.0, last + 1.0);
+        const auto k = static_cast<std::size_t>(std::min(std::floor(u), last));
+        const double t = u - static_cast<double>(k);
+        return (1.0 - t) * strip_nodes_[(k * N + c) * 4 + 3] +
+               t * strip_nodes_[((k + 1) * N + c) * 4 + 3];
+    };
+    const double correction = narrow * narrow / 24.0;
+    for (std::size_t c = 0; c < N; ++c) {
+        if (wanted[c]) {
+            values[c] = aspect_ *
+                        (values[c] + correction * (slope(far_edge, c) - slope(near_edge, c))) /
+                        wide;
+        }
+    }
 }
 
 /**
- * @brief One channel's light in a pixel from the profile's far field (averaged over any rings),
- * averaged over the pixel to second order. Averaging over a side w adds w^2 / 24 of the second
- * derivative along it; for a radial f(r) that is f'' cos^2 + f' sin^2 / r along x, and likewise
- * along y.
+ * @brief The far fields' shapes (see far_rank_) at a pixel whose center is (dx, dy) from the
+ * source, r < far_radii_.back(), averaged over the pixel to second order. Averaging over a side
+ * w adds w^2 / 24 of the second derivative along it; for a radial f(r) that is
+ * f'' cos^2 + f' sin^2 / r along x, and likewise along y.
  */
 template <IsSpectral TSpectral>
-double PsfTables<TSpectral>::far_value_(const Strip& strip, double dx, double dy, double r) const
+void PsfTables<TSpectral>::far_shapes_(double dx, double dy, double r, Values& shapes) const
 {
+    // One division, for the many pixels this is called for:
+    const double inverse_r2 = 1.0 / (r * r);
+    const double aspect2 = aspect_ * aspect_;
+    const double cos2 = dx * dx * inverse_r2;
+    const double sin2 = aspect2 * dy * dy * inverse_r2;
+    const double by_second = aspect_ / 24.0 * (cos2 + aspect2 * sin2);
+    const double by_first = aspect_ / 24.0 * (sin2 + aspect2 * cos2) * r * inverse_r2;
+
+    const std::size_t k = far_node_(r);
+    const double h = far_radii_[k + 1] - far_radii_[k];
+    const double t = (r - far_radii_[k]) * far_inverse_steps_[k];
+    const double t2 = t * t;
+    const double t3 = t2 * t;
+    // Quintic Hermite weights of each end's value, slope and curvature. The derivatives enter
+    // only the average over the pixel, a correction of under 1% beyond the near table, and are
+    // interpolated linearly: within 0.1% of it, as they change by 5% from node to node.
+    const double h0 = aspect_ * (1.0 - t3 * (10.0 - 15.0 * t + 6.0 * t2));
+    const double h3 = aspect_ - h0;
+    const double h1 = aspect_ * h * (t - t3 * (6.0 - 8.0 * t + 3.0 * t2));
+    const double h2 = aspect_ * h * h * 0.5 * t2 * (1.0 - 3.0 * t + 3.0 * t2 - t2 * t);
+    const double h4 = aspect_ * h * t3 * (-4.0 + 7.0 * t - 3.0 * t2);
+    const double h5 = aspect_ * h * h * 0.5 * t3 * (1.0 - 2.0 * t + t2);
+    const double first0 = by_first * (1.0 - t);
+    const double first1 = by_first * t;
+    const double second0 = by_second * (1.0 - t);
+    const double second1 = by_second * t;
+    const double* a = &far_basis_[k * far_rank_ * 3];
+    const double* b = a + far_rank_ * 3;
+    for (std::size_t i = 0; i < far_rank_; ++i, a += 3, b += 3) {
+        shapes[i] = (h0 * a[0] + h3 * b[0]) + (h1 + first0) * a[1] + (h4 + first1) * b[1] +
+                    (h2 + second0) * a[2] + (h5 + second1) * b[2];
+    }
+}
+
+/// The far fields' node at or below r, for r below the last.
+template <IsSpectral TSpectral>
+std::size_t PsfTables<TSpectral>::far_node_(double r) const
+{
+    const std::uint64_t key = psf_tables_detail::radius_key(r, FAR_KEY_BITS);
+    std::size_t k = key <= far_key_start_ ? 0 : far_index_[key - far_key_start_];
+    if (k + 2 < far_radii_.size() && r >= far_radii_[k + 1]) {
+        ++k;
+    }
+    return k;
+}
+
+/**
+ * @brief Every channel's profile at a distance r, averaged over its rings from where the near
+ * table starts to blend out (see smooth_profile()); where the far fields hold, from their shapes.
+ */
+template <IsSpectral TSpectral>
+void PsfTables<TSpectral>::smooth_profiles_(double r, Values& values) const
+{
+    constexpr std::size_t N = TSpectral::size();
+    if (r < near_radius_ - BLEND_WIDTH) {
+        for (std::size_t c = 0; c < N; ++c) {
+            values[c] = profile(c, r);
+        }
+        return;
+    }
+    if (r < smooth_from_all_ || r >= far_radii_.back()) {
+        for (std::size_t c = 0; c < N; ++c) {
+            values[c] = smooth_profile(c, r);
+        }
+        return;
+    }
+    const std::size_t k = far_node_(r);
+    const double h = far_radii_[k + 1] - far_radii_[k];
+    const double t = (r - far_radii_[k]) / h;
+    Values shapes;
+    const double* a = &far_basis_[k * far_rank_ * 3];
+    const double* b = a + far_rank_ * 3;
+    for (std::size_t i = 0; i < far_rank_; ++i, a += 3, b += 3) {
+        shapes[i] = psf_tables_detail::quintic_hermite(t, h, a[0], a[1], a[2], b[0], b[1], b[2]);
+    }
+    combine_far_(shapes, values);
+}
+
+/**
+ * @brief The integral over r from lo to hi of each channel's profile times weight(r), with the
+ * profile's rings followed out to where the near table starts to blend out, and averaged over
+ * beyond, which a smooth weight sees the same way. That is at least 26 periods of the pattern's
+ * coarsest detail out, where the average over the rings leaves out under 10^-5 of the light.
+ *
+ * Four-point Gauss-Legendre panels, a twentieth of a pixel wide among the rings and beyond
+ * growing by a ratio of 1.2, split at breaks: where the weight has kinks.
+ */
+template <IsSpectral TSpectral>
+template <class Weight>
+std::array<double, TSpectral::size()> PsfTables<TSpectral>::integrate(double lo,
+                                                                      double hi,
+                                                                      std::vector<double> breaks,
+                                                                      const Weight& weight) const
+{
+    constexpr std::size_t N = TSpectral::size();
+    constexpr std::array<double, 4> GL4_NODES{
+        -0.8611363115940526, -0.3399810435848563, 0.3399810435848563, 0.8611363115940526};
+    constexpr std::array<double, 4> GL4_WEIGHTS{
+        0.3478548451374538, 0.6521451548625461, 0.6521451548625461, 0.3478548451374538};
+    constexpr double PANEL_RATIO = 1.2;
+    constexpr double RING_PANEL = 0.05;
+    const double rings_within = near_radius_ - BLEND_WIDTH;
+    Values result{};
+    breaks.push_back(lo);
+    breaks.push_back(hi);
+    if (lo < rings_within && rings_within < hi) {
+        breaks.push_back(rings_within);
+    }
+    std::sort(breaks.begin(), breaks.end());
+    Values values;
+    for (std::size_t b = 0; b + 1 < breaks.size(); ++b) {
+        const double u = std::max(breaks[b], lo);
+        const double v = std::min(breaks[b + 1], hi);
+        if (!(v > u)) {
+            continue;
+        }
+        const bool rings = v <= rings_within;
+        const int panels =
+            std::max(1,
+                     static_cast<int>(rings ? std::ceil((v - u) / RING_PANEL)
+                                            : std::ceil(std::log(v / u) / std::log(PANEL_RATIO))));
+        const double ratio = std::pow(v / u, 1.0 / panels);
+        double start = u;
+        for (int k = 0; k < panels; ++k) {
+            const double end = k + 1 == panels ? v
+                               : rings         ? start + (v - u) / panels
+                                               : start * ratio;
+            const double mid = 0.5 * (start + end);
+            const double half = 0.5 * (end - start);
+            for (std::size_t i = 0; i < GL4_NODES.size(); ++i) {
+                const double r = mid + half * GL4_NODES[i];
+                const double w = half * GL4_WEIGHTS[i] * weight(r);
+                if (w == 0.0) {
+                    continue;
+                }
+                smooth_profiles_(r, values);
+                for (std::size_t c = 0; c < N; ++c) {
+                    result[c] += w * values[c];
+                }
+            }
+            start = end;
+        }
+    }
+    return result;
+}
+
+/// Every channel's far field from its shapes' values.
+template <IsSpectral TSpectral>
+void PsfTables<TSpectral>::combine_far_(const Values& shapes, Values& values) const
+{
+    constexpr std::size_t N = TSpectral::size();
+    if (far_coefficients_.empty()) {
+        values = shapes;
+        return;
+    }
+    // One shape in focus, two with scattered light: unrolled.
+    const double* coefficient = far_coefficients_.data();
+    if (far_rank_ == 1) {
+        for (std::size_t c = 0; c < N; ++c) {
+            values[c] = coefficient[c] * shapes[0];
+        }
+    } else if (far_rank_ == 2) {
+        for (std::size_t c = 0; c < N; ++c) {
+            values[c] = coefficient[2 * c] * shapes[0] + coefficient[2 * c + 1] * shapes[1];
+        }
+    } else {
+        for (std::size_t c = 0; c < N; ++c, coefficient += far_rank_) {
+            double sum = 0.0;
+            for (std::size_t i = 0; i < far_rank_; ++i) {
+                sum += coefficient[i] * shapes[i];
+            }
+            values[c] = sum;
+        }
+    }
+}
+
+/**
+ * @brief Every channel's light in a pixel from the profile's far field (averaged over any rings),
+ * averaged over the pixel to second order; beyond the shapes' last node, each channel's own power
+ * law.
+ */
+template <IsSpectral TSpectral>
+void PsfTables<TSpectral>::far_values_(double dx, double dy, double r, Values& values) const
+{
+    if (r < far_radii_.back()) {
+        Values shapes;
+        far_shapes_(dx, dy, r, shapes);
+        combine_far_(shapes, values);
+        return;
+    }
     const double cosine = dx / r;
     const double sine = aspect_ * dy / r;
     const double cos2 = cosine * cosine;
     const double sin2 = sine * sine;
-    const auto [value, first, second] = strip.far(r);
-    const double along_x = second * cos2 + first * sin2 / r;
-    const double along_y = second * sin2 + first * cos2 / r;
-    return aspect_ * (value + (along_x + aspect_ * aspect_ * along_y) / 24.0);
+    const double aspect2 = aspect_ * aspect_;
+    const double by_second = (cos2 + aspect2 * sin2) / 24.0;
+    const double by_first = (sin2 + aspect2 * cos2) / (24.0 * r);
+    for (std::size_t c = 0; c < TSpectral::size(); ++c) {
+        const auto [value, first, second] = strips_[c].far(r);
+        values[c] = aspect_ * (value + by_second * second + by_first * first);
+    }
+}
+
+/**
+ * @brief Finds the fewest shapes whose combinations give every channel's far field, by
+ * Gram-Schmidt over the channels' tabulated values and derivatives. They are weighted by r^3,
+ * r^4 and r^5, so that an r^-3 fall counts the same at every node. A channel whose part outside
+ * the shapes so far is below a part in 10^10 of it adds none; that leaves its pixels within
+ * about 10^-8 of their own far field's. If every channel adds a shape, the channels are kept as
+ * they are.
+ */
+template <IsSpectral TSpectral>
+void PsfTables<TSpectral>::build_far_basis_(const std::vector<double>& far_nodes)
+{
+    constexpr std::size_t N = TSpectral::size();
+    constexpr double TOLERANCE = 1e-10;
+    const std::size_t count = far_radii_.size();
+    const std::size_t length = count * 3;
+    std::vector<std::array<double, 3>> weights(count);
+    for (std::size_t k = 0; k < count; ++k) {
+        const double r = far_radii_[k];
+        weights[k] = {r * r * r, r * r * r * r, r * r * r * r * r};
+    }
+    const auto row = [&](std::size_t c) {
+        std::vector<double> result(length);
+        for (std::size_t k = 0; k < count; ++k) {
+            for (std::size_t j = 0; j < 3; ++j) {
+                result[k * 3 + j] = far_nodes[(k * N + c) * 3 + j] * weights[k][j];
+            }
+        }
+        return result;
+    };
+    const auto dot = [](const std::vector<double>& x, const std::vector<double>& y) {
+        double sum = 0.0;
+        for (std::size_t i = 0; i < x.size(); ++i) {
+            sum += x[i] * y[i];
+        }
+        return sum;
+    };
+
+    std::vector<std::vector<double>> basis;
+    for (std::size_t c = 0; c < N; ++c) {
+        std::vector<double> residual = row(c);
+        const double norm = std::sqrt(dot(residual, residual));
+        // Twice, as the first pass leaves rounding along the shapes already found.
+        for (int pass = 0; pass < 2; ++pass) {
+            for (const std::vector<double>& shape : basis) {
+                const double along = dot(residual, shape);
+                for (std::size_t i = 0; i < length; ++i) {
+                    residual[i] -= along * shape[i];
+                }
+            }
+        }
+        const double left = std::sqrt(dot(residual, residual));
+        if (left > TOLERANCE * norm) {
+            for (double& value : residual) {
+                value /= left;
+            }
+            basis.push_back(std::move(residual));
+        }
+    }
+
+    if (basis.size() == N) {
+        far_rank_ = N;
+        far_basis_ = far_nodes;
+        far_coefficients_.clear();
+        return;
+    }
+    far_rank_ = basis.size();
+    far_coefficients_.assign(N * far_rank_, 0.0);
+    for (std::size_t c = 0; c < N; ++c) {
+        const std::vector<double> values = row(c);
+        for (std::size_t i = 0; i < far_rank_; ++i) {
+            far_coefficients_[c * far_rank_ + i] = dot(values, basis[i]);
+        }
+    }
+    far_basis_.assign(count * far_rank_ * 3, 0.0);
+    for (std::size_t k = 0; k < count; ++k) {
+        for (std::size_t i = 0; i < far_rank_; ++i) {
+            for (std::size_t j = 0; j < 3; ++j) {
+                far_basis_[(k * far_rank_ + i) * 3 + j] = basis[i][k * 3 + j] / weights[k][j];
+            }
+        }
+    }
 }
 
 /**
  * @brief The light of a source in the pixel whose center is (dx, dy) pixels from it, per
  * channel, for a source whose light totals 1 in each channel.
+ *
+ * Within the near table's radius, the near table; beyond, each channel's projected integral and,
+ * beyond its far radius, its far field, each blended into the next over BLEND_WIDTH.
  */
 template <IsSpectral TSpectral>
 TSpectral PsfTables<TSpectral>::pixel(double dx, double dy) const
 {
-    const double r = std::hypot(dx, aspect_ * dy);
+    return pixel(dx, dy, std::numeric_limits<double>::infinity());
+}
+
+/**
+ * @brief The light of a source in a pixel, as pixel(dx, dy), with its rings followed only within
+ * rings_within of it: beyond, each channel's far field, averaged over the rings, blended in over
+ * BLEND_WIDTH. Far from a faint source the rings change a pixel by less than anything that
+ * matters (see ring_deviation()), and the far field takes a fraction of the time: no projected
+ * integrals, and no reads from the near table, which is too large to stay in a processor's
+ * cache.
+ *
+ * The rings are always followed wherever a channel's far field does not hold.
+ */
+template <IsSpectral TSpectral>
+TSpectral PsfTables<TSpectral>::pixel(double dx, double dy, double rings_within) const
+{
+    constexpr std::size_t N = TSpectral::size();
+    const double r = std::sqrt(dx * dx + aspect_ * aspect_ * dy * dy);
+    TSpectral result{0.f};
+    Values far;
+    if (r >= std::min(far_from_, std::max(rings_within, smooth_from_all_) + BLEND_WIDTH)) {
+        // Every channel from its far field:
+        far_values_(dx, dy, r, far);
+        for (std::size_t c = 0; c < N; ++c) {
+            result[c] = static_cast<float>(far[c]);
+        }
+        return result;
+    }
+
+    // Each channel's share from its far field, beyond its rings, and whether its rings are
+    // wanted:
+    Values smooth_weight{};
+    std::array<bool, N> rings{};
+    bool any_smooth = false;
+    for (std::size_t c = 0; c < N; ++c) {
+        smooth_weight[c] = psf_tables_detail::smooth_step(
+            (r - std::max(rings_within, smooth_from_[c])) / BLEND_WIDTH);
+        rings[c] = smooth_weight[c] < 1.0;
+        any_smooth = any_smooth || smooth_weight[c] > 0.0;
+    }
+    bool have_far = false;
+    const auto need_far = [&] {
+        if (!have_far) {
+            far_values_(dx, dy, r, far);
+            have_far = true;
+        }
+    };
+
+    // The rings: the near table, then the projected integrals, then the far field, each blended
+    // into the next.
+    Values inner{};
     const double blend_from = near_radius_ - BLEND_WIDTH;
     if (r <= blend_from) {
-        return near_value_(dx, dy);
+        const TSpectral near = near_value_(dx, dy);
+        for (std::size_t c = 0; c < N; ++c) {
+            inner[c] = static_cast<double>(near[c]);
+        }
+    } else {
+        const double near_weight =
+            r < near_radius_ ? 1.0 - psf_tables_detail::smooth_step((r - blend_from) / BLEND_WIDTH)
+                             : 0.0;
+        const TSpectral near = near_weight > 0.0 ? near_value_(dx, dy) : TSpectral{0.f};
+        Values outer_weight{};
+        std::array<bool, N> strip_wanted{};
+        bool any_strip = false;
+        bool any_far = false;
+        for (std::size_t c = 0; c < N; ++c) {
+            outer_weight[c] =
+                r < strip_limit_[c]
+                    ? psf_tables_detail::smooth_step((r - far_blend_from_[c]) / BLEND_WIDTH)
+                    : 1.0;
+            strip_wanted[c] = rings[c] && outer_weight[c] < 1.0;
+            any_strip = any_strip || strip_wanted[c];
+            any_far = any_far || (rings[c] && outer_weight[c] > 0.0);
+        }
+        Values strip{};
+        if (any_strip) {
+            strip_values_(dx, dy, r, strip_wanted, strip);
+        }
+        if (any_far) {
+            need_far();
+        }
+        for (std::size_t c = 0; c < N; ++c) {
+            if (!rings[c]) {
+                continue;
+            }
+            double outer = strip[c];
+            if (outer_weight[c] >= 1.0) {
+                outer = far[c];
+            } else if (outer_weight[c] > 0.0) {
+                outer = (1.0 - outer_weight[c]) * strip[c] + outer_weight[c] * far[c];
+            }
+            inner[c] = near_weight * static_cast<double>(near[c]) + (1.0 - near_weight) * outer;
+        }
     }
-    const double weight =
-        r < near_radius_ ? psf_tables_detail::smooth_step((r - blend_from) / BLEND_WIDTH) : 1.0;
-    const TSpectral near = weight < 1.0 ? near_value_(dx, dy) : TSpectral{0.f};
-    TSpectral result{0.f};
-    for (std::size_t channel = 0; channel < TSpectral::size(); ++channel) {
-        const double outer = outer_value_(strips_[channel], dx, dy, r);
-        result[channel] = static_cast<float>((1.0 - weight) * static_cast<double>(near[channel]) +
-                                             weight * outer);
+
+    if (any_smooth) {
+        need_far();
+    }
+    for (std::size_t c = 0; c < N; ++c) {
+        const double weight = smooth_weight[c];
+        result[c] = static_cast<float>(weight > 0.0 ? (1.0 - weight) * inner[c] + weight * far[c]
+                                                    : inner[c]);
     }
     return result;
+}
+
+/**
+ * @brief An upper bound on how far a pixel at least r from a source strays, in a channel, from
+ * its far field, for a source whose light totals 1: how much following the rings beyond r can
+ * matter. Infinite where the far field does not hold, and 0 beyond the projected integrals.
+ */
+template <IsSpectral TSpectral>
+double PsfTables<TSpectral>::ring_deviation(std::size_t channel, double r) const
+{
+    // The straying is found at a sample of distances and directions, not everywhere: the
+    // greatest found from a pixel nearer in, with a margin, bounds the rest.
+    constexpr double MARGIN = 1.5;
+    if (r < ring_start_) {
+        return std::numeric_limits<double>::infinity();
+    }
+    const std::vector<double>& deviation = ring_deviation_[channel];
+    const double u = std::max(0.0, (r - ring_start_ - 1.0) / RING_STEP);
+    if (u >= static_cast<double>(deviation.size())) {
+        return 0.0;
+    }
+    return MARGIN * deviation[static_cast<std::size_t>(u)];
+}
+
+/**
+ * @brief Tabulates ring_deviation(): every RING_STEP from where the first far field holds to the
+ * end of the projected integrals, the most that a pixel in any of 32 directions across a quadrant
+ * (and the same reflected) strays from its far field, then the greatest at or beyond each node.
+ */
+template <IsSpectral TSpectral>
+void PsfTables<TSpectral>::build_ring_deviation_()
+{
+    constexpr std::size_t N = TSpectral::size();
+    constexpr int DIRECTIONS = 32;
+    ring_start_ = smooth_from_[0];
+    double limit = near_radius_;
+    for (std::size_t c = 0; c < N; ++c) {
+        ring_start_ = std::min(ring_start_, smooth_from_[c]);
+        limit = std::max(limit, strip_limit_[c]);
+    }
+    const auto count = static_cast<std::size_t>(std::ceil((limit - ring_start_) / RING_STEP)) + 1;
+    std::vector<Values> found(count);
+    tbb::parallel_for(std::size_t{0}, count, [&](std::size_t k) {
+        const double r = ring_start_ + static_cast<double>(k) * RING_STEP;
+        Values most{};
+        for (int j = 0; j < DIRECTIONS; ++j) {
+            const double angle =
+                0.5 * PI<double>() * static_cast<double>(j) / static_cast<double>(DIRECTIONS - 1);
+            const double dx = r * std::cos(angle);
+            const double dy = r * std::sin(angle) / aspect_;
+            const TSpectral rings = pixel(dx, dy);
+            Values far{};
+            far_values_(dx, dy, r, far);
+            for (std::size_t c = 0; c < N; ++c) {
+                most[c] = std::max(most[c], std::abs(static_cast<double>(rings[c]) - far[c]));
+            }
+        }
+        for (std::size_t c = 0; c < N; ++c) {
+            if (r >= strip_limit_[c]) {
+                most[c] = 0.0;
+            } else if (r < smooth_from_[c]) {
+                most[c] = std::numeric_limits<double>::infinity();
+            }
+        }
+        found[k] = most;
+    });
+
+    ring_deviation_.assign(N, {});
+    for (std::size_t c = 0; c < N; ++c) {
+        std::vector<double>& deviation = ring_deviation_[c];
+        deviation.resize(count);
+        double running = 0.0;
+        for (std::size_t k = count; k-- > 0;) {
+            running = std::max(running, found[k][c]);
+            deviation[k] = running;
+        }
+        while (!deviation.empty() && deviation.back() == 0.0) {
+            deviation.pop_back();
+        }
+    }
 }
 
 /**
@@ -724,13 +1256,260 @@ Image<TSpectral> PsfTables<TSpectral>::image(int radius, double x_offset, double
     return result;
 }
 
+/**
+ * @brief Adds a source's light to the pixels of a block of an image, as pixel() with the rings
+ * followed within rings_within, out to reach from the source, times weight(r) at a distance r.
+ *
+ * Where every channel takes its far field, its shapes are evaluated once for all channels, and
+ * the light is added straight from them: the bulk of a bright source's pixels, at a fraction of
+ * pixel()'s cost.
+ *
+ * @param target The image; pixel (x, y) covers [x, x + 1) by [y, y + 1).
+ * @param x_begin, x_end, y_begin, y_end The block's pixels, which must be in the image.
+ * @param source_x, source_y The source's position, in the same coordinates.
+ * @param power The source's light, per channel.
+ * @param rings_within How far out its rings are followed.
+ * @param reach How far out it is drawn.
+ * @param weight A function of the distance, the share drawn there.
+ * @return The light drawn per channel, as a fraction of power.
+ */
+template <IsSpectral TSpectral>
+template <class Weight>
+std::array<double, TSpectral::size()> PsfTables<TSpectral>::draw(Image<TSpectral>& target,
+                                                                 int x_begin,
+                                                                 int x_end,
+                                                                 int y_begin,
+                                                                 int y_end,
+                                                                 double source_x,
+                                                                 double source_y,
+                                                                 const TSpectral& power,
+                                                                 double rings_within,
+                                                                 double reach,
+                                                                 const Weight& weight) const
+{
+    constexpr std::size_t N = TSpectral::size();
+    // Where pixel() takes every channel from its far field, and the shapes hold:
+    const double far_from =
+        std::min(far_from_, std::max(rings_within, smooth_from_all_) + BLEND_WIDTH);
+    const double far_to = far_radii_.back();
+
+    // Each shape's light per channel, for this source:
+    std::array<TSpectral, N> shape_power{};
+    for (std::size_t i = 0; i < far_rank_; ++i) {
+        for (std::size_t c = 0; c < N; ++c) {
+            const double coefficient = far_coefficients_.empty()
+                                           ? (c == i ? 1.0 : 0.0)
+                                           : far_coefficients_[c * far_rank_ + i];
+            shape_power[i][c] = static_cast<float>(coefficient * static_cast<double>(power[c]));
+        }
+    }
+
+    Values drawn{};
+    Values shape_drawn{};
+    Values shapes;
+    const double reach2 = reach * reach;
+    const double aspect2 = aspect_ * aspect_;
+    for (int y = y_begin; y < y_end; ++y) {
+        const double dy = static_cast<double>(y) + 0.5 - source_y;
+        for (int x = x_begin; x < x_end; ++x) {
+            const double dx = static_cast<double>(x) + 0.5 - source_x;
+            const double r2 = dx * dx + aspect2 * dy * dy;
+            if (r2 > reach2) {
+                continue;
+            }
+            const double r = std::sqrt(r2);
+            const double share = weight(r);
+            if (share == 0.0) {
+                continue;
+            }
+            if (r >= far_from && r < far_to) {
+                far_shapes_(dx, dy, r, shapes);
+                TSpectral light{0.f};
+                for (std::size_t i = 0; i < far_rank_; ++i) {
+                    const double value = share * shapes[i];
+                    shape_drawn[i] += value;
+                    light += shape_power[i] * static_cast<float>(value);
+                }
+                target(x, y) += light;
+                continue;
+            }
+            const TSpectral value = pixel(dx, dy, rings_within);
+            TSpectral light{0.f};
+            for (std::size_t c = 0; c < N; ++c) {
+                const double part = share * static_cast<double>(value[c]);
+                drawn[c] += part;
+                light[c] = static_cast<float>(part);
+            }
+            target(x, y) += power * light;
+        }
+    }
+    Values from_shapes;
+    combine_far_(shape_drawn, from_shapes);
+    for (std::size_t c = 0; c < N; ++c) {
+        drawn[c] += from_shapes[c];
+    }
+    return drawn;
+}
+
+/**
+ * @brief Tabulates one channel's profile every half of its antiderivatives' step, from the source
+ * to beyond where its far field takes over, with the suffix maxima, and finds the radius holding
+ * 90% of the light by summing 2 pi r P(r) (with the trapezoid rule, within about 1e-4).
+ */
+template <IsSpectral TSpectral>
+template <class Profile>
+typename PsfTables<TSpectral>::Radial PsfTables<TSpectral>::build_radial_(const Profile& profile,
+                                                                          const Strip& strip) const
+{
+    constexpr double MARGIN = 4.0;
+    Radial radial;
+    radial.step = 0.5 * grid_.step;
+    const auto count =
+        static_cast<std::size_t>(std::ceil((strip.far_radius + MARGIN) / radial.step)) + 1;
+    radial.value.resize(count);
+    radial.slope.resize(count);
+    for (std::size_t k = 0; k < count; ++k) {
+        radial.value[k] = profile(static_cast<double>(k) * radial.step);
+        radial.slope[k] = profile.slope(static_cast<double>(k) * radial.step);
+    }
+    radial.suffix_max.resize(count);
+    double running = 0.0;
+    for (std::size_t k = count; k-- > 0;) {
+        running = std::max(running, radial.value[k]);
+        radial.suffix_max[k] = running;
+    }
+    double light = 0.0;
+    radial.radius_90 = static_cast<double>(count - 1) * radial.step;
+    for (std::size_t k = 1; k < count; ++k) {
+        const double r0 = static_cast<double>(k - 1) * radial.step;
+        const double r1 = static_cast<double>(k) * radial.step;
+        const double added =
+            PI<double>() * radial.step * (r0 * radial.value[k - 1] + r1 * radial.value[k]);
+        if (light + added >= 0.9) {
+            radial.radius_90 = r0 + radial.step * (0.9 - light) / added;
+            break;
+        }
+        light += added;
+    }
+    return radial;
+}
+
+/**
+ * @brief One channel's profile, the light per unit area (in pixel widths squared) at a distance r
+ * from the source, by cubic Hermite interpolation from its value and slope at 16 points to the
+ * pattern's finest period: within about 10^-4 of the light, where linear interpolation over the
+ * rings' troughs would add half a percent. Beyond the far radius, its far field.
+ */
+template <IsSpectral TSpectral>
+double PsfTables<TSpectral>::profile(std::size_t channel, double r) const
+{
+    const Radial& radial = radials_[channel];
+    const double u = r / radial.step;
+    if (u >= static_cast<double>(radial.value.size() - 1)) {
+        return strips_[channel].far(r)[0];
+    }
+    const auto k = static_cast<std::size_t>(u);
+    const double t = u - static_cast<double>(k);
+    const double t2 = t * t;
+    const double h01 = t2 * (3.0 - 2.0 * t);
+    const double h10 = t * (1.0 - t) * (1.0 - t);
+    const double h11 = t2 * (t - 1.0);
+    return (1.0 - h01) * radial.value[k] + h01 * radial.value[k + 1] +
+           radial.step * (h10 * radial.slope[k] + h11 * radial.slope[k + 1]);
+}
+
+/**
+ * @brief One channel's profile averaged over its rings: its far field, which for an in-focus
+ * profile holds from a pixel out, and for a defocused one from where it is smooth. Closer in, the
+ * profile itself.
+ */
+template <IsSpectral TSpectral>
+double PsfTables<TSpectral>::smooth_profile(std::size_t channel, double r) const
+{
+    const Strip& strip = strips_[channel];
+    return r >= std::max(strip.far.start(), strip.smooth_from) ? strip.far(r)[0]
+                                                               : profile(channel, r);
+}
+
+/**
+ * @brief The light beyond r of one channel's profile averaged over its rings, for r in its far
+ * field: the far field integrated out to its table's end, and beyond, the power law it follows
+ * there integrated to infinity.
+ */
+template <IsSpectral TSpectral>
+double PsfTables<TSpectral>::smooth_light_beyond(std::size_t channel, double r) const
+{
+    constexpr std::array<double, 4> GL4_NODES{
+        -0.8611363115940526, -0.3399810435848563, 0.3399810435848563, 0.8611363115940526};
+    constexpr std::array<double, 4> GL4_WEIGHTS{
+        0.3478548451374538, 0.6521451548625461, 0.6521451548625461, 0.3478548451374538};
+    constexpr double PANEL_RATIO = 1.2;
+    const detail::RadialTable& far = strips_[channel].far;
+    const double end = std::max(r, far.end());
+    double light = 0.0;
+    if (end > r) {
+        const int panels =
+            std::max(1, static_cast<int>(std::ceil(std::log(end / r) / std::log(PANEL_RATIO))));
+        const double ratio = std::pow(end / r, 1.0 / panels);
+        double start = r;
+        for (int k = 0; k < panels; ++k) {
+            const double stop = k + 1 == panels ? end : start * ratio;
+            const double mid = 0.5 * (start + stop);
+            const double half = 0.5 * (stop - start);
+            for (std::size_t i = 0; i < GL4_NODES.size(); ++i) {
+                const double at = mid + half * GL4_NODES[i];
+                light += half * GL4_WEIGHTS[i] * 2.0 * PI<double>() * at * far(at)[0];
+            }
+            start = stop;
+        }
+    }
+    const std::array<double, 3> tail = far(end);
+    if (tail[0] > 0.0) {
+        const double falloff = -end * tail[1] / tail[0];
+        if (falloff > 2.0) {
+            light += 2.0 * PI<double>() * tail[0] * end * end / (falloff - 2.0);
+        }
+    }
+    return light;
+}
+
+/**
+ * @brief An upper bound on the light, in a channel, of any pixel whose center is at least r from
+ * the source, for a source whose light totals 1, drawn by pixel() with its rings followed within
+ * rings_within: the pixel's area times the profile's greatest value from the pixel's nearest
+ * corner outward. Where pixel() takes the far field, which decreases, that is its value at the
+ * nearest corner, below the rings' peaks. It does not increase with r.
+ */
+template <IsSpectral TSpectral>
+double PsfTables<TSpectral>::envelope(std::size_t channel, double r, double rings_within) const
+{
+    const Radial& radial = radials_[channel];
+    const double nearest = std::max(0.0, r - 0.5 * std::hypot(1.0, aspect_));
+    const bool far =
+        nearest >= std::min(far_from_, std::max(rings_within, smooth_from_all_) + BLEND_WIDTH);
+    const double u = nearest / radial.step;
+    if (far || u >= static_cast<double>(radial.value.size() - 1)) {
+        return aspect_ * strips_[channel].far(nearest)[0];
+    }
+    return aspect_ * radial.suffix_max[static_cast<std::size_t>(u)];
+}
+
 /// Memory the tables take, in bytes.
 template <IsSpectral TSpectral>
 std::size_t PsfTables<TSpectral>::memory_bytes() const
 {
     std::size_t bytes = near_.size() * sizeof(TSpectral);
+    bytes +=
+        (strip_nodes_.size() + far_radii_.size() + far_basis_.size() + far_coefficients_.size()) *
+        sizeof(double);
     for (const Strip& strip : strips_) {
-        bytes += strip.nodes.size() * sizeof(strip.nodes[0]) + strip.far.memory_bytes();
+        bytes += strip.far.memory_bytes();
+    }
+    for (const Radial& radial : radials_) {
+        bytes += 3 * radial.value.size() * sizeof(double);
+    }
+    for (const std::vector<double>& deviation : ring_deviation_) {
+        bytes += deviation.size() * sizeof(double);
     }
     return bytes;
 }

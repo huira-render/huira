@@ -58,14 +58,27 @@ class Renderer {
      * @brief Crop each unresolved source's PSF stamp to the pixels its light would show in (the
      * default), or always stamp the whole PSF.
      *
-     * Cropped, a source's stamp keeps the pixels that receive at least a tenth of the sensor's
-     * read noise over the exposure (a tenth of an electron for a sensor without noise), and is
-     * scaled back to the whole stamp's energy, so that no light is lost: what lay beyond the
-     * crop is spread over the pixels kept. A stamp is never cropped so far that the source's
-     * centroid moves by more than 0.01 px. Faint stars then cost a few pixels each rather than
-     * the whole stamp.
+     * Cropped, a source's stamp keeps the pixels that read out at least a tenth of the sensor's
+     * read noise over the exposure (each channel for RGB, their sum otherwise; a tenth of an
+     * electron for a sensor with under an electron of noise, and the noise as configured
+     * whether or not it is simulated), and is scaled back to the whole stamp's energy, so that
+     * no light is lost: what lay beyond the crop is spread over the pixels kept. A stamp is
+     * never cropped so far that the source's centroid moves by more than 0.01 px. Faint stars
+     * then cost a few pixels each rather than the whole stamp.
+     *
+     * Still sources with the aperture's PSF are not stamped but drawn from its tables, out to
+     * where their light fades below set_unresolved_taper()'s threshold.
      */
     void set_stamp_cropping(bool enable = true) { stamp_cropping_ = enable; }
+
+    /// How faint, as a fraction of the sensor's read noise, the light a still unresolved source
+    /// puts in a pixel gets before it is tapered off. See set_unresolved_taper().
+    static constexpr double DEFAULT_UNRESOLVED_TAPER = 1e-3;
+
+    void set_unresolved_taper(double fraction_of_read_noise);
+
+    /// See set_unresolved_taper().
+    [[nodiscard]] double unresolved_taper() const { return unresolved_taper_; }
 
     /**
      * @brief Enable or disable skipping screen regions that provably contain no geometry.
@@ -135,6 +148,7 @@ class Renderer {
 
     bool unresolved_occlusion_ = true;
     bool stamp_cropping_ = true;
+    double unresolved_taper_ = DEFAULT_UNRESOLVED_TAPER;
 
     bool region_culling_ = true;
     bool region_cull_validation_ = false;
