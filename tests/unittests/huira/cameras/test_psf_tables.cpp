@@ -738,3 +738,115 @@ TEST_CASE("psf_image() blurs a source at a range by its own defocus", "[cameras]
     camera.delete_psf();
     CHECK_THROWS(camera.psf_image(8));
 }
+
+namespace {
+
+/// The Jupiter example's optics in Visible8, in focus, with scattered light, and out of focus,
+/// reaching as far as a camera's. Built once, for every test that uses them.
+const std::vector<std::pair<std::string, PsfTables<Visible8>>>& visible_tables()
+{
+    constexpr double REACH = 4096.0;
+    static const std::vector<std::pair<std::string, PsfTables<Visible8>>> tables = [] {
+        std::vector<std::pair<std::string, PsfTables<Visible8>>> built;
+        built.emplace_back("in focus", PsfTables<Visible8>::airy(3.3, 8.5e-6, 8.5e-6, REACH));
+        built.emplace_back(
+            "scattered light",
+            PsfTables<Visible8>::airy(
+                3.3, 8.5e-6, 8.5e-6, REACH, PsfTables<Visible8>::Scatter{0.02, 2.5, 0.5, {}}));
+        built.emplace_back(
+            "defocused", PsfTables<Visible8>::airy(3.3, 8.5e-6, 8.5e-6, REACH, std::nullopt, 2.5));
+        return built;
+    }();
+    return tables;
+}
+
+} // namespace
+
+TEST_CASE("Taking the far field beyond a distance changes no pixel by more than "
+          "ring_deviation()",
+          "[cameras][psf]")
+{
+    std::mt19937_64 random(7);
+    std::uniform_real_distribution<double> uniform(0.0, 1.0);
+    for (const auto& [name, tables] : visible_tables()) {
+        INFO(name);
+        double worst = 0.0;
+        bool unchanged = true;
+        for (int k = 0; k < 20000; ++k) {
+            const double r = 1.0 + 130.0 * uniform(random);
+            const double angle = 2.0 * reference::PI * uniform(random);
+            const double dx = r * std::cos(angle);
+            const double dy = r * std::sin(angle);
+            const Visible8 rings = tables.pixel(dx, dy);
+            const Visible8 smooth = tables.pixel(dx, dy, 0.0);
+            unchanged =
+                unchanged && tables.pixel(dx, dy, std::numeric_limits<double>::infinity()) == rings;
+            for (std::size_t c = 0; c < Visible8::size(); ++c) {
+                const double bound = tables.ring_deviation(c, r);
+                const double change =
+                    std::abs(static_cast<double>(rings[c]) - static_cast<double>(smooth[c]));
+                worst = std::max(worst, change / bound);
+            }
+        }
+        CHECK(worst <= 1.0);
+        CHECK(unchanged);
+    }
+}
+
+TEST_CASE("draw() adds each pixel's light, as pixel() gives it, times the weight", "[cameras][psf]")
+{
+    for (const auto& [name, tables] : visible_tables()) {
+        INFO(name);
+        Visible8 power{0.f};
+        for (std::size_t c = 0; c < Visible8::size(); ++c) {
+            power[c] = 1.0f + 0.25f * static_cast<float>(c);
+        }
+        const double source_x = 40.37;
+        const double source_y = 38.81;
+        const double rings = 20.0;
+        const double reach = 35.0;
+        const auto weight = [](double r) { return r < 25.0 ? 1.0 : 0.5; };
+        Image<Visible8> image(80, 80, Visible8{0.f});
+        const std::array<double, Visible8::size()> drawn =
+            tables.draw(image, 3, 77, 5, 75, source_x, source_y, power, rings, reach, weight);
+
+        std::array<double, Visible8::size()> expected_drawn{};
+        double worst = 0.0;
+        double peak = 0.0;
+        for (int y = 0; y < 80; ++y) {
+            for (int x = 0; x < 80; ++x) {
+                const double dx = x + 0.5 - source_x;
+                const double dy = y + 0.5 - source_y;
+                const double r = std::hypot(dx, dy);
+                const bool inside = x >= 3 && x < 77 && y >= 5 && y < 75 && r <= reach;
+                const Visible8 value = tables.pixel(dx, dy, rings);
+                for (std::size_t c = 0; c < Visible8::size(); ++c) {
+                    const double light = inside ? weight(r) * static_cast<double>(value[c]) : 0.0;
+                    expected_drawn[c] += light;
+                    const double expected = light * static_cast<double>(power[c]);
+                    worst =
+                        std::max(worst, std::abs(static_cast<double>(image(x, y)[c]) - expected));
+                    peak = std::max(peak, expected);
+                }
+            }
+        }
+        CHECK(worst < 1e-6 * peak);
+        for (std::size_t c = 0; c < Visible8::size(); ++c) {
+            CHECK(std::abs(drawn[c] - expected_drawn[c]) < 1e-6);
+        }
+    }
+}
+
+TEST_CASE("integrate() finds all of a profile's light", "[cameras][psf]")
+{
+    for (const auto& [name, tables] : visible_tables()) {
+        INFO(name);
+        const double end = 200.0;
+        const std::array<double, Visible8::size()> inside =
+            tables.integrate(0.0, end, {}, [](double r) { return 2.0 * reference::PI * r; });
+        for (std::size_t c = 0; c < Visible8::size(); ++c) {
+            INFO("channel " << c);
+            CHECK(std::abs(inside[c] + tables.smooth_light_beyond(c, end) - 1.0) < 2e-5);
+        }
+    }
+}

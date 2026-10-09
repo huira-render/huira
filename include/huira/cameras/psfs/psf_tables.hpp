@@ -2,6 +2,8 @@
 
 #include <array>
 #include <cstddef>
+#include <cstdint>
+#include <limits>
 #include <optional>
 #include <vector>
 
@@ -95,7 +97,21 @@ class PsfTables {
                           double blur = 0.0);
 
     [[nodiscard]] TSpectral pixel(double dx, double dy) const;
+    [[nodiscard]] TSpectral pixel(double dx, double dy, double rings_within) const;
     [[nodiscard]] Image<TSpectral> image(int radius, double x_offset, double y_offset) const;
+
+    template <class Weight>
+    std::array<double, TSpectral::size()> draw(Image<TSpectral>& target,
+                                               int x_begin,
+                                               int x_end,
+                                               int y_begin,
+                                               int y_end,
+                                               double source_x,
+                                               double source_y,
+                                               const TSpectral& power,
+                                               double rings_within,
+                                               double reach,
+                                               const Weight& weight) const;
 
     /// The pixel's height over its width.
     [[nodiscard]] double aspect() const { return aspect_; }
@@ -112,17 +128,45 @@ class PsfTables {
         return strips_[channel].far_radius;
     }
 
+    [[nodiscard]] double profile(std::size_t channel, double r) const;
+    [[nodiscard]] double smooth_profile(std::size_t channel, double r) const;
+    [[nodiscard]] double smooth_light_beyond(std::size_t channel, double r) const;
+    [[nodiscard]] double
+    envelope(std::size_t channel,
+             double r,
+             double rings_within = std::numeric_limits<double>::infinity()) const;
+    [[nodiscard]] double ring_deviation(std::size_t channel, double r) const;
+
+    template <class Weight>
+    [[nodiscard]] std::array<double, TSpectral::size()>
+    integrate(double lo, double hi, std::vector<double> breaks, const Weight& weight) const;
+
+    /// The radius of the circle about a source that holds 90% of its light in a channel.
+    [[nodiscard]] double radius_holding_90(std::size_t channel) const
+    {
+        return radials_[channel].radius_90;
+    }
+
     [[nodiscard]] std::size_t memory_bytes() const;
 
   private:
-    /// One channel's antiderivatives, from start in steps of step. Each node holds the two
-    /// antiderivatives (integrals of the profile to infinity, once and twice), the profile and
-    /// its slope.
-    struct Strip {
+    /// Where the channels' antiderivatives and far fields are tabulated: the same nodes for
+    /// all, so that a pixel finds its place among them once.
+    struct Grid {
         double start = 0.0;
         double step = 0.25;
+        std::size_t count = 0;
+        double far_start = 1.0;
+        double far_end = 2.0;
+    };
+
+    /// One channel's antiderivatives, every step from start. Each node holds the two
+    /// antiderivatives (integrals of the profile to infinity, once and twice), the profile and
+    /// its slope. Its far field, averaged over any rings, holds from smooth_from out.
+    struct Strip {
         double limit = 0.0;
         double far_radius = 0.0;
+        double smooth_from = 0.0;
         detail::RadialTable far;
         std::vector<std::array<double, 4>> nodes;
     };
@@ -136,16 +180,80 @@ class PsfTables {
     std::vector<TSpectral> near_;
     std::vector<Strip> strips_;
 
+    // The strips of all channels at each node, channel by channel: 4 values per channel per
+    // node.
+    Grid grid_;
+    std::vector<double> strip_nodes_;
+
+    // The far fields, at far_radii_, which grow by a constant ratio. They are mostly one shape at
+    // different scales (the diffraction pattern's r^-3 at each wavelength, and scattered light,
+    // the same in every channel), so they are held as far_rank_ shapes, each with its value and
+    // first two derivatives at every node, shape by shape; a channel's far field is a
+    // combination of them, with far_coefficients_ channel by channel. A pixel evaluates each
+    // shape once. Without coefficients, the shapes are the channels.
+    std::vector<double> far_radii_;
+    std::vector<double> far_inverse_steps_;
+    // The node below each of FAR_KEY_BITS-bit slices of the radii's binary representation from
+    // far_radii_'s first: a slice is narrower than the nodes' spacing, so the node below r is
+    // its slice's or the next. far_key_start_ is the first slice's key.
+    static constexpr int FAR_KEY_BITS = 8;
+    std::uint64_t far_key_start_ = 0;
+    std::vector<std::uint32_t> far_index_;
+    std::size_t far_rank_ = 0;
+    std::vector<double> far_basis_;
+    std::vector<double> far_coefficients_;
+
+    // How far a pixel's light in each channel can stray from its far field, from ring_start_,
+    // where the first far field holds, out: the greatest straying found at or beyond each node,
+    // every RING_STEP.
+    static constexpr double RING_STEP = 0.1;
+    double ring_start_ = 0.0;
+    std::vector<std::vector<double>> ring_deviation_;
+
+    std::array<double, TSpectral::size()> strip_limit_{};
+    std::array<double, TSpectral::size()> far_blend_from_{};
+    std::array<double, TSpectral::size()> smooth_from_{};
+    // Beyond far_from_ every channel takes its far field, rings or not; beyond smooth_from_all_,
+    // every channel's far field holds.
+    double far_from_ = 0.0;
+    double smooth_from_all_ = 0.0;
+
+    /// One channel's profile from the source out to its far field, every step, for questions
+    /// about the light at a distance: how much there is, how far it reaches. The suffix maxima
+    /// bound the profile beyond each node.
+    struct Radial {
+        double step = 0.0;
+        std::vector<double> value;
+        std::vector<double> slope;
+        std::vector<double> suffix_max;
+        double radius_90 = 0.0;
+    };
+    std::vector<Radial> radials_;
+
+    template <class Profile>
+    Radial build_radial_(const Profile& profile, const Strip& strip) const;
+
     template <class Profile>
     void build_near_(const std::vector<Profile>& profiles);
     template <class Profile>
     Strip build_strip_(const Profile& profile, const Channel& channel, double reach) const;
 
+    using Values = std::array<double, TSpectral::size()>;
+
     [[nodiscard]] std::size_t near_index_(int i, int j) const;
     [[nodiscard]] TSpectral near_value_(double dx, double dy) const;
-    [[nodiscard]] double outer_value_(const Strip& strip, double dx, double dy, double r) const;
-    [[nodiscard]] double strip_value_(const Strip& strip, double dx, double dy, double r) const;
-    [[nodiscard]] double far_value_(const Strip& strip, double dx, double dy, double r) const;
+    void strip_values_(double dx,
+                       double dy,
+                       double r,
+                       const std::array<bool, TSpectral::size()>& wanted,
+                       Values& values) const;
+    [[nodiscard]] std::size_t far_node_(double r) const;
+    void smooth_profiles_(double r, Values& values) const;
+    void far_shapes_(double dx, double dy, double r, Values& shapes) const;
+    void combine_far_(const Values& shapes, Values& values) const;
+    void far_values_(double dx, double dy, double r, Values& values) const;
+    void build_far_basis_(const std::vector<double>& far_nodes);
+    void build_ring_deviation_();
 };
 
 } // namespace huira

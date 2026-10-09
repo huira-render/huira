@@ -30,6 +30,8 @@ class RadialTable {
 
     [[nodiscard]] double start() const { return start_; }
     [[nodiscard]] double end() const { return end_; }
+    [[nodiscard]] const std::vector<double>& radii() const { return radii_; }
+    [[nodiscard]] const std::vector<std::array<double, 3>>& nodes() const { return nodes_; }
     [[nodiscard]] std::size_t memory_bytes() const { return nodes_.size() * sizeof(nodes_[0]); }
 
   private:
@@ -87,6 +89,9 @@ class OpticsProfile {
     [[nodiscard]] double slope(double r) const;
     [[nodiscard]] std::array<double, 3> far_field(double r) const;
 
+    /// far_field() holds from here out; for this profile, everywhere.
+    [[nodiscard]] double smooth_from() const { return 0.0; }
+
     [[nodiscard]] const AiryBandProfile& diffraction() const { return diffraction_; }
     [[nodiscard]] double scatter_fraction() const { return scatter_fraction_; }
     [[nodiscard]] const std::optional<ScatterProfile>& scatter() const { return scatter_; }
@@ -128,6 +133,9 @@ class DefocusedProfile {
 
     /// How far out the in-focus profile's rings are followed.
     [[nodiscard]] double ring_radius() const { return ring_radius_; }
+
+    /// far_field() holds from here out: the disc's edge plus ring_radius().
+    [[nodiscard]] double smooth_from() const { return blur_ + ring_radius_; }
 
   private:
     double blur_;

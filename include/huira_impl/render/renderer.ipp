@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <limits>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -42,7 +43,83 @@ template <IsSpectral TSpectral>
     return true;
 }
 
+/// Length of the arc of the circle of radius r about the origin that lies in x >= a, y >= b,
+/// for a, b >= 0.
+inline double corner_arc(double a, double b, double r)
+{
+    if (a * a + b * b >= r * r) {
+        return 0.0;
+    }
+    return r * (std::acos(std::min(b / r, 1.0)) - std::asin(std::min(a / r, 1.0)));
+}
+
+/// Length of the circle of radius r about the origin inside the rectangle [x0, x1] x [y0, y1]:
+/// the rectangle's parts in each quadrant, reflected into the first, each as four corner arcs.
+inline double arc_in_rectangle(double x0, double x1, double y0, double y1, double r)
+{
+    const auto fold = [](double u0, double u1, std::array<std::array<double, 2>, 2>& spans) {
+        if (u1 <= 0.0) {
+            spans = {{{-u1, -u0}, {0.0, 0.0}}};
+        } else if (u0 >= 0.0) {
+            spans = {{{u0, u1}, {0.0, 0.0}}};
+        } else {
+            spans = {{{0.0, -u0}, {0.0, u1}}};
+        }
+    };
+    std::array<std::array<double, 2>, 2> xs{};
+    std::array<std::array<double, 2>, 2> ys{};
+    fold(x0, x1, xs);
+    fold(y0, y1, ys);
+    double length = 0.0;
+    for (const auto& [a0, a1] : xs) {
+        for (const auto& [b0, b1] : ys) {
+            if (a1 > a0 && b1 > b0) {
+                length += corner_arc(a0, b0, r) - corner_arc(a1, b0, r) - corner_arc(a0, b1, r) +
+                          corner_arc(a1, b1, r);
+            }
+        }
+    }
+    return length;
+}
+
 } // namespace detail
+
+/**
+ * @brief Set how far a still unresolved source is drawn: until the light it puts in a pixel, as
+ * the sensor reads it out, falls to this fraction of the read noise.
+ *
+ * Still sources, with the aperture's PSF, are drawn at their exact position, pixel by pixel from
+ * the PSF's tables, out to the distance r beyond which no pixel reads out more than tau, this
+ * fraction of the sensor's read noise as configured (of an electron for a sensor without read
+ * noise; the same whether or not noise is simulated, so that a noiseless frame is the mean of
+ * noisy ones). From r to 2 r they fade smoothly to nothing. The light left on the sensor beyond
+ * that is added evenly over the frame, so that none is lost and no edge appears. A source's
+ * rings are followed only as far as they change a pixel by more than tau; beyond, its light is
+ * averaged over them. No pixel is off by more than about 2 tau. A source is always drawn out to
+ * where it holds 90% of its light. RGB sensors read out each channel; others, their sum.
+ *
+ * The default, DEFAULT_UNRESOLVED_TAPER, ends halos where a square-root stretch of a noiseless
+ * frame to 30 electrons cannot show it. Larger values draw fewer pixels, and so take less time; 0
+ * draws every still source over the whole frame, which can take a long time.
+ *
+ * @param fraction_of_read_noise Non-negative and finite.
+ * @throws std::runtime_error if it is negative or not finite.
+ */
+template <IsSpectral TSpectral>
+void Renderer<TSpectral>::set_unresolved_taper(double fraction_of_read_noise)
+{
+    if (!(fraction_of_read_noise >= 0.0) || !std::isfinite(fraction_of_read_noise)) {
+        HUIRA_THROW_ERROR("Renderer::set_unresolved_taper - The fraction must be non-negative and "
+                          "finite: " +
+                          std::to_string(fraction_of_read_noise));
+    }
+    if (fraction_of_read_noise == 0.0 && unresolved_taper_ != 0.0) {
+        HUIRA_LOG_WARNING("Renderer::set_unresolved_taper - With no taper, every still unresolved "
+                          "source is drawn over the whole frame, which takes as long as drawing "
+                          "a frame per source");
+    }
+    unresolved_taper_ = fraction_of_read_noise;
+}
 
 template <IsSpectral TSpectral>
 void Renderer<TSpectral>::render(SceneView<TSpectral>& scene_view,
@@ -1332,12 +1409,13 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
         return received_power;
     }
 
-    // Stamps are cropped, per source, to the pixels its light would show in: those that receive
-    // at least a tenth of the sensor's read noise over the exposure, at the brightest the
-    // source gets (a tenth of an electron for a sensor without noise, or with under an electron
-    // of it). A motion-blurred source is sized as if all its light fell in one place, which keeps
-    // more than enough. A cropped stamp is scaled back to the whole stamp's energy (see
-    // crop_scale below), so that no light is lost, and is never cropped so far that its
+    // Stamps are cropped, per source, to the pixels its light would show in: those that read
+    // out at least a tenth of the sensor's read noise over the exposure, at the brightest the
+    // source gets (a tenth of an electron for a sensor with under an electron of it). The read
+    // noise is as configured, whether or not noise is simulated, so that a noiseless frame is
+    // the mean of noisy ones. A motion-blurred source is sized as if all its light fell in one
+    // place, which keeps more than enough. A cropped stamp is scaled back to the whole stamp's
+    // energy (see crop_scale below), so that no light is lost, and is never cropped so far that its
     // centroid moves by more than CROP_CENTROID_TOLERANCE: the light beyond a crop is not
     // symmetric about the source, unless it is on a pixel's center, so cutting it pulls the
     // centroid toward the pixel's center (by up to 0.07 px for an Airy pattern with its first
@@ -1353,8 +1431,8 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
         const Image<TSpectral>& center_kernel = stamp_kernel(0.0f, 0.0f);
 
         const SensorModel<TSpectral>& sensor = *camera->sensor_;
-        const float read_noise = sensor.noise_enabled() ? sensor.read_noise() : 0.f;
-        radius_config.threshold_electrons = 0.1f * std::max(read_noise, 1.f);
+        radius_config.threshold_electrons = 0.1f * std::max(sensor.read_noise(), 1.f);
+        radius_config.summed_readout = !std::is_same_v<TSpectral, RGB>;
 
         // Per channel, the electrons a pixel collects over the exposure per unit irradiance and
         // stamp weight. The on-axis aperture area is the largest, so conservative:
@@ -1491,23 +1569,31 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
     const int reach = std::max(stamp_radius, 1) + 1;
     const Frustum<TSpectral> frustum = camera->view_frustum_with_margin_(static_cast<float>(reach));
 
+    // A still source drawn from the tables reaches as far as its own light shows, which for a
+    // bright one can be across the frame: so those up to a frame's diagonal outside it are
+    // considered too.
+    const auto diagonal = static_cast<float>(
+        std::ceil(std::hypot(static_cast<double>(fb_width), static_cast<double>(fb_height))));
+    const Frustum<TSpectral> wide_frustum =
+        use_tables ? camera->view_frustum_with_margin_(diagonal) : frustum;
+
     // Occlusion of unresolved sources by resolved geometry:
     const bool test_occlusion = unresolved_occlusion_ && !scene_view.primitives_.empty();
     const bool mask_available = occluder_mask_valid_ && occluder_mask_.width() == fb_width &&
                                 occluder_mask_.height() == fb_height;
 
     /// One sample of a source's (possibly motion-blurred) arc, with the power it delivers. A
-    /// source drawn at its exact position has its own pixel values instead of a stamp: the
-    /// square of pixels values[values .. values + (2 r + 1)^2) cover, centered on (base_x,
-    /// base_y), for its effective radius r.
-    static constexpr std::uint32_t NO_VALUES = std::numeric_limits<std::uint32_t>::max();
+    /// still source drawn from the tables at its exact position is tapered: drawn in full out to
+    /// taper pixel widths, fading to nothing at twice that, or to draw if taper is infinite. Its
+    /// rings are followed out to rings pixel widths, and averaged over beyond.
     struct Sample {
         std::size_t item_idx;
         Pixel projected; ///< Sensor coordinates.
         TSpectral power;
-        std::uint32_t values = NO_VALUES;
-        int base_x = 0;
-        int base_y = 0;
+        bool exact = false;
+        double taper = 0.0;
+        double draw = 0.0;
+        double rings = 0.0;
     };
 
     // A source that moves less than this during the exposure is drawn once, at its mean
@@ -1530,15 +1616,131 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
     struct Batch {
         std::vector<RenderItem<TSpectral>> items;
         std::vector<Sample> samples;
-        std::vector<TSpectral> values;
         std::vector<std::pair<std::uint32_t, std::uint32_t>> tile_samples;
+    };
+
+    // How far a still source drawn from the tables reaches. The sensor reads out each channel
+    // for RGB, and the channels' sum otherwise; the light a pixel reads out, against tau, decides
+    // how far a source is drawn. tau is a fraction of the read noise as configured, whether or
+    // not noise is simulated, so that a noiseless frame is the mean of noisy ones, or of an
+    // electron for a sensor without read noise. See set_unresolved_taper().
+    constexpr bool PER_CHANNEL_READOUT = std::is_same_v<TSpectral, RGB>;
+    const double aspect = use_tables ? tables->aspect() : 1.0;
+    std::array<double, TSpectral::size()> electrons_per_power{};
+    double tau = 0.0;
+    double floor_radius = 0.0;
+    if (use_tables) {
+        const SensorModel<TSpectral>& sensor = *camera->sensor_;
+        const double read_noise = static_cast<double>(sensor.read_noise());
+        tau = unresolved_taper_ * (read_noise > 0.0 ? read_noise : 1.0);
+        const double exposure = scene_view.duration().to_si();
+        const TSpectral photon_energies = TSpectral::photon_energies();
+        const TSpectral qe = sensor.quantum_efficiency();
+        for (std::size_t c = 0; c < TSpectral::size(); ++c) {
+            if (photon_energies[c] > 0.f) {
+                electrons_per_power[c] =
+                    exposure * static_cast<double>(qe[c]) / static_cast<double>(photon_energies[c]);
+            }
+            // However faint, a source is drawn out to where it holds 90% of its light:
+            floor_radius = std::max(floor_radius, tables->radius_holding_90(c));
+        }
+    }
+
+    // Full out to the taper radius, then falling smoothly (with two continuous derivatives) to
+    // nothing at twice it; full everywhere with no taper.
+    auto taper_weight = [](double r, double taper) {
+        if (r <= taper) {
+            return 1.0;
+        }
+        const double t = std::min((r - taper) / taper, 1.0);
+        return 1.0 - t * t * t * (10.0 - 15.0 * t + 6.0 * t * t);
+    };
+
+    // The distance from a position to the frame's farthest corner, in pixel widths.
+    auto farthest_corner = [&](const Pixel& p) {
+        const double x = std::max(static_cast<double>(p.x), fb_width - static_cast<double>(p.x));
+        const double y = std::max(static_cast<double>(p.y), fb_height - static_cast<double>(p.y));
+        return std::hypot(x, aspect * y) + 1.0;
+    };
+
+    // The distance beyond which no pixel reads out more than tau from a source of this power,
+    // drawn with its rings followed within rings (see PsfTables::envelope()), found by
+    // bisection; infinite with no taper, or if the source is bright enough to stay above tau
+    // across the frame.
+    auto taper_radius = [&](const TSpectral& power, double rings) {
+        if (!(tau > 0.0)) {
+            return std::numeric_limits<double>::infinity();
+        }
+        std::array<double, TSpectral::size()> electrons{};
+        for (std::size_t c = 0; c < TSpectral::size(); ++c) {
+            electrons[c] = static_cast<double>(power[c]) * electrons_per_power[c];
+        }
+        const auto readout = [&](double r) {
+            double value = 0.0;
+            for (std::size_t c = 0; c < TSpectral::size(); ++c) {
+                const double channel = electrons[c] * tables->envelope(c, r, rings);
+                value = PER_CHANNEL_READOUT ? std::max(value, channel) : value + channel;
+            }
+            return value;
+        };
+        const double limit = 2.0 * static_cast<double>(diagonal);
+        double hi = std::max(floor_radius, 1.0);
+        while (readout(hi) > tau) {
+            if (hi > limit) {
+                return std::numeric_limits<double>::infinity();
+            }
+            hi *= 2.0;
+        }
+        double lo = 0.0;
+        while (hi - lo > 1e-3 * hi) {
+            const double mid = 0.5 * (lo + hi);
+            (readout(mid) > tau ? lo : hi) = mid;
+        }
+        return std::max(hi, floor_radius);
+    };
+
+    // The distance beyond which following the source's rings changes no pixel's readout by more
+    // than tau (see PsfTables::ring_deviation()), found by bisection to a twentieth of a pixel;
+    // infinite with no taper.
+    auto rings_radius = [&](const TSpectral& power) {
+        if (!(tau > 0.0)) {
+            return std::numeric_limits<double>::infinity();
+        }
+        std::array<double, TSpectral::size()> electrons{};
+        for (std::size_t c = 0; c < TSpectral::size(); ++c) {
+            electrons[c] = static_cast<double>(power[c]) * electrons_per_power[c];
+        }
+        const auto readout = [&](double r) {
+            double value = 0.0;
+            for (std::size_t c = 0; c < TSpectral::size(); ++c) {
+                if (electrons[c] > 0.0) {
+                    const double channel = electrons[c] * tables->ring_deviation(c, r);
+                    value = PER_CHANNEL_READOUT ? std::max(value, channel) : value + channel;
+                }
+            }
+            return value;
+        };
+        // Beyond the projected integrals' reach the rings are never followed, and the readout
+        // is 0.
+        double lo = 0.0;
+        double hi = 1.0;
+        while (readout(hi) > tau) {
+            lo = hi;
+            hi *= 2.0;
+        }
+        while (hi - lo > 0.05) {
+            const double mid = 0.5 * (lo + hi);
+            (readout(mid) > tau ? lo : hi) = mid;
+        }
+        return hi;
     };
 
     // List a sample in the tiles its light reaches: its stamp, the wings' bilinear splat, or,
     // without either, the pixel it falls in. Stamps and the splat place light by pixel centers,
     // which sit at i + 0.5 in the sensor coordinates the camera projects to, so they work from
-    // the position half a pixel lower. A sample drawn at its exact position is first given its
-    // pixel values from the tables, normalized per channel over its square as stamps are.
+    // the position half a pixel lower. A still source drawn from the tables reaches out to its
+    // drawn radius, and is kept even if that misses the frame, for the light it puts on it
+    // beyond.
     auto emit_sample = [&](const RenderItem<TSpectral>& item,
                            std::size_t item_index,
                            const Pixel& p,
@@ -1554,12 +1756,18 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
         Sample sample{item_index, p, power};
         const int r = item.effective_radius;
         if (exact) {
-            sample.base_x = static_cast<int>(std::floor(p.x));
-            sample.base_y = static_cast<int>(std::floor(p.y));
-            x_lo = std::min(x_lo, sample.base_x - r);
-            x_hi = std::max(x_hi, sample.base_x + r);
-            y_lo = std::min(y_lo, sample.base_y - r);
-            y_hi = std::max(y_hi, sample.base_y + r);
+            sample.exact = true;
+            sample.rings = rings_radius(power);
+            sample.taper = taper_radius(power, sample.rings);
+            sample.draw = std::isinf(sample.taper) ? farthest_corner(p) : 2.0 * sample.taper;
+            const double reach_x = sample.draw;
+            const double reach_y = sample.draw / aspect;
+            x_lo = static_cast<int>(std::floor(std::max(static_cast<double>(p.x) - reach_x, -1.0)));
+            x_hi = static_cast<int>(std::floor(
+                std::min(static_cast<double>(p.x) + reach_x, static_cast<double>(fb_width))));
+            y_lo = static_cast<int>(std::floor(std::max(static_cast<double>(p.y) - reach_y, -1.0)));
+            y_hi = static_cast<int>(std::floor(
+                std::min(static_cast<double>(p.y) + reach_y, static_cast<double>(fb_height))));
         } else if (stamp_radius > 0) {
             const int base_x = nearest_stamp_phase(center_x).base;
             const int base_y = nearest_stamp_phase(center_y).base;
@@ -1575,34 +1783,16 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
         y_lo = std::max(y_lo, 0);
         x_hi = std::min(x_hi, fb_width - 1);
         y_hi = std::min(y_hi, fb_height - 1);
-        if (x_lo > x_hi || y_lo > y_hi) {
-            return; // nothing reaches the image
-        }
-
-        if (exact) {
-            sample.values = static_cast<std::uint32_t>(batch.values.size());
-            std::array<double, TSpectral::size()> sum{};
-            for (int y = sample.base_y - r; y <= sample.base_y + r; ++y) {
-                for (int x = sample.base_x - r; x <= sample.base_x + r; ++x) {
-                    const TSpectral value =
-                        tables->pixel(static_cast<double>(x) + 0.5 - static_cast<double>(p.x),
-                                      static_cast<double>(y) + 0.5 - static_cast<double>(p.y));
-                    for (std::size_t c = 0; c < TSpectral::size(); ++c) {
-                        sum[c] += static_cast<double>(value[c]);
-                    }
-                    batch.values.push_back(value);
-                }
-            }
-            for (std::size_t i = sample.values; i < batch.values.size(); ++i) {
-                for (std::size_t c = 0; c < TSpectral::size(); ++c) {
-                    batch.values[i][c] =
-                        static_cast<float>(static_cast<double>(batch.values[i][c]) / sum[c]);
-                }
-            }
+        const bool reaches_image = x_lo <= x_hi && y_lo <= y_hi;
+        if (!reaches_image && !exact) {
+            return;
         }
 
         const auto sample_index = static_cast<std::uint32_t>(batch.samples.size());
         batch.samples.push_back(sample);
+        if (!reaches_image) {
+            return;
+        }
         for (int ty = y_lo / TILE_SIZE; ty <= y_hi / TILE_SIZE; ++ty) {
             for (int tx = x_lo / TILE_SIZE; tx <= x_hi / TILE_SIZE; ++tx) {
                 batch.tile_samples.emplace_back(static_cast<std::uint32_t>(ty * tiles_x + tx),
@@ -1620,11 +1810,29 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                         Batch& batch) {
         const auto& arc = item.arc;
 
-        // Clip arc to frustum:
-        const auto& visible_intervals = frustum.clip_arc(arc, scratch.clip);
-        if (visible_intervals.empty()) {
-            return;
+        // Clip arc to frustum. Beyond the stamps' reach, only a still source drawn from the
+        // tables can light the frame:
+        const auto* intervals = &frustum.clip_arc(arc, scratch.clip);
+        if (intervals->empty()) {
+            if (!use_tables) {
+                return;
+            }
+            const Pixel first = camera->project_to_sensor_(arc.evaluate(0.f));
+            const Pixel middle = camera->project_to_sensor_(arc.evaluate(0.5f));
+            const Pixel last = camera->project_to_sensor_(arc.evaluate(1.f));
+            const auto close = [&](const Pixel& a, const Pixel& b) {
+                return std::abs(a.x - b.x) < STILL_TOLERANCE &&
+                       std::abs(a.y - b.y) < STILL_TOLERANCE;
+            };
+            if (!close(first, middle) || !close(first, last)) {
+                return;
+            }
+            intervals = &wide_frustum.clip_arc(arc, scratch.clip);
+            if (intervals->empty()) {
+                return;
+            }
         }
+        const auto& visible_intervals = *intervals;
 
         // For each visible interval, adaptively sample in pixel space:
         for (const auto& [t_start, t_end] : visible_intervals) {
@@ -1718,7 +1926,7 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                 // beyond the image, or NaN, where the lens images nothing (past the pole of a
                 // rational distortion model). The margin is beyond the furthest a stamp or the
                 // wings' splat reaches.
-                const float margin = static_cast<float>(reach + 1);
+                const float margin = still ? diagonal + 1.f : static_cast<float>(reach + 1);
                 if (!(p.x > -margin && p.x < static_cast<float>(fb_width) + margin &&
                       p.y > -margin && p.y < static_cast<float>(fb_height) + margin)) {
                     continue;
@@ -1811,7 +2019,7 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                         // Cheap rejection before anything is allocated. This is the
                         // same frustum test the binning pass performs; running it here
                         // only decides whether a RenderItem is worth building.
-                        if (frustum.clip_arc(scratch.arc, scratch.clip).empty()) {
+                        if (wide_frustum.clip_arc(scratch.arc, scratch.clip).empty()) {
                             continue;
                         }
 
@@ -1873,23 +2081,19 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
     // Merge the batches in order, and sort their (tile, sample) pairs into one list per tile
     // (offsets into a single index array), keeping the order sources were binned in:
     std::vector<Sample> samples;
-    std::vector<TSpectral> values;
     std::vector<std::size_t> tile_offsets(static_cast<std::size_t>(num_tiles) + 1, 0);
     {
         std::size_t total_items = 0;
         std::size_t total_samples = 0;
-        std::size_t total_values = 0;
         for (const Batch& batch : batches) {
             total_items += batch.items.size();
             total_samples += batch.samples.size();
-            total_values += batch.values.size();
             for (const auto& [tile, sample] : batch.tile_samples) {
                 ++tile_offsets[tile + 1];
             }
         }
         items.reserve(total_items);
         samples.reserve(total_samples);
-        values.reserve(total_values);
         for (std::size_t t = 0; t < static_cast<std::size_t>(num_tiles); ++t) {
             tile_offsets[t + 1] += tile_offsets[t];
         }
@@ -1900,18 +2104,13 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
         for (Batch& batch : batches) {
             const std::size_t item_base = items.size();
             const auto sample_base = static_cast<std::uint32_t>(samples.size());
-            const auto value_base = static_cast<std::uint32_t>(values.size());
             for (auto& item : batch.items) {
                 items.push_back(std::move(item));
             }
             for (Sample& sample : batch.samples) {
                 sample.item_idx += item_base;
-                if (sample.values != NO_VALUES) {
-                    sample.values += value_base;
-                }
                 samples.push_back(sample);
             }
-            values.insert(values.end(), batch.values.begin(), batch.values.end());
             for (const auto& [tile, sample] : batch.tile_samples) {
                 tile_sample_indices[fill[tile]++] = sample_base + sample;
             }
@@ -1923,6 +2122,11 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
         wing_splat = Image<TSpectral>(0, 0, TSpectral{0});
         return received_power;
     }
+
+    // The light each still source drawn from the tables puts in each tile, per unit power: one
+    // entry per (tile, sample) pair, so that the tiles write their own.
+    std::vector<std::array<double, TSpectral::size()>> entry_light(
+        use_tables ? tile_sample_indices.size() : 0);
 
     // Render the tiles in parallel, each into its own pixels of the frame:
     tbb::parallel_for(
@@ -1972,23 +2176,31 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                         splat_at(bx + 1, by + 1, w11);
                     }
 
-                    if (sample.values != NO_VALUES) {
-                        // Drawn at its exact position, from its own values:
-                        const int r = item.effective_radius;
-                        const int side = 2 * r + 1;
-                        const int x0 = sample.base_x - r;
-                        const int y0 = sample.base_y - r;
-                        const int x_begin = std::max(x0, tile_x0);
-                        const int x_end = std::min(x0 + side, tile_x1);
-                        const int y_begin = std::max(y0, tile_y0);
-                        const int y_end = std::min(y0 + side, tile_y1);
-                        for (int y = y_begin; y < y_end; ++y) {
-                            for (int x = x_begin; x < x_end; ++x) {
-                                received_power(x, y) +=
-                                    power * values[sample.values + static_cast<std::size_t>(
-                                                                       (y - y0) * side + (x - x0))];
-                            }
-                        }
+                    if (sample.exact) {
+                        // Drawn from the tables at its exact position, tapered, and the light
+                        // drawn added up per (tile, sample), for the light left to spread:
+                        const double px = static_cast<double>(star_p.x);
+                        const double py = static_cast<double>(star_p.y);
+                        const int x_begin =
+                            std::max(tile_x0, static_cast<int>(std::floor(px - sample.draw)));
+                        const int x_end =
+                            std::min(tile_x1, static_cast<int>(std::floor(px + sample.draw)) + 1);
+                        const int y_begin = std::max(
+                            tile_y0, static_cast<int>(std::floor(py - sample.draw / aspect)));
+                        const int y_end = std::min(
+                            tile_y1, static_cast<int>(std::floor(py + sample.draw / aspect)) + 1);
+                        entry_light[k] =
+                            tables->draw(received_power,
+                                         x_begin,
+                                         x_end,
+                                         y_begin,
+                                         y_end,
+                                         px,
+                                         py,
+                                         power,
+                                         sample.rings,
+                                         sample.draw,
+                                         [&](double r) { return taper_weight(r, sample.taper); });
                     } else if (stamp_radius > 0) {
                         const StampPhase phase_x = nearest_stamp_phase(center_x);
                         const StampPhase phase_y = nearest_stamp_phase(center_y);
@@ -2045,6 +2257,90 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                 }
             }
         });
+
+    // The light still sources drawn from the tables put on the sensor beyond what was drawn,
+    // spread evenly over it. See spread_light_().
+    if (use_tables) {
+        // The light each source drew, per unit power: its entries' sums, in a fixed order.
+        std::vector<std::array<double, TSpectral::size()>> drawn(samples.size());
+        for (std::size_t k = 0; k < tile_sample_indices.size(); ++k) {
+            auto& sum = drawn[tile_sample_indices[k]];
+            for (std::size_t c = 0; c < TSpectral::size(); ++c) {
+                sum[c] += entry_light[k][c];
+            }
+        }
+
+        // The frame, in pixel widths, and the radii at which a circle about a source meets its
+        // edges and corners, where the length of the circle on the frame has kinks.
+        const double width = static_cast<double>(fb_width);
+        const double height = aspect * static_cast<double>(fb_height);
+        std::vector<std::array<double, TSpectral::size()>> excess(samples.size());
+        tbb::parallel_for(std::size_t{0}, samples.size(), [&](std::size_t i) {
+            const Sample& sample = samples[i];
+            if (!sample.exact || std::isinf(sample.taper)) {
+                return; // drawn over the whole frame: nothing left on it
+            }
+            const double px = static_cast<double>(sample.projected.x);
+            const double py = aspect * static_cast<double>(sample.projected.y);
+            const double x0 = -px;
+            const double x1 = width - px;
+            const double y0 = -py;
+            const double y1 = height - py;
+            const double farthest = std::hypot(std::max(-x0, x1), std::max(-y0, y1));
+            std::vector<double> breaks{std::abs(x0),
+                                       x1,
+                                       std::abs(y0),
+                                       y1,
+                                       std::hypot(x0, y0),
+                                       std::hypot(x1, y0),
+                                       std::hypot(x0, y1),
+                                       std::hypot(x1, y1),
+                                       sample.taper,
+                                       2.0 * sample.taper};
+            const auto on_frame = [&](double r) {
+                return detail::arc_in_rectangle(x0, x1, y0, y1, r);
+            };
+            const double nearest_edge = std::min({px, width - px, py, height - py});
+            std::array<double, TSpectral::size()>& left = excess[i];
+            if (nearest_edge >= sample.draw) {
+                // Drawn wholly on the frame: what was not drawn is what drawing left out,
+                // exactly, less what falls off the frame, all of it beyond the nearest edge.
+                std::array<double, TSpectral::size()> off =
+                    tables->integrate(nearest_edge, farthest, breaks, [&](double r) {
+                        return 2.0 * PI<double>() * r - on_frame(r);
+                    });
+                for (std::size_t c = 0; c < TSpectral::size(); ++c) {
+                    off[c] += tables->smooth_light_beyond(c, farthest);
+                    left[c] = 1.0 - drawn[i][c] - off[c];
+                }
+            } else {
+                // Crossing the frame's edge, or beyond it: the light left on the frame, from
+                // the profile.
+                left = tables->integrate(sample.taper, farthest, breaks, [&](double r) {
+                    return (1.0 - taper_weight(r, sample.taper)) * on_frame(r);
+                });
+            }
+        });
+
+        std::array<double, TSpectral::size()> spread{};
+        for (std::size_t i = 0; i < samples.size(); ++i) {
+            for (std::size_t c = 0; c < TSpectral::size(); ++c) {
+                spread[c] += static_cast<double>(samples[i].power[c]) * excess[i][c];
+            }
+        }
+        TSpectral per_pixel{0.f};
+        bool any = false;
+        const double pixels = static_cast<double>(fb_width) * static_cast<double>(fb_height);
+        for (std::size_t c = 0; c < TSpectral::size(); ++c) {
+            per_pixel[c] = static_cast<float>(spread[c] / pixels);
+            any = any || per_pixel[c] != 0.f;
+        }
+        if (any) {
+            tbb::parallel_for(std::size_t{0}, received_power.size(), [&](std::size_t i) {
+                received_power[i] += per_pixel;
+            });
+        }
+    }
 
     // Out of focus, the defocus stamps are blurred by the PSF and scattered light together,
     // whether or not resolved bodies are convolved:
