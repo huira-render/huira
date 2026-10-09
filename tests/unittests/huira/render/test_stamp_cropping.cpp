@@ -17,10 +17,13 @@ struct Exposure {
     double seconds = 1.0;
     float read_noise = 10.f; ///< Electrons.
     bool cropping = true;
+    bool noise = true; ///< Whether noise is simulated.
 };
 
 /// Renders one unresolved source near the middle of a 48 x 48 frame of 10 um pixels behind a
-/// 50 mm f/32 lens, with the aperture's PSF in 8 px stamps, and returns the received power.
+/// 50 mm f/32 lens, with the aperture's PSF in 8 px stamps, and returns the received power. The
+/// source moves a twentieth of a pixel during the exposure, so that it is stamped: a still one is
+/// drawn from the PSF's tables instead.
 Image<RGB> render(const Exposure& exposure)
 {
     Scene<RGB> scene;
@@ -30,6 +33,7 @@ Image<RGB> render(const Exposure& exposure)
     camera_model.set_fstop(32.f);
     camera_model.use_aperture_psf(8, 2); // small, so quick to build
     camera_model.set_sensor_read_noise(exposure.read_noise);
+    camera_model.enable_sensor_noise(exposure.noise);
     auto camera = scene.root.new_instance(camera_model);
 
     auto source =
@@ -37,13 +41,16 @@ Image<RGB> render(const Exposure& exposure)
     source.set_position(units::Meter(0.3 / 5000.0 * 1000.0),
                         units::Meter(0.2 / 5000.0 * 1000.0),
                         units::Meter(1000.0));
+    source.set_velocity(units::MetersPerSecond(0.05 * 0.2 / exposure.seconds),
+                        units::MetersPerSecond(0.0),
+                        units::MetersPerSecond(0.0));
 
     auto frame_buffer = camera_model.make_frame_buffer();
     frame_buffer.enable_received_power();
     Renderer<RGB> renderer;
     renderer.set_stamp_cropping(exposure.cropping);
     Interval interval{Time::from_et(0.0), Time::from_et(exposure.seconds)};
-    SceneView<RGB> scene_view(scene, interval, camera, ObservationMode::GEOMETRIC_STATE);
+    SceneView<RGB> scene_view(scene, interval, camera, ObservationMode::GEOMETRIC_STATE, 3);
     renderer.render(scene_view, frame_buffer);
     return frame_buffer.received_power();
 }
@@ -126,6 +133,14 @@ TEST_CASE("Stamps are cropped by the light received over the exposure, against t
     const int noisy = lit_radius(render({1e-2, 1.0, 100.f}));
     INFO("lit radius " << quiet << " with 1 e- of read noise, " << noisy << " with 100 e-");
     CHECK(noisy < quiet);
+
+    // Against the read noise as configured, whether or not noise is simulated, so that a
+    // noiseless frame is the mean of noisy ones. A noiseless frame used to be cropped as if the
+    // sensor had none.
+    const int simulated = lit_radius(render({1e-2, 1.0, 100.f, true, true}));
+    const int noiseless = lit_radius(render({1e-2, 1.0, 100.f, true, false}));
+    INFO("lit radius " << simulated << " with noise simulated, " << noiseless << " without");
+    CHECK(noiseless == simulated);
 }
 
 TEST_CASE("Cropping keeps the source's centroid, and can be turned off",
