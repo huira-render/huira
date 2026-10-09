@@ -32,6 +32,7 @@ set(UNIT_TESTS
     huira/render/test_stamp_cropping.cpp
     huira/render/test_unresolved_memory.cpp
     huira/render/test_unresolved_position.cpp
+    huira/render/test_unresolved_tables.cpp
 
     huira/scene/test_node_rates.cpp
     huira/scene/test_scene_deletion.cpp

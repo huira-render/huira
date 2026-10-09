@@ -788,6 +788,13 @@ const Image<TSpectral>& CameraModel<TSpectral>::get_psf_kernel(float u, float v)
         HUIRA_THROW_ERROR("CameraModel::get_psf_kernel - No PSF has been set");
     }
     std::lock_guard<std::mutex> lock(optics_mutex_);
+    if (use_aperture_psf_) {
+        tbb::this_task_arena::isolate([&] { ensure_table_stamps_(); });
+        const float banks = static_cast<float>(table_stamp_banks_);
+        const int bx = std::clamp(static_cast<int>(u * banks), 0, table_stamp_banks_ - 1);
+        const int by = std::clamp(static_cast<int>(v * banks), 0, table_stamp_banks_ - 1);
+        return table_stamps_[static_cast<std::size_t>(by * table_stamp_banks_ + bx)];
+    }
     tbb::this_task_arena::isolate([&] { ensure_polyphase_(); });
     return psf_->get_kernel(u, v);
 }
@@ -876,7 +883,9 @@ Image<TSpectral> CameraModel<TSpectral>::psf_image(int radius,
             ensure_psf_tables_();
             const double star_blur = blur_pixels_(0.0);
             const double blur = range.has_value() ? blur_pixels_(1.0 / range->to_si()) : star_blur;
-            tables = blur == star_blur ? psf_tables_ : build_psf_tables_(blur);
+            tables = blur == star_blur
+                         ? psf_tables_
+                         : build_psf_tables_(blur, scatter_for_tables_(), tables_reach_());
         });
     }
     return tables->image(radius, static_cast<double>(x_offset), static_cast<double>(y_offset));
@@ -1238,7 +1247,11 @@ void CameraModel<TSpectral>::precompute_locked_()
     // unless enable_psf_convolution(false).
     const bool defocused = !defocus_kernel_.empty();
     if (has_psf() && !defocused) {
-        ensure_polyphase_();
+        if (use_aperture_psf_) {
+            ensure_table_stamps_(); // and the tables they come from
+        } else {
+            ensure_polyphase_();
+        }
     }
     if (scatter_enabled_ && !defocused) {
         ensure_wings_spectrum_();
@@ -1269,9 +1282,11 @@ bool CameraModel<TSpectral>::is_precomputed_locked_() const
     }
 
     if (has_psf() && !defocused) {
-        const bool diffraction_current =
-            !use_aperture_psf_ || (psf_ != nullptr && !diffraction_stale_(diffraction_built_at_));
-        if (!diffraction_current || !psf_->has_polyphase_cache()) {
+        if (use_aperture_psf_) {
+            if (table_stamps_stale_()) {
+                return false;
+            }
+        } else if (!psf_->has_polyphase_cache()) {
             return false;
         }
     }
@@ -1420,8 +1435,108 @@ void CameraModel<TSpectral>::ensure_psf_tables_()
                                            OpticsInput::Focus})) {
         return;
     }
-    psf_tables_ = build_psf_tables_(blur_pixels_(0.0));
+    // Without scattered light or defocus they are the renderer's tables.
+    const double blur = blur_pixels_(0.0);
+    if (!scatter_enabled_ && blur < PsfTables<TSpectral>::MIN_BLUR) {
+        ensure_render_tables_();
+        psf_tables_ = render_tables_;
+    } else {
+        psf_tables_ = build_psf_tables_(blur, scatter_for_tables_(), tables_reach_());
+    }
     psf_tables_built_at_ = optics_version_;
+}
+
+/**
+ * @brief How far the tables reach: twice the frame's diagonal, since a source lights pixels up to
+ * a diagonal away and can lie as far outside the frame, and at least 4096 pixels, so that
+ * smaller frames share tables. Beyond, the far field continues as a power law, which is exact for
+ * diffraction alone.
+ */
+template <IsSpectral TSpectral>
+double CameraModel<TSpectral>::tables_reach_() const
+{
+    constexpr double SMALLEST_REACH = 4096.0;
+    const Vec2<float> pitch = sensor_->pixel_pitch();
+    const Resolution resolution = sensor_->resolution();
+    const double aspect = static_cast<double>(pitch.y) / static_cast<double>(pitch.x);
+    return std::max(SMALLEST_REACH,
+                    2.0 * std::hypot(static_cast<double>(resolution.x),
+                                     aspect * static_cast<double>(resolution.y)));
+}
+
+/// Whether the renderer's tables are out of date. A smaller frame does not rebuild them.
+template <IsSpectral TSpectral>
+bool CameraModel<TSpectral>::render_tables_stale_() const
+{
+    return render_tables_ == nullptr ||
+           stale_(render_tables_built_at_,
+                  {OpticsInput::FocalLength, OpticsInput::PixelPitch, OpticsInput::Aperture}) ||
+           tables_reach_() > render_tables_reach_;
+}
+
+/**
+ * @brief Build the tables the renderer draws unresolved sources from, if out of date: the
+ * aperture's diffraction, in focus. See render_tables_.
+ */
+template <IsSpectral TSpectral>
+void CameraModel<TSpectral>::ensure_render_tables_()
+{
+    if (!render_tables_stale_()) {
+        return;
+    }
+    render_tables_reach_ = tables_reach_();
+    std::optional<typename PsfTables<TSpectral>::Scatter> no_scatter;
+    render_tables_ = build_psf_tables_(0.0, no_scatter, render_tables_reach_);
+    render_tables_built_at_ = optics_version_;
+}
+
+/// Whether the stamps from the tables are out of date.
+template <IsSpectral TSpectral>
+bool CameraModel<TSpectral>::table_stamps_stale_() const
+{
+    return table_stamps_.empty() || render_tables_stale_() ||
+           stale_(table_stamps_built_at_, {OpticsInput::CorePSF}) ||
+           table_stamps_built_at_ < render_tables_built_at_;
+}
+
+/**
+ * @brief Build the stamps for moving sources from the renderer's tables, if out of date.
+ *
+ * Bank (bx, by) holds a source bx / banks, by / banks of a pixel right of and below the center
+ * pixel's center, as PSF::get_kernel() does, and is normalized per channel: the light beyond
+ * the stamp is folded into it.
+ */
+template <IsSpectral TSpectral>
+void CameraModel<TSpectral>::ensure_table_stamps_()
+{
+    if (!table_stamps_stale_()) {
+        return;
+    }
+    ensure_render_tables_();
+    const int radius = aperture_psf_stamp_radius_();
+    const int banks = aperture_psf_banks_;
+    std::vector<Image<TSpectral>> stamps(static_cast<std::size_t>(banks * banks));
+    tbb::parallel_for(0, banks * banks, [&](int bank) {
+        Image<TSpectral> stamp =
+            render_tables_->image(radius,
+                                  static_cast<double>(bank % banks) / static_cast<double>(banks),
+                                  static_cast<double>(bank / banks) / static_cast<double>(banks));
+        std::array<double, TSpectral::size()> sum{};
+        for (std::size_t i = 0; i < stamp.size(); ++i) {
+            for (std::size_t c = 0; c < TSpectral::size(); ++c) {
+                sum[c] += static_cast<double>(stamp[i][c]);
+            }
+        }
+        for (std::size_t i = 0; i < stamp.size(); ++i) {
+            for (std::size_t c = 0; c < TSpectral::size(); ++c) {
+                stamp[i][c] = static_cast<float>(static_cast<double>(stamp[i][c]) / sum[c]);
+            }
+        }
+        stamps[static_cast<std::size_t>(bank)] = std::move(stamp);
+    });
+    table_stamps_ = std::move(stamps);
+    table_stamp_banks_ = banks;
+    table_stamps_built_at_ = optics_version_;
 }
 
 /**
@@ -1442,35 +1557,40 @@ double CameraModel<TSpectral>::blur_pixels_(double inverse_range) const
 }
 
 /**
- * @brief Build the tables for the current optics and the given blur, in pixel widths.
- *
- * A source lights pixels up to a frame's diagonal away and can lie as far outside the frame, so
- * the tables reach twice the diagonal.
+ * @brief The scattered light set with set_scatter(), in pixel widths for the tables; none if it
+ * is off or was set in pixels.
  */
 template <IsSpectral TSpectral>
-std::shared_ptr<const PsfTables<TSpectral>>
-CameraModel<TSpectral>::build_psf_tables_(double blur) const
+std::optional<typename PsfTables<TSpectral>::Scatter>
+CameraModel<TSpectral>::scatter_for_tables_() const
+{
+    if (!scatter_enabled_ || !scatter_in_angles_) {
+        return std::nullopt;
+    }
+    // An angle theta from the source lands f theta from it on the sensor.
+    const double pixels_per_radian =
+        static_cast<double>(focal_length_) / static_cast<double>(sensor_->pixel_pitch().x);
+    return typename PsfTables<TSpectral>::Scatter{
+        static_cast<double>(scatter_fraction_),
+        static_cast<double>(scatter_falloff_exponent_),
+        scatter_shoulder_angle_ * pixels_per_radian,
+        scatter_outer_angle_ > 0.0 ? std::optional<double>(scatter_outer_angle_ * pixels_per_radian)
+                                   : std::nullopt};
+}
+
+/**
+ * @brief Build the tables for the current optics, the given blur (in pixel widths) and scattered
+ * light, out to the given reach (see tables_reach_()).
+ */
+template <IsSpectral TSpectral>
+std::shared_ptr<const PsfTables<TSpectral>> CameraModel<TSpectral>::build_psf_tables_(
+    double blur,
+    const std::optional<typename PsfTables<TSpectral>::Scatter>& scatter,
+    double reach) const
 {
     const auto start = std::chrono::steady_clock::now();
     const Vec2<float> pitch = sensor_->pixel_pitch();
-    const Resolution resolution = sensor_->resolution();
-    const double aspect = static_cast<double>(pitch.y) / static_cast<double>(pitch.x);
-    const double reach = 2.0 * std::hypot(static_cast<double>(resolution.x),
-                                          aspect * static_cast<double>(resolution.y));
     const double fnumber = static_cast<double>(focal_length_) / aperture_diameter().to_si();
-    std::optional<typename PsfTables<TSpectral>::Scatter> scatter;
-    if (scatter_enabled_ && scatter_in_angles_) {
-        // An angle theta from the source lands f theta from it on the sensor.
-        const double pixels_per_radian =
-            static_cast<double>(focal_length_) / static_cast<double>(pitch.x);
-        scatter = typename PsfTables<TSpectral>::Scatter{
-            static_cast<double>(scatter_fraction_),
-            static_cast<double>(scatter_falloff_exponent_),
-            scatter_shoulder_angle_ * pixels_per_radian,
-            scatter_outer_angle_ > 0.0
-                ? std::optional<double>(scatter_outer_angle_ * pixels_per_radian)
-                : std::nullopt};
-    }
     auto tables = std::make_shared<const PsfTables<TSpectral>>(PsfTables<TSpectral>::airy(
         fnumber, static_cast<double>(pitch.x), static_cast<double>(pitch.y), reach, scatter, blur));
 

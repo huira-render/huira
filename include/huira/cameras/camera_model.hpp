@@ -371,6 +371,17 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     /// so that an image can be read from them while they are rebuilt for new optics.
     std::shared_ptr<const PsfTables<TSpectral>> psf_tables_;
 
+    /// The tables the renderer draws unresolved sources from with the aperture's PSF: its
+    /// diffraction alone, in focus (scattered light and defocus are drawn separately), and the
+    /// reach they were built for. psf_tables_ shares them when it would be the same.
+    std::shared_ptr<const PsfTables<TSpectral>> render_tables_;
+    double render_tables_reach_ = 0.0;
+
+    /// Stamps from render_tables_, for sources that move during the exposure: one per subpixel
+    /// position, banks x banks of them, each normalized per channel as PSF's are.
+    std::vector<Image<TSpectral>> table_stamps_;
+    int table_stamp_banks_ = 0;
+
     /// Stamps for the defocus blur of unresolved sources; empty when in focus.
     DefocusKernel<TSpectral> defocus_kernel_;
     static constexpr int DEFOCUS_BANKS_ = 16;
@@ -413,6 +424,8 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     std::uint64_t wings_kernel_built_at_ = 0;
     std::uint64_t wings_spectrum_built_at_ = 0;
     std::uint64_t psf_tables_built_at_ = 0;
+    std::uint64_t render_tables_built_at_ = 0;
+    std::uint64_t table_stamps_built_at_ = 0;
 
     // The geometry compute_intrinsics_() last saw, to tell which inputs a change touched.
     float optics_focal_length_ = 0.f;
@@ -436,7 +449,16 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     void ensure_wings_kernel_();
     void ensure_wings_spectrum_();
     void ensure_psf_tables_();
-    std::shared_ptr<const PsfTables<TSpectral>> build_psf_tables_(double blur) const;
+    void ensure_render_tables_();
+    void ensure_table_stamps_();
+    [[nodiscard]] double tables_reach_() const;
+    [[nodiscard]] bool render_tables_stale_() const;
+    [[nodiscard]] bool table_stamps_stale_() const;
+    std::shared_ptr<const PsfTables<TSpectral>>
+    build_psf_tables_(double blur,
+                      const std::optional<typename PsfTables<TSpectral>::Scatter>& scatter,
+                      double reach) const;
+    std::optional<typename PsfTables<TSpectral>::Scatter> scatter_for_tables_() const;
     double blur_pixels_(double inverse_range) const;
     int convolution_radius_(const char* caller) const;
 
