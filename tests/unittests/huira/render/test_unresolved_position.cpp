@@ -239,12 +239,14 @@ TEST_CASE("Unresolved sources land where the camera projects them", "[render][un
         }
     }
 
-    // Stamps hold the kernel pre-shifted in 1/16 pixel banks, and each source uses the nearest
-    // bank. So the centroid lands within 1/32 px of the projection, and much closer to the
-    // projection rounded to the nearest bank; what is left there is the pixelated edge of the
-    // defocus disk and the truncated tail of the Airy pattern. Before this was fixed, stamps
-    // were half a pixel off in both axes, and taking the bank below rather than the nearest
-    // one added up to a further 1/16 px towards -x and -y.
+    // The aperture's PSF is drawn at the source's exact position, so its centroid lands on the
+    // projection, but for the pull of the stamp's truncated tail towards the pixel's center (up
+    // to 0.012 px for this wide pattern). Defocus stamps hold the kernel pre-shifted in 1/16
+    // pixel banks, and each source uses the nearest bank, so the centroid lands within 1/32 px
+    // of the projection, and much closer to the projection rounded to the nearest bank; what is
+    // left there is the pixelated edge of the defocus disk. Before this was fixed, stamps were
+    // half a pixel off in both axes, and taking the bank below rather than the nearest one
+    // added up to a further 1/16 px towards -x and -y.
     for (Stamp stamp : {Stamp::Airy, Stamp::Defocus}) {
         for (const PixelConvention& convention :
              {PixelConvention::opencv(), PixelConvention::fits()}) {
@@ -259,10 +261,15 @@ TEST_CASE("Unresolved sources land where the camera projects them", "[render][un
                     };
                     const Vec2<double> c = centroid(image, convention);
                     INFO("centroid (" << c.x << ", " << c.y << ")");
-                    CHECK(std::abs(c.x - p.x) < 0.05);
-                    CHECK(std::abs(c.y - p.y) < 0.05);
-                    CHECK(std::abs(c.x - nearest_bank(p.x)) < 0.025);
-                    CHECK(std::abs(c.y - nearest_bank(p.y)) < 0.025);
+                    if (stamp == Stamp::Airy) {
+                        CHECK(std::abs(c.x - p.x) < 0.015);
+                        CHECK(std::abs(c.y - p.y) < 0.015);
+                    } else {
+                        CHECK(std::abs(c.x - p.x) < 0.05);
+                        CHECK(std::abs(c.y - p.y) < 0.05);
+                        CHECK(std::abs(c.x - nearest_bank(p.x)) < 0.025);
+                        CHECK(std::abs(c.y - nearest_bank(p.y)) < 0.025);
+                    }
                 });
             }
         }
