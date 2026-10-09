@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cassert>
 #include <chrono>
@@ -1294,14 +1295,34 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
         wing_splat = Image<TSpectral>(fb_width, fb_height, TSpectral{0});
     }
     const bool use_psf_direct = camera->has_psf() && !use_defocus;
-    const PSF<TSpectral>* psf = use_psf_direct ? camera->psf_.get() : nullptr;
-    assert(!use_psf_direct || psf != nullptr);
+
+    // The aperture's PSF is drawn from its tables: a source that stays put during the exposure at
+    // its exact position, and a moving one from stamps made from the tables at 1/banks of a pixel
+    // apart. A PSF that was set is drawn from its own stamps.
+    const bool use_tables = use_psf_direct && camera->use_aperture_psf_;
+    const PSF<TSpectral>* psf = use_psf_direct && !use_tables ? camera->psf_.get() : nullptr;
+    const PsfTables<TSpectral>* tables = use_tables ? camera->render_tables_.get() : nullptr;
+    assert(!use_psf_direct || psf != nullptr || tables != nullptr);
     int stamp_radius = 0;
     if (use_defocus) {
         stamp_radius = defocus.half_extent();
+    } else if (use_tables) {
+        stamp_radius = camera->aperture_psf_stamp_radius_();
     } else if (use_psf_direct) {
         stamp_radius = psf->get_radius();
     }
+    const int psf_banks =
+        use_tables ? camera->table_stamp_banks_ : (use_psf_direct ? psf->get_banks() : 0);
+    // The stamp for a source at subpixel position (u, v) in [0, 1), as PSF::get_kernel():
+    auto stamp_kernel = [&](float u, float v) -> const Image<TSpectral>& {
+        if (!use_tables) {
+            return psf->get_kernel(u, v);
+        }
+        const float banks = static_cast<float>(psf_banks);
+        const int bx = std::clamp(static_cast<int>(u * banks), 0, psf_banks - 1);
+        const int by = std::clamp(static_cast<int>(v * banks), 0, psf_banks - 1);
+        return camera->table_stamps_[static_cast<std::size_t>(by * psf_banks + bx)];
+    };
 
     const auto& times = scene_view.temporal_samples_;
     const auto& star_field = scene_view.stars_;
@@ -1329,7 +1350,7 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
     RadiusLUTConfig radius_config;
     std::vector<RadiusLUTEntry> radius_lut;
     if (stamp_cropping_ && use_psf_direct && stamp_radius > 1) {
-        const Image<TSpectral>& center_kernel = psf->get_kernel(0.0f, 0.0f);
+        const Image<TSpectral>& center_kernel = stamp_kernel(0.0f, 0.0f);
 
         const SensorModel<TSpectral>& sensor = *camera->sensor_;
         const float read_noise = sensor.noise_enabled() ? sensor.read_noise() : 0.f;
@@ -1362,13 +1383,13 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
     std::vector<TSpectral> crop_scale;
     const auto crop_radii = static_cast<std::size_t>(stamp_radius) + 1;
     if (use_radius_lut) {
-        const int banks = psf->get_banks();
+        const int banks = psf_banks;
         crop_scale.assign(static_cast<std::size_t>(banks * banks) * crop_radii, TSpectral{1.f});
         std::vector<int> smallest_radius(static_cast<std::size_t>(banks * banks), 0);
         tbb::parallel_for(0, banks * banks, [&](int b) {
             const float u = (static_cast<float>(b % banks) + 0.5f) / static_cast<float>(banks);
             const float v = (static_cast<float>(b / banks) + 0.5f) / static_cast<float>(banks);
-            const Image<TSpectral>& kernel = psf->get_kernel(u, v);
+            const Image<TSpectral>& kernel = stamp_kernel(u, v);
 
             // Sums, and first moments, over the pixels at each Chebyshev distance from the
             // middle, accumulated out to each radius:
@@ -1444,7 +1465,7 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
     // Polyphase stamp kernels hold the kernel pre-shifted by bank / banks of a pixel. Each
     // source uses the nearest bank, which keeps the quantization error unbiased (within half a
     // bank either way)
-    const int stamp_banks = use_defocus ? defocus.banks() : (use_psf_direct ? psf->get_banks() : 0);
+    const int stamp_banks = use_defocus ? defocus.banks() : psf_banks;
     struct StampPhase {
         int base;    ///< Pixel the kernel's center pixel lands on.
         float phase; ///< Fraction for get_kernel(), mid-way through the chosen bank.
@@ -1475,12 +1496,23 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
     const bool mask_available = occluder_mask_valid_ && occluder_mask_.width() == fb_width &&
                                 occluder_mask_.height() == fb_height;
 
-    /// One sample of a source's (possibly motion-blurred) arc, with the power it delivers.
+    /// One sample of a source's (possibly motion-blurred) arc, with the power it delivers. A
+    /// source drawn at its exact position has its own pixel values instead of a stamp: the
+    /// square of pixels values[values .. values + (2 r + 1)^2) cover, centered on (base_x,
+    /// base_y), for its effective radius r.
+    static constexpr std::uint32_t NO_VALUES = std::numeric_limits<std::uint32_t>::max();
     struct Sample {
         std::size_t item_idx;
         Pixel projected; ///< Sensor coordinates.
         TSpectral power;
+        std::uint32_t values = NO_VALUES;
+        int base_x = 0;
+        int base_y = 0;
     };
+
+    // A source that moves less than this during the exposure is drawn once, at its mean
+    // position, which is then within half of it of everywhere the source was:
+    constexpr float STILL_TOLERANCE = 0.01f; // pixels
 
     float max_pixel_step = 0.75f; // TODO Make this configurable
 
@@ -1498,7 +1530,85 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
     struct Batch {
         std::vector<RenderItem<TSpectral>> items;
         std::vector<Sample> samples;
+        std::vector<TSpectral> values;
         std::vector<std::pair<std::uint32_t, std::uint32_t>> tile_samples;
+    };
+
+    // List a sample in the tiles its light reaches: its stamp, the wings' bilinear splat, or,
+    // without either, the pixel it falls in. Stamps and the splat place light by pixel centers,
+    // which sit at i + 0.5 in the sensor coordinates the camera projects to, so they work from
+    // the position half a pixel lower. A sample drawn at its exact position is first given its
+    // pixel values from the tables, normalized per channel over its square as stamps are.
+    auto emit_sample = [&](const RenderItem<TSpectral>& item,
+                           std::size_t item_index,
+                           const Pixel& p,
+                           const TSpectral& power,
+                           bool exact,
+                           Batch& batch) {
+        const float center_x = p.x - 0.5f;
+        const float center_y = p.y - 0.5f;
+        int x_lo = static_cast<int>(std::floor(center_x));
+        int y_lo = static_cast<int>(std::floor(center_y));
+        int x_hi = x_lo + 1;
+        int y_hi = y_lo + 1;
+        Sample sample{item_index, p, power};
+        const int r = item.effective_radius;
+        if (exact) {
+            sample.base_x = static_cast<int>(std::floor(p.x));
+            sample.base_y = static_cast<int>(std::floor(p.y));
+            x_lo = std::min(x_lo, sample.base_x - r);
+            x_hi = std::max(x_hi, sample.base_x + r);
+            y_lo = std::min(y_lo, sample.base_y - r);
+            y_hi = std::max(y_hi, sample.base_y + r);
+        } else if (stamp_radius > 0) {
+            const int base_x = nearest_stamp_phase(center_x).base;
+            const int base_y = nearest_stamp_phase(center_y).base;
+            x_lo = std::min(x_lo, base_x - r);
+            x_hi = std::max(x_hi, base_x + r);
+            y_lo = std::min(y_lo, base_y - r);
+            y_hi = std::max(y_hi, base_y + r);
+        } else if (!splat_wings) {
+            x_lo = x_hi = static_cast<int>(std::floor(p.x));
+            y_lo = y_hi = static_cast<int>(std::floor(p.y));
+        }
+        x_lo = std::max(x_lo, 0);
+        y_lo = std::max(y_lo, 0);
+        x_hi = std::min(x_hi, fb_width - 1);
+        y_hi = std::min(y_hi, fb_height - 1);
+        if (x_lo > x_hi || y_lo > y_hi) {
+            return; // nothing reaches the image
+        }
+
+        if (exact) {
+            sample.values = static_cast<std::uint32_t>(batch.values.size());
+            std::array<double, TSpectral::size()> sum{};
+            for (int y = sample.base_y - r; y <= sample.base_y + r; ++y) {
+                for (int x = sample.base_x - r; x <= sample.base_x + r; ++x) {
+                    const TSpectral value =
+                        tables->pixel(static_cast<double>(x) + 0.5 - static_cast<double>(p.x),
+                                      static_cast<double>(y) + 0.5 - static_cast<double>(p.y));
+                    for (std::size_t c = 0; c < TSpectral::size(); ++c) {
+                        sum[c] += static_cast<double>(value[c]);
+                    }
+                    batch.values.push_back(value);
+                }
+            }
+            for (std::size_t i = sample.values; i < batch.values.size(); ++i) {
+                for (std::size_t c = 0; c < TSpectral::size(); ++c) {
+                    batch.values[i][c] =
+                        static_cast<float>(static_cast<double>(batch.values[i][c]) / sum[c]);
+                }
+            }
+        }
+
+        const auto sample_index = static_cast<std::uint32_t>(batch.samples.size());
+        batch.samples.push_back(sample);
+        for (int ty = y_lo / TILE_SIZE; ty <= y_hi / TILE_SIZE; ++ty) {
+            for (int tx = x_lo / TILE_SIZE; tx <= x_hi / TILE_SIZE; ++tx) {
+                batch.tile_samples.emplace_back(static_cast<std::uint32_t>(ty * tiles_x + tx),
+                                                sample_index);
+            }
+        }
     };
 
     // Sample one source's visible arc, find the power each sample delivers, and list it in the
@@ -1567,6 +1677,18 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                 }
             }
 
+            // A source that stays put during the exposure, with the tables to draw it from, is
+            // drawn once at its mean position: its samples' light is added up.
+            bool still = use_tables;
+            for (std::size_t k = 1; still && k < pixels.size(); ++k) {
+                still = std::abs(pixels[k].x - pixels[0].x) < STILL_TOLERANCE &&
+                        std::abs(pixels[k].y - pixels[0].y) < STILL_TOLERANCE;
+            }
+            TSpectral still_power{0.f};
+            double still_x = 0.0;
+            double still_y = 0.0;
+            double still_weight = 0.0;
+
             // Compute weights (proportional to parameter interval around each sample):
             // Each sample represents the midpoint of its surrounding interval.
             std::size_t num_samples = params.size();
@@ -1600,36 +1722,6 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                 if (!(p.x > -margin && p.x < static_cast<float>(fb_width) + margin &&
                       p.y > -margin && p.y < static_cast<float>(fb_height) + margin)) {
                     continue;
-                }
-
-                // The pixels the sample's light reaches: its stamp, the wings' bilinear splat,
-                // or, without either, the pixel it falls in. Stamps and the splat place light
-                // by pixel centers, which sit at i + 0.5 in the sensor coordinates the camera
-                // projects to, so they work from the position half a pixel lower.
-                const float center_x = p.x - 0.5f;
-                const float center_y = p.y - 0.5f;
-                int x_lo = static_cast<int>(std::floor(center_x));
-                int y_lo = static_cast<int>(std::floor(center_y));
-                int x_hi = x_lo + 1;
-                int y_hi = y_lo + 1;
-                if (stamp_radius > 0) {
-                    const int r = item.effective_radius;
-                    const int base_x = nearest_stamp_phase(center_x).base;
-                    const int base_y = nearest_stamp_phase(center_y).base;
-                    x_lo = std::min(x_lo, base_x - r);
-                    x_hi = std::max(x_hi, base_x + r);
-                    y_lo = std::min(y_lo, base_y - r);
-                    y_hi = std::max(y_hi, base_y + r);
-                } else if (!splat_wings) {
-                    x_lo = x_hi = static_cast<int>(std::floor(p.x));
-                    y_lo = y_hi = static_cast<int>(std::floor(p.y));
-                }
-                x_lo = std::max(x_lo, 0);
-                y_lo = std::max(y_lo, 0);
-                x_hi = std::min(x_hi, fb_width - 1);
-                y_hi = std::min(y_hi, fb_height - 1);
-                if (x_lo > x_hi || y_lo > y_hi) {
-                    continue; // nothing reaches the image
                 }
 
                 // Interpolate irradiance at this parameter value:
@@ -1670,14 +1762,19 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                     }
                 }
 
-                const auto sample_index = static_cast<std::uint32_t>(batch.samples.size());
-                batch.samples.push_back({item_index, p, power});
-                for (int ty = y_lo / TILE_SIZE; ty <= y_hi / TILE_SIZE; ++ty) {
-                    for (int tx = x_lo / TILE_SIZE; tx <= x_hi / TILE_SIZE; ++tx) {
-                        batch.tile_samples.emplace_back(
-                            static_cast<std::uint32_t>(ty * tiles_x + tx), sample_index);
-                    }
+                if (still) {
+                    still_power += power;
+                    still_x += static_cast<double>(weight) * static_cast<double>(p.x);
+                    still_y += static_cast<double>(weight) * static_cast<double>(p.y);
+                    still_weight += static_cast<double>(weight);
+                } else {
+                    emit_sample(item, item_index, p, power, false, batch);
                 }
+            }
+            if (still && still_weight > 0.0) {
+                const Pixel mean{static_cast<float>(still_x / still_weight),
+                                 static_cast<float>(still_y / still_weight)};
+                emit_sample(item, item_index, mean, still_power, true, batch);
             }
         }
     };
@@ -1776,19 +1873,23 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
     // Merge the batches in order, and sort their (tile, sample) pairs into one list per tile
     // (offsets into a single index array), keeping the order sources were binned in:
     std::vector<Sample> samples;
+    std::vector<TSpectral> values;
     std::vector<std::size_t> tile_offsets(static_cast<std::size_t>(num_tiles) + 1, 0);
     {
         std::size_t total_items = 0;
         std::size_t total_samples = 0;
+        std::size_t total_values = 0;
         for (const Batch& batch : batches) {
             total_items += batch.items.size();
             total_samples += batch.samples.size();
+            total_values += batch.values.size();
             for (const auto& [tile, sample] : batch.tile_samples) {
                 ++tile_offsets[tile + 1];
             }
         }
         items.reserve(total_items);
         samples.reserve(total_samples);
+        values.reserve(total_values);
         for (std::size_t t = 0; t < static_cast<std::size_t>(num_tiles); ++t) {
             tile_offsets[t + 1] += tile_offsets[t];
         }
@@ -1799,13 +1900,18 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
         for (Batch& batch : batches) {
             const std::size_t item_base = items.size();
             const auto sample_base = static_cast<std::uint32_t>(samples.size());
+            const auto value_base = static_cast<std::uint32_t>(values.size());
             for (auto& item : batch.items) {
                 items.push_back(std::move(item));
             }
             for (Sample& sample : batch.samples) {
                 sample.item_idx += item_base;
+                if (sample.values != NO_VALUES) {
+                    sample.values += value_base;
+                }
                 samples.push_back(sample);
             }
+            values.insert(values.end(), batch.values.begin(), batch.values.end());
             for (const auto& [tile, sample] : batch.tile_samples) {
                 tile_sample_indices[fill[tile]++] = sample_base + sample;
             }
@@ -1866,7 +1972,24 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                         splat_at(bx + 1, by + 1, w11);
                     }
 
-                    if (stamp_radius > 0) {
+                    if (sample.values != NO_VALUES) {
+                        // Drawn at its exact position, from its own values:
+                        const int r = item.effective_radius;
+                        const int side = 2 * r + 1;
+                        const int x0 = sample.base_x - r;
+                        const int y0 = sample.base_y - r;
+                        const int x_begin = std::max(x0, tile_x0);
+                        const int x_end = std::min(x0 + side, tile_x1);
+                        const int y_begin = std::max(y0, tile_y0);
+                        const int y_end = std::min(y0 + side, tile_y1);
+                        for (int y = y_begin; y < y_end; ++y) {
+                            for (int x = x_begin; x < x_end; ++x) {
+                                received_power(x, y) +=
+                                    power * values[sample.values + static_cast<std::size_t>(
+                                                                       (y - y0) * side + (x - x0))];
+                            }
+                        }
+                    } else if (stamp_radius > 0) {
                         const StampPhase phase_x = nearest_stamp_phase(center_x);
                         const StampPhase phase_y = nearest_stamp_phase(center_y);
 
@@ -1893,7 +2016,7 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                             }
                         } else {
                             const Image<TSpectral>& kernel =
-                                psf->get_kernel(phase_x.phase, phase_y.phase);
+                                stamp_kernel(phase_x.phase, phase_y.phase);
                             const int k_offset = stamp_radius - eff_r;
 
                             // A cropped stamp keeps the whole stamp's energy:
