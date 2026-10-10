@@ -383,7 +383,8 @@ inline void bind_camera_model_handle(py::module_& m)
              "Choose whether a PSF or scattered light that is set blurs resolved bodies (the "
              "path-traced image). On by default. Off, bodies are sharp, and rendering is faster "
              "without the whole-image convolution; unresolved sources, such as stars, get the "
-             "PSF and scattered light either way.")
+             "PSF and scattered light either way. With the aperture's PSF, bodies get the whole "
+             "of it, across the frame, in focus: path tracing gives them their defocus.")
         .def("psf_convolution_enabled",
              &HandleType::psf_convolution_enabled,
              "Whether a PSF or scattered light that is set blurs resolved bodies (the "
@@ -397,7 +398,9 @@ inline void bind_camera_model_handle(py::module_& m)
              &HandleType::set_psf_convolution_radius,
              py::arg("radius"),
              "Set the radius (pixels) of the whole-image PSF convolution kernel, independent "
-             "of the polyphase stamping radius. Large frame-wide radii are supported.")
+             "of the polyphase stamping radius. Large frame-wide radii are supported. With the "
+             "aperture's PSF, bodies get the whole PSF whatever the radius, and it sets only "
+             "get_psf_convolution_kernel()'s size.")
         .def("set_measured_psf",
              &HandleType::set_measured_psf,
              py::arg("data"),
@@ -476,7 +479,8 @@ inline void bind_camera_model_handle(py::module_& m)
             },
             py::call_guard<py::gil_scoped_release>(),
             "A copy of the whole-image convolution kernel (the PSF and scattered light "
-            "together, unit energy per channel), building it first if needed.")
+            "together, unit energy per channel), building it first if needed. With the "
+            "aperture's PSF, the renderer convolves bodies with the whole PSF instead.")
         .def(
             "get_psf_wings_kernel",
             [](const HandleType& self) { return Image<TSpectral>(self.get_psf_wings_kernel()); },

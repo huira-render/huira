@@ -1154,6 +1154,14 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
     // PSF convolution, of resolved bodies with the PSF and scattered light, unless
     // CameraModel::enable_psf_convolution(false).
     //
+    // With the aperture's PSF, each pixel's light is spread over the whole frame, as the PSF's
+    // tables give a still source's (see PsfConvolver), so a bright body's diffraction halo
+    // reaches every pixel, and the FFTs' rounding error stays far below it. Only what is traced
+    // in the frame is spread: a body just beyond its edges adds no halo. A PSF set with
+    // set_psf() is cropped to its kernel, and the rounding is all that lies beyond it: with
+    // the Sun's limb in the frame, up to about 2e-3 electrons, near the unresolved taper's
+    // threshold.
+    //
     // Write R for the frame as traced, and S for the frame the sky alone would give: each
     // pixel's radiance-to-power factor times the sky's radiance L. Convolution (written *) is
     // linear, so convolving R with the PSF P gives

@@ -134,6 +134,11 @@ class PsfTables {
         return strips_[channel].far_radius;
     }
 
+    /// Beyond this distance pixel() takes every channel from its far field, rings or not.
+    [[nodiscard]] double far_from() const { return far_from_; }
+
+    [[nodiscard]] std::array<double, TSpectral::size()> far_pixel(double dx, double dy) const;
+
     [[nodiscard]] double profile(std::size_t channel, double r) const;
     [[nodiscard]] double smooth_profile(std::size_t channel, double r) const;
     [[nodiscard]] double smooth_light_beyond(std::size_t channel, double r) const;
