@@ -548,7 +548,8 @@ void CameraModelHandle<TSpectral>::use_aperture_psf(bool value) const
 /**
  * @brief Use the aperture's diffraction pattern as the PSF (the default), with the given stamp
  * size. See CameraModel::use_aperture_psf().
- * @param radius Radius in pixels of the stamps for unresolved sources; 0 for automatic.
+ * @param radius Radius in pixels of the stamps get_psf_kernel() gives; 0 for automatic.
+ *        Unresolved sources are drawn from the PSF's tables.
  * @param banks Subpixel positions per axis the stamps are made for.
  */
 template <IsSpectral TSpectral>

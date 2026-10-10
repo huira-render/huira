@@ -20,10 +20,30 @@ struct Exposure {
     bool noise = true; ///< Whether noise is simulated.
 };
 
+/// A measured PSF with wings that fall as the aperture's do, as r^-3, about 2 px across: four
+/// samples per pixel out to 16 px.
+Image<RGB> measurement()
+{
+    constexpr int SAMPLES = 4;
+    constexpr int EXTENT = 16;
+    constexpr int SIDE = 2 * SAMPLES * EXTENT + 1;
+    Image<RGB> data(SIDE, SIDE);
+    for (int y = 0; y < SIDE; ++y) {
+        for (int x = 0; x < SIDE; ++x) {
+            const float dx = static_cast<float>(x - SAMPLES * EXTENT) / SAMPLES;
+            const float dy = static_cast<float>(y - SAMPLES * EXTENT) / SAMPLES;
+            const float r2 = (dx * dx + dy * dy) / (0.6f * 0.6f);
+            data(x, y) = RGB{1.f / std::pow(1.f + r2, 1.5f)};
+        }
+    }
+    return data;
+}
+
 /// Renders one unresolved source near the middle of a 48 x 48 frame of 10 um pixels behind a
-/// 50 mm f/32 lens, with the aperture's PSF in 8 px stamps, and returns the received power. The
-/// source moves a twentieth of a pixel during the exposure, so that it is stamped: a still one is
-/// drawn from the PSF's tables instead.
+/// 50 mm f/32 lens, with a measured PSF in 8 px stamps, and returns the received power. The
+/// source moves a twentieth of a pixel during the exposure, so that it is stamped. (The
+/// aperture's own PSF draws a moving source from its tables, along its path, and is tapered
+/// rather than cropped.)
 Image<RGB> render(const Exposure& exposure)
 {
     Scene<RGB> scene;
@@ -31,7 +51,7 @@ Image<RGB> render(const Exposure& exposure)
     camera_model.configure_sensor_from_pitch({48, 48}, 10_um);
     camera_model.set_focal_length(50_mm);
     camera_model.set_fstop(32.f);
-    camera_model.use_aperture_psf(8, 2); // small, so quick to build
+    camera_model.set_measured_psf(measurement(), 4.f, PSFSampling::PointSampled, 8, 2);
     camera_model.set_sensor_read_noise(exposure.read_noise);
     camera_model.enable_sensor_noise(exposure.noise);
     auto camera = scene.root.new_instance(camera_model);
