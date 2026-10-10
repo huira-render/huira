@@ -295,3 +295,54 @@ TEST_CASE("The taper must be a non-negative fraction", "[render][unresolved][psf
     renderer.set_unresolved_taper(0.01);
     CHECK(renderer.unresolved_taper() == 0.01);
 }
+
+TEST_CASE("A still source is drawn across the frame as the PSF's tables give it, out of focus "
+          "and with scattered light",
+          "[render][unresolved][psf][defocus][scatter]")
+{
+    // A 2 px blur: R f |vergence| / pitch, with R = f / (2 N).
+    constexpr double DIOPTERS = 2.0 * 8.5e-6 * 2.0 * 3.3 / (50e-3 * 50e-3);
+    for (const int optics : {0, 1, 2}) {
+        Scene<RGB> scene;
+        auto camera_model = make_camera(scene);
+        if (optics != 1) {
+            camera_model.set_focus_diopters(units::Diopter(DIOPTERS));
+        }
+        if (optics != 0) {
+            camera_model.set_scatter(0.05f, 2.5f, units::Arcsecond(20.0));
+        }
+        INFO((optics == 0 ? "defocused" : optics == 1 ? "scattered light" : "both"));
+        auto camera = scene.root.new_instance(camera_model);
+        auto source = scene.root.new_instance(scene.new_unresolved_emitter(units::Watt(BRIGHT)));
+        const double x = 30.27;
+        const double y = 33.61;
+        const Image<RGB> image = render_at(scene, camera_model, camera, source, x, y);
+
+        // The tables over the whole frame, and the source's power from its center pixel:
+        const int base_x = static_cast<int>(std::floor(x));
+        const int base_y = static_cast<int>(std::floor(y));
+        const Image<RGB> table = camera_model.psf_image(
+            SIZE, static_cast<float>(x - base_x - 0.5), static_cast<float>(y - base_y - 0.5));
+        for (std::size_t c = 0; c < 3; ++c) {
+            INFO("channel " << c);
+            const double expected_center = static_cast<double>(table(SIZE, SIZE)[c]);
+            const double power = static_cast<double>(image(base_x, base_y)[c]) / expected_center;
+            double worst = 0.0;
+            double sum = 0.0;
+            double on_frame = 0.0;
+            for (int j = 0; j < SIZE; ++j) {
+                for (int i = 0; i < SIZE; ++i) {
+                    const double expected =
+                        static_cast<double>(table(i - base_x + SIZE, j - base_y + SIZE)[c]);
+                    const double rendered = static_cast<double>(image(i, j)[c]) / power;
+                    worst = std::max(worst, std::abs(rendered - expected));
+                    sum += rendered;
+                    on_frame += expected;
+                }
+            }
+            // To the renderer's single-precision projection; and no light lost or added.
+            CHECK(worst < 1e-4 * expected_center);
+            CHECK(std::abs(sum - on_frame) < 2e-5);
+        }
+    }
+}

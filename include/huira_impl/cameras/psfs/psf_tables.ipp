@@ -766,8 +766,8 @@ void PsfTables<TSpectral>::far_shapes_(double dx, double dy, double r, Values& s
     const double t2 = t * t;
     const double t3 = t2 * t;
     // Quintic Hermite weights of each end's value, slope and curvature. The derivatives enter
-    // only the average over the pixel, a correction of under 1% beyond the near table, and are
-    // interpolated linearly: within 0.1% of it, as they change by 5% from node to node.
+    // only the average over the pixel, a correction of 0.5 / r^2 of the value for an r^-3 fall,
+    // and are interpolated linearly: within 0.1% of it, as they change by 5% from node to node.
     const double h0 = aspect_ * (1.0 - t3 * (10.0 - 15.0 * t + 6.0 * t2));
     const double h3 = aspect_ - h0;
     const double h1 = aspect_ * h * (t - t3 * (6.0 - 8.0 * t + 3.0 * t2));
@@ -959,15 +959,16 @@ void PsfTables<TSpectral>::far_values_(double dx, double dy, double r, Values& v
  * @brief Finds the fewest shapes whose combinations give every channel's far field, by
  * Gram-Schmidt over the channels' tabulated values and derivatives. They are weighted by r^3,
  * r^4 and r^5, so that an r^-3 fall counts the same at every node. A channel whose part outside
- * the shapes so far is below a part in 10^10 of it adds none; that leaves its pixels within
- * about 10^-8 of their own far field's. If every channel adds a shape, the channels are kept as
- * they are.
+ * the shapes so far is below a part in 10^6 of it adds none: the blurred far fields are
+ * integrated numerically per channel, which leaves differences of about 10^-8 in shapes that are
+ * the same, and a part in 10^6 leaves every pixel within 10^-4 of its own far field's, well
+ * inside the tables' accuracy. If every channel adds a shape, the channels are kept as they are.
  */
 template <IsSpectral TSpectral>
 void PsfTables<TSpectral>::build_far_basis_(const std::vector<double>& far_nodes)
 {
     constexpr std::size_t N = TSpectral::size();
-    constexpr double TOLERANCE = 1e-10;
+    constexpr double TOLERANCE = 1e-6;
     const std::size_t count = far_radii_.size();
     const std::size_t length = count * 3;
     std::vector<std::array<double, 3>> weights(count);

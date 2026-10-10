@@ -583,16 +583,42 @@ TEST_CASE("set_scatter() checks its arguments", "[cameras][psf][scatter]")
     CHECK_NOTHROW(camera.set_scatter(0.f, 2.5f, shoulder));
 }
 
-TEST_CASE("psf_image() does not take scattered light set in pixels", "[cameras][psf][scatter]")
+TEST_CASE("psf_image() takes scattered light set in pixels as it does in angles",
+          "[cameras][psf][scatter]")
 {
-    CameraModel<RGB> camera;
-    configure(camera, JUPITER, Resolution{64, 64});
-    camera.set_harvey_shack_scatter(0.05f, 2.5f);
-    CHECK_THROWS(camera.psf_image(2));
+    // 50 mm over 8.5 um pixels: 20 arcsec is 0.5704 px and 1 degree 102.66 px.
+    const double pixels_per_radian = 0.05 / JUPITER.pitch_x;
+    CameraModel<RGB> in_angles;
+    configure(in_angles, JUPITER, Resolution{64, 64});
+    in_angles.set_scatter(0.05f, 1.8f, units::Arcsecond(20.0), units::Degree(1.0));
 
-    // Set in angles, it replaces the earlier setting.
-    camera.set_scatter(0.05f, 2.5f, units::Arcsecond(20.0));
-    CHECK_NOTHROW(camera.psf_image(2));
+    CameraModel<RGB> in_pixels;
+    configure(in_pixels, JUPITER, Resolution{64, 64});
+    in_pixels.set_harvey_shack_scatter(
+        0.05f,
+        1.8f,
+        static_cast<float>(units::Arcsecond(20.0).to_si() * pixels_per_radian),
+        static_cast<float>(units::Degree(1.0).to_si() * pixels_per_radian));
+
+    const Image<RGB> angles = in_angles.psf_image(6, 0.2f, -0.3f);
+    const Image<RGB> pixels = in_pixels.psf_image(6, 0.2f, -0.3f);
+    double worst = 0.0;
+    for (int y = 0; y < angles.height(); ++y) {
+        for (int x = 0; x < angles.width(); ++x) {
+            for (std::size_t c = 0; c < 3; ++c) {
+                worst = std::max(worst,
+                                 std::abs(static_cast<double>(angles(x, y)[c] - pixels(x, y)[c])) /
+                                     static_cast<double>(angles(x, y)[c]));
+            }
+        }
+    }
+    CHECK(worst < 1e-5);
+
+    // As in angles, the wings need an outer radius beyond the shoulder to fall as slowly as r^-2:
+    CHECK_THROWS(in_pixels.set_harvey_shack_scatter(0.05f, 2.f));
+    CHECK_THROWS(in_pixels.set_harvey_shack_scatter(0.05f, 1.8f, 2.f, 1.f));
+    CHECK_NOTHROW(in_pixels.set_harvey_shack_scatter(0.05f, 2.f, 0.5f, 100.f));
+    CHECK_NOTHROW(in_pixels.set_harvey_shack_scatter(0.f, 2.f));
 }
 
 TEST_CASE("Renders use scattered light set in angles at its size in pixels",

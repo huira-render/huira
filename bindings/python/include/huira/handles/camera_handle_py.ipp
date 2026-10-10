@@ -426,10 +426,11 @@ inline void bind_camera_model_handle(py::module_& m)
              py::arg("falloff_exponent"),
              py::arg("r0") = 0.5f,
              py::arg("radius") = 0.f,
-             "Add Harvey-Shack scattered-light wings to the total system PSF: "
-             "'scatter_fraction' of the energy follows a power-law halo with the given "
-             "falloff exponent (typically 2-3), shoulder radius r0 (pixels), and optional "
-             "hard cutoff radius (0 = none).")
+             "Add Harvey-Shack scattered-light wings, as set_scatter() does in angles: "
+             "'scatter_fraction' of the light follows a power-law halo with the given "
+             "falloff exponent (typically 2-3), flat within r0 (pixels), and falling two powers "
+             "faster beyond an optional outer radius (pixels; 0 = none). An exponent of 2 or "
+             "less needs a radius. Included in psf_image().")
         .def("disable_harvey_shack_scatter", &HandleType::disable_harvey_shack_scatter)
         .def(
             "set_scatter",
