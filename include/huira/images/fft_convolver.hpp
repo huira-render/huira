@@ -38,6 +38,14 @@ enum class FftPlanEffort { Estimate, Measure };
  *   applying the same kernel to successive frames costs one forward and one inverse
  *   transform per channel instead of two forward and one inverse.
  * - Processes spectral channels in parallel via TBB.
+ * - Transforms in place, so each channel needs one buffer, not two.
+ *
+ * The transforms are in double precision, whatever the pixel type. Each output pixel of an FFT
+ * sums every frequency, and each frequency every input pixel, so every pixel carries rounding
+ * error in proportion to the whole image: in single precision about 1e-8 to 1e-7 of its brightest
+ * content, which a bright body in the frame lifts far above a faint pixel's light, with half the
+ * pixels negative. In double precision it is about 1e-9 of that again: with the Sun's limb in a
+ * frame (about a hundred pixels of 5e-5 W each, in a 1 s exposure), up to 2e-3 electrons.
  *
  * The kernel is treated as centered at pixel (width/2, height/2), and convolution semantics
  * match "stamping" the kernel as-drawn around each source: a kernel whose mass lies left of
@@ -83,11 +91,11 @@ class FftConvolver {
     int complex_cols_ = 0;
 
     // Cached per-channel kernel spectra, pre-scaled by the inverse-FFT normalization factor
-    std::vector<fftwf_complex*> kernel_spectra_;
+    std::vector<fftw_complex*> kernel_spectra_;
 
     // Cached plans (owned by the global plan cache; never destroyed here):
-    fftwf_plan forward_plan_ = nullptr;
-    fftwf_plan inverse_plan_ = nullptr;
+    fftw_plan forward_plan_ = nullptr;
+    fftw_plan inverse_plan_ = nullptr;
 
     // Per-channel transform buffers, retained between apply() calls.
     mutable std::unique_ptr<detail::FftScratchPool> scratch_pool_;

@@ -720,6 +720,9 @@ void CameraModel<TSpectral>::use_aperture_psf(int radius, int banks)
  * it may be much larger (e.g. spanning the full frame to model scattered-light wings). A
  * radius of 0 matches the polyphase radius.
  *
+ * With the aperture's PSF, resolved bodies are convolved with the whole PSF whatever the
+ * radius, and it sets only get_psf_convolution_kernel()'s size.
+ *
  * @param radius Convolution kernel radius in pixels (kernel dimension is 2 * radius + 1)
  */
 template <IsSpectral TSpectral>
@@ -744,6 +747,9 @@ void CameraModel<TSpectral>::set_psf_convolution_radius(int radius)
  * Harvey-Shack scattered-light wings. Veiling glare, the third component, is uniform across
  * the image and is applied separately by the renderer for efficiency. The kernel is built
  * when first needed, and rebuilt when the settings it depends on change (see precompute()).
+ *
+ * With the aperture's PSF, the renderer does not use it: resolved bodies are convolved with
+ * the whole PSF, from its tables (see psf_image()), across the frame.
  *
  * @return Reference to the total-system convolution kernel (unit energy per channel), valid
  *         until the camera's settings next change.
@@ -1272,14 +1278,14 @@ void CameraModel<TSpectral>::precompute_locked_()
 {
     // With the aperture's PSF, unresolved sources are drawn from its tables, which hold the
     // defocus blur and the scattered light: still ones at their position, and moving ones
-    // along their path. Resolved bodies get the convolution kernel, unless
-    // enable_psf_convolution(false). (The stamps get_psf_kernel() gives are built when asked
-    // for.)
+    // along their path. Resolved bodies are convolved with the whole PSF from tables in focus,
+    // unless enable_psf_convolution(false). (The stamps get_psf_kernel() gives are built when
+    // asked for.)
     if (use_aperture_psf_) {
         defocus_kernel_.clear();
         ensure_render_tables_();
         if (convolves_bodies_()) {
-            ensure_convolution_spectrum_();
+            ensure_body_convolver_();
         }
         return;
     }
@@ -1309,9 +1315,7 @@ bool CameraModel<TSpectral>::is_precomputed_locked_() const
 {
     if (use_aperture_psf_) {
         return defocus_kernel_.empty() && !render_tables_stale_() &&
-               (!convolves_bodies_() ||
-                !(convolution_stale_(convolution_spectrum_built_at_) ||
-                  stale_(convolution_spectrum_built_at_, {OpticsInput::Resolution})));
+               (!convolves_bodies_() || !body_convolver_stale_());
     }
     const bool defocused = defocus_blur_radius() > 0.f;
     if (defocused) {
@@ -1528,6 +1532,67 @@ void CameraModel<TSpectral>::ensure_render_tables_()
     render_tables_ =
         build_psf_tables_(render_tables_blur_, scatter_for_tables_(), render_tables_reach_);
     render_tables_built_at_ = optics_version_;
+}
+
+/// Whether the tables for resolved bodies are out of date: the renderer's, in focus.
+template <IsSpectral TSpectral>
+bool CameraModel<TSpectral>::body_tables_stale_() const
+{
+    if (tables_blur_() == 0.0) {
+        return render_tables_stale_();
+    }
+    return body_tables_ == nullptr ||
+           stale_(body_tables_built_at_,
+                  {OpticsInput::FocalLength,
+                   OpticsInput::PixelPitch,
+                   OpticsInput::Aperture,
+                   OpticsInput::Scatter}) ||
+           tables_reach_() > body_tables_reach_;
+}
+
+/// Whether the convolution for resolved bodies is out of date: its tables, or the resolution.
+template <IsSpectral TSpectral>
+bool CameraModel<TSpectral>::body_convolver_stale_() const
+{
+    if (body_tables_stale_()) {
+        return true;
+    }
+    const auto& tables = tables_blur_() == 0.0 ? render_tables_ : body_tables_;
+    return body_convolver_.tables() != tables ||
+           !(body_convolver_.resolution() == sensor_->resolution());
+}
+
+/**
+ * @brief Prepare the convolution for resolved bodies, if out of date: with the whole PSF, from
+ * the renderer's tables in focus, or from tables of their own otherwise. Path tracing gives
+ * bodies their defocus, so their tables are in focus whatever the focus, with the scattered
+ * light.
+ */
+template <IsSpectral TSpectral>
+void CameraModel<TSpectral>::ensure_body_convolver_()
+{
+    if (!body_convolver_stale_()) {
+        return;
+    }
+    if (tables_blur_() == 0.0) {
+        ensure_render_tables_();
+        body_tables_ = nullptr;
+    } else if (body_tables_stale_()) {
+        body_tables_reach_ = tables_reach_();
+        body_tables_ = build_psf_tables_(0.0, scatter_for_tables_(), body_tables_reach_);
+        body_tables_built_at_ = optics_version_;
+    }
+    const auto start = std::chrono::steady_clock::now();
+    body_convolver_.set_tables(tables_blur_() == 0.0 ? render_tables_ : body_tables_,
+                               sensor_->resolution());
+
+    const std::chrono::duration<double> elapsed = std::chrono::steady_clock::now() - start;
+    std::ostringstream message;
+    message << "CameraModel - Prepared the convolution of resolved bodies in " << std::fixed
+            << std::setprecision(2) << elapsed.count() << " seconds: near part to "
+            << body_convolver_.near_radius() << " pixels, coarse grid every "
+            << body_convolver_.step()[0] << " pixels";
+    HUIRA_LOG_INFO(message.str());
 }
 
 /// Whether the tables the stamps come from are out of date. They do not depend on the
@@ -1818,7 +1883,8 @@ void CameraModel<TSpectral>::ensure_wings_spectrum_()
 }
 
 /**
- * @brief Convolve an image in place with the total-system convolution kernel, as
+ * @brief Convolve an image in place with the PSF: with the aperture's, the whole of it, across
+ * the frame (see PsfConvolver); otherwise with the total-system convolution kernel, as
  * Image::convolve() would, but through the precomputed spectrum.
  *
  * For the renderer, after precompute_for_render_().
@@ -1827,6 +1893,12 @@ template <IsSpectral TSpectral>
 void CameraModel<TSpectral>::apply_psf_convolution_(Image<TSpectral>& image) const
 {
     detail::convolve_finite_pixels(image, "PSF", [this](Image<TSpectral>& finite) {
+        if (use_aperture_psf_) {
+            // The convolver's working buffers are shared:
+            std::lock_guard<std::mutex> lock(optics_mutex_);
+            tbb::this_task_arena::isolate([&] { body_convolver_.apply(finite); });
+            return;
+        }
         const Image<TSpectral>& kernel = psf_convolution_kernel_;
         if (kernel.width() * kernel.height() <= DIRECT_CONVOLUTION_MAX_AREA_) {
             finite.convolve(kernel);

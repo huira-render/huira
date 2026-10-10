@@ -963,6 +963,20 @@ void PsfTables<TSpectral>::far_values_(double dx, double dy, double r, Values& v
 }
 
 /**
+ * @brief The light in a pixel whose center is (dx, dy) from the source, every channel from its
+ * far field, averaged over its rings and over the pixel: pixel()'s value beyond far_from(), and
+ * the smooth part of it nearer.
+ */
+template <IsSpectral TSpectral>
+std::array<double, TSpectral::size()> PsfTables<TSpectral>::far_pixel(double dx, double dy) const
+{
+    Values values{};
+    const double r = std::sqrt(dx * dx + aspect_ * aspect_ * dy * dy);
+    far_values_(dx, dy, std::max(r, 1e-9), values);
+    return values;
+}
+
+/**
  * @brief Finds the fewest shapes whose combinations give every channel's far field, by
  * Gram-Schmidt over the channels' tabulated values and derivatives. They are weighted by r^3,
  * r^4 and r^5, so that an r^-3 fall counts the same at every node. A channel whose part outside

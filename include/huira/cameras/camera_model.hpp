@@ -21,6 +21,7 @@
 #include "huira/cameras/pixel_convention.hpp"
 #include "huira/cameras/psfs/measured_psf.hpp"
 #include "huira/cameras/psfs/psf.hpp"
+#include "huira/cameras/psfs/psf_convolver.hpp"
 #include "huira/cameras/psfs/psf_tables.hpp"
 #include "huira/cameras/sensors/sensor_model.hpp"
 #include "huira/concepts/numeric_concepts.hpp"
@@ -162,7 +163,8 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     /// Choose whether a PSF or scattered light that is set blurs resolved bodies (the path-traced
     /// image). On by default. Off, bodies are sharp, and rendering is faster without the
     /// whole-image convolution; unresolved sources, such as stars, get the PSF and scattered light
-    /// either way.
+    /// either way. With the aperture's PSF, bodies get the whole of it, across the frame, in
+    /// focus: path tracing gives them their defocus.
     void enable_psf_convolution(bool convolve_psf = true) { convolve_psf_ = convolve_psf; }
 
     /// Whether a PSF or scattered light that is set blurs resolved bodies (the default). See
@@ -385,6 +387,16 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     std::shared_ptr<const PsfTables<TSpectral>> stamp_tables_;
     double stamp_tables_blur_ = 0.0;
 
+    /// What resolved bodies are convolved with, with the aperture's PSF: the whole of the PSF,
+    /// across the frame, from render_tables_ in focus, or body_tables_ otherwise.
+    PsfConvolver<TSpectral> body_convolver_;
+
+    /// The tables for resolved bodies when a star is out of focus: in focus, with the scattered
+    /// light, since path tracing gives bodies their own defocus. Empty in focus, when the
+    /// renderer's serve. With the reach they were built for.
+    std::shared_ptr<const PsfTables<TSpectral>> body_tables_;
+    double body_tables_reach_ = 0.0;
+
     /// Stamps from stamp_tables_, for get_psf_kernel(): one per subpixel position, banks x banks
     /// of them, each normalized per channel as PSF's are, with their radius.
     std::vector<Image<TSpectral>> table_stamps_;
@@ -435,6 +447,7 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     std::uint64_t render_tables_built_at_ = 0;
     std::uint64_t stamp_tables_built_at_ = 0;
     std::uint64_t table_stamps_built_at_ = 0;
+    std::uint64_t body_tables_built_at_ = 0;
 
     // The geometry compute_intrinsics_() last saw, to tell which inputs a change touched.
     float optics_focal_length_ = 0.f;
@@ -461,11 +474,14 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     void ensure_render_tables_();
     void ensure_stamp_tables_();
     void ensure_table_stamps_();
+    void ensure_body_convolver_();
     [[nodiscard]] double tables_reach_() const;
     [[nodiscard]] bool render_tables_stale_() const;
     [[nodiscard]] bool stamp_tables_stale_() const;
     [[nodiscard]] double tables_blur_() const;
     [[nodiscard]] bool table_stamps_stale_() const;
+    [[nodiscard]] bool body_tables_stale_() const;
+    [[nodiscard]] bool body_convolver_stale_() const;
     std::shared_ptr<const PsfTables<TSpectral>>
     build_psf_tables_(double blur,
                       const std::optional<typename PsfTables<TSpectral>::Scatter>& scatter,

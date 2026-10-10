@@ -4,6 +4,7 @@
 #include <cstring>
 #include <memory>
 #include <mutex>
+#include <type_traits>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -19,15 +20,25 @@ namespace huira {
 namespace detail {
 
 /**
+ * @brief The real view of a buffer transformed in place: each of its rows of padded_width reals
+ * starts a complex row, padded_width / 2 + 1 complex values or twice as many reals, from the
+ * last. Transforming in place halves the buffers.
+ */
+inline double* in_place_real(fftw_complex* buffer)
+{
+    return reinterpret_cast<double*>(buffer);
+}
+
+/**
  * @brief Process-wide cache of FFTW plans, keyed by padded transform size.
  *
  * FFTW plan creation is not thread-safe and (with FFTW_MEASURE) can be expensive, so plans
  * are created once per (height, width, effort) under a mutex and reused for the lifetime of
- * the process. Execution uses the new-array interface (fftwf_execute_dft_r2c / _c2r), which
+ * the process. Execution uses the new-array interface (fftw_execute_dft_r2c / _c2r), which
  * is thread-safe as long as each thread supplies its own buffers, so a single cached plan
  * serves any number of concurrent convolutions.
  *
- * Buffers used during planning are allocated with fftwf_alloc_* and freed immediately after
+ * Buffers used during planning are allocated with fftw_alloc_* and freed immediately after
  * planning; all subsequent buffers are allocated the same way, guaranteeing the alignment
  * that the plans were created with.
  */
@@ -37,8 +48,8 @@ class FftwPlanCache {
     FftwPlanCache& operator=(const FftwPlanCache&) = delete;
 
     struct Plans {
-        fftwf_plan forward = nullptr; // real-to-complex
-        fftwf_plan inverse = nullptr; // complex-to-real
+        fftw_plan forward = nullptr; // real-to-complex
+        fftw_plan inverse = nullptr; // complex-to-real
     };
 
     static FftwPlanCache& instance()
@@ -66,36 +77,32 @@ class FftwPlanCache {
             return it->second;
         }
 
-        const std::size_t real_size =
-            static_cast<std::size_t>(padded_width) * static_cast<std::size_t>(padded_height);
         const std::size_t complex_size = static_cast<std::size_t>(padded_width / 2 + 1) *
                                          static_cast<std::size_t>(padded_height);
 
-        float* real_buf = fftwf_alloc_real(real_size);
-        fftwf_complex* complex_buf = fftwf_alloc_complex(complex_size);
-        if (real_buf == nullptr || complex_buf == nullptr) {
-            fftwf_free(real_buf);
-            fftwf_free(complex_buf);
+        // In place: the real rows are padded to the complex rows' width (see in_place_real()).
+        fftw_complex* complex_buf = fftw_alloc_complex(complex_size);
+        if (complex_buf == nullptr) {
             HUIRA_THROW_ERROR("FftwPlanCache::get - Failed to allocate planning buffers");
         }
+        double* real_buf = in_place_real(complex_buf);
 
         const unsigned flags = measure ? FFTW_MEASURE : FFTW_ESTIMATE;
 
         Plans plans;
         plans.forward =
-            fftwf_plan_dft_r2c_2d(padded_height, padded_width, real_buf, complex_buf, flags);
+            fftw_plan_dft_r2c_2d(padded_height, padded_width, real_buf, complex_buf, flags);
         plans.inverse =
-            fftwf_plan_dft_c2r_2d(padded_height, padded_width, complex_buf, real_buf, flags);
+            fftw_plan_dft_c2r_2d(padded_height, padded_width, complex_buf, real_buf, flags);
 
-        fftwf_free(real_buf);
-        fftwf_free(complex_buf);
+        fftw_free(complex_buf);
 
         if (plans.forward == nullptr || plans.inverse == nullptr) {
             if (plans.forward != nullptr) {
-                fftwf_destroy_plan(plans.forward);
+                fftw_destroy_plan(plans.forward);
             }
             if (plans.inverse != nullptr) {
-                fftwf_destroy_plan(plans.inverse);
+                fftw_destroy_plan(plans.inverse);
             }
             HUIRA_THROW_ERROR("FftwPlanCache::get - FFTW plan creation failed");
         }
@@ -112,8 +119,8 @@ class FftwPlanCache {
     ~FftwPlanCache()
     {
         for (auto& [key, plans] : plans_) {
-            fftwf_destroy_plan(plans.forward);
-            fftwf_destroy_plan(plans.inverse);
+            fftw_destroy_plan(plans.forward);
+            fftw_destroy_plan(plans.inverse);
         }
     }
 
@@ -121,35 +128,24 @@ class FftwPlanCache {
     std::unordered_map<std::uint64_t, Plans> plans_;
 };
 
-/// Scratch buffers for one channel's FFT convolution.
+/// The scratch buffer for one channel's FFT convolution, transformed in place.
 struct FftScratch {
-    float* real = nullptr;
-    fftwf_complex* complex_buf = nullptr;
-    std::size_t real_size = 0;
+    fftw_complex* complex_buf = nullptr;
     std::size_t complex_size = 0;
 
-    void ensure(std::size_t new_real_size, std::size_t new_complex_size)
+    void ensure(std::size_t new_complex_size)
     {
-        if (real_size < new_real_size) {
-            fftwf_free(real);
-            real = fftwf_alloc_real(new_real_size);
-            real_size = new_real_size;
-        }
         if (complex_size < new_complex_size) {
-            fftwf_free(complex_buf);
-            complex_buf = fftwf_alloc_complex(new_complex_size);
+            fftw_free(complex_buf);
+            complex_buf = fftw_alloc_complex(new_complex_size);
             complex_size = new_complex_size;
         }
-        if (real == nullptr || complex_buf == nullptr) {
+        if (complex_buf == nullptr) {
             HUIRA_THROW_ERROR("FftScratch::ensure - Failed to allocate scratch buffers");
         }
     }
 
-    ~FftScratch()
-    {
-        fftwf_free(real);
-        fftwf_free(complex_buf);
-    }
+    ~FftScratch() { fftw_free(complex_buf); }
 
     FftScratch() = default;
     FftScratch(const FftScratch&) = delete;
@@ -167,28 +163,30 @@ struct FftScratchPool {
 };
 
 template <typename PixelT>
-inline float get_pixel_channel(const PixelT& pixel, std::size_t c)
+inline double get_pixel_channel(const PixelT& pixel, std::size_t c)
 {
     if constexpr (ImagePixelTraits<PixelT>::channels == 1) {
         (void)c;
-        return static_cast<float>(pixel);
+        return static_cast<double>(pixel);
     } else if constexpr (IsVec<PixelT>) {
-        return static_cast<float>(pixel[static_cast<int>(c)]);
+        return static_cast<double>(pixel[static_cast<int>(c)]);
     } else {
-        return static_cast<float>(pixel[c]);
+        return static_cast<double>(pixel[c]);
     }
 }
 
 template <typename PixelT>
-inline void set_pixel_channel(PixelT& pixel, std::size_t c, float val)
+inline void set_pixel_channel(PixelT& pixel, std::size_t c, double val)
 {
     if constexpr (ImagePixelTraits<PixelT>::channels == 1) {
         (void)c;
         pixel = static_cast<PixelT>(val);
     } else if constexpr (IsVec<PixelT>) {
-        pixel[static_cast<int>(c)] = val;
+        using Channel = std::remove_cvref_t<decltype(pixel[0])>;
+        pixel[static_cast<int>(c)] = static_cast<Channel>(val);
     } else {
-        pixel[c] = val;
+        using Channel = std::remove_cvref_t<decltype(pixel[0])>;
+        pixel[c] = static_cast<Channel>(val);
     }
 }
 } // namespace detail
@@ -267,8 +265,8 @@ FftConvolver<PixelT>& FftConvolver<PixelT>::operator=(FftConvolver&& other) noex
 template <IsImagePixel PixelT>
 void FftConvolver<PixelT>::release_()
 {
-    for (fftwf_complex* spectrum : kernel_spectra_) {
-        fftwf_free(spectrum);
+    for (fftw_complex* spectrum : kernel_spectra_) {
+        fftw_free(spectrum);
     }
     kernel_spectra_.clear();
     ready_ = false;
@@ -319,10 +317,10 @@ void FftConvolver<PixelT>::set_kernel(const Image<PixelT>& kernel,
         forward_plan_ = plans.forward;
         inverse_plan_ = plans.inverse;
 
-        const std::size_t real_size =
-            static_cast<std::size_t>(padded_width_) * static_cast<std::size_t>(padded_height_);
         const std::size_t complex_size =
             static_cast<std::size_t>(complex_cols_) * static_cast<std::size_t>(padded_height_);
+        // The real rows' stride, transformed in place (see detail::in_place_real()):
+        const std::size_t real_stride = 2 * static_cast<std::size_t>(complex_cols_);
 
         constexpr std::size_t num_channels = ImagePixelTraits<PixelT>::channels;
         const int kcx = kw / 2;
@@ -330,40 +328,34 @@ void FftConvolver<PixelT>::set_kernel(const Image<PixelT>& kernel,
 
         // The inverse transform scale factor is folded into the cached kernel spectra so that
         // apply() does not need a separate normalization pass:
-        const float norm =
-            1.0f / (static_cast<float>(padded_width_) * static_cast<float>(padded_height_));
+        const double norm =
+            1.0 / (static_cast<double>(padded_width_) * static_cast<double>(padded_height_));
 
         kernel_spectra_.resize(num_channels, nullptr);
 
-        float* real_buf = fftwf_alloc_real(real_size);
-        if (real_buf == nullptr) {
-            HUIRA_THROW_ERROR("FftConvolver::set_kernel - Failed to allocate kernel buffer");
-        }
-
         for (std::size_t c = 0; c < num_channels; ++c) {
-            fftwf_complex* spectrum = fftwf_alloc_complex(complex_size);
+            fftw_complex* spectrum = fftw_alloc_complex(complex_size);
             if (spectrum == nullptr) {
-                fftwf_free(real_buf);
                 release_();
                 HUIRA_THROW_ERROR("FftConvolver::set_kernel - Failed to allocate spectrum");
             }
             kernel_spectra_[c] = spectrum;
+            double* real_buf = detail::in_place_real(spectrum);
 
             // Pack the kernel centered at the origin with wrap-around, so that the "same"
             // region of the linear convolution lands at the top-left of the padded output:
-            std::memset(real_buf, 0, real_size * sizeof(float));
+            std::memset(spectrum, 0, complex_size * sizeof(fftw_complex));
             for (int ky = 0; ky < kh; ++ky) {
                 const int dst_y = (ky - kcy + padded_height_) % padded_height_;
                 for (int kx = 0; kx < kw; ++kx) {
                     const int dst_x = (kx - kcx + padded_width_) % padded_width_;
-                    real_buf[static_cast<std::size_t>(dst_y) *
-                                 static_cast<std::size_t>(padded_width_) +
+                    real_buf[static_cast<std::size_t>(dst_y) * real_stride +
                              static_cast<std::size_t>(dst_x)] =
                         detail::get_pixel_channel(kernel(kx, ky), c);
                 }
             }
 
-            fftwf_execute_dft_r2c(forward_plan_, real_buf, spectrum);
+            fftw_execute_dft_r2c(forward_plan_, real_buf, spectrum);
 
             for (std::size_t i = 0; i < complex_size; ++i) {
                 spectrum[i][0] *= norm;
@@ -371,7 +363,6 @@ void FftConvolver<PixelT>::set_kernel(const Image<PixelT>& kernel,
             }
         }
 
-        fftwf_free(real_buf);
         ready_ = true;
     }
 }
@@ -395,10 +386,10 @@ void FftConvolver<PixelT>::apply(Image<PixelT>& image) const
                               "the resolution given to set_kernel()");
         }
 
-        const std::size_t real_size =
-            static_cast<std::size_t>(padded_width_) * static_cast<std::size_t>(padded_height_);
         const std::size_t complex_size =
             static_cast<std::size_t>(complex_cols_) * static_cast<std::size_t>(padded_height_);
+        // The real rows' stride, transformed in place (see detail::in_place_real()):
+        const std::size_t real_stride = 2 * static_cast<std::size_t>(complex_cols_);
 
         constexpr std::size_t num_channels = ImagePixelTraits<PixelT>::channels;
 
@@ -432,16 +423,15 @@ void FftConvolver<PixelT>::apply(Image<PixelT>& image) const
             [&](const tbb::blocked_range<std::size_t>& range) {
                 for (std::size_t c = range.begin(); c < range.end(); ++c) {
                     detail::FftScratch& scratch = *scratch_buffers[c];
-                    scratch.ensure(real_size, complex_size);
+                    scratch.ensure(complex_size);
+                    double* real = detail::in_place_real(scratch.complex_buf);
 
                     // Pack this channel top-left into the zero-padded buffer:
                     tbb::parallel_for(
                         tbb::blocked_range<int>(0, padded_height_),
                         [&](const tbb::blocked_range<int>& rows) {
                             for (int y = rows.begin(); y < rows.end(); ++y) {
-                                float* row =
-                                    scratch.real + static_cast<std::size_t>(y) *
-                                                       static_cast<std::size_t>(padded_width_);
+                                double* row = real + static_cast<std::size_t>(y) * real_stride;
                                 if (y < image_height_) {
                                     for (int x = 0; x < image_width_; ++x) {
                                         row[x] = detail::get_pixel_channel(image(x, y), c);
@@ -449,44 +439,39 @@ void FftConvolver<PixelT>::apply(Image<PixelT>& image) const
                                     std::memset(
                                         row + image_width_,
                                         0,
-                                        static_cast<std::size_t>(padded_width_ - image_width_) *
-                                            sizeof(float));
+                                        (real_stride - static_cast<std::size_t>(image_width_)) *
+                                            sizeof(double));
                                 } else {
-                                    std::memset(row,
-                                                0,
-                                                static_cast<std::size_t>(padded_width_) *
-                                                    sizeof(float));
+                                    std::memset(row, 0, real_stride * sizeof(double));
                                 }
                             }
                         });
 
-                    fftwf_execute_dft_r2c(forward_plan_, scratch.real, scratch.complex_buf);
+                    fftw_execute_dft_r2c(forward_plan_, real, scratch.complex_buf);
 
                     // Pointwise multiply with the cached (pre-normalized) kernel spectrum:
-                    const fftwf_complex* k_spec = kernel_spectra_[c];
+                    const fftw_complex* k_spec = kernel_spectra_[c];
                     tbb::parallel_for(
                         tbb::blocked_range<std::size_t>(0, complex_size),
                         [&](const tbb::blocked_range<std::size_t>& block) {
                             for (std::size_t i = block.begin(); i < block.end(); ++i) {
-                                const float re = scratch.complex_buf[i][0] * k_spec[i][0] -
-                                                 scratch.complex_buf[i][1] * k_spec[i][1];
-                                const float im = scratch.complex_buf[i][0] * k_spec[i][1] +
-                                                 scratch.complex_buf[i][1] * k_spec[i][0];
+                                const double re = scratch.complex_buf[i][0] * k_spec[i][0] -
+                                                  scratch.complex_buf[i][1] * k_spec[i][1];
+                                const double im = scratch.complex_buf[i][0] * k_spec[i][1] +
+                                                  scratch.complex_buf[i][1] * k_spec[i][0];
                                 scratch.complex_buf[i][0] = re;
                                 scratch.complex_buf[i][1] = im;
                             }
                         });
 
-                    fftwf_execute_dft_c2r(inverse_plan_, scratch.complex_buf, scratch.real);
+                    fftw_execute_dft_c2r(inverse_plan_, scratch.complex_buf, real);
 
                     // Unpack the valid "same" region from the top-left of the padded result:
                     tbb::parallel_for(tbb::blocked_range<int>(0, image_height_),
                                       [&](const tbb::blocked_range<int>& rows) {
                                           for (int y = rows.begin(); y < rows.end(); ++y) {
-                                              const float* row =
-                                                  scratch.real +
-                                                  static_cast<std::size_t>(y) *
-                                                      static_cast<std::size_t>(padded_width_);
+                                              const double* row =
+                                                  real + static_cast<std::size_t>(y) * real_stride;
                                               for (int x = 0; x < image_width_; ++x) {
                                                   detail::set_pixel_channel(image(x, y), c, row[x]);
                                               }

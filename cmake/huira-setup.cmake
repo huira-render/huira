@@ -28,9 +28,9 @@ find_package(CSPICE REQUIRED)
 
 find_package(embree CONFIG REQUIRED)
 
-find_package(FFTW3f REQUIRED)
+find_package(FFTW3 REQUIRED)
 include(CustomSanitizeTargets)
-huira_strip_unix_libm(FFTW3::fftw3f)  # fftw has shipped '-lm' on Windows before (fftw-feedstock#74)
+huira_strip_unix_libm(FFTW3::fftw3)  # fftw has shipped '-lm' on Windows before (fftw-feedstock#74)
 
 find_package(glm CONFIG QUIET)
 if(NOT glm_FOUND)
@@ -57,7 +57,7 @@ target_link_libraries(huira INTERFACE
     CFITSIO::CFITSIO
     CSPICE::cspice
     embree
-    FFTW3::fftw3f
+    FFTW3::fftw3
     glm::glm
     ${TURBOJPEG_TARGET}
     PNG::PNG
