@@ -387,6 +387,17 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     std::shared_ptr<const PsfTables<TSpectral>> stamp_tables_;
     double stamp_tables_blur_ = 0.0;
 
+    /// Tables for unresolved objects whose blur differs from a star's, by their blur, most
+    /// recently used last, with the reach they were built for. Those the last render used are
+    /// kept, and others up to OBJECT_TABLES_KEPT_ in all.
+    struct BlurTables {
+        double blur = 0.0;
+        std::shared_ptr<const PsfTables<TSpectral>> tables;
+    };
+    std::vector<BlurTables> object_tables_;
+    double object_tables_reach_ = 0.0;
+    static constexpr std::size_t OBJECT_TABLES_KEPT_ = 8;
+
     /// What resolved bodies are convolved with, with the aperture's PSF: the whole of the PSF,
     /// across the frame, from render_tables_ in focus, or body_tables_ otherwise.
     PsfConvolver<TSpectral> body_convolver_;
@@ -448,6 +459,7 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     std::uint64_t stamp_tables_built_at_ = 0;
     std::uint64_t table_stamps_built_at_ = 0;
     std::uint64_t body_tables_built_at_ = 0;
+    std::uint64_t object_tables_built_at_ = 0;
 
     // The geometry compute_intrinsics_() last saw, to tell which inputs a change touched.
     float optics_focal_length_ = 0.f;
@@ -475,6 +487,8 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     void ensure_stamp_tables_();
     void ensure_table_stamps_();
     void ensure_body_convolver_();
+    std::vector<std::shared_ptr<const PsfTables<TSpectral>>>
+    tables_at_locked_(const std::vector<double>& inverse_depths);
     [[nodiscard]] double tables_reach_() const;
     [[nodiscard]] bool render_tables_stale_() const;
     [[nodiscard]] bool stamp_tables_stale_() const;
@@ -500,6 +514,8 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
 
     // For the renderer:
     void precompute_for_render_();
+    std::vector<std::shared_ptr<const PsfTables<TSpectral>>>
+    tables_at_(const std::vector<double>& inverse_depths);
     void apply_psf_convolution_(Image<TSpectral>& image) const;
     void apply_wings_convolution_(Image<TSpectral>& image) const;
 

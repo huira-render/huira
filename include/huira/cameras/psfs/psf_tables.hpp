@@ -78,6 +78,11 @@ class PsfTables {
     /// no pixel by more than a part in 10^5.
     static constexpr double MIN_BLUR = 1e-4;
 
+    /// Blur radii, in pixel widths, closer than this give the same pixels, within 1e-5 of the
+    /// peak: a pixel changes with the blur by at most four times as much, relative to the peak
+    /// (2.7 measured, at f/1 with 10 um pixels and a blur of 0.7 px).
+    static constexpr double BLUR_TOLERANCE = 2.5e-6;
+
     /// Blur radii up to this, in pixel widths, are covered by the near table, so that the blur's
     /// edge is exact; beyond, the projected integrals take its edge, within 0.25%.
     static constexpr double MAX_NEAR_BLUR = 6.0;

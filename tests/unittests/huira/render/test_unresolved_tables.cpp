@@ -16,6 +16,7 @@ namespace {
 /// pixel edges are at integers, so that sensor coordinates and pixel coordinates agree.
 constexpr int SIZE = 64;
 constexpr double FOCAL_PIXELS = 50e-3 / 8.5e-6;
+/// The sources' depth, which sets their defocus: the references take the PSF's tables there.
 constexpr double RANGE = 1e6;
 
 CameraModelHandle<RGB> make_camera(Scene<RGB>& scene, double focal_pixels = FOCAL_PIXELS)
@@ -97,8 +98,10 @@ TEST_CASE("A still source is drawn from the PSF's tables at its exact position",
         // to a scale. Its center pixel is the one the source falls in.
         const int base_x = static_cast<int>(std::floor(x));
         const int base_y = static_cast<int>(std::floor(y));
-        const Image<RGB> expected = camera_model.psf_image(
-            radius, static_cast<float>(x - base_x - 0.5), static_cast<float>(y - base_y - 0.5));
+        const Image<RGB> expected = camera_model.psf_image(radius,
+                                                           static_cast<float>(x - base_x - 0.5),
+                                                           static_cast<float>(y - base_y - 0.5),
+                                                           units::Meter(RANGE));
         std::array<double, 3> rendered_sum{};
         for (int j = -radius; j <= radius; ++j) {
             for (int i = -radius; i <= radius; ++i) {
@@ -191,8 +194,10 @@ std::array<double, 3> fraction_on_frame(CameraModelHandle<RGB>& camera_model, do
 {
     const int base_x = static_cast<int>(std::floor(x));
     const int base_y = static_cast<int>(std::floor(y));
-    const Image<RGB> table = camera_model.psf_image(
-        SIZE, static_cast<float>(x - base_x - 0.5), static_cast<float>(y - base_y - 0.5));
+    const Image<RGB> table = camera_model.psf_image(SIZE,
+                                                    static_cast<float>(x - base_x - 0.5),
+                                                    static_cast<float>(y - base_y - 0.5),
+                                                    units::Meter(RANGE));
     std::array<double, 3> sum{};
     for (int j = 0; j < SIZE; ++j) {
         for (int i = 0; i < SIZE; ++i) {
@@ -233,8 +238,10 @@ TEST_CASE("A still source puts all its light that falls on the frame on it",
         // The bright source's power, from its center pixel, which it draws in full:
         const int base_x = static_cast<int>(std::floor(x));
         const int base_y = static_cast<int>(std::floor(y));
-        const Image<RGB> center = camera_model.psf_image(
-            0, static_cast<float>(x - base_x - 0.5), static_cast<float>(y - base_y - 0.5));
+        const Image<RGB> center = camera_model.psf_image(0,
+                                                         static_cast<float>(x - base_x - 0.5),
+                                                         static_cast<float>(y - base_y - 0.5),
+                                                         units::Meter(RANGE));
         const std::array<double, 3> bright_sum = sums(bright);
         const std::array<double, 3> faint_sum = sums(faint);
         for (std::size_t c = 0; c < 3; ++c) {
@@ -320,8 +327,10 @@ TEST_CASE("A still source is drawn across the frame as the PSF's tables give it,
         // The tables over the whole frame, and the source's power from its center pixel:
         const int base_x = static_cast<int>(std::floor(x));
         const int base_y = static_cast<int>(std::floor(y));
-        const Image<RGB> table = camera_model.psf_image(
-            SIZE, static_cast<float>(x - base_x - 0.5), static_cast<float>(y - base_y - 0.5));
+        const Image<RGB> table = camera_model.psf_image(SIZE,
+                                                        static_cast<float>(x - base_x - 0.5),
+                                                        static_cast<float>(y - base_y - 0.5),
+                                                        units::Meter(RANGE));
         for (std::size_t c = 0; c < 3; ++c) {
             INFO("channel " << c);
             const double expected_center = static_cast<double>(table(SIZE, SIZE)[c]);
@@ -402,7 +411,8 @@ Image<RGB> streak_reference(
             const int base_y = static_cast<int>(std::floor(y));
             const Image<RGB> stamp = camera_model.psf_image(radius,
                                                             static_cast<float>(px - base_x - 0.5),
-                                                            static_cast<float>(y - base_y - 0.5));
+                                                            static_cast<float>(y - base_y - 0.5),
+                                                            units::Meter(RANGE));
             for (int j = -radius; j <= radius; ++j) {
                 for (int i = -radius; i <= radius; ++i) {
                     const int fx = base_x + i;
@@ -464,8 +474,10 @@ streak_on_frame(CameraModelHandle<RGB>& camera_model, double x, double y, double
             const int base_x = static_cast<int>(std::floor(px));
             const int base_y = static_cast<int>(std::floor(y));
             constexpr int REACH = 2 * SIZE;
-            const Image<RGB> table = camera_model.psf_image(
-                REACH, static_cast<float>(px - base_x - 0.5), static_cast<float>(y - base_y - 0.5));
+            const Image<RGB> table = camera_model.psf_image(REACH,
+                                                            static_cast<float>(px - base_x - 0.5),
+                                                            static_cast<float>(y - base_y - 0.5),
+                                                            units::Meter(RANGE));
             for (int j = 0; j < SIZE; ++j) {
                 for (int i = 0; i < SIZE; ++i) {
                     const RGB value = table(i - base_x + REACH, j - base_y + REACH);
@@ -569,7 +581,7 @@ TEST_CASE("A moving source puts all its light that falls on the frame on it",
         Scene<RGB> still_scene;
         auto still_model = make_camera(still_scene, LONG_FOCAL_PIXELS);
         const Image<RGB> still = render_moving(still_model, still_scene, BRIGHT, 32.5, 32.5, 0.0);
-        const Image<RGB> center = still_model.psf_image(0, 0.f, 0.f);
+        const Image<RGB> center = still_model.psf_image(0, 0.f, 0.f, units::Meter(RANGE));
         const std::array<double, 3> bright_sum = sums(bright);
         const std::array<double, 3> faint_sum = sums(faint);
         for (std::size_t c = 0; c < 3; ++c) {

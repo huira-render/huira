@@ -1289,6 +1289,10 @@ struct RenderItem {
     int effective_radius;
     static constexpr float RANGE_AT_INFINITY = std::numeric_limits<float>::max();
 
+    /// The PSF's tables it is drawn from, with the aperture's PSF: a star's, or for its own
+    /// blur (see CameraModel::tables_at_()).
+    const PsfTables<TSpectral>* tables = nullptr;
+
     TSpectral interpolate_irradiances(float t) const
     {
         if (irradiance.size() == 1) {
@@ -1654,7 +1658,6 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
     const double aspect = use_tables ? tables->aspect() : 1.0;
     std::array<double, TSpectral::size()> electrons_per_power{};
     double tau = 0.0;
-    double floor_radius = 0.0;
     if (use_tables) {
         const SensorModel<TSpectral>& sensor = *camera->sensor_;
         const double read_noise = static_cast<double>(sensor.read_noise());
@@ -1667,10 +1670,25 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                 electrons_per_power[c] =
                     exposure * static_cast<double>(qe[c]) / static_cast<double>(photon_energies[c]);
             }
-            // However faint, a source is drawn out to where it holds 90% of its light:
-            floor_radius = std::max(floor_radius, tables->radius_holding_90(c));
         }
     }
+
+    // However faint, a source is drawn out to where it holds 90% of its light, and a line to
+    // where it holds 90% of its light per unit length:
+    auto floor_radius = [](const PsfTables<TSpectral>& source_tables) {
+        double radius = 0.0;
+        for (std::size_t c = 0; c < TSpectral::size(); ++c) {
+            radius = std::max(radius, source_tables.radius_holding_90(c));
+        }
+        return radius;
+    };
+    auto line_floor = [](const PsfTables<TSpectral>& source_tables) {
+        double radius = 0.0;
+        for (std::size_t c = 0; c < TSpectral::size(); ++c) {
+            radius = std::max(radius, source_tables.line_holding_90(c));
+        }
+        return radius;
+    };
 
     // Full out to the taper radius, then falling smoothly (with two continuous derivatives) to
     // nothing at twice it; full everywhere with no taper.
@@ -1690,45 +1708,47 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
     };
 
     // The distance beyond which no pixel reads out more than tau from a source of this power,
-    // drawn with its rings followed within rings (see PsfTables::envelope()), found by
-    // bisection; infinite with no taper, or if the source is bright enough to stay above tau
-    // across the frame.
-    auto taper_radius = [&](const TSpectral& power, double rings) {
-        if (!(tau > 0.0)) {
-            return std::numeric_limits<double>::infinity();
-        }
-        std::array<double, TSpectral::size()> electrons{};
-        for (std::size_t c = 0; c < TSpectral::size(); ++c) {
-            electrons[c] = static_cast<double>(power[c]) * electrons_per_power[c];
-        }
-        const auto readout = [&](double r) {
-            double value = 0.0;
-            for (std::size_t c = 0; c < TSpectral::size(); ++c) {
-                const double channel = electrons[c] * tables->envelope(c, r, rings);
-                value = PER_CHANNEL_READOUT ? std::max(value, channel) : value + channel;
-            }
-            return value;
-        };
-        const double limit = 2.0 * static_cast<double>(diagonal);
-        double hi = std::max(floor_radius, 1.0);
-        while (readout(hi) > tau) {
-            if (hi > limit) {
+    // drawn from these tables with its rings followed within rings (see PsfTables::envelope()),
+    // found by bisection; infinite with no taper, or if the source is bright enough to stay
+    // above tau across the frame.
+    auto taper_radius =
+        [&](const TSpectral& power, double rings, const PsfTables<TSpectral>& source_tables) {
+            if (!(tau > 0.0)) {
                 return std::numeric_limits<double>::infinity();
             }
-            hi *= 2.0;
-        }
-        double lo = 0.0;
-        while (hi - lo > 1e-3 * hi) {
-            const double mid = 0.5 * (lo + hi);
-            (readout(mid) > tau ? lo : hi) = mid;
-        }
-        return std::max(hi, floor_radius);
-    };
+            std::array<double, TSpectral::size()> electrons{};
+            for (std::size_t c = 0; c < TSpectral::size(); ++c) {
+                electrons[c] = static_cast<double>(power[c]) * electrons_per_power[c];
+            }
+            const auto readout = [&](double r) {
+                double value = 0.0;
+                for (std::size_t c = 0; c < TSpectral::size(); ++c) {
+                    const double channel = electrons[c] * source_tables.envelope(c, r, rings);
+                    value = PER_CHANNEL_READOUT ? std::max(value, channel) : value + channel;
+                }
+                return value;
+            };
+            const double limit = 2.0 * static_cast<double>(diagonal);
+            const double floor = floor_radius(source_tables);
+            double hi = std::max(floor, 1.0);
+            while (readout(hi) > tau) {
+                if (hi > limit) {
+                    return std::numeric_limits<double>::infinity();
+                }
+                hi *= 2.0;
+            }
+            double lo = 0.0;
+            while (hi - lo > 1e-3 * hi) {
+                const double mid = 0.5 * (lo + hi);
+                (readout(mid) > tau ? lo : hi) = mid;
+            }
+            return std::max(hi, floor);
+        };
 
     // The distance beyond which following the source's rings changes no pixel's readout by more
     // than tau (see PsfTables::ring_deviation()), found by bisection to a twentieth of a pixel;
     // infinite with no taper.
-    auto rings_radius = [&](const TSpectral& power) {
+    auto rings_radius = [&](const TSpectral& power, const PsfTables<TSpectral>& source_tables) {
         if (!(tau > 0.0)) {
             return std::numeric_limits<double>::infinity();
         }
@@ -1740,7 +1760,7 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
             double value = 0.0;
             for (std::size_t c = 0; c < TSpectral::size(); ++c) {
                 if (electrons[c] > 0.0) {
-                    const double channel = electrons[c] * tables->ring_deviation(c, r);
+                    const double channel = electrons[c] * source_tables.ring_deviation(c, r);
                     value = PER_CHANNEL_READOUT ? std::max(value, channel) : value + channel;
                 }
             }
@@ -1783,8 +1803,8 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
         const int r = item.effective_radius;
         if (exact) {
             sample.exact = true;
-            sample.rings = rings_radius(power);
-            sample.taper = taper_radius(power, sample.rings);
+            sample.rings = rings_radius(power, *item.tables);
+            sample.taper = taper_radius(power, sample.rings, *item.tables);
             sample.draw = std::isinf(sample.taper) ? farthest_corner(p) : 2.0 * sample.taper;
             const double reach_x = sample.draw;
             const double reach_y = sample.draw / aspect;
@@ -1835,17 +1855,11 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
         typename PsfTables<TSpectral>::LineReach reach;
         double taper = 0.0;
     };
-    double line_floor = 0.0;
-    if (use_tables) {
-        for (std::size_t c = 0; c < TSpectral::size(); ++c) {
-            line_floor = std::max(line_floor, tables->line_holding_90(c));
-        }
-    }
-    auto line_radii = [&](const TSpectral& density) {
+    auto line_radii = [&](const TSpectral& density, const PsfTables<TSpectral>& source_tables) {
         LineRadii radii;
         if (!(tau > 0.0)) {
             radii.taper = std::numeric_limits<double>::infinity();
-            radii.reach.ends_exact_within = tables->near_radius();
+            radii.reach.ends_exact_within = source_tables.near_radius();
             return radii;
         }
         std::array<double, TSpectral::size()> electrons{};
@@ -1881,16 +1895,23 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
             return hi;
         };
         const double limit = 2.0 * static_cast<double>(diagonal);
-        const auto envelope = [&](std::size_t c, double r) { return tables->line_envelope(c, r); };
-        const auto half = [&](std::size_t c, double r) {
-            return 0.5 * tables->line_envelope(c, r);
+        const auto envelope = [&](std::size_t c, double r) {
+            return source_tables.line_envelope(c, r);
         };
-        const auto rings = [&](std::size_t c, double r) { return tables->line_deviation(c, r); };
-        const auto ends = [&](std::size_t c, double r) { return tables->end_deviation(c, r); };
-        radii.taper = std::max(first_below(envelope, line_floor, limit), line_floor);
+        const auto half = [&](std::size_t c, double r) {
+            return 0.5 * source_tables.line_envelope(c, r);
+        };
+        const auto rings = [&](std::size_t c, double r) {
+            return source_tables.line_deviation(c, r);
+        };
+        const auto ends = [&](std::size_t c, double r) {
+            return source_tables.end_deviation(c, r);
+        };
+        const double floor = line_floor(source_tables);
+        radii.taper = std::max(first_below(envelope, floor, limit), floor);
         radii.reach.exact_within = first_below(rings, 0.5, limit);
         radii.reach.ends_exact_within =
-            std::min(first_below(ends, 0.5, limit), tables->near_radius());
+            std::min(first_below(ends, 0.5, limit), source_tables.near_radius());
         radii.reach.ends_within = first_below(half, 0.5, limit);
         return radii;
     };
@@ -1971,7 +1992,10 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
     // where the line starts. A sample that is occluded, or cannot be placed, breaks the path.
     constexpr double LINE_TOLERANCE = 1e-3;    // pixels
     constexpr double DENSITY_TOLERANCE = 1e-3; // relative
-    auto emit_path = [&](std::size_t item_index, BinScratch& scratch, Batch& batch) {
+    auto emit_path = [&](std::size_t item_index,
+                         const PsfTables<TSpectral>& source_tables,
+                         BinScratch& scratch,
+                         Batch& batch) {
         const std::vector<Vertex>& path = scratch.path;
         const std::size_t count = path.size();
         // Each piece's length, in pixel widths, light and light per unit length; a piece with
@@ -2071,7 +2095,7 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                            RADII_TOLERANCE * std::max(density[c], radii_density[c]);
                 }
                 if (!same) {
-                    radii = line_radii(density);
+                    radii = line_radii(density, source_tables);
                     radii_density = density;
                     have_radii = true;
                 }
@@ -2267,7 +2291,7 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                 }
             }
             if (path) {
-                emit_path(item_index, scratch, batch);
+                emit_path(item_index, *item.tables, scratch, batch);
             }
             if (still && still_weight > 0.0) {
                 const Pixel mean{static_cast<float>(still_x / still_weight),
@@ -2321,6 +2345,7 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                             std::vector<TSpectral>{star_field.irradiances[i]},
                             std::vector<float>{RenderItem<TSpectral>::RANGE_AT_INFINITY},
                             stamp_radius);
+                        item.tables = tables;
                         assign_radius(item);
 
                         batch.items.push_back(std::move(item));
@@ -2332,25 +2357,45 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
     }
 
     // Unresolved objects (separate from stars). Their irradiances are found one object at a
-    // time, and then they are binned in parallel, one batch each:
+    // time, and then they are binned in parallel, one batch each.
+    //
+    // With the aperture's PSF, each is blurred by the defocus at its own depth, its distance
+    // along the axis, as path tracing blurs bodies: from a star's tables if that is a star's
+    // blur, within PsfTables::BLUR_TOLERANCE, as it is for anything far enough away, and
+    // otherwise from tables for its blur, built the first time it is needed. A moving object
+    // takes the blur at its mean inverse depth over the exposure. The tables are held here
+    // until the render is done.
+    std::vector<std::shared_ptr<const PsfTables<TSpectral>>> object_tables;
     if (!scene_view.unresolved_objects_.empty()) {
         std::vector<RenderItem<TSpectral>> objects;
         objects.reserve(scene_view.unresolved_objects_.size());
+        std::vector<double> inverse_depths;
+        inverse_depths.reserve(scene_view.unresolved_objects_.size());
         for (const auto& instance : scene_view.unresolved_objects_) {
             std::vector<Vec3<float>> directions(instance.transforms.size());
             std::vector<TSpectral> irradiances(instance.transforms.size());
             std::vector<float> ranges(instance.transforms.size());
+            double inverse_depth = 0.0;
             for (std::size_t i = 0; i < instance.transforms.size(); ++i) {
                 const Vec3<float>& position = instance.transforms[i].position;
                 directions[i] = glm::normalize(position);
                 irradiances[i] = instance.unresolved_object->get_irradiance(times[i]);
                 ranges[i] = glm::length(position);
+                inverse_depth += 1.0 / std::abs(static_cast<double>(position.z));
             }
             TrajectoryArc arc(directions);
             RenderItem<TSpectral> item(
                 std::move(arc), std::move(irradiances), std::move(ranges), stamp_radius);
+            inverse_depths.push_back(inverse_depth /
+                                     static_cast<double>(instance.transforms.size()));
             assign_radius(item);
             objects.push_back(std::move(item));
+        }
+        if (use_tables) {
+            object_tables = camera->tables_at_(inverse_depths);
+            for (std::size_t i = 0; i < objects.size(); ++i) {
+                objects[i].tables = object_tables[i].get();
+            }
         }
 
         const std::size_t first_batch = batches.size();
@@ -2481,7 +2526,7 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                         // A piece of a moving source's path, drawn from the tables (which keep
                         // to the pixels within its reach), with the light drawn added up as for
                         // a still source, per unit power:
-                        const std::array<double, TSpectral::size()> drawn = tables->draw_line(
+                        const std::array<double, TSpectral::size()> drawn = item.tables->draw_line(
                             received_power,
                             tile_x0,
                             tile_x1,
@@ -2509,18 +2554,18 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                             tile_y0, static_cast<int>(std::floor(py - sample.draw / aspect)));
                         const int y_end = std::min(
                             tile_y1, static_cast<int>(std::floor(py + sample.draw / aspect)) + 1);
-                        entry_light[k] =
-                            tables->draw(received_power,
-                                         x_begin,
-                                         x_end,
-                                         y_begin,
-                                         y_end,
-                                         px,
-                                         py,
-                                         power,
-                                         sample.rings,
-                                         sample.draw,
-                                         [&](double r) { return taper_weight(r, sample.taper); });
+                        entry_light[k] = item.tables->draw(
+                            received_power,
+                            x_begin,
+                            x_end,
+                            y_begin,
+                            y_end,
+                            px,
+                            py,
+                            power,
+                            sample.rings,
+                            sample.draw,
+                            [&](double r) { return taper_weight(r, sample.taper); });
                     } else if (stamp_radius > 0) {
                         const StampPhase phase_x = nearest_stamp_phase(center_x);
                         const StampPhase phase_y = nearest_stamp_phase(center_y);
@@ -2604,8 +2649,9 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
         // edge, four points are taken, and elsewhere two (or one for a panel much shorter), on
         // panels as long as the distance along the line to the nearest edge, over which the
         // light beyond the edges changes by about a factor of two.
-        const double near_edge = tables->near_radius();
         const auto line_on_frame = [&](const Sample& sample) {
+            const PsfTables<TSpectral>& source_tables = *items[sample.item_idx].tables;
+            const double near_edge = source_tables.near_radius();
             constexpr std::array<double, 4> GL4_NODES{
                 -0.8611363115940526, -0.3399810435848563, 0.3399810435848563, 0.8611363115940526};
             constexpr std::array<double, 4> GL4_WEIGHTS{
@@ -2657,7 +2703,7 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                     const double px = ax + u * tx;
                     const double py = ay + u * ty;
                     const Light light =
-                        tables->light_in_rectangle(-px, width - px, -py, height - py);
+                        source_tables.light_in_rectangle(-px, width - px, -py, height - py);
                     for (std::size_t c = 0; c < TSpectral::size(); ++c) {
                         total[c] += half * weights[n] * light[c] / length;
                     }
@@ -2719,6 +2765,7 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
             if (!sample.exact) {
                 return;
             }
+            const PsfTables<TSpectral>& source_tables = *items[sample.item_idx].tables;
             const double px = static_cast<double>(sample.projected.x);
             const double py = aspect * static_cast<double>(sample.projected.y);
             const double x0 = -px;
@@ -2745,17 +2792,17 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                 // Drawn wholly on the frame: what was not drawn is what drawing left out,
                 // exactly, less what falls off the frame, all of it beyond the nearest edge.
                 std::array<double, TSpectral::size()> off =
-                    tables->integrate(nearest_edge, farthest, breaks, [&](double r) {
+                    source_tables.integrate(nearest_edge, farthest, breaks, [&](double r) {
                         return 2.0 * PI<double>() * r - on_frame(r);
                     });
                 for (std::size_t c = 0; c < TSpectral::size(); ++c) {
-                    off[c] += tables->smooth_light_beyond(c, farthest);
+                    off[c] += source_tables.smooth_light_beyond(c, farthest);
                     left[c] = 1.0 - drawn[i][c] - off[c];
                 }
             } else {
                 // Crossing the frame's edge, or beyond it: the light left on the frame, from
                 // the profile.
-                left = tables->integrate(sample.taper, farthest, breaks, [&](double r) {
+                left = source_tables.integrate(sample.taper, farthest, breaks, [&](double r) {
                     return (1.0 - taper_weight(r, sample.taper)) * on_frame(r);
                 });
             }
