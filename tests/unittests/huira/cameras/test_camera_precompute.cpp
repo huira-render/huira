@@ -204,8 +204,9 @@ TEST_CASE("Setters record settings, and precompute() builds what a render would 
     camera.precompute();
     CHECK(camera.is_precomputed());
 
-    // Convolving bodies needs the convolution kernel and its spectrum, which depend on the
-    // scatter settings and convolution radius, and on the resolution too:
+    // Convolving bodies with the aperture's PSF needs it across the frame, from tables in focus
+    // with the scattered light, which depend on the scatter settings, and on the resolution
+    // too:
     camera.enable_psf_convolution();
     CHECK_FALSE(camera.is_precomputed());
     camera.precompute();
@@ -215,9 +216,9 @@ TEST_CASE("Setters record settings, and precompute() builds what a render would 
     CHECK_FALSE(camera.is_precomputed());
     camera.precompute();
 
+    // The convolution radius does not limit it:
     camera.set_psf_convolution_radius(10);
-    CHECK_FALSE(camera.is_precomputed());
-    camera.precompute();
+    CHECK(camera.is_precomputed());
 
     camera.configure_sensor_from_pitch(Resolution{36, 36}, units::Micrometer(8.0));
     CHECK_FALSE(camera.is_precomputed());

@@ -18,24 +18,26 @@ enum class Content {
 
 struct Rendered {
     Image<RGB> power;  ///< Received power.
-    Image<RGB> kernel; ///< The camera's convolution kernel, when convolving.
+    Image<RGB> kernel; ///< The camera's convolution kernel, reaching 32 px, when convolving.
+    Image<RGB> psf;    ///< The PSF of a source at a pixel's center, to 63 px, when convolving.
 };
 
+constexpr int SIZE = 64;
+
 /// Renders a 64 x 64 frame of 10 um pixels behind a 50 mm f/8 lens (1/5000 rad per pixel),
-/// against a uniform sky, with an Airy PSF and scattered light reaching 32 px. The sky is about
-/// as bright as the sunlit ball, so that the convolution's rounding error, which scales with the
-/// brightest pixel, is small next to it.
+/// against a uniform sky, with an Airy PSF and scattered light. The sky is about as bright as the
+/// sunlit ball.
 Rendered render(Content content, bool convolve, bool region_culling = true)
 {
     Scene<RGB> scene;
     scene.set_background_radiance(200.0f);
 
     auto camera_model = scene.new_camera_model();
-    camera_model.configure_sensor_from_pitch({64, 64}, 10_um);
+    camera_model.configure_sensor_from_pitch({SIZE, SIZE}, 10_um);
     camera_model.set_focal_length(50_mm);
     camera_model.set_fstop(8.0f);
     camera_model.use_aperture_psf(8, 4);
-    camera_model.set_harvey_shack_scatter(0.2f, 2.5f, 0.5f);
+    camera_model.set_scatter(0.2f, 2.5f, units::Radian(0.5 / 5000.0));
     camera_model.set_psf_convolution_radius(32);
     camera_model.enable_psf_convolution(convolve);
     auto camera = scene.root.new_instance(camera_model);
@@ -80,7 +82,10 @@ Rendered render(Content content, bool convolve, bool region_culling = true)
     }
     CHECK(worst <= 1e-5 * brightest);
 
-    return {total, convolve ? camera_model.get_psf_convolution_kernel() : Image<RGB>(0, 0)};
+    if (!convolve) {
+        return {total, Image<RGB>(0, 0), Image<RGB>(0, 0)};
+    }
+    return {total, camera_model.get_psf_convolution_kernel(), camera_model.psf_image(SIZE - 1)};
 }
 
 /// Largest relative difference between two images, in the green channel.
@@ -114,38 +119,35 @@ TEST_CASE("The PSF convolution leaves a uniform sky as it is", "[render][psf]")
 
 TEST_CASE("The frame is convolved as if a uniform sky continued beyond its edges", "[render][psf]")
 {
-    // The reference is worked out here without the renderer's split of the sky: the frame
-    // traced without convolution is set in a larger canvas whose border continues the sky (the
-    // sky alone's edge pixels, carried outward), convolved with the camera's own kernel by
-    // Image::convolve(), and cropped back. The ball's rim has pixels it covers only partly, and
-    // it comes within 4 px of the frame's left edge, so its light also spreads beyond the frame.
+    // A sky that goes on beyond the frame is its own image convolved, since the PSF holds all of
+    // a source's light: so the reference is the sky alone, and the ball's light less the sky it
+    // hides, spread by the PSF over the whole frame. The ball's rim has pixels it covers only
+    // partly, and it comes within 4 px of the frame's left edge, so its light also spreads
+    // beyond the frame.
     const Image<RGB> sky = render(Content::Nothing, false).power;
     const Image<RGB> traced = render(Content::BallNearEdge, false).power;
     const Rendered convolved = render(Content::BallNearEdge, true);
 
-    constexpr int SIZE = 64;
-    constexpr int BORDER = 40; // more than the kernel's 32 px reach
-    Image<RGB> canvas(SIZE + 2 * BORDER, SIZE + 2 * BORDER, RGB{0.f});
-    for (int y = 0; y < canvas.height(); ++y) {
-        for (int x = 0; x < canvas.width(); ++x) {
-            const int fx = x - BORDER;
-            const int fy = y - BORDER;
-            const bool in_frame = fx >= 0 && fx < SIZE && fy >= 0 && fy < SIZE;
-            canvas(x, y) = in_frame ? traced(fx, fy)
-                                    : sky(std::clamp(fx, 0, SIZE - 1), std::clamp(fy, 0, SIZE - 1));
-        }
-    }
-    canvas.convolve(convolved.kernel);
-    Image<RGB> reference(SIZE, SIZE, RGB{0.f});
-    for (int y = 0; y < SIZE; ++y) {
-        for (int x = 0; x < SIZE; ++x) {
-            reference(x, y) = canvas(x + BORDER, y + BORDER);
+    Image<RGB> reference = sky;
+    const int center = SIZE - 1;
+    for (int sy = 0; sy < SIZE; ++sy) {
+        for (int sx = 0; sx < SIZE; ++sx) {
+            const RGB ball = traced(sx, sy) - sky(sx, sy);
+            if (ball.max() == 0.f && ball.min() == 0.f) {
+                continue;
+            }
+            for (int y = 0; y < SIZE; ++y) {
+                for (int x = 0; x < SIZE; ++x) {
+                    reference(x, y) += ball * convolved.psf(center + x - sx, center + y - sy);
+                }
+            }
         }
     }
 
     CHECK(largest_difference(convolved.power, reference) < 1e-4);
 
-    // The frame convolved on its own, as it was before, is far from it toward the edges:
+    // The frame convolved on its own, as it was before the sky was split off, is far from it
+    // toward the edges:
     Image<RGB> alone = traced;
     alone.convolve(convolved.kernel);
     CHECK(largest_difference(alone, reference) > 0.1);
