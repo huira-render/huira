@@ -468,9 +468,18 @@ TEST_CASE("psf_image() without the aperture's PSF", "[cameras][psf]")
             }
         }
     }
-    SECTION("A PSF that was set is not supported")
+    SECTION("A PSF that was set is given as the renderer draws it, in focus without scattered "
+            "light")
     {
+        // Taken as complete, it holds all of the source's light:
         camera.set_measured_psf(Image<RGB>(9, 9, RGB{1.f}), 1.f, PSFSampling::PointSampled);
+        const Image<RGB> image = camera.psf_image(12, 0.3f, -0.2f);
+        double sum = 0.0;
+        for (std::size_t i = 0; i < image.size(); ++i) {
+            sum += static_cast<double>(image[i][0]);
+        }
+        CHECK(std::abs(sum - 1.0) < 1e-5);
+        camera.set_scatter(0.05f, 2.5f, units::Radian(1e-4));
         CHECK_THROWS(camera.psf_image(2));
     }
     SECTION("Out-of-range arguments throw")

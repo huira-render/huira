@@ -97,7 +97,9 @@ inline double arc_in_rectangle(double x0, double x1, double y0, double y1, doubl
  * The light left on the sensor beyond that is added evenly over the frame, so that none is lost
  * and no edge appears. A source's rings are followed only as far as they change a pixel by more
  * than tau; beyond, its light is averaged over them. No pixel is off by more than about 2 tau.
- * A source is always drawn out to where it holds 90% of its light. RGB sensors read out each
+ * A source is always drawn out to where it holds 90% of its light. A still source with a PSF
+ * set with CameraModel::set_psf() or set_measured_psf() is drawn the same way from the PSF's
+ * grid (see GridPsf), without rings to follow. RGB sensors read out each
  * channel; others, their sum.
  *
  * The default, DEFAULT_UNRESOLVED_TAPER, ends halos where a square-root stretch of a noiseless
@@ -1382,10 +1384,14 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
 
     // The aperture's PSF is drawn from its tables: a source that stays put during the exposure at
     // its exact position, and a moving one along its path, as line integrals (see
-    // PsfTables::draw_line()). A PSF that was set is drawn from its own stamps.
+    // PsfTables::draw_line()). A PSF that was set is drawn from its grid for a source that stays
+    // put, at its exact position (see GridPsf), and from its own stamps for a moving one.
     const bool use_tables = use_psf_direct && camera->use_aperture_psf_;
     const PSF<TSpectral>* psf = use_psf_direct && !use_tables ? camera->psf_.get() : nullptr;
     const PsfTables<TSpectral>* tables = use_tables ? camera->render_tables_.get() : nullptr;
+    const GridPsf<TSpectral>* grid =
+        use_psf_direct && !use_tables ? camera->grid_psf_.get() : nullptr;
+    const bool use_grid = grid != nullptr;
     assert(!use_psf_direct || psf != nullptr || tables != nullptr);
 
     // Scattered-light wings for unresolved sources that are stamped, whether or not resolved
@@ -1569,7 +1575,9 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
     // A source's light reaches its stamp's radius beyond the pixel it is anchored to, and the
     // wings' splat one pixel; sources that far outside the image still light its edge. The
     // frustum they are culled against is widened by that much.
-    const int reach = std::max(stamp_radius, 1) + 1;
+    const int reach = std::max(std::max(stamp_radius, 1),
+                               use_grid ? static_cast<int>(std::ceil(grid->reach())) : 0) +
+                      1;
     const Frustum<TSpectral> frustum = camera->view_frustum_with_margin_(static_cast<float>(reach));
 
     // A source drawn from the tables reaches as far as its own light shows, which for a bright
@@ -1607,6 +1615,8 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
         std::array<double, 2> end{};
         TSpectral density{0.f};
         typename PsfTables<TSpectral>::LineReach reach{};
+        /// Drawn from a PSF's grid: its scale (see GridPsf::scale()).
+        std::array<double, TSpectral::size()> scale{};
     };
 
     // A source that moves less than this during the exposure is drawn once, at its mean
@@ -1655,10 +1665,10 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
     // not noise is simulated, so that a noiseless frame is the mean of noisy ones, or of an
     // electron for a sensor without read noise. See set_unresolved_taper().
     constexpr bool PER_CHANNEL_READOUT = std::is_same_v<TSpectral, RGB>;
-    const double aspect = use_tables ? tables->aspect() : 1.0;
+    const double aspect = use_tables ? tables->aspect() : use_grid ? grid->aspect() : 1.0;
     std::array<double, TSpectral::size()> electrons_per_power{};
     double tau = 0.0;
-    if (use_tables) {
+    if (use_tables || use_grid) {
         const SensorModel<TSpectral>& sensor = *camera->sensor_;
         const double read_noise = static_cast<double>(sensor.read_noise());
         tau = unresolved_taper_ * (read_noise > 0.0 ? read_noise : 1.0);
@@ -1745,6 +1755,39 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
             return std::max(hi, floor);
         };
 
+    // The same for a source drawn from a PSF's grid, which reaches no further than the grid:
+    // infinite if it stays above tau that far.
+    auto grid_taper_radius = [&](const TSpectral& power) {
+        if (!(tau > 0.0)) {
+            return std::numeric_limits<double>::infinity();
+        }
+        std::array<double, TSpectral::size()> electrons{};
+        double floor = 0.0;
+        for (std::size_t c = 0; c < TSpectral::size(); ++c) {
+            electrons[c] = static_cast<double>(power[c]) * electrons_per_power[c];
+            floor = std::max(floor, grid->radius_holding_90(c));
+        }
+        const auto readout = [&](double r) {
+            double value = 0.0;
+            for (std::size_t c = 0; c < TSpectral::size(); ++c) {
+                const double channel = electrons[c] * grid->envelope(c, r);
+                value = PER_CHANNEL_READOUT ? std::max(value, channel) : value + channel;
+            }
+            return value;
+        };
+        const double limit = grid->reach();
+        if (readout(limit) > tau) {
+            return std::numeric_limits<double>::infinity();
+        }
+        double lo = 0.0;
+        double hi = limit;
+        while (hi - lo > 1e-3 * hi) {
+            const double mid = 0.5 * (lo + hi);
+            (readout(mid) > tau ? lo : hi) = mid;
+        }
+        return std::max(hi, floor);
+    };
+
     // The distance beyond which following the source's rings changes no pixel's readout by more
     // than tau (see PsfTables::ring_deviation()), found by bisection to a twentieth of a pixel;
     // infinite with no taper.
@@ -1803,9 +1846,19 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
         const int r = item.effective_radius;
         if (exact) {
             sample.exact = true;
-            sample.rings = rings_radius(power, *item.tables);
-            sample.taper = taper_radius(power, sample.rings, *item.tables);
-            sample.draw = std::isinf(sample.taper) ? farthest_corner(p) : 2.0 * sample.taper;
+            if (use_grid) {
+                // The core's light, less the wings' (see the tiles below):
+                sample.scale = grid->scale(static_cast<double>(p.x), static_cast<double>(p.y));
+                sample.taper = grid_taper_radius(
+                    splat_wings ? power * (1.f - camera->scatter_fraction_) : power);
+                sample.draw =
+                    std::min(std::isinf(sample.taper) ? farthest_corner(p) : 2.0 * sample.taper,
+                             grid->reach());
+            } else {
+                sample.rings = rings_radius(power, *item.tables);
+                sample.taper = taper_radius(power, sample.rings, *item.tables);
+                sample.draw = std::isinf(sample.taper) ? farthest_corner(p) : 2.0 * sample.taper;
+            }
             const double reach_x = sample.draw;
             const double reach_y = sample.draw / aspect;
             x_lo = static_cast<int>(std::floor(std::max(static_cast<double>(p.x) - reach_x, -1.0)));
@@ -2181,9 +2234,9 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                 pixels.swap(next_pixels);
             }
 
-            // A source that stays put during the exposure, with the tables to draw it from, is
-            // drawn once at its mean position: its samples' light is added up.
-            bool still = use_tables;
+            // A source that stays put during the exposure, with the tables or a PSF's grid to draw
+            // it from, is drawn once at its mean position: its samples' light is added up.
+            bool still = use_tables || use_grid;
             for (std::size_t k = 1; still && k < pixels.size(); ++k) {
                 still = std::abs(pixels[k].x - pixels[0].x) < STILL_TOLERANCE &&
                         std::abs(pixels[k].y - pixels[0].y) < STILL_TOLERANCE;
@@ -2458,17 +2511,18 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
         return received_power;
     }
 
-    // Only stamped sources are splatted for the wings:
-    if (splat_wings && std::any_of(samples.begin(), samples.end(), [](const Sample& sample) {
-            return !sample.exact;
-        })) {
+    // Only stamped sources, and those drawn from a PSF's grid, are splatted for the wings:
+    if (splat_wings &&
+        (use_grid || std::any_of(samples.begin(), samples.end(), [](const Sample& sample) {
+             return !sample.exact;
+         }))) {
         wing_splat = Image<TSpectral>(fb_width, fb_height, TSpectral{0});
     }
 
     // The light each source or line drawn from the tables puts in each tile, per unit power: one
     // entry per (tile, sample) pair, so that the tiles write their own.
     std::vector<std::array<double, TSpectral::size()>> entry_light(
-        use_tables ? tile_sample_indices.size() : 0);
+        use_tables || use_grid ? tile_sample_indices.size() : 0);
 
     // Render the tiles in parallel, each into its own pixels of the frame:
     tbb::parallel_for(
@@ -2495,8 +2549,9 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                     const float center_x = star_p.x - 0.5f;
                     const float center_y = star_p.y - 0.5f;
 
-                    // A stamped source's core takes 1 - f_s of its light, and its wings the rest:
-                    const bool wings = splat_wings && !sample.exact;
+                    // A stamped source's core takes 1 - f_s of its light, and its wings the rest,
+                    // as does one drawn from a PSF's grid:
+                    const bool wings = splat_wings && (!sample.exact || use_grid);
                     const TSpectral core_power =
                         wings ? power * (1.f - camera->scatter_fraction_) : power;
                     if (wings) {
@@ -2542,8 +2597,9 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                                 power[c] > 0.f ? drawn[c] / static_cast<double>(power[c]) : 0.0;
                         }
                     } else if (sample.exact) {
-                        // Drawn from the tables at its exact position, tapered, and the light
-                        // drawn added up per (tile, sample), for the light left to spread:
+                        // Drawn from the tables or a PSF's grid at its exact position, tapered, and
+                        // the light drawn added up per (tile, sample), for the light left to
+                        // spread:
                         const double px = static_cast<double>(star_p.x);
                         const double py = static_cast<double>(star_p.y);
                         const int x_begin =
@@ -2554,18 +2610,29 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                             tile_y0, static_cast<int>(std::floor(py - sample.draw / aspect)));
                         const int y_end = std::min(
                             tile_y1, static_cast<int>(std::floor(py + sample.draw / aspect)) + 1);
-                        entry_light[k] = item.tables->draw(
-                            received_power,
-                            x_begin,
-                            x_end,
-                            y_begin,
-                            y_end,
-                            px,
-                            py,
-                            power,
-                            sample.rings,
-                            sample.draw,
-                            [&](double r) { return taper_weight(r, sample.taper); });
+                        const auto weight = [&](double r) { return taper_weight(r, sample.taper); };
+                        entry_light[k] = use_grid ? grid->draw(received_power,
+                                                               x_begin,
+                                                               x_end,
+                                                               y_begin,
+                                                               y_end,
+                                                               px,
+                                                               py,
+                                                               core_power,
+                                                               sample.scale,
+                                                               sample.draw,
+                                                               weight)
+                                                  : item.tables->draw(received_power,
+                                                                      x_begin,
+                                                                      x_end,
+                                                                      y_begin,
+                                                                      y_end,
+                                                                      px,
+                                                                      py,
+                                                                      power,
+                                                                      sample.rings,
+                                                                      sample.draw,
+                                                                      weight);
                     } else if (stamp_radius > 0) {
                         const StampPhase phase_x = nearest_stamp_phase(center_x);
                         const StampPhase phase_y = nearest_stamp_phase(center_y);
@@ -2623,9 +2690,9 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
             }
         });
 
-    // The light sources drawn from the tables put on the sensor beyond what was drawn,
-    // spread evenly over it. See spread_light_().
-    if (use_tables) {
+    // The light sources drawn from the tables or a PSF's grid put on the sensor beyond what was
+    // drawn, spread evenly over it. See spread_light_().
+    if (use_tables || use_grid) {
         // The light each source drew, per unit power: its entries' sums, in a fixed order.
         std::vector<std::array<double, TSpectral::size()>> drawn(samples.size());
         for (std::size_t k = 0; k < tile_sample_indices.size(); ++k) {
@@ -2763,6 +2830,20 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                 return;
             }
             if (!sample.exact) {
+                return;
+            }
+            if (use_grid) {
+                // What falls on the frame, less what was drawn, of the core's light:
+                const Light on_frame = grid->light_on_frame(static_cast<double>(sample.projected.x),
+                                                            static_cast<double>(sample.projected.y),
+                                                            fb_width,
+                                                            fb_height,
+                                                            sample.scale);
+                const double core =
+                    splat_wings ? 1.0 - static_cast<double>(camera->scatter_fraction_) : 1.0;
+                for (std::size_t c = 0; c < TSpectral::size(); ++c) {
+                    excess[i][c] = core * (on_frame[c] - drawn[i][c]);
+                }
                 return;
             }
             const PsfTables<TSpectral>& source_tables = *items[sample.item_idx].tables;
