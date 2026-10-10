@@ -152,15 +152,14 @@ void Renderer<TSpectral>::render(SceneView<TSpectral>& scene_view,
         // it shows up only as an unexplained gap between those two and the total.
         auto wings_start = std::chrono::high_resolution_clock::now();
 
-        // No source landed in frame, so the splat is empty and its wings are too. The
-        // core/wing blend below still has to run: it rescales the core by 1 - f_s.
+        // The stamped sources' cores were drawn with 1 - f_s of their light; their wings take
+        // the rest. No such source landed in frame if the splat is empty.
         if (!image_is_zero_(star_wing_splat)) {
             camera->apply_wings_convolution_(star_wing_splat);
-        }
-        const float f_s = camera->scatter_fraction_;
-        const float core_weight = 1.f - f_s;
-        for (std::size_t i = 0; i < star_power.size(); ++i) {
-            star_power[i] = star_power[i] * core_weight + star_wing_splat[i] * f_s;
+            const float f_s = camera->scatter_fraction_;
+            for (std::size_t i = 0; i < star_power.size(); ++i) {
+                star_power[i] += star_wing_splat[i] * f_s;
+            }
         }
 
         std::chrono::duration<double> wings_elapsed =
@@ -1360,17 +1359,15 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
     }
 
     // Determine the stamp based on camera settings. render() has brought the camera's
-    // kernels up to date: the defocus stamps are empty when in focus, and when they are not
-    // they replace the PSF's.
+    // kernels up to date: the defocus stamps are empty when in focus or with the aperture's
+    // PSF, whose tables hold the blur, and otherwise replace the PSF's.
     const DefocusKernel<TSpectral>& defocus = camera->defocus_kernel_;
     const bool use_defocus = !defocus.empty();
 
-    // Scattered-light wings for unresolved sources, whether or not resolved bodies are
-    // convolved (see CameraModel::enable_psf_convolution()):
+    // Scattered-light wings for unresolved sources that are stamped, whether or not resolved
+    // bodies are convolved (see CameraModel::enable_psf_convolution()); those drawn from the
+    // tables have their scattered light in them:
     const bool splat_wings = camera->scatter_enabled_ && !use_defocus;
-    if (splat_wings) {
-        wing_splat = Image<TSpectral>(fb_width, fb_height, TSpectral{0});
-    }
     const bool use_psf_direct = camera->has_psf() && !use_defocus;
 
     // The aperture's PSF is drawn from its tables: a source that stays put during the exposure at
@@ -1384,7 +1381,7 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
     if (use_defocus) {
         stamp_radius = defocus.half_extent();
     } else if (use_tables) {
-        stamp_radius = camera->aperture_psf_stamp_radius_();
+        stamp_radius = camera->table_stamps_radius_;
     } else if (use_psf_direct) {
         stamp_radius = psf->get_radius();
     }
@@ -2123,6 +2120,13 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
         return received_power;
     }
 
+    // Only stamped sources are splatted for the wings:
+    if (splat_wings && std::any_of(samples.begin(), samples.end(), [](const Sample& sample) {
+            return !sample.exact;
+        })) {
+        wing_splat = Image<TSpectral>(fb_width, fb_height, TSpectral{0});
+    }
+
     // The light each still source drawn from the tables puts in each tile, per unit power: one
     // entry per (tile, sample) pair, so that the tiles write their own.
     std::vector<std::array<double, TSpectral::size()>> entry_light(
@@ -2153,7 +2157,11 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                     const float center_x = star_p.x - 0.5f;
                     const float center_y = star_p.y - 0.5f;
 
-                    if (splat_wings) {
+                    // A stamped source's core takes 1 - f_s of its light, and its wings the rest:
+                    const bool wings = splat_wings && !sample.exact;
+                    const TSpectral core_power =
+                        wings ? power * (1.f - camera->scatter_fraction_) : power;
+                    if (wings) {
                         const int bx = static_cast<int>(std::floor(center_x));
                         const int by = static_cast<int>(std::floor(center_y));
                         const float fx = center_x - static_cast<float>(bx);
@@ -2223,7 +2231,7 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                                 for (int kx = kx_begin; kx < kx_end; ++kx) {
                                     // Note: scalar kernel * spectral power
                                     received_power(start_x + kx, start_y + ky) +=
-                                        power * kernel(kx + k_offset, ky + k_offset);
+                                        core_power * kernel(kx + k_offset, ky + k_offset);
                                 }
                             }
                         } else {
@@ -2232,7 +2240,7 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                             const int k_offset = stamp_radius - eff_r;
 
                             // A cropped stamp keeps the whole stamp's energy:
-                            TSpectral stamp_power = power;
+                            TSpectral stamp_power = core_power;
                             if (eff_r < stamp_radius && !crop_scale.empty()) {
                                 const auto bank = static_cast<std::size_t>(
                                     phase_y.bank * stamp_banks + phase_x.bank);
@@ -2251,7 +2259,7 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                         const int px = static_cast<int>(std::floor(star_p.x));
                         const int py = static_cast<int>(std::floor(star_p.y));
                         if (px >= tile_x0 && px < tile_x1 && py >= tile_y0 && py < tile_y1) {
-                            received_power(px, py) += power;
+                            received_power(px, py) += core_power;
                         }
                     }
                 }

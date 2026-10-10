@@ -17,6 +17,13 @@ constexpr float SKY = 1e-3f;
 /// A BSDF whose every value is NaN, as a broken material's might be.
 class NaNBSDF final : public BSDF<RGB> {
   public:
+    NaNBSDF() = default;
+
+    NaNBSDF(const NaNBSDF&) = delete;
+    NaNBSDF& operator=(const NaNBSDF&) = delete;
+    NaNBSDF(NaNBSDF&&) = delete;
+    NaNBSDF& operator=(NaNBSDF&&) = delete;
+
     [[nodiscard]] BSDFRequirements requirements() const override { return {}; }
 
     [[nodiscard]] RGB eval(const Vec3<float>&,

@@ -115,7 +115,9 @@ class OpticsProfile {
  * The in-focus profile's rings are followed out to ring_radius(); beyond it they are averaged
  * over, as in the far field. Averaged over the disc, the rings lose contrast as
  * (pi c b)^(-3/2), so the larger the blur, the closer in that can be. Beyond the disc's edge
- * plus ring_radius() the blurred profile is smooth, and is tabulated on a logarithmic grid.
+ * plus ring_radius() the blurred profile is smooth. Its far field, the disc over the in-focus
+ * profile averaged over its rings, is tabulated on a logarithmic grid from a pixel beyond the
+ * disc's edge.
  */
 class DefocusedProfile {
   public:
@@ -134,8 +136,13 @@ class DefocusedProfile {
     /// How far out the in-focus profile's rings are followed.
     [[nodiscard]] double ring_radius() const { return ring_radius_; }
 
-    /// far_field() holds from here out: the disc's edge plus ring_radius().
-    [[nodiscard]] double smooth_from() const { return blur_ + ring_radius_; }
+    /// far_field(), averaged over the rings, holds from here out: a pixel beyond the disc's
+    /// edge. The profile is its far field beyond the disc's edge plus ring_radius().
+    [[nodiscard]] double smooth_from() const { return blur_ + FAR_START; }
+
+    /// How far beyond the disc's edge the far field starts, in pixel widths: where every arc
+    /// lies where the in-focus far field holds.
+    static constexpr double FAR_START = 1.0;
 
   private:
     double blur_;

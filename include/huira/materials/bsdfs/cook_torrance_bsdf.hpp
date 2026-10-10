@@ -53,6 +53,11 @@ class CookTorranceBSDF final : public BSDF<TSpectral> {
   public:
     CookTorranceBSDF() noexcept = default;
 
+    CookTorranceBSDF(const CookTorranceBSDF&) = delete;
+    CookTorranceBSDF& operator=(const CookTorranceBSDF&) = delete;
+    CookTorranceBSDF(CookTorranceBSDF&&) = delete;
+    CookTorranceBSDF& operator=(CookTorranceBSDF&&) = delete;
+
     [[nodiscard]] BSDFRequirements requirements() const override;
 
     [[nodiscard]] TSpectral eval(const Vec3<float>& wo,

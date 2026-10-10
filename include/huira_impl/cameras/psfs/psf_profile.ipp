@@ -459,15 +459,19 @@ inline DefocusedProfile::DefocusedProfile(const OpticsProfile& focused,
     };
 
     // Beyond the disc's edge plus the ring radius every arc lies where the rings are averaged,
-    // so the blurred profile is smooth there.
+    // so the blurred profile is smooth there, and the profile is its far field. The far field,
+    // the disc over the in-focus profile averaged over its rings, is tabulated from FAR_START
+    // beyond the disc's edge, where the in-focus far field holds for every arc, so that a
+    // faint source can be drawn from it where the rings do not show (see
+    // PsfTables::ring_deviation()).
     constexpr double OVERLAP = 4.0;
-    const double smooth_from = blur + ring_radius_;
+    const double rings_end = blur + ring_radius_;
     near_ = RadialTable::linear(
-        [&](double r) { return blurred(r, false); }, 0.0, smooth_from + OVERLAP, step);
+        [&](double r) { return blurred(r, false); }, 0.0, rings_end + OVERLAP, step);
     constexpr double FAR_RATIO = 1.01;
     far_ = RadialTable::logarithmic([&](double r) { return blurred(r, true); },
-                                    smooth_from,
-                                    std::max(reach, 2.0 * smooth_from),
+                                    smooth_from(),
+                                    std::max(reach, 2.0 * rings_end),
                                     FAR_RATIO);
 }
 
@@ -484,8 +488,8 @@ inline double DefocusedProfile::slope(double r) const
 }
 
 /**
- * @brief The blurred profile where it is smooth, beyond the disc's edge plus ring_radius(), with
- * its first two derivatives.
+ * @brief The blurred profile averaged over its rings, from smooth_from() out, with its first two
+ * derivatives: the profile itself beyond the disc's edge plus ring_radius().
  */
 inline std::array<double, 3> DefocusedProfile::far_field(double r) const
 {

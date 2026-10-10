@@ -347,6 +347,7 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     int aperture_psf_radius_ = 0; ///< 0 for automatic: see aperture_psf_stamp_radius_().
     int aperture_psf_banks_ = DEFAULT_PSF_BANKS;
     int aperture_psf_stamp_radius_() const;
+    int table_stamp_radius_() const;
     bool convolve_psf_ = true;
 
     /// Whether there is anything to blur with: a PSF, or scattered light.
@@ -371,16 +372,24 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     /// so that an image can be read from them while they are rebuilt for new optics.
     std::shared_ptr<const PsfTables<TSpectral>> psf_tables_;
 
-    /// The tables the renderer draws unresolved sources from with the aperture's PSF: its
-    /// diffraction alone, in focus (scattered light and defocus are drawn separately), and the
-    /// reach they were built for. psf_tables_ shares them when it would be the same.
+    /// The tables the renderer draws still unresolved sources from with the aperture's PSF: its
+    /// diffraction with the scattered light, blurred as a star is by the focus, and the reach
+    /// they were built for. psf_tables_ shares them.
     std::shared_ptr<const PsfTables<TSpectral>> render_tables_;
     double render_tables_reach_ = 0.0;
+    double render_tables_blur_ = 0.0;
 
-    /// Stamps from render_tables_, for sources that move during the exposure: one per subpixel
-    /// position, banks x banks of them, each normalized per channel as PSF's are.
+    /// The same without the scattered light, which the wings add to moving sources, for the
+    /// stamps, and the blur they were built for: render_tables_ without scattered light.
+    std::shared_ptr<const PsfTables<TSpectral>> stamp_tables_;
+    double stamp_tables_blur_ = 0.0;
+
+    /// Stamps from stamp_tables_, for sources that move during the exposure: one per subpixel
+    /// position, banks x banks of them, each normalized per channel as PSF's are, with their
+    /// radius.
     std::vector<Image<TSpectral>> table_stamps_;
     int table_stamp_banks_ = 0;
+    int table_stamps_radius_ = 0;
 
     /// Stamps for the defocus blur of unresolved sources; empty when in focus.
     DefocusKernel<TSpectral> defocus_kernel_;
@@ -423,8 +432,8 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     std::uint64_t convolution_spectrum_built_at_ = 0;
     std::uint64_t wings_kernel_built_at_ = 0;
     std::uint64_t wings_spectrum_built_at_ = 0;
-    std::uint64_t psf_tables_built_at_ = 0;
     std::uint64_t render_tables_built_at_ = 0;
+    std::uint64_t stamp_tables_built_at_ = 0;
     std::uint64_t table_stamps_built_at_ = 0;
 
     // The geometry compute_intrinsics_() last saw, to tell which inputs a change touched.
@@ -450,9 +459,12 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     void ensure_wings_spectrum_();
     void ensure_psf_tables_();
     void ensure_render_tables_();
+    void ensure_stamp_tables_();
     void ensure_table_stamps_();
     [[nodiscard]] double tables_reach_() const;
     [[nodiscard]] bool render_tables_stale_() const;
+    [[nodiscard]] bool stamp_tables_stale_() const;
+    [[nodiscard]] double tables_blur_() const;
     [[nodiscard]] bool table_stamps_stale_() const;
     std::shared_ptr<const PsfTables<TSpectral>>
     build_psf_tables_(double blur,

@@ -133,7 +133,7 @@ TEST_CASE("Scatter-only camera (no core PSF)", "[cameras][psf][scatter]")
     camera.set_focal_length(units::Millimeter(25.0));
     camera.configure_sensor_from_size(Resolution{256, 256}, units::Millimeter(6.0));
     camera.delete_psf(); // the aperture's, by default
-    camera.set_harvey_shack_scatter(0.02f, 2.0f, 0.5f);
+    camera.set_harvey_shack_scatter(0.02f, 2.5f, 0.5f);
 
     SECTION("Requires an explicit convolution radius")
     {
