@@ -368,7 +368,8 @@ inline void bind_camera_model_handle(py::module_& m)
              py::arg("banks") = CameraModel<TSpectral>::DEFAULT_PSF_BANKS,
              "Use the aperture's diffraction pattern as the PSF (the default), with stamps of "
              "the given radius in pixels (0: automatic, holding about 99% of the light, from "
-             "16 to 64 px) and subpixel positions per axis for unresolved sources.")
+             "16 to 64 px) and subpixel positions per axis, as get_psf_kernel() gives them. "
+             "Unresolved sources are drawn from the PSF's tables (see psf_image()).")
         .def("uses_aperture_psf",
              &HandleType::uses_aperture_psf,
              "Whether the PSF is the aperture's diffraction pattern (the default).")

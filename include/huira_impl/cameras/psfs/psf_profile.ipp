@@ -159,6 +159,7 @@ inline ScatterProfile::ScatterProfile(double shoulder, double slope, std::option
                               std::to_string(slope));
         }
         peak_ = (slope - 2.0) / (2.0 * pi * shoulder_squared_);
+        build_line_();
         return;
     }
     if (!(*outer > shoulder) || !std::isfinite(*outer)) {
@@ -185,6 +186,42 @@ inline ScatterProfile::ScatterProfile(double shoulder, double slope, std::option
     // Beyond the end the denominator is h to a part in e^40.
     total += 2.0 / (slope * h) * std::exp(-0.5 * slope * end);
     peak_ = 1.0 / (pi * shoulder_squared_ * total);
+    build_line_();
+}
+
+/**
+ * @brief Tabulates the line spread, the profile integrated along a line, against the distance
+ * from it: every sixteenth of the shoulder out to 64 shoulders, then every 2% out to 10^6
+ * shoulders, beyond which it continues as the power law it follows there.
+ */
+inline void ScatterProfile::build_line_()
+{
+    const double shoulder = std::sqrt(shoulder_squared_);
+    const auto line = [&](double d) {
+        return abel_derivatives([&](double r) { return derivatives(r); }, d, shoulder);
+    };
+    constexpr double NEAR_SHOULDERS = 64.0;
+    constexpr double FAR_SHOULDERS = 1e6;
+    auto table = std::make_shared<Line>();
+    table->near = RadialTable::linear(line, 0.0, NEAR_SHOULDERS * shoulder, shoulder / 16.0);
+    table->far =
+        RadialTable::logarithmic(line, NEAR_SHOULDERS * shoulder, FAR_SHOULDERS * shoulder, 1.02);
+    line_ = std::move(table);
+}
+
+/**
+ * @brief The line spread, light per unit length across a line through the source's path, at a
+ * signed distance d from it, with its first two derivatives.
+ */
+inline std::array<double, 3> ScatterProfile::line_derivatives(double d) const
+{
+    const double distance = std::abs(d);
+    std::array<double, 3> result =
+        distance <= line_->near.end() ? line_->near(distance) : line_->far(distance);
+    if (d < 0.0) {
+        result[1] = -result[1];
+    }
+    return result;
 }
 
 /// Light per unit area at a distance r from the source.
@@ -272,6 +309,31 @@ inline std::array<double, 3> OpticsProfile::far_field(double r) const
     return result;
 }
 
+/**
+ * @brief The line spread, light per unit length across a line through the source's path, at a
+ * signed distance d from it, with its first two derivatives: the band's diffraction pattern's,
+ * in closed form (see AiryBandLine), and the scattered light's.
+ */
+inline std::array<double, 3> OpticsProfile::line_derivatives(double d) const
+{
+    const double distance = std::abs(d);
+    const AiryBandLine line(diffraction_.cutoff_blue(), diffraction_.cutoff_red());
+    const std::array<double, 2> derivatives = line.derivatives(distance);
+    const double kept = 1.0 - scatter_fraction_;
+    std::array<double, 3> result{
+        kept * line(distance), kept * derivatives[0], kept * derivatives[1]};
+    if (scatter_fraction_ > 0.0) {
+        const std::array<double, 3> scattered = scatter_->line_derivatives(distance);
+        for (std::size_t i = 0; i < result.size(); ++i) {
+            result[i] += scatter_fraction_ * scattered[i];
+        }
+    }
+    if (d < 0.0) {
+        result[1] = -result[1];
+    }
+    return result;
+}
+
 /// The derivative of the profile with distance.
 inline double OpticsProfile::slope(double r) const
 {
@@ -307,6 +369,57 @@ std::array<double, N> gauss_legendre_panels(const F& fn, double a, double b, std
 }
 
 } // namespace psf_profile_detail
+
+/**
+ * @brief The Abel transform of a radial function g, its integral along a line a distance d from
+ * the centre, 2 x the integral over s from 0 of g(sqrt(d^2 + s^2)), with its first two
+ * derivatives in d, from derivatives(r), which returns g and its first two derivatives.
+ *
+ * Eight-point Gauss-Legendre panels: four out to the larger of d and scale (where g changes
+ * fastest, and its rings, if any, should be resolved by the caller's scale), then growing by
+ * half each out to 10^7 times that, and beyond, the power law g follows there.
+ */
+template <class Derivatives>
+std::array<double, 3> abel_derivatives(const Derivatives& derivatives, double d, double scale)
+{
+    const double width = std::max(d, scale);
+    const double d2 = d * d;
+    const auto integrand = [&](double s) {
+        const double r = std::sqrt(d2 + s * s);
+        const std::array<double, 3> g = derivatives(r);
+        if (!(r > 0.0)) {
+            return std::array<double, 3>{g[0], 0.0, g[2]};
+        }
+        const double inverse = 1.0 / r;
+        return std::array<double, 3>{g[0],
+                                     g[1] * d * inverse,
+                                     g[2] * d2 * inverse * inverse +
+                                         g[1] * s * s * inverse * inverse * inverse};
+    };
+    std::array<double, 3> sum =
+        psf_profile_detail::gauss_legendre_panels<3>(integrand, 0.0, width, 4);
+    constexpr double GROWTH = 1.5;
+    constexpr double REACH = 1e7;
+    double start = width;
+    double panel = 0.5 * width;
+    while (start < REACH * width) {
+        const std::array<double, 3> part =
+            psf_profile_detail::gauss_legendre_panels<3>(integrand, start, start + panel, 1);
+        for (std::size_t i = 0; i < 3; ++i) {
+            sum[i] += part[i];
+        }
+        start += panel;
+        panel *= GROWTH;
+    }
+    const std::array<double, 3> tail = derivatives(start);
+    if (tail[0] > 0.0) {
+        const double falloff = -start * tail[1] / tail[0];
+        if (falloff > 1.0) {
+            sum[0] += tail[0] * start / (falloff - 1.0);
+        }
+    }
+    return {2.0 * sum[0], 2.0 * sum[1], 2.0 * sum[2]};
+}
 
 /**
  * @brief The profile of focused, blurred by a disc of radius blur.
@@ -473,6 +586,84 @@ inline DefocusedProfile::DefocusedProfile(const OpticsProfile& focused,
                                     smooth_from(),
                                     std::max(reach, 2.0 * rings_end),
                                     FAR_RATIO);
+
+    // The line spread, the in-focus one convolved with the disc's, 2 sqrt(b^2 - x^2) / (pi b^2):
+    // with x = b sin(theta), (2 / pi) times the integral of cos^2(theta) times the in-focus
+    // line spread at d - b sin(theta). The in-focus line spread is tabulated first, as far as
+    // that reaches. Panels follow its rings within the ring radius of d, and beyond, where they
+    // are washed out, grow with the distance from d. Tabulated as far as the profile's rings,
+    // beyond which the tables use the far field's.
+    // Every quarter period, as the tables' nodes are: quintic interpolation between holds it to
+    // about 1e-6.
+    const double line_end = rings_end + OVERLAP;
+    const double line_step = 2.0 * step;
+    const RadialTable focused_line =
+        RadialTable::linear([&](double d) { return focused.line_derivatives(d); },
+                            0.0,
+                            line_end + blur + line_step,
+                            line_step);
+    const auto in_focus_line = [&](double x) {
+        std::array<double, 3> l = focused_line(std::abs(x));
+        if (x < 0.0) {
+            l[1] = -l[1];
+        }
+        return l;
+    };
+    const auto line = [&](double d) {
+        const auto integrand = [&](double theta) {
+            const double cosine = std::cos(theta);
+            const std::array<double, 3> l = in_focus_line(d - blur * std::sin(theta));
+            const double weight = cosine * cosine;
+            return std::array<double, 3>{weight * l[0], weight * l[1], weight * l[2]};
+        };
+        const auto angle = [&](double x) { return std::asin(std::clamp(x / blur, -1.0, 1.0)); };
+        std::array<double, 3> sum{};
+        const auto add = [&](double from, double to, double width) {
+            if (!(to > from)) {
+                return;
+            }
+            const auto panels =
+                static_cast<std::size_t>(std::max(1.0, std::ceil(blur * (to - from) / width)));
+            const std::array<double, 3> part =
+                gauss_legendre_panels<3>(integrand, from, to, panels);
+            for (std::size_t i = 0; i < 3; ++i) {
+                sum[i] += part[i];
+            }
+        };
+        const double fine_from = angle(d - ring_radius_);
+        const double fine_to = angle(d + ring_radius_);
+        add(fine_from, fine_to, 0.5 * period);
+        // Beyond, one panel for each quarter by which the distance from d grows.
+        for (const double sign : {-1.0, 1.0}) {
+            double distance = ring_radius_;
+            while (distance < 2.0 * blur + line_end) {
+                const double next = std::max(1.25 * distance, distance + 0.5 * period);
+                const double a = angle(d + sign * distance);
+                const double b = angle(d + sign * next);
+                add(std::min(a, b), std::max(a, b), std::numeric_limits<double>::infinity());
+                distance = next;
+            }
+        }
+        for (double& value : sum) {
+            value *= 2.0 / pi;
+        }
+        return sum;
+    };
+    line_ = RadialTable::linear(line, 0.0, line_end, line_step);
+}
+
+/**
+ * @brief The line spread at a signed distance d from the line, with its first two derivatives,
+ * out to the disc's edge plus ring_radius() and a few pixels; the tables take the far field's
+ * beyond.
+ */
+inline std::array<double, 3> DefocusedProfile::line_derivatives(double d) const
+{
+    std::array<double, 3> result = line_(std::abs(d));
+    if (d < 0.0) {
+        result[1] = -result[1];
+    }
+    return result;
 }
 
 /// Light per unit area at a distance r from the source.

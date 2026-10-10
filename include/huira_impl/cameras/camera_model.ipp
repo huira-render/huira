@@ -685,7 +685,10 @@ void CameraModel<TSpectral>::set_measured_psf(const Image<TSpectral>& data,
  * pixel. It is at least MIN_AUTO_PSF_RADIUS and at most DEFAULT_PSF_RADIUS pixels; light
  * beyond the stamp is folded into it, since each stamp is normalized.
  *
- * @param radius Radius in pixels of the stamps used for unresolved sources; 0 for automatic.
+ * Unresolved sources are drawn from the PSF's tables (see psf_image()); the stamps are those
+ * get_psf_kernel() gives.
+ *
+ * @param radius Radius in pixels of the stamps; 0 for automatic.
  * @param banks Subpixel positions per axis the stamps are made for.
  * @throws std::runtime_error if the radius is negative, the banks less than 1, or the stamps
  *         would exceed 4 GiB.
@@ -897,8 +900,8 @@ int CameraModel<TSpectral>::get_psf_radius() const
 }
 
 /**
- * @brief The radius of the stamps for moving sources with the aperture's PSF: as set, or
- * automatic (see use_aperture_psf()), widened by the blur a star gets from the focus.
+ * @brief The radius of get_psf_kernel()'s stamps with the aperture's PSF: as set, or automatic
+ * (see use_aperture_psf()), widened by the blur a star gets from the focus.
  */
 template <IsSpectral TSpectral>
 int CameraModel<TSpectral>::table_stamp_radius_() const
@@ -977,8 +980,8 @@ void CameraModel<TSpectral>::disable_veiling_glare()
  *
  * Without an outer radius the light totals a finite amount only for a falloff exponent over 2,
  * so an exponent of 2 or less needs one. Unresolved sources drawn from the aperture's PSF's
- * tables bend the wings down smoothly beyond the outer radius; moving sources and resolved
- * bodies, convolved with the wings kernel, still cut them off there, or at the kernel's edge.
+ * tables bend the wings down smoothly beyond the outer radius; resolved bodies, convolved with
+ * the wings kernel, still cut them off there, or at the kernel's edge.
  *
  * @param scatter_fraction Fraction of light scattered, in [0, 1)
  * @param falloff_exponent Power-law exponent of the falloff (typically 2 to 3)
@@ -1062,8 +1065,8 @@ void CameraModel<TSpectral>::disable_harvey_shack_scatter()
  * the sensor, within 0.1% below 3 degrees.
  *
  * The scattered light follows the focal length and pixel pitch. It replaces scattered light set
- * with set_harvey_shack_scatter(), and is included in psf_image(). Still unresolved sources are
- * drawn from the aperture's PSF's tables, which hold it; moving sources and resolved bodies are
+ * with set_harvey_shack_scatter(), and is included in psf_image(). Unresolved sources, still or
+ * moving, are drawn from the aperture's PSF's tables, which hold it; resolved bodies are
  * convolved with the wings kernel, with the shoulder and the outer angle (as a cutoff) in
  * pixels.
  *
@@ -1268,16 +1271,13 @@ template <IsSpectral TSpectral>
 void CameraModel<TSpectral>::precompute_locked_()
 {
     // With the aperture's PSF, unresolved sources are drawn from its tables, which hold the
-    // defocus blur and the scattered light: still ones directly, and moving ones from stamps
-    // made from them, with the scattered-light wings. Resolved bodies get the convolution
-    // kernel, unless enable_psf_convolution(false).
+    // defocus blur and the scattered light: still ones at their position, and moving ones
+    // along their path. Resolved bodies get the convolution kernel, unless
+    // enable_psf_convolution(false). (The stamps get_psf_kernel() gives are built when asked
+    // for.)
     if (use_aperture_psf_) {
         defocus_kernel_.clear();
         ensure_render_tables_();
-        ensure_table_stamps_(); // and the tables they come from
-        if (scatter_enabled_) {
-            ensure_wings_spectrum_();
-        }
         if (convolves_bodies_()) {
             ensure_convolution_spectrum_();
         }
@@ -1308,10 +1308,7 @@ template <IsSpectral TSpectral>
 bool CameraModel<TSpectral>::is_precomputed_locked_() const
 {
     if (use_aperture_psf_) {
-        return defocus_kernel_.empty() && !render_tables_stale_() && !table_stamps_stale_() &&
-               (!scatter_enabled_ ||
-                !(wings_stale_(wings_spectrum_built_at_) ||
-                  stale_(wings_spectrum_built_at_, {OpticsInput::Resolution}))) &&
+        return defocus_kernel_.empty() && !render_tables_stale_() &&
                (!convolves_bodies_() ||
                 !(convolution_stale_(convolution_spectrum_built_at_) ||
                   stale_(convolution_spectrum_built_at_, {OpticsInput::Resolution})));
@@ -1545,9 +1542,9 @@ bool CameraModel<TSpectral>::stamp_tables_stale_() const
 }
 
 /**
- * @brief Build the tables the stamps for moving sources come from, if out of date: the
- * renderer's without the scattered light, which the wings add. Without scattered light they are
- * the renderer's.
+ * @brief Build the tables get_psf_kernel()'s stamps come from, if out of date: the renderer's
+ * without the scattered light, which the wings add. Without scattered light they are the
+ * renderer's.
  */
 template <IsSpectral TSpectral>
 void CameraModel<TSpectral>::ensure_stamp_tables_()
@@ -1578,8 +1575,8 @@ bool CameraModel<TSpectral>::table_stamps_stale_() const
 }
 
 /**
- * @brief Build the stamps for moving sources from the renderer's tables without the scattered
- * light, which the wings add, if out of date.
+ * @brief Build get_psf_kernel()'s stamps from the renderer's tables without the scattered light,
+ * which the wings add, if out of date.
  *
  * Bank (bx, by) holds a source bx / banks, by / banks of a pixel right of and below the center
  * pixel's center, as PSF::get_kernel() does, and is normalized per channel: the light beyond

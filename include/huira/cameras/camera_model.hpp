@@ -379,14 +379,14 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     double render_tables_reach_ = 0.0;
     double render_tables_blur_ = 0.0;
 
-    /// The same without the scattered light, which the wings add to moving sources, for the
-    /// stamps, and the blur they were built for: render_tables_ without scattered light.
+    /// The same without the scattered light, which get_psf_wings_kernel() gives, for the stamps
+    /// get_psf_kernel() gives, and the blur they were built for: render_tables_ without
+    /// scattered light.
     std::shared_ptr<const PsfTables<TSpectral>> stamp_tables_;
     double stamp_tables_blur_ = 0.0;
 
-    /// Stamps from stamp_tables_, for sources that move during the exposure: one per subpixel
-    /// position, banks x banks of them, each normalized per channel as PSF's are, with their
-    /// radius.
+    /// Stamps from stamp_tables_, for get_psf_kernel(): one per subpixel position, banks x banks
+    /// of them, each normalized per channel as PSF's are, with their radius.
     std::vector<Image<TSpectral>> table_stamps_;
     int table_stamp_banks_ = 0;
     int table_stamps_radius_ = 0;

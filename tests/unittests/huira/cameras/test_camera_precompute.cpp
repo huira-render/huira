@@ -170,12 +170,12 @@ TEST_CASE("Setters record settings, and precompute() builds what a render would 
     CHECK_FALSE(camera.is_precomputed());
     camera.precompute();
 
+    // The stamp size changes nothing a render uses: unresolved sources are drawn from the PSF's
+    // tables, and the stamps are made when get_psf_kernel() asks for them.
     camera.use_aperture_psf(8, 4);
-    CHECK_FALSE(camera.is_precomputed());
-    camera.precompute();
     CHECK(camera.is_precomputed());
 
-    // Out of focus, the PSF's tables, and the stamps made from them, are blurred:
+    // Out of focus, the PSF's tables are blurred:
     camera.set_focus_sensor_offset(units::Micrometer(400.0));
     REQUIRE(camera.defocus_blur_radius() > 1.f);
     CHECK_FALSE(camera.is_precomputed());
@@ -187,13 +187,10 @@ TEST_CASE("Setters record settings, and precompute() builds what a render would 
     camera.precompute();
     CHECK(camera.is_precomputed());
 
-    // A new stamp size rebuilds the stamps...
     camera.use_aperture_psf(6, 4);
-    CHECK_FALSE(camera.is_precomputed());
-    camera.precompute();
     CHECK(camera.is_precomputed());
 
-    // ...as does coming back into focus:
+    // Coming back into focus rebuilds them:
     camera.set_focus_distance(units::Meter(INF));
     CHECK_FALSE(camera.is_precomputed());
     camera.precompute();

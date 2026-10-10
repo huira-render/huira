@@ -77,9 +77,9 @@ inline std::array<double, 3> bessel_miller(double x)
     return {low[0] / norm, low[1] / norm, low[2] / norm};
 }
 
-/// J_n(x) for n = 0, 1, 2 from Hankel's asymptotic expansion (DLMF 10.17.3), for
-/// x >= ASYMPTOTIC_LIMIT, where its terms fall below 1e-17 before they start to grow.
-inline double bessel_hankel(int n, double x, double cos_x, double sin_x)
+/// The sums P and Q of Hankel's asymptotic expansion of J_n and Y_n (DLMF 10.17.3 and 10.17.4),
+/// for x >= ASYMPTOTIC_LIMIT, where their terms fall below 1e-17 before they start to grow.
+inline std::array<double, 2> hankel_pq(int n, double x)
 {
     const double mu = 4.0 * n * n;
     double p = 1.0;
@@ -99,8 +99,13 @@ inline double bessel_hankel(int n, double x, double cos_x, double sin_x)
             break;
         }
     }
-    // cos and sin of the phase x - (2n + 1) pi / 4, from those of x, so that rounding a large
-    // phase adds no error.
+    return {p, q};
+}
+
+/// cos and sin of the phase x - (2n + 1) pi / 4 for n = 0, 1, 2, from those of x, so that
+/// rounding a large phase adds no error.
+inline std::array<double, 2> hankel_phase(int n, double cos_x, double sin_x)
+{
     const double half_root = std::sqrt(0.5);
     double cos_phase = 0.0;
     double sin_phase = 0.0;
@@ -118,7 +123,23 @@ inline double bessel_hankel(int n, double x, double cos_x, double sin_x)
         sin_phase = half_root * (cos_x - sin_x);
         break;
     }
+    return {cos_phase, sin_phase};
+}
+
+/// J_n(x) for n = 0, 1, 2 from Hankel's asymptotic expansion, for x >= ASYMPTOTIC_LIMIT.
+inline double bessel_hankel(int n, double x, double cos_x, double sin_x)
+{
+    const auto [p, q] = hankel_pq(n, x);
+    const auto [cos_phase, sin_phase] = hankel_phase(n, cos_x, sin_x);
     return std::sqrt(2.0 / (PI<double>() * x)) * (p * cos_phase - q * sin_phase);
+}
+
+/// Y_n(x) for n = 0, 1 from Hankel's asymptotic expansion, for x >= ASYMPTOTIC_LIMIT.
+inline double bessel_y_hankel(int n, double x, double cos_x, double sin_x)
+{
+    const auto [p, q] = hankel_pq(n, x);
+    const auto [cos_phase, sin_phase] = hankel_phase(n, cos_x, sin_x);
+    return std::sqrt(2.0 / (PI<double>() * x)) * (p * sin_phase + q * cos_phase);
 }
 
 } // namespace airy_band_detail

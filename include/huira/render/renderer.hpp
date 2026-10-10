@@ -66,13 +66,13 @@ class Renderer {
      * never cropped so far that the source's centroid moves by more than 0.01 px. Faint stars
      * then cost a few pixels each rather than the whole stamp.
      *
-     * Still sources with the aperture's PSF are not stamped but drawn from its tables, out to
-     * where their light fades below set_unresolved_taper()'s threshold.
+     * Sources with the aperture's PSF are not stamped but drawn from its tables, out to where
+     * their light fades below set_unresolved_taper()'s threshold.
      */
     void set_stamp_cropping(bool enable = true) { stamp_cropping_ = enable; }
 
-    /// How faint, as a fraction of the sensor's read noise, the light a still unresolved source
-    /// puts in a pixel gets before it is tapered off. See set_unresolved_taper().
+    /// How faint, as a fraction of the sensor's read noise, the light an unresolved source puts
+    /// in a pixel gets before it is tapered off. See set_unresolved_taper().
     static constexpr double DEFAULT_UNRESOLVED_TAPER = 1e-3;
 
     void set_unresolved_taper(double fraction_of_read_noise);

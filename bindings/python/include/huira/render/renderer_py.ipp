@@ -40,11 +40,11 @@ void bind_renderer(py::module_& m)
         .def("set_unresolved_taper",
              &Renderer::set_unresolved_taper,
              py::arg("fraction_of_read_noise"),
-             "Set how far a still unresolved source is drawn with the aperture's PSF: until the "
-             "light it puts in a pixel, as read out, falls to this fraction of the sensor's read "
-             "noise (of an electron without read noise). It then fades out smoothly by twice "
-             "that distance, and the light left on the sensor is spread evenly over the frame. "
-             "The default is 0.001; 0 draws every still source over the whole frame.")
+             "Set how far an unresolved source, still or moving, is drawn with the aperture's "
+             "PSF: until the light it puts in a pixel, as read out, falls to this fraction of the "
+             "sensor's read noise (of an electron without read noise). It then fades out "
+             "smoothly by twice that distance, and the light left on the sensor is spread evenly "
+             "over the frame. The default is 0.001; 0 draws every source over the whole frame.")
         .def("unresolved_taper", &Renderer::unresolved_taper)
         .def("set_region_culling", &Renderer::set_region_culling, py::arg("enable") = true)
         .def("set_region_cull_margin_scale",
