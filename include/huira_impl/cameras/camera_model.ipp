@@ -817,22 +817,25 @@ const Image<TSpectral>& CameraModel<TSpectral>::get_psf_kernel(float u, float v)
  * diffraction pattern, averaged evenly over each spectral bin's wavelengths, for a circular
  * aperture, with scattered light set with set_scatter(), blurred by defocus as the focus
  * setting blurs a point at the given range: a uniform disc, the aperture's image out of focus
- * (see set_focus_distance()). Without a range the point is a star, at infinity. The blur is
- * applied however small, and not at all with depth of field off (see enable_depth_of_field()).
- * See PsfTables for how it is computed and how accurate it is.
+ * (see set_focus_distance()). Without a range the point is a star, at infinity. There is no
+ * blur with depth of field off (see enable_depth_of_field()). As the renderer draws unresolved
+ * objects, a source whose blur is a star's within PsfTables::BLUR_TOLERANCE is given a star's
+ * tables. See PsfTables for how it is computed and how accurate it is.
  *
  * With no PSF (see delete_psf()), no scattered light and no defocus, the pixel the source falls
  * in holds all of its light.
  *
  * The tables for stars are built the first time they are needed after the optics change: the
- * focal length, aperture, pixel pitch, resolution, scattered light or focus. Tables for a range
- * are built on each call. Either can take a second or two.
+ * focal length, aperture, pixel pitch, resolution, scattered light or focus. Tables for another
+ * blur are built the first time it is needed, and the last few are kept, shared with the
+ * renderer. Either can take a second or two.
  *
  * @param radius The image is 2 radius + 1 pixels square, centered on the pixel the source is
  *        offset from.
  * @param x_offset The source's position right of the center pixel's center, in pixels.
  * @param y_offset Its position below the center pixel's center, in pixels.
- * @param range The source's distance from the camera, for its defocus; none for a star.
+ * @param range The source's distance along the camera's axis, which sets its defocus; none for
+ *        a star.
  * @return The image. Each channel sums to the part of the source's light that falls within it.
  * @throws std::runtime_error if the radius is negative or over MAX_PSF_IMAGE_RADIUS, an offset
  *         is not finite, the range is not positive, the PSF was set with set_psf() or
@@ -885,11 +888,8 @@ Image<TSpectral> CameraModel<TSpectral>::psf_image(int radius,
         std::lock_guard<std::mutex> lock(optics_mutex_);
         tbb::this_task_arena::isolate([&] {
             ensure_psf_tables_();
-            const double star_blur = blur_pixels_(0.0);
-            const double blur = range.has_value() ? blur_pixels_(1.0 / range->to_si()) : star_blur;
-            tables = blur == star_blur
-                         ? psf_tables_
-                         : build_psf_tables_(blur, scatter_for_tables_(), tables_reach_());
+            tables =
+                range.has_value() ? tables_at_locked_({1.0 / range->to_si()}).front() : psf_tables_;
         });
     }
     return tables->image(radius, static_cast<double>(x_offset), static_cast<double>(y_offset));
@@ -1534,6 +1534,95 @@ void CameraModel<TSpectral>::ensure_render_tables_()
     render_tables_built_at_ = optics_version_;
 }
 
+/**
+ * @brief The tables for unresolved sources at depths (their distance along the axis, which
+ * sets their defocus, as it does for path-traced bodies), given as their inverses: 0 for a
+ * star. One call gives all that a render needs.
+ *
+ * A source whose blur is a star's, within PsfTables::BLUR_TOLERANCE, is drawn from the
+ * renderer's tables: any at more than about 74,000 km with the Jupiter camera focused at 10 m,
+ * or 1,900 km focused at infinity, where blurs under MIN_BLUR count as none. Others get tables
+ * for their own blur, built the first time a blur is needed (taking as long as the renderer's)
+ * and kept for later sources and renders whose blur is within the tolerance of it: all that
+ * this call used, and the most recently used others up to OBJECT_TABLES_KEPT_ in all. They are
+ * rebuilt when the optics change.
+ */
+template <IsSpectral TSpectral>
+std::vector<std::shared_ptr<const PsfTables<TSpectral>>>
+CameraModel<TSpectral>::tables_at_(const std::vector<double>& inverse_depths)
+{
+    std::vector<std::shared_ptr<const PsfTables<TSpectral>>> tables;
+    std::lock_guard<std::mutex> lock(optics_mutex_);
+    tbb::this_task_arena::isolate([&] { tables = tables_at_locked_(inverse_depths); });
+    return tables;
+}
+
+/// tables_at_(), with optics_mutex_ held.
+template <IsSpectral TSpectral>
+std::vector<std::shared_ptr<const PsfTables<TSpectral>>>
+CameraModel<TSpectral>::tables_at_locked_(const std::vector<double>& inverse_depths)
+{
+    ensure_render_tables_();
+    if (stale_(object_tables_built_at_,
+               {OpticsInput::FocalLength,
+                OpticsInput::PixelPitch,
+                OpticsInput::Aperture,
+                OpticsInput::Scatter}) ||
+        tables_reach_() > object_tables_reach_) {
+        object_tables_.clear();
+        object_tables_reach_ = tables_reach_();
+        object_tables_built_at_ = optics_version_;
+    }
+
+    std::vector<std::shared_ptr<const PsfTables<TSpectral>>> result;
+    result.reserve(inverse_depths.size());
+    std::size_t used = 0; // the last this many kept are those this call has used
+    for (const double inverse_depth : inverse_depths) {
+        const double raw_blur = blur_pixels_(inverse_depth);
+        const double blur = raw_blur >= PsfTables<TSpectral>::MIN_BLUR ? raw_blur : 0.0;
+        if (!std::isfinite(blur) ||
+            std::abs(blur - render_tables_blur_) <= PsfTables<TSpectral>::BLUR_TOLERANCE) {
+            result.push_back(render_tables_);
+            continue;
+        }
+
+        // The nearest blur kept, if it is within the tolerance, moved to the end as the most
+        // recently used, unless this call has used it already:
+        auto nearest = object_tables_.end();
+        for (auto it = object_tables_.begin(); it != object_tables_.end(); ++it) {
+            if (nearest == object_tables_.end() ||
+                std::abs(it->blur - blur) < std::abs(nearest->blur - blur)) {
+                nearest = it;
+            }
+        }
+        if (nearest != object_tables_.end() &&
+            std::abs(nearest->blur - blur) <= PsfTables<TSpectral>::BLUR_TOLERANCE) {
+            result.push_back(nearest->tables);
+            const auto position = static_cast<std::size_t>(nearest - object_tables_.begin());
+            if (position < object_tables_.size() - used) {
+                BlurTables found = std::move(*nearest);
+                object_tables_.erase(nearest);
+                object_tables_.push_back(std::move(found));
+                ++used;
+            }
+            continue;
+        }
+        object_tables_.push_back(
+            BlurTables{blur, build_psf_tables_(blur, scatter_for_tables_(), object_tables_reach_)});
+        ++used;
+        result.push_back(object_tables_.back().tables);
+    }
+
+    // Those not used here, oldest first, beyond the number kept:
+    const std::size_t kept = std::max(used, OBJECT_TABLES_KEPT_);
+    if (object_tables_.size() > kept) {
+        object_tables_.erase(object_tables_.begin(),
+                             object_tables_.begin() +
+                                 static_cast<std::ptrdiff_t>(object_tables_.size() - kept));
+    }
+    return result;
+}
+
 /// Whether the tables for resolved bodies are out of date: the renderer's, in focus.
 template <IsSpectral TSpectral>
 bool CameraModel<TSpectral>::body_tables_stale_() const
@@ -2060,8 +2149,9 @@ units::Micrometer CameraModel<TSpectral>::focus_sensor_offset() const
  * On, the camera has the focus that set_focus_distance(), set_focus_diopters() or
  * set_focus_sensor_offset() gave it (at infinity unless set): resolved bodies are traced with
  * rays from across the aperture, which blurs whatever is out of focus, and unresolved sources
- * are blurred by their defocus (see defocus_blur_radius()). Off, everything is in focus, as
- * through a pinhole, whatever the focus setting.
+ * are blurred by the defocus at their depth: stars as defocus_blur_radius() says, and objects
+ * nearer by their own (see psf_image()). Off, everything is in focus, as through a pinhole,
+ * whatever the focus setting.
  *
  * Rays from across the aperture are noisier where bodies are out of focus, and need more
  * samples per pixel to look clean: with focus at infinity, bodies closer than about the
@@ -2081,11 +2171,12 @@ void CameraModel<TSpectral>::enable_depth_of_field(bool depth_of_field)
 }
 
 /**
- * @brief Get the radius, in pixels, of the defocus blur applied to unresolved sources.
+ * @brief Get the radius, in pixels, of the defocus blur of a star.
  *
  * This is the blur of a point at infinity for the current focus, aperture, focal length and
- * pixel pitch. It is 0 when the blur is under half a pixel, which is treated as in focus, and
- * when depth of field is off (see enable_depth_of_field()).
+ * pixel pitch. It is 0 when the blur is under half a pixel, and when depth of field is off
+ * (see enable_depth_of_field()). An unresolved object nearer is blurred by the defocus at its
+ * own depth, as resolved bodies are (see psf_image()).
  */
 template <IsSpectral TSpectral>
 float CameraModel<TSpectral>::defocus_blur_radius() const

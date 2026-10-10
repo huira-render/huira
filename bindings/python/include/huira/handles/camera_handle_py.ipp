@@ -508,8 +508,9 @@ inline void bind_camera_model_handle(py::module_& m)
             py::arg("range") = py::none(),
             "The light an unresolved source puts in each pixel around it, per channel: the "
             "aperture's diffraction pattern, averaged over each spectral bin, with scattered "
-            "light set with set_scatter(), blurred by defocus for a source at 'range' (any "
-            "length unit; None for a star), and integrated over each pixel, for the source "
+            "light set with set_scatter(), blurred by defocus for a source at 'range' along the "
+            "camera's axis (any length unit; None for a star), and integrated over each pixel, "
+            "as the renderer draws unresolved objects, for the source "
             "(x_offset, y_offset) pixels from the center pixel's center. The image is "
             "2 radius + 1 pixels square. With no PSF, the pixel the source falls in holds all "
             "its light.")
@@ -542,7 +543,8 @@ inline void bind_camera_model_handle(py::module_& m)
              "Turn depth of field on (the default) or off. On, the camera has the focus set "
              "(at infinity unless set): resolved bodies are traced with rays from across the "
              "aperture, which blurs whatever is out of focus, and unresolved sources are "
-             "blurred by their defocus. Off, everything is in focus, as through a pinhole. "
+             "blurred by the defocus at their depth. Off, everything is in focus, as through a "
+             "pinhole. "
              "Out-of-focus bodies need more samples per pixel to look clean.")
         .def("depth_of_field_enabled",
              &HandleType::depth_of_field_enabled,
@@ -586,8 +588,8 @@ inline void bind_camera_model_handle(py::module_& m)
              "Focus as the sensor's offset from the infinity-focus position.")
         .def("defocus_blur_radius",
              &HandleType::defocus_blur_radius,
-             "Radius in pixels of the defocus blur applied to unresolved sources (0 if in "
-             "focus).")
+             "Radius in pixels of the defocus blur of a star (0 if under half a pixel). An "
+             "unresolved object nearer is blurred by the defocus at its own depth.")
 
         // Projection and rays
         .def(
