@@ -259,6 +259,7 @@ PsfTables<TSpectral>::PsfTables(const std::vector<Profile>& profiles,
         radials_[channel] = build_radial_(profiles[channel], strips_[channel]);
     });
     build_ring_deviation_();
+    build_lines_(profiles);
 }
 
 /**
@@ -748,17 +749,23 @@ void PsfTables<TSpectral>::strip_values_(double dx,
  * source, r < far_radii_.back(), averaged over the pixel to second order. Averaging over a side
  * w adds w^2 / 24 of the second derivative along it; for a radial f(r) that is
  * f'' cos^2 + f' sin^2 / r along x, and likewise along y.
+ *
+ * Light spread along a line about the source adds, likewise, spread times the second derivative
+ * along the line, with along2 the squared cosine of the angle between the line and the pixel's
+ * direction: spread is half the light's second moment along the line over the light.
  */
 template <IsSpectral TSpectral>
-void PsfTables<TSpectral>::far_shapes_(double dx, double dy, double r, Values& shapes) const
+void PsfTables<TSpectral>::far_shapes_(
+    double dx, double dy, double r, Values& shapes, double spread, double along2) const
 {
     // One division, for the many pixels this is called for:
     const double inverse_r2 = 1.0 / (r * r);
     const double aspect2 = aspect_ * aspect_;
     const double cos2 = dx * dx * inverse_r2;
     const double sin2 = aspect2 * dy * dy * inverse_r2;
-    const double by_second = aspect_ / 24.0 * (cos2 + aspect2 * sin2);
-    const double by_first = aspect_ / 24.0 * (sin2 + aspect2 * cos2) * r * inverse_r2;
+    const double by_second = aspect_ * ((cos2 + aspect2 * sin2) / 24.0 + spread * along2);
+    const double by_first =
+        aspect_ * ((sin2 + aspect2 * cos2) / 24.0 + spread * (1.0 - along2)) * r * inverse_r2;
 
     const std::size_t k = far_node_(r);
     const double h = far_radii_[k + 1] - far_radii_[k];
@@ -1512,6 +1519,17 @@ std::size_t PsfTables<TSpectral>::memory_bytes() const
     for (const std::vector<double>& deviation : ring_deviation_) {
         bytes += deviation.size() * sizeof(double);
     }
+    bytes += line_nodes_.size() * sizeof(double);
+    bytes += far_line_nodes_.size() * sizeof(double);
+    for (const auto* tables : {&line_deviation_, &line_suffix_, &end_deviation_}) {
+        for (const std::vector<double>& table : *tables) {
+            bytes += table.size() * sizeof(double);
+        }
+    }
+    for (const HalfLines& table : half_lines_) {
+        bytes += (table.f.size() + table.laplacian.size()) * sizeof(double);
+    }
+    bytes += corners_.size() * sizeof(double);
     return bytes;
 }
 

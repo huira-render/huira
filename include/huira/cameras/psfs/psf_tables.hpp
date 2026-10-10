@@ -38,6 +38,12 @@ namespace huira {
  * forms. Beyond the antiderivatives' reach (twice the frame's diagonal, for a camera's tables)
  * the far field is used whatever the rings.
  *
+ * A moving source's light is its path's line integral of the pixels' light: for each straight
+ * piece of the path, the light of the whole line through it, from the line spread (the profile
+ * integrated along a line, and its antiderivatives across the pixel), less that of the half
+ * lines beyond its ends (see draw_line()). light_in_rectangle() gives the light a source puts on
+ * the frame, from the line spread and the light beyond two edges at once.
+ *
  * Lengths are in units of the pixel's width; a pixel is aspect() widths high.
  *
  * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
@@ -147,6 +153,48 @@ class PsfTables {
         return radials_[channel].radius_90;
     }
 
+    /// How far from a moving source's path, and from its ends, its light is drawn exactly. See
+    /// draw_line().
+    struct LineReach {
+        /// The line spread's rings are followed within this of the path; beyond, the far
+        /// field's line spread.
+        double exact_within = std::numeric_limits<double>::infinity();
+        /// Near its ends, the pixels' own light is integrated along the path within this of
+        /// them; beyond, the far field's.
+        double ends_exact_within = 0.0;
+        /// The ends are allowed for within this of them.
+        double ends_within = std::numeric_limits<double>::infinity();
+        /// The pixels drawn: those within this of the path.
+        double reach = std::numeric_limits<double>::infinity();
+    };
+
+    template <class Weight>
+    std::array<double, TSpectral::size()> draw_line(Image<TSpectral>& target,
+                                                    int x_begin,
+                                                    int x_end,
+                                                    int y_begin,
+                                                    int y_end,
+                                                    const std::array<double, 2>& start,
+                                                    const std::array<double, 2>& end,
+                                                    const TSpectral& density,
+                                                    const LineReach& reach,
+                                                    const Weight& weight) const;
+
+    [[nodiscard]] double line_envelope(std::size_t channel, double r) const;
+    [[nodiscard]] double line_deviation(std::size_t channel, double d) const;
+    [[nodiscard]] double end_deviation(std::size_t channel, double r) const;
+
+    /// The distance either side of a line that holds 90% of its light in a channel.
+    [[nodiscard]] double line_holding_90(std::size_t channel) const
+    {
+        return line_holding_90_[channel];
+    }
+
+    [[nodiscard]] std::array<double, TSpectral::size()> half_plane_light(double d) const;
+    [[nodiscard]] std::array<double, TSpectral::size()> corner_light(double a, double b) const;
+    [[nodiscard]] std::array<double, TSpectral::size()>
+    light_in_rectangle(double x0, double x1, double y0, double y1) const;
+
     [[nodiscard]] std::size_t memory_bytes() const;
 
   private:
@@ -230,6 +278,50 @@ class PsfTables {
     };
     std::vector<Radial> radials_;
 
+    // A moving source's light: its path's line integral (see draw_line()). Each channel's line
+    // spread, its two antiderivatives and its slope, every grid_.step from the line out to its
+    // strip limit and beyond (line_nodes_, 4 values per node, each for every channel in turn);
+    // each far field shape's line spread with its first two derivatives at far_radii_, shape by
+    // shape (far_line_nodes_); how far the pixels stray from the far
+    // field's line spread (line_deviation_, every RING_STEP from ring_start_); the suffix maxima
+    // of each channel's line spread at the nodes (line_suffix_); how far a half line's light
+    // strays (end_deviation_); and each shape's integral along half lines (half_lines_).
+    static constexpr double END_STEP = 0.5;
+    std::size_t line_count_ = 0;
+    std::vector<double> line_nodes_;
+    std::vector<double> far_line_nodes_;
+    std::vector<std::vector<double>> line_deviation_;
+    std::vector<std::vector<double>> line_suffix_;
+    std::vector<std::vector<double>> end_deviation_;
+    std::array<double, TSpectral::size()> line_holding_90_{};
+
+    /// One far field shape's integrals along half lines from a point, against the distance rho
+    /// from it and the angle beta of the half line from the pixel's foot on it: the shape (f),
+    /// and its Laplacian (laplacian), scaled by rho^2 and rho^4 so that they change slowly, on
+    /// a grid even in log rho and beta.
+    struct HalfLines {
+        double log_start = 0.0;
+        double log_step = 0.0;
+        std::size_t rho_count = 0;
+        double beta_step = 0.0;
+        std::size_t beta_count = 0;
+        std::vector<double> f;
+        std::vector<double> laplacian;
+    };
+    std::vector<HalfLines> half_lines_;
+
+    /// The light beyond two perpendicular edges, at distances a, b >= 0 from the source (see
+    /// corner_light()), from corner_start_ out: every CORNER_STEP in log R, R = hypot(a, b),
+    /// from one node before corner_start_ to one after the last, corner_rows_ in all, and at
+    /// CORNER_ANGLES steps of the angle atan(min(a, b) / max(a, b)) up to pi / 4, from one step
+    /// below 0; each node's channels together.
+    static constexpr double CORNER_STEP = 1.0 / 16.0;
+    static constexpr std::size_t CORNER_ANGLES = 16;
+    static constexpr double CORNER_END = 131072.0;
+    double corner_start_ = 0.0;
+    std::size_t corner_rows_ = 0;
+    std::vector<double> corners_;
+
     template <class Profile>
     Radial build_radial_(const Profile& profile, const Strip& strip) const;
 
@@ -249,13 +341,39 @@ class PsfTables {
                        Values& values) const;
     [[nodiscard]] std::size_t far_node_(double r) const;
     void smooth_profiles_(double r, Values& values) const;
-    void far_shapes_(double dx, double dy, double r, Values& shapes) const;
+    void far_shapes_(double dx,
+                     double dy,
+                     double r,
+                     Values& shapes,
+                     double spread = 0.0,
+                     double along2 = 0.0) const;
     void combine_far_(const Values& shapes, Values& values) const;
     void far_values_(double dx, double dy, double r, Values& values) const;
     void build_far_basis_(const std::vector<double>& far_nodes);
     void build_ring_deviation_();
+
+    template <class Profile>
+    void build_lines_(const std::vector<Profile>& profiles);
+    void build_far_lines_();
+    void build_line_deviation_();
+    void build_half_lines_();
+    void build_corners_();
+    [[nodiscard]] Values corner_integral_(double a, double b) const;
+    [[nodiscard]] Values corner_table_(double a, double b) const;
+    [[nodiscard]] std::array<double, 3> far_shape_(std::size_t shape, double r) const;
+    void line_exact_(double normal_x,
+                     double normal_y,
+                     double d,
+                     const std::array<bool, TSpectral::size()>& wanted,
+                     Values& values) const;
+    void line_far_(double normal_x, double normal_y, double d, Values& values) const;
+    [[nodiscard]] std::array<double, 2> far_line_(std::size_t shape, double d) const;
+    void half_line_far_(double qx, double qy, double ex, double ey, Values& values) const;
+    void half_line_(
+        double qx, double qy, double hx, double hy, double exact_within, Values& values) const;
 };
 
 } // namespace huira
 
 #include "huira_impl/cameras/psfs/psf_tables.ipp"
+#include "huira_impl/cameras/psfs/psf_tables_lines.ipp"

@@ -2,10 +2,12 @@
 
 #include <array>
 #include <cstddef>
+#include <memory>
 #include <optional>
 #include <vector>
 
 #include "huira/cameras/psfs/airy_band.hpp"
+#include "huira/cameras/psfs/airy_line.hpp"
 
 namespace huira::detail {
 
@@ -64,6 +66,7 @@ class ScatterProfile {
     [[nodiscard]] double operator()(double r) const;
     [[nodiscard]] double slope(double r) const;
     [[nodiscard]] std::array<double, 3> derivatives(double r) const;
+    [[nodiscard]] std::array<double, 3> line_derivatives(double d) const;
 
     /// K, the profile's value at r = 0.
     [[nodiscard]] double peak() const { return peak_; }
@@ -73,6 +76,16 @@ class ScatterProfile {
     double falloff_;
     std::optional<double> outer_squared_;
     double peak_ = 0.0;
+
+    /// The line spread and its first two derivatives, tabulated evenly near the line and on a
+    /// logarithmic grid beyond; shared by the copies.
+    struct Line {
+        RadialTable near;
+        RadialTable far;
+    };
+    std::shared_ptr<const Line> line_;
+
+    void build_line_();
 };
 
 /**
@@ -88,6 +101,7 @@ class OpticsProfile {
     [[nodiscard]] double operator()(double r) const;
     [[nodiscard]] double slope(double r) const;
     [[nodiscard]] std::array<double, 3> far_field(double r) const;
+    [[nodiscard]] std::array<double, 3> line_derivatives(double d) const;
 
     /// far_field() holds from here out; for this profile, everywhere.
     [[nodiscard]] double smooth_from() const { return 0.0; }
@@ -129,6 +143,7 @@ class DefocusedProfile {
     [[nodiscard]] double operator()(double r) const;
     [[nodiscard]] double slope(double r) const;
     [[nodiscard]] std::array<double, 3> far_field(double r) const;
+    [[nodiscard]] std::array<double, 3> line_derivatives(double d) const;
 
     /// The radius of the blur disc.
     [[nodiscard]] double blur() const { return blur_; }
@@ -149,7 +164,11 @@ class DefocusedProfile {
     double ring_radius_ = 0.0;
     RadialTable near_;
     RadialTable far_;
+    RadialTable line_;
 };
+
+template <class Derivatives>
+std::array<double, 3> abel_derivatives(const Derivatives& derivatives, double d, double scale);
 
 } // namespace huira::detail
 
