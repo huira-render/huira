@@ -645,13 +645,13 @@ void CameraModelHandle<TSpectral>::disable_veiling_glare() const
 }
 
 /**
- * @brief Set Harvey-Shack scatter parameters.
+ * @brief Set scattered light in pixels. See CameraModel::set_harvey_shack_scatter().
  * @param scatter_fraction Fraction of light scattered, in [0, 1)
  * @param falloff_exponent Power-law exponent of the falloff (typically 2 to 3)
  * @param r0 Shoulder radius in pixels: the profile is flat within it and falls off as
  *        r^-falloff_exponent beyond it (default 0.5)
- * @param radius Cutoff radius in pixels (default 0: none, beyond the convolution kernel's own
- *        radius)
+ * @param radius Outer radius in pixels, beyond the shoulder (default 0: none); an exponent of 2
+ *        or less needs one
  */
 template <IsSpectral TSpectral>
 void CameraModelHandle<TSpectral>::set_harvey_shack_scatter(float scatter_fraction,

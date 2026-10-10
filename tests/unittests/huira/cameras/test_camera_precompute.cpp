@@ -175,8 +175,7 @@ TEST_CASE("Setters record settings, and precompute() builds what a render would 
     camera.precompute();
     CHECK(camera.is_precomputed());
 
-    // Out of focus, unresolved sources get the defocus blur's stamps instead of the PSF's,
-    // blurred by the PSF through the convolution kernel:
+    // Out of focus, the PSF's tables, and the stamps made from them, are blurred:
     camera.set_focus_sensor_offset(units::Micrometer(400.0));
     REQUIRE(camera.defocus_blur_radius() > 1.f);
     CHECK_FALSE(camera.is_precomputed());
@@ -188,20 +187,21 @@ TEST_CASE("Setters record settings, and precompute() builds what a render would 
     camera.precompute();
     CHECK(camera.is_precomputed());
 
-    // so a new PSF needs a new convolution kernel while it is (and not its stamps)...
+    // A new stamp size rebuilds the stamps...
     camera.use_aperture_psf(6, 4);
     CHECK_FALSE(camera.is_precomputed());
     camera.precompute();
     CHECK(camera.is_precomputed());
 
-    // ...and its stamps when it is back in focus:
+    // ...as does coming back into focus:
     camera.set_focus_distance(units::Meter(INF));
     CHECK_FALSE(camera.is_precomputed());
     camera.precompute();
     CHECK(camera.is_precomputed());
 
-    // Scattered light reaches unresolved sources whether or not bodies are convolved, through
-    // the wings' kernel and its spectrum:
+    // Scattered light reaches unresolved sources whether or not bodies are convolved: the
+    // PSF's tables hold it for still ones, and the wings' kernel and its spectrum give it to
+    // moving ones:
     camera.set_harvey_shack_scatter(0.05f, 2.5f);
     CHECK_FALSE(camera.is_precomputed());
     camera.precompute();

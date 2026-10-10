@@ -75,6 +75,11 @@ std::filesystem::path triangle_model()
 struct Camera {
     CameraModelHandle<RGB> model;
     InstanceHandle<RGB> instance;
+
+    Camera(CameraModelHandle<RGB> m, InstanceHandle<RGB> i)
+        : model(std::move(m)), instance(std::move(i))
+    {
+    }
 };
 
 Camera small_camera(Scene<RGB>& scene)

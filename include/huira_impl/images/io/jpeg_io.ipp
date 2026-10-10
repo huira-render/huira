@@ -246,8 +246,9 @@ write_image_jpeg(const fs::path& filepath, const ImageBundle<RGB>& output_image,
             const RGB& pixel = output_image.image(x, y);
 
             for (std::size_t c = 0; c < 3; ++c) {
-                srgb_data[idx + c] =
-                    non_finite.not_finite(pixel[c]) ? 0 : float_to_integer<uint8_t>(pixel[c]);
+                srgb_data[idx + c] = non_finite.not_finite(pixel[c])
+                                         ? std::uint8_t{0}
+                                         : float_to_integer<std::uint8_t>(pixel[c]);
             }
         }
     }
