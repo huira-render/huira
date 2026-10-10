@@ -47,14 +47,15 @@ enum class PSFSampling {
  *
  * The measurement is assumed to be centered on the image: the PSF origin is placed at the
  * geometric center ((width - 1) / 2, (height - 1) / 2), so measurements should be centroided
- * before being supplied. evaluate() bilinearly interpolates the samples and returns zero
- * outside the measured extent. Normalization of the supplied data does not matter; kernels
- * generated from this PSF are normalized to unit energy.
+ * before being supplied. Normalization of the supplied data does not matter: the PSF is taken
+ * as complete, holding all of a source's light within the measured extent and the radius.
  *
- * Subpixel fidelity of the polyphase stamping cache is limited by the sampling density: with
- * samples_per_pixel = 1 the subpixel banks are pure interpolation, while an oversampled
- * measurement (4x or more per axis) captures genuine subpixel structure. For whole-image
- * convolution this matters far less, since the convolution grid has no subpixel offset.
+ * The renderer draws a still source from the samples on their grid, at its exact position (see
+ * GridPsf): the cubic spline through them, integrated over each pixel for point samples. How
+ * well that follows the real pattern depends on the sampling: a pattern sampled at least twice
+ * as finely as its finest detail is followed within a few parts in 10^3. evaluate() bilinearly
+ * interpolates the samples and returns zero outside the measured extent; the stamps for moving
+ * sources and the convolution kernel are made from it.
  *
  * A MeasuredPSF is the "core" component of the total system PSF: because real measurements
  * are dynamic-range limited, they rarely capture the faint far wings, so Harvey-Shack scatter
@@ -84,6 +85,12 @@ class MeasuredPSF : public PSF<TSpectral> {
 
     /// What the samples are.
     [[nodiscard]] PSFSampling sampling() const { return sampling_; }
+
+    /// The samples, as given.
+    [[nodiscard]] const Image<TSpectral>& data() const { return data_; }
+
+    /// Samples per sensor pixel, per axis.
+    [[nodiscard]] float samples_per_pixel() const { return samples_per_pixel_; }
 
     /**
      * @brief The largest radius (in sensor pixels) covered by the measured data.

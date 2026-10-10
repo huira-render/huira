@@ -413,9 +413,10 @@ inline void bind_camera_model_handle(py::module_& m)
              "the measurement sampling density per sensor pixel per axis; 'sampling' says what "
              "the samples are (see PSFSampling): PSFSampling.PixelIntegrated if the data came "
              "from the sensor being simulated, such as a star's image, and otherwise almost "
-             "always PSFSampling.PointSampled, such as optical design software's PSF. radius=0 "
-             "auto-selects the largest stamping radius covered by the measurement (capped at "
-             "64).")
+             "always PSFSampling.PointSampled, such as optical design software's PSF. The PSF is "
+             "taken as complete out to 'radius' pixels from its center (0: as far as the "
+             "measurement reaches, up to 64), and still sources are drawn from the spline "
+             "through the samples at their exact position.")
 
         // Stray light
         .def("set_veiling_glare",

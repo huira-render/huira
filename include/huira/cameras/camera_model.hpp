@@ -19,6 +19,7 @@
 #include "huira/cameras/distortion/opencv_distortion.hpp"
 #include "huira/cameras/distortion/owen_distortion.hpp"
 #include "huira/cameras/pixel_convention.hpp"
+#include "huira/cameras/psfs/grid_psf.hpp"
 #include "huira/cameras/psfs/measured_psf.hpp"
 #include "huira/cameras/psfs/psf.hpp"
 #include "huira/cameras/psfs/psf_convolver.hpp"
@@ -387,6 +388,10 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     std::shared_ptr<const PsfTables<TSpectral>> stamp_tables_;
     double stamp_tables_blur_ = 0.0;
 
+    /// A PSF set with set_psf() or set_measured_psf(), on its grid, for still unresolved sources
+    /// in focus. See GridPsf.
+    std::shared_ptr<const GridPsf<TSpectral>> grid_psf_;
+
     /// Tables for unresolved objects whose blur differs from a star's, by their blur, most
     /// recently used last, with the reach they were built for. Those the last render used are
     /// kept, and others up to OBJECT_TABLES_KEPT_ in all.
@@ -460,6 +465,7 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     std::uint64_t table_stamps_built_at_ = 0;
     std::uint64_t body_tables_built_at_ = 0;
     std::uint64_t object_tables_built_at_ = 0;
+    std::uint64_t grid_psf_built_at_ = 0;
 
     // The geometry compute_intrinsics_() last saw, to tell which inputs a change touched.
     float optics_focal_length_ = 0.f;
@@ -487,6 +493,7 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     void ensure_stamp_tables_();
     void ensure_table_stamps_();
     void ensure_body_convolver_();
+    void ensure_grid_psf_();
     std::vector<std::shared_ptr<const PsfTables<TSpectral>>>
     tables_at_locked_(const std::vector<double>& inverse_depths);
     [[nodiscard]] double tables_reach_() const;
@@ -496,6 +503,7 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     [[nodiscard]] bool table_stamps_stale_() const;
     [[nodiscard]] bool body_tables_stale_() const;
     [[nodiscard]] bool body_convolver_stale_() const;
+    [[nodiscard]] bool grid_psf_stale_() const;
     std::shared_ptr<const PsfTables<TSpectral>>
     build_psf_tables_(double blur,
                       const std::optional<typename PsfTables<TSpectral>::Scatter>& scatter,

@@ -627,6 +627,10 @@ void CameraModel<TSpectral>::set_aperture(Args&&... args)
  * MeasuredPSF do; HarveyShackScatter does not) gets the default size, DEFAULT_PSF_RADIUS and
  * DEFAULT_PSF_BANKS.
  *
+ * In focus, a still unresolved source is drawn from the PSF on a grid at its exact position,
+ * tapered as with the aperture's PSF (see GridPsf and Renderer::set_unresolved_taper()); the PSF
+ * is taken as complete out to its radius. A moving source is drawn from its stamps.
+ *
  * @tparam TPSF PSF model type
  * @tparam Args Constructor arguments for the PSF
  * @param args Arguments to construct the PSF
@@ -656,8 +660,9 @@ void CameraModel<TSpectral>::set_psf(Args&&... args)
  * @param sampling What the samples are: the PSF's intensity at points, or the light a pixel
  *                 centered there receives, such as a star image taken with the sensor itself
  *                 (see PSFSampling).
- * @param radius Polyphase stamping kernel radius in sensor pixels (0 = auto).
- * @param banks Number of polyphase banks per axis for subpixel stamping.
+ * @param radius How far out the measurement is taken, in sensor pixels from its center (0 =
+ *        auto: as far as it reaches, up to 64); also the stamps' radius for moving sources.
+ * @param banks Number of polyphase banks per axis for the stamps for moving sources.
  */
 template <IsSpectral TSpectral>
 void CameraModel<TSpectral>::set_measured_psf(const Image<TSpectral>& data,
@@ -823,7 +828,8 @@ const Image<TSpectral>& CameraModel<TSpectral>::get_psf_kernel(float u, float v)
  * tables. See PsfTables for how it is computed and how accurate it is.
  *
  * With no PSF (see delete_psf()), no scattered light and no defocus, the pixel the source falls
- * in holds all of its light.
+ * in holds all of its light. A PSF set with set_psf() or set_measured_psf() is given as the
+ * renderer draws a still source with it (see GridPsf), in focus and without scattered light.
  *
  * The tables for stars are built the first time they are needed after the optics change: the
  * focal length, aperture, pixel pitch, resolution, scattered light or focus. Tables for another
@@ -838,9 +844,9 @@ const Image<TSpectral>& CameraModel<TSpectral>::get_psf_kernel(float u, float v)
  *        a star.
  * @return The image. Each channel sums to the part of the source's light that falls within it.
  * @throws std::runtime_error if the radius is negative or over MAX_PSF_IMAGE_RADIUS, an offset
- *         is not finite, the range is not positive, the PSF was set with set_psf() or
- *         set_measured_psf(), the scattered light with set_harvey_shack_scatter(), or there is
- *         scattered light or defocus but no PSF.
+ *         is not finite, the range is not positive, there is scattered light or defocus but no
+ *         PSF, or the PSF was set with set_psf() or set_measured_psf() and there is scattered
+ *         light or a blur of half a pixel or more.
  */
 template <IsSpectral TSpectral>
 Image<TSpectral> CameraModel<TSpectral>::psf_image(int radius,
@@ -879,8 +885,34 @@ Image<TSpectral> CameraModel<TSpectral>::psf_image(int radius,
         return image;
     }
     if (!use_aperture_psf_) {
-        HUIRA_THROW_ERROR("CameraModel::psf_image - Only the aperture's diffraction pattern is "
-                          "supported, not a PSF set with set_psf() or set_measured_psf()");
+        // A PSF that was set, as the renderer draws a still source with it: in focus, without
+        // scattered light.
+        const double blur = blur_pixels_(range.has_value() ? 1.0 / range->to_si() : 0.0);
+        if (scatter_enabled_ || blur >= 0.5) {
+            HUIRA_THROW_ERROR("CameraModel::psf_image - A PSF set with set_psf() or "
+                              "set_measured_psf() is supported in focus without scattered "
+                              "light");
+        }
+        std::shared_ptr<const GridPsf<TSpectral>> grid;
+        {
+            std::lock_guard<std::mutex> lock(optics_mutex_);
+            tbb::this_task_arena::isolate([&] { ensure_grid_psf_(); });
+            grid = grid_psf_;
+        }
+        // The center pixel covers [0, 1) x [0, 1):
+        const double source_x = 0.5 + static_cast<double>(x_offset);
+        const double source_y = 0.5 + static_cast<double>(y_offset);
+        const auto scale = grid->scale(source_x, source_y);
+        const int size = 2 * radius + 1;
+        Image<TSpectral> image(size, size, TSpectral{0.f});
+        tbb::parallel_for(0, size, [&](int y) {
+            for (int x = 0; x < size; ++x) {
+                image(x, y) = grid->pixel(static_cast<double>(x - radius) - x_offset,
+                                          static_cast<double>(y - radius) - y_offset,
+                                          scale);
+            }
+        });
+        return image;
     }
 
     std::shared_ptr<const PsfTables<TSpectral>> tables;
@@ -1292,12 +1324,14 @@ void CameraModel<TSpectral>::precompute_locked_()
 
     ensure_defocus_();
 
-    // Otherwise, unresolved sources in focus get the PSF's stamps, and the scattered-light
-    // wings. Out of focus they get the defocus blur's stamps instead, which the convolution
-    // kernel (the PSF and the wings together) then blurs.
+    // Otherwise, unresolved sources in focus are drawn from the PSF on its grid if still, or
+    // from its stamps if moving, with the scattered-light wings. Out of focus they get the
+    // defocus blur's stamps instead, which the convolution kernel (the PSF and the wings
+    // together) then blurs.
     const bool defocused = !defocus_kernel_.empty();
     if (has_psf() && !defocused) {
         ensure_polyphase_();
+        ensure_grid_psf_();
     }
     if (scatter_enabled_ && !defocused) {
         ensure_wings_spectrum_();
@@ -1331,7 +1365,7 @@ bool CameraModel<TSpectral>::is_precomputed_locked_() const
         return false; // stamps left from when it was out of focus
     }
 
-    if (has_psf() && !defocused && !psf_->has_polyphase_cache()) {
+    if (has_psf() && !defocused && (!psf_->has_polyphase_cache() || grid_psf_stale_())) {
         return false;
     }
 
@@ -1435,6 +1469,39 @@ void CameraModel<TSpectral>::ensure_polyphase_()
     if (psf_ != nullptr) {
         psf_->ensure_polyphase_cache();
     }
+}
+
+/// Whether the PSF on its grid is out of date: the PSF or the pixels' shape changed.
+template <IsSpectral TSpectral>
+bool CameraModel<TSpectral>::grid_psf_stale_() const
+{
+    return grid_psf_ == nullptr ||
+           stale_(grid_psf_built_at_, {OpticsInput::CorePSF, OpticsInput::PixelPitch});
+}
+
+/**
+ * @brief Put a PSF set with set_psf() or set_measured_psf() on its grid, if out of date. See
+ * GridPsf.
+ */
+template <IsSpectral TSpectral>
+void CameraModel<TSpectral>::ensure_grid_psf_()
+{
+    if (use_aperture_psf_ || psf_ == nullptr || !grid_psf_stale_()) {
+        return;
+    }
+    const auto start = std::chrono::steady_clock::now();
+    const Vec2<float> pitch = sensor_->pixel_pitch();
+    grid_psf_ = std::make_shared<const GridPsf<TSpectral>>(
+        *psf_, static_cast<double>(pitch.y) / static_cast<double>(pitch.x));
+    grid_psf_built_at_ = optics_version_;
+
+    const std::chrono::duration<double> elapsed = std::chrono::steady_clock::now() - start;
+    std::ostringstream message;
+    message << "CameraModel - Put the PSF on its grid in " << std::fixed << std::setprecision(2)
+            << elapsed.count()
+            << " seconds: " << static_cast<double>(grid_psf_->memory_bytes()) / (1024.0 * 1024.0)
+            << " MiB, a sample every " << grid_psf_->step() << " pixels";
+    HUIRA_LOG_INFO(message.str());
 }
 
 /**
