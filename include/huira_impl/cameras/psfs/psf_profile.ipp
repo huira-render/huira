@@ -264,7 +264,7 @@ inline std::array<double, 3> ScatterProfile::derivatives(double r) const
  * @brief The profile of a channel's diffraction pattern, with scatter_fraction of its light
  * scattered as the scatter profile says.
  *
- * @throws std::runtime_error if the fraction is outside [0, 1), or positive without a scatter
+ * @throws std::runtime_error if the fraction is outside [0, 1], or positive without a scatter
  *         profile.
  */
 inline OpticsProfile::OpticsProfile(const AiryBandProfile& diffraction,
@@ -272,9 +272,9 @@ inline OpticsProfile::OpticsProfile(const AiryBandProfile& diffraction,
                                     std::optional<ScatterProfile> scatter)
     : diffraction_{diffraction}, scatter_fraction_{scatter_fraction}, scatter_{scatter}
 {
-    if (!(scatter_fraction >= 0.0 && scatter_fraction < 1.0) ||
+    if (!(scatter_fraction >= 0.0 && scatter_fraction <= 1.0) ||
         (scatter_fraction > 0.0 && !scatter.has_value())) {
-        HUIRA_THROW_ERROR("OpticsProfile - The scattered fraction must be in [0, 1), with a "
+        HUIRA_THROW_ERROR("OpticsProfile - The scattered fraction must be in [0, 1], with a "
                           "profile when positive: " +
                           std::to_string(scatter_fraction));
     }

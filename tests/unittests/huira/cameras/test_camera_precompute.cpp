@@ -197,8 +197,7 @@ TEST_CASE("Setters record settings, and precompute() builds what a render would 
     CHECK(camera.is_precomputed());
 
     // Scattered light reaches unresolved sources whether or not bodies are convolved: the
-    // PSF's tables hold it for still ones, and the wings' kernel and its spectrum give it to
-    // moving ones:
+    // PSF's tables hold it:
     camera.set_harvey_shack_scatter(0.05f, 2.5f);
     CHECK_FALSE(camera.is_precomputed());
     camera.precompute();
@@ -228,7 +227,7 @@ TEST_CASE("Setters record settings, and precompute() builds what a render would 
     camera.enable_psf_convolution(false);
     CHECK(camera.is_precomputed());
 
-    // Removing the PSF resizes the wings, which take the convolution radius instead...
+    // Removing the PSF leaves the scattered light, in tables of its own...
     camera.delete_psf();
     CHECK_FALSE(camera.has_psf());
     CHECK_FALSE(camera.is_precomputed());
@@ -294,12 +293,12 @@ TEST_CASE("Invalid PSF settings are rejected when made, and inconsistent ones wh
     CHECK_NOTHROW(camera.precompute());
     CHECK(camera.is_precomputed());
 
-    // Scattering without a PSF has no size until a convolution radius is set:
+    // Scattering without a PSF is drawn from its own tables, which need no convolution radius:
     camera.set_harvey_shack_scatter(0.05f, 2.5f);
     CHECK_FALSE(camera.is_precomputed());
-    CHECK_THROWS(camera.precompute());
-    camera.set_psf_convolution_radius(8);
     CHECK_NOTHROW(camera.precompute());
+    CHECK(camera.is_precomputed());
+    camera.set_psf_convolution_radius(8);
     CHECK(camera.is_precomputed());
 }
 

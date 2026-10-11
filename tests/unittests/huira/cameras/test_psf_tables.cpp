@@ -468,8 +468,7 @@ TEST_CASE("psf_image() without the aperture's PSF", "[cameras][psf]")
             }
         }
     }
-    SECTION("A PSF that was set is given as the renderer draws it, in focus without scattered "
-            "light")
+    SECTION("A PSF that was set is given as the renderer draws it, with its scattered light")
     {
         // Taken as complete, it holds all of the source's light:
         camera.set_measured_psf(Image<RGB>(9, 9, RGB{1.f}), 1.f, PSFSampling::PointSampled);
@@ -479,8 +478,22 @@ TEST_CASE("psf_image() without the aperture's PSF", "[cameras][psf]")
             sum += static_cast<double>(image[i][0]);
         }
         CHECK(std::abs(sum - 1.0) < 1e-5);
+
+        // With scattered light, it keeps the rest, and the scattered light reaches beyond it:
         camera.set_scatter(0.05f, 2.5f, units::Radian(1e-4));
-        CHECK_THROWS(camera.psf_image(2));
+        const Image<RGB> scattered = camera.psf_image(12, 0.3f, -0.2f);
+        double scattered_sum = 0.0;
+        double worst = 0.0;
+        for (std::size_t i = 0; i < image.size(); ++i) {
+            scattered_sum += static_cast<double>(scattered[i][0]);
+            worst = std::max(worst,
+                             0.95 * static_cast<double>(image[i][0]) -
+                                 static_cast<double>(scattered[i][0]));
+        }
+        CHECK(worst < 1e-6);
+        CHECK(scattered_sum > 0.95);
+        CHECK(scattered_sum < 1.0);
+        CHECK(scattered(0, 0)[0] > 0.f);
     }
     SECTION("Out-of-range arguments throw")
     {

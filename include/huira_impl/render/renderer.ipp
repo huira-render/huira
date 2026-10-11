@@ -145,32 +145,7 @@ void Renderer<TSpectral>::render(SceneView<TSpectral>& scene_view,
 
     Image<TSpectral> ray_traced_power = this->path_trace_(scene_view, frame_buffer);
 
-    Image<TSpectral> star_wing_splat(0, 0, TSpectral{0});
-    Image<TSpectral> star_power =
-        this->render_unresolved_(scene_view, frame_buffer, star_wing_splat);
-
-    // Apply the scattered-light wings to unresolved sources.
-    if (star_wing_splat.size() > 0) {
-        // Timed and logged separately: this is a frame-sized convolution that belongs
-        // to neither the path tracing nor the unresolved stage, so without its own line
-        // it shows up only as an unexplained gap between those two and the total.
-        auto wings_start = std::chrono::high_resolution_clock::now();
-
-        // The stamped sources' cores were drawn with 1 - f_s of their light; their wings take
-        // the rest. No such source landed in frame if the splat is empty.
-        if (!image_is_zero_(star_wing_splat)) {
-            camera->apply_wings_convolution_(star_wing_splat);
-            const float f_s = camera->scatter_fraction_;
-            for (std::size_t i = 0; i < star_power.size(); ++i) {
-                star_power[i] += star_wing_splat[i] * f_s;
-            }
-        }
-
-        std::chrono::duration<double> wings_elapsed =
-            std::chrono::high_resolution_clock::now() - wings_start;
-        HUIRA_LOG_INFO("Scattered-light wings completed in " +
-                       std::to_string(wings_elapsed.count()) + " seconds");
-    }
+    Image<TSpectral> star_power = this->render_unresolved_(scene_view, frame_buffer);
 
     if (frame_buffer.has_received_power()) {
         frame_buffer.received_power() = ray_traced_power + star_power;
@@ -1363,8 +1338,7 @@ struct RenderItem {
  */
 template <IsSpectral TSpectral>
 Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& scene_view,
-                                                         FrameBuffer<TSpectral>& frame_buffer,
-                                                         Image<TSpectral>& wing_splat)
+                                                         FrameBuffer<TSpectral>& frame_buffer)
 {
     auto start_clock = std::chrono::high_resolution_clock::now();
     auto& camera = scene_view.camera_model_;
@@ -1378,39 +1352,35 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
         return received_power;
     }
 
-    // Determine the stamp based on camera settings. render() has brought the camera's
-    // kernels up to date: the defocus stamps are there only without a PSF, out of focus; a
-    // PSF's tables or grid hold the blur.
+    // Each source's light is drawn in up to two parts, render() having brought the camera's
+    // kernels up to date. The tables' part (PsfTables): with the aperture's PSF, all of it,
+    // diffraction and scattered light; with a PSF that was set, or none, the scattered light's
+    // share, f, if any. A source that stays put during the exposure is drawn from them at its
+    // exact position, and a moving one along its path, as line integrals (see
+    // PsfTables::draw_line()). The core's part, the rest: a PSF that was set is drawn from its
+    // grid for a source that stays put, at its exact position (see GridPsf), blurred by its
+    // defocus, and a moving one from the PSF's own stamps if it is in focus while stars are (the
+    // camera builds them only then), and otherwise from its grid at each point of its path.
+    // Without a PSF it is the defocus blur's stamps, there only out of focus, or the pixel the
+    // source falls in. Either part's tables or grid hold the source's own blur.
     const DefocusKernel<TSpectral>& defocus = camera->defocus_kernel_;
     const bool use_defocus = !defocus.empty();
-
-    const bool use_psf_direct = camera->has_psf() && !use_defocus;
-
-    // The aperture's PSF is drawn from its tables: a source that stays put during the exposure at
-    // its exact position, and a moving one along its path, as line integrals (see
-    // PsfTables::draw_line()). A PSF that was set is drawn from its grid for a source that stays
-    // put, at its exact position (see GridPsf), blurred by its defocus. A moving one is drawn
-    // from the PSF's own stamps if it is in focus while stars are (the camera builds them only
-    // then), and otherwise from its grid at each point of its path.
-    const bool use_tables = use_psf_direct && camera->use_aperture_psf_;
-    const PSF<TSpectral>* psf = use_psf_direct && !use_tables ? camera->psf_.get() : nullptr;
-    const PsfTables<TSpectral>* tables = use_tables ? camera->render_tables_.get() : nullptr;
-    const GridPsf<TSpectral>* grid =
-        use_psf_direct && !use_tables ? camera->grid_psf_.get() : nullptr;
-    const GridPsf<TSpectral>* focused_grid =
-        use_psf_direct && !use_tables ? camera->focused_grid_.get() : nullptr;
+    const bool aperture = camera->use_aperture_psf_;
+    const PsfTables<TSpectral>* tables =
+        aperture || camera->scatter_enabled_ ? camera->render_tables_.get() : nullptr;
+    const bool use_tables = tables != nullptr;
+    const float tables_share = aperture ? 1.f : use_tables ? camera->scatter_fraction_ : 0.f;
+    const float core_share = 1.f - tables_share;
+    const bool has_core = core_share > 0.f;
+    const PSF<TSpectral>* psf = !aperture ? camera->psf_.get() : nullptr;
+    const GridPsf<TSpectral>* grid = psf != nullptr ? camera->grid_psf_.get() : nullptr;
+    const GridPsf<TSpectral>* focused_grid = psf != nullptr ? camera->focused_grid_.get() : nullptr;
     const bool use_grid = grid != nullptr;
     const bool use_stamps = psf != nullptr && grid == focused_grid;
-    assert(!use_psf_direct || psf != nullptr || tables != nullptr);
-
-    // Scattered-light wings for unresolved sources that are stamped, whether or not resolved
-    // bodies are convolved (see CameraModel::enable_psf_convolution()); the tables hold the
-    // scattered light themselves:
-    const bool splat_wings = camera->scatter_enabled_ && !use_defocus && !use_tables;
     int stamp_radius = 0;
     if (use_defocus) {
         stamp_radius = defocus.half_extent();
-    } else if (use_psf_direct && !use_tables) {
+    } else if (psf != nullptr) {
         stamp_radius = psf->get_radius();
     }
     const int psf_banks = psf != nullptr ? psf->get_banks() : 0;
@@ -1423,7 +1393,6 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
     const auto& star_field = scene_view.stars_;
 
     if (star_field.empty() && scene_view.unresolved_objects_.empty()) {
-        wing_splat = Image<TSpectral>(0, 0, TSpectral{0});
         return received_power;
     }
 
@@ -1445,7 +1414,7 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
     bool use_radius_lut = false;
     RadiusLUTConfig radius_config;
     std::vector<RadiusLUTEntry> radius_lut;
-    if (stamp_cropping_ && use_psf_direct && stamp_radius > 1 && (!use_grid || use_stamps)) {
+    if (stamp_cropping_ && use_stamps && stamp_radius > 1) {
         const Image<TSpectral>& center_kernel = stamp_kernel(0.0f, 0.0f);
 
         const SensorModel<TSpectral>& sensor = *camera->sensor_;
@@ -1638,8 +1607,8 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
     }
 
     // A source's light reaches its stamp's radius beyond the pixel it is anchored to, or its
-    // grid's reach, and the wings' splat one pixel; sources that far outside the image still
-    // light its edge. The frustum they are culled against is widened by that much.
+    // grid's reach, and at least a pixel; sources that far outside the image still light its
+    // edge. The frustum they are culled against is widened by that much.
     const int reach = std::max(std::max(stamp_radius, 1),
                                static_cast<int>(std::ceil(
                                    grid_reach / std::min(use_grid ? grid->aspect() : 1.0, 1.0)))) +
@@ -1681,7 +1650,9 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
         std::array<double, 2> end{};
         TSpectral density{0.f};
         typename PsfTables<TSpectral>::LineReach reach{};
-        /// Drawn from a PSF's grid: its scale (see GridPsf::scale()).
+        /// Drawn at its exact position from its item's grid, rather than its tables, with the
+        /// grid's scale (see GridPsf::scale()).
+        bool from_grid = false;
         std::array<double, TSpectral::size()> scale{};
     };
 
@@ -1750,16 +1721,25 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
     }
 
     // However faint, a source is drawn out to where it holds 90% of its light, and a line to
-    // where it holds 90% of its light per unit length:
-    auto floor_radius = [](const PsfTables<TSpectral>& source_tables) {
+    // where it holds 90% of its light per unit length. That is the core's when the tables hold
+    // only the scattered light, which is then drawn only as far as it shows: it holds 90% of its
+    // own light only far out (50 px for a slope of 2.5 with a half-pixel shoulder), which would
+    // draw every faint source that far.
+    auto floor_radius = [&](const PsfTables<TSpectral>& source_tables) {
         double radius = 0.0;
+        if (!aperture) {
+            return radius;
+        }
         for (std::size_t c = 0; c < TSpectral::size(); ++c) {
             radius = std::max(radius, source_tables.radius_holding_90(c));
         }
         return radius;
     };
-    auto line_floor = [](const PsfTables<TSpectral>& source_tables) {
+    auto line_floor = [&](const PsfTables<TSpectral>& source_tables) {
         double radius = 0.0;
+        if (!aperture) {
+            return radius;
+        }
         for (std::size_t c = 0; c < TSpectral::size(); ++c) {
             radius = std::max(radius, source_tables.line_holding_90(c));
         }
@@ -1890,17 +1870,17 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
         return hi;
     };
 
-    // List a sample in the tiles its light reaches: its stamp, the wings' bilinear splat, or,
-    // without either, the pixel it falls in. Stamps and the splat place light by pixel centers,
-    // which sit at i + 0.5 in the sensor coordinates the camera projects to, so they work from
-    // the position half a pixel lower. A still source drawn from the tables reaches out to its
-    // drawn radius, and is kept even if that misses the frame, for the light it puts on it
-    // beyond.
+    // List a sample in the tiles its light reaches: its stamp, or without one the pixel it falls
+    // in. Stamps place light by pixel centers, which sit at i + 0.5 in the sensor coordinates the
+    // camera projects to, so they work from the position half a pixel lower. One drawn at its
+    // exact position, from its item's tables or grid, reaches out to its drawn radius, and is
+    // kept even if that misses the frame, for the light it puts on it beyond.
+    enum class Draw { Stamp, Tables, Grid };
     auto emit_sample = [&](const RenderItem<TSpectral>& item,
                            std::size_t item_index,
                            const Pixel& p,
                            const TSpectral& power,
-                           bool exact,
+                           Draw how,
                            Batch& batch) {
         const float center_x = p.x - 0.5f;
         const float center_y = p.y - 0.5f;
@@ -1910,13 +1890,13 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
         int y_hi = y_lo + 1;
         Sample sample{item_index, p, power};
         const int r = item.effective_radius;
+        const bool exact = how != Draw::Stamp;
         if (exact) {
             sample.exact = true;
-            if (use_grid) {
-                // The core's light, less the wings' (see the tiles below):
+            if (how == Draw::Grid) {
+                sample.from_grid = true;
                 sample.scale = item.grid->scale(static_cast<double>(p.x), static_cast<double>(p.y));
-                sample.taper = grid_taper_radius(
-                    splat_wings ? power * (1.f - camera->scatter_fraction_) : power, *item.grid);
+                sample.taper = grid_taper_radius(power, *item.grid);
                 sample.draw =
                     std::min(std::isinf(sample.taper) ? farthest_corner(p) : 2.0 * sample.taper,
                              item.grid->reach());
@@ -1940,7 +1920,7 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
             x_hi = std::max(x_hi, base_x + r);
             y_lo = std::min(y_lo, base_y - r);
             y_hi = std::max(y_hi, base_y + r);
-        } else if (!splat_wings) {
+        } else {
             x_lo = x_hi = static_cast<int>(std::floor(p.x));
             y_lo = y_hi = static_cast<int>(std::floor(p.y));
         }
@@ -2301,7 +2281,8 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
             }
 
             // A source that stays put during the exposure, with the tables or a PSF's grid to draw
-            // it from, is drawn once at its mean position: its samples' light is added up.
+            // it from, is drawn once at its mean position, each part with its share: its samples'
+            // light is added up.
             bool still = use_tables || use_grid;
             for (std::size_t k = 1; still && k < pixels.size(); ++k) {
                 still = std::abs(pixels[k].x - pixels[0].x) < STILL_TOLERANCE &&
@@ -2312,11 +2293,12 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
             double still_y = 0.0;
             double still_weight = 0.0;
 
-            // Otherwise, with the tables, its samples are the vertices of its path, drawn as
-            // lines; with a PSF's grid blurred by defocus, each is drawn from the grid at its
-            // exact position, and in focus, from the PSF's stamps:
+            // Otherwise, the tables' part has its samples as the vertices of its path, drawn as
+            // lines; the core's part is drawn at each sample, from a PSF's grid blurred by
+            // defocus, at its exact position, and in focus from the PSF's stamps:
             const bool path = use_tables && !still;
-            const bool exact_samples = use_grid && (item.grid != focused_grid || !use_stamps);
+            const Draw moving_core =
+                use_grid && (item.grid != focused_grid || !use_stamps) ? Draw::Grid : Draw::Stamp;
             if (path) {
                 scratch.path.assign(params.size(), Vertex{});
             }
@@ -2348,8 +2330,8 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                 // A source whose light cannot reach the image is dropped here, before its
                 // position is converted to pixel indices, which it may not fit: it can be far
                 // beyond the image, or NaN, where the lens images nothing (past the pole of a
-                // rational distortion model). The margin is beyond the furthest a stamp or the
-                // wings' splat reaches, or, from the tables, the frame's diagonal.
+                // rational distortion model). The margin is beyond the furthest a stamp or a grid
+                // reaches, or, from the tables, the frame's diagonal.
                 const float margin = use_tables ? diagonal + 1.f : static_cast<float>(reach + 1);
                 if (!(p.x > -margin && p.x < static_cast<float>(fb_width) + margin &&
                       p.y > -margin && p.y < static_cast<float>(fb_height) + margin)) {
@@ -2396,19 +2378,22 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                 }
                 const TSpectral power = weight * rate;
 
-                if (path) {
-                    scratch.path[k] = Vertex{static_cast<double>(p.x),
-                                             static_cast<double>(p.y),
-                                             static_cast<double>(params[k]),
-                                             rate,
-                                             true};
-                } else if (still) {
+                if (still) {
                     still_power += power;
                     still_x += static_cast<double>(weight) * static_cast<double>(p.x);
                     still_y += static_cast<double>(weight) * static_cast<double>(p.y);
                     still_weight += static_cast<double>(weight);
-                } else {
-                    emit_sample(item, item_index, p, power, exact_samples, batch);
+                    continue;
+                }
+                if (path) {
+                    scratch.path[k] = Vertex{static_cast<double>(p.x),
+                                             static_cast<double>(p.y),
+                                             static_cast<double>(params[k]),
+                                             rate * tables_share,
+                                             true};
+                }
+                if (has_core) {
+                    emit_sample(item, item_index, p, power * core_share, moving_core, batch);
                 }
             }
             if (path) {
@@ -2417,7 +2402,18 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
             if (still && still_weight > 0.0) {
                 const Pixel mean{static_cast<float>(still_x / still_weight),
                                  static_cast<float>(still_y / still_weight)};
-                emit_sample(item, item_index, mean, still_power, true, batch);
+                if (use_tables) {
+                    emit_sample(
+                        item, item_index, mean, still_power * tables_share, Draw::Tables, batch);
+                }
+                if (has_core) {
+                    emit_sample(item,
+                                item_index,
+                                mean,
+                                still_power * core_share,
+                                use_grid ? Draw::Grid : Draw::Stamp,
+                                batch);
+                }
             }
         }
     };
@@ -2537,16 +2533,7 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
     }
 
     if (samples.empty()) {
-        wing_splat = Image<TSpectral>(0, 0, TSpectral{0});
         return received_power;
-    }
-
-    // Only stamped sources, and those drawn from a PSF's grid, are splatted for the wings:
-    if (splat_wings &&
-        (use_grid || std::any_of(samples.begin(), samples.end(), [](const Sample& sample) {
-             return !sample.exact;
-         }))) {
-        wing_splat = Image<TSpectral>(fb_width, fb_height, TSpectral{0});
     }
 
     // The light each source or line drawn from the tables puts in each tile, per unit power: one
@@ -2575,37 +2562,9 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                     const Pixel& star_p = sample.projected;
                     const TSpectral& power = sample.power;
 
-                    // Stamps and the splat place light by pixel centers (see bin_item):
+                    // Stamps place light by pixel centers (see bin_item):
                     const float center_x = star_p.x - 0.5f;
                     const float center_y = star_p.y - 0.5f;
-
-                    // A stamped source's core takes 1 - f_s of its light, and its wings the rest,
-                    // as does one drawn from a PSF's grid:
-                    const bool wings = splat_wings && (!sample.exact || use_grid);
-                    const TSpectral core_power =
-                        wings ? power * (1.f - camera->scatter_fraction_) : power;
-                    if (wings) {
-                        const int bx = static_cast<int>(std::floor(center_x));
-                        const int by = static_cast<int>(std::floor(center_y));
-                        const float fx = center_x - static_cast<float>(bx);
-                        const float fy = center_y - static_cast<float>(by);
-
-                        const float w00 = (1.f - fx) * (1.f - fy);
-                        const float w10 = fx * (1.f - fy);
-                        const float w01 = (1.f - fx) * fy;
-                        const float w11 = fx * fy;
-
-                        auto splat_at = [&](int px, int py, float w) {
-                            if (w > 0.f && px >= tile_x0 && px < tile_x1 && py >= tile_y0 &&
-                                py < tile_y1) {
-                                wing_splat(px, py) += power * w;
-                            }
-                        };
-                        splat_at(bx, by, w00);
-                        splat_at(bx + 1, by, w10);
-                        splat_at(bx, by + 1, w01);
-                        splat_at(bx + 1, by + 1, w11);
-                    }
 
                     if (sample.line) {
                         // A piece of a moving source's path, drawn from the tables (which keep
@@ -2641,28 +2600,28 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                         const int y_end = std::min(
                             tile_y1, static_cast<int>(std::floor(py + sample.draw / aspect)) + 1);
                         const auto weight = [&](double r) { return taper_weight(r, sample.taper); };
-                        entry_light[k] = use_grid ? item.grid->draw(received_power,
-                                                                    x_begin,
-                                                                    x_end,
-                                                                    y_begin,
-                                                                    y_end,
-                                                                    px,
-                                                                    py,
-                                                                    core_power,
-                                                                    sample.scale,
-                                                                    sample.draw,
-                                                                    weight)
-                                                  : item.tables->draw(received_power,
-                                                                      x_begin,
-                                                                      x_end,
-                                                                      y_begin,
-                                                                      y_end,
-                                                                      px,
-                                                                      py,
-                                                                      power,
-                                                                      sample.rings,
-                                                                      sample.draw,
-                                                                      weight);
+                        entry_light[k] = sample.from_grid ? item.grid->draw(received_power,
+                                                                            x_begin,
+                                                                            x_end,
+                                                                            y_begin,
+                                                                            y_end,
+                                                                            px,
+                                                                            py,
+                                                                            power,
+                                                                            sample.scale,
+                                                                            sample.draw,
+                                                                            weight)
+                                                          : item.tables->draw(received_power,
+                                                                              x_begin,
+                                                                              x_end,
+                                                                              y_begin,
+                                                                              y_end,
+                                                                              px,
+                                                                              py,
+                                                                              power,
+                                                                              sample.rings,
+                                                                              sample.draw,
+                                                                              weight);
                     } else if (stamp_radius > 0) {
                         const StampPhase phase_x = nearest_stamp_phase(center_x);
                         const StampPhase phase_y = nearest_stamp_phase(center_y);
@@ -2685,7 +2644,7 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                                 for (int kx = kx_begin; kx < kx_end; ++kx) {
                                     // Note: scalar kernel * spectral power
                                     received_power(start_x + kx, start_y + ky) +=
-                                        core_power * kernel(kx + k_offset, ky + k_offset);
+                                        power * kernel(kx + k_offset, ky + k_offset);
                                 }
                             }
                         } else {
@@ -2694,7 +2653,7 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                             const int k_offset = stamp_radius - eff_r;
 
                             // A cropped stamp keeps the whole stamp's energy:
-                            TSpectral stamp_power = core_power;
+                            TSpectral stamp_power = power;
                             if (eff_r < stamp_radius && !crop_scale.empty()) {
                                 const auto bank = static_cast<std::size_t>(
                                     phase_y.bank * stamp_banks + phase_x.bank);
@@ -2713,7 +2672,7 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                         const int px = static_cast<int>(std::floor(star_p.x));
                         const int py = static_cast<int>(std::floor(star_p.y));
                         if (px >= tile_x0 && px < tile_x1 && py >= tile_y0 && py < tile_y1) {
-                            received_power(px, py) += core_power;
+                            received_power(px, py) += power;
                         }
                     }
                 }
@@ -2862,18 +2821,16 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
             if (!sample.exact) {
                 return;
             }
-            if (use_grid) {
-                // What falls on the frame, less what was drawn, of the core's light:
+            if (sample.from_grid) {
+                // What falls on the frame, less what was drawn:
                 const Light on_frame = items[sample.item_idx].grid->light_on_frame(
                     static_cast<double>(sample.projected.x),
                     static_cast<double>(sample.projected.y),
                     fb_width,
                     fb_height,
                     sample.scale);
-                const double core =
-                    splat_wings ? 1.0 - static_cast<double>(camera->scatter_fraction_) : 1.0;
                 for (std::size_t c = 0; c < TSpectral::size(); ++c) {
-                    excess[i][c] = core * (on_frame[c] - drawn[i][c]);
+                    excess[i][c] = on_frame[c] - drawn[i][c];
                 }
                 return;
             }
@@ -2937,14 +2894,6 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
             tbb::parallel_for(std::size_t{0}, received_power.size(), [&](std::size_t i) {
                 received_power[i] += per_pixel;
             });
-        }
-    }
-
-    // Out of focus, the defocus stamps are blurred by the PSF and scattered light together,
-    // whether or not resolved bodies are convolved:
-    if (use_defocus && camera->has_psf_or_scatter_()) {
-        if (!image_is_zero_(received_power)) {
-            camera->apply_psf_convolution_(received_power);
         }
     }
 

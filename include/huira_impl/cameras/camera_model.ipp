@@ -738,8 +738,9 @@ void CameraModel<TSpectral>::use_aperture_psf(int radius, int banks)
  * it may be much larger (e.g. spanning the full frame to model scattered-light wings). A
  * radius of 0 matches the polyphase radius.
  *
- * With the aperture's PSF, resolved bodies are convolved with the whole PSF whatever the
- * radius, and it sets only get_psf_convolution_kernel()'s size.
+ * The renderer does not use it: resolved bodies are convolved with the whole PSF and scattered
+ * light whatever the radius, and it sets only get_psf_convolution_kernel()'s and
+ * get_psf_wings_kernel()'s size.
  *
  * @param radius Convolution kernel radius in pixels (kernel dimension is 2 * radius + 1)
  */
@@ -766,8 +767,8 @@ void CameraModel<TSpectral>::set_psf_convolution_radius(int radius)
  * the image and is applied separately by the renderer for efficiency. The kernel is built
  * when first needed, and rebuilt when the settings it depends on change (see precompute()).
  *
- * With the aperture's PSF, the renderer does not use it: resolved bodies are convolved with
- * the whole PSF, from its tables (see psf_image()), across the frame.
+ * The renderer does not use it: resolved bodies are convolved with the whole PSF and scattered
+ * light across the frame, as psf_image() gives them (see enable_psf_convolution()).
  *
  * @return Reference to the total-system convolution kernel (unit energy per channel), valid
  *         until the camera's settings next change.
@@ -784,10 +785,10 @@ const Image<TSpectral>& CameraModel<TSpectral>::get_psf_convolution_kernel()
  * @brief Returns the scattered-light wings kernel alone, building it if needed.
  *
  * This is the Harvey-Shack component of the total system PSF, normalized to unit energy and
- * NOT scaled by the scatter fraction. The renderer uses it to apply wings to unresolved
- * sources: their compact core is stamped via the polyphase cache, their raw energy is
- * splatted into a separate buffer, and that buffer is convolved with this kernel before the
- * two are blended by (1 - f_s) and f_s. Requires scattering to be enabled.
+ * NOT scaled by the scatter fraction, cut at the convolution radius (see
+ * set_psf_convolution_radius()). The renderer does not use it: unresolved sources and resolved
+ * bodies get the scattered light from its tables, out to the frame's edges (see psf_image()).
+ * Requires scattering to be enabled.
  *
  * @return Reference to the wings kernel (unit energy per channel), valid until the camera's
  *         settings next change.
@@ -840,10 +841,11 @@ const Image<TSpectral>& CameraModel<TSpectral>::get_psf_kernel(float u, float v)
  * objects, a source whose blur is a star's within PsfTables::BLUR_TOLERANCE is given a star's
  * tables. See PsfTables for how it is computed and how accurate it is.
  *
- * With no PSF (see delete_psf()), no scattered light and no defocus, the pixel the source falls
- * in holds all of its light. A PSF set with set_psf() or set_measured_psf() is given as the
- * renderer draws a still source with it (see GridPsf), blurred by the same defocus unless the PSF
- * already holds it (see PSFFocus), without scattered light.
+ * A PSF set with set_psf() or set_measured_psf() is given as the renderer draws a still source
+ * with it (see GridPsf), blurred by the same defocus unless the PSF already holds it (see
+ * PSFFocus); with no PSF (see delete_psf()), and no defocus, the pixel the source falls in holds
+ * that share of its light. Either way the scattered light's share, if any, is from its own tables,
+ * as the aperture's PSF's is.
  *
  * The tables for stars are built the first time they are needed after the optics change: the
  * focal length, aperture, pixel pitch, resolution, scattered light or focus. Tables for another
@@ -858,9 +860,7 @@ const Image<TSpectral>& CameraModel<TSpectral>::get_psf_kernel(float u, float v)
  *        a star.
  * @return The image. Each channel sums to the part of the source's light that falls within it.
  * @throws std::runtime_error if the radius is negative or over MAX_PSF_IMAGE_RADIUS, an offset
- *         is not finite, the range is not positive, there is scattered light or defocus but no
- *         PSF, or the PSF was set with set_psf() or set_measured_psf() and there is scattered
- *         light.
+ *         is not finite, the range is not positive, or there is defocus but no PSF.
  */
 template <IsSpectral TSpectral>
 Image<TSpectral> CameraModel<TSpectral>::psf_image(int radius,
@@ -880,64 +880,61 @@ Image<TSpectral> CameraModel<TSpectral>::psf_image(int radius,
         HUIRA_THROW_ERROR("CameraModel::psf_image - The offsets must be finite: " +
                           std::to_string(x_offset) + ", " + std::to_string(y_offset));
     }
-    if (!has_psf() && scatter_enabled_) {
-        HUIRA_THROW_ERROR("CameraModel::psf_image - Scattered light without a PSF is not "
-                          "supported");
-    }
-    if (!has_psf() && blur_pixels_(range.has_value() ? 1.0 / range->to_si() : 0.0) >=
-                          PsfTables<TSpectral>::MIN_BLUR) {
+    const double inverse_depth = range.has_value() ? 1.0 / range->to_si() : 0.0;
+    if (!has_psf() && source_blur_(inverse_depth) > 0.0) {
         HUIRA_THROW_ERROR("CameraModel::psf_image - Defocus without a PSF is not supported");
     }
-    if (!has_psf()) {
-        const int size = 2 * radius + 1;
-        Image<TSpectral> image(size, size, TSpectral{0.f});
-        const auto x = static_cast<long>(std::floor(static_cast<double>(x_offset) + 0.5)) + radius;
-        const auto y = static_cast<long>(std::floor(static_cast<double>(y_offset) + 0.5)) + radius;
-        if (x >= 0 && x < size && y >= 0 && y < size) {
-            image(static_cast<int>(x), static_cast<int>(y)) = TSpectral{1.f};
-        }
-        return image;
-    }
-    if (!use_aperture_psf_) {
-        // A PSF that was set, as the renderer draws a still source with it, without scattered
-        // light:
-        if (scatter_enabled_) {
-            HUIRA_THROW_ERROR("CameraModel::psf_image - A PSF set with set_psf() or "
-                              "set_measured_psf() is supported without scattered light");
-        }
-        std::shared_ptr<const GridPsf<TSpectral>> grid;
-        {
-            std::lock_guard<std::mutex> lock(optics_mutex_);
-            tbb::this_task_arena::isolate([&] {
-                grid = grids_at_locked_({range.has_value() ? 1.0 / range->to_si() : 0.0}).front();
-            });
-        }
-        // The center pixel covers [0, 1) x [0, 1):
-        const double source_x = 0.5 + static_cast<double>(x_offset);
-        const double source_y = 0.5 + static_cast<double>(y_offset);
-        const auto scale = grid->scale(source_x, source_y);
-        const int size = 2 * radius + 1;
-        Image<TSpectral> image(size, size, TSpectral{0.f});
-        tbb::parallel_for(0, size, [&](int y) {
-            for (int x = 0; x < size; ++x) {
-                image(x, y) = grid->pixel(static_cast<double>(x - radius) - x_offset,
-                                          static_cast<double>(y - radius) - y_offset,
-                                          scale);
-            }
-        });
-        return image;
-    }
-
     std::shared_ptr<const PsfTables<TSpectral>> tables;
+    std::shared_ptr<const GridPsf<TSpectral>> grid;
     {
         std::lock_guard<std::mutex> lock(optics_mutex_);
         tbb::this_task_arena::isolate([&] {
-            ensure_psf_tables_();
-            tables =
-                range.has_value() ? tables_at_locked_({1.0 / range->to_si()}).front() : psf_tables_;
+            if (uses_tables_()) {
+                ensure_psf_tables_();
+                tables = tables_at_locked_({inverse_depth}).front();
+            }
+            if (!use_aperture_psf_ && has_psf()) {
+                grid = grids_at_locked_({inverse_depth}).front();
+            }
         });
     }
-    return tables->image(radius, static_cast<double>(x_offset), static_cast<double>(y_offset));
+    if (use_aperture_psf_) {
+        return tables->image(radius, static_cast<double>(x_offset), static_cast<double>(y_offset));
+    }
+
+    // Otherwise the scattered light's share from its tables, and the rest from the PSF that
+    // was set, as the renderer draws a still source with it, or all in the pixel the source
+    // falls in without one:
+    const double scattered = scatter_enabled_ ? static_cast<double>(scatter_fraction_) : 0.0;
+    const int size = 2 * radius + 1;
+    Image<TSpectral> image(size, size, TSpectral{0.f});
+    if (tables != nullptr) {
+        image = tables->image(radius, static_cast<double>(x_offset), static_cast<double>(y_offset));
+        for (std::size_t i = 0; i < image.size(); ++i) {
+            image[i] = image[i] * static_cast<float>(scattered);
+        }
+    }
+    const auto core = static_cast<float>(1.0 - scattered);
+    if (grid == nullptr) {
+        const auto x = static_cast<long>(std::floor(static_cast<double>(x_offset) + 0.5)) + radius;
+        const auto y = static_cast<long>(std::floor(static_cast<double>(y_offset) + 0.5)) + radius;
+        if (x >= 0 && x < size && y >= 0 && y < size) {
+            image(static_cast<int>(x), static_cast<int>(y)) += TSpectral{core};
+        }
+        return image;
+    }
+    // The center pixel covers [0, 1) x [0, 1):
+    const auto scale =
+        grid->scale(0.5 + static_cast<double>(x_offset), 0.5 + static_cast<double>(y_offset));
+    tbb::parallel_for(0, size, [&](int y) {
+        for (int x = 0; x < size; ++x) {
+            image(x, y) += grid->pixel(static_cast<double>(x - radius) - x_offset,
+                                       static_cast<double>(y - radius) - y_offset,
+                                       scale) *
+                           core;
+        }
+    });
+    return image;
 }
 
 /// Get the radius in pixels of the PSF's stamps for unresolved sources; 0 without a PSF.
@@ -1030,9 +1027,8 @@ void CameraModel<TSpectral>::disable_veiling_glare()
  * sets them in angles, with the shoulder and outer radius in pixels.
  *
  * Without an outer radius the light totals a finite amount only for a falloff exponent over 2,
- * so an exponent of 2 or less needs one. Unresolved sources drawn from the aperture's PSF's
- * tables bend the wings down smoothly beyond the outer radius; resolved bodies, convolved with
- * the wings kernel, still cut them off there, or at the kernel's edge.
+ * so an exponent of 2 or less needs one. The outer radius bends the wings down smoothly rather
+ * than cutting them off, for unresolved sources and resolved bodies alike.
  *
  * @param scatter_fraction Fraction of light scattered, in [0, 1)
  * @param falloff_exponent Power-law exponent of the falloff (typically 2 to 3)
@@ -1117,9 +1113,9 @@ void CameraModel<TSpectral>::disable_harvey_shack_scatter()
  *
  * The scattered light follows the focal length and pixel pitch. It replaces scattered light set
  * with set_harvey_shack_scatter(), and is included in psf_image(). Unresolved sources, still or
- * moving, are drawn from the aperture's PSF's tables, which hold it; resolved bodies are
- * convolved with the wings kernel, with the shoulder and the outer angle (as a cutoff) in
- * pixels.
+ * moving, are drawn from tables that hold it: the aperture's PSF's, or with another PSF or none,
+ * its own, blurred by each source's defocus; resolved bodies are convolved with it across the
+ * frame (see enable_psf_convolution()).
  *
  * @param fraction Fraction of the light scattered, in [0, 1); 0 for none.
  * @param slope How fast the wings fall beyond the shoulder; positive.
@@ -1196,11 +1192,11 @@ std::array<float, 2> CameraModel<TSpectral>::scatter_pixels_() const
  * @brief Build everything the camera's optics and geometry need for the next render, now.
  *
  * The kernels a render uses are derived from the camera's settings: the aperture PSF's tables
- * for unresolved sources, with the defocus blur and scattered light, and stamps made from them
- * (see use_aperture_psf(), set_focus_distance() and set_scatter()), or a PSF that was set on
- * its grid, blurred as a star is by the focus, and its stamps (see set_psf()), and the
- * whole-image convolution kernels and
- * their spectra (see enable_psf_convolution()). So are the tables of the camera's
+ * for unresolved sources, with the defocus blur and scattered light (see use_aperture_psf(),
+ * set_focus_distance() and set_scatter()), or a PSF that was set on its grid, blurred as a star
+ * is by the focus, and its stamps (see set_psf()), with the scattered light's own tables, and the
+ * convolution of resolved bodies with the whole PSF (see enable_psf_convolution()). So are the
+ * tables of the camera's
  * geometry: each pixel's ray direction with distortion, and its solid angle, and the view
  * frustum, which depend on the focal length, sensor, intrinsics, distortion and axis
  * convention. The setters only record settings, so they are cheap and can be made in any
@@ -1221,9 +1217,8 @@ std::array<float, 2> CameraModel<TSpectral>::scatter_pixels_() const
  * while another is set. Tables and grids for unresolved objects whose blur differs from a
  * star's are built by the render that first needs them (see psf_image()).
  *
- * @throws std::runtime_error if the settings are inconsistent, e.g. scattering is enabled
- *         without a PSF and without set_psf_convolution_radius(), or the lens distortion has no
- *         inverse somewhere in the image at this focal length and sensor (see set_distortion()).
+ * @throws std::runtime_error if the lens distortion has no inverse somewhere in the image at this
+ *         focal length and sensor (see set_distortion()).
  */
 template <IsSpectral TSpectral>
 void CameraModel<TSpectral>::precompute()
@@ -1325,37 +1320,32 @@ void CameraModel<TSpectral>::precompute_locked_()
 {
     // With the aperture's PSF, unresolved sources are drawn from its tables, which hold the
     // defocus blur and the scattered light: still ones at their position, and moving ones
-    // along their path. Resolved bodies are convolved with the whole PSF from tables in focus,
-    // unless enable_psf_convolution(false). (The stamps get_psf_kernel() gives are built when
-    // asked for.)
+    // along their path. (The stamps get_psf_kernel() gives are built when asked for.)
+    //
+    // With a PSF that was set, its share of each source is drawn from it on its grid, blurred by
+    // the source's defocus, if still, and if moving, from its stamps while stars are in focus,
+    // and otherwise from its grid at each point of the path. Without one, it is the defocus
+    // blur's stamps, or the pixel the source falls in. The scattered light, if any, is drawn
+    // from its own tables, as the aperture's are.
+    //
+    // Resolved bodies are convolved with the whole PSF across the frame, in focus, unless
+    // enable_psf_convolution(false).
     if (use_aperture_psf_) {
         defocus_kernel_.clear();
-        ensure_render_tables_();
-        if (convolves_bodies_()) {
-            ensure_body_convolver_();
-        }
-        return;
-    }
-
-    // Otherwise, unresolved sources are drawn from the PSF on its grid, blurred by their
-    // defocus, if still, and if moving, from its stamps while stars are in focus, and otherwise
-    // from its grid at each point of their path; with the scattered-light wings. Without a PSF,
-    // they get the defocus blur's stamps, which the scattered light then blurs.
-    if (has_psf()) {
+    } else if (has_psf()) {
         defocus_kernel_.clear();
-        if (grid_blur_(0.0) == 0.0) {
+        if (source_blur_(0.0) == 0.0) {
             ensure_polyphase_();
         }
         ensure_grid_psf_();
     } else {
         ensure_defocus_();
     }
-    const bool defocused = !defocus_kernel_.empty();
-    if (scatter_enabled_ && !defocused) {
-        ensure_wings_spectrum_();
+    if (uses_tables_()) {
+        ensure_render_tables_();
     }
-    if (convolves_bodies_() || (defocused && has_psf_or_scatter_())) {
-        ensure_convolution_spectrum_();
+    if (convolves_bodies_()) {
+        ensure_body_convolver_();
     }
 }
 
@@ -1365,12 +1355,11 @@ void CameraModel<TSpectral>::precompute_locked_()
 template <IsSpectral TSpectral>
 bool CameraModel<TSpectral>::is_precomputed_locked_() const
 {
-    if (use_aperture_psf_) {
-        return defocus_kernel_.empty() && !render_tables_stale_() &&
-               (!convolves_bodies_() || !body_convolver_stale_());
-    }
-    const bool defocused = !has_psf() && defocus_blur_radius() > 0.f;
-    if (defocused) {
+    if (use_aperture_psf_ || has_psf()) {
+        if (!defocus_kernel_.empty()) {
+            return false;
+        }
+    } else if (defocus_blur_radius() > 0.f) {
         if (defocus_kernel_.empty() || stale_(defocus_built_at_,
                                               {OpticsInput::FocalLength,
                                                OpticsInput::PixelPitch,
@@ -1380,27 +1369,16 @@ bool CameraModel<TSpectral>::is_precomputed_locked_() const
             return false;
         }
     } else if (!defocus_kernel_.empty()) {
-        return false; // stamps left from when it was out of focus, or without a PSF
+        return false; // stamps left from when it was out of focus
     }
-
-    if (has_psf() &&
-        ((grid_blur_(0.0) == 0.0 && !psf_->has_polyphase_cache()) || grid_psf_stale_())) {
+    if (!use_aperture_psf_ && has_psf() &&
+        ((source_blur_(0.0) == 0.0 && !psf_->has_polyphase_cache()) || grid_psf_stale_())) {
         return false;
     }
-
-    // The spectra depend on everything their kernels do, so they are current only if the
-    // kernels are too:
-    if (scatter_enabled_ && !defocused &&
-        (wings_stale_(wings_spectrum_built_at_) ||
-         stale_(wings_spectrum_built_at_, {OpticsInput::Resolution}))) {
+    if (uses_tables_() && render_tables_stale_()) {
         return false;
     }
-    if ((convolves_bodies_() || (defocused && has_psf_or_scatter_())) &&
-        (convolution_stale_(convolution_spectrum_built_at_) ||
-         stale_(convolution_spectrum_built_at_, {OpticsInput::Resolution}))) {
-        return false;
-    }
-    return true;
+    return !convolves_bodies_() || !body_convolver_stale_();
 }
 
 /**
@@ -1497,7 +1475,7 @@ bool CameraModel<TSpectral>::grid_psf_stale_() const
 {
     return focused_grid_ == nullptr || grid_psf_ == nullptr ||
            stale_(focused_grid_built_at_, {OpticsInput::CorePSF, OpticsInput::PixelPitch}) ||
-           grid_psf_blur_ != grid_blur_(0.0);
+           grid_psf_blur_ != source_blur_(0.0);
 }
 
 /**
@@ -1519,7 +1497,7 @@ void CameraModel<TSpectral>::ensure_grid_psf_()
         focused_grid_built_at_ = optics_version_;
         grid_psf_ = nullptr;
     }
-    const double blur = grid_blur_(0.0);
+    const double blur = source_blur_(0.0);
     if (grid_psf_ == nullptr || blur != grid_psf_blur_) {
         grid_psf_ = blur > 0.0 ? std::make_shared<const GridPsf<TSpectral>>(*focused_grid_, blur)
                                : focused_grid_;
@@ -1600,8 +1578,7 @@ double CameraModel<TSpectral>::tables_reach_() const
 template <IsSpectral TSpectral>
 double CameraModel<TSpectral>::tables_blur_() const
 {
-    const double blur = blur_pixels_(0.0);
-    return blur >= PsfTables<TSpectral>::MIN_BLUR ? blur : 0.0;
+    return source_blur_(0.0);
 }
 
 /// Whether the renderer's tables are out of date. A smaller frame does not rebuild them.
@@ -1614,13 +1591,14 @@ bool CameraModel<TSpectral>::render_tables_stale_() const
                    OpticsInput::PixelPitch,
                    OpticsInput::Aperture,
                    OpticsInput::Scatter}) ||
-           tables_blur_() != render_tables_blur_ || tables_reach_() > render_tables_reach_;
+           tables_blur_() != render_tables_blur_ || tables_reach_() > render_tables_reach_ ||
+           render_tables_scatter_only_ != !use_aperture_psf_;
 }
 
 /**
- * @brief Build the tables the renderer draws still unresolved sources from, if out of date: the
- * aperture's diffraction with the scattered light, blurred as a star is by the focus. See
- * render_tables_.
+ * @brief Build the tables the renderer draws unresolved sources from, if out of date: the
+ * aperture's diffraction with the scattered light, or the scattered light alone with another PSF
+ * or none, blurred as a star is by the focus. See render_tables_.
  */
 template <IsSpectral TSpectral>
 void CameraModel<TSpectral>::ensure_render_tables_()
@@ -1630,8 +1608,9 @@ void CameraModel<TSpectral>::ensure_render_tables_()
     }
     render_tables_reach_ = tables_reach_();
     render_tables_blur_ = tables_blur_();
+    render_tables_scatter_only_ = !use_aperture_psf_;
     render_tables_ =
-        build_psf_tables_(render_tables_blur_, scatter_for_tables_(), render_tables_reach_);
+        build_psf_tables_(render_tables_blur_, tables_scatter_(), render_tables_reach_);
     render_tables_built_at_ = optics_version_;
 }
 
@@ -1669,9 +1648,11 @@ CameraModel<TSpectral>::tables_at_locked_(const std::vector<double>& inverse_dep
                 OpticsInput::PixelPitch,
                 OpticsInput::Aperture,
                 OpticsInput::Scatter}) ||
-        tables_reach_() > object_tables_reach_) {
+        tables_reach_() > object_tables_reach_ ||
+        object_tables_scatter_only_ != !use_aperture_psf_) {
         object_tables_.entries.clear();
         object_tables_reach_ = tables_reach_();
+        object_tables_scatter_only_ = !use_aperture_psf_;
         object_tables_built_at_ = optics_version_;
     }
 
@@ -1679,15 +1660,14 @@ CameraModel<TSpectral>::tables_at_locked_(const std::vector<double>& inverse_dep
     result.reserve(inverse_depths.size());
     std::size_t used = 0; // the last this many kept are those this call has used
     for (const double inverse_depth : inverse_depths) {
-        const double raw_blur = blur_pixels_(inverse_depth);
-        const double blur = raw_blur >= PsfTables<TSpectral>::MIN_BLUR ? raw_blur : 0.0;
+        const double blur = source_blur_(inverse_depth);
         if (!std::isfinite(blur) ||
             std::abs(blur - render_tables_blur_) <= PsfTables<TSpectral>::BLUR_TOLERANCE) {
             result.push_back(render_tables_);
             continue;
         }
         result.push_back(object_tables_.find(blur, used, [&] {
-            return build_psf_tables_(blur, scatter_for_tables_(), object_tables_reach_);
+            return build_psf_tables_(blur, tables_scatter_(), object_tables_reach_);
         }));
     }
     object_tables_.trim(used);
@@ -1727,7 +1707,7 @@ CameraModel<TSpectral>::grids_at_locked_(const std::vector<double>& inverse_dept
     result.reserve(inverse_depths.size());
     std::size_t used = 0;
     for (const double inverse_depth : inverse_depths) {
-        const double blur = grid_blur_(inverse_depth);
+        const double blur = source_blur_(inverse_depth);
         if (!std::isfinite(blur) ||
             std::abs(blur - grid_psf_blur_) <= PsfTables<TSpectral>::BLUR_TOLERANCE) {
             result.push_back(grid_psf_);
@@ -1744,11 +1724,12 @@ CameraModel<TSpectral>::grids_at_locked_(const std::vector<double>& inverse_dept
 }
 
 /**
- * @brief The blur, in pixel widths, a PSF that was set is given at an inverse depth: none below
- * PsfTables::MIN_BLUR, as for the aperture's tables, or if the PSF already holds the defocus.
+ * @brief The blur, in pixel widths, an unresolved source is given at an inverse depth (0 for a
+ * star): none below PsfTables::MIN_BLUR, or if the PSF already holds the defocus (see
+ * PSF::includes_defocus()).
  */
 template <IsSpectral TSpectral>
-double CameraModel<TSpectral>::grid_blur_(double inverse_depth) const
+double CameraModel<TSpectral>::source_blur_(double inverse_depth) const
 {
     if (psf_ != nullptr && psf_->includes_defocus()) {
         return 0.0;
@@ -1757,10 +1738,14 @@ double CameraModel<TSpectral>::grid_blur_(double inverse_depth) const
     return blur >= PsfTables<TSpectral>::MIN_BLUR ? blur : 0.0;
 }
 
-/// Whether the tables for resolved bodies are out of date: the renderer's, in focus.
+/// Whether the tables for resolved bodies are out of date: the renderer's, in focus. None are
+/// needed without the aperture's PSF or scattered light.
 template <IsSpectral TSpectral>
 bool CameraModel<TSpectral>::body_tables_stale_() const
 {
+    if (!uses_tables_()) {
+        return false;
+    }
     if (tables_blur_() == 0.0) {
         return render_tables_stale_();
     }
@@ -1770,26 +1755,48 @@ bool CameraModel<TSpectral>::body_tables_stale_() const
                    OpticsInput::PixelPitch,
                    OpticsInput::Aperture,
                    OpticsInput::Scatter}) ||
-           tables_reach_() > body_tables_reach_;
+           tables_reach_() > body_tables_reach_ || body_tables_scatter_only_ != !use_aperture_psf_;
 }
 
-/// Whether the convolution for resolved bodies is out of date: its tables, or the resolution.
+/**
+ * @brief What resolved bodies are convolved with, in focus, since path tracing gives them their
+ * defocus: the aperture's tables, which hold its diffraction and the scattered light; or a PSF
+ * that was set on its grid, or a point without one, with 1 - f of the light, and the scattered
+ * light's tables with f of it, f being the scattered fraction (0 without scattered light).
+ */
+template <IsSpectral TSpectral>
+typename PsfConvolver<TSpectral>::Parts CameraModel<TSpectral>::body_parts_() const
+{
+    typename PsfConvolver<TSpectral>::Parts parts;
+    if (uses_tables_()) {
+        parts.tables = tables_blur_() == 0.0 ? render_tables_ : body_tables_;
+    }
+    if (use_aperture_psf_) {
+        return parts;
+    }
+    const double scattered = scatter_enabled_ ? static_cast<double>(scatter_fraction_) : 0.0;
+    parts.tables_share = scattered;
+    parts.core = has_psf() ? focused_grid_ : nullptr;
+    parts.core_share = 1.0 - scattered;
+    return parts;
+}
+
+/// Whether the convolution for resolved bodies is out of date: its tables, its core, or the
+/// resolution.
 template <IsSpectral TSpectral>
 bool CameraModel<TSpectral>::body_convolver_stale_() const
 {
     if (body_tables_stale_()) {
         return true;
     }
-    const auto& tables = tables_blur_() == 0.0 ? render_tables_ : body_tables_;
-    return body_convolver_.tables() != tables ||
+    return !body_convolver_.is_ready() || !(body_convolver_.parts() == body_parts_()) ||
            !(body_convolver_.resolution() == sensor_->resolution());
 }
 
 /**
- * @brief Prepare the convolution for resolved bodies, if out of date: with the whole PSF, from
- * the renderer's tables in focus, or from tables of their own otherwise. Path tracing gives
- * bodies their defocus, so their tables are in focus whatever the focus, with the scattered
- * light.
+ * @brief Prepare the convolution for resolved bodies, if out of date: with the whole PSF (see
+ * body_parts_()), from the renderer's tables in focus, or from tables of their own otherwise.
+ * A PSF that was set must be on its grid (see ensure_grid_psf_()).
  */
 template <IsSpectral TSpectral>
 void CameraModel<TSpectral>::ensure_body_convolver_()
@@ -1797,17 +1804,19 @@ void CameraModel<TSpectral>::ensure_body_convolver_()
     if (!body_convolver_stale_()) {
         return;
     }
-    if (tables_blur_() == 0.0) {
-        ensure_render_tables_();
-        body_tables_ = nullptr;
-    } else if (body_tables_stale_()) {
-        body_tables_reach_ = tables_reach_();
-        body_tables_ = build_psf_tables_(0.0, scatter_for_tables_(), body_tables_reach_);
-        body_tables_built_at_ = optics_version_;
+    if (uses_tables_()) {
+        if (tables_blur_() == 0.0) {
+            ensure_render_tables_();
+            body_tables_ = nullptr;
+        } else if (body_tables_stale_()) {
+            body_tables_reach_ = tables_reach_();
+            body_tables_scatter_only_ = !use_aperture_psf_;
+            body_tables_ = build_psf_tables_(0.0, tables_scatter_(), body_tables_reach_);
+            body_tables_built_at_ = optics_version_;
+        }
     }
     const auto start = std::chrono::steady_clock::now();
-    body_convolver_.set_tables(tables_blur_() == 0.0 ? render_tables_ : body_tables_,
-                               sensor_->resolution());
+    body_convolver_.set_parts(body_parts_(), sensor_->resolution());
 
     const std::chrono::duration<double> elapsed = std::chrono::steady_clock::now() - start;
     std::ostringstream message;
@@ -1951,8 +1960,25 @@ CameraModel<TSpectral>::scatter_for_tables_() const
 }
 
 /**
+ * @brief The scattered light the renderer's tables hold: as set with the aperture's PSF, which
+ * they hold too; and otherwise all of their light, the scattered light alone, which the renderer
+ * gives its fraction (see scatter_for_tables_()).
+ */
+template <IsSpectral TSpectral>
+std::optional<typename PsfTables<TSpectral>::Scatter>
+CameraModel<TSpectral>::tables_scatter_() const
+{
+    auto scatter = scatter_for_tables_();
+    if (scatter.has_value() && !use_aperture_psf_) {
+        scatter->fraction = 1.0;
+    }
+    return scatter;
+}
+
+/**
  * @brief Build the tables for the current optics, the given blur (in pixel widths) and scattered
- * light, out to the given reach (see tables_reach_()).
+ * light, out to the given reach (see tables_reach_()). With all of the light scattered, the
+ * diffraction pattern is left out.
  */
 template <IsSpectral TSpectral>
 std::shared_ptr<const PsfTables<TSpectral>> CameraModel<TSpectral>::build_psf_tables_(
@@ -2050,25 +2076,6 @@ void CameraModel<TSpectral>::ensure_convolution_kernel_()
 }
 
 /**
- * @brief Transform the total-system convolution kernel at the sensor's resolution, if out of
- * date.
- */
-template <IsSpectral TSpectral>
-void CameraModel<TSpectral>::ensure_convolution_spectrum_()
-{
-    ensure_convolution_kernel_();
-    if (!convolution_stale_(convolution_spectrum_built_at_) &&
-        !stale_(convolution_spectrum_built_at_, {OpticsInput::Resolution})) {
-        return;
-    }
-    const Image<TSpectral>& kernel = psf_convolution_kernel_;
-    if (kernel.width() * kernel.height() > DIRECT_CONVOLUTION_MAX_AREA_) {
-        psf_convolver_.set_kernel(kernel, sensor_->resolution());
-    }
-    convolution_spectrum_built_at_ = optics_version_;
-}
-
-/**
  * @brief Build the scattered-light wings kernel, if out of date. See get_psf_wings_kernel().
  */
 template <IsSpectral TSpectral>
@@ -2088,27 +2095,8 @@ void CameraModel<TSpectral>::ensure_wings_kernel_()
 }
 
 /**
- * @brief Transform the scattered-light wings kernel at the sensor's resolution, if out of date.
- */
-template <IsSpectral TSpectral>
-void CameraModel<TSpectral>::ensure_wings_spectrum_()
-{
-    ensure_wings_kernel_();
-    if (!wings_stale_(wings_spectrum_built_at_) &&
-        !stale_(wings_spectrum_built_at_, {OpticsInput::Resolution})) {
-        return;
-    }
-    const Image<TSpectral>& kernel = psf_wings_kernel_;
-    if (kernel.width() * kernel.height() > DIRECT_CONVOLUTION_MAX_AREA_) {
-        wings_convolver_.set_kernel(kernel, sensor_->resolution());
-    }
-    wings_spectrum_built_at_ = optics_version_;
-}
-
-/**
- * @brief Convolve an image in place with the PSF: with the aperture's, the whole of it, across
- * the frame (see PsfConvolver); otherwise with the total-system convolution kernel, as
- * Image::convolve() would, but through the precomputed spectrum.
+ * @brief Convolve an image in place with the whole PSF, across the frame (see PsfConvolver and
+ * body_parts_()).
  *
  * For the renderer, after precompute_for_render_().
  */
@@ -2116,40 +2104,10 @@ template <IsSpectral TSpectral>
 void CameraModel<TSpectral>::apply_psf_convolution_(Image<TSpectral>& image) const
 {
     detail::convolve_finite_pixels(image, "PSF", [this](Image<TSpectral>& finite) {
-        if (use_aperture_psf_) {
-            // The convolver's working buffers are shared:
-            std::lock_guard<std::mutex> lock(optics_mutex_);
-            tbb::this_task_arena::isolate([&] { body_convolver_.apply(finite); });
-            return;
-        }
-        const Image<TSpectral>& kernel = psf_convolution_kernel_;
-        if (kernel.width() * kernel.height() <= DIRECT_CONVOLUTION_MAX_AREA_) {
-            finite.convolve(kernel);
-            return;
-        }
         // The convolver's working buffers are shared:
         std::lock_guard<std::mutex> lock(optics_mutex_);
-        tbb::this_task_arena::isolate([&] { psf_convolver_.apply(finite); });
+        tbb::this_task_arena::isolate([&] { body_convolver_.apply(finite); });
     });
-}
-
-/**
- * @brief Convolve an image in place with the scattered-light wings kernel. See
- * apply_psf_convolution_().
- */
-template <IsSpectral TSpectral>
-void CameraModel<TSpectral>::apply_wings_convolution_(Image<TSpectral>& image) const
-{
-    detail::convolve_finite_pixels(
-        image, "scattered-light wings", [this](Image<TSpectral>& finite) {
-            const Image<TSpectral>& kernel = psf_wings_kernel_;
-            if (kernel.width() * kernel.height() <= DIRECT_CONVOLUTION_MAX_AREA_) {
-                finite.convolve(kernel);
-                return;
-            }
-            std::lock_guard<std::mutex> lock(optics_mutex_);
-            tbb::this_task_arena::isolate([&] { wings_convolver_.apply(finite); });
-        });
 }
 
 /**

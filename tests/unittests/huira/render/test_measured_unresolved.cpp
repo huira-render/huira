@@ -2,6 +2,7 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <optional>
 
 #include "catch2/catch_test_macros.hpp"
 #include "huira/huira.hpp"
@@ -97,7 +98,6 @@ Image<RGB> render_with(double x,
     camera_model.set_sensor_read_noise(10.f);
     if (scatter) {
         camera_model.set_harvey_shack_scatter(0.1f, 3.0f, 0.5f);
-        camera_model.set_psf_convolution_radius(16);
     }
     auto camera = scene.root.new_instance(camera_model);
     auto source = scene.root.new_instance(scene.new_unresolved_emitter(units::Watt(watts)));
@@ -258,16 +258,21 @@ TEST_CASE("A faint source with a measured PSF keeps its pixels' light where it i
 TEST_CASE("A still source with a measured PSF and scattered light keeps its light",
           "[render][unresolved][psf][measured][scatter]")
 {
-    // The core takes nine tenths of the light, drawn from the PSF's grid, and the wings the rest,
-    // splatted and convolved; a faint source fades out, and what it leaves is spread. Wings that
-    // reach 16 px from the middle stay on the frame.
+    // The core takes nine tenths of the light, drawn from the PSF's grid, and the scattered
+    // light the rest, from its own tables; a faint source fades out, and what it leaves is
+    // spread. What reaches beyond the frame is the scattered light's, as its tables give it.
     const Image<RGB> data = measurement(8, PSFSampling::PointSampled);
+    const auto scatter = PsfTables<RGB>::airy(
+        4.0, PITCH, PITCH, 4096.0, PsfTables<RGB>::Scatter{1.0, 3.0, 0.5, std::nullopt});
+    const double scattered_on_frame =
+        scatter.light_in_rectangle(-32.2, SIZE - 32.2, -32.3, SIZE - 32.3)[1];
+    REQUIRE(scattered_on_frame < 0.99);
     for (const double watts : {1e3, 1e-6}) {
         INFO(watts << " W");
         const double without =
             total(render_with(32.2, 32.3, watts, data, 8, PSFSampling::PointSampled, RADIUS));
         const double with =
             total(render_with(32.2, 32.3, watts, data, 8, PSFSampling::PointSampled, RADIUS, true));
-        CHECK(std::abs(with / without - 1.0) < 1e-5);
+        CHECK(std::abs(with / without - (0.9 + 0.1 * scattered_on_frame)) < 1e-5);
     }
 }
