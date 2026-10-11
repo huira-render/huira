@@ -2,6 +2,10 @@
 
 #include <array>
 #include <cstddef>
+#include <cstdint>
+#include <map>
+#include <memory>
+#include <mutex>
 #include <vector>
 
 #include "huira/cameras/psfs/psf.hpp"
@@ -40,6 +44,10 @@ namespace huira {
  * GridPsf(const GridPsf&, double)), and held as pixel-integrated samples, which sum over the
  * pixels to all of the light wherever the source is, so that scale() is 1.
  *
+ * A moving source is drawn as a line integral of its pixels' light along each straight piece of
+ * its path: from tables for the piece's direction (see Line and draw_line()), which pay for
+ * themselves once enough pieces share it, or else directly (see draw_line_direct()).
+ *
  * Coordinates are in pixels along each axis, as PSF::evaluate() takes them; distances, as
  * elsewhere, in pixel widths, a pixel being aspect() widths high.
  *
@@ -56,8 +64,83 @@ class GridPsf {
     /// The most memory a sampled PSF takes, before its samples are made coarser.
     static constexpr std::size_t MEMORY_BUDGET = std::size_t{64} * 1024 * 1024;
 
+    /// The directions lines are drawn from tables for, around a full turn, every 0.088 degrees: a
+    /// piece of a path takes the two either side of it, in proportion. Even a round PSF needs
+    /// them this close, as pixels collect it, since the pixels are square.
+    static constexpr int LINE_DIRECTIONS = 4096;
+
+    /// The most memory the tables lines are drawn from are kept in: beyond it, those used least
+    /// recently are dropped, and made again if needed.
+    static constexpr std::size_t LINE_CACHE_BUDGET = 8 * MEMORY_BUDGET;
+
     GridPsf(PSF<TSpectral>& psf, double aspect);
     GridPsf(const GridPsf& in_focus, double blur);
+    static GridPsf disc(double blur, double aspect);
+
+    /**
+     * @brief What a line in one direction (cos, sin), in pixels along the axes, is drawn from: the
+     * light per unit length it puts in a pixel whose center is p along the normal (-sin, cos) from
+     * it, and q along it from where it starts, if it runs from -infinity to there: the pixels'
+     * light (as pixel() gives it) integrated along it, C(p, q). The whole line's is C(p, infinity),
+     * the line spread. Both are tabulated every step from first, in p and in q, out to where the
+     * PSF reaches (support), as cubic splines' coefficients, channel by channel at each: C by
+     * row of p.
+     */
+    struct Line {
+        double cos = 1.0;
+        double sin = 0.0;
+        double first = 0.0;
+        double step = 1.0;
+        int count = 0;
+        double support = 0.0;
+        std::vector<double> spread;
+        std::vector<double> cumulative;
+        [[nodiscard]] std::size_t memory_bytes() const
+        {
+            return (spread.size() + cumulative.size()) * sizeof(double);
+        }
+    };
+
+    /// The directions either side of a piece's, in pixels along the axes, as indices around a
+    /// turn, and how far it is from the first towards the second.
+    struct LineDirections {
+        int below = 0;
+        int above = 0;
+        double fraction = 0.0;
+    };
+    [[nodiscard]] static LineDirections line_directions(double dx, double dy);
+    [[nodiscard]] std::size_t line_table_bytes() const;
+    [[nodiscard]] double line_table_work() const;
+    [[nodiscard]] double line_direct_work(double length, double reach) const;
+    void prepare_line(int direction) const;
+
+    [[nodiscard]] double line_envelope(std::size_t channel, double r) const;
+    [[nodiscard]] Light line_scale() const;
+    [[nodiscard]] std::size_t line_cache_bytes() const;
+
+    template <class Weight>
+    Light draw_line(Image<TSpectral>& target,
+                    int x_begin,
+                    int x_end,
+                    int y_begin,
+                    int y_end,
+                    const std::array<double, 2>& start,
+                    const std::array<double, 2>& end,
+                    const TSpectral& power,
+                    double reach,
+                    const Weight& weight) const;
+
+    template <class Weight>
+    Light draw_line_direct(Image<TSpectral>& target,
+                           int x_begin,
+                           int x_end,
+                           int y_begin,
+                           int y_end,
+                           const std::array<double, 2>& start,
+                           const std::array<double, 2>& end,
+                           const TSpectral& power,
+                           double reach,
+                           const Weight& weight) const;
 
     [[nodiscard]] TSpectral pixel(double dx, double dy, const Light& scale) const;
     [[nodiscard]] Light scale(double source_x, double source_y) const;
@@ -104,6 +187,11 @@ class GridPsf {
     static constexpr std::size_t N = TSpectral::size();
     /// The envelope's bins, per pixel width.
     static constexpr double ENVELOPE_BINS = 8.0;
+    /// Drawing a line directly, how far off each panel's integral may be, per unit of its length,
+    /// as a fraction of the brightest the collected PSF gets (see direct_setup_()).
+    static constexpr double DIRECT_TOLERANCE = 1e-3;
+    /// The bins, per pixel along the axes, the panels' lengths are set for by distance.
+    static constexpr double PANEL_BINS = 4.0;
     /// Coefficients beyond the samples on every side, mirrored, which the spline takes within
     /// two samples of them.
     static constexpr int MARGIN = 2;
@@ -139,6 +227,48 @@ class GridPsf {
     GridPsf() = default;
     [[nodiscard]] static GridPsf integrated_(const GridPsf& point);
 
+    /// By distance bin, the most light per unit length a line puts in a pixel there or beyond.
+    std::vector<std::array<double, N>> line_envelope_;
+
+    /// What lines are drawn from, made when first needed and shared by copies: the PSF as pixels
+    /// collect it (itself, if pixel-integrated; see integrated_()), its scale() at a pixel's
+    /// center, and the tables made so far, by direction, with when each was last used.
+    struct LineCache {
+        std::once_flag collected_once;
+        std::shared_ptr<const GridPsf> integrated;
+        std::once_flag scale_once;
+        Light scale{};
+        std::once_flag direct_once;
+        /// Drawing a line directly: by distance from the source (PANEL_BINS per pixel along the
+        /// axes), the longest panel that may start there, and the panels a line through it to
+        /// the PSF's edge takes from there, both ways.
+        std::vector<double> panel_limit;
+        std::vector<double> panels_from;
+        std::mutex mutex;
+        struct Entry {
+            std::shared_ptr<const Line> line;
+            std::uint64_t used = 0;
+        };
+        std::map<int, Entry> lines;
+        std::uint64_t clock = 0;
+        std::size_t bytes = 0;
+    };
+    std::shared_ptr<LineCache> line_cache_ = std::make_shared<LineCache>();
+    [[nodiscard]] const GridPsf& collected_() const;
+    [[nodiscard]] const LineCache& direct_setup_() const;
+    [[nodiscard]] double panel_length_(const LineCache& cache, double near, double far_limit) const;
+    /// Where a line's tables are made: every step from -half steps, out to support either side.
+    struct LineLayout {
+        double support = 0.0;
+        double step = 1.0;
+        int half = 0;
+    };
+    [[nodiscard]] LineLayout line_layout_() const;
+    [[nodiscard]] std::shared_ptr<const Line> line_at_(int index) const;
+    [[nodiscard]] Line build_line_(double cos, double sin) const;
+    [[nodiscard]] static Light line_spread_(const Line& line, double p);
+    [[nodiscard]] static Light line_cumulative_(const Line& line, double p, double q);
+
     [[nodiscard]] std::size_t at_(int i, int j) const
     {
         return (static_cast<std::size_t>(j) * static_cast<std::size_t>(nx_) +
@@ -168,3 +298,4 @@ class GridPsf {
 } // namespace huira
 
 #include "huira_impl/cameras/psfs/grid_psf.ipp"
+#include "huira_impl/cameras/psfs/grid_psf_lines.ipp"

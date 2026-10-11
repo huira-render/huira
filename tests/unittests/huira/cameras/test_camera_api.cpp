@@ -64,7 +64,9 @@ TEST_CASE("A star spreads over the pixels around it by default", "[render][psf][
         camera_model.configure_sensor_from_pitch({32, 32}, 10_um);
         camera_model.set_focal_length(50_mm);
         if (!psf) {
+            // In focus: out of focus, even by a twentieth of a pixel, the star is a small disc.
             camera_model.delete_psf();
+            camera_model.enable_depth_of_field(false);
         }
         auto camera = scene.root.new_instance(camera_model);
 

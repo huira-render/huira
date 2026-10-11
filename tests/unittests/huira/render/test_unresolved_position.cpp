@@ -121,6 +121,9 @@ void render_positions(Stamp stamp, const PixelConvention& convention, Check chec
         // About a 2 px blur radius.
         camera_model.set_focus_sensor_offset(units::Micrometer(160.0));
         REQUIRE(camera_model.defocus_blur_radius() > 1.5f);
+    } else if (stamp == Stamp::None) {
+        // In focus: the source would otherwise be a disc a twentieth of a pixel across.
+        camera_model.enable_depth_of_field(false);
     }
     auto camera = scene.root.new_instance(camera_model);
 
@@ -239,37 +242,22 @@ TEST_CASE("Unresolved sources land where the camera projects them", "[render][un
         }
     }
 
-    // The aperture's PSF is drawn at the source's exact position, so its centroid lands on the
-    // projection, but for the pull of the stamp's truncated tail towards the pixel's center (up
-    // to 0.012 px for this wide pattern). Defocus stamps hold the kernel pre-shifted in 1/16
-    // pixel banks, and each source uses the nearest bank, so the centroid lands within 1/32 px
-    // of the projection, and much closer to the projection rounded to the nearest bank; what is
-    // left there is the pixelated edge of the defocus disk. Before this was fixed, stamps were
-    // half a pixel off in both axes, and taking the bank below rather than the nearest one
-    // added up to a further 1/16 px towards -x and -y.
+    // The aperture's PSF, and the defocus disc without a PSF, are drawn at the source's exact
+    // position, so the centroid lands on the projection, but for the pull of the light beyond the
+    // frame, or spread over it, towards the frame's center (up to 0.012 px for this wide
+    // pattern). Before this was fixed, stamps were half a pixel off in both axes; the defocus
+    // disc used to be stamped from 1/16 pixel banks, and landed within 1/32 px.
     for (Stamp stamp : {Stamp::Airy, Stamp::Defocus}) {
         for (const PixelConvention& convention :
              {PixelConvention::opencv(), PixelConvention::fits()}) {
-            DYNAMIC_SECTION((stamp == Stamp::Airy ? "Airy PSF stamp, " : "Defocus disk stamp, ")
+            DYNAMIC_SECTION((stamp == Stamp::Airy ? "Airy PSF, " : "Defocus disc, ")
                             << name(convention))
             {
                 render_positions(stamp, convention, [&](const Image<RGB>& image, Vec2<double> p) {
-                    // Banks are spaced from pixel centers:
-                    const double c0 = first_center(convention);
-                    auto nearest_bank = [c0](double v) {
-                        return std::round((v - c0) * 16.0) / 16.0 + c0;
-                    };
                     const Vec2<double> c = centroid(image, convention);
                     INFO("centroid (" << c.x << ", " << c.y << ")");
-                    if (stamp == Stamp::Airy) {
-                        CHECK(std::abs(c.x - p.x) < 0.015);
-                        CHECK(std::abs(c.y - p.y) < 0.015);
-                    } else {
-                        CHECK(std::abs(c.x - p.x) < 0.05);
-                        CHECK(std::abs(c.y - p.y) < 0.05);
-                        CHECK(std::abs(c.x - nearest_bank(p.x)) < 0.025);
-                        CHECK(std::abs(c.y - nearest_bank(p.y)) < 0.025);
-                    }
+                    CHECK(std::abs(c.x - p.x) < 0.015);
+                    CHECK(std::abs(c.y - p.y) < 0.015);
                 });
             }
         }

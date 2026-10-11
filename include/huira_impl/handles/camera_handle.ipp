@@ -614,8 +614,8 @@ bool CameraModelHandle<TSpectral>::psf_convolution_enabled() const
  * @param sampling What the samples are: the PSF's intensity at points, or the light a pixel
  *                 centered there receives (see PSFSampling).
  * @param radius How far out the measurement is taken, in sensor pixels from its center (0 =
- *        auto); also the stamps' radius for moving sources.
- * @param banks Number of polyphase banks per axis for the stamps for moving sources.
+ *        auto); also get_psf_kernel()'s stamps' radius.
+ * @param banks Subpixel positions per axis get_psf_kernel()'s stamps are made for.
  * @param focus Whether the samples are a point's in focus, which the camera's focus blurs, or
  *              already hold its defocus (see PSFFocus).
  */

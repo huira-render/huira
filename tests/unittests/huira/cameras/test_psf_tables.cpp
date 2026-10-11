@@ -783,8 +783,23 @@ TEST_CASE("psf_image() blurs a source at a range by its own defocus", "[cameras]
 
     camera.enable_depth_of_field(true);
     CHECK_THROWS(camera.psf_image(8, 0.f, 0.f, units::Meter(0.0)));
+
+    // Without a PSF, the blur alone, a uniform disc: each pixel holds the disc's area within it.
     camera.delete_psf();
-    CHECK_THROWS(camera.psf_image(8));
+    const Image<RGB> disc = camera.psf_image(8, 0.2f, 0.4f);
+    const double blur = camera.defocus_blur_radius();
+    double worst = 0.0;
+    for (int y = 0; y < disc.height(); ++y) {
+        for (int x = 0; x < disc.width(); ++x) {
+            const double dx = x - 8 - 0.2;
+            const double dy = y - 8 - 0.4;
+            const double expected = huira::grid_psf_detail::circle_rectangle_area(
+                                        dx - 0.5, dx + 0.5, dy - 0.5, dy + 0.5, blur) /
+                                    (huira::PI<double>() * blur * blur);
+            worst = std::max(worst, std::abs(static_cast<double>(disc(x, y)[0]) - expected));
+        }
+    }
+    CHECK(worst < 1e-3 / (huira::PI<double>() * blur * blur));
 }
 
 namespace {
