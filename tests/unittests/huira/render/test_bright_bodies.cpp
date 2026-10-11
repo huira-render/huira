@@ -2,6 +2,7 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <string>
 #include <vector>
 
 #include "catch2/catch_test_macros.hpp"
@@ -191,7 +192,10 @@ constexpr double BALL_FOCAL = 50e-3;
 constexpr double BALL_PITCH = 10e-6;
 constexpr std::array<double, 2> STAR_PIXEL{700.3, 120.6};
 
-Image<RGB> render_ball_scene(bool with_ball, bool with_star, double seconds)
+Image<RGB> render_ball_scene(bool with_ball,
+                             bool with_star,
+                             double seconds,
+                             double fft_tolerance = Renderer<RGB>::DEFAULT_FFT_ROUNDING_TOLERANCE)
 {
     Scene<RGB> scene;
     auto camera_model = scene.new_camera_model();
@@ -226,6 +230,7 @@ Image<RGB> render_ball_scene(bool with_ball, bool with_star, double seconds)
     auto frame_buffer = camera_model.make_frame_buffer();
     frame_buffer.enable_received_power();
     Renderer<RGB> renderer;
+    renderer.set_fft_rounding_tolerance(fft_tolerance);
     SceneView<RGB> scene_view(scene,
                               Interval{Time::from_et(0.0), Time::from_et(seconds)},
                               camera,
@@ -364,4 +369,56 @@ TEST_CASE("A large bright body leaves a faint star's measurement as it is withou
     CHECK(std::abs(beside.centroid[0] - alone.centroid[0]) < 1e-3);
     CHECK(std::abs(beside.centroid[1] - alone.centroid[1]) < 1e-3);
     CHECK(beside.background_rms < 0.5);
+}
+
+TEST_CASE("Bodies are convolved in single precision only where its rounding stays faint",
+          "[render][psf][bodies]")
+{
+    // The same frame at two exposures: the power is the same, but the electrons, and so what
+    // single precision's rounding would spread over the frame, grow with the exposure. Short,
+    // that is far under a tenth of the read noise, and the frame is convolved in single
+    // precision; long, in double. The two may differ only by the rounding: where the frame is
+    // dark, by no more than a tenth of the read noise at the short exposure. Before, every frame
+    // was convolved in double precision.
+    constexpr double SHORT = 2e-4;
+    constexpr double LONG = 2e-2;
+    std::vector<std::string> precisions;
+    Logger::set_custom_sink([&](const LogEntry& entry) {
+        if (entry.message.find("Convolved bodies with the PSF") != std::string::npos) {
+            precisions.push_back(entry.message.find("in single precision") != std::string::npos
+                                     ? "single"
+                                     : "double");
+        }
+    });
+    const Image<RGB> short_frame = render_ball_scene(true, false, SHORT);
+    const Image<RGB> long_frame = render_ball_scene(true, false, LONG);
+    // With no tolerance for single precision's rounding, always in double precision:
+    static_cast<void>(render_ball_scene(true, false, SHORT, 0.0));
+    Logger::clear_custom_sink();
+    REQUIRE(precisions.size() == 3);
+    CHECK(precisions[0] == "single");
+    CHECK(precisions[1] == "double");
+    CHECK(precisions[2] == "double");
+
+    Scene<RGB> scene;
+    auto optics = scene.new_camera_model();
+    const std::array<double, 3> per_power = electrons_per_power(optics, SHORT);
+    double brightest = 0.0;
+    for (std::size_t i = 0; i < long_frame.size(); ++i) {
+        brightest = std::max(brightest, electrons(long_frame[i], per_power));
+    }
+    double worst = 0.0;
+    std::size_t dark = 0;
+    for (std::size_t i = 0; i < short_frame.size(); ++i) {
+        const double expected = electrons(long_frame[i], per_power);
+        if (expected > 1e-5 * brightest) {
+            continue;
+        }
+        ++dark;
+        worst = std::max(worst, std::abs(electrons(short_frame[i], per_power) - expected));
+    }
+    INFO("brightest pixel " << brightest << " electrons; worst of " << dark
+                            << " dark pixels off by " << worst << " electrons");
+    REQUIRE(dark > 10000);
+    CHECK(worst < 0.1 * 5.0);
 }

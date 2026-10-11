@@ -45,6 +45,28 @@ void bind_renderer(py::module_& m)
              "smoothly by twice that distance, and the light left on the sensor is spread evenly "
              "over the frame. The default is 0.001; 0 draws every source over the whole frame.")
         .def("unresolved_taper", &Renderer::unresolved_taper)
+        .def("set_fft_planning",
+             &Renderer::set_fft_planning,
+             py::arg("effort"),
+             "Set how hard FFTW plans the transforms that convolve bodies with the PSF. "
+             "FftPlanEffort.Estimate, the default, plans at once. FftPlanEffort.Measure finds "
+             "faster transforms, which convolve a 1920 x 1080 Visible8 frame in about 15% less "
+             "time, but takes 2 to 5 seconds the first time a size and precision are used in a "
+             "process: worth it for long sequences of frames. Bodies are convolved in single "
+             "precision, unless the rounding error it would spread over the frame reaches a tenth "
+             "of the read noise in a pixel; then in double.")
+        .def("fft_planning", &Renderer::fft_planning)
+        .def("set_fft_rounding_tolerance",
+             &Renderer::set_fft_rounding_tolerance,
+             py::arg("fraction_of_read_noise"),
+             "Set how much of the read noise (of an electron without read noise) the rounding "
+             "of convolving bodies with the PSF in single precision may put in a pixel's "
+             "readout before they are convolved in double precision instead. Single precision "
+             "spreads a faint pattern of rounding over the frame in proportion to its brightest "
+             "pixel: at the default, 0.1, lost in any one frame's read noise, but a square-root "
+             "stretch of a noiseless frame to 30 electrons can show it. 0 always convolves in "
+             "double precision.")
+        .def("fft_rounding_tolerance", &Renderer::fft_rounding_tolerance)
         .def("set_region_culling", &Renderer::set_region_culling, py::arg("enable") = true)
         .def("set_region_cull_margin_scale",
              &Renderer::set_region_cull_margin_scale,

@@ -150,6 +150,14 @@ void PsfConvolver<TSpectral>::set_parts(const Parts& parts, Resolution resolutio
                 weights_[axis][static_cast<std::size_t>(rho)][static_cast<std::size_t>(m)] = weight;
             }
         }
+        weight_sums_[axis] = 0.0;
+        for (const auto& weights : weights_[axis]) {
+            double sum = 0.0;
+            for (const double weight : weights) {
+                sum += std::abs(weight);
+            }
+            weight_sums_[axis] = std::max(weight_sums_[axis], sum);
+        }
     }
 
     // The smooth part at every offset between nodes:
@@ -172,11 +180,50 @@ void PsfConvolver<TSpectral>::set_parts(const Parts& parts, Resolution resolutio
 }
 
 /**
- * @brief Convolves a frame in place: the near part through its FFTs, and the smooth part on the
- * coarse grid, added. The interpolation runs in double precision, one axis at a time.
+ * @brief About the most the FFTs' rounding in a precision puts in each channel of a frame's
+ * pixels where it is dark (see FftConvolver::rounding_error()): the near part's, and the smooth
+ * part's on the coarse grid, whose nodes hold at most a cell's light, and whose error is
+ * interpolated back to the pixels.
  */
 template <IsSpectral TSpectral>
-void PsfConvolver<TSpectral>::apply(Image<TSpectral>& image) const
+std::array<double, TSpectral::size()>
+PsfConvolver<TSpectral>::rounding_error(const Image<TSpectral>& image, FftPrecision precision) const
+{
+    constexpr std::size_t N = TSpectral::size();
+    std::array<double, N> largest{};
+    for (std::size_t i = 0; i < image.size(); ++i) {
+        for (std::size_t c = 0; c < N; ++c) {
+            largest[c] = std::max(largest[c], std::abs(static_cast<double>(image[i][c])));
+        }
+    }
+    std::array<double, N> error = near_.rounding_error(largest, precision);
+    if (has_far_) {
+        const double spread = weight_sums_[0] * weight_sums_[1];
+        std::array<double, N> node_largest{};
+        for (std::size_t c = 0; c < N; ++c) {
+            node_largest[c] =
+                largest[c] * static_cast<double>(step_[0]) * static_cast<double>(step_[1]) * spread;
+        }
+        const std::array<double, N> far = far_.rounding_error(node_largest, precision);
+        for (std::size_t c = 0; c < N; ++c) {
+            error[c] += far[c] * spread;
+        }
+    }
+    return error;
+}
+
+/**
+ * @brief Convolves a frame in place: the near part through its FFTs, and the smooth part on the
+ * coarse grid, added. The interpolation runs in double precision, one axis at a time.
+ *
+ * @param image The frame, at the resolution given to set_parts().
+ * @param precision The FFTs' precision (see rounding_error()).
+ * @param effort How hard FFTW plans them (see FftPlanEffort).
+ */
+template <IsSpectral TSpectral>
+void PsfConvolver<TSpectral>::apply(Image<TSpectral>& image,
+                                    FftPrecision precision,
+                                    FftPlanEffort effort) const
 {
     constexpr std::size_t N = TSpectral::size();
     using Channels = std::array<double, N>;
@@ -188,7 +235,7 @@ void PsfConvolver<TSpectral>::apply(Image<TSpectral>& image) const
                           "resolution given to set_parts()");
     }
     if (!has_far_) {
-        near_.apply(image);
+        near_.apply(image, precision, effort);
         return;
     }
     const int nx = nodes_[0];
@@ -251,10 +298,10 @@ void PsfConvolver<TSpectral>::apply(Image<TSpectral>& image) const
                 nodes(kx, ky) = value;
             }
         });
-        far_.apply(nodes);
+        far_.apply(nodes, precision, effort);
     }
 
-    near_.apply(image);
+    near_.apply(image, precision, effort);
     if (!any) {
         return;
     }

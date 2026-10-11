@@ -109,6 +109,34 @@ inline double arc_in_rectangle(double x0, double x1, double y0, double y1, doubl
  * @param fraction_of_read_noise Non-negative and finite.
  * @throws std::runtime_error if it is negative or not finite.
  */
+/**
+ * @brief Sets how much of the sensor's read noise (of an electron without read noise) the
+ * rounding error of convolving bodies with the PSF in single precision may put in a pixel's
+ * readout, as FftConvolver::rounding_error() predicts it, before they are convolved in double
+ * precision instead.
+ *
+ * Each FFT spreads rounding error over the whole frame in proportion to its brightest pixel, so
+ * that in single precision, the dark sky beside a body many full wells bright carries a faint
+ * pattern of it, positive and negative. At the default, DEFAULT_FFT_ROUNDING_TOLERANCE, it is
+ * lost in the read noise of any one frame, but a square-root stretch of a noiseless frame to 30
+ * electrons can show it. Single precision takes about 25% less memory for a 1920 x 1080 Visible8
+ * frame, and about as long. 0 always convolves in double precision, whose rounding is about
+ * 1e-9 of single's.
+ *
+ * @param fraction_of_read_noise Non-negative and finite.
+ * @throws std::runtime_error if it is negative or not finite.
+ */
+template <IsSpectral TSpectral>
+void Renderer<TSpectral>::set_fft_rounding_tolerance(double fraction_of_read_noise)
+{
+    if (!(fraction_of_read_noise >= 0.0) || !std::isfinite(fraction_of_read_noise)) {
+        HUIRA_THROW_ERROR("Renderer::set_fft_rounding_tolerance - The fraction must be "
+                          "non-negative and finite: " +
+                          std::to_string(fraction_of_read_noise));
+    }
+    fft_rounding_tolerance_ = fraction_of_read_noise;
+}
+
 template <IsSpectral TSpectral>
 void Renderer<TSpectral>::set_unresolved_taper(double fraction_of_read_noise)
 {
@@ -1131,13 +1159,16 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
     // PSF convolution, of resolved bodies with the PSF and scattered light, unless
     // CameraModel::enable_psf_convolution(false).
     //
-    // With the aperture's PSF, each pixel's light is spread over the whole frame, as the PSF's
-    // tables give a still source's (see PsfConvolver), so a bright body's diffraction halo
-    // reaches every pixel, and the FFTs' rounding error stays far below it. Only what is traced
-    // in the frame is spread: a body just beyond its edges adds no halo. A PSF set with
-    // set_psf() is cropped to its kernel, and the rounding is all that lies beyond it: with
-    // the Sun's limb in the frame, up to about 2e-3 electrons, near the unresolved taper's
-    // threshold.
+    // Each pixel's light is spread over the whole frame, as the PSF gives a still source's (see
+    // PsfConvolver), so a bright body's halo reaches every pixel. Only what is traced in the
+    // frame is spread: a body just beyond its edges adds no halo.
+    //
+    // The FFTs that convolve run in single precision, unless the rounding error they would
+    // spread across the frame, in proportion to its brightest pixel, reaches
+    // fft_rounding_tolerance() of the read noise in a pixel's readout (see
+    // FftConvolver::rounding_error()); then in double precision, where it is about 1e-9 of that
+    // again. Every component is convolved in the same precision, chosen for all of them, so that
+    // the total stays the sum of the direct and indirect light.
     //
     // Write R for the frame as traced, and S for the frame the sky alone would give: each
     // pixel's radiance-to-power factor times the sky's radiance L. Convolution (written *) is
@@ -1200,16 +1231,57 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
             });
         }
 
-        // Convolve, each component on its own, which keeps total == direct + indirect exactly.
+        // The components to convolve, each on its own, which keeps total == direct + indirect:
+        std::vector<Image<TSpectral>*> components;
         if (has_power && !image_is_zero_(received_power)) {
-            camera->apply_psf_convolution_(received_power);
+            components.push_back(&received_power);
         }
         if (has_direct && !image_is_zero_(frame_buffer.received_direct_power())) {
-            camera->apply_psf_convolution_(frame_buffer.received_direct_power());
+            components.push_back(&frame_buffer.received_direct_power());
         }
         if (frame_buffer.has_received_indirect_power() &&
             !image_is_zero_(frame_buffer.received_indirect_power())) {
-            camera->apply_psf_convolution_(frame_buffer.received_indirect_power());
+            components.push_back(&frame_buffer.received_indirect_power());
+        }
+
+        // The most single precision's rounding would put in a pixel's readout, in electrons, for
+        // any of them:
+        const SensorModel<TSpectral>& sensor = *camera->sensor_;
+        const double exposure = scene_view.duration().to_si();
+        const TSpectral photon_energies = TSpectral::photon_energies();
+        const TSpectral qe = sensor.quantum_efficiency();
+        double rounding = 0.0;
+        for (const Image<TSpectral>* component : components) {
+            const auto error = camera->psf_convolution_error_(*component, FftPrecision::Single);
+            double readout = 0.0;
+            for (std::size_t c = 0; c < TSpectral::size(); ++c) {
+                if (!(photon_energies[c] > 0.f)) {
+                    continue;
+                }
+                const double electrons = error[c] * exposure * static_cast<double>(qe[c]) /
+                                         static_cast<double>(photon_energies[c]);
+                readout = std::is_same_v<TSpectral, RGB> ? std::max(readout, electrons)
+                                                         : readout + electrons;
+            }
+            rounding = std::max(rounding, readout);
+        }
+        const double read_noise = static_cast<double>(sensor.read_noise());
+        const double tolerance = fft_rounding_tolerance_ * (read_noise > 0.0 ? read_noise : 1.0);
+        const FftPrecision precision =
+            tolerance > 0.0 && rounding <= tolerance ? FftPrecision::Single : FftPrecision::Double;
+        const auto convolve_start = std::chrono::steady_clock::now();
+        for (Image<TSpectral>* component : components) {
+            camera->apply_psf_convolution_(*component, precision, fft_planning_);
+        }
+        if (!components.empty()) {
+            const double seconds =
+                std::chrono::duration<double>(std::chrono::steady_clock::now() - convolve_start)
+                    .count();
+            HUIRA_LOG_INFO("Convolved bodies with the PSF in " + std::to_string(seconds) +
+                           " s, in " + (precision == FftPrecision::Single ? "single" : "double") +
+                           " precision: single precision's rounding would put up to " +
+                           std::to_string(rounding) + " electrons in a pixel's readout, against " +
+                           std::to_string(tolerance));
         }
 
         // With a uniform sky, P * (R - S) becomes S + P * (R - S):

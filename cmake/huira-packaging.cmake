@@ -56,6 +56,7 @@ install(FILES
         "${CMAKE_SOURCE_DIR}/cmake/find/FindCSPICE.cmake"
         "${CMAKE_SOURCE_DIR}/cmake/find/FindCFITSIO.cmake"
         "${CMAKE_SOURCE_DIR}/cmake/find/FindFFTW3.cmake"
+        "${CMAKE_SOURCE_DIR}/cmake/find/FindFFTW3f.cmake"
         DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/huira)
 
 # Add uninstall target

@@ -176,6 +176,18 @@ PYBIND11_MODULE(_huira, m)
                "Resolved bodies are still traced with depth of field and then blurred by "
                "this PSF too, so their defocus is approximate at best.");
 
+    // How hard FFTW plans the transforms that convolve bodies with the PSF
+    // (Renderer.set_fft_planning()):
+    py::enum_<huira::FftPlanEffort>(m,
+                                    "FftPlanEffort",
+                                    "How hard FFTW plans its transforms: plans are kept for "
+                                    "the rest of the process, for each size and precision.")
+        .value("Estimate", huira::FftPlanEffort::Estimate, "Plans at once, by heuristics.")
+        .value("Measure",
+               huira::FftPlanEffort::Measure,
+               "Times candidate transforms to find the fastest: a few seconds the first time a "
+               "size is used, for transforms about 15% faster.");
+
     // Bind RGB spectral specializations:
     auto rgb = m.def_submodule("rgb", "RGB (3-bin) spectral specialization");
     bind_spectral<huira::RGB>(rgb);

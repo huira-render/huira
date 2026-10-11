@@ -27,8 +27,10 @@ namespace huira {
  * The PSF is split in two. The smooth part is its far field (PsfTables::far_pixel()), with a
  * window that rises smoothly from 0 to 1 between half of near_radius() and near_radius(); the
  * near part is the rest, which is nothing beyond near_radius(), where pixel() is the far field.
- * The near part is convolved through FFTs, in double precision (see FftConvolver), so that the
- * rounding of a bright body's light stays below the light the PSF puts anywhere in the frame.
+ * The near part is convolved through FFTs (see FftConvolver), in single precision where the
+ * rounding a frame's brightest light spreads across it is small enough for the caller (see
+ * rounding_error()), and otherwise in double precision, where it stays below the light the PSF
+ * puts anywhere in the frame.
  *
  * The smooth part changes little over many pixels, and is convolved on a coarse grid, a node
  * every step() pixels: each pixel's light is shared among the six nodes on either axis around it
@@ -60,7 +62,11 @@ class PsfConvolver {
     {
         set_parts(Parts{std::move(tables), 1.0, nullptr, 0.0}, resolution);
     }
-    void apply(Image<TSpectral>& image) const;
+    void apply(Image<TSpectral>& image,
+               FftPrecision precision = FftPrecision::Double,
+               FftPlanEffort effort = FftPlanEffort::Estimate) const;
+    [[nodiscard]] std::array<double, TSpectral::size()>
+    rounding_error(const Image<TSpectral>& image, FftPrecision precision) const;
 
     [[nodiscard]] bool is_ready() const { return ready_; }
 
@@ -103,8 +109,10 @@ class PsfConvolver {
     bool has_far_ = false;
     std::array<int, 2> step_{1, 1};
     std::array<int, 2> nodes_{0, 0};
-    /// Each pixel's weights for the nodes of its stencil, by its offset within its cell.
+    /// Each pixel's weights for the nodes of its stencil, by its offset within its cell, and
+    /// the largest sum of their sizes, along each axis.
     std::array<std::vector<std::array<double, ORDER>>, 2> weights_;
+    std::array<double, 2> weight_sums_{1.0, 1.0};
     FftConvolver<TSpectral> far_;
 };
 

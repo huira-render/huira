@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <memory>
 #include <vector>
@@ -12,8 +13,7 @@
 namespace huira {
 
 namespace detail {
-struct FftScratch;
-struct FftScratchPool;
+struct FftState;
 } // namespace detail
 
 /**
@@ -26,26 +26,30 @@ struct FftScratchPool;
 enum class FftPlanEffort { Estimate, Measure };
 
 /**
+ * @brief The precision an FftConvolver transforms in.
+ *
+ * Single takes about half the memory and, with measured plans, less time. Each output pixel
+ * of an FFT sums every frequency, and each frequency every input pixel, so every pixel carries
+ * rounding error in proportion to the whole image: in single precision about 1e-7 of its
+ * brightest content, in double about 1e-16. See FftConvolver::rounding_error().
+ */
+enum class FftPrecision { Single, Double };
+
+/**
  * @brief Reusable FFT-based convolution engine with cached plans and kernel spectra.
  *
  * Performs linear convolution of an image with an arbitrary kernel via zero-padded FFTs.
  *
  * - Rounds padded transform dimensions up to the next 7-smooth size (2^a 3^b 5^c 7^d),
  *   avoiding FFTW's slow generic algorithms for sizes with large prime factors.
- * - Caches FFTW plans globally per transform size, so repeated convolutions (and repeated
- *   construction of convolvers) never re-plan.
- * - Transforms the kernel once in set_kernel() and caches its spectrum per channel, so
- *   applying the same kernel to successive frames costs one forward and one inverse
- *   transform per channel instead of two forward and one inverse.
+ * - Caches FFTW plans globally per transform size and precision, so repeated convolutions (and
+ *   repeated construction of convolvers) never re-plan.
+ * - Transforms the kernel once per precision, in double precision, and caches its spectrum per
+ *   channel, so applying the same kernel to successive frames costs one forward and one inverse
+ *   transform per channel instead of two forward and one inverse. A precision's spectra are
+ *   made the first time it is applied in, so that only those used take memory.
  * - Processes spectral channels in parallel via TBB.
  * - Transforms in place, so each channel needs one buffer, not two.
- *
- * The transforms are in double precision, whatever the pixel type. Each output pixel of an FFT
- * sums every frequency, and each frequency every input pixel, so every pixel carries rounding
- * error in proportion to the whole image: in single precision about 1e-8 to 1e-7 of its brightest
- * content, which a bright body in the frame lifts far above a faint pixel's light, with half the
- * pixels negative. In double precision it is about 1e-9 of that again: with the Sun's limb in a
- * frame (about a hundred pixels of 5e-5 W each, in a 1 s exposure), up to 2e-3 electrons.
  *
  * The kernel is treated as centered at pixel (width/2, height/2), and convolution semantics
  * match "stamping" the kernel as-drawn around each source: a kernel whose mass lies left of
@@ -57,7 +61,9 @@ enum class FftPlanEffort { Estimate, Measure };
 template <IsImagePixel PixelT>
 class FftConvolver {
   public:
-    FftConvolver() = default;
+    static constexpr std::size_t CHANNELS = ImagePixelTraits<PixelT>::channels;
+
+    FftConvolver();
     ~FftConvolver();
 
     FftConvolver(const FftConvolver&) = delete;
@@ -69,7 +75,13 @@ class FftConvolver {
                     Resolution image_resolution,
                     FftPlanEffort effort = FftPlanEffort::Estimate);
 
-    void apply(Image<PixelT>& image) const;
+    void apply(Image<PixelT>& image, FftPrecision precision = FftPrecision::Double) const;
+    void apply(Image<PixelT>& image, FftPrecision precision, FftPlanEffort effort) const;
+
+    [[nodiscard]] std::array<double, CHANNELS> rounding_error(const Image<PixelT>& image,
+                                                              FftPrecision precision) const;
+    [[nodiscard]] std::array<double, CHANNELS>
+    rounding_error(const std::array<double, CHANNELS>& largest, FftPrecision precision) const;
 
     /// Whether set_kernel() has been called successfully.
     bool is_ready() const { return ready_; }
@@ -77,28 +89,31 @@ class FftConvolver {
     /// Resolution the convolver was configured for.
     Resolution image_resolution() const { return Resolution{image_width_, image_height_}; }
 
+    /// The memory the kernel's spectra and the transforms' buffers take now.
+    [[nodiscard]] std::size_t memory_bytes() const;
+
     static int next_fast_size(int n);
 
   private:
-    void release_();
+    /// The rounding error where the frame is dark over eps log2(n) max|x| sum|k|, with a margin
+    /// (see rounding_error()).
+    static constexpr double ROUNDING_FACTOR = 0.75;
 
     bool ready_ = false;
+    FftPlanEffort effort_ = FftPlanEffort::Estimate;
 
     int image_width_ = 0;
     int image_height_ = 0;
     int padded_width_ = 0;
     int padded_height_ = 0;
-    int complex_cols_ = 0;
 
-    // Cached per-channel kernel spectra, pre-scaled by the inverse-FFT normalization factor
-    std::vector<fftw_complex*> kernel_spectra_;
+    /// The kernel as given, which each precision's spectra are made from when first needed.
+    Image<PixelT> kernel_;
+    /// Each channel's kernel's sum of absolute values, for rounding_error().
+    std::array<double, CHANNELS> kernel_sum_{};
 
-    // Cached plans (owned by the global plan cache; never destroyed here):
-    fftw_plan forward_plan_ = nullptr;
-    fftw_plan inverse_plan_ = nullptr;
-
-    // Per-channel transform buffers, retained between apply() calls.
-    mutable std::unique_ptr<detail::FftScratchPool> scratch_pool_;
+    /// Each precision's plans, kernel spectra and buffers, made as needed.
+    mutable std::unique_ptr<detail::FftState> state_;
 };
 } // namespace huira
 

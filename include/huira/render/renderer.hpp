@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "huira/concepts/spectral_concepts.hpp"
+#include "huira/images/fft_convolver.hpp"
 #include "huira/render/frame_buffer.hpp"
 #include "huira/sampling/sampler.hpp"
 #include "huira/scene/scene_view.hpp"
@@ -69,6 +70,28 @@ class Renderer {
 
     /// See set_unresolved_taper().
     [[nodiscard]] double unresolved_taper() const { return unresolved_taper_; }
+
+    /// How much of the read noise the rounding of convolving bodies with the PSF in single
+    /// precision may put in a pixel's readout before they are convolved in double precision, by
+    /// default. See set_fft_rounding_tolerance().
+    static constexpr double DEFAULT_FFT_ROUNDING_TOLERANCE = 0.1;
+
+    void set_fft_rounding_tolerance(double fraction_of_read_noise);
+
+    /// See set_fft_rounding_tolerance().
+    [[nodiscard]] double fft_rounding_tolerance() const { return fft_rounding_tolerance_; }
+
+    /**
+     * @brief How hard FFTW plans the transforms that convolve bodies with the PSF (see
+     * FftPlanEffort). Estimate, the default, plans at once. Measure finds faster transforms,
+     * which convolve a 1920 x 1080 Visible8 frame in about 15% less time, but takes 2 to 5
+     * seconds the first time a size and precision are used in a process: worth it for long
+     * sequences of frames.
+     */
+    void set_fft_planning(FftPlanEffort effort) { fft_planning_ = effort; }
+
+    /// See set_fft_planning().
+    [[nodiscard]] FftPlanEffort fft_planning() const { return fft_planning_; }
 
     /**
      * @brief Enable or disable skipping screen regions that provably contain no geometry.
@@ -137,6 +160,8 @@ class Renderer {
 
     bool unresolved_occlusion_ = true;
     double unresolved_taper_ = DEFAULT_UNRESOLVED_TAPER;
+    FftPlanEffort fft_planning_ = FftPlanEffort::Estimate;
+    double fft_rounding_tolerance_ = DEFAULT_FFT_ROUNDING_TOLERANCE;
 
     bool region_culling_ = true;
     bool region_cull_validation_ = false;
