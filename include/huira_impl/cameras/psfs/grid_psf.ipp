@@ -3,11 +3,14 @@
 #include <cmath>
 #include <cstddef>
 #include <limits>
+#include <memory>
 #include <string>
 #include <vector>
 
 #include "huira/cameras/psfs/measured_psf.hpp"
 #include "huira/cameras/psfs/psf_tables.hpp"
+#include "huira/core/constants.hpp"
+#include "huira/images/fft_convolver.hpp"
 #include "huira/util/logger.hpp"
 #include "tbb/parallel_for.h"
 
@@ -148,6 +151,300 @@ GridPsf<TSpectral>::GridPsf(PSF<TSpectral>& psf, double aspect)
         HUIRA_THROW_ERROR("GridPsf - The PSF needs at least three samples across within its "
                           "radius");
     }
+    build_from_samples_(samples, count_x, count_y);
+}
+
+/**
+ * @brief The PSF blurred by defocus, a uniform disc of radius blur pixel widths: the image of
+ * the aperture out of focus, as PsfTables::airy() blurs diffraction.
+ *
+ * The blurred PSF is held as what a pixel centered at each sample collects (as pixel-integrated
+ * samples are), which a pixel's width smooths, so that a large blur's sharp edge, where the disc
+ * ends, is still resolved when the samples are spread out. Point samples are first integrated
+ * over a pixel at each (see integrated_()). Those sum, over the pixels, to all of the light,
+ * wherever the source is, so scale() is 1. The blurred spline is the focused one's coefficients
+ * convolved with the disc's integral over each basis function: across each chord of the disc
+ * exactly (spline_integral()), and along the disc by four-point Gauss-Legendre quadrature on each
+ * sample's height, in the angle whose sine is the height over the radius, which takes away the
+ * chord's square-root ends. The disc is round in pixel widths, so blur / aspect() pixels high. Its
+ * values at the new samples, which reach a disc's radius and two samples beyond the old ones on
+ * every side, are then fitted with a spline as before. The coefficients taken are the samples' own:
+ * so within two samples of the edge of a PSF that does not fall to zero there, the PSF blurred
+ * falls to zero over those two samples rather than at the edge.
+ *
+ * The new samples are every few of the old, if all of them would take more than MEMORY_BUDGET:
+ * a large blur spreads the light over many samples. Only those are computed: the convolution is
+ * split by where each coefficient falls between them, into one convolution per offset, each of
+ * every few coefficients, whose spectra are added (a polyphase decomposition). So the work and
+ * memory go with the samples kept, and the convolution is exact whatever the spacing.
+ *
+ * @param in_focus The PSF in focus.
+ * @param blur The disc's radius, in pixel widths; positive.
+ * @throws std::runtime_error if the blur is not positive and finite.
+ */
+template <IsSpectral TSpectral>
+GridPsf<TSpectral>::GridPsf(const GridPsf& in_focus, double blur)
+    : aspect_{in_focus.aspect_}, pixel_integrated_{true}, sums_to_one_{true}, step_{in_focus.step_}
+{
+    using grid_psf_detail::spline;
+    using grid_psf_detail::spline_integral;
+    if (!(blur > 0.0) || !std::isfinite(blur)) {
+        HUIRA_THROW_ERROR("GridPsf - The blur must be positive and finite: " +
+                          std::to_string(blur));
+    }
+    GridPsf integrated;
+    if (!in_focus.pixel_integrated_) {
+        integrated = integrated_(in_focus);
+    }
+    const GridPsf& focused = in_focus.pixel_integrated_ ? in_focus : integrated;
+    const double h = focused.step_;
+    const double tall = blur / aspect_; // the disc's half height, in pixels
+    const double area = PI<double>() * blur * tall;
+    // In samples, how far the disc reaches beyond a basis function, which itself reaches two:
+    const int reach = static_cast<int>(std::ceil(std::max(blur, tall) / h)) + 2;
+    if (reach > (1 << 20)) {
+        HUIRA_THROW_ERROR("GridPsf - The blur is too large for the PSF's samples: " +
+                          std::to_string(blur) + " px");
+    }
+
+    // The samples' own coefficients, and the blurred spline's extent in old samples:
+    const int inner_x = focused.nx_ - 2 * MARGIN;
+    const int inner_y = focused.ny_ - 2 * MARGIN;
+    const int width = inner_x + 2 * reach;
+    const int height = inner_y + 2 * reach;
+
+    // Every few, if all would take more than the budget, out to the extent's far edge:
+    const double bytes = static_cast<double>(N * sizeof(double) * 2);
+    const double nodes =
+        static_cast<double>(width + 2 * MARGIN) * static_cast<double>(height + 2 * MARGIN);
+    const int every = std::max(
+        1,
+        static_cast<int>(std::ceil(std::sqrt(nodes * bytes / static_cast<double>(MEMORY_BUDGET)))));
+    const int count_x = (width - 1 + every - 1) / every + 1;
+    const int count_y = (height - 1 + every - 1) / every + 1;
+    if (every > 1) {
+        HUIRA_LOG_INFO("GridPsf - The PSF blurred by " + std::to_string(blur) +
+                       " px is sampled every " + std::to_string(h * every) +
+                       " pixels, to keep it within " + std::to_string(MEMORY_BUDGET >> 20) +
+                       " MiB");
+    }
+
+    // The disc's integral over the basis function at an offset of (dx, dy) samples from its
+    // center, over its area: the light a coefficient of 1 there gives the blurred spline at the
+    // center. For each row, the quadrature's nodes along the disc, as the weight each takes and
+    // the chord's half length, in samples:
+    struct Node {
+        double weight = 0.0;
+        double chord = 0.0;
+    };
+    using Row = std::array<Node, 16>;
+    constexpr std::array<double, 4> GL_NODES{
+        -0.8611363115940526, -0.3399810435848563, 0.3399810435848563, 0.8611363115940526};
+    constexpr std::array<double, 4> GL_WEIGHTS{
+        0.3478548451374538, 0.6521451548625461, 0.6521451548625461, 0.3478548451374538};
+    const auto row_nodes = [&](int dy, Row& row) {
+        std::size_t count = 0;
+        // The basis is nonzero for heights within two samples of dy h, a sample at a time:
+        for (int k = -2; k < 2; ++k) {
+            const double y0 = std::max(-tall, h * static_cast<double>(dy + k));
+            const double y1 = std::min(tall, h * static_cast<double>(dy + k + 1));
+            if (!(y1 > y0)) {
+                continue;
+            }
+            const double t0 = std::asin(std::clamp(y0 / tall, -1.0, 1.0));
+            const double t1 = std::asin(std::clamp(y1 / tall, -1.0, 1.0));
+            const double mid = 0.5 * (t0 + t1);
+            const double half = 0.5 * (t1 - t0);
+            for (std::size_t n = 0; n < GL_NODES.size(); ++n) {
+                const double theta = mid + half * GL_NODES[n];
+                const double cosine = std::cos(theta);
+                const double y = tall * std::sin(theta);
+                row[count++] = Node{GL_WEIGHTS[n] * half * tall * cosine *
+                                        spline(static_cast<double>(dy) - y / h) * h / area,
+                                    blur * cosine / h};
+            }
+        }
+        return count;
+    };
+    const auto disc_value = [&](const Row& row, std::size_t count, int dx) {
+        double sum = 0.0;
+        for (std::size_t n = 0; n < count; ++n) {
+            sum += row[n].weight * (spline_integral(static_cast<double>(dx) + row[n].chord) -
+                                    spline_integral(static_cast<double>(dx) - row[n].chord));
+        }
+        return sum;
+    };
+
+    // The new sample i, at old sample every i of the extent, takes coefficient m (at old sample
+    // m + reach) through the disc at offset every i - reach - m. With m = every q + r, that is
+    // every (i - q) - reach - r: for each r, a convolution of the coefficients every q + r with
+    // the disc's values every p - reach - r, nonzero for p from 0 to most. Each is drawn
+    // centered on p = middle, and its coefficients shifted by as much, so that the output's
+    // sample i is the convolution's at i + half.
+    const int most = (2 * reach + every - 1) / every;
+    const int middle = most / 2;
+    const int half_side = most - middle;
+    const int side = 2 * half_side + 1;
+    const int image_x = std::max(count_x, (inner_x + every - 1) / every + middle);
+    const int image_y = std::max(count_y, (inner_y + every - 1) / every + middle);
+    const int padded_x = FftConvolver<TSpectral>::next_fast_size(image_x + side - 1);
+    const int padded_y = FftConvolver<TSpectral>::next_fast_size(image_y + side - 1);
+    const auto plans = detail::FftwPlanCache::instance().get(padded_y, padded_x, false);
+    const auto complex_columns = static_cast<std::size_t>(padded_x / 2 + 1);
+    const std::size_t complex_size = complex_columns * static_cast<std::size_t>(padded_y);
+    const std::size_t stride = 2 * complex_columns; // reals per row, transformed in place
+
+    // Buffers aligned as the plans were made: the disc's offsets, and per channel the
+    // coefficients' and the sum of the products' spectra.
+    struct Buffer {
+        fftw_complex* data = nullptr;
+        explicit Buffer(std::size_t size) : data{fftw_alloc_complex(size)}
+        {
+            if (data == nullptr) {
+                HUIRA_THROW_ERROR("GridPsf - Failed to allocate the blur's buffers");
+            }
+        }
+        Buffer(const Buffer&) = delete;
+        Buffer& operator=(const Buffer&) = delete;
+        ~Buffer() { fftw_free(data); }
+        double* real() const { return detail::in_place_real(data); }
+    };
+    Buffer disc(complex_size);
+    std::vector<std::unique_ptr<Buffer>> spectra;
+    std::vector<std::unique_ptr<Buffer>> scratch;
+    for (std::size_t c = 0; c < N; ++c) {
+        spectra.push_back(std::make_unique<Buffer>(complex_size));
+        std::fill(spectra.back()->real(), spectra.back()->real() + 2 * complex_size, 0.0);
+        scratch.push_back(std::make_unique<Buffer>(complex_size));
+    }
+
+    for (int ry = 0; ry < every; ++ry) {
+        for (int rx = 0; rx < every; ++rx) {
+            double* kernel = disc.real();
+            std::fill(kernel, kernel + 2 * complex_size, 0.0);
+            tbb::parallel_for(0, side, [&](int ky) {
+                const int dy = every * (ky - half_side + middle) - reach - ry;
+                if (std::abs(dy) > reach) {
+                    return;
+                }
+                Row row;
+                const std::size_t count = row_nodes(dy, row);
+                for (int kx = 0; kx < side; ++kx) {
+                    const int dx = every * (kx - half_side + middle) - reach - rx;
+                    if (std::abs(dx) <= reach) {
+                        kernel[static_cast<std::size_t>(ky) * stride +
+                               static_cast<std::size_t>(kx)] = disc_value(row, count, dx);
+                    }
+                }
+            });
+            fftw_execute_dft_r2c(plans.forward, kernel, disc.data);
+
+            tbb::parallel_for(std::size_t{0}, N, [&](std::size_t c) {
+                double* values = scratch[c]->real();
+                std::fill(values, values + 2 * complex_size, 0.0);
+                for (int j = ry, q_y = 0; j < inner_y; j += every, ++q_y) {
+                    double* out = values + static_cast<std::size_t>(q_y + middle) * stride +
+                                  static_cast<std::size_t>(middle);
+                    for (int i = rx, q_x = 0; i < inner_x; i += every, ++q_x) {
+                        out[q_x] = focused.coefficients_[focused.at_(i + MARGIN, j + MARGIN) + c];
+                    }
+                }
+                fftw_execute_dft_r2c(plans.forward, values, scratch[c]->data);
+                fftw_complex* sum = spectra[c]->data;
+                const fftw_complex* a = scratch[c]->data;
+                const fftw_complex* b = disc.data;
+                for (std::size_t k = 0; k < complex_size; ++k) {
+                    sum[k][0] += a[k][0] * b[k][0] - a[k][1] * b[k][1];
+                    sum[k][1] += a[k][0] * b[k][1] + a[k][1] * b[k][0];
+                }
+            });
+        }
+    }
+
+    std::vector<double> samples(static_cast<std::size_t>(count_x) *
+                                static_cast<std::size_t>(count_y) * N);
+    const double normalization = 1.0 / (static_cast<double>(padded_x) * padded_y);
+    tbb::parallel_for(std::size_t{0}, N, [&](std::size_t c) {
+        fftw_execute_dft_c2r(plans.inverse, spectra[c]->data, spectra[c]->real());
+        const double* values = spectra[c]->real();
+        for (int j = 0; j < count_y; ++j) {
+            for (int i = 0; i < count_x; ++i) {
+                samples[(static_cast<std::size_t>(j) * static_cast<std::size_t>(count_x) +
+                         static_cast<std::size_t>(i)) *
+                            N +
+                        c] = values[static_cast<std::size_t>(j + half_side) * stride +
+                                    static_cast<std::size_t>(i + half_side)] *
+                             normalization;
+            }
+        }
+    });
+
+    left_ = focused.left_ - static_cast<double>(reach) * h;
+    top_ = focused.top_ - static_cast<double>(reach) * h;
+    step_ = h * static_cast<double>(every);
+    build_from_samples_(samples, count_x, count_y);
+}
+
+/**
+ * @brief A point-sampled PSF integrated over a pixel centered at each of a grid of points, as
+ * pixel-integrated samples: exactly (see rectangle_light_()), out to where a pixel no longer meets
+ * the PSF's rectangle.
+ *
+ * Where the PSF is cut off at its rectangle, without having fallen to zero, the integral falls to
+ * zero across a pixel's width, with a kink at each end, which a spline through samples rounds
+ * with a dip below zero, of a few hundredths of the drop for samples a quarter of a pixel apart.
+ * So the points are every SAMPLE_STEP pixels, or as finely as MEMORY_BUDGET allows if coarser,
+ * whatever the PSF's own spacing, which takes the dip to a few thousandths of the drop.
+ */
+template <IsSpectral TSpectral>
+GridPsf<TSpectral> GridPsf<TSpectral>::integrated_(const GridPsf& point)
+{
+    GridPsf result;
+    result.aspect_ = point.aspect_;
+    result.pixel_integrated_ = true;
+    // The rectangle the integrals reach, half a pixel beyond the PSF's on every side:
+    const double width = point.right_ - point.left_ + 1.0;
+    const double height = point.bottom_ - point.top_ + 1.0;
+    const double bytes = static_cast<double>(N * sizeof(double) * 2);
+    const double most = std::sqrt(static_cast<double>(MEMORY_BUDGET) / bytes) - 2.0 * MARGIN - 1.0;
+    const double step =
+        std::min(point.step_, std::max(SAMPLE_STEP, std::max(width, height) / std::max(most, 4.0)));
+    const int count_x = static_cast<int>(std::ceil(width / step - 1e-9)) + 1;
+    const int count_y = static_cast<int>(std::ceil(height / step - 1e-9)) + 1;
+    result.step_ = step;
+    result.left_ = point.left_ - 0.5;
+    result.top_ = point.top_ - 0.5;
+    std::vector<double> samples(static_cast<std::size_t>(count_x) *
+                                static_cast<std::size_t>(count_y) * N);
+    tbb::parallel_for(0, count_y, [&](int j) {
+        const double y = result.top_ + static_cast<double>(j) * step;
+        for (int i = 0; i < count_x; ++i) {
+            const double x = result.left_ + static_cast<double>(i) * step;
+            const Light light = point.rectangle_light_(x - 0.5, x + 0.5, y - 0.5, y + 0.5);
+            std::copy(light.begin(),
+                      light.end(),
+                      &samples[(static_cast<std::size_t>(j) * static_cast<std::size_t>(count_x) +
+                                static_cast<std::size_t>(i)) *
+                               N]);
+        }
+    });
+    result.build_from_samples_(samples, count_x, count_y);
+    return result;
+}
+
+/**
+ * @brief The spline through samples count_x by count_y, every step_ from (left_, top_),
+ * channel by channel at each: the coefficients, with the samples mirrored about the first and
+ * last, MARGIN more of them on every side, normalized, and the bounds.
+ */
+template <IsSpectral TSpectral>
+void GridPsf<TSpectral>::build_from_samples_(std::vector<double>& samples, int count_x, int count_y)
+{
+    const auto sample_at = [&](int i, int j) -> double* {
+        return &samples[(static_cast<std::size_t>(j) * static_cast<std::size_t>(count_x) +
+                         static_cast<std::size_t>(i)) *
+                        N];
+    };
     right_ = left_ + static_cast<double>(count_x - 1) * step_;
     bottom_ = top_ + static_cast<double>(count_y - 1) * step_;
 
@@ -260,7 +557,7 @@ void GridPsf<TSpectral>::build_bounds_()
     // pixels, over a grid of the source's positions within a pixel, with a margin.
     Light largest_scale;
     largest_scale.fill(1.0);
-    if (pixel_integrated_) {
+    if (pixel_integrated_ && !sums_to_one_) {
         constexpr int PHASES = 16;
         Light smallest;
         smallest.fill(std::numeric_limits<double>::infinity());
@@ -550,7 +847,7 @@ typename GridPsf<TSpectral>::Light GridPsf<TSpectral>::scale(double source_x, do
 {
     Light result;
     result.fill(1.0);
-    if (!pixel_integrated_) {
+    if (!pixel_integrated_ || sums_to_one_) {
         return result;
     }
     const Light sum = sum_over_pixels_(source_x, source_y);

@@ -159,6 +159,23 @@ PYBIND11_MODULE(_huira, m)
                "combined from many such images at subpixel offsets (more). The pixel's area is "
                "already included, so Huira uses the values as they are.");
 
+    // Whether a measured PSF holds the camera's defocus (CameraModelHandle.set_measured_psf()):
+    py::enum_<huira::PSFFocus>(m,
+                               "PSFFocus",
+                               "Whether a measured PSF is that of a point in focus, or already "
+                               "holds the defocus the camera's focus gives it.")
+        .value("InFocus",
+               huira::PSFFocus::InFocus,
+               "The PSF of a point in focus: the camera's focus blurs it as it blurs the "
+               "aperture's diffraction, for stars and for each unresolved object at its own "
+               "depth.")
+        .value("IncludesDefocus",
+               huira::PSFFocus::IncludesDefocus,
+               "The PSF as the camera, focused as it is, images a star: no defocus is added to "
+               "it, and every unresolved source is drawn with it as it is, whatever its depth. "
+               "Resolved bodies are still traced with depth of field and then blurred by "
+               "this PSF too, so their defocus is approximate at best.");
+
     // Bind RGB spectral specializations:
     auto rgb = m.def_submodule("rgb", "RGB (3-bin) spectral specialization");
     bind_spectral<huira::RGB>(rgb);

@@ -18,14 +18,17 @@ namespace huira {
  * @param radius Polyphase stamping kernel radius in sensor pixels. A value of 0 selects the largest
  *               radius covered by the measurement, capped at 64.
  * @param banks Number of polyphase banks per axis for subpixel stamping.
+ * @param focus Whether the samples are a point's in focus, which the camera's focus blurs, or
+ *              already hold its defocus (see PSFFocus).
  */
 template <IsSpectral TSpectral>
 MeasuredPSF<TSpectral>::MeasuredPSF(const Image<TSpectral>& data,
                                     float samples_per_pixel,
                                     PSFSampling sampling,
                                     int radius,
-                                    int banks)
-    : data_(data), samples_per_pixel_(samples_per_pixel), sampling_(sampling),
+                                    int banks,
+                                    PSFFocus focus)
+    : data_(data), samples_per_pixel_(samples_per_pixel), sampling_(sampling), focus_(focus),
       center_x_(static_cast<float>(data.width() - 1) * 0.5f),
       center_y_(static_cast<float>(data.height() - 1) * 0.5f), measured_radius_(0)
 {

@@ -44,6 +44,13 @@ class PSF {
      */
     [[nodiscard]] virtual bool is_pixel_integrated() const { return false; }
 
+    /**
+     * @brief Whether the PSF already holds the defocus the camera's focus gives, rather than
+     * being a point's in focus, which the focus then blurs as it blurs diffraction (see
+     * PSFFocus).
+     */
+    [[nodiscard]] virtual bool includes_defocus() const { return false; }
+
     void set_polyphase_size(int radius, int banks);
     void build_polyphase_cache(int radius, int banks);
     void ensure_polyphase_cache() const;

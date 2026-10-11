@@ -1,7 +1,9 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <atomic>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <initializer_list>
@@ -11,6 +13,7 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "huira/cameras/apertures/aperture.hpp"
 #include "huira/cameras/defocus_kernel.hpp"
@@ -157,7 +160,8 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
                           float samples_per_pixel,
                           PSFSampling sampling,
                           int radius = 0,
-                          int banks = DEFAULT_PSF_BANKS);
+                          int banks = DEFAULT_PSF_BANKS,
+                          PSFFocus focus = PSFFocus::InFocus);
 
     void use_aperture_psf(int radius = 0, int banks = DEFAULT_PSF_BANKS);
 
@@ -388,20 +392,71 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     std::shared_ptr<const PsfTables<TSpectral>> stamp_tables_;
     double stamp_tables_blur_ = 0.0;
 
-    /// A PSF set with set_psf() or set_measured_psf(), on its grid, for still unresolved sources
-    /// in focus. See GridPsf.
-    std::shared_ptr<const GridPsf<TSpectral>> grid_psf_;
+    /// What is built for unresolved objects by their blur, where it differs from a star's: tables
+    /// with the aperture's PSF, or a PSF that was set on its grid. Most recently used last. Those
+    /// the last render used are kept, and others up to OBJECT_TABLES_KEPT_ in all.
+    template <class T>
+    struct BlurCache {
+        struct Entry {
+            double blur = 0.0;
+            std::shared_ptr<const T> value;
+        };
+        std::vector<Entry> entries;
 
-    /// Tables for unresolved objects whose blur differs from a star's, by their blur, most
-    /// recently used last, with the reach they were built for. Those the last render used are
-    /// kept, and others up to OBJECT_TABLES_KEPT_ in all.
-    struct BlurTables {
-        double blur = 0.0;
-        std::shared_ptr<const PsfTables<TSpectral>> tables;
+        /// The kept one nearest blur, if within PsfTables::BLUR_TOLERANCE of it, or one made with
+        /// build(); used counts those this render has used, which are kept last.
+        template <class Build>
+        std::shared_ptr<const T> find(double blur, std::size_t& used, const Build& build)
+        {
+            auto nearest = entries.end();
+            for (auto it = entries.begin(); it != entries.end(); ++it) {
+                if (nearest == entries.end() ||
+                    std::abs(it->blur - blur) < std::abs(nearest->blur - blur)) {
+                    nearest = it;
+                }
+            }
+            if (nearest != entries.end() &&
+                std::abs(nearest->blur - blur) <= PsfTables<TSpectral>::BLUR_TOLERANCE) {
+                std::shared_ptr<const T> value = nearest->value;
+                // Moved to the end as the most recently used, unless this render has used it:
+                const auto position = static_cast<std::size_t>(nearest - entries.begin());
+                if (position < entries.size() - used) {
+                    Entry found = std::move(*nearest);
+                    entries.erase(nearest);
+                    entries.push_back(std::move(found));
+                    ++used;
+                }
+                return value;
+            }
+            entries.push_back(Entry{blur, build()});
+            ++used;
+            return entries.back().value;
+        }
+
+        /// Drops those this render did not use, oldest first, beyond the number kept.
+        void trim(std::size_t used)
+        {
+            const std::size_t kept = std::max(used, OBJECT_TABLES_KEPT_);
+            if (entries.size() > kept) {
+                entries.erase(entries.begin(),
+                              entries.begin() + static_cast<std::ptrdiff_t>(entries.size() - kept));
+            }
+        }
     };
-    std::vector<BlurTables> object_tables_;
-    double object_tables_reach_ = 0.0;
     static constexpr std::size_t OBJECT_TABLES_KEPT_ = 8;
+
+    /// A PSF set with set_psf() or set_measured_psf(), on its grid (see GridPsf): in focus, and
+    /// blurred as a star is by the focus, with the blur, which the renderer draws still
+    /// unresolved sources from; and for objects whose blur differs from a star's, by their blur.
+    std::shared_ptr<const GridPsf<TSpectral>> focused_grid_;
+    std::shared_ptr<const GridPsf<TSpectral>> grid_psf_;
+    double grid_psf_blur_ = 0.0;
+    BlurCache<GridPsf<TSpectral>> object_grids_;
+
+    /// Tables for unresolved objects whose blur differs from a star's, with the reach they were
+    /// built for.
+    BlurCache<PsfTables<TSpectral>> object_tables_;
+    double object_tables_reach_ = 0.0;
 
     /// What resolved bodies are convolved with, with the aperture's PSF: the whole of the PSF,
     /// across the frame, from render_tables_ in focus, or body_tables_ otherwise.
@@ -419,7 +474,8 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     int table_stamp_banks_ = 0;
     int table_stamps_radius_ = 0;
 
-    /// Stamps for the defocus blur of unresolved sources; empty when in focus.
+    /// Stamps for the defocus blur of unresolved sources without a PSF (see delete_psf()); empty
+    /// when in focus.
     DefocusKernel<TSpectral> defocus_kernel_;
     static constexpr int DEFOCUS_BANKS_ = 16;
 
@@ -465,7 +521,8 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     std::uint64_t table_stamps_built_at_ = 0;
     std::uint64_t body_tables_built_at_ = 0;
     std::uint64_t object_tables_built_at_ = 0;
-    std::uint64_t grid_psf_built_at_ = 0;
+    std::uint64_t focused_grid_built_at_ = 0;
+    std::uint64_t object_grids_built_at_ = 0;
 
     // The geometry compute_intrinsics_() last saw, to tell which inputs a change touched.
     float optics_focal_length_ = 0.f;
@@ -496,6 +553,9 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     void ensure_grid_psf_();
     std::vector<std::shared_ptr<const PsfTables<TSpectral>>>
     tables_at_locked_(const std::vector<double>& inverse_depths);
+    std::vector<std::shared_ptr<const GridPsf<TSpectral>>>
+    grids_at_locked_(const std::vector<double>& inverse_depths);
+    [[nodiscard]] double grid_blur_(double inverse_depth) const;
     [[nodiscard]] double tables_reach_() const;
     [[nodiscard]] bool render_tables_stale_() const;
     [[nodiscard]] bool stamp_tables_stale_() const;
@@ -524,6 +584,8 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     void precompute_for_render_();
     std::vector<std::shared_ptr<const PsfTables<TSpectral>>>
     tables_at_(const std::vector<double>& inverse_depths);
+    std::vector<std::shared_ptr<const GridPsf<TSpectral>>>
+    grids_at_(const std::vector<double>& inverse_depths);
     void apply_psf_convolution_(Image<TSpectral>& image) const;
     void apply_wings_convolution_(Image<TSpectral>& image) const;
 

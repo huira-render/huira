@@ -29,6 +29,22 @@ enum class PSFSampling {
 };
 
 /**
+ * @brief Whether a measured PSF is that of a point in focus, or already holds the defocus the
+ * camera's focus gives it.
+ */
+enum class PSFFocus {
+    /// The PSF of a point in focus: the camera's focus blurs it as it blurs the aperture's
+    /// diffraction, for stars and for each unresolved object at its own depth.
+    InFocus,
+
+    /// The PSF as the camera, focused as it is, images a star: no defocus is added to it, and
+    /// every unresolved source is drawn with it as it is, whatever its depth. Path tracing still
+    /// gives resolved bodies their depth of field, which this PSF, convolved with them, then
+    /// blurs again, so their defocus is approximate at best.
+    IncludesDefocus,
+};
+
+/**
  * @brief Point spread function defined by user-supplied measured (or precomputed) data.
  *
  * Allows the exact response of a real optical system - measured on a bench, extracted from
@@ -70,7 +86,8 @@ class MeasuredPSF : public PSF<TSpectral> {
                 float samples_per_pixel,
                 PSFSampling sampling,
                 int radius = 0,
-                int banks = 16);
+                int banks = 16,
+                PSFFocus focus = PSFFocus::InFocus);
     ~MeasuredPSF() override = default;
 
     MeasuredPSF(const MeasuredPSF&) = delete;
@@ -81,6 +98,11 @@ class MeasuredPSF : public PSF<TSpectral> {
     [[nodiscard]] bool is_pixel_integrated() const override
     {
         return sampling_ == PSFSampling::PixelIntegrated;
+    }
+
+    [[nodiscard]] bool includes_defocus() const override
+    {
+        return focus_ == PSFFocus::IncludesDefocus;
     }
 
     /// What the samples are.
@@ -101,6 +123,7 @@ class MeasuredPSF : public PSF<TSpectral> {
     Image<TSpectral> data_;
     float samples_per_pixel_;
     PSFSampling sampling_;
+    PSFFocus focus_;
     float center_x_;
     float center_y_;
     int measured_radius_;

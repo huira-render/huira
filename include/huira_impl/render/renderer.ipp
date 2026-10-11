@@ -1295,6 +1295,10 @@ struct RenderItem {
     /// blur (see CameraModel::tables_at_()).
     const PsfTables<TSpectral>* tables = nullptr;
 
+    /// The grid it is drawn from, with a PSF that was set: a star's, or for its own blur (see
+    /// CameraModel::grids_at_()).
+    const GridPsf<TSpectral>* grid = nullptr;
+
     TSpectral interpolate_irradiances(float t) const
     {
         if (irradiance.size() == 1) {
@@ -1375,8 +1379,8 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
     }
 
     // Determine the stamp based on camera settings. render() has brought the camera's
-    // kernels up to date: the defocus stamps are empty when in focus or with the aperture's
-    // PSF, whose tables hold the blur, and otherwise replace the PSF's.
+    // kernels up to date: the defocus stamps are there only without a PSF, out of focus; a
+    // PSF's tables or grid hold the blur.
     const DefocusKernel<TSpectral>& defocus = camera->defocus_kernel_;
     const bool use_defocus = !defocus.empty();
 
@@ -1385,13 +1389,18 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
     // The aperture's PSF is drawn from its tables: a source that stays put during the exposure at
     // its exact position, and a moving one along its path, as line integrals (see
     // PsfTables::draw_line()). A PSF that was set is drawn from its grid for a source that stays
-    // put, at its exact position (see GridPsf), and from its own stamps for a moving one.
+    // put, at its exact position (see GridPsf), blurred by its defocus. A moving one is drawn
+    // from the PSF's own stamps if it is in focus while stars are (the camera builds them only
+    // then), and otherwise from its grid at each point of its path.
     const bool use_tables = use_psf_direct && camera->use_aperture_psf_;
     const PSF<TSpectral>* psf = use_psf_direct && !use_tables ? camera->psf_.get() : nullptr;
     const PsfTables<TSpectral>* tables = use_tables ? camera->render_tables_.get() : nullptr;
     const GridPsf<TSpectral>* grid =
         use_psf_direct && !use_tables ? camera->grid_psf_.get() : nullptr;
+    const GridPsf<TSpectral>* focused_grid =
+        use_psf_direct && !use_tables ? camera->focused_grid_.get() : nullptr;
     const bool use_grid = grid != nullptr;
+    const bool use_stamps = psf != nullptr && grid == focused_grid;
     assert(!use_psf_direct || psf != nullptr || tables != nullptr);
 
     // Scattered-light wings for unresolved sources that are stamped, whether or not resolved
@@ -1436,7 +1445,7 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
     bool use_radius_lut = false;
     RadiusLUTConfig radius_config;
     std::vector<RadiusLUTEntry> radius_lut;
-    if (stamp_cropping_ && use_psf_direct && stamp_radius > 1) {
+    if (stamp_cropping_ && use_psf_direct && stamp_radius > 1 && (!use_grid || use_stamps)) {
         const Image<TSpectral>& center_kernel = stamp_kernel(0.0f, 0.0f);
 
         const SensorModel<TSpectral>& sensor = *camera->sensor_;
@@ -1572,11 +1581,68 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                           static_cast<int>(bank)};
     };
 
-    // A source's light reaches its stamp's radius beyond the pixel it is anchored to, and the
-    // wings' splat one pixel; sources that far outside the image still light its edge. The
-    // frustum they are culled against is widened by that much.
+    // Unresolved objects (separate from stars). Their irradiances are found one object at a
+    // time, before anything is binned, so that the frustum reaches as far as their PSFs.
+    //
+    // Each is blurred by the defocus at its own depth, its distance along the axis, as path
+    // tracing blurs bodies: from a star's tables or grid if that is a star's blur, within
+    // PsfTables::BLUR_TOLERANCE, as it is for anything far enough away, and otherwise from tables
+    // or a grid for its blur, built the first time it is needed. A moving object takes the blur
+    // at its mean inverse depth over the exposure. The tables and grids are held here until the
+    // render is done.
+    std::vector<std::shared_ptr<const PsfTables<TSpectral>>> object_tables;
+    std::vector<std::shared_ptr<const GridPsf<TSpectral>>> object_grids;
+    std::vector<RenderItem<TSpectral>> objects;
+    if (!scene_view.unresolved_objects_.empty()) {
+        objects.reserve(scene_view.unresolved_objects_.size());
+        std::vector<double> inverse_depths;
+        inverse_depths.reserve(scene_view.unresolved_objects_.size());
+        for (const auto& instance : scene_view.unresolved_objects_) {
+            std::vector<Vec3<float>> directions(instance.transforms.size());
+            std::vector<TSpectral> irradiances(instance.transforms.size());
+            std::vector<float> ranges(instance.transforms.size());
+            double inverse_depth = 0.0;
+            for (std::size_t i = 0; i < instance.transforms.size(); ++i) {
+                const Vec3<float>& position = instance.transforms[i].position;
+                directions[i] = glm::normalize(position);
+                irradiances[i] = instance.unresolved_object->get_irradiance(times[i]);
+                ranges[i] = glm::length(position);
+                inverse_depth += 1.0 / std::abs(static_cast<double>(position.z));
+            }
+            TrajectoryArc arc(directions);
+            RenderItem<TSpectral> item(
+                std::move(arc), std::move(irradiances), std::move(ranges), stamp_radius);
+            inverse_depths.push_back(inverse_depth /
+                                     static_cast<double>(instance.transforms.size()));
+            assign_radius(item);
+            objects.push_back(std::move(item));
+        }
+        if (use_tables) {
+            object_tables = camera->tables_at_(inverse_depths);
+            for (std::size_t i = 0; i < objects.size(); ++i) {
+                objects[i].tables = object_tables[i].get();
+            }
+        }
+        if (use_grid) {
+            object_grids = camera->grids_at_(inverse_depths);
+            for (std::size_t i = 0; i < objects.size(); ++i) {
+                objects[i].grid = object_grids[i].get();
+            }
+        }
+    }
+
+    // How far the grids drawn from reach, in pixel widths:
+    double grid_reach = use_grid ? grid->reach() : 0.0;
+    for (const auto& object_grid : object_grids) {
+        grid_reach = std::max(grid_reach, object_grid->reach());
+    }
+
+    // A source's light reaches its stamp's radius beyond the pixel it is anchored to, or its
+    // grid's reach, and the wings' splat one pixel; sources that far outside the image still
+    // light its edge. The frustum they are culled against is widened by that much.
     const int reach = std::max(std::max(stamp_radius, 1),
-                               use_grid ? static_cast<int>(std::ceil(grid->reach())) : 0) +
+                               static_cast<int>(std::ceil(
+                                   grid_reach / std::min(use_grid ? grid->aspect() : 1.0, 1.0)))) +
                       1;
     const Frustum<TSpectral> frustum = camera->view_frustum_with_margin_(static_cast<float>(reach));
 
@@ -1757,7 +1823,7 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
 
     // The same for a source drawn from a PSF's grid, which reaches no further than the grid:
     // infinite if it stays above tau that far.
-    auto grid_taper_radius = [&](const TSpectral& power) {
+    auto grid_taper_radius = [&](const TSpectral& power, const GridPsf<TSpectral>& source_grid) {
         if (!(tau > 0.0)) {
             return std::numeric_limits<double>::infinity();
         }
@@ -1765,17 +1831,17 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
         double floor = 0.0;
         for (std::size_t c = 0; c < TSpectral::size(); ++c) {
             electrons[c] = static_cast<double>(power[c]) * electrons_per_power[c];
-            floor = std::max(floor, grid->radius_holding_90(c));
+            floor = std::max(floor, source_grid.radius_holding_90(c));
         }
         const auto readout = [&](double r) {
             double value = 0.0;
             for (std::size_t c = 0; c < TSpectral::size(); ++c) {
-                const double channel = electrons[c] * grid->envelope(c, r);
+                const double channel = electrons[c] * source_grid.envelope(c, r);
                 value = PER_CHANNEL_READOUT ? std::max(value, channel) : value + channel;
             }
             return value;
         };
-        const double limit = grid->reach();
+        const double limit = source_grid.reach();
         if (readout(limit) > tau) {
             return std::numeric_limits<double>::infinity();
         }
@@ -1848,12 +1914,12 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
             sample.exact = true;
             if (use_grid) {
                 // The core's light, less the wings' (see the tiles below):
-                sample.scale = grid->scale(static_cast<double>(p.x), static_cast<double>(p.y));
+                sample.scale = item.grid->scale(static_cast<double>(p.x), static_cast<double>(p.y));
                 sample.taper = grid_taper_radius(
-                    splat_wings ? power * (1.f - camera->scatter_fraction_) : power);
+                    splat_wings ? power * (1.f - camera->scatter_fraction_) : power, *item.grid);
                 sample.draw =
                     std::min(std::isinf(sample.taper) ? farthest_corner(p) : 2.0 * sample.taper,
-                             grid->reach());
+                             item.grid->reach());
             } else {
                 sample.rings = rings_radius(power, *item.tables);
                 sample.taper = taper_radius(power, sample.rings, *item.tables);
@@ -2247,8 +2313,10 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
             double still_weight = 0.0;
 
             // Otherwise, with the tables, its samples are the vertices of its path, drawn as
-            // lines:
+            // lines; with a PSF's grid blurred by defocus, each is drawn from the grid at its
+            // exact position, and in focus, from the PSF's stamps:
             const bool path = use_tables && !still;
+            const bool exact_samples = use_grid && (item.grid != focused_grid || !use_stamps);
             if (path) {
                 scratch.path.assign(params.size(), Vertex{});
             }
@@ -2340,7 +2408,7 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                     still_y += static_cast<double>(weight) * static_cast<double>(p.y);
                     still_weight += static_cast<double>(weight);
                 } else {
-                    emit_sample(item, item_index, p, power, false, batch);
+                    emit_sample(item, item_index, p, power, exact_samples, batch);
                 }
             }
             if (path) {
@@ -2399,6 +2467,7 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                             std::vector<float>{RenderItem<TSpectral>::RANGE_AT_INFINITY},
                             stamp_radius);
                         item.tables = tables;
+                        item.grid = grid;
                         assign_radius(item);
 
                         batch.items.push_back(std::move(item));
@@ -2409,48 +2478,9 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
             });
     }
 
-    // Unresolved objects (separate from stars). Their irradiances are found one object at a
-    // time, and then they are binned in parallel, one batch each.
-    //
-    // With the aperture's PSF, each is blurred by the defocus at its own depth, its distance
-    // along the axis, as path tracing blurs bodies: from a star's tables if that is a star's
-    // blur, within PsfTables::BLUR_TOLERANCE, as it is for anything far enough away, and
-    // otherwise from tables for its blur, built the first time it is needed. A moving object
-    // takes the blur at its mean inverse depth over the exposure. The tables are held here
-    // until the render is done.
-    std::vector<std::shared_ptr<const PsfTables<TSpectral>>> object_tables;
-    if (!scene_view.unresolved_objects_.empty()) {
-        std::vector<RenderItem<TSpectral>> objects;
-        objects.reserve(scene_view.unresolved_objects_.size());
-        std::vector<double> inverse_depths;
-        inverse_depths.reserve(scene_view.unresolved_objects_.size());
-        for (const auto& instance : scene_view.unresolved_objects_) {
-            std::vector<Vec3<float>> directions(instance.transforms.size());
-            std::vector<TSpectral> irradiances(instance.transforms.size());
-            std::vector<float> ranges(instance.transforms.size());
-            double inverse_depth = 0.0;
-            for (std::size_t i = 0; i < instance.transforms.size(); ++i) {
-                const Vec3<float>& position = instance.transforms[i].position;
-                directions[i] = glm::normalize(position);
-                irradiances[i] = instance.unresolved_object->get_irradiance(times[i]);
-                ranges[i] = glm::length(position);
-                inverse_depth += 1.0 / std::abs(static_cast<double>(position.z));
-            }
-            TrajectoryArc arc(directions);
-            RenderItem<TSpectral> item(
-                std::move(arc), std::move(irradiances), std::move(ranges), stamp_radius);
-            inverse_depths.push_back(inverse_depth /
-                                     static_cast<double>(instance.transforms.size()));
-            assign_radius(item);
-            objects.push_back(std::move(item));
-        }
-        if (use_tables) {
-            object_tables = camera->tables_at_(inverse_depths);
-            for (std::size_t i = 0; i < objects.size(); ++i) {
-                objects[i].tables = object_tables[i].get();
-            }
-        }
-
+    // Unresolved objects (separate from stars), prepared above, are binned in parallel, one
+    // batch each.
+    if (!objects.empty()) {
         const std::size_t first_batch = batches.size();
         batches.resize(first_batch + objects.size());
         tbb::parallel_for(tbb::blocked_range<std::size_t>(0, objects.size()),
@@ -2611,17 +2641,17 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                         const int y_end = std::min(
                             tile_y1, static_cast<int>(std::floor(py + sample.draw / aspect)) + 1);
                         const auto weight = [&](double r) { return taper_weight(r, sample.taper); };
-                        entry_light[k] = use_grid ? grid->draw(received_power,
-                                                               x_begin,
-                                                               x_end,
-                                                               y_begin,
-                                                               y_end,
-                                                               px,
-                                                               py,
-                                                               core_power,
-                                                               sample.scale,
-                                                               sample.draw,
-                                                               weight)
+                        entry_light[k] = use_grid ? item.grid->draw(received_power,
+                                                                    x_begin,
+                                                                    x_end,
+                                                                    y_begin,
+                                                                    y_end,
+                                                                    px,
+                                                                    py,
+                                                                    core_power,
+                                                                    sample.scale,
+                                                                    sample.draw,
+                                                                    weight)
                                                   : item.tables->draw(received_power,
                                                                       x_begin,
                                                                       x_end,
@@ -2834,11 +2864,12 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
             }
             if (use_grid) {
                 // What falls on the frame, less what was drawn, of the core's light:
-                const Light on_frame = grid->light_on_frame(static_cast<double>(sample.projected.x),
-                                                            static_cast<double>(sample.projected.y),
-                                                            fb_width,
-                                                            fb_height,
-                                                            sample.scale);
+                const Light on_frame = items[sample.item_idx].grid->light_on_frame(
+                    static_cast<double>(sample.projected.x),
+                    static_cast<double>(sample.projected.y),
+                    fb_width,
+                    fb_height,
+                    sample.scale);
                 const double core =
                     splat_wings ? 1.0 - static_cast<double>(camera->scatter_fraction_) : 1.0;
                 for (std::size_t c = 0; c < TSpectral::size(); ++c) {
