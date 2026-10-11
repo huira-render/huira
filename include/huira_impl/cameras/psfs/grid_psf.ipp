@@ -192,11 +192,7 @@ GridPsf<TSpectral>::GridPsf(const GridPsf& in_focus, double blur)
         HUIRA_THROW_ERROR("GridPsf - The blur must be positive and finite: " +
                           std::to_string(blur));
     }
-    GridPsf integrated;
-    if (!in_focus.pixel_integrated_) {
-        integrated = integrated_(in_focus);
-    }
-    const GridPsf& focused = in_focus.pixel_integrated_ ? in_focus : integrated;
+    const GridPsf& focused = in_focus.collected_();
     const double h = focused.step_;
     const double tall = blur / aspect_; // the disc's half height, in pixels
     const double area = PI<double>() * blur * tall;
@@ -617,6 +613,25 @@ void GridPsf<TSpectral>::build_bounds_()
             if (light >= 0.9) {
                 radius_90_[c] = std::min(node.r + margin, reach_);
                 break;
+            }
+        }
+    }
+
+    // A line's light per unit length in a pixel at least r from it, the envelope integrated along
+    // it, from each bin's near edge: the envelope falls with distance, so the sums of its values
+    // at the near ends of steps along the line hold it.
+    const double along = 1.0 / ENVELOPE_BINS;
+    const auto line_bins = static_cast<std::size_t>(std::ceil(reach_ * ENVELOPE_BINS)) + 1;
+    line_envelope_.assign(line_bins, {});
+    for (std::size_t b = 0; b < line_bins; ++b) {
+        const double r = static_cast<double>(b) * along;
+        for (std::size_t k = 0; k < line_bins; ++k) {
+            const double distance = std::hypot(r, static_cast<double>(k) * along);
+            if (distance > reach_) {
+                break;
+            }
+            for (std::size_t c = 0; c < N; ++c) {
+                line_envelope_[b][c] += 2.0 * along * envelope(c, distance);
             }
         }
     }
@@ -1067,7 +1082,7 @@ template <IsSpectral TSpectral>
 std::size_t GridPsf<TSpectral>::memory_bytes() const
 {
     return (coefficients_.size() + below_.size() + row_.size() + column_.size()) * sizeof(double) +
-           envelope_.size() * sizeof(envelope_[0]);
+           (envelope_.size() + line_envelope_.size()) * sizeof(envelope_[0]);
 }
 
 } // namespace huira

@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <limits>
+#include <map>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -25,7 +26,6 @@
 #include "huira/sampling/cone_sampling.hpp"
 #include "huira/volumes/medium.hpp"
 #include "huira/volumes/medium_stack.hpp"
-#include "huira_impl/render/psf_lut.ipp"
 
 namespace huira {
 
@@ -97,10 +97,10 @@ inline double arc_in_rectangle(double x0, double x1, double y0, double y1, doubl
  * The light left on the sensor beyond that is added evenly over the frame, so that none is lost
  * and no edge appears. A source's rings are followed only as far as they change a pixel by more
  * than tau; beyond, its light is averaged over them. No pixel is off by more than about 2 tau.
- * A source is always drawn out to where it holds 90% of its light. A still source with a PSF
- * set with CameraModel::set_psf() or set_measured_psf() is drawn the same way from the PSF's
- * grid (see GridPsf), without rings to follow. RGB sensors read out each
- * channel; others, their sum.
+ * A source is always drawn out to where it holds 90% of its light. A source with a PSF set with
+ * CameraModel::set_psf() or set_measured_psf(), still or moving, is drawn the same way from the
+ * PSF's grid (see GridPsf), without rings to follow, as is the defocus blur without a PSF. RGB
+ * sensors read out each channel; others, their sum.
  *
  * The default, DEFAULT_UNRESOLVED_TAPER, ends halos where a square-root stretch of a noiseless
  * frame to 30 electrons cannot show it. Larger values draw fewer pixels, and so take less time; 0
@@ -1250,10 +1250,9 @@ template <IsSpectral TSpectral>
 struct RenderItem {
     RenderItem(TrajectoryArc set_arc,
                std::vector<TSpectral> set_irradiance,
-               std::vector<float> set_range,
-               int set_effective_radius)
+               std::vector<float> set_range)
         : arc(std::move(set_arc)), irradiance(std::move(set_irradiance)),
-          range(std::move(set_range)), effective_radius(set_effective_radius)
+          range(std::move(set_range))
     {
     }
 
@@ -1263,15 +1262,14 @@ struct RenderItem {
     /// Distance to the source at each temporal sample
     std::vector<float> range;
 
-    int effective_radius;
     static constexpr float RANGE_AT_INFINITY = std::numeric_limits<float>::max();
 
     /// The PSF's tables it is drawn from, with the aperture's PSF: a star's, or for its own
     /// blur (see CameraModel::tables_at_()).
     const PsfTables<TSpectral>* tables = nullptr;
 
-    /// The grid it is drawn from, with a PSF that was set: a star's, or for its own blur (see
-    /// CameraModel::grids_at_()).
+    /// The grid its core is drawn from, without the aperture's PSF: a star's, or for its own
+    /// blur (see CameraModel::grids_at_()); none for a point, in focus without a PSF.
     const GridPsf<TSpectral>* grid = nullptr;
 
     TSpectral interpolate_irradiances(float t) const
@@ -1321,16 +1319,17 @@ struct RenderItem {
 /**
  * @brief Render unresolved point sources (stars and unresolved objects) into the frame buffer.
  *
- * This method implements an optimized pipeline for rendering point sources that cannot be
- * resolved into visible geometry. It supports both delta-function (no PSF) and spatially-
- * distributed PSF rendering with adaptive radius culling for performance.
+ * Each source is drawn from the PSF's tables or grid, at its exact position if it stays put
+ * during the exposure and along its path as line integrals if it moves, tapered off where its
+ * light fades below set_unresolved_taper()'s threshold, with the light beyond spread over the
+ * frame; without a PSF, in focus, all of its light goes to the pixel it falls in.
  *
  * The rendering pipeline:
- * 1. Collects all stars and unresolved objects into a unified list
- * 2. Builds a radius LUT and assigns per-source effective PSF radii based on irradiance
- * 3. Projects sources to screen space, including those just outside the image whose stamps
- *    reach into it, and lists each in every tile its stamp reaches
- * 4. Renders the tiles in parallel, each writing only its own pixels of the frame
+ * 1. Collects all stars and unresolved objects, each with the tables and grid for its blur
+ * 2. Projects sources to screen space, including those outside the image whose light reaches
+ *    into it, and lists each in every tile its light reaches
+ * 3. Renders the tiles in parallel, each writing only its own pixels of the frame
+ * 4. Spreads the light each left beyond its drawn radius evenly over the frame
  *
  * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  * @param scene_view The scene view containing stars and unresolved objects
@@ -1355,16 +1354,12 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
     // Each source's light is drawn in up to two parts, render() having brought the camera's
     // kernels up to date. The tables' part (PsfTables): with the aperture's PSF, all of it,
     // diffraction and scattered light; with a PSF that was set, or none, the scattered light's
-    // share, f, if any. A source that stays put during the exposure is drawn from them at its
-    // exact position, and a moving one along its path, as line integrals (see
-    // PsfTables::draw_line()). The core's part, the rest: a PSF that was set is drawn from its
-    // grid for a source that stays put, at its exact position (see GridPsf), blurred by its
-    // defocus, and a moving one from the PSF's own stamps if it is in focus while stars are (the
-    // camera builds them only then), and otherwise from its grid at each point of its path.
-    // Without a PSF it is the defocus blur's stamps, there only out of focus, or the pixel the
-    // source falls in. Either part's tables or grid hold the source's own blur.
-    const DefocusKernel<TSpectral>& defocus = camera->defocus_kernel_;
-    const bool use_defocus = !defocus.empty();
+    // share, f, if any. The core's part, the rest: a PSF that was set, on its grid (see GridPsf),
+    // or without one the defocus blur alone on a grid of its own, or in focus the pixel the
+    // source falls in. Each part's tables or grid hold the source's own blur. A source that stays
+    // put during the exposure is drawn from them at its exact position, and a moving one along
+    // its path, as line integrals (see PsfTables::draw_line() and GridPsf::draw_line()), but
+    // without a grid, at each point of it.
     const bool aperture = camera->use_aperture_psf_;
     const PsfTables<TSpectral>* tables =
         aperture || camera->scatter_enabled_ ? camera->render_tables_.get() : nullptr;
@@ -1372,22 +1367,7 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
     const float tables_share = aperture ? 1.f : use_tables ? camera->scatter_fraction_ : 0.f;
     const float core_share = 1.f - tables_share;
     const bool has_core = core_share > 0.f;
-    const PSF<TSpectral>* psf = !aperture ? camera->psf_.get() : nullptr;
-    const GridPsf<TSpectral>* grid = psf != nullptr ? camera->grid_psf_.get() : nullptr;
-    const GridPsf<TSpectral>* focused_grid = psf != nullptr ? camera->focused_grid_.get() : nullptr;
-    const bool use_grid = grid != nullptr;
-    const bool use_stamps = psf != nullptr && grid == focused_grid;
-    int stamp_radius = 0;
-    if (use_defocus) {
-        stamp_radius = defocus.half_extent();
-    } else if (psf != nullptr) {
-        stamp_radius = psf->get_radius();
-    }
-    const int psf_banks = psf != nullptr ? psf->get_banks() : 0;
-    // The stamp for a source at subpixel position (u, v) in [0, 1), as PSF::get_kernel():
-    auto stamp_kernel = [&](float u, float v) -> const Image<TSpectral>& {
-        return psf->get_kernel(u, v);
-    };
+    const GridPsf<TSpectral>* grid = !aperture ? camera->grid_psf_.get() : nullptr;
 
     const auto& times = scene_view.temporal_samples_;
     const auto& star_field = scene_view.stars_;
@@ -1396,159 +1376,16 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
         return received_power;
     }
 
-    // Stamps are cropped, per source, to the pixels its light would show in: those that read
-    // out at least a tenth of the sensor's read noise over the exposure, at the brightest the
-    // source gets (a tenth of an electron for a sensor with under an electron of it). The read
-    // noise is as configured, whether or not noise is simulated, so that a noiseless frame is
-    // the mean of noisy ones. A motion-blurred source is sized as if all its light fell in one
-    // place, which keeps more than enough. A cropped stamp is scaled back to the whole stamp's
-    // energy (see crop_scale below), so that no light is lost, and is never cropped so far that its
-    // centroid moves by more than CROP_CENTROID_TOLERANCE: the light beyond a crop is not
-    // symmetric about the source, unless it is on a pixel's center, so cutting it pulls the
-    // centroid toward the pixel's center (by up to 0.07 px for an Airy pattern with its first
-    // dark ring 2 px out, cropped to 2 px). Renderer::set_stamp_cropping(false) stamps the whole
-    // PSF.
-    //
-    // The radius LUT is built up front so that per-source radii can be assigned as each source
-    // is created, rather than in a second pass over the whole catalogue.
-    bool use_radius_lut = false;
-    RadiusLUTConfig radius_config;
-    std::vector<RadiusLUTEntry> radius_lut;
-    if (stamp_cropping_ && use_stamps && stamp_radius > 1) {
-        const Image<TSpectral>& center_kernel = stamp_kernel(0.0f, 0.0f);
-
-        const SensorModel<TSpectral>& sensor = *camera->sensor_;
-        radius_config.threshold_electrons = 0.1f * std::max(sensor.read_noise(), 1.f);
-        radius_config.summed_readout = !std::is_same_v<TSpectral, RGB>;
-
-        // Per channel, the electrons a pixel collects over the exposure per unit irradiance and
-        // stamp weight. The on-axis aperture area is the largest, so conservative:
-        const float area = camera->projected_aperture_area(Vec3<float>{0.f, 0.f, 1.f});
-        const auto exposure = static_cast<float>(scene_view.duration().to_si());
-        const TSpectral photon_energies = TSpectral::photon_energies();
-        const TSpectral qe = sensor.quantum_efficiency();
-        TSpectral electrons_per_irradiance{0.f};
-        for (std::size_t c = 0; c < TSpectral::size(); ++c) {
-            if (photon_energies[c] > 0.f) {
-                electrons_per_irradiance[c] = area * exposure * qe[c] / photon_energies[c];
-            }
-        }
-
-        radius_lut =
-            build_radius_lut(center_kernel, stamp_radius, electrons_per_irradiance, radius_config);
-        use_radius_lut = true;
-    }
-
-    // For a stamp cropped to a radius, the scale that gives it back the whole stamp's energy:
-    // the whole stamp's sum over the cropped stamp's, per channel. Indexed by the bank (by *
-    // banks + bx, as PSF::get_kernel()) times (stamp_radius + 1), plus the radius. Also the
-    // smallest radius to which every bank can be cropped without its centroid moving by more
-    // than CROP_CENTROID_TOLERANCE, in any channel.
-    constexpr float CROP_CENTROID_TOLERANCE = 0.01f; // pixels
-    std::vector<TSpectral> crop_scale;
-    const auto crop_radii = static_cast<std::size_t>(stamp_radius) + 1;
-    if (use_radius_lut) {
-        const int banks = psf_banks;
-        crop_scale.assign(static_cast<std::size_t>(banks * banks) * crop_radii, TSpectral{1.f});
-        std::vector<int> smallest_radius(static_cast<std::size_t>(banks * banks), 0);
-        tbb::parallel_for(0, banks * banks, [&](int b) {
-            const float u = (static_cast<float>(b % banks) + 0.5f) / static_cast<float>(banks);
-            const float v = (static_cast<float>(b / banks) + 0.5f) / static_cast<float>(banks);
-            const Image<TSpectral>& kernel = stamp_kernel(u, v);
-
-            // Sums, and first moments, over the pixels at each Chebyshev distance from the
-            // middle, accumulated out to each radius:
-            std::vector<TSpectral> within(crop_radii, TSpectral{0.f});
-            std::vector<TSpectral> moment_x(crop_radii, TSpectral{0.f});
-            std::vector<TSpectral> moment_y(crop_radii, TSpectral{0.f});
-            for (int y = 0; y < kernel.height(); ++y) {
-                for (int x = 0; x < kernel.width(); ++x) {
-                    const int dx = x - stamp_radius;
-                    const int dy = y - stamp_radius;
-                    const auto r = static_cast<std::size_t>(std::max(std::abs(dx), std::abs(dy)));
-                    within[r] += kernel(x, y);
-                    moment_x[r] += kernel(x, y) * static_cast<float>(dx);
-                    moment_y[r] += kernel(x, y) * static_cast<float>(dy);
-                }
-            }
-            for (std::size_t r = 1; r < crop_radii; ++r) {
-                within[r] += within[r - 1];
-                moment_x[r] += moment_x[r - 1];
-                moment_y[r] += moment_y[r - 1];
-            }
-
-            const std::size_t whole = crop_radii - 1;
-            std::size_t smallest = whole;
-            bool centroid_kept = true;
-            for (std::size_t r = whole + 1; r-- > 0;) {
-                TSpectral& scale = crop_scale[static_cast<std::size_t>(b) * crop_radii + r];
-                for (std::size_t c = 0; c < TSpectral::size(); ++c) {
-                    if (!(within[r][c] > 0.f)) {
-                        centroid_kept = false;
-                        continue;
-                    }
-                    scale[c] = within[whole][c] / within[r][c];
-                    const float shift_x =
-                        moment_x[r][c] / within[r][c] - moment_x[whole][c] / within[whole][c];
-                    const float shift_y =
-                        moment_y[r][c] / within[r][c] - moment_y[whole][c] / within[whole][c];
-                    if (std::abs(shift_x) > CROP_CENTROID_TOLERANCE ||
-                        std::abs(shift_y) > CROP_CENTROID_TOLERANCE) {
-                        centroid_kept = false;
-                    }
-                }
-                if (centroid_kept) {
-                    smallest = r;
-                }
-            }
-            smallest_radius[static_cast<std::size_t>(b)] = static_cast<int>(smallest);
-        });
-        radius_config.min_radius =
-            std::max(radius_config.min_radius,
-                     *std::max_element(smallest_radius.begin(), smallest_radius.end()));
-    }
-
-    // Per-source lookup - just a scalar comparison, no kernel traversal.
-    auto assign_radius = [&](RenderItem<TSpectral>& item) {
-        if (use_radius_lut) {
-            item.effective_radius = lookup_effective_radius(
-                radius_lut, item.max_irradiance(), radius_config.min_radius);
-        }
-    };
-
     std::vector<RenderItem<TSpectral>> items;
 
     // Sources are rendered in screen-space tiles, in parallel. Each source is listed in every
     // tile its light reaches, and each tile writes only its own pixels, straight into the
-    // frame: memory is the frame and the lists, whatever the stamps' size.
+    // frame: memory is the frame and the lists, however far sources reach.
     constexpr int TILE_SIZE = 64;
 
     int tiles_x = (fb_width + TILE_SIZE - 1) / TILE_SIZE;
     int tiles_y = (fb_height + TILE_SIZE - 1) / TILE_SIZE;
     int num_tiles = tiles_x * tiles_y;
-
-    // Polyphase stamp kernels hold the kernel pre-shifted by bank / banks of a pixel. Each
-    // source uses the nearest bank, which keeps the quantization error unbiased (within half a
-    // bank either way)
-    const int stamp_banks = use_defocus ? defocus.banks() : psf_banks;
-    struct StampPhase {
-        int base;    ///< Pixel the kernel's center pixel lands on.
-        float phase; ///< Fraction for get_kernel(), mid-way through the chosen bank.
-        int bank;    ///< The chosen bank.
-    };
-    auto nearest_stamp_phase = [stamp_banks](float center) {
-        const long banks = static_cast<long>(stamp_banks);
-        const long k = std::lround(static_cast<double>(center) * static_cast<double>(banks));
-        long base = k / banks;
-        long bank = k % banks;
-        if (bank < 0) {
-            bank += banks;
-            base -= 1;
-        }
-        return StampPhase{static_cast<int>(base),
-                          (static_cast<float>(bank) + 0.5f) / static_cast<float>(banks),
-                          static_cast<int>(bank)};
-    };
 
     // Unresolved objects (separate from stars). Their irradiances are found one object at a
     // time, before anything is binned, so that the frustum reaches as far as their PSFs.
@@ -1579,11 +1416,9 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                 inverse_depth += 1.0 / std::abs(static_cast<double>(position.z));
             }
             TrajectoryArc arc(directions);
-            RenderItem<TSpectral> item(
-                std::move(arc), std::move(irradiances), std::move(ranges), stamp_radius);
+            RenderItem<TSpectral> item(std::move(arc), std::move(irradiances), std::move(ranges));
             inverse_depths.push_back(inverse_depth /
                                      static_cast<double>(instance.transforms.size()));
-            assign_radius(item);
             objects.push_back(std::move(item));
         }
         if (use_tables) {
@@ -1592,7 +1427,7 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                 objects[i].tables = object_tables[i].get();
             }
         }
-        if (use_grid) {
+        if (!aperture) {
             object_grids = camera->grids_at_(inverse_depths);
             for (std::size_t i = 0; i < objects.size(); ++i) {
                 objects[i].grid = object_grids[i].get();
@@ -1600,19 +1435,23 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
         }
     }
 
+    // The pixel's height over its width:
+    const Vec2<float> pitch = camera->sensor_->pixel_pitch();
+    const double aspect = static_cast<double>(pitch.y) / static_cast<double>(pitch.x);
+
     // How far the grids drawn from reach, in pixel widths:
-    double grid_reach = use_grid ? grid->reach() : 0.0;
+    double grid_reach = grid != nullptr ? grid->reach() : 0.0;
     for (const auto& object_grid : object_grids) {
-        grid_reach = std::max(grid_reach, object_grid->reach());
+        if (object_grid != nullptr) {
+            grid_reach = std::max(grid_reach, object_grid->reach());
+        }
     }
 
-    // A source's light reaches its stamp's radius beyond the pixel it is anchored to, or its
-    // grid's reach, and at least a pixel; sources that far outside the image still light its
-    // edge. The frustum they are culled against is widened by that much.
-    const int reach = std::max(std::max(stamp_radius, 1),
-                               static_cast<int>(std::ceil(
-                                   grid_reach / std::min(use_grid ? grid->aspect() : 1.0, 1.0)))) +
-                      1;
+    // A source's light reaches its grid's reach, and at least a pixel; sources that far outside
+    // the image still light its edge. The frustum they are culled against is widened by that
+    // much.
+    const int reach =
+        std::max(1, static_cast<int>(std::ceil(grid_reach / std::min(aspect, 1.0)))) + 1;
     const Frustum<TSpectral> frustum = camera->view_frustum_with_margin_(static_cast<float>(reach));
 
     // A source drawn from the tables reaches as far as its own light shows, which for a bright
@@ -1650,9 +1489,12 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
         std::array<double, 2> end{};
         TSpectral density{0.f};
         typename PsfTables<TSpectral>::LineReach reach{};
-        /// Drawn at its exact position from its item's grid, rather than its tables, with the
-        /// grid's scale (see GridPsf::scale()).
+        /// Drawn at its exact position, or as a line, from its item's grid rather than its tables,
+        /// with the grid's scale (see GridPsf::scale()).
         bool from_grid = false;
+        /// For a line drawn from its item's grid, whether from the tables for its direction
+        /// rather than directly (see GridPsf::draw_line_direct()).
+        bool from_tables = false;
         std::array<double, TSpectral::size()> scale{};
     };
 
@@ -1702,10 +1544,9 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
     // not noise is simulated, so that a noiseless frame is the mean of noisy ones, or of an
     // electron for a sensor without read noise. See set_unresolved_taper().
     constexpr bool PER_CHANNEL_READOUT = std::is_same_v<TSpectral, RGB>;
-    const double aspect = use_tables ? tables->aspect() : use_grid ? grid->aspect() : 1.0;
     std::array<double, TSpectral::size()> electrons_per_power{};
     double tau = 0.0;
-    if (use_tables || use_grid) {
+    {
         const SensorModel<TSpectral>& sensor = *camera->sensor_;
         const double read_noise = static_cast<double>(sensor.read_noise());
         tau = unresolved_taper_ * (read_noise > 0.0 ? read_noise : 1.0);
@@ -1834,6 +1675,41 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
         return std::max(hi, floor);
     };
 
+    // How far a line drawn from a PSF's grid with the given light per unit length is drawn, as
+    // for a still source: no further than the grid reaches, where it is drawn exactly all
+    // along, and to where a still source holds 90% of its light however faint, which is at least
+    // as far as a line in any direction holds 90% of its light per unit length.
+    auto grid_line_taper = [&](const TSpectral& density, const GridPsf<TSpectral>& source_grid) {
+        if (!(tau > 0.0)) {
+            return std::numeric_limits<double>::infinity();
+        }
+        std::array<double, TSpectral::size()> electrons{};
+        double floor = 0.0;
+        for (std::size_t c = 0; c < TSpectral::size(); ++c) {
+            electrons[c] = static_cast<double>(density[c]) * electrons_per_power[c];
+            floor = std::max(floor, source_grid.radius_holding_90(c));
+        }
+        const auto readout = [&](double r) {
+            double value = 0.0;
+            for (std::size_t c = 0; c < TSpectral::size(); ++c) {
+                const double channel = electrons[c] * source_grid.line_envelope(c, r);
+                value = PER_CHANNEL_READOUT ? std::max(value, channel) : value + channel;
+            }
+            return value;
+        };
+        const double limit = source_grid.reach();
+        if (readout(limit) > tau) {
+            return std::numeric_limits<double>::infinity();
+        }
+        double lo = 0.0;
+        double hi = limit;
+        while (hi - lo > 1e-3 * hi) {
+            const double mid = 0.5 * (lo + hi);
+            (readout(mid) > tau ? lo : hi) = mid;
+        }
+        return std::max(hi, floor);
+    };
+
     // The distance beyond which following the source's rings changes no pixel's readout by more
     // than tau (see PsfTables::ring_deviation()), found by bisection to a twentieth of a pixel;
     // infinite with no taper.
@@ -1870,27 +1746,22 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
         return hi;
     };
 
-    // List a sample in the tiles its light reaches: its stamp, or without one the pixel it falls
-    // in. Stamps place light by pixel centers, which sit at i + 0.5 in the sensor coordinates the
-    // camera projects to, so they work from the position half a pixel lower. One drawn at its
-    // exact position, from its item's tables or grid, reaches out to its drawn radius, and is
-    // kept even if that misses the frame, for the light it puts on it beyond.
-    enum class Draw { Stamp, Tables, Grid };
+    // List a sample in the tiles its light reaches: drawn at its exact position from its item's
+    // tables or grid, out to its drawn radius, and kept even if that misses the frame, for the
+    // light it puts on it beyond; or without either, the pixel it falls in.
+    enum class Draw { Point, Tables, Grid };
     auto emit_sample = [&](const RenderItem<TSpectral>& item,
                            std::size_t item_index,
                            const Pixel& p,
                            const TSpectral& power,
                            Draw how,
                            Batch& batch) {
-        const float center_x = p.x - 0.5f;
-        const float center_y = p.y - 0.5f;
-        int x_lo = static_cast<int>(std::floor(center_x));
-        int y_lo = static_cast<int>(std::floor(center_y));
-        int x_hi = x_lo + 1;
-        int y_hi = y_lo + 1;
+        int x_lo = 0;
+        int y_lo = 0;
+        int x_hi = 0;
+        int y_hi = 0;
         Sample sample{item_index, p, power};
-        const int r = item.effective_radius;
-        const bool exact = how != Draw::Stamp;
+        const bool exact = how != Draw::Point;
         if (exact) {
             sample.exact = true;
             if (how == Draw::Grid) {
@@ -1913,13 +1784,6 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
             y_lo = static_cast<int>(std::floor(std::max(static_cast<double>(p.y) - reach_y, -1.0)));
             y_hi = static_cast<int>(std::floor(
                 std::min(static_cast<double>(p.y) + reach_y, static_cast<double>(fb_height))));
-        } else if (stamp_radius > 0) {
-            const int base_x = nearest_stamp_phase(center_x).base;
-            const int base_y = nearest_stamp_phase(center_y).base;
-            x_lo = std::min(x_lo, base_x - r);
-            x_hi = std::max(x_hi, base_x + r);
-            y_lo = std::min(y_lo, base_y - r);
-            y_hi = std::max(y_hi, base_y + r);
         } else {
             x_lo = x_hi = static_cast<int>(std::floor(p.x));
             y_lo = y_hi = static_cast<int>(std::floor(p.y));
@@ -2024,6 +1888,7 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                          double length,
                          const TSpectral& power,
                          const LineRadii& radii,
+                         const GridPsf<TSpectral>* source_grid,
                          Batch& batch) {
         Sample sample{item_index,
                       Pixel{static_cast<float>(0.5 * (start[0] + end[0])),
@@ -2041,6 +1906,11 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
             sample.draw = std::max(farthest_corner(a), farthest_corner(b));
         } else {
             sample.draw = 2.0 * radii.taper;
+        }
+        if (source_grid != nullptr) {
+            // Drawn from a grid, which reaches no further:
+            sample.from_grid = true;
+            sample.draw = std::min(sample.draw, source_grid->reach());
         }
         sample.reach.reach = sample.draw;
 
@@ -2092,7 +1962,9 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
     constexpr double LINE_TOLERANCE = 1e-3;    // pixels
     constexpr double DENSITY_TOLERANCE = 1e-3; // relative
     auto emit_path = [&](std::size_t item_index,
-                         const PsfTables<TSpectral>& source_tables,
+                         const PsfTables<TSpectral>* source_tables,
+                         const GridPsf<TSpectral>* source_grid,
+                         float share,
                          BinScratch& scratch,
                          Batch& batch) {
         const std::vector<Vertex>& path = scratch.path;
@@ -2112,7 +1984,7 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
             const double dt = path[k + 1].t - path[k].t;
             TSpectral& light = scratch.piece_light[k];
             for (std::size_t c = 0; c < TSpectral::size(); ++c) {
-                light[c] = static_cast<float>(0.5 * dt *
+                light[c] = static_cast<float>(0.5 * dt * static_cast<double>(share) *
                                               (static_cast<double>(path[k].rate[c]) +
                                                static_cast<double>(path[k + 1].rate[c])));
                 scratch.piece_density[k][c] =
@@ -2194,11 +2066,16 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                            RADII_TOLERANCE * std::max(density[c], radii_density[c]);
                 }
                 if (!same) {
-                    radii = line_radii(density, source_tables);
+                    if (source_grid != nullptr) {
+                        radii = LineRadii{};
+                        radii.taper = grid_line_taper(density, *source_grid);
+                    } else {
+                        radii = line_radii(density, *source_tables);
+                    }
                     radii_density = density;
                     have_radii = true;
                 }
-                emit_line(item_index, start, end, length, power, radii, batch);
+                emit_line(item_index, start, end, length, power, radii, source_grid, batch);
             }
             k = last + 1;
         }
@@ -2213,7 +2090,7 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                         Batch& batch) {
         const auto& arc = item.arc;
 
-        // Clip arc to frustum, which reaches as far as the stamps do; drawn from the tables, a
+        // Clip arc to frustum, which reaches as far as the grids do; drawn from the tables, a
         // source's light can reach across the frame (see wide_frustum).
         const auto& visible_intervals =
             (use_tables ? wide_frustum : frustum).clip_arc(arc, scratch.clip);
@@ -2280,10 +2157,9 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                 pixels.swap(next_pixels);
             }
 
-            // A source that stays put during the exposure, with the tables or a PSF's grid to draw
-            // it from, is drawn once at its mean position, each part with its share: its samples'
-            // light is added up.
-            bool still = use_tables || use_grid;
+            // A source that stays put during the exposure is drawn once at its mean position,
+            // each part with its share: its samples' light is added up.
+            bool still = true;
             for (std::size_t k = 1; still && k < pixels.size(); ++k) {
                 still = std::abs(pixels[k].x - pixels[0].x) < STILL_TOLERANCE &&
                         std::abs(pixels[k].y - pixels[0].y) < STILL_TOLERANCE;
@@ -2293,12 +2169,11 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
             double still_y = 0.0;
             double still_weight = 0.0;
 
-            // Otherwise, the tables' part has its samples as the vertices of its path, drawn as
-            // lines; the core's part is drawn at each sample, from a PSF's grid blurred by
-            // defocus, at its exact position, and in focus from the PSF's stamps:
-            const bool path = use_tables && !still;
-            const Draw moving_core =
-                use_grid && (item.grid != focused_grid || !use_stamps) ? Draw::Grid : Draw::Stamp;
+            // Otherwise its samples are the vertices of its path, drawn as lines from the tables
+            // and its grid; a core without a grid is drawn at each sample, in the pixel it falls
+            // in:
+            const bool core_lines = has_core && item.grid != nullptr;
+            const bool path = !still && (use_tables || core_lines);
             if (path) {
                 scratch.path.assign(params.size(), Vertex{});
             }
@@ -2330,7 +2205,7 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                 // A source whose light cannot reach the image is dropped here, before its
                 // position is converted to pixel indices, which it may not fit: it can be far
                 // beyond the image, or NaN, where the lens images nothing (past the pole of a
-                // rational distortion model). The margin is beyond the furthest a stamp or a grid
+                // rational distortion model). The margin is beyond the furthest a grid
                 // reaches, or, from the tables, the frame's diagonal.
                 const float margin = use_tables ? diagonal + 1.f : static_cast<float>(reach + 1);
                 if (!(p.x > -margin && p.x < static_cast<float>(fb_width) + margin &&
@@ -2389,15 +2264,18 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                     scratch.path[k] = Vertex{static_cast<double>(p.x),
                                              static_cast<double>(p.y),
                                              static_cast<double>(params[k]),
-                                             rate * tables_share,
+                                             rate,
                                              true};
                 }
-                if (has_core) {
-                    emit_sample(item, item_index, p, power * core_share, moving_core, batch);
+                if (has_core && !core_lines) {
+                    emit_sample(item, item_index, p, power * core_share, Draw::Point, batch);
                 }
             }
-            if (path) {
-                emit_path(item_index, *item.tables, scratch, batch);
+            if (path && use_tables) {
+                emit_path(item_index, item.tables, nullptr, tables_share, scratch, batch);
+            }
+            if (path && core_lines) {
+                emit_path(item_index, nullptr, item.grid, core_share, scratch, batch);
             }
             if (still && still_weight > 0.0) {
                 const Pixel mean{static_cast<float>(still_x / still_weight),
@@ -2411,7 +2289,7 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                                 item_index,
                                 mean,
                                 still_power * core_share,
-                                use_grid ? Draw::Grid : Draw::Stamp,
+                                item.grid != nullptr ? Draw::Grid : Draw::Point,
                                 batch);
                 }
             }
@@ -2460,11 +2338,9 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                         RenderItem<TSpectral> item(
                             scratch.arc,
                             std::vector<TSpectral>{star_field.irradiances[i]},
-                            std::vector<float>{RenderItem<TSpectral>::RANGE_AT_INFINITY},
-                            stamp_radius);
+                            std::vector<float>{RenderItem<TSpectral>::RANGE_AT_INFINITY});
                         item.tables = tables;
                         item.grid = grid;
-                        assign_radius(item);
 
                         batch.items.push_back(std::move(item));
                         bin_item(
@@ -2536,10 +2412,72 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
         return received_power;
     }
 
+    // Lines drawn from a PSF's grid are drawn from tables for their direction where enough of them
+    // share it that drawing them directly would take longer than making the tables (as few as
+    // fit in GridPsf::LINE_CACHE_BUDGET, most wanted first), and directly otherwise: a camera
+    // that turns about its boresight sends each source its own way. The choice is the frame's
+    // alone, not what earlier ones left made, so a frame comes out the same however it is drawn.
+    {
+        using Grid = GridPsf<TSpectral>;
+        std::map<std::pair<const Grid*, int>, double> wanted;
+        const auto direction_of = [](const Sample& sample) {
+            return Grid::line_directions(sample.end[0] - sample.start[0],
+                                         sample.end[1] - sample.start[1]);
+        };
+        for (const Sample& sample : samples) {
+            if (!sample.line || !sample.from_grid) {
+                continue;
+            }
+            const Grid* line_grid = items[sample.item_idx].grid;
+            const auto directions = direction_of(sample);
+            const double length =
+                std::hypot(sample.end[0] - sample.start[0], sample.end[1] - sample.start[1]);
+            const double work = line_grid->line_direct_work(length, sample.draw);
+            wanted[{line_grid, directions.below}] += work;
+            if (directions.fraction > 0.0) {
+                wanted[{line_grid, directions.above}] += work;
+            }
+        }
+        std::vector<std::pair<double, std::pair<const Grid*, int>>> worth;
+        for (const auto& [key, work] : wanted) {
+            if (work > key.first->line_table_work()) {
+                worth.emplace_back(work, key);
+            }
+        }
+        std::sort(worth.begin(), worth.end(), [](const auto& a, const auto& b) {
+            return a.first > b.first || (a.first == b.first && a.second < b.second);
+        });
+        std::map<const Grid*, std::size_t> bytes;
+        std::vector<std::pair<const Grid*, int>> made;
+        for (const auto& [work, key] : worth) {
+            std::size_t& used = bytes[key.first];
+            const std::size_t more = key.first->line_table_bytes();
+            if (used + more <= Grid::LINE_CACHE_BUDGET) {
+                used += more;
+                made.push_back(key);
+            }
+        }
+        std::sort(made.begin(), made.end());
+        tbb::parallel_for(std::size_t{0}, made.size(), [&](std::size_t k) {
+            made[k].first->prepare_line(made[k].second);
+        });
+        const auto have = [&](const Grid* of, int direction) {
+            return std::binary_search(made.begin(), made.end(), std::make_pair(of, direction));
+        };
+        for (Sample& sample : samples) {
+            if (!sample.line || !sample.from_grid) {
+                continue;
+            }
+            const Grid* line_grid = items[sample.item_idx].grid;
+            const auto directions = direction_of(sample);
+            sample.from_tables = have(line_grid, directions.below) &&
+                                 (directions.fraction == 0.0 || have(line_grid, directions.above));
+        }
+    }
+
     // The light each source or line drawn from the tables puts in each tile, per unit power: one
     // entry per (tile, sample) pair, so that the tiles write their own.
-    std::vector<std::array<double, TSpectral::size()>> entry_light(
-        use_tables || use_grid ? tile_sample_indices.size() : 0);
+    std::vector<std::array<double, TSpectral::size()>> entry_light(tile_sample_indices.size());
 
     // Render the tiles in parallel, each into its own pixels of the frame:
     tbb::parallel_for(
@@ -2562,11 +2500,31 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                     const Pixel& star_p = sample.projected;
                     const TSpectral& power = sample.power;
 
-                    // Stamps place light by pixel centers (see bin_item):
-                    const float center_x = star_p.x - 0.5f;
-                    const float center_y = star_p.y - 0.5f;
-
-                    if (sample.line) {
+                    if (sample.line && sample.from_grid) {
+                        // A piece of a moving source's path, drawn from its grid:
+                        const auto weight = [&](double r) { return taper_weight(r, sample.taper); };
+                        entry_light[k] = sample.from_tables
+                                             ? item.grid->draw_line(received_power,
+                                                                    tile_x0,
+                                                                    tile_x1,
+                                                                    tile_y0,
+                                                                    tile_y1,
+                                                                    sample.start,
+                                                                    sample.end,
+                                                                    power,
+                                                                    sample.draw,
+                                                                    weight)
+                                             : item.grid->draw_line_direct(received_power,
+                                                                           tile_x0,
+                                                                           tile_x1,
+                                                                           tile_y0,
+                                                                           tile_y1,
+                                                                           sample.start,
+                                                                           sample.end,
+                                                                           power,
+                                                                           sample.draw,
+                                                                           weight);
+                    } else if (sample.line) {
                         // A piece of a moving source's path, drawn from the tables (which keep
                         // to the pixels within its reach), with the light drawn added up as for
                         // a still source, per unit power:
@@ -2622,53 +2580,8 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                                                                               sample.rings,
                                                                               sample.draw,
                                                                               weight);
-                    } else if (stamp_radius > 0) {
-                        const StampPhase phase_x = nearest_stamp_phase(center_x);
-                        const StampPhase phase_y = nearest_stamp_phase(center_y);
-
-                        const int eff_r = item.effective_radius;
-                        const int start_x = phase_x.base - eff_r;
-                        const int start_y = phase_y.base - eff_r;
-
-                        // The part of the (cropped) stamp inside this tile:
-                        const int crop_dim = 2 * eff_r + 1;
-                        const int kx_begin = std::max(0, tile_x0 - start_x);
-                        const int kx_end = std::min(crop_dim, tile_x1 - start_x);
-                        const int ky_begin = std::max(0, tile_y0 - start_y);
-                        const int ky_end = std::min(crop_dim, tile_y1 - start_y);
-
-                        if (use_defocus) {
-                            const Image<float>& kernel = defocus.get(phase_x.phase, phase_y.phase);
-                            const int k_offset = defocus.half_extent() - eff_r;
-                            for (int ky = ky_begin; ky < ky_end; ++ky) {
-                                for (int kx = kx_begin; kx < kx_end; ++kx) {
-                                    // Note: scalar kernel * spectral power
-                                    received_power(start_x + kx, start_y + ky) +=
-                                        power * kernel(kx + k_offset, ky + k_offset);
-                                }
-                            }
-                        } else {
-                            const Image<TSpectral>& kernel =
-                                stamp_kernel(phase_x.phase, phase_y.phase);
-                            const int k_offset = stamp_radius - eff_r;
-
-                            // A cropped stamp keeps the whole stamp's energy:
-                            TSpectral stamp_power = power;
-                            if (eff_r < stamp_radius && !crop_scale.empty()) {
-                                const auto bank = static_cast<std::size_t>(
-                                    phase_y.bank * stamp_banks + phase_x.bank);
-                                stamp_power *=
-                                    crop_scale[bank * crop_radii + static_cast<std::size_t>(eff_r)];
-                            }
-                            for (int ky = ky_begin; ky < ky_end; ++ky) {
-                                for (int kx = kx_begin; kx < kx_end; ++kx) {
-                                    received_power(start_x + kx, start_y + ky) +=
-                                        stamp_power * kernel(kx + k_offset, ky + k_offset);
-                                }
-                            }
-                        }
                     } else {
-                        // No kernel: all the light goes to the pixel the source falls in.
+                        // A point: all the light goes to the pixel the source falls in.
                         const int px = static_cast<int>(std::floor(star_p.x));
                         const int py = static_cast<int>(std::floor(star_p.y));
                         if (px >= tile_x0 && px < tile_x1 && py >= tile_y0 && py < tile_y1) {
@@ -2679,9 +2592,9 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
             }
         });
 
-    // The light sources drawn from the tables or a PSF's grid put on the sensor beyond what was
-    // drawn, spread evenly over it. See spread_light_().
-    if (use_tables || use_grid) {
+    // The light sources drawn from the tables or a grid put on the sensor beyond what was drawn,
+    // spread evenly over it. See spread_light_().
+    {
         // The light each source drew, per unit power: its entries' sums, in a fixed order.
         std::vector<std::array<double, TSpectral::size()>> drawn(samples.size());
         for (std::size_t k = 0; k < tile_sample_indices.size(); ++k) {
@@ -2706,8 +2619,14 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
         // panels as long as the distance along the line to the nearest edge, over which the
         // light beyond the edges changes by about a factor of two.
         const auto line_on_frame = [&](const Sample& sample) {
-            const PsfTables<TSpectral>& source_tables = *items[sample.item_idx].tables;
-            const double near_edge = source_tables.near_radius();
+            const PsfTables<TSpectral>* source_tables = items[sample.item_idx].tables;
+            const GridPsf<TSpectral>* source_grid =
+                sample.from_grid ? items[sample.item_idx].grid : nullptr;
+            const std::array<double, TSpectral::size()> line_scale =
+                source_grid != nullptr ? source_grid->line_scale()
+                                       : std::array<double, TSpectral::size()>{};
+            const double near_edge = source_grid != nullptr ? std::min(source_grid->reach(), 8.0)
+                                                            : source_tables->near_radius();
             constexpr std::array<double, 4> GL4_NODES{
                 -0.8611363115940526, -0.3399810435848563, 0.3399810435848563, 0.8611363115940526};
             constexpr std::array<double, 4> GL4_WEIGHTS{
@@ -2759,7 +2678,10 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                     const double px = ax + u * tx;
                     const double py = ay + u * ty;
                     const Light light =
-                        source_tables.light_in_rectangle(-px, width - px, -py, height - py);
+                        source_grid != nullptr
+                            ? source_grid->light_on_frame(
+                                  px, py / aspect, fb_width, fb_height, line_scale)
+                            : source_tables->light_in_rectangle(-px, width - px, -py, height - py);
                     for (std::size_t c = 0; c < TSpectral::size(); ++c) {
                         total[c] += half * weights[n] * light[c] / length;
                     }

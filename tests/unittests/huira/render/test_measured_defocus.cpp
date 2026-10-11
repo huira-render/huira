@@ -208,15 +208,15 @@ TEST_CASE("A still source with a measured PSF is blurred by the defocus at its o
 TEST_CASE("A moving source with a measured PSF is blurred by the defocus at its own range",
           "[render][unresolved][psf][measured][defocus][streak]")
 {
-    // Drawn from the blurred PSF at each point of its path, so within what the points' spacing
-    // allows of the streak's exact light.
+    // Drawn from the blurred PSF as its path's line integral. Before, it was drawn at points
+    // along its path every 0.71 px, 0.0078 of the peak off at the ends.
     const double x = 25.37;
     const double y = 31.81;
     const double length = 11.43;
     for (const double range : {1e9, 20.0}) {
         INFO("range " << range << " m, blur " << blur_at(range) << " px");
         const Image<RGB> image = render_source(range, x, y, length);
-        CHECK(worst_difference(image, expected_on_frame(x, y, blur_at(range), length)) < 2e-2);
+        CHECK(worst_difference(image, expected_on_frame(x, y, blur_at(range), length)) < 2e-4);
     }
 }
 

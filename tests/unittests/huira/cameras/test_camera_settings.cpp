@@ -193,42 +193,6 @@ TEST_CASE("Rays can be cast through positions outside the image", "[cameras][int
     }
 }
 
-TEST_CASE("A very large defocus blur uses fewer stamps rather than failing", "[cameras][defocus]")
-{
-    const CircularAperture<RGB> aperture(units::Millimeter(10.0));
-
-    DefocusKernel<RGB> kernel;
-    kernel.build(aperture, 40.f, 16);
-    CHECK(kernel.banks() == 16);
-
-    // 83 x 83 stamps of 4-byte floats are 27 KiB, so 256 KiB holds 3 x 3 of them:
-    kernel.build(aperture, 40.f, 16, 1000, std::size_t{256} * 1024);
-    CHECK(kernel.banks() == 3);
-    CHECK(kernel.half_extent() == 41);
-
-    auto total = [](const Image<float>& stamp) {
-        double sum = 0.0;
-        for (int y = 0; y < stamp.height(); ++y) {
-            for (int x = 0; x < stamp.width(); ++x) {
-                sum += static_cast<double>(stamp(x, y));
-            }
-        }
-        return sum;
-    };
-
-    // Every stamp still holds all the light:
-    for (float u : {0.f, 0.5f, 0.9f}) {
-        CHECK(close(total(kernel.get(u, u)), 1.0, 1e-5));
-    }
-
-    // A blur wider than the image is cut where no light could reach it, and still holds the
-    // whole blur's share of the light: here a 20 px square of a 40 px radius disk.
-    kernel.build(aperture, 40.f, 4, 10);
-    CHECK(kernel.half_extent() == 10);
-    const double square_share = 21.0 * 21.0 / (PI<double>() * 40.0 * 40.0);
-    CHECK(close(total(kernel.get(0.f, 0.f)), square_share, 1e-3));
-}
-
 TEST_CASE("Invalid settings throw and leave the camera as it was", "[cameras][validation]")
 {
     CameraModel<RGB> camera;

@@ -55,21 +55,11 @@ class Renderer {
     void set_unresolved_occlusion(bool occlusion = true) { unresolved_occlusion_ = occlusion; }
 
     /**
-     * @brief Crop each unresolved source's PSF stamp to the pixels its light would show in (the
-     * default), or always stamp the whole PSF.
-     *
-     * Cropped, a source's stamp keeps the pixels that read out at least a tenth of the sensor's
-     * read noise over the exposure (each channel for RGB, their sum otherwise; a tenth of an
-     * electron for a sensor with under an electron of noise, and the noise as configured
-     * whether or not it is simulated), and is scaled back to the whole stamp's energy, so that
-     * no light is lost: what lay beyond the crop is spread over the pixels kept. A stamp is
-     * never cropped so far that the source's centroid moves by more than 0.01 px. Faint stars
-     * then cost a few pixels each rather than the whole stamp.
-     *
-     * Sources with the aperture's PSF are not stamped but drawn from its tables, out to where
-     * their light fades below set_unresolved_taper()'s threshold.
+     * @brief Has no effect: unresolved sources are no longer stamped, but drawn from the PSF's
+     * tables or grid out to where their light fades below set_unresolved_taper()'s threshold,
+     * keeping all of their light. Kept until the API is reworked.
      */
-    void set_stamp_cropping(bool enable = true) { stamp_cropping_ = enable; }
+    void set_stamp_cropping(bool enable = true) { static_cast<void>(enable); }
 
     /// How faint, as a fraction of the sensor's read noise, the light an unresolved source puts
     /// in a pixel gets before it is tapered off. See set_unresolved_taper().
@@ -146,7 +136,6 @@ class Renderer {
     int max_bounces_ = 3;
 
     bool unresolved_occlusion_ = true;
-    bool stamp_cropping_ = true;
     double unresolved_taper_ = DEFAULT_UNRESOLVED_TAPER;
 
     bool region_culling_ = true;

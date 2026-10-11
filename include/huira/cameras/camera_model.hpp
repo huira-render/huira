@@ -16,7 +16,6 @@
 #include <vector>
 
 #include "huira/cameras/apertures/aperture.hpp"
-#include "huira/cameras/defocus_kernel.hpp"
 #include "huira/cameras/distortion/brown_distortion.hpp"
 #include "huira/cameras/distortion/distortion.hpp"
 #include "huira/cameras/distortion/opencv_distortion.hpp"
@@ -477,11 +476,6 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     int table_stamp_banks_ = 0;
     int table_stamps_radius_ = 0;
 
-    /// Stamps for the defocus blur of unresolved sources without a PSF (see delete_psf()); empty
-    /// when in focus.
-    DefocusKernel<TSpectral> defocus_kernel_;
-    static constexpr int DEFOCUS_BANKS_ = 16;
-
     /// The settings the optics kernels are derived from. Each kernel depends on some of them,
     /// and is rebuilt only when one of those has changed since it was built.
     enum class OpticsInput : std::size_t {
@@ -514,7 +508,6 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
 
     // The version each kernel was built at; 0 for never.
     std::uint64_t diffraction_built_at_ = 0;
-    std::uint64_t defocus_built_at_ = 0;
     std::uint64_t convolution_kernel_built_at_ = 0;
     std::uint64_t wings_kernel_built_at_ = 0;
     std::uint64_t render_tables_built_at_ = 0;
@@ -522,7 +515,7 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     std::uint64_t table_stamps_built_at_ = 0;
     std::uint64_t body_tables_built_at_ = 0;
     std::uint64_t object_tables_built_at_ = 0;
-    std::uint64_t focused_grid_built_at_ = 0;
+    std::uint64_t grid_source_built_at_ = 0;
     std::uint64_t object_grids_built_at_ = 0;
 
     // The geometry compute_intrinsics_() last saw, to tell which inputs a change touched.
@@ -541,7 +534,6 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     // Each builds its kernel if it is out of date. optics_mutex_ must be held.
     void ensure_diffraction_();
     void ensure_polyphase_();
-    void ensure_defocus_();
     void ensure_convolution_kernel_();
     void ensure_wings_kernel_();
     void ensure_psf_tables_();
