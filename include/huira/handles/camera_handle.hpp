@@ -128,7 +128,8 @@ class CameraModelHandle : public Handle<CameraModel<TSpectral>> {
                           float samples_per_pixel,
                           PSFSampling sampling,
                           int radius = 0,
-                          int banks = CameraModel<TSpectral>::DEFAULT_PSF_BANKS) const;
+                          int banks = CameraModel<TSpectral>::DEFAULT_PSF_BANKS,
+                          PSFFocus focus = PSFFocus::InFocus) const;
 
     void use_aperture_psf(bool value) const;
     void use_aperture_psf(int radius = 0,

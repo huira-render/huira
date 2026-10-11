@@ -41,9 +41,10 @@ Image<RGB> measurement()
 
 /// Renders one unresolved source near the middle of a 48 x 48 frame of 10 um pixels behind a
 /// 50 mm f/32 lens, with a measured PSF in 8 px stamps, and returns the received power. The
-/// source moves a twentieth of a pixel during the exposure, so that it is stamped. (The
-/// aperture's own PSF draws a moving source from its tables, along its path, and is tapered
-/// rather than cropped.)
+/// source moves a twentieth of a pixel during the exposure, and there is no depth of field, so
+/// that it is in focus with the stars and stamped. (Out of focus, it would be drawn from the PSF
+/// blurred, at each point of its path; the aperture's own PSF draws a moving source from its
+/// tables, along its path. Both are tapered rather than cropped.)
 Image<RGB> render(const Exposure& exposure)
 {
     Scene<RGB> scene;
@@ -51,6 +52,7 @@ Image<RGB> render(const Exposure& exposure)
     camera_model.configure_sensor_from_pitch({48, 48}, 10_um);
     camera_model.set_focal_length(50_mm);
     camera_model.set_fstop(32.f);
+    camera_model.enable_depth_of_field(false);
     camera_model.set_measured_psf(measurement(), 4.f, PSFSampling::PointSampled, 8, 2);
     camera_model.set_sensor_read_noise(exposure.read_noise);
     camera_model.enable_sensor_noise(exposure.noise);

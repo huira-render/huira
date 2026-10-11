@@ -408,6 +408,7 @@ inline void bind_camera_model_handle(py::module_& m)
              py::arg("sampling"),
              py::arg("radius") = 0,
              py::arg("banks") = CameraModel<TSpectral>::DEFAULT_PSF_BANKS,
+             py::arg("focus") = PSFFocus::InFocus,
              "Use a measured (user-supplied) PSF as the camera's core PSF, in place of the "
              "aperture's. 'data' is an Image of centered PSF samples; 'samples_per_pixel' is "
              "the measurement sampling density per sensor pixel per axis; 'sampling' says what "
@@ -416,7 +417,9 @@ inline void bind_camera_model_handle(py::module_& m)
              "always PSFSampling.PointSampled, such as optical design software's PSF. The PSF is "
              "taken as complete out to 'radius' pixels from its center (0: as far as the "
              "measurement reaches, up to 64), and still sources are drawn from the spline "
-             "through the samples at their exact position.")
+             "through the samples at their exact position. 'focus' says whether it is a point's "
+             "in focus, which the camera's focus blurs (the default), or already holds the "
+             "camera's defocus (see PSFFocus).")
 
         // Stray light
         .def("set_veiling_glare",

@@ -36,6 +36,10 @@ namespace huira {
  * the same summed over all such pixels for the source's position (see scale()), which keeps
  * each source's light exact, as the stamps' normalization did.
  *
+ * Out of focus, the PSF is blurred by a uniform disc, the aperture's image (see
+ * GridPsf(const GridPsf&, double)), and held as pixel-integrated samples, which sum over the
+ * pixels to all of the light wherever the source is, so that scale() is 1.
+ *
  * Coordinates are in pixels along each axis, as PSF::evaluate() takes them; distances, as
  * elsewhere, in pixel widths, a pixel being aspect() widths high.
  *
@@ -53,6 +57,7 @@ class GridPsf {
     static constexpr std::size_t MEMORY_BUDGET = std::size_t{64} * 1024 * 1024;
 
     GridPsf(PSF<TSpectral>& psf, double aspect);
+    GridPsf(const GridPsf& in_focus, double blur);
 
     [[nodiscard]] TSpectral pixel(double dx, double dy, const Light& scale) const;
     [[nodiscard]] Light scale(double source_x, double source_y) const;
@@ -103,8 +108,11 @@ class GridPsf {
     /// two samples of them.
     static constexpr int MARGIN = 2;
 
-    double aspect_;
+    double aspect_ = 1.0;
     bool pixel_integrated_ = false;
+    /// Whether the pixel-integrated samples sum, over the pixels, to all of the light wherever
+    /// the source is, as they do when integrated from point samples: then scale() is 1.
+    bool sums_to_one_ = false;
     double step_ = 1.0;
     int nx_ = 0;
     int ny_ = 0;
@@ -128,6 +136,9 @@ class GridPsf {
     Light radius_90_{};
     double reach_ = 0.0;
 
+    GridPsf() = default;
+    [[nodiscard]] static GridPsf integrated_(const GridPsf& point);
+
     [[nodiscard]] std::size_t at_(int i, int j) const
     {
         return (static_cast<std::size_t>(j) * static_cast<std::size_t>(nx_) +
@@ -149,6 +160,7 @@ class GridPsf {
     [[nodiscard]] Light interpolate_(const Axis& x, const Axis& y) const;
     [[nodiscard]] Light interpolate_(double x, double y) const;
     [[nodiscard]] Light sum_over_pixels_(double source_x, double source_y) const;
+    void build_from_samples_(std::vector<double>& samples, int count_x, int count_y);
     void build_point_sampled_();
     void build_bounds_();
 };

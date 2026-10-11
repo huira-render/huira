@@ -613,17 +613,21 @@ bool CameraModelHandle<TSpectral>::psf_convolution_enabled() const
  * @param samples_per_pixel Measurement samples per sensor pixel per axis.
  * @param sampling What the samples are: the PSF's intensity at points, or the light a pixel
  *                 centered there receives (see PSFSampling).
- * @param radius Polyphase stamping kernel radius in sensor pixels (0 = auto).
- * @param banks Number of polyphase banks per axis for subpixel stamping.
+ * @param radius How far out the measurement is taken, in sensor pixels from its center (0 =
+ *        auto); also the stamps' radius for moving sources.
+ * @param banks Number of polyphase banks per axis for the stamps for moving sources.
+ * @param focus Whether the samples are a point's in focus, which the camera's focus blurs, or
+ *              already hold its defocus (see PSFFocus).
  */
 template <IsSpectral TSpectral>
 void CameraModelHandle<TSpectral>::set_measured_psf(const Image<TSpectral>& data,
                                                     float samples_per_pixel,
                                                     PSFSampling sampling,
                                                     int radius,
-                                                    int banks) const
+                                                    int banks,
+                                                    PSFFocus focus) const
 {
-    this->get_()->set_measured_psf(data, samples_per_pixel, sampling, radius, banks);
+    this->get_()->set_measured_psf(data, samples_per_pixel, sampling, radius, banks, focus);
 }
 
 /**
