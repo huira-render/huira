@@ -31,45 +31,73 @@ inline double window(double t)
 } // namespace psf_convolver_detail
 
 /**
- * @brief Prepares to convolve frames of a resolution with the PSF the tables give: the near
- * part's kernel and the smooth part's at the coarse grid's offsets, transformed.
+ * @brief Prepares to convolve frames of a resolution with a PSF: the near part's kernel and the
+ * smooth part's at the coarse grid's offsets, transformed.
  *
- * The near part reaches one pixel beyond PsfTables::far_from(), and at least MIN_NEAR_RADIUS,
- * or across the frame if that is less; the window rises over its outer half; and the coarse grid
- * has STEPS_TO_WINDOW steps to where the window begins. Where the window begins beyond the
- * frame, there is no coarse grid.
+ * With tables, the near part reaches one pixel beyond PsfTables::far_from(), and at least
+ * MIN_NEAR_RADIUS, and as far as the core; the window rises over the outer half of the tables'
+ * share; and the coarse grid has STEPS_TO_WINDOW steps to where the window begins. Where the
+ * window begins beyond the frame, there is no coarse grid. Without tables, the near part is the
+ * core alone, out to its reach. Either way it is cut at the frame's size, which it never needs
+ * to exceed.
  */
 template <IsSpectral TSpectral>
-void PsfConvolver<TSpectral>::set_tables(std::shared_ptr<const PsfTables<TSpectral>> tables,
-                                         Resolution resolution)
+void PsfConvolver<TSpectral>::set_parts(const Parts& parts, Resolution resolution)
 {
     constexpr std::size_t N = TSpectral::size();
-    tables_ = std::move(tables);
+    parts_ = parts;
+    ready_ = true;
     width_ = resolution.width;
     height_ = resolution.height;
-    const PsfTables<TSpectral>& psf = *tables_;
-    const double aspect = psf.aspect();
-
-    near_radius_ = std::max(std::ceil(psf.far_from()) + 1.0, MIN_NEAR_RADIUS);
+    const PsfTables<TSpectral>* psf = parts_.tables.get();
+    const GridPsf<TSpectral>* core = parts_.core.get();
+    const double aspect = psf != nullptr ? psf->aspect() : core != nullptr ? core->aspect() : 1.0;
+    near_radius_ =
+        psf != nullptr ? std::max(std::ceil(psf->far_from()) + 1.0, MIN_NEAR_RADIUS) : 0.0;
+    if (core != nullptr) {
+        near_radius_ = std::max(near_radius_, std::ceil(core->reach()));
+    }
     const double window_to = near_radius_ - 1.0;
     const double window_from = 0.5 * window_to;
     // The smooth part at an offset in pixels:
     const auto smooth = [&](double dx, double dy) {
-        const double r = std::sqrt(dx * dx + aspect * aspect * dy * dy);
         std::array<double, N> values{};
+        if (psf == nullptr) {
+            return values;
+        }
+        const double r = std::sqrt(dx * dx + aspect * aspect * dy * dy);
         const double share =
             psf_convolver_detail::window((r - window_from) / (window_to - window_from));
         if (share > 0.0) {
-            values = psf.far_pixel(dx, dy);
+            values = psf->far_pixel(dx, dy);
             for (double& value : values) {
-                value *= share;
+                value *= share * parts_.tables_share;
             }
         }
         return values;
     };
-
-    // The near part: the tables less the smooth part, out to near_radius_, or across the frame
-    // if that is less.
+    // The core's light at an offset, for a source at a pixel's center:
+    const auto core_scale =
+        core != nullptr ? core->scale(0.5, 0.5) : typename GridPsf<TSpectral>::Light{};
+    const auto core_light = [&](double dx, double dy) {
+        std::array<double, N> values{};
+        if (parts_.core_share == 0.0) {
+            return values;
+        }
+        if (core == nullptr) {
+            if (dx == 0.0 && dy == 0.0) {
+                values.fill(parts_.core_share);
+            }
+            return values;
+        }
+        const TSpectral light = core->pixel(dx, dy, core_scale);
+        for (std::size_t c = 0; c < N; ++c) {
+            values[c] = parts_.core_share * static_cast<double>(light[c]);
+        }
+        return values;
+    };
+    // The near part: the tables less the smooth part, and the core, out to near_radius_, or
+    // across the frame if that is less.
     const int near_x = std::min(static_cast<int>(near_radius_), width_ - 1);
     const int near_y = std::min(static_cast<int>(std::ceil(near_radius_ / aspect)), height_ - 1);
     Image<TSpectral> near_kernel(2 * near_x + 1, 2 * near_y + 1, TSpectral{0.f});
@@ -77,11 +105,13 @@ void PsfConvolver<TSpectral>::set_tables(std::shared_ptr<const PsfTables<TSpectr
         const double dy = static_cast<double>(y - near_y);
         for (int x = 0; x < 2 * near_x + 1; ++x) {
             const double dx = static_cast<double>(x - near_x);
-            const TSpectral exact = psf.pixel(dx, dy);
             const std::array<double, N> part = smooth(dx, dy);
+            const std::array<double, N> center = core_light(dx, dy);
+            const TSpectral exact = psf != nullptr ? psf->pixel(dx, dy) : TSpectral{0.f};
             TSpectral value{0.f};
             for (std::size_t c = 0; c < N; ++c) {
-                value[c] = static_cast<float>(static_cast<double>(exact[c]) - part[c]);
+                value[c] = static_cast<float>(parts_.tables_share * static_cast<double>(exact[c]) -
+                                              part[c] + center[c]);
             }
             near_kernel(x, y) = value;
         }
@@ -91,7 +121,7 @@ void PsfConvolver<TSpectral>::set_tables(std::shared_ptr<const PsfTables<TSpectr
     // Where the window begins beyond the frame's diagonal, the near part is all of it:
     const double diagonal =
         std::hypot(static_cast<double>(width_ - 1), aspect * static_cast<double>(height_ - 1));
-    has_far_ = window_from < diagonal;
+    has_far_ = psf != nullptr && window_from < diagonal;
     if (!has_far_) {
         far_ = FftConvolver<TSpectral>{};
         return;
@@ -151,11 +181,11 @@ void PsfConvolver<TSpectral>::apply(Image<TSpectral>& image) const
     constexpr std::size_t N = TSpectral::size();
     using Channels = std::array<double, N>;
     if (!is_ready()) {
-        HUIRA_THROW_ERROR("PsfConvolver::apply - set_tables() has not been called");
+        HUIRA_THROW_ERROR("PsfConvolver::apply - set_parts() has not been called");
     }
     if (image.width() != width_ || image.height() != height_) {
         HUIRA_THROW_ERROR("PsfConvolver::apply - Image resolution does not match the "
-                          "resolution given to set_tables()");
+                          "resolution given to set_parts()");
     }
     if (!has_far_) {
         near_.apply(image);

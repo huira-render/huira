@@ -168,8 +168,8 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     /// Choose whether a PSF or scattered light that is set blurs resolved bodies (the path-traced
     /// image). On by default. Off, bodies are sharp, and rendering is faster without the
     /// whole-image convolution; unresolved sources, such as stars, get the PSF and scattered light
-    /// either way. With the aperture's PSF, bodies get the whole of it, across the frame, in
-    /// focus: path tracing gives them their defocus.
+    /// either way. Bodies get the whole PSF and scattered light, across the frame, in focus:
+    /// path tracing gives them their defocus.
     void enable_psf_convolution(bool convolve_psf = true) { convolve_psf_ = convolve_psf; }
 
     /// Whether a PSF or scattered light that is set blurs resolved bodies (the default). See
@@ -364,27 +364,27 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     /// light: see enable_psf_convolution().
     bool convolves_bodies_() const { return convolve_psf_ && has_psf_or_scatter_(); }
 
-    // Whole-image convolution kernel: a single centered kernel, made from psf_ and the
-    // scattered-light wings, and its spectrum at the sensor's resolution.
+    // The kernels get_psf_convolution_kernel() and get_psf_wings_kernel() give: the core PSF
+    // with the scattered-light wings, and the wings alone, each a single centered kernel of
+    // psf_convolution_radius_. The renderer uses neither (see body_convolver_ and
+    // render_tables_).
     int psf_convolution_radius_ = 0;
     Image<TSpectral> psf_convolution_kernel_;
-    FftConvolver<TSpectral> psf_convolver_;
-
-    // Scattered-light wings kernel alone (unit energy), used by the renderer to apply wings
-    // to unresolved sources whose compact core is stamped rather than convolved.
     Image<TSpectral> psf_wings_kernel_;
-    FftConvolver<TSpectral> wings_convolver_;
 
     /// The tables that give an unresolved source's light in each pixel: see psf_image(). Shared,
     /// so that an image can be read from them while they are rebuilt for new optics.
     std::shared_ptr<const PsfTables<TSpectral>> psf_tables_;
 
-    /// The tables the renderer draws still unresolved sources from with the aperture's PSF: its
-    /// diffraction with the scattered light, blurred as a star is by the focus, and the reach
-    /// they were built for. psf_tables_ shares them.
+    /// The tables the renderer draws unresolved sources from: with the aperture's PSF, its
+    /// diffraction with the scattered light, and otherwise the scattered light alone; blurred as
+    /// a star is by the focus, with the reach they were built for. psf_tables_ shares them.
     std::shared_ptr<const PsfTables<TSpectral>> render_tables_;
     double render_tables_reach_ = 0.0;
     double render_tables_blur_ = 0.0;
+    /// Whether the tables hold the scattered light alone, as they do for a PSF that was set or
+    /// none: see tables_scatter_(). The same for object_tables_ and body_tables_.
+    bool render_tables_scatter_only_ = false;
 
     /// The same without the scattered light, which get_psf_wings_kernel() gives, for the stamps
     /// get_psf_kernel() gives, and the blur they were built for: render_tables_ without
@@ -457,16 +457,19 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     /// built for.
     BlurCache<PsfTables<TSpectral>> object_tables_;
     double object_tables_reach_ = 0.0;
+    bool object_tables_scatter_only_ = false;
 
-    /// What resolved bodies are convolved with, with the aperture's PSF: the whole of the PSF,
-    /// across the frame, from render_tables_ in focus, or body_tables_ otherwise.
+    /// What resolved bodies are convolved with: the whole of the PSF, across the frame, from
+    /// render_tables_ in focus, or body_tables_ otherwise, with a PSF that was set on its grid in
+    /// focus (see body_parts_()).
     PsfConvolver<TSpectral> body_convolver_;
 
-    /// The tables for resolved bodies when a star is out of focus: in focus, with the scattered
-    /// light, since path tracing gives bodies their own defocus. Empty in focus, when the
+    /// The tables for resolved bodies when a star is out of focus: in focus, as render_tables_
+    /// are otherwise, since path tracing gives bodies their own defocus. Empty in focus, when the
     /// renderer's serve. With the reach they were built for.
     std::shared_ptr<const PsfTables<TSpectral>> body_tables_;
     double body_tables_reach_ = 0.0;
+    bool body_tables_scatter_only_ = false;
 
     /// Stamps from stamp_tables_, for get_psf_kernel(): one per subpixel position, banks x banks
     /// of them, each normalized per channel as PSF's are, with their radius.
@@ -513,9 +516,7 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     std::uint64_t diffraction_built_at_ = 0;
     std::uint64_t defocus_built_at_ = 0;
     std::uint64_t convolution_kernel_built_at_ = 0;
-    std::uint64_t convolution_spectrum_built_at_ = 0;
     std::uint64_t wings_kernel_built_at_ = 0;
-    std::uint64_t wings_spectrum_built_at_ = 0;
     std::uint64_t render_tables_built_at_ = 0;
     std::uint64_t stamp_tables_built_at_ = 0;
     std::uint64_t table_stamps_built_at_ = 0;
@@ -542,9 +543,7 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     void ensure_polyphase_();
     void ensure_defocus_();
     void ensure_convolution_kernel_();
-    void ensure_convolution_spectrum_();
     void ensure_wings_kernel_();
-    void ensure_wings_spectrum_();
     void ensure_psf_tables_();
     void ensure_render_tables_();
     void ensure_stamp_tables_();
@@ -555,7 +554,7 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     tables_at_locked_(const std::vector<double>& inverse_depths);
     std::vector<std::shared_ptr<const GridPsf<TSpectral>>>
     grids_at_locked_(const std::vector<double>& inverse_depths);
-    [[nodiscard]] double grid_blur_(double inverse_depth) const;
+    [[nodiscard]] double source_blur_(double inverse_depth) const;
     [[nodiscard]] double tables_reach_() const;
     [[nodiscard]] bool render_tables_stale_() const;
     [[nodiscard]] bool stamp_tables_stale_() const;
@@ -569,16 +568,15 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
                       const std::optional<typename PsfTables<TSpectral>::Scatter>& scatter,
                       double reach) const;
     std::optional<typename PsfTables<TSpectral>::Scatter> scatter_for_tables_() const;
+    std::optional<typename PsfTables<TSpectral>::Scatter> tables_scatter_() const;
+    [[nodiscard]] bool uses_tables_() const { return use_aperture_psf_ || scatter_enabled_; }
+    [[nodiscard]] typename PsfConvolver<TSpectral>::Parts body_parts_() const;
     double blur_pixels_(double inverse_range) const;
     int convolution_radius_(const char* caller) const;
 
     // optics_mutex_ must be held.
     void precompute_locked_();
     bool is_precomputed_locked_() const;
-
-    /// Kernels up to this many pixels are applied directly, as Image::convolve() does, and
-    /// larger ones through their spectrum.
-    static constexpr int DIRECT_CONVOLUTION_MAX_AREA_ = 25;
 
     // For the renderer:
     void precompute_for_render_();
@@ -587,7 +585,6 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     std::vector<std::shared_ptr<const GridPsf<TSpectral>>>
     grids_at_(const std::vector<double>& inverse_depths);
     void apply_psf_convolution_(Image<TSpectral>& image) const;
-    void apply_wings_convolution_(Image<TSpectral>& image) const;
 
     enum class FocusReference { Distance, Diopters, SensorOffset };
     FocusReference focus_reference_ = FocusReference::Distance;

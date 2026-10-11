@@ -483,14 +483,15 @@ inline void bind_camera_model_handle(py::module_& m)
             },
             py::call_guard<py::gil_scoped_release>(),
             "A copy of the whole-image convolution kernel (the PSF and scattered light "
-            "together, unit energy per channel), building it first if needed. With the "
-            "aperture's PSF, the renderer convolves bodies with the whole PSF instead.")
+            "together, unit energy per channel), building it first if needed. The renderer "
+            "convolves bodies with the whole PSF and scattered light instead.")
         .def(
             "get_psf_wings_kernel",
             [](const HandleType& self) { return Image<TSpectral>(self.get_psf_wings_kernel()); },
             py::call_guard<py::gil_scoped_release>(),
             "A copy of the scattered light's kernel alone (unit energy per channel), building "
-            "it first if needed. Requires Harvey-Shack scatter.")
+            "it first if needed; the renderer draws scattered light from its tables instead. "
+            "Requires Harvey-Shack scatter.")
 
         .def(
             "psf_image",

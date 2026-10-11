@@ -3,8 +3,10 @@
 #include <array>
 #include <cstddef>
 #include <memory>
+#include <utility>
 #include <vector>
 
+#include "huira/cameras/psfs/grid_psf.hpp"
 #include "huira/cameras/psfs/psf_tables.hpp"
 #include "huira/core/types.hpp"
 #include "huira/images/fft_convolver.hpp"
@@ -14,9 +16,13 @@
 namespace huira {
 
 /**
- * @brief Convolves a frame with the PSF its tables give, across the whole frame: each pixel's
- * light is spread as a still source's at its center would be (PsfTables::pixel()), out to the
- * frame's far edges.
+ * @brief Convolves a frame with a PSF across the whole frame: each pixel's light is spread as a
+ * still source's at its center would be, out to the frame's far edges.
+ *
+ * The PSF is a radial part from tables (PsfTables::pixel()), such as the aperture's diffraction
+ * and scattered light, and a core: a PSF set on its grid (GridPsf::pixel()), or a point, whose
+ * light all stays in its pixel; each with its share of the light (see Parts). The core reaches
+ * no further than its grid, and is convolved with the near part below.
  *
  * The PSF is split in two. The smooth part is its far field (PsfTables::far_pixel()), with a
  * window that rises smoothly from 0 to 1 between half of near_radius() and near_radius(); the
@@ -37,15 +43,34 @@ namespace huira {
 template <IsSpectral TSpectral>
 class PsfConvolver {
   public:
-    void set_tables(std::shared_ptr<const PsfTables<TSpectral>> tables, Resolution resolution);
+    /// What the PSF is made of, and each part's share of the light.
+    struct Parts {
+        /// The radial part; none for a PSF that is all core.
+        std::shared_ptr<const PsfTables<TSpectral>> tables;
+        double tables_share = 1.0;
+        /// The core: a PSF on its grid, or none for a point.
+        std::shared_ptr<const GridPsf<TSpectral>> core;
+        double core_share = 0.0;
+
+        bool operator==(const Parts&) const = default;
+    };
+
+    void set_parts(const Parts& parts, Resolution resolution);
+    void set_tables(std::shared_ptr<const PsfTables<TSpectral>> tables, Resolution resolution)
+    {
+        set_parts(Parts{std::move(tables), 1.0, nullptr, 0.0}, resolution);
+    }
     void apply(Image<TSpectral>& image) const;
 
-    [[nodiscard]] bool is_ready() const { return tables_ != nullptr; }
+    [[nodiscard]] bool is_ready() const { return ready_; }
 
-    /// The tables the PSF comes from.
+    /// What the PSF is made of.
+    [[nodiscard]] const Parts& parts() const { return parts_; }
+
+    /// The tables the PSF's radial part comes from.
     [[nodiscard]] const std::shared_ptr<const PsfTables<TSpectral>>& tables() const
     {
-        return tables_;
+        return parts_.tables;
     }
 
     /// The resolution of the frames it convolves.
@@ -67,7 +92,8 @@ class PsfConvolver {
     /// finer than the pixels to stay smooth on it.
     static constexpr double MIN_NEAR_RADIUS = 128.0;
 
-    std::shared_ptr<const PsfTables<TSpectral>> tables_;
+    Parts parts_;
+    bool ready_ = false;
     int width_ = 0;
     int height_ = 0;
     double near_radius_ = 0.0;

@@ -101,8 +101,7 @@ class Renderer {
                                          FrameBuffer<TSpectral>& frame_buffer);
 
     virtual Image<TSpectral> render_unresolved_(SceneView<TSpectral>& scene_view,
-                                                FrameBuffer<TSpectral>& frame_buffer,
-                                                Image<TSpectral>& wing_splat);
+                                                FrameBuffer<TSpectral>& frame_buffer);
 
     std::shared_ptr<CameraModel<TSpectral>> get_camera(SceneView<TSpectral>& scene_view) const
     {
