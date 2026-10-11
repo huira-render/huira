@@ -27,7 +27,59 @@ endif()
 find_package(FFTW3 CONFIG QUIET)
 
 if(FFTW3_FOUND AND TARGET FFTW3::fftw3)
-    # The config already provides FFTW3::fftw3 — nothing to wrap.
+    # The config already provides FFTW3::fftw3. Some packaged configs (FFTW built with autotools,
+    # with a hand-written or partial targets file) define it without saying where the library is
+    # for any build configuration, and CMake then fails at generation with "IMPORTED_LOCATION or
+    # IMPORTED_IMPLIB not set". So check that a location is set, and if none is, find the library
+    # and set it.
+    get_target_property(_fftw3_type FFTW3::fftw3 TYPE)
+    set(_fftw3_located FALSE)
+    if(_fftw3_type STREQUAL "INTERFACE_LIBRARY")
+        set(_fftw3_located TRUE)
+    else()
+        get_target_property(_fftw3_configs FFTW3::fftw3 IMPORTED_CONFIGURATIONS)
+        set(_fftw3_properties IMPORTED_LOCATION IMPORTED_IMPLIB)
+        if(_fftw3_configs)
+            foreach(_cfg IN LISTS _fftw3_configs)
+                string(TOUPPER "${_cfg}" _cfg)
+                list(APPEND _fftw3_properties IMPORTED_LOCATION_${_cfg} IMPORTED_IMPLIB_${_cfg})
+            endforeach()
+        endif()
+        foreach(_property IN LISTS _fftw3_properties)
+            get_target_property(_value FFTW3::fftw3 ${_property})
+            if(_value)
+                set(_fftw3_located TRUE)
+            endif()
+        endforeach()
+    endif()
+
+    if(NOT _fftw3_located)
+        # The config lives in <prefix>/lib/cmake/fftw3 (or <prefix>/lib64/...):
+        find_library(FFTW3_LIBRARY_PATH
+            NAMES fftw3 libfftw3 fftw3-3 libfftw3-3
+            HINTS
+                ${FFTW3_LIBRARY_DIRS}
+                "${FFTW3_DIR}/../.."
+                "${FFTW3_DIR}/../../.."
+                ${FFTW3_ROOT}
+                $ENV{FFTW3_ROOT}
+                $ENV{CONDA_PREFIX}
+            PATH_SUFFIXES lib lib64
+        )
+        if(NOT FFTW3_LIBRARY_PATH)
+            message(FATAL_ERROR
+                "FFTW3's CMake config (${FFTW3_DIR}) defines FFTW3::fftw3 without a library "
+                "location, and libfftw3 was not found near it. Set FFTW3_LIBRARY_PATH to the "
+                "double-precision FFTW library.")
+        endif()
+        message(STATUS "FFTW3's CMake config gives no library location; using ${FFTW3_LIBRARY_PATH}")
+        set_target_properties(FFTW3::fftw3 PROPERTIES IMPORTED_LOCATION "${FFTW3_LIBRARY_PATH}")
+        if(WIN32)
+            set_target_properties(FFTW3::fftw3 PROPERTIES IMPORTED_IMPLIB "${FFTW3_LIBRARY_PATH}")
+        endif()
+        mark_as_advanced(FFTW3_LIBRARY_PATH)
+    endif()
+
     get_target_property(_inc FFTW3::fftw3 INTERFACE_INCLUDE_DIRECTORIES)
     if(_inc)
         set(FFTW3_INCLUDE_DIRS "${_inc}")
