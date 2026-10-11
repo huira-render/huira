@@ -2062,18 +2062,35 @@ void CameraModel<TSpectral>::ensure_wings_kernel_()
 }
 
 /**
- * @brief Convolve an image in place with the whole PSF, across the frame (see PsfConvolver and
- * body_parts_()).
+ * @brief About the most convolving an image with the whole PSF in a precision would put in each
+ * channel of its pixels where it is dark, from rounding (see PsfConvolver::rounding_error()).
  *
  * For the renderer, after precompute_for_render_().
  */
 template <IsSpectral TSpectral>
-void CameraModel<TSpectral>::apply_psf_convolution_(Image<TSpectral>& image) const
+std::array<double, TSpectral::size()>
+CameraModel<TSpectral>::psf_convolution_error_(const Image<TSpectral>& image,
+                                               FftPrecision precision) const
 {
-    detail::convolve_finite_pixels(image, "PSF", [this](Image<TSpectral>& finite) {
+    std::lock_guard<std::mutex> lock(optics_mutex_);
+    return body_convolver_.rounding_error(image, precision);
+}
+
+/**
+ * @brief Convolve an image in place with the whole PSF, across the frame (see PsfConvolver and
+ * body_parts_()), in a precision, with plans made with an effort.
+ *
+ * For the renderer, after precompute_for_render_().
+ */
+template <IsSpectral TSpectral>
+void CameraModel<TSpectral>::apply_psf_convolution_(Image<TSpectral>& image,
+                                                    FftPrecision precision,
+                                                    FftPlanEffort effort) const
+{
+    detail::convolve_finite_pixels(image, "PSF", [&](Image<TSpectral>& finite) {
         // The convolver's working buffers are shared:
         std::lock_guard<std::mutex> lock(optics_mutex_);
-        tbb::this_task_arena::isolate([&] { body_convolver_.apply(finite); });
+        tbb::this_task_arena::isolate([&] { body_convolver_.apply(finite, precision, effort); });
     });
 }
 

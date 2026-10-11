@@ -200,3 +200,70 @@ TEST_CASE("FftConvolver::next_fast_size returns 7-smooth sizes", "[images][convo
     REQUIRE(FftConvolver<float>::next_fast_size(3079) == 3087); // 3^2 * 7^3
     REQUIRE(FftConvolver<float>::next_fast_size(8191) == 8192); // avoids a prime size
 }
+
+TEST_CASE("FftConvolver in single precision rounds no more than rounding_error() says",
+          "[images][convolution]")
+{
+    // A normalized kernel with power-law wings, and frames whose brightest light is a point, a
+    // disc or half the frame. Where the frame convolved in double precision is dark, single
+    // precision may be off only by its rounding, which rounding_error() bounds. Before, there
+    // was no single precision.
+    constexpr int WIDTH = 256;
+    constexpr int HEIGHT = 192;
+    constexpr int RADIUS = 40;
+    Image<double> kernel(2 * RADIUS + 1, 2 * RADIUS + 1, 0.0);
+    double sum = 0.0;
+    for (int y = 0; y < kernel.height(); ++y) {
+        for (int x = 0; x < kernel.width(); ++x) {
+            const double r2 = (x - RADIUS) * (x - RADIUS) + (y - RADIUS) * (y - RADIUS);
+            kernel(x, y) = std::pow(1.0 + r2 / 0.64, -1.5);
+            sum += kernel(x, y);
+        }
+    }
+    for (std::size_t i = 0; i < kernel.size(); ++i) {
+        kernel[i] /= sum;
+    }
+    FftConvolver<double> convolver;
+    convolver.set_kernel(kernel, Resolution{WIDTH, HEIGHT});
+
+    for (int shape = 0; shape < 3; ++shape) {
+        Image<double> frame(WIDTH, HEIGHT, 0.0);
+        for (int y = 0; y < HEIGHT; ++y) {
+            for (int x = 0; x < WIDTH; ++x) {
+                if ((shape == 0 && x == 70 && y == 90) ||
+                    (shape == 1 && std::hypot(x - 128.0, y - 96.0) < 48.0) ||
+                    (shape == 2 && x < WIDTH / 2)) {
+                    frame(x, y) = shape == 0 ? 1e6 : 1e3 * (1.0 + 0.5 * std::sin(0.1 * x + y));
+                }
+            }
+        }
+        Image<double> single = frame;
+        Image<double> twice = frame;
+        convolver.apply(single, FftPrecision::Single);
+        convolver.apply(twice, FftPrecision::Double);
+        double peak = 0.0;
+        for (std::size_t i = 0; i < twice.size(); ++i) {
+            peak = std::max(peak, std::abs(twice[i]));
+        }
+        double worst = 0.0;
+        for (std::size_t i = 0; i < twice.size(); ++i) {
+            if (std::abs(twice[i]) < 1e-5 * peak) {
+                worst = std::max(worst, std::abs(single[i] - twice[i]));
+            }
+        }
+        const double bound = convolver.rounding_error(frame, FftPrecision::Single)[0];
+        INFO("shape " << shape << ": off by " << worst << " where dark, against " << bound);
+        CHECK(worst > 0.0);
+        CHECK(worst <= bound);
+        CHECK(convolver.rounding_error(frame, FftPrecision::Double)[0] < 1e-8 * bound);
+    }
+
+    // Single precision's spectra and buffers take half the memory:
+    FftConvolver<double> single_only;
+    single_only.set_kernel(kernel, Resolution{WIDTH, HEIGHT});
+    Image<double> frame(WIDTH, HEIGHT, 1.0);
+    single_only.apply(frame, FftPrecision::Single);
+    const std::size_t single_bytes = single_only.memory_bytes();
+    single_only.apply(frame, FftPrecision::Double);
+    CHECK(single_only.memory_bytes() == 3 * single_bytes);
+}

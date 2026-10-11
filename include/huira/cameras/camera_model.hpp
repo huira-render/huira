@@ -576,7 +576,11 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     tables_at_(const std::vector<double>& inverse_depths);
     std::vector<std::shared_ptr<const GridPsf<TSpectral>>>
     grids_at_(const std::vector<double>& inverse_depths);
-    void apply_psf_convolution_(Image<TSpectral>& image) const;
+    [[nodiscard]] std::array<double, TSpectral::size()>
+    psf_convolution_error_(const Image<TSpectral>& image, FftPrecision precision) const;
+    void apply_psf_convolution_(Image<TSpectral>& image,
+                                FftPrecision precision,
+                                FftPlanEffort effort) const;
 
     enum class FocusReference { Distance, Diopters, SensorOffset };
     FocusReference focus_reference_ = FocusReference::Distance;
