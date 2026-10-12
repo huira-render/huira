@@ -1100,7 +1100,7 @@ void CameraModel<TSpectral>::disable_scatter()
  * frustum, which depend on the focal length, sensor, intrinsics, distortion and axis
  * convention. The setters only record settings, so they are cheap and can be made in any
  * order, and each kernel or table is rebuilt only when a setting it depends on has changed:
- * refocusing by less than PsfTables::MIN_BLUR of blur, for example, rebuilds nothing.
+ * refocusing while a star's blur stays under PsfTables::MIN_BLUR, for example, rebuilds nothing.
  *
  * Building can take a while, for the PSF's tables or a large set PSF, or a large sensor with
  * distortion. Calling this once the camera is configured keeps that time out of the first
