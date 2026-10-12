@@ -1695,6 +1695,10 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
         return radius;
     };
 
+    // The smallest taper radius the searches below resolve, in pixel widths: a source tapered
+    // to this puts nothing in any pixel but one it is centered on.
+    constexpr double MIN_TAPER = 1e-6;
+
     // Full out to the taper radius, then falling smoothly (with two continuous derivatives) to
     // nothing at twice it; full everywhere with no taper.
     auto taper_weight = [](double r, double taper) {
@@ -1742,8 +1746,11 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                 }
                 hi *= 2.0;
             }
+            // To a thousandth of the radius; a source whose brightest pixel is under tau has
+            // none to speak of, and the search stops at MIN_TAPER rather than halving its way
+            // down to the smallest double (over a thousand steps per source).
             double lo = 0.0;
-            while (hi - lo > 1e-3 * hi) {
+            while (hi - lo > 1e-3 * hi && hi > MIN_TAPER) {
                 const double mid = 0.5 * (lo + hi);
                 (readout(mid) > tau ? lo : hi) = mid;
             }
@@ -1776,7 +1783,7 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
         }
         double lo = 0.0;
         double hi = limit;
-        while (hi - lo > 1e-3 * hi) {
+        while (hi - lo > 1e-3 * hi && hi > MIN_TAPER) {
             const double mid = 0.5 * (lo + hi);
             (readout(mid) > tau ? lo : hi) = mid;
         }
@@ -1811,7 +1818,7 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
         }
         double lo = 0.0;
         double hi = limit;
-        while (hi - lo > 1e-3 * hi) {
+        while (hi - lo > 1e-3 * hi && hi > MIN_TAPER) {
             const double mid = 0.5 * (lo + hi);
             (readout(mid) > tau ? lo : hi) = mid;
         }
