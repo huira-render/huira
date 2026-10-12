@@ -12,4 +12,5 @@ An overview of Huira's architecture and the physics involved.
    image_output
    pixel_conventions
    aperture
+   psf_model
    camera_optics

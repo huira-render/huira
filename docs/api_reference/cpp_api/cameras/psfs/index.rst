@@ -5,4 +5,6 @@ Point Spread Functions
    :maxdepth: 1
 
    psf
+   measured_psf
    airy_disk
+   harvey_shack_scatter
