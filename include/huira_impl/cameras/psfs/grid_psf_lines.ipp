@@ -267,14 +267,20 @@ typename GridPsf<TSpectral>::Light GridPsf<TSpectral>::exact_line_light_(
         }
         const double mid = 0.5 * (a + b);
         const double half = 0.5 * (b - a);
-        // Wholly within the pixel, which is most of a piece longer than the pixel:
+        // Wholly within the pixel, which is most of a piece longer than the pixel. A point is in
+        // the pixel from its lower edges up to, not including, its upper ones, as when still
+        // (see exact_light_()), so that one moving exactly along an edge is in the pixels on one
+        // side of it, not both:
         const double x = mid * d_x - c_x;
         const double y = mid * d_y - c_y;
-        if (std::abs(x) <= half_x - blur && std::abs(y) <= half_y - blur) {
-            inside += b - a;
+        if (blur == 0.0) {
+            if (x >= -half_x && x < half_x && y >= -half_y && y < half_y) {
+                inside += b - a;
+            }
             continue;
         }
-        if (blur == 0.0) {
+        if (std::abs(x) <= half_x - blur && std::abs(y) <= half_y - blur) {
+            inside += b - a;
             continue;
         }
         for (std::size_t i = 0; i < grid_psf_detail::GL4_NODES.size(); ++i) {

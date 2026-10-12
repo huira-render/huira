@@ -369,6 +369,30 @@ TEST_CASE("Without a PSF, a point in focus and a disc under half a pixel are dra
     }
 }
 
+TEST_CASE("Without a PSF, a point in focus moving along a pixel's edge lights the pixels on "
+          "one side",
+          "[render][unresolved][defocus][streak]")
+{
+    // A pixel holds the points from its edge at the lower coordinate up to, not including, the
+    // one at the higher. A path exactly along an edge, as on the axis of a sensor an even number
+    // of pixels across, was counted in the pixels on both sides of it: twice its light.
+    const double axis = SIZE / 2.0;
+    for (const bool across : {true, false}) {
+        const double x = across ? 27.31 : axis;
+        const double y = across ? axis : 27.31;
+        const double dx = across ? 7.3 : 0.0;
+        const double dy = across ? 0.0 : 7.3;
+        INFO("moving " << (across ? "across" : "down") << " along the edge at " << axis);
+        const Image<RGB> image = render_source(false, false, 20.0, x, y, dx, dy);
+        const auto point = [&](int i, int j, double, double) {
+            return path_share(i, j, x, y, dx, dy);
+        };
+        CHECK(worst_difference(image, expected_on_frame(x, y, dx, dy, 2.0, point, 1)) < 1e-5);
+        const double still = total(render_source(false, false, 20.0, x, y, 0.0, 0.0));
+        CHECK(std::abs(total(image) / still - 1.0) < 1e-5);
+    }
+}
+
 TEST_CASE("A moving source with a set PSF keeps all of its light, however faint",
           "[render][unresolved][psf][measured][streak]")
 {
