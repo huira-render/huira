@@ -99,8 +99,9 @@ inline double arc_in_rectangle(double x0, double x1, double y0, double y1, doubl
  * than tau; beyond, its light is averaged over them. No pixel is off by more than about 2 tau.
  * A source is always drawn out to where it holds 90% of its light. A source with a PSF set with
  * CameraModel::set_psf() or set_measured_psf(), still or moving, is drawn the same way from the
- * PSF's grid (see GridPsf), without rings to follow, as is the defocus blur without a PSF. RGB
- * sensors read out each channel; others, their sum.
+ * PSF's grid (see GridPsf), without rings to follow, as is the defocus blur without a PSF; where
+ * moving, its faint wings are interpolated between pixels where that is off by no more than half
+ * of tau (see GridPsf::draw_line()). RGB sensors read out each channel; others, their sum.
  *
  * The default, DEFAULT_UNRESOLVED_TAPER, ends halos where a square-root stretch of a noiseless
  * frame to 30 electrons cannot show it. Larger values draw fewer pixels, and so take less time; 0
@@ -1565,8 +1566,11 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
         /// with the grid's scale (see GridPsf::scale()).
         bool from_grid = false;
         /// For a line drawn from its item's grid, whether from the tables for its direction
-        /// rather than directly (see GridPsf::draw_line_direct()).
+        /// rather than directly (see GridPsf::draw_line_direct()), and the share of half of tau
+        /// interpolating its faint wings may be off by: its path's lines overlap there, and
+        /// their errors add.
         bool from_tables = false;
+        float tolerance_share = 1.f;
         std::array<double, TSpectral::size()> scale{};
     };
 
@@ -2075,6 +2079,7 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
             return cross * cross <= LINE_TOLERANCE * LINE_TOLERANCE * (cx * cx + cy * cy);
         };
         constexpr float RADII_TOLERANCE = 0.01f;
+        const std::size_t first_sample = batch.samples.size();
         LineRadii radii;
         TSpectral radii_density{0.f};
         bool have_radii = false;
@@ -2150,6 +2155,13 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                 emit_line(item_index, start, end, length, power, radii, source_grid, batch);
             }
             k = last + 1;
+        }
+        // The path's lines drawn from a grid share the tolerance for interpolating their wings:
+        if (source_grid != nullptr && batch.samples.size() > first_sample + 1) {
+            const float lines = static_cast<float>(batch.samples.size() - first_sample);
+            for (std::size_t i = first_sample; i < batch.samples.size(); ++i) {
+                batch.samples[i].tolerance_share = 1.f / lines;
+            }
         }
     };
 
@@ -2573,8 +2585,18 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                     const TSpectral& power = sample.power;
 
                     if (sample.line && sample.from_grid) {
-                        // A piece of a moving source's path, drawn from its grid:
+                        // A piece of a moving source's path, drawn from its grid, its faint wings
+                        // interpolated where that is off by no more than its share of half of
+                        // tau:
                         const auto weight = [&](double r) { return taper_weight(r, sample.taper); };
+                        typename GridPsf<TSpectral>::LineTolerance tolerance;
+                        for (std::size_t c = 0; c < TSpectral::size(); ++c) {
+                            tolerance.electrons[c] =
+                                static_cast<double>(power[c]) * electrons_per_power[c];
+                        }
+                        tolerance.electrons_off =
+                            0.5 * tau * static_cast<double>(sample.tolerance_share);
+                        tolerance.per_channel = PER_CHANNEL_READOUT;
                         entry_light[k] = sample.from_tables
                                              ? item.grid->draw_line(received_power,
                                                                     tile_x0,
@@ -2585,7 +2607,8 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                                                                     sample.end,
                                                                     power,
                                                                     sample.draw,
-                                                                    weight)
+                                                                    weight,
+                                                                    tolerance)
                                              : item.grid->draw_line_direct(received_power,
                                                                            tile_x0,
                                                                            tile_x1,
@@ -2595,7 +2618,8 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                                                                            sample.end,
                                                                            power,
                                                                            sample.draw,
-                                                                           weight);
+                                                                           weight,
+                                                                           tolerance);
                     } else if (sample.line) {
                         // A piece of a moving source's path, drawn from the tables (which keep
                         // to the pixels within its reach), with the light drawn added up as for

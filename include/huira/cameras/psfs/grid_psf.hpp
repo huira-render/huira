@@ -3,6 +3,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -82,9 +83,9 @@ class GridPsf {
      * light per unit length it puts in a pixel whose center is p along the normal (-sin, cos) from
      * it, and q along it from where it starts, if it runs from -infinity to there: the pixels'
      * light (as pixel() gives it) integrated along it, C(p, q). The whole line's is C(p, infinity),
-     * the line spread. Both are tabulated every step from first, in p and in q, out to where the
-     * PSF reaches (support), as cubic splines' coefficients, channel by channel at each: C by
-     * row of p.
+     * the line spread. Both are tabulated every step (LINE_TABLE_STEP, or as the PSF was sampled)
+     * from first, in p and in q, out to where the PSF reaches (support), as cubic splines'
+     * coefficients in single precision, channel by channel at each: C by row of p.
      */
     struct Line {
         double cos = 1.0;
@@ -93,11 +94,11 @@ class GridPsf {
         double step = 1.0;
         int count = 0;
         double support = 0.0;
-        std::vector<double> spread;
-        std::vector<double> cumulative;
+        std::vector<float> spread;
+        std::vector<float> cumulative;
         [[nodiscard]] std::size_t memory_bytes() const
         {
-            return (spread.size() + cumulative.size()) * sizeof(double);
+            return (spread.size() + cumulative.size()) * sizeof(float);
         }
     };
 
@@ -115,6 +116,25 @@ class GridPsf {
     void prepare_line(int direction) const;
 
     [[nodiscard]] double line_envelope(std::size_t channel, double r) const;
+
+    /// The cells a line's faint wings are interpolated across, pixels on a side (see
+    /// draw_line_pixels_()).
+    static constexpr int WING_CELL = 4;
+    /// How many times the tolerance a cell's light may come to, by the line's envelope, for it to
+    /// be interpolated (see draw_line_pixels_()).
+    static constexpr double WING_LIGHT = 100.0;
+
+    /**
+     * @brief How far off a line may be in a pixel by interpolating across its faint wings (see
+     * draw_line_pixels_()): the electrons each channel of the light it draws in a pixel, as a
+     * fraction of its power, comes to, and at most how many electrons interpolating may put in or
+     * take from a pixel's readout, of every channel or of their sum. None by default.
+     */
+    struct LineTolerance {
+        std::array<double, TSpectral::size()> electrons{};
+        double electrons_off = 0.0;
+        bool per_channel = false;
+    };
     [[nodiscard]] Light line_scale() const;
     [[nodiscard]] std::size_t line_cache_bytes() const;
 
@@ -128,7 +148,8 @@ class GridPsf {
                     const std::array<double, 2>& end,
                     const TSpectral& power,
                     double reach,
-                    const Weight& weight) const;
+                    const Weight& weight,
+                    const LineTolerance& tolerance = {}) const;
 
     template <class Weight>
     Light draw_line_direct(Image<TSpectral>& target,
@@ -140,7 +161,8 @@ class GridPsf {
                            const std::array<double, 2>& end,
                            const TSpectral& power,
                            double reach,
-                           const Weight& weight) const;
+                           const Weight& weight,
+                           const LineTolerance& tolerance = {}) const;
 
     [[nodiscard]] TSpectral pixel(double dx, double dy, const Light& scale) const;
     [[nodiscard]] Light scale(double source_x, double source_y) const;
@@ -190,6 +212,10 @@ class GridPsf {
     /// Drawing a line directly, how far off each panel's integral may be, per unit of its length,
     /// as a fraction of the brightest the collected PSF gets (see direct_setup_()).
     static constexpr double DIRECT_TOLERANCE = 1e-3;
+    /// The finest step lines' tables are made with, in pixels: the light a line puts in a pixel is
+    /// smooth enough, being the PSF integrated over the pixel and along the line, that a spline
+    /// through it this finely is within about 1e-4 of its peak.
+    static constexpr double LINE_TABLE_STEP = 1.0 / 8.0;
     /// The bins, per pixel along the axes, the panels' lengths are set for by distance.
     static constexpr double PANEL_BINS = 4.0;
     /// Coefficients beyond the samples on every side, mirrored, which the spline takes within
@@ -225,7 +251,7 @@ class GridPsf {
     double reach_ = 0.0;
 
     GridPsf() = default;
-    [[nodiscard]] static GridPsf integrated_(const GridPsf& point);
+    [[nodiscard]] static GridPsf integrated_(const GridPsf& point, double finest = SAMPLE_STEP);
 
     /// By distance bin, the most light per unit length a line puts in a pixel there or beyond.
     std::vector<std::array<double, N>> line_envelope_;
@@ -236,6 +262,8 @@ class GridPsf {
     struct LineCache {
         std::once_flag collected_once;
         std::shared_ptr<const GridPsf> integrated;
+        std::once_flag source_once;
+        std::shared_ptr<const GridPsf> source;
         std::once_flag scale_once;
         Light scale{};
         std::once_flag direct_once;
@@ -244,6 +272,9 @@ class GridPsf {
         /// the PSF's edge takes from there, both ways.
         std::vector<double> panel_limit;
         std::vector<double> panels_from;
+        /// The collected PSF's coefficients in single precision, which lines are drawn directly
+        /// from, in half the memory and time (see add_collected_()).
+        std::vector<float> coefficients;
         std::mutex mutex;
         struct Entry {
             std::shared_ptr<const Line> line;
@@ -255,17 +286,43 @@ class GridPsf {
     };
     std::shared_ptr<LineCache> line_cache_ = std::make_shared<LineCache>();
     [[nodiscard]] const GridPsf& collected_() const;
+    [[nodiscard]] const GridPsf& line_source_() const;
     [[nodiscard]] const LineCache& direct_setup_() const;
     [[nodiscard]] double panel_length_(const LineCache& cache, double near, double far_limit) const;
+    void
+    add_collected_(const LineCache& cache, double x, double y, double weight, Light& sum) const;
     /// Where a line's tables are made: every step from -half steps, out to support either side.
     struct LineLayout {
         double support = 0.0;
         double step = 1.0;
         int half = 0;
+        /// The quadrature's panels in each step, each one of the collected PSF's steps.
+        int panels = 1;
     };
     [[nodiscard]] LineLayout line_layout_() const;
     [[nodiscard]] std::shared_ptr<const Line> line_at_(int index) const;
     [[nodiscard]] Line build_line_(double cos, double sin) const;
+    /// Where along a line a pixel's offset from it is within the PSF's rectangle, and what cuts
+    /// that off at either end: 0 the line's ends, 1 the rectangle's edges across x, 2 across y,
+    /// or -1 if nowhere (see clip_()).
+    struct Clip {
+        std::array<double, 2> range{};
+        std::array<int, 2> cut{0, 0};
+    };
+    [[nodiscard]] Clip clip_(double qx, double qy, double ex, double ey, double length) const;
+    template <class Weight, class LightAt>
+    Light draw_line_pixels_(Image<TSpectral>& target,
+                            int x_begin,
+                            int x_end,
+                            int y_begin,
+                            int y_end,
+                            const std::array<double, 2>& start,
+                            const std::array<double, 2>& end,
+                            const TSpectral& power,
+                            double reach,
+                            const Weight& weight,
+                            const LineTolerance& tolerance,
+                            const LightAt& light_at) const;
     [[nodiscard]] static Light line_spread_(const Line& line, double p);
     [[nodiscard]] static Light line_cumulative_(const Line& line, double p, double q);
 
