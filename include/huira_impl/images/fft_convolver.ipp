@@ -597,10 +597,10 @@ void FftConvolver<PixelT>::apply(Image<PixelT>& image,
  * wide, rising with log2(n): ROUNDING_FACTOR holds the largest with a margin of 2.5.
  */
 template <IsImagePixel PixelT>
-std::array<double, FftConvolver<PixelT>::CHANNELS>
+typename FftConvolver<PixelT>::ChannelValues
 FftConvolver<PixelT>::rounding_error(const Image<PixelT>& image, FftPrecision precision) const
 {
-    std::array<double, CHANNELS> largest{};
+    ChannelValues largest{};
     for (std::size_t i = 0; i < image.size(); ++i) {
         for (std::size_t c = 0; c < CHANNELS; ++c) {
             largest[c] = std::max(largest[c], std::abs(detail::get_pixel_channel(image[i], c)));
@@ -611,15 +611,14 @@ FftConvolver<PixelT>::rounding_error(const Image<PixelT>& image, FftPrecision pr
 
 /// The same for an image whose largest value in each channel is given.
 template <IsImagePixel PixelT>
-std::array<double, FftConvolver<PixelT>::CHANNELS>
-FftConvolver<PixelT>::rounding_error(const std::array<double, CHANNELS>& largest,
-                                     FftPrecision precision) const
+typename FftConvolver<PixelT>::ChannelValues
+FftConvolver<PixelT>::rounding_error(const ChannelValues& largest, FftPrecision precision) const
 {
     const double eps = precision == FftPrecision::Single ? 0.5 * 1.1920928955078125e-7
                                                          : 0.5 * 2.220446049250313e-16;
     const double points = static_cast<double>(padded_width_) * static_cast<double>(padded_height_);
     const double scale = ROUNDING_FACTOR * eps * std::log2(std::max(points, 2.0));
-    std::array<double, CHANNELS> error{};
+    ChannelValues error{};
     for (std::size_t c = 0; c < CHANNELS; ++c) {
         error[c] = scale * largest[c] * kernel_sum_[c];
     }

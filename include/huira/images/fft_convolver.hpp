@@ -62,6 +62,10 @@ template <IsImagePixel PixelT>
 class FftConvolver {
   public:
     static constexpr std::size_t CHANNELS = ImagePixelTraits<PixelT>::channels;
+    /// A value per channel. Named, so that definitions outside the class can name their return
+    /// type as typename FftConvolver<PixelT>::ChannelValues, which MSVC matches to the
+    /// declaration where it does not match std::array<double, FftConvolver<PixelT>::CHANNELS>.
+    using ChannelValues = std::array<double, CHANNELS>;
 
     FftConvolver();
     ~FftConvolver();
@@ -78,10 +82,10 @@ class FftConvolver {
     void apply(Image<PixelT>& image, FftPrecision precision = FftPrecision::Double) const;
     void apply(Image<PixelT>& image, FftPrecision precision, FftPlanEffort effort) const;
 
-    [[nodiscard]] std::array<double, CHANNELS> rounding_error(const Image<PixelT>& image,
-                                                              FftPrecision precision) const;
-    [[nodiscard]] std::array<double, CHANNELS>
-    rounding_error(const std::array<double, CHANNELS>& largest, FftPrecision precision) const;
+    [[nodiscard]] ChannelValues rounding_error(const Image<PixelT>& image,
+                                               FftPrecision precision) const;
+    [[nodiscard]] ChannelValues rounding_error(const ChannelValues& largest,
+                                               FftPrecision precision) const;
 
     /// Whether set_kernel() has been called successfully.
     bool is_ready() const { return ready_; }
