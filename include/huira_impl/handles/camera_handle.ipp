@@ -510,7 +510,26 @@ void CameraModelHandle<TSpectral>::set_aperture(Args&&... args) const
 }
 
 /**
- * @brief Set the point spread function (PSF) model for the camera.
+ * @brief Turn the aperture's diffraction pattern on (the default) or off. See
+ * CameraModel::enable_diffraction().
+ * @param diffraction True to turn it on, false to turn it off.
+ */
+template <IsSpectral TSpectral>
+void CameraModelHandle<TSpectral>::enable_diffraction(bool diffraction) const
+{
+    this->get_()->enable_diffraction(diffraction);
+}
+
+/// Whether the aperture's diffraction pattern is on (the default).
+template <IsSpectral TSpectral>
+bool CameraModelHandle<TSpectral>::diffraction_enabled() const
+{
+    return this->get_()->diffraction_enabled();
+}
+
+/**
+ * @brief Set a point spread function (PSF) in place of the aperture's diffraction pattern. See
+ * CameraModel::set_psf().
  * @tparam TPSF PSF model type
  * @tparam Args Constructor arguments for the PSF
  * @param args Arguments to construct the PSF
@@ -523,99 +542,13 @@ void CameraModelHandle<TSpectral>::set_psf(Args&&... args) const
 }
 
 /**
- * @brief Use the aperture's diffraction pattern as the PSF (point spread function), or stop.
+ * @brief Set a measured (user-supplied) PSF in place of the aperture's diffraction pattern. See
+ * CameraModel::set_measured_psf().
  *
- * The aperture's PSF is the default. True uses it, with the automatic stamp size if it was not
- * already in use (and keeps its stamp size if it was). False stops using it, leaving no PSF; a
- * PSF set with set_psf() or set_measured_psf() is left as it is. (In the interim: the API
- * rework replaces this, when diffraction and the PSF as a whole are set separately.)
- *
- * @param value True to use the aperture's PSF, false to stop using it.
- */
-template <IsSpectral TSpectral>
-void CameraModelHandle<TSpectral>::use_aperture_psf(bool value) const
-{
-    auto& camera = *this->get_();
-    if (value) {
-        if (!camera.use_aperture_psf_) {
-            camera.use_aperture_psf();
-        }
-    } else if (camera.use_aperture_psf_) {
-        camera.delete_psf();
-    }
-}
-
-/**
- * @brief Use the aperture's diffraction pattern as the PSF (the default), with the given stamp
- * size. See CameraModel::use_aperture_psf().
- * @param radius Radius in pixels of the stamps get_psf_kernel() gives; 0 for automatic.
- *        Unresolved sources are drawn from the PSF's tables.
- * @param banks Subpixel positions per axis the stamps are made for.
- */
-template <IsSpectral TSpectral>
-void CameraModelHandle<TSpectral>::use_aperture_psf(int radius, int banks) const
-{
-    this->get_()->use_aperture_psf(radius, banks);
-}
-
-/**
- * @brief Choose whether a PSF or scattered light that is set blurs resolved bodies. See
- * CameraModel::enable_psf_convolution().
- * @param convolve_psf True (the default) to blur resolved bodies, false to leave them sharp.
- */
-template <IsSpectral TSpectral>
-void CameraModelHandle<TSpectral>::enable_psf_convolution(bool convolve_psf) const
-{
-    this->get_()->enable_psf_convolution(convolve_psf);
-}
-
-template <IsSpectral TSpectral>
-void CameraModelHandle<TSpectral>::set_psf_convolution_radius(int radius) const
-{
-    this->get_()->set_psf_convolution_radius(radius);
-}
-
-/**
- * @brief Remove the PSF, the aperture's diffraction pattern (the default) included. See
- * CameraModel::delete_psf().
- */
-template <IsSpectral TSpectral>
-void CameraModelHandle<TSpectral>::delete_psf() const
-{
-    this->get_()->delete_psf();
-}
-
-/// Whether the PSF is the aperture's diffraction pattern (the default).
-template <IsSpectral TSpectral>
-bool CameraModelHandle<TSpectral>::uses_aperture_psf() const
-{
-    return this->get_()->uses_aperture_psf();
-}
-
-/// Whether the camera has a PSF: the aperture's (the default), or one that was set.
-template <IsSpectral TSpectral>
-bool CameraModelHandle<TSpectral>::has_psf() const
-{
-    return this->get_()->has_psf();
-}
-
-/// Whether a PSF or scattered light that is set blurs resolved bodies (the default).
-template <IsSpectral TSpectral>
-bool CameraModelHandle<TSpectral>::psf_convolution_enabled() const
-{
-    return this->get_()->psf_convolution_enabled();
-}
-
-/**
- * @brief Sets a measured (user-supplied) PSF as the core PSF of the camera.
- *
- * @param data Measured PSF samples, centered on the image.
+ * @param data Measured PSF samples, centered on the image, taken whole.
  * @param samples_per_pixel Measurement samples per sensor pixel per axis.
  * @param sampling What the samples are: the PSF's intensity at points, or the light a pixel
  *                 centered there receives (see PSFSampling).
- * @param radius How far out the measurement is taken, in sensor pixels from its center (0 =
- *        auto); also get_psf_kernel()'s stamps' radius.
- * @param banks Subpixel positions per axis get_psf_kernel()'s stamps are made for.
  * @param focus Whether the samples are a point's in focus, which the camera's focus blurs, or
  *              already hold its defocus (see PSFFocus).
  */
@@ -623,11 +556,49 @@ template <IsSpectral TSpectral>
 void CameraModelHandle<TSpectral>::set_measured_psf(const Image<TSpectral>& data,
                                                     float samples_per_pixel,
                                                     PSFSampling sampling,
-                                                    int radius,
-                                                    int banks,
                                                     PSFFocus focus) const
 {
-    this->get_()->set_measured_psf(data, samples_per_pixel, sampling, radius, banks, focus);
+    this->get_()->set_measured_psf(data, samples_per_pixel, sampling, focus);
+}
+
+/// Remove a PSF that was set, going back to the aperture's diffraction pattern, if it is on.
+template <IsSpectral TSpectral>
+void CameraModelHandle<TSpectral>::clear_psf() const
+{
+    this->get_()->clear_psf();
+}
+
+/// Whether a PSF was set in place of the aperture's diffraction pattern.
+template <IsSpectral TSpectral>
+bool CameraModelHandle<TSpectral>::has_set_psf() const
+{
+    return this->get_()->has_set_psf();
+}
+
+/**
+ * @brief Set scattered light, in angles. See CameraModel::set_scatter().
+ */
+template <IsSpectral TSpectral>
+void CameraModelHandle<TSpectral>::set_scatter(float fraction,
+                                               float slope,
+                                               units::Radian shoulder_angle,
+                                               std::optional<units::Radian> outer_angle) const
+{
+    this->get_()->set_scatter(fraction, slope, shoulder_angle, outer_angle);
+}
+
+/// Turn scattered light off (the default).
+template <IsSpectral TSpectral>
+void CameraModelHandle<TSpectral>::disable_scatter() const
+{
+    this->get_()->disable_scatter();
+}
+
+/// Whether scattered light is on.
+template <IsSpectral TSpectral>
+bool CameraModelHandle<TSpectral>::scatter_enabled() const
+{
+    return this->get_()->scatter_enabled();
 }
 
 /**
@@ -650,64 +621,26 @@ void CameraModelHandle<TSpectral>::disable_veiling_glare() const
 }
 
 /**
- * @brief Set scattered light in pixels. See CameraModel::set_harvey_shack_scatter().
- * @param scatter_fraction Fraction of light scattered, in [0, 1)
- * @param falloff_exponent Power-law exponent of the falloff (typically 2 to 3)
- * @param r0 Shoulder radius in pixels: the profile is flat within it and falls off as
- *        r^-falloff_exponent beyond it (default 0.5)
- * @param radius Outer radius in pixels, beyond the shoulder (default 0: none); an exponent of 2
- *        or less needs one
+ * @brief Choose whether the PSF and scattered light blur resolved bodies. See
+ * CameraModel::enable_psf_convolution().
+ * @param convolve_psf True (the default) to blur resolved bodies, false to leave them sharp.
  */
 template <IsSpectral TSpectral>
-void CameraModelHandle<TSpectral>::set_harvey_shack_scatter(float scatter_fraction,
-                                                            float falloff_exponent,
-                                                            float r0,
-                                                            float radius) const
+void CameraModelHandle<TSpectral>::enable_psf_convolution(bool convolve_psf) const
 {
-    this->get_()->set_harvey_shack_scatter(scatter_fraction, falloff_exponent, r0, radius);
+    this->get_()->enable_psf_convolution(convolve_psf);
+}
+
+/// Whether the PSF and scattered light blur resolved bodies (the default).
+template <IsSpectral TSpectral>
+bool CameraModelHandle<TSpectral>::psf_convolution_enabled() const
+{
+    return this->get_()->psf_convolution_enabled();
 }
 
 /**
- * @brief Disable Harvey-Shack scatter effects.
- */
-template <IsSpectral TSpectral>
-void CameraModelHandle<TSpectral>::disable_harvey_shack_scatter() const
-{
-    this->get_()->disable_harvey_shack_scatter();
-}
-
-/**
- * @brief Set scattered light in angles. See CameraModel::set_scatter().
- */
-template <IsSpectral TSpectral>
-void CameraModelHandle<TSpectral>::set_scatter(float fraction,
-                                               float slope,
-                                               units::Radian shoulder_angle,
-                                               std::optional<units::Radian> outer_angle) const
-{
-    this->get_()->set_scatter(fraction, slope, shoulder_angle, outer_angle);
-}
-
-/// Get the radius in pixels of the PSF's stamps for unresolved sources; 0 without a PSF.
-template <IsSpectral TSpectral>
-int CameraModelHandle<TSpectral>::get_psf_radius() const
-{
-    return this->get_()->get_psf_radius();
-}
-
-/**
- * @brief Get the PSF's stamp for an unresolved source at a subpixel position, building the
- * stamps first if needed. See CameraModel::get_psf_kernel().
- */
-template <IsSpectral TSpectral>
-const Image<TSpectral>& CameraModelHandle<TSpectral>::get_psf_kernel(float u, float v) const
-{
-    return this->get_()->get_psf_kernel(u, v);
-}
-
-/**
- * @brief The light an unresolved source puts in each pixel around it, per channel. See
- * CameraModel::psf_image().
+ * @brief The light an unresolved source puts in each pixel around it, per channel, as the
+ * renderer draws it. See CameraModel::psf_image().
  */
 template <IsSpectral TSpectral>
 Image<TSpectral> CameraModelHandle<TSpectral>::psf_image(int radius,
@@ -718,23 +651,28 @@ Image<TSpectral> CameraModelHandle<TSpectral>::psf_image(int radius,
     return this->get_()->psf_image(radius, x_offset, y_offset, range);
 }
 
-/**
- * @brief Get the whole-image convolution kernel: the PSF and scattered light together. See
- * CameraModel::get_psf_convolution_kernel().
- */
+/// The aperture's diffraction pattern alone, in focus. See CameraModel::diffraction_image().
 template <IsSpectral TSpectral>
-const Image<TSpectral>& CameraModelHandle<TSpectral>::get_psf_convolution_kernel() const
+Image<TSpectral>
+CameraModelHandle<TSpectral>::diffraction_image(int radius, float x_offset, float y_offset) const
 {
-    return this->get_()->get_psf_convolution_kernel();
+    return this->get_()->diffraction_image(radius, x_offset, y_offset);
 }
 
-/**
- * @brief Get the scattered light's kernel alone. See CameraModel::get_psf_wings_kernel().
- */
+/// The scattered light alone, in focus. See CameraModel::scatter_image().
 template <IsSpectral TSpectral>
-const Image<TSpectral>& CameraModelHandle<TSpectral>::get_psf_wings_kernel() const
+Image<TSpectral>
+CameraModelHandle<TSpectral>::scatter_image(int radius, float x_offset, float y_offset) const
 {
-    return this->get_()->get_psf_wings_kernel();
+    return this->get_()->scatter_image(radius, x_offset, y_offset);
+}
+
+/// The defocus blur alone, of a point at a range or a star. See CameraModel::defocus_image().
+template <IsSpectral TSpectral>
+Image<TSpectral> CameraModelHandle<TSpectral>::defocus_image(
+    int radius, float x_offset, float y_offset, std::optional<units::Meter> range) const
+{
+    return this->get_()->defocus_image(radius, x_offset, y_offset, range);
 }
 
 /**
@@ -855,11 +793,12 @@ units::Micrometer CameraModelHandle<TSpectral>::focus_sensor_offset() const
     return this->get_()->focus_sensor_offset();
 }
 
-/// Get the radius, in pixels, of the defocus blur applied to unresolved sources (0 if in focus).
+/// The radius, in pixel widths, of the defocus blur of a point at a range, or of a star. See
+/// CameraModel::defocus_blur_radius().
 template <IsSpectral TSpectral>
-float CameraModelHandle<TSpectral>::defocus_blur_radius() const
+float CameraModelHandle<TSpectral>::defocus_blur_radius(std::optional<units::Meter> range) const
 {
-    return this->get_()->defocus_blur_radius();
+    return this->get_()->defocus_blur_radius(range);
 }
 
 /**

@@ -4,7 +4,6 @@
 #include <string>
 
 #include "huira/cameras/apertures/aperture.hpp"
-#include "huira/cameras/psfs/airy_disk.hpp"
 #include "huira/concepts/spectral_concepts.hpp"
 #include "huira/core/constants.hpp"
 #include "huira/units/units.hpp"
@@ -103,27 +102,6 @@ template <IsSpectral TSpectral>
 units::Meter CircularAperture<TSpectral>::get_diameter() const
 {
     return units::Meter(diameter_);
-}
-
-/**
- * @brief Creates a point spread function (PSF) for the circular aperture.
- *
- * Constructs an Airy disk PSF using the aperture's diameter and the provided optical parameters.
- *
- * @param focal_length The focal length of the optical system in meters.
- * @param pitch_x The pixel pitch in the x direction in meters.
- * @param pitch_y The pixel pitch in the y direction in meters.
- * @param radius The radius of the PSF kernel in pixels.
- * @param banks The number of spectral banks.
- * @return A unique pointer to the created PSF object.
- */
-template <IsSpectral TSpectral>
-std::unique_ptr<PSF<TSpectral>> CircularAperture<TSpectral>::make_psf(
-    units::Meter focal_length, units::Meter pitch_x, units::Meter pitch_y, int radius, int banks)
-{
-    units::Meter diameter(diameter_);
-    return std::make_unique<AiryDisk<TSpectral>>(
-        focal_length, pitch_x, pitch_y, diameter, radius, banks);
 }
 
 template <IsSpectral TSpectral>

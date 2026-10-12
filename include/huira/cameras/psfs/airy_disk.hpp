@@ -22,8 +22,7 @@ class AiryDisk : public PSF<TSpectral> {
              units::Meter pitch_x,
              units::Meter pitch_y,
              units::Meter aperture_diameter,
-             int radius,
-             int banks);
+             int radius);
     ~AiryDisk() override = default;
 
     AiryDisk(const AiryDisk&) = delete;

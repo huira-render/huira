@@ -29,6 +29,24 @@ inline const std::map<std::string, std::string>& removed_camera_methods()
         {"set_sensor_size", "v0.9.4. Use configure_sensor_from_size() instead."},
         {"set_sensor_rotation", "v0.9.10. Use set_sensor_roll() instead."},
         {"set_sensor_simulate_noise", "v0.9.10. Use enable_sensor_noise() instead."},
+        {"use_aperture_psf",
+         "v0.9.10. The aperture's diffraction pattern is on by default: use "
+         "enable_diffraction() to turn it on or off, and clear_psf() to go back to it from a "
+         "PSF that was set. Its extent is automatic."},
+        {"delete_psf",
+         "v0.9.10. Use clear_psf() to remove a PSF that was set, and enable_diffraction(False) "
+         "to turn the aperture's diffraction pattern off."},
+        {"set_psf_convolution_radius",
+         "v0.9.10. Resolved bodies are convolved with the whole PSF across the frame; use "
+         "psf_image() to see it."},
+        {"set_harvey_shack_scatter",
+         "v0.9.10. Use set_scatter(), which takes the shoulder and outer radius as angles."},
+        {"disable_harvey_shack_scatter", "v0.9.10. Use disable_scatter() instead."},
+        {"get_psf_radius",
+         "v0.9.10. Sources are drawn as far as their light reaches (see "
+         "Renderer.set_unresolved_taper()); psf_image() takes the radius to show."},
+        {"get_psf_convolution_kernel",
+         "v0.9.10. Use psf_image(), the whole PSF resolved bodies are convolved with."},
     };
     return removed;
 }
@@ -353,93 +371,43 @@ inline void bind_camera_model_handle(py::module_& m)
              "sensor's axes (in which projections and rays are given) to the camera's: the roll "
              "about the optical axis.")
 
-        // PSF
-        .def("use_aperture_psf",
-             py::overload_cast<bool>(&HandleType::use_aperture_psf, py::const_),
-             py::arg("value"),
-             "The aperture's diffraction pattern is the PSF by default. True uses it, with the "
-             "automatic stamp size if it was not already in use (and keeps its stamp size if it "
-             "was). False stops using it, leaving no PSF; a PSF set with set_measured_psf() is "
-             "left as it is. (In the interim: this goes when diffraction and the PSF as a whole "
-             "are set separately.)")
-        .def("use_aperture_psf",
-             py::overload_cast<int, int>(&HandleType::use_aperture_psf, py::const_),
-             py::arg("radius") = 0,
-             py::arg("banks") = CameraModel<TSpectral>::DEFAULT_PSF_BANKS,
-             "Use the aperture's diffraction pattern as the PSF (the default), with stamps of "
-             "the given radius in pixels (0: automatic, holding about 99% of the light, from "
-             "16 to 64 px) and subpixel positions per axis, as get_psf_kernel() gives them. "
-             "Unresolved sources are drawn from the PSF's tables (see psf_image()).")
-        .def("uses_aperture_psf",
-             &HandleType::uses_aperture_psf,
-             "Whether the PSF is the aperture's diffraction pattern (the default).")
-        .def("has_psf",
-             &HandleType::has_psf,
-             "Whether the camera has a PSF: the aperture's (the default), or one that was set. "
-             "False after delete_psf().")
-        .def("enable_psf_convolution",
-             &HandleType::enable_psf_convolution,
-             py::arg("convolve_psf") = true,
-             "Choose whether a PSF or scattered light that is set blurs resolved bodies (the "
-             "path-traced image). On by default. Off, bodies are sharp, and rendering is faster "
-             "without the whole-image convolution; unresolved sources, such as stars, get the "
-             "PSF and scattered light either way. With the aperture's PSF, bodies get the whole "
-             "of it, across the frame, in focus: path tracing gives them their defocus.")
-        .def("psf_convolution_enabled",
-             &HandleType::psf_convolution_enabled,
-             "Whether a PSF or scattered light that is set blurs resolved bodies (the "
-             "default). See enable_psf_convolution().")
-        .def("delete_psf",
-             &HandleType::delete_psf,
-             "Remove the PSF, the aperture's diffraction pattern (the default) included: "
-             "unresolved sources then put all their light in the pixel they fall in. "
-             "use_aperture_psf() brings the aperture's back.")
-        .def("set_psf_convolution_radius",
-             &HandleType::set_psf_convolution_radius,
-             py::arg("radius"),
-             "Set the radius (pixels) of the whole-image PSF convolution kernel, independent "
-             "of the polyphase stamping radius. Large frame-wide radii are supported. With the "
-             "aperture's PSF, bodies get the whole PSF whatever the radius, and it sets only "
-             "get_psf_convolution_kernel()'s size.")
+        // PSF: the aperture's diffraction pattern, or a PSF set in its place, with scattered
+        // light, blurred by each source's defocus
+        .def("enable_diffraction",
+             &HandleType::enable_diffraction,
+             py::arg("diffraction") = true,
+             "Turn the aperture's diffraction pattern on (the default) or off. On, unresolved "
+             "sources are drawn with it, averaged over each spectral bin, and resolved bodies "
+             "are convolved with it; off, a source in focus puts that light in the pixel it "
+             "falls in. Scattered light and defocus are added either way. A PSF set with "
+             "set_measured_psf() takes its place while set; clear_psf() goes back to it.")
+        .def("diffraction_enabled",
+             &HandleType::diffraction_enabled,
+             "Whether the aperture's diffraction pattern is on (the default).")
         .def("set_measured_psf",
              &HandleType::set_measured_psf,
              py::arg("data"),
              py::arg("samples_per_pixel"),
              py::arg("sampling"),
-             py::arg("radius") = 0,
-             py::arg("banks") = CameraModel<TSpectral>::DEFAULT_PSF_BANKS,
              py::arg("focus") = PSFFocus::InFocus,
-             "Use a measured (user-supplied) PSF as the camera's core PSF, in place of the "
-             "aperture's. 'data' is an Image of centered PSF samples; 'samples_per_pixel' is "
-             "the measurement sampling density per sensor pixel per axis; 'sampling' says what "
-             "the samples are (see PSFSampling): PSFSampling.PixelIntegrated if the data came "
-             "from the sensor being simulated, such as a star's image, and otherwise almost "
-             "always PSFSampling.PointSampled, such as optical design software's PSF. The PSF is "
-             "taken as complete out to 'radius' pixels from its center (0: as far as the "
-             "measurement reaches, up to 64), and still sources are drawn from the spline "
-             "through the samples at their exact position. 'focus' says whether it is a point's "
-             "in focus, which the camera's focus blurs (the default), or already holds the "
-             "camera's defocus (see PSFFocus).")
-
-        // Stray light
-        .def("set_veiling_glare",
-             &HandleType::set_veiling_glare,
-             py::arg("alpha"),
-             "Redistribute the given fraction of total collected energy uniformly across the "
-             "image (veiling glare).")
-        .def("disable_veiling_glare", &HandleType::disable_veiling_glare)
-        .def("set_harvey_shack_scatter",
-             &HandleType::set_harvey_shack_scatter,
-             py::arg("scatter_fraction"),
-             py::arg("falloff_exponent"),
-             py::arg("r0") = 0.5f,
-             py::arg("radius") = 0.f,
-             "Add Harvey-Shack scattered-light wings, as set_scatter() does in angles: "
-             "'scatter_fraction' of the light follows a power-law halo with the given "
-             "falloff exponent (typically 2-3), flat within r0 (pixels), and falling two powers "
-             "faster beyond an optional outer radius (pixels; 0 = none). An exponent of 2 or "
-             "less needs a radius. Included in psf_image().")
-        .def("disable_harvey_shack_scatter", &HandleType::disable_harvey_shack_scatter)
+             "Use a measured (user-supplied) PSF in place of the aperture's diffraction "
+             "pattern, until clear_psf(). 'data' is an Image of centered PSF samples, taken "
+             "whole: as holding all of a source's light out to its farthest sample (crop it to "
+             "use less); 'samples_per_pixel' is the measurement sampling density per sensor "
+             "pixel per axis; 'sampling' says what the samples are (see PSFSampling): "
+             "PSFSampling.PixelIntegrated if the data came from the sensor being simulated, "
+             "such as a star's image, and otherwise almost always PSFSampling.PointSampled, such "
+             "as optical design software's PSF. Sources are drawn from the spline through the "
+             "samples. 'focus' says whether it is a point's in focus, which the camera's focus "
+             "blurs (the default), or already holds the camera's defocus (see PSFFocus). "
+             "Scattered light, if set, is added to it.")
+        .def("clear_psf",
+             &HandleType::clear_psf,
+             "Remove a PSF set with set_measured_psf(): sources are drawn with the aperture's "
+             "diffraction pattern again, or without one if it is off.")
+        .def("has_set_psf",
+             &HandleType::has_set_psf,
+             "Whether a PSF was set in place of the aperture's diffraction pattern.")
         .def(
             "set_scatter",
             [](const HandleType& self,
@@ -461,38 +429,36 @@ inline void bind_camera_model_handle(py::module_& m)
             "Set scattered light in angles (any angle unit, e.g. Arcsecond): 'fraction' of each "
             "source's light spreads as (1 + (theta / shoulder_angle)^2)^(-slope / 2), falling "
             "as theta^-(slope + 2) beyond 'outer_angle'. A slope of 2 or less needs an outer "
-            "angle. Replaces set_harvey_shack_scatter(); included in psf_image().")
+            "angle. It is added to diffraction or a PSF that was set, and included in "
+            "psf_image(); scatter_image() gives it alone.")
+        .def("disable_scatter",
+             &HandleType::disable_scatter,
+             "Turn scattered light off (the default).")
+        .def("scatter_enabled", &HandleType::scatter_enabled, "Whether scattered light is on.")
 
-        .def("get_psf_radius",
-             &HandleType::get_psf_radius,
-             "Radius in pixels of the PSF's stamps for unresolved sources; 0 without a PSF.")
-        .def(
-            "get_psf_kernel",
-            [](const HandleType& self, float u, float v) {
-                return Image<TSpectral>(self.get_psf_kernel(u, v));
-            },
-            py::arg("u") = 0.f,
-            py::arg("v") = 0.f,
-            py::call_guard<py::gil_scoped_release>(),
-            "A copy of the PSF's stamp for an unresolved source at subpixel position (u, v) "
-            "in [0, 1), building the stamps first if needed.")
-        .def(
-            "get_psf_convolution_kernel",
-            [](const HandleType& self) {
-                return Image<TSpectral>(self.get_psf_convolution_kernel());
-            },
-            py::call_guard<py::gil_scoped_release>(),
-            "A copy of the whole-image convolution kernel (the PSF and scattered light "
-            "together, unit energy per channel), building it first if needed. The renderer "
-            "convolves bodies with the whole PSF and scattered light instead.")
-        .def(
-            "get_psf_wings_kernel",
-            [](const HandleType& self) { return Image<TSpectral>(self.get_psf_wings_kernel()); },
-            py::call_guard<py::gil_scoped_release>(),
-            "A copy of the scattered light's kernel alone (unit energy per channel), building "
-            "it first if needed; the renderer draws scattered light from its tables instead. "
-            "Requires Harvey-Shack scatter.")
+        // Stray light
+        .def("set_veiling_glare",
+             &HandleType::set_veiling_glare,
+             py::arg("alpha"),
+             "Redistribute the given fraction of total collected energy uniformly across the "
+             "image (veiling glare).")
+        .def("disable_veiling_glare", &HandleType::disable_veiling_glare)
 
+        // Resolved bodies
+        .def("enable_psf_convolution",
+             &HandleType::enable_psf_convolution,
+             py::arg("convolve_psf") = true,
+             "Choose whether the PSF and scattered light blur resolved bodies (the path-traced "
+             "image). On by default. Off, bodies are sharp, and rendering is faster without the "
+             "whole-image convolution; unresolved sources, such as stars, get the PSF and "
+             "scattered light either way. Bodies get the whole PSF, across the frame, in focus: "
+             "path tracing gives them their defocus.")
+        .def("psf_convolution_enabled",
+             &HandleType::psf_convolution_enabled,
+             "Whether the PSF and scattered light blur resolved bodies (the default). See "
+             "enable_psf_convolution().")
+
+        // Inspection
         .def(
             "psf_image",
             [](const HandleType& self,
@@ -511,21 +477,64 @@ inline void bind_camera_model_handle(py::module_& m)
             py::arg("x_offset") = 0.f,
             py::arg("y_offset") = 0.f,
             py::arg("range") = py::none(),
-            "The light an unresolved source puts in each pixel around it, per channel: the "
-            "aperture's diffraction pattern, averaged over each spectral bin, with scattered "
-            "light set with set_scatter(), blurred by defocus for a source at 'range' along the "
+            "The light an unresolved source puts in each pixel around it, per channel, as the "
+            "renderer draws it: the aperture's diffraction pattern (or a PSF set in its place), "
+            "with scattered light, blurred by defocus for a source at 'range' along the "
             "camera's axis (any length unit; None for a star), and integrated over each pixel, "
-            "as the renderer draws unresolved objects, for the source "
-            "(x_offset, y_offset) pixels from the center pixel's center. The image is "
-            "2 radius + 1 pixels square. With no PSF, the pixel the source falls in holds all "
-            "its light.")
+            "for the source (x_offset, y_offset) pixels from the center pixel's center. The "
+            "image is 2 radius + 1 pixels square. Resolved bodies are convolved with it in "
+            "focus.")
+        .def(
+            "diffraction_image",
+            [](const HandleType& self, int radius, float x_offset, float y_offset) {
+                py::gil_scoped_release release;
+                return self.diffraction_image(radius, x_offset, y_offset);
+            },
+            py::arg("radius"),
+            py::arg("x_offset") = 0.f,
+            py::arg("y_offset") = 0.f,
+            "The aperture's diffraction pattern alone, in focus, in each pixel as psf_image() "
+            "gives it, whether or not it is in use.")
+        .def(
+            "scatter_image",
+            [](const HandleType& self, int radius, float x_offset, float y_offset) {
+                py::gil_scoped_release release;
+                return self.scatter_image(radius, x_offset, y_offset);
+            },
+            py::arg("radius"),
+            py::arg("x_offset") = 0.f,
+            py::arg("y_offset") = 0.f,
+            "The scattered light alone, in focus, in each pixel as psf_image() gives it, "
+            "holding all of the light rather than its fraction. Raises without scattered "
+            "light.")
+        .def(
+            "defocus_image",
+            [](const HandleType& self,
+               int radius,
+               float x_offset,
+               float y_offset,
+               const py::object& range) {
+                std::optional<units::Meter> distance;
+                if (!range.is_none()) {
+                    distance = detail::unit_from_py<units::Meter>(range);
+                }
+                return self.defocus_image(radius, x_offset, y_offset, distance);
+            },
+            py::arg("radius"),
+            py::arg("x_offset") = 0.f,
+            py::arg("y_offset") = 0.f,
+            py::arg("range") = py::none(),
+            "The defocus blur alone of a point at 'range' (any length unit; None for a star), "
+            "in each pixel as psf_image() gives it: a uniform disc of radius "
+            "defocus_blur_radius(range), or in focus the pixel the point falls in.")
+
         // Optics kernels
         .def("precompute",
              &HandleType::precompute,
              py::call_guard<py::gil_scoped_release>(),
              "Build everything the camera needs for the next render now (the tables of its "
-             "geometry, PSF and defocus stamps, convolution kernels and their spectra), so that "
-             "the time is not spent in the render. Only what is out of date is rebuilt.")
+             "geometry, the PSF's tables or grid, and the convolution of resolved bodies), so "
+             "that the time is not spent in the render. Only what is out of date is rebuilt.")
         .def("is_precomputed",
              &HandleType::is_precomputed,
              "Whether everything the next render needs from the camera is built and up to "
@@ -591,10 +600,20 @@ inline void bind_camera_model_handle(py::module_& m)
         .def("focus_sensor_offset",
              &HandleType::focus_sensor_offset,
              "Focus as the sensor's offset from the infinity-focus position.")
-        .def("defocus_blur_radius",
-             &HandleType::defocus_blur_radius,
-             "Radius in pixels of the defocus blur of a star (0 if under half a pixel). An "
-             "unresolved object nearer is blurred by the defocus at its own depth.")
+        .def(
+            "defocus_blur_radius",
+            [](const HandleType& self, const py::object& range) {
+                std::optional<units::Meter> distance;
+                if (!range.is_none()) {
+                    distance = detail::unit_from_py<units::Meter>(range);
+                }
+                return self.defocus_blur_radius(distance);
+            },
+            py::arg("range") = py::none(),
+            "Radius in pixel widths of the defocus blur of a point at 'range' along the "
+            "camera's axis (any length unit), or of a star (None), as unresolved sources are "
+            "drawn with it: 0 when it would change no pixel by more than a part in 10^5, and "
+            "with depth of field off.")
 
         // Projection and rays
         .def(

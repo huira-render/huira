@@ -192,9 +192,9 @@ Image<RGB> render_sources(bool with_psf,
     camera_model.enable_depth_of_field(depth_of_field);
     if (with_psf) {
         camera_model.set_measured_psf(
-            measurement(), static_cast<float>(PER_PIXEL), PSFSampling::PointSampled, RADIUS);
+            measurement(), static_cast<float>(PER_PIXEL), PSFSampling::PointSampled);
     } else {
-        camera_model.delete_psf();
+        camera_model.enable_diffraction(false);
     }
     camera_model.set_sensor_read_noise(10.f);
     auto camera = scene.root.new_instance(camera_model);
@@ -359,7 +359,7 @@ TEST_CASE("A faint line's wings are interpolated only as far as the tolerance al
             data(i, j) = RGB{static_cast<float>(std::pow(1.0 + (x * x + y * y) / 0.64, -1.5))};
         }
     }
-    MeasuredPSF<RGB> measured(data, static_cast<float>(PER), PSFSampling::PointSampled, WINGS);
+    MeasuredPSF<RGB> measured(data, static_cast<float>(PER), PSFSampling::PointSampled);
     const GridPsf<RGB> grid(measured, 1.0);
     constexpr int SIDE = 72;
     const std::array<double, 2> start{24.31, 30.77};

@@ -31,12 +31,6 @@ class CircularAperture : public Aperture<TSpectral> {
     void set_diameter(units::Meter diameter);
     units::Meter get_diameter() const;
 
-    std::unique_ptr<PSF<TSpectral>> make_psf(units::Meter focal_length,
-                                             units::Meter pitch_x,
-                                             units::Meter pitch_y,
-                                             int radius,
-                                             int banks) override;
-
     units::Meter get_bounding_radius() const override;
 
     void rasterize_shape(Image<float>& kernel,

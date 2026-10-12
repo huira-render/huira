@@ -38,12 +38,14 @@ def main():
     camera_model.configure_sensor_from_pitch((1920, 1080), um(8.5))
     camera_model.set_sensor_bit_depth(12)
 
-    # The aperture's diffraction pattern is the PSF by default, in stamps sized to hold about
-    # 99% of the light. use_aperture_psf(radius, banks) gives a size of your own: a larger
-    # radius shows more of a bright source's rings, but takes longer to build (64 px and 16
-    # banks takes tens of seconds for Visible8). Build the stamps now rather than in the render:
+    # The aperture's diffraction pattern is the PSF by default (enable_diffraction()): stars are
+    # drawn with it as far as their light reaches, and Jupiter is convolved with it. Scattered
+    # light can be added in angles, with set_scatter(), and a measured PSF can take the
+    # diffraction pattern's place, with set_measured_psf(); psf_image() shows the PSF as it is
+    # drawn, and diffraction_image(), scatter_image() and defocus_image() each part alone.
+    # Build the PSF's tables now rather than in the render:
     camera_model.precompute()
-    print(f"PSF stamp radius: {camera_model.get_psf_radius()} px")
+    print(camera_model.describe())
     
     # Set the observation time
     time = huira.Time("2016-09-19T16:22:05.728")

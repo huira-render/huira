@@ -1,25 +1,24 @@
 
 #pragma once
 
-#include <atomic>
-#include <mutex>
-#include <vector>
+#include <concepts>
+#include <string>
+#include <type_traits>
 
 #include "huira/concepts/spectral_concepts.hpp"
 #include "huira/images/image.hpp"
+#include "huira/util/logger.hpp"
 
 namespace huira {
 
 /**
- * @brief Abstract base class for point spread functions (PSF).
+ * @brief Abstract base class for point spread functions (PSF) that can be set on a camera.
  *
- * Defines the interface and cache management for all PSF types, supporting polyphase kernel
- * generation.
- *
- * The polyphase cache (the stamps used for unresolved sources) is built on first use rather than
- * on construction: set_polyphase_size() only records its size. It can be built ahead of time
- * with ensure_polyphase_cache(), which CameraModel::precompute() does. Building is
- * thread-safe, so concurrent first uses build it once.
+ * A PSF set with CameraModel::set_psf() takes the place of the aperture's diffraction pattern.
+ * It is given by evaluate(), its value at an offset from the source in pixels, and is taken as
+ * complete within radius() pixels of the source: the renderer samples it on a grid out to there
+ * (see GridPsf) and normalizes what it finds, so that every source keeps all its light. A
+ * MeasuredPSF is instead sampled where its own samples lie.
  *
  * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
@@ -38,9 +37,9 @@ class PSF {
      * @brief Whether evaluate() gives the light a pixel centered at (x, y) receives, rather than
      * the PSF's intensity at that point.
      *
-     * Stamps and convolution kernels integrate a PSF's intensity over each pixel. One that is
-     * already integrated over a pixel (see PSFSampling::PixelIntegrated) is instead taken at
-     * each pixel's center, so that it is not integrated twice.
+     * A PSF's intensity is integrated over each pixel. One that is already integrated over a
+     * pixel (see PSFSampling::PixelIntegrated) is instead taken at each pixel's center, so that
+     * it is not integrated twice.
      */
     [[nodiscard]] virtual bool is_pixel_integrated() const { return false; }
 
@@ -51,45 +50,26 @@ class PSF {
      */
     [[nodiscard]] virtual bool includes_defocus() const { return false; }
 
-    void set_polyphase_size(int radius, int banks);
-    void build_polyphase_cache(int radius, int banks);
-    void ensure_polyphase_cache() const;
+    /// How far from the source, in pixels, the PSF holds light; 0 if not set, in which case
+    /// CameraModel::set_psf() gives it CameraModel::DEFAULT_PSF_RADIUS.
+    [[nodiscard]] int radius() const { return radius_; }
 
-    /// True when the polyphase cache has been built for its current size.
-    [[nodiscard]] bool has_polyphase_cache() const
+    /**
+     * @brief Set how far from the source, in pixels, the PSF holds light.
+     *
+     * @throws std::runtime_error if the radius is less than 1.
+     */
+    void set_radius(int radius)
     {
-        return cache_built_.load(std::memory_order_acquire);
+        if (radius < 1) {
+            HUIRA_THROW_ERROR("PSF::set_radius - The radius must be at least 1 pixel: " +
+                              std::to_string(radius));
+        }
+        radius_ = radius;
     }
-
-    static void check_polyphase_size(int radius, int banks);
-
-    Image<TSpectral> generate_convolution_kernel(int radius);
-
-    const Image<TSpectral>& get_kernel(float u, float v) const;
-    std::vector<Image<TSpectral>> get_all_kernels() const
-    {
-        ensure_polyphase_cache();
-        return cache_.kernels;
-    }
-
-    int get_radius() const { return cache_.radius; }
-    int get_banks() const { return cache_.banks; }
-
-  protected:
-    struct PolyphaseCache {
-        int radius = 0;
-        int dim = 0;
-        int banks = 0;
-        std::vector<Image<TSpectral>> kernels;
-    } cache_;
 
   private:
-    void generate_polyphase_data_();
-    void fill_pixel_integrated_bank_(int bx, int by);
-    void normalize_kernel_(Image<TSpectral>& kernel, const TSpectral& total_energy);
-
-    mutable std::mutex cache_mutex_;
-    mutable std::atomic<bool> cache_built_{false};
+    int radius_ = 0;
 };
 
 template <typename T>
@@ -102,5 +82,3 @@ struct is_psf<Derived<TSpectral>> : std::true_type {};
 template <typename T>
 concept IsPSF = is_psf<T>::value;
 } // namespace huira
-
-#include "huira_impl/cameras/psfs/psf.ipp"

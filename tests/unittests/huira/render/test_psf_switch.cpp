@@ -30,14 +30,10 @@ Image<RGB> render(const Setup& setup)
     camera_model.configure_sensor_from_pitch({SIZE, SIZE}, 10_um);
     camera_model.set_focal_length(50_mm);
     camera_model.set_fstop(8.0f);
-    if (setup.psf) {
-        camera_model.use_aperture_psf(6, 4);
-    } else {
-        camera_model.delete_psf(); // the aperture's, by default
-    }
+    camera_model.enable_diffraction(setup.psf); // on by default
     if (setup.scatter) {
-        camera_model.set_harvey_shack_scatter(0.1f, 2.5f, 0.5f);
-        camera_model.set_psf_convolution_radius(16);
+        // A shoulder of half a pixel:
+        camera_model.set_scatter(0.1f, 2.5f, units::Radian(0.5 * 10e-6 / 50e-3));
     }
     if (!setup.convolve) {
         camera_model.enable_psf_convolution(false);

@@ -57,10 +57,10 @@ class Renderer;
  * to the image plane, compute projected aperture area, and supports both analytic and PSF-based
  * point spread functions. All units are SI unless otherwise noted.
  *
- * The kernels the camera's optics need for rendering (PSF stamps, defocus stamps, convolution
- * kernels and their spectra), and the tables of its geometry (each pixel's ray direction and
- * solid angle, and the view frustum), are derived from its settings and built when first
- * needed, not by the setters, which are therefore cheap. precompute() builds them ahead of
+ * The kernels the camera's optics need for rendering (the PSF's tables or grid, and the
+ * convolution of resolved bodies with it), and the tables of its geometry (each pixel's ray
+ * direction and solid angle, and the view frustum), are derived from its settings and built when
+ * first needed, not by the setters, which are therefore cheap. precompute() builds them ahead of
  * time; see there for what a render does when they are out of date. Getters give the same
  * results either way.
  *
@@ -77,15 +77,9 @@ class Renderer;
 template <IsSpectral TSpectral>
 class CameraModel : public SceneObject<CameraModel<TSpectral>> {
   public:
-    /// Stamp size for a PSF's stamps for unresolved sources, unless given: radius in pixels,
-    /// and subpixel positions per axis. See use_aperture_psf() and set_psf(). The radius is
-    /// also the largest the aperture's automatic stamp radius gets.
+    /// How far from the source, in pixels, a PSF that was set holds light, unless it says
+    /// (see PSF::radius() and set_psf()).
     static constexpr int DEFAULT_PSF_RADIUS = 64;
-    static constexpr int DEFAULT_PSF_BANKS = 16;
-
-    /// The smallest automatic stamp radius for the aperture's diffraction pattern, in pixels.
-    /// See use_aperture_psf().
-    static constexpr int MIN_AUTO_PSF_RADIUS = 16;
 
     /// The largest radius psf_image() takes, in pixels.
     static constexpr int MAX_PSF_IMAGE_RADIUS = 16384;
@@ -152,62 +146,60 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     template <IsAperture TAperture, typename... Args>
     void set_aperture(Args&&... args);
 
+    void enable_diffraction(bool diffraction = true);
+
+    /// Whether the aperture's diffraction pattern is on (the default). A PSF that was set takes
+    /// its place either way. See enable_diffraction().
+    [[nodiscard]] bool diffraction_enabled() const { return diffraction_enabled_; }
+
     template <IsPSF TPSF, typename... Args>
     void set_psf(Args&&... args);
 
     void set_measured_psf(const Image<TSpectral>& data,
                           float samples_per_pixel,
                           PSFSampling sampling,
-                          int radius = 0,
-                          int banks = DEFAULT_PSF_BANKS,
                           PSFFocus focus = PSFFocus::InFocus);
 
-    void use_aperture_psf(int radius = 0, int banks = DEFAULT_PSF_BANKS);
+    void clear_psf();
 
-    /// Choose whether a PSF or scattered light that is set blurs resolved bodies (the path-traced
-    /// image). On by default. Off, bodies are sharp, and rendering is faster without the
-    /// whole-image convolution; unresolved sources, such as stars, get the PSF and scattered light
-    /// either way. Bodies get the whole PSF and scattered light, across the frame, in focus:
-    /// path tracing gives them their defocus.
-    void enable_psf_convolution(bool convolve_psf = true) { convolve_psf_ = convolve_psf; }
+    /// Whether a PSF was set with set_psf() or set_measured_psf(), in place of the aperture's
+    /// diffraction pattern. See clear_psf().
+    [[nodiscard]] bool has_set_psf() const { return psf_ != nullptr; }
 
-    /// Whether a PSF or scattered light that is set blurs resolved bodies (the default). See
-    /// enable_psf_convolution().
-    bool psf_convolution_enabled() const { return convolve_psf_; }
-
-    void set_psf_convolution_radius(int radius);
-    void delete_psf();
-
-    void set_veiling_glare(float alpha);
-    void disable_veiling_glare();
-    void set_harvey_shack_scatter(float scatter_fraction,
-                                  float falloff_exponent,
-                                  float r0 = 0.5f,
-                                  float radius = 0.f);
-    void disable_harvey_shack_scatter();
     void set_scatter(float fraction,
                      float slope,
                      units::Radian shoulder_angle,
                      std::optional<units::Radian> outer_angle = std::nullopt);
+    void disable_scatter();
 
-    /// Check if the camera model has a PSF: the aperture's diffraction pattern (the default; see
-    /// use_aperture_psf()), or one that was set. False after delete_psf().
-    bool has_psf() const { return use_aperture_psf_ || psf_ != nullptr; }
+    /// Whether scattered light is on: see set_scatter(). Off by default.
+    [[nodiscard]] bool scatter_enabled() const { return scatter_enabled_; }
 
-    /// Whether the PSF is the aperture's diffraction pattern (the default). See
-    /// use_aperture_psf().
-    bool uses_aperture_psf() const { return use_aperture_psf_; }
+    void set_veiling_glare(float alpha);
+    void disable_veiling_glare();
 
-    const Image<TSpectral>& get_psf_kernel(float u, float v);
-    int get_psf_radius() const;
+    /// Choose whether the PSF and scattered light blur resolved bodies (the path-traced image).
+    /// On by default. Off, bodies are sharp, and rendering is faster without the whole-image
+    /// convolution; unresolved sources, such as stars, get the PSF and scattered light either
+    /// way. Bodies get the whole PSF and scattered light, across the frame, in focus: path
+    /// tracing gives them their defocus.
+    void enable_psf_convolution(bool convolve_psf = true) { convolve_psf_ = convolve_psf; }
 
-    const Image<TSpectral>& get_psf_convolution_kernel();
-    const Image<TSpectral>& get_psf_wings_kernel();
+    /// Whether the PSF and scattered light blur resolved bodies (the default). See
+    /// enable_psf_convolution().
+    bool psf_convolution_enabled() const { return convolve_psf_; }
 
     Image<TSpectral> psf_image(int radius,
                                float x_offset = 0.f,
                                float y_offset = 0.f,
                                std::optional<units::Meter> range = std::nullopt);
+    Image<TSpectral>
+    diffraction_image(int radius, float x_offset = 0.f, float y_offset = 0.f) const;
+    Image<TSpectral> scatter_image(int radius, float x_offset = 0.f, float y_offset = 0.f) const;
+    Image<TSpectral> defocus_image(int radius,
+                                   float x_offset = 0.f,
+                                   float y_offset = 0.f,
+                                   std::optional<units::Meter> range = std::nullopt) const;
 
     void precompute();
     [[nodiscard]] bool is_precomputed() const;
@@ -232,7 +224,7 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     units::Diopter focus_diopters() const;
     units::Micrometer focus_sensor_offset() const;
 
-    float defocus_blur_radius() const;
+    float defocus_blur_radius(std::optional<units::Meter> range = std::nullopt) const;
 
     void set_pixel_convention(PixelConvention convention);
 
@@ -339,45 +331,138 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
         return resolution();
     }
 
+    template <typename... Args>
+    void use_aperture_psf(Args&&...)
+    {
+        static_assert(detail::removed_api<Args...>,
+                      "use_aperture_psf() was removed in v0.9.10. The aperture's diffraction "
+                      "pattern is on by default: use enable_diffraction() to turn it on or off, "
+                      "and clear_psf() to go back to it from a PSF that was set. Its extent is "
+                      "automatic.");
+    }
+
+    template <typename... Args>
+    void delete_psf(Args&&...)
+    {
+        static_assert(detail::removed_api<Args...>,
+                      "delete_psf() was removed in v0.9.10. Use clear_psf() to remove a PSF "
+                      "that was set, and enable_diffraction(false) to turn the aperture's "
+                      "diffraction pattern off.");
+    }
+
+    template <typename... Args>
+    bool has_psf(Args&&...) const
+    {
+        static_assert(detail::removed_api<Args...>,
+                      "has_psf() was removed in v0.9.10. Use has_set_psf() for a PSF that was "
+                      "set, or diffraction_enabled() for the aperture's diffraction pattern.");
+        return {};
+    }
+
+    template <typename... Args>
+    void set_psf_convolution_radius(Args&&...)
+    {
+        static_assert(detail::removed_api<Args...>,
+                      "set_psf_convolution_radius() was removed in v0.9.10. Resolved bodies are "
+                      "convolved with the whole PSF across the frame; use psf_image() to see it.");
+    }
+
+    template <typename... Args>
+    void set_harvey_shack_scatter(Args&&...)
+    {
+        static_assert(detail::removed_api<Args...>,
+                      "set_harvey_shack_scatter() was removed in v0.9.10. Use set_scatter(), "
+                      "which takes the shoulder and outer radius as angles.");
+    }
+
+    template <typename... Args>
+    void disable_harvey_shack_scatter(Args&&...)
+    {
+        static_assert(detail::removed_api<Args...>,
+                      "disable_harvey_shack_scatter() was removed in v0.9.10. Use "
+                      "disable_scatter() instead.");
+    }
+
+    template <typename... Args>
+    const Image<TSpectral>& get_psf_kernel(Args&&...)
+    {
+        static_assert(detail::removed_api<Args...>,
+                      "get_psf_kernel() was removed in v0.9.10. Use psf_image(radius, x_offset, "
+                      "y_offset), which gives the PSF as the renderer draws it, at any offset.");
+        static const Image<TSpectral> none;
+        return none;
+    }
+
+    template <typename... Args>
+    int get_psf_radius(Args&&...) const
+    {
+        static_assert(detail::removed_api<Args...>,
+                      "get_psf_radius() was removed in v0.9.10. Sources are drawn as far as "
+                      "their light reaches (see Renderer::set_unresolved_taper()); psf_image() "
+                      "takes the radius to show.");
+        return {};
+    }
+
+    template <typename... Args>
+    const Image<TSpectral>& get_psf_convolution_kernel(Args&&...)
+    {
+        static_assert(detail::removed_api<Args...>,
+                      "get_psf_convolution_kernel() was removed in v0.9.10. Use psf_image(), the "
+                      "whole PSF resolved bodies are convolved with.");
+        static const Image<TSpectral> none;
+        return none;
+    }
+
+    template <typename... Args>
+    const Image<TSpectral>& get_psf_wings_kernel(Args&&...)
+    {
+        static_assert(detail::removed_api<Args...>,
+                      "get_psf_wings_kernel() was removed in v0.9.10. Use scatter_image() "
+                      "instead.");
+        static const Image<TSpectral> none;
+        return none;
+    }
+
+    template <typename... Args>
+    std::uint64_t psf_kernel_version(Args&&...) const
+    {
+        static_assert(detail::removed_api<Args...>,
+                      "psf_kernel_version() was removed in v0.9.10. The camera rebuilds what its "
+                      "settings change; is_precomputed() says whether that is still to do.");
+        return {};
+    }
+
   protected:
     float focal_length_ = .05f;
 
     std::unique_ptr<SensorModel<TSpectral>> sensor_;
     std::unique_ptr<Aperture<TSpectral>> aperture_;
     std::unique_ptr<Distortion<TSpectral>> distortion_ = nullptr;
-    /// The core PSF. With use_aperture_psf_ (the default) it is the aperture's diffraction PSF,
-    /// made from the current optics when needed (see ensure_diffraction_()); otherwise it is the
-    /// one set.
+    /// A PSF set with set_psf() or set_measured_psf(), which takes the place of the aperture's
+    /// diffraction pattern; none if not set.
     std::unique_ptr<PSF<TSpectral>> psf_ = nullptr;
-    bool use_aperture_psf_ = true;
-    int aperture_psf_radius_ = 0; ///< 0 for automatic: see aperture_psf_stamp_radius_().
-    int aperture_psf_banks_ = DEFAULT_PSF_BANKS;
-    int aperture_psf_stamp_radius_() const;
-    int table_stamp_radius_() const;
+    bool diffraction_enabled_ = true;
     bool convolve_psf_ = true;
 
-    /// Whether there is anything to blur with: a PSF, or scattered light.
-    bool has_psf_or_scatter_() const { return has_psf() || scatter_enabled_; }
+    /// Whether unresolved sources are drawn with the aperture's diffraction pattern: it is on,
+    /// and no PSF was set in its place. Its tables then hold the scattered light too.
+    bool uses_diffraction_() const { return diffraction_enabled_ && psf_ == nullptr; }
+
+    /// Whether there is anything to blur with: diffraction, a PSF that was set, or scattered
+    /// light.
+    bool has_psf_or_scatter_() const
+    {
+        return uses_diffraction_() || psf_ != nullptr || scatter_enabled_;
+    }
 
     /// Whether the path-traced image of resolved bodies is convolved with the PSF and scattered
     /// light: see enable_psf_convolution().
     bool convolves_bodies_() const { return convolve_psf_ && has_psf_or_scatter_(); }
 
-    // The kernels get_psf_convolution_kernel() and get_psf_wings_kernel() give: the core PSF
-    // with the scattered-light wings, and the wings alone, each a single centered kernel of
-    // psf_convolution_radius_. The renderer uses neither (see body_convolver_ and
-    // render_tables_).
-    int psf_convolution_radius_ = 0;
-    Image<TSpectral> psf_convolution_kernel_;
-    Image<TSpectral> psf_wings_kernel_;
-
-    /// The tables that give an unresolved source's light in each pixel: see psf_image(). Shared,
-    /// so that an image can be read from them while they are rebuilt for new optics.
-    std::shared_ptr<const PsfTables<TSpectral>> psf_tables_;
-
-    /// The tables the renderer draws unresolved sources from: with the aperture's PSF, its
-    /// diffraction with the scattered light, and otherwise the scattered light alone; blurred as
-    /// a star is by the focus, with the reach they were built for. psf_tables_ shares them.
+    /// The tables the renderer draws unresolved sources from, and psf_image() reads: with the
+    /// aperture's diffraction pattern, it with the scattered light, and otherwise the scattered
+    /// light alone; blurred as a star is by the focus, with the reach they were built for.
+    /// Shared, so that an image can be read from them while they are rebuilt for new optics.
     std::shared_ptr<const PsfTables<TSpectral>> render_tables_;
     double render_tables_reach_ = 0.0;
     double render_tables_blur_ = 0.0;
@@ -385,15 +470,9 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     /// none: see tables_scatter_(). The same for object_tables_ and body_tables_.
     bool render_tables_scatter_only_ = false;
 
-    /// The same without the scattered light, which get_psf_wings_kernel() gives, for the stamps
-    /// get_psf_kernel() gives, and the blur they were built for: render_tables_ without
-    /// scattered light.
-    std::shared_ptr<const PsfTables<TSpectral>> stamp_tables_;
-    double stamp_tables_blur_ = 0.0;
-
     /// What is built for unresolved objects by their blur, where it differs from a star's: tables
-    /// with the aperture's PSF, or a PSF that was set on its grid. Most recently used last. Those
-    /// the last render used are kept, and others up to OBJECT_TABLES_KEPT_ in all.
+    /// with the diffraction pattern, or a PSF that was set on its grid. Most recently used last.
+    /// Those the last render used are kept, and others up to OBJECT_TABLES_KEPT_ in all.
     template <class T>
     struct BlurCache {
         struct Entry {
@@ -470,12 +549,6 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     double body_tables_reach_ = 0.0;
     bool body_tables_scatter_only_ = false;
 
-    /// Stamps from stamp_tables_, for get_psf_kernel(): one per subpixel position, banks x banks
-    /// of them, each normalized per channel as PSF's are, with their radius.
-    std::vector<Image<TSpectral>> table_stamps_;
-    int table_stamp_banks_ = 0;
-    int table_stamps_radius_ = 0;
-
     /// The settings the optics kernels are derived from. Each kernel depends on some of them,
     /// and is rebuilt only when one of those has changed since it was built.
     enum class OpticsInput : std::size_t {
@@ -485,7 +558,6 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
         Aperture,
         Focus,
         CorePSF,
-        Convolution,
         Scatter,
         Count
     };
@@ -502,17 +574,9 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     }
 
     bool stale_(std::uint64_t built_at, std::initializer_list<OpticsInput> inputs) const;
-    bool diffraction_stale_(std::uint64_t built_at) const;
-    bool convolution_stale_(std::uint64_t built_at) const;
-    bool wings_stale_(std::uint64_t built_at) const;
 
     // The version each kernel was built at; 0 for never.
-    std::uint64_t diffraction_built_at_ = 0;
-    std::uint64_t convolution_kernel_built_at_ = 0;
-    std::uint64_t wings_kernel_built_at_ = 0;
     std::uint64_t render_tables_built_at_ = 0;
-    std::uint64_t stamp_tables_built_at_ = 0;
-    std::uint64_t table_stamps_built_at_ = 0;
     std::uint64_t body_tables_built_at_ = 0;
     std::uint64_t object_tables_built_at_ = 0;
     std::uint64_t grid_source_built_at_ = 0;
@@ -532,14 +596,7 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     mutable std::mutex optics_mutex_;
 
     // Each builds its kernel if it is out of date. optics_mutex_ must be held.
-    void ensure_diffraction_();
-    void ensure_polyphase_();
-    void ensure_convolution_kernel_();
-    void ensure_wings_kernel_();
-    void ensure_psf_tables_();
     void ensure_render_tables_();
-    void ensure_stamp_tables_();
-    void ensure_table_stamps_();
     void ensure_body_convolver_();
     void ensure_grid_psf_();
     std::vector<std::shared_ptr<const PsfTables<TSpectral>>>
@@ -549,9 +606,7 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     [[nodiscard]] double source_blur_(double inverse_depth) const;
     [[nodiscard]] double tables_reach_() const;
     [[nodiscard]] bool render_tables_stale_() const;
-    [[nodiscard]] bool stamp_tables_stale_() const;
     [[nodiscard]] double tables_blur_() const;
-    [[nodiscard]] bool table_stamps_stale_() const;
     [[nodiscard]] bool body_tables_stale_() const;
     [[nodiscard]] bool body_convolver_stale_() const;
     [[nodiscard]] bool grid_psf_stale_() const;
@@ -561,10 +616,15 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
                       double reach) const;
     std::optional<typename PsfTables<TSpectral>::Scatter> scatter_for_tables_() const;
     std::optional<typename PsfTables<TSpectral>::Scatter> tables_scatter_() const;
-    [[nodiscard]] bool uses_tables_() const { return use_aperture_psf_ || scatter_enabled_; }
+    [[nodiscard]] bool uses_tables_() const { return uses_diffraction_() || scatter_enabled_; }
     [[nodiscard]] typename PsfConvolver<TSpectral>::Parts body_parts_() const;
     double blur_pixels_(double inverse_range) const;
-    int convolution_radius_(const char* caller) const;
+    void check_image_arguments_(const char* caller,
+                                int radius,
+                                float x_offset,
+                                float y_offset,
+                                std::optional<units::Meter> range) const;
+    [[nodiscard]] double image_reach_(int radius) const;
 
     // optics_mutex_ must be held.
     void precompute_locked_();
@@ -602,19 +662,13 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     float veiling_alpha_ = 0.f;
     bool veiling_glare_enabled_ = false;
 
+    /// The scattered light (see set_scatter()): its fraction, slope, and shoulder and outer
+    /// angles in radians (0 for no outer angle).
     float scatter_fraction_ = 0.f;
-    float scatter_falloff_exponent_ = 2.f;
-    float r0_ = 0.5f;
-    float scatter_radius_ = 0.f;
+    float scatter_slope_ = 2.5f;
     bool scatter_enabled_ = false;
-
-    /// Whether the scattered light was set in angles, with set_scatter(), rather than in pixels.
-    /// Its shoulder and outer angles, in radians (0 for no outer angle), then replace r0_ and
-    /// scatter_radius_, which follow from them.
-    bool scatter_in_angles_ = false;
     double scatter_shoulder_angle_ = 0.0;
     double scatter_outer_angle_ = 0.0;
-    std::array<float, 2> scatter_pixels_() const;
 
     float fx_;
     float fy_;

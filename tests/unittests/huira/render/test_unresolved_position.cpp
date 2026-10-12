@@ -112,10 +112,9 @@ void render_positions(Stamp stamp, const PixelConvention& convention, Check chec
         // f/32 puts the first dark ring at about 2.1 px. A much narrower PSF would be
         // undersampled, and its pixel-integrated centroid genuinely sticks to pixel positions.
         camera_model.set_fstop(32.0f);
-        camera_model.use_aperture_psf(12, 16);
     } else {
         camera_model.set_fstop(4.0f);
-        camera_model.delete_psf(); // the aperture's, by default
+        camera_model.enable_diffraction(false); // on by default
     }
     if (stamp == Stamp::Defocus) {
         // About a 2 px blur radius.
@@ -177,11 +176,10 @@ render_windows(Stamp stamp, Vec2<double> source, const std::vector<Window>& wind
     camera_model.set_focal_length(50_mm);
     if (stamp == Stamp::Airy) {
         camera_model.set_fstop(32.0f);
-        camera_model.use_aperture_psf(12, 16);
     } else {
         // About a 6 px blur radius.
         camera_model.set_fstop(4.0f);
-        camera_model.delete_psf(); // the aperture's, by default
+        camera_model.enable_diffraction(false); // on by default
         camera_model.set_focus_sensor_offset(units::Micrometer(480.0));
     }
     auto camera = scene.root.new_instance(camera_model);

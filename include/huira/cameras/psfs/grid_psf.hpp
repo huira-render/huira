@@ -23,8 +23,8 @@ namespace huira {
  * and is taken as complete: it holds all of a source's light, the same in every channel, and
  * none falls beyond the rectangle. The spline is continued past the samples by mirroring them,
  * and cut off at the rectangle's edge only when it is integrated, so that an edge where the
- * samples are not yet zero does not ring. A measurement is taken out to the PSF's radius
- * (PSF::get_radius()) from its center; any other PSF is sampled from PSF::evaluate() every
+ * samples are not yet zero does not ring. A measurement is taken whole, out to its radius
+ * (PSF::radius()), its farthest sample; any other PSF is sampled from PSF::evaluate() every
  * SAMPLE_STEP pixels out to its radius, or more coarsely if that would take more than
  * MEMORY_BUDGET. For a pattern sampled at least twice as finely as its finest detail, the
  * spline is within a few parts in 10^3 of the pattern, where straight lines between the samples

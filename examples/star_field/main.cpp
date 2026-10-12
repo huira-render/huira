@@ -50,10 +50,10 @@ int main(int argc, char** argv)
     camera_model.set_focus_diopters(0.0025_dpt);
 
     // The aperture's diffraction pattern is the PSF by default, and depth of field is on by
-    // default too. The focus set above defocuses the stars by a blur of 0.7 px: they are
-    // stamped with the defocus blur, which the diffraction pattern then blurs (the diffraction
-    // stamps are used only for stars in focus). Building the kernels takes a moment, so it is
-    // done here rather than in the render:
+    // default too. The focus set above blurs the stars by 0.7 px: each is drawn with the
+    // diffraction pattern blurred by that disc, and an object nearer by its own defocus (see
+    // defocus_blur_radius() with a range, and defocus_image()). Building the PSF's tables takes
+    // a moment, so it is done here rather than in the render:
     camera_model.precompute();
     std::cout << "Defocus blur radius: " << camera_model.defocus_blur_radius() << " px\n";
 

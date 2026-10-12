@@ -18,40 +18,31 @@ bool close(double a, double b, double tolerance = 1e-5)
 
 } // namespace
 
-TEST_CASE("The aperture's diffraction pattern is the PSF by default, with an automatic stamp size",
-          "[cameras][psf][defaults]")
+TEST_CASE("The aperture's diffraction pattern is the PSF by default", "[cameras][psf][defaults]")
 {
     CameraModel<RGB> camera;
     camera.configure_sensor_from_pitch({64, 64}, 10_um);
     camera.set_focal_length(50_mm);
-    CHECK(camera.has_psf());
-    CHECK(camera.uses_aperture_psf());
+    CHECK(camera.diffraction_enabled());
+    CHECK_FALSE(camera.has_set_psf());
+    CHECK_FALSE(camera.scatter_enabled());
 
-    // The radius holding 99% of an Airy pattern's light, 20.4 lambda N at RGB's longest
-    // wavelength (675 nm), is 3.9 px at f/2.8 here, so the stamps take the smallest automatic
-    // radius:
-    CHECK(camera.get_psf_radius() == CameraModel<RGB>::MIN_AUTO_PSF_RADIUS);
+    // Unresolved sources are drawn with it, as it is on its own:
+    const Image<RGB> psf = camera.psf_image(4, 0.2f, -0.3f);
+    const Image<RGB> pattern = camera.diffraction_image(4, 0.2f, -0.3f);
+    double worst = 0.0;
+    for (std::size_t i = 0; i < psf.size(); ++i) {
+        worst = std::max(worst, std::abs(static_cast<double>(psf[i][1] - pattern[i][1])));
+    }
+    CHECK(worst < 1e-6);
 
-    // At f/16 with 5 um pixels it is 44.1 px, and one more covers the subpixel offset:
-    camera.configure_sensor_from_pitch({64, 64}, 5_um);
-    camera.set_fstop(16.f);
-    CHECK(camera.get_psf_radius() == 46);
-
-    // At f/64 it would be 177 px, beyond the largest automatic radius:
-    camera.set_fstop(64.f);
-    CHECK(camera.get_psf_radius() == CameraModel<RGB>::DEFAULT_PSF_RADIUS);
-
-    // A size can still be given, and 0 goes back to the automatic one:
-    camera.use_aperture_psf(8, 4);
-    CHECK(camera.get_psf_radius() == 8);
-    camera.use_aperture_psf(0);
-    CHECK(camera.get_psf_radius() == CameraModel<RGB>::DEFAULT_PSF_RADIUS);
-
-    // Without a PSF, unresolved sources put all their light in one pixel:
-    camera.delete_psf();
-    CHECK_FALSE(camera.has_psf());
-    CHECK_FALSE(camera.uses_aperture_psf());
-    CHECK(camera.get_psf_radius() == 0);
+    // Without it, unresolved sources in focus put all their light in one pixel:
+    camera.enable_diffraction(false);
+    CHECK_FALSE(camera.diffraction_enabled());
+    const Image<RGB> point = camera.psf_image(4, 0.2f, -0.3f);
+    CHECK(point(4, 4)[1] == 1.f);
+    camera.enable_diffraction();
+    CHECK(camera.diffraction_enabled());
 }
 
 TEST_CASE("A star spreads over the pixels around it by default", "[render][psf][defaults]")
@@ -65,7 +56,7 @@ TEST_CASE("A star spreads over the pixels around it by default", "[render][psf][
         camera_model.set_focal_length(50_mm);
         if (!psf) {
             // In focus: out of focus, even by a twentieth of a pixel, the star is a small disc.
-            camera_model.delete_psf();
+            camera_model.enable_diffraction(false);
             camera_model.enable_depth_of_field(false);
         }
         auto camera = scene.root.new_instance(camera_model);
@@ -103,7 +94,7 @@ TEST_CASE("Depth of field is on by default, and unresolved sources' defocus foll
     camera.configure_sensor_from_pitch({32, 32}, 10_um);
     camera.set_focal_length(50_mm);
     camera.set_fstop(8.f);
-    camera.delete_psf(); // only the defocus stamps are built here
+    camera.enable_diffraction(false); // only the defocus blur is built here
     CHECK(camera.depth_of_field_enabled());
 
     // About a 3 px blur:
@@ -204,19 +195,26 @@ TEST_CASE("The camera handle reads back what was set", "[cameras][api]")
     CHECK(close(camera.sensor_roll().to_si(), PI<double>() / 2.0));
 
     // PSF:
-    CHECK(camera.uses_aperture_psf());
-    camera.use_aperture_psf(4, 2); // small, so quick to build
-    camera.set_harvey_shack_scatter(0.05f, 2.5f);
-    camera.set_psf_convolution_radius(6);
-    CHECK(camera.get_psf_kernel(0.f, 0.f).width() == 9);
-    CHECK(camera.get_psf_convolution_kernel().width() == 13);
-    CHECK(camera.get_psf_wings_kernel().width() == 13);
+    CHECK(camera.diffraction_enabled());
+    camera.set_scatter(0.05f, 2.5f, units::Arcsecond(20.0));
+    CHECK(camera.scatter_enabled());
+    CHECK(camera.psf_image(4).width() == 9);
+    CHECK(camera.diffraction_image(4).width() == 9);
+    CHECK(camera.scatter_image(6).width() == 13);
+    CHECK(camera.defocus_image(3, 0.f, 0.f, units::Meter(10.0)).width() == 7);
+    CHECK(camera.defocus_blur_radius(units::Meter(10.0)) == 0.f); // depth of field is off
+    camera.disable_scatter();
+    CHECK_FALSE(camera.scatter_enabled());
 
     Image<RGB> data(9, 9, RGB{0.f});
     data(4, 4) = RGB{1.f};
-    camera.set_measured_psf(data, 1.f, PSFSampling::PixelIntegrated, 4);
-    CHECK(camera.has_psf());
-    CHECK_FALSE(camera.uses_aperture_psf());
+    camera.set_measured_psf(data, 1.f, PSFSampling::PixelIntegrated);
+    CHECK(camera.has_set_psf());
+    CHECK(camera.diffraction_enabled());
+    camera.clear_psf();
+    CHECK_FALSE(camera.has_set_psf());
+    camera.enable_diffraction(false);
+    CHECK_FALSE(camera.diffraction_enabled());
 }
 
 TEST_CASE("A sensor's roll turns the scene the other way in the image", "[cameras][render][roll]")
@@ -227,7 +225,7 @@ TEST_CASE("A sensor's roll turns the scene the other way in the image", "[camera
     auto camera_model = scene.new_camera_model();
     camera_model.configure_sensor_from_pitch({32, 32}, 10_um);
     camera_model.set_focal_length(50_mm);
-    camera_model.delete_psf(); // all of a source's light in one pixel
+    camera_model.enable_diffraction(false); // all of a source's light in one pixel
     camera_model.set_sensor_roll(units::Degree(30.0));
     CHECK(close(camera_model.sensor_roll().to_si(), PI<double>() / 6.0));
 
