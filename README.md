@@ -83,14 +83,16 @@ If there are features you wish to see, that you don't see listed here, please fe
 - API Reference Documentation (NOTE: Some docs may appear incomplete or poorly formatted)
 
 ### Features Coming Soon (Order of Priority)
-| Feature | Status | Expected by | Version |
-| --- | --- | --- | --- |
-| SRP and Unresolved 3d Models | In-Progress | TBD | v0.9.11 |
-| Digital Elevation Maps | In-Progress | TBD | v0.9.12 |
-| Level-of-Detail | Designed | TBD | v0.9.13 |
-| LIDAR simulation | Planned | TBD | v1.0.X |
-| Comprehensive Tutorials | In-Progress | TBD | v1.0.X |
-| TLE support | Licensing | - | - |
+| Feature | Status |
+| --- | --- |
+| SRP and Unresolved 3d Models | In-Progress |
+| Digital Elevation Maps | In-Progress |
+| Level-of-Detail | Designed |
+| LIDAR simulation | Planned |
+| Comprehensive Tutorials | In-Progress |
+| TLE support | Licensing\* |
+
+\* There are licensing concerns with SGP4 that need to be understood before TLE support can be added.
 
 ### Long Term Plans
 - Vulkan based GPU Acceleration
