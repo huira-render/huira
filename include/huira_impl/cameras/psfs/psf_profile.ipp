@@ -443,9 +443,8 @@ inline DefocusedProfile::DefocusedProfile(const OpticsProfile& focused,
                           std::to_string(blur));
     }
     const double pi = PI<double>();
-    const double blue = focused.diffraction().cutoff_blue();
     const double red = focused.diffraction().cutoff_red();
-    const double period = 1.0 / blue;
+    const double period = focused.finest_period();
     const double step = period / 8.0;
 
     // How far the rings matter. At the far radius they are 0.1% of the mean once averaged over
@@ -461,6 +460,11 @@ inline DefocusedProfile::DefocusedProfile(const OpticsProfile& focused,
     ring_radius_ = std::clamp(focused_far_radius * std::min(1.0, SAFETY * kept / through),
                               std::min(PROJECTION_PERIODS / red, focused_far_radius),
                               focused_far_radius);
+    if (focused.scatter_only()) {
+        // Scattered light alone has no rings: the far field is the profile itself, from where
+        // its table starts, FAR_START beyond the disc's edge.
+        ring_radius_ = FAR_START;
+    }
 
     // The in-focus profile and its first two derivatives: tabulated with its rings out to the
     // ring radius, and averaged over them beyond. The second derivative is a central difference
@@ -592,7 +596,7 @@ inline DefocusedProfile::DefocusedProfile(const OpticsProfile& focused,
     // line spread at d - b sin(theta). The in-focus line spread is tabulated first, as far as
     // that reaches. Panels follow its rings within the ring radius of d, and beyond, where they
     // are washed out, grow with the distance from d. Tabulated as far as the profile's rings,
-    // beyond which the tables use the far field's.
+    // beyond which line_derivatives() takes the far field's.
     // Every quarter period, as the tables' nodes are: quintic interpolation between holds it to
     // about 1e-6.
     const double line_end = rings_end + OVERLAP;
@@ -653,13 +657,22 @@ inline DefocusedProfile::DefocusedProfile(const OpticsProfile& focused,
 }
 
 /**
- * @brief The line spread at a signed distance d from the line, with its first two derivatives,
- * out to the disc's edge plus ring_radius() and a few pixels; the tables take the far field's
- * beyond.
+ * @brief The line spread at a signed distance d from the line, with its first two derivatives:
+ * tabulated out to the disc's edge plus ring_radius() and a few pixels, and beyond, where the
+ * profile is its far field, the far field's, by Abel transform.
+ *
+ * The tables' line spreads can reach further than the table, out to where their far field takes
+ * over: just beyond it with the aperture's PSF, and for scattered light alone, followed to no
+ * rings, well beyond it. The table's power-law tail was 0.2% to 0.6% off there, out of focus by
+ * 5.6 px.
  */
 inline std::array<double, 3> DefocusedProfile::line_derivatives(double d) const
 {
-    std::array<double, 3> result = line_(std::abs(d));
+    const double distance = std::abs(d);
+    std::array<double, 3> result =
+        distance < line_.end()
+            ? line_(distance)
+            : abel_derivatives([&](double r) { return far_(r); }, distance, distance);
     if (d < 0.0) {
         result[1] = -result[1];
     }

@@ -316,6 +316,13 @@ PsfTables<TSpectral> PsfTables<TSpectral>::airy(double fnumber,
     constexpr double STRIP_STEPS_PER_PERIOD = 4.0;
     constexpr double MAX_STRIP_STEP = 0.5;
     constexpr double NEAR_SAMPLES_PER_SHOULDER = 4.0;
+    // For scattered light alone, against pixel integrals of the profile, blurred or not (with
+    // shoulders of 0.3 to 2 px): the projected integrals are within 2e-5 beyond 4 shoulders and
+    // PROJECTION_MIN_RADIUS. A near table holds each pixel's light, which turns over the pixel's
+    // width as well as the shoulder: 16 points a pixel at least keep it within 2e-5 of the peak,
+    // where 4 left 3e-4 with a shoulder of 2 px.
+    constexpr double PROJECTION_SHOULDERS = 4.0;
+    constexpr double SCATTER_MIN_NEAR_SAMPLES = 16.0;
 
     const double scatter_fraction =
         scatter.has_value() && scatter->fraction > 0.0 ? scatter->fraction : 0.0;
@@ -340,13 +347,23 @@ PsfTables<TSpectral> PsfTables<TSpectral>::airy(double fnumber,
         coarsest = std::min(coarsest, red);
     }
 
+    // Scattered light alone, as with a PSF that was set or none, has no rings to resolve. Its
+    // finest detail is its shoulder, and it needs no far field averaged over rings: the profile
+    // itself holds out to the reach. Sampling it as finely as the diffraction it lacks took
+    // several times as long, and ten times the memory, for no difference beyond 2e-5 of the
+    // peak (or at the edge of a blur beyond MAX_NEAR_BLUR, the 5e-5 the projected integrals
+    // took there already).
+    const bool scatter_only = scatter_fraction >= 1.0;
     Layout layout;
     layout.aspect = aspect;
     layout.reach = reach;
-    layout.near_radius = std::ceil(std::max(PROJECTION_MIN_RADIUS, PROJECTION_PERIODS / coarsest) +
-                                   (defocused ? std::min(blur, MAX_NEAR_BLUR) : 0.0)) +
-                         BLEND_WIDTH;
-    double samples_wanted = NEAR_SAMPLES_PER_PERIOD * finest * std::max(1.0, aspect);
+    const double projection =
+        scatter_only ? std::max(PROJECTION_MIN_RADIUS, PROJECTION_SHOULDERS * scatter->shoulder)
+                     : std::max(PROJECTION_MIN_RADIUS, PROJECTION_PERIODS / coarsest);
+    layout.near_radius =
+        std::ceil(projection + (defocused ? std::min(blur, MAX_NEAR_BLUR) : 0.0)) + BLEND_WIDTH;
+    double samples_wanted = scatter_only ? SCATTER_MIN_NEAR_SAMPLES
+                                         : NEAR_SAMPLES_PER_PERIOD * finest * std::max(1.0, aspect);
     if (scatter_fraction > 0.0) {
         samples_wanted = std::max(
             samples_wanted, NEAR_SAMPLES_PER_SHOULDER * std::max(1.0, aspect) / scatter->shoulder);
@@ -381,10 +398,12 @@ PsfTables<TSpectral> PsfTables<TSpectral>::airy(double fnumber,
         const double blue = profiles[channel].diffraction().cutoff_blue();
         const double red = profiles[channel].diffraction().cutoff_red();
         const double through = std::min(1.0, 1.0 / (PI<double>() * red * std::min(1.0, aspect)));
-        const double rings = blue > red ? FAR_FIELD_RINGS * through / (blue - red)
-                                        : std::numeric_limits<double>::infinity();
+        const double rings = scatter_only ? 0.0
+                             : blue > red ? FAR_FIELD_RINGS * through / (blue - red)
+                                          : std::numeric_limits<double>::infinity();
         channels[channel].far_radius = std::max(layout.near_radius + BLEND_WIDTH, rings);
-        channels[channel].step = std::min(MAX_STRIP_STEP, 1.0 / (STRIP_STEPS_PER_PERIOD * blue));
+        channels[channel].step =
+            std::min(MAX_STRIP_STEP, profiles[channel].finest_period() / STRIP_STEPS_PER_PERIOD);
     }
     if (!defocused) {
         return PsfTables(profiles, channels, layout);
