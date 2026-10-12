@@ -1468,8 +1468,14 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
     // tracing blurs bodies: from a star's tables or grid if that is a star's blur, within
     // PsfTables::BLUR_TOLERANCE, as it is for anything far enough away, and otherwise from tables
     // or a grid for its blur, built the first time it is needed. A moving object takes the blur
-    // at its mean inverse depth over the exposure. The tables and grids are held here until the
-    // render is done.
+    // at its mean inverse depth over the exposure, while in front of the camera. The tables and
+    // grids are held here until the render is done.
+    //
+    // Only objects whose light can reach the image are kept, before any tables are built for
+    // them: one behind the camera for the whole exposure is never seen, and one whose blurred
+    // light lands nowhere near the image needs none. (A nearby object beside or behind the
+    // camera has a large blur for its depth, which would take long to build tables for, and
+    // longer the nearer it is.)
     std::vector<std::shared_ptr<const PsfTables<TSpectral>>> object_tables;
     std::vector<std::shared_ptr<const GridPsf<TSpectral>>> object_grids;
     std::vector<RenderItem<TSpectral>> objects;
@@ -1477,22 +1483,48 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
         objects.reserve(scene_view.unresolved_objects_.size());
         std::vector<double> inverse_depths;
         inverse_depths.reserve(scene_view.unresolved_objects_.size());
+        // How far beyond its blur an object's light reaches, in pixel widths: the tables' sources
+        // are considered out to a frame's diagonal (see wide_frustum below), and a grid's to its
+        // reach.
+        const double object_margin =
+            std::max(use_tables
+                         ? std::hypot(static_cast<double>(fb_width), static_cast<double>(fb_height))
+                         : 0.0,
+                     grid != nullptr ? grid->reach() : 0.0) +
+            2.0;
+        const float depth_sign = camera->blender_convention_ ? -1.f : 1.f;
         for (const auto& instance : scene_view.unresolved_objects_) {
             std::vector<Vec3<float>> directions(instance.transforms.size());
             std::vector<TSpectral> irradiances(instance.transforms.size());
             std::vector<float> ranges(instance.transforms.size());
             double inverse_depth = 0.0;
+            std::size_t in_front = 0;
             for (std::size_t i = 0; i < instance.transforms.size(); ++i) {
                 const Vec3<float>& position = instance.transforms[i].position;
                 directions[i] = glm::normalize(position);
                 irradiances[i] = instance.unresolved_object->get_irradiance(times[i]);
                 ranges[i] = glm::length(position);
-                inverse_depth += 1.0 / std::abs(static_cast<double>(position.z));
+                const double depth = static_cast<double>(depth_sign * position.z);
+                if (depth > 0.0) {
+                    inverse_depth += 1.0 / depth;
+                    ++in_front;
+                }
+            }
+            if (in_front == 0) {
+                continue;
+            }
+            inverse_depth /= static_cast<double>(in_front);
+            const double blur = camera->source_blur_(inverse_depth);
+            const Frustum<TSpectral> object_frustum = camera->view_frustum_with_margin_(
+                static_cast<float>(std::min(blur + object_margin, 1e9)));
+            if (std::none_of(directions.begin(), directions.end(), [&](const Vec3<float>& d) {
+                    return object_frustum.contains(d);
+                })) {
+                continue;
             }
             TrajectoryArc arc(directions);
             RenderItem<TSpectral> item(std::move(arc), std::move(irradiances), std::move(ranges));
-            inverse_depths.push_back(inverse_depth /
-                                     static_cast<double>(instance.transforms.size()));
+            inverse_depths.push_back(inverse_depth);
             objects.push_back(std::move(item));
         }
         if (use_tables) {
