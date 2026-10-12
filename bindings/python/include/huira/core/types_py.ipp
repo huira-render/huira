@@ -9,6 +9,10 @@ namespace py = pybind11;
 
 namespace huira {
 
+/// A numpy array of doubles, made contiguous if it is not, which the bindings read through a
+/// pointer.
+using DoubleArray = py::array_t<double, py::array::c_style | py::array::forcecast>;
+
 /**
  * @brief Register pybind11 type casters and classes for core math types
  *        (Vec3, Mat3, Quaternion, ShusterQuaternion) using double precision.
@@ -25,7 +29,7 @@ inline void bind_types(py::module_& m)
     py::class_<Vec3<double>>(m, "Vec3", "3-component vector (double precision)")
         .def(py::init<>())
         .def(py::init<double, double, double>(), py::arg("x"), py::arg("y"), py::arg("z"))
-        .def(py::init([](py::array_t<double> arr) {
+        .def(py::init([](DoubleArray arr) {
                  auto buf = arr.request();
                  if (buf.ndim != 1 || buf.shape[0] != 3) {
                      throw std::runtime_error("Vec3 requires a 1-D array of length 3");
@@ -71,7 +75,7 @@ inline void bind_types(py::module_& m)
         .def(py::init<double>(),
              py::arg("diagonal"),
              "Construct a diagonal matrix with the given value")
-        .def(py::init([](py::array_t<double, py::array::c_style | py::array::forcecast> arr) {
+        .def(py::init([](DoubleArray arr) {
                  auto buf = arr.request();
                  if (buf.ndim != 2 || buf.shape[0] != 3 || buf.shape[1] != 3) {
                      throw std::runtime_error("Mat3 requires a 3x3 numpy array");
@@ -117,7 +121,7 @@ inline void bind_types(py::module_& m)
              py::arg("x"),
              py::arg("y"),
              py::arg("z"))
-        .def(py::init([](py::array_t<double> arr) {
+        .def(py::init([](DoubleArray arr) {
                  auto buf = arr.request();
                  if (buf.ndim != 1 || buf.shape[0] != 4) {
                      throw std::runtime_error(
@@ -178,7 +182,7 @@ inline void bind_types(py::module_& m)
              py::arg("y"),
              py::arg("z"),
              py::arg("w"))
-        .def(py::init([](py::array_t<double> arr) {
+        .def(py::init([](DoubleArray arr) {
                  auto buf = arr.request();
                  if (buf.ndim != 1 || buf.shape[0] != 4) {
                      throw std::runtime_error(

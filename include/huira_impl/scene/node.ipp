@@ -35,6 +35,7 @@ void Node<TSpectral>::set_position(const Vec3<double>& position)
         HUIRA_THROW_ERROR(this->get_info() +
                           " - cannot manually set position when child has a spice_origin");
     }
+    validate_real(position, this->get_info() + " position");
 
     this->local_transform_.position = position;
     this->position_mode_ = TransformMode::MANUAL_TRANSFORM;
@@ -58,7 +59,9 @@ void Node<TSpectral>::set_position(units::Meter x, units::Meter y, units::Meter 
     HUIRA_LOG_INFO(this->get_info() + " - set_position(" + std::to_string(x.to_si()) + ", " +
                    std::to_string(y.to_si()) + ", " + std::to_string(z.to_si()) + ")");
 
-    this->local_transform_.position = Vec3<double>{x.to_si(), y.to_si(), z.to_si()};
+    const Vec3<double> position{x.to_si(), y.to_si(), z.to_si()};
+    validate_real(position, this->get_info() + " position");
+    this->local_transform_.position = position;
     this->position_mode_ = TransformMode::MANUAL_TRANSFORM;
     this->spice_origin_ = "";
 }
@@ -84,7 +87,8 @@ void Node<TSpectral>::set_rotation(const Rotation<double>& rotation)
 
 /**
  * @brief Set the node's scale.
- * @param scale Scale vector
+ * @param scale Scale vector: each component finite and not 0 (a negative one mirrors).
+ * @throws std::runtime_error if a component is 0, too small to invert, or not finite.
  */
 template <IsSpectral TSpectral>
 void Node<TSpectral>::set_scale(const Vec3<double>& scale)
@@ -92,7 +96,22 @@ void Node<TSpectral>::set_scale(const Vec3<double>& scale)
     HUIRA_LOG_INFO(this->get_info() + " - set_scale(" + std::to_string(scale[0]) + ", " +
                    std::to_string(scale[1]) + ", " + std::to_string(scale[2]) + ")");
 
+    check_scale_(scale);
     this->local_transform_.scale = scale;
+}
+
+/// Throws unless each component of a scale is finite, and so is its inverse, which the inverse
+/// transform takes: 0 would flatten the node.
+template <IsSpectral TSpectral>
+void Node<TSpectral>::check_scale_(const Vec3<double>& scale) const
+{
+    for (int i = 0; i < 3; ++i) {
+        if (!std::isfinite(scale[i]) || !std::isfinite(1.0 / scale[i])) {
+            HUIRA_THROW_ERROR(
+                this->get_info() +
+                " - The scale must be finite and not 0 in each component: " + vec_to_string(scale));
+        }
+    }
 }
 
 /**
@@ -100,6 +119,7 @@ void Node<TSpectral>::set_scale(const Vec3<double>& scale)
  * @param sx X scale
  * @param sy Y scale
  * @param sz Z scale
+ * @throws std::runtime_error if one is 0, too small to invert, or not finite.
  */
 template <IsSpectral TSpectral>
 void Node<TSpectral>::set_scale(double sx, double sy, double sz)
@@ -107,7 +127,9 @@ void Node<TSpectral>::set_scale(double sx, double sy, double sz)
     HUIRA_LOG_INFO(this->get_info() + " - set_scale(" + std::to_string(sx) + ", " +
                    std::to_string(sy) + ", " + std::to_string(sz) + ")");
 
-    this->local_transform_.scale = Vec3<double>{sx, sy, sz};
+    const Vec3<double> scale{sx, sy, sz};
+    check_scale_(scale);
+    this->local_transform_.scale = scale;
 }
 
 /**
@@ -121,6 +143,7 @@ void Node<TSpectral>::set_velocity(const Vec3<double>& velocity)
         HUIRA_THROW_ERROR(this->get_info() +
                           " - cannot manually set velocity when node does not use manual position");
     }
+    validate_real(velocity, this->get_info() + " velocity");
 
     this->local_transform_.velocity = velocity;
 }
@@ -144,7 +167,9 @@ void Node<TSpectral>::set_velocity(units::MetersPerSecond vx,
     HUIRA_LOG_INFO(this->get_info() + " - set_velocity(" + std::to_string(vx.to_si()) + ", " +
                    std::to_string(vy.to_si()) + ", " + std::to_string(vz.to_si()) + ")");
 
-    this->local_transform_.velocity = Vec3<double>{vx.to_si(), vy.to_si(), vz.to_si()};
+    const Vec3<double> velocity{vx.to_si(), vy.to_si(), vz.to_si()};
+    validate_real(velocity, this->get_info() + " velocity");
+    this->local_transform_.velocity = velocity;
 }
 
 /**
@@ -166,6 +191,7 @@ void Node<TSpectral>::set_angular_velocity(const Vec3<double>& angular_velocity)
             this->get_info() +
             " - cannot manually set angular velocity when node does not use manual rotation");
     }
+    validate_real(angular_velocity, this->get_info() + " angular velocity");
 
     this->local_transform_.angular_velocity = angular_velocity;
     this->body_frame_rates_ = false;
@@ -199,7 +225,9 @@ void Node<TSpectral>::set_angular_velocity(units::RadiansPerSecond wx,
     HUIRA_LOG_INFO(this->get_info() + " - set_angular_velocity(" + std::to_string(wx.to_si()) +
                    ", " + std::to_string(wy.to_si()) + ", " + std::to_string(wz.to_si()) + ")");
 
-    this->local_transform_.angular_velocity = Vec3<double>{wx.to_si(), wy.to_si(), wz.to_si()};
+    const Vec3<double> angular_velocity{wx.to_si(), wy.to_si(), wz.to_si()};
+    validate_real(angular_velocity, this->get_info() + " angular velocity");
+    this->local_transform_.angular_velocity = angular_velocity;
     this->body_frame_rates_ = false;
 }
 
@@ -232,7 +260,9 @@ void Node<TSpectral>::set_body_angular_velocity(units::RadiansPerSecond wx,
     HUIRA_LOG_INFO(this->get_info() + " - set_body_angular_velocity(" + std::to_string(wx.to_si()) +
                    ", " + std::to_string(wy.to_si()) + ", " + std::to_string(wz.to_si()) + ")");
 
-    this->local_transform_.angular_velocity = Vec3<double>{wx.to_si(), wy.to_si(), wz.to_si()};
+    const Vec3<double> angular_velocity{wx.to_si(), wy.to_si(), wz.to_si()};
+    validate_real(angular_velocity, this->get_info() + " angular velocity");
+    this->local_transform_.angular_velocity = angular_velocity;
     this->body_frame_rates_ = true;
 }
 
@@ -246,6 +276,11 @@ void Node<TSpectral>::set_manual_transform(const Transform<double>& transform)
 
     HUIRA_LOG_INFO(this->get_info() + " - set_manual_transform(" + transform.to_string());
 
+    // Its rotation was checked when it was made:
+    validate_real(transform.position, this->get_info() + " position");
+    validate_real(transform.velocity, this->get_info() + " velocity");
+    validate_real(transform.angular_velocity, this->get_info() + " angular velocity");
+    check_scale_(transform.scale);
     this->local_transform_ = transform;
     this->body_frame_rates_ = false;
 }
@@ -317,6 +352,18 @@ void Node<TSpectral>::set_custom_position_callback(Args&&... args)
     this->spice_origin_ = "";
 }
 
+/**
+ * @brief Move the node on a Keplerian orbit about its parent, by CSPICE's conics_c().
+ *
+ * @param semi_major_axis The semi-major axis: positive for an ellipse (eccentricity under 1),
+ *        negative for a hyperbola (over 1).
+ * @param eccentricity Non-negative, and not 1: a parabola has no semi-major axis.
+ * @param inclination, raan, arg_periapsis, mean_anomaly Angles, finite.
+ * @param epoch When the body is at mean_anomaly.
+ * @param mu The central body's gravitational parameter, in km^3/s^2 as SPICE takes it; positive.
+ * @throws std::runtime_error if any element is not finite, or they do not describe an orbit
+ *         whose periapsis is a positive distance away, about a body of positive mass.
+ */
 template <IsSpectral TSpectral>
 void Node<TSpectral>::set_keplerian_orbit(units::Meter semi_major_axis,
                                           double eccentricity,
@@ -327,6 +374,25 @@ void Node<TSpectral>::set_keplerian_orbit(units::Meter semi_major_axis,
                                           Time epoch,
                                           double mu)
 {
+    const double a = semi_major_axis.to_si();
+    for (const double angle : {inclination.to_si(),
+                               raan.to_si(),
+                               arg_periapsis.to_si(),
+                               mean_anomaly.to_si(),
+                               epoch.et()}) {
+        validate_real(angle, this->get_info() + " orbital angle or epoch");
+    }
+    // The periapsis, a (1 - e), is a positive distance for an ellipse with a > 0 and for a
+    // hyperbola with a < 0:
+    if (!(eccentricity >= 0.0) || !std::isfinite(eccentricity) || eccentricity == 1.0 ||
+        !std::isfinite(a) || !(a * (1.0 - eccentricity) > 0.0)) {
+        HUIRA_THROW_ERROR(this->get_info() +
+                          " - The orbit needs an eccentricity that is non-negative, finite and "
+                          "not 1, and a semi-major axis positive for an ellipse and negative for "
+                          "a hyperbola: " +
+                          std::to_string(a) + " m, eccentricity " + std::to_string(eccentricity));
+    }
+    validate_strictly_positive(mu, this->get_info() + " gravitational parameter");
     this->set_custom_position_callback<KeplerianOrbitCallback>(
         semi_major_axis, eccentricity, inclination, raan, arg_periapsis, mean_anomaly, epoch, mu);
 }

@@ -49,6 +49,7 @@ class SphereLight : public Light<TSpectral> {
     void set_spectral_power(const units::SpectralWatts<TSpectral>& spectral_power);
 
     float radius_;
+    static float checked_radius_(const units::Meter& radius);
     TSpectral radiance_;
 };
 } // namespace huira

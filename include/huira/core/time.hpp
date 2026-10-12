@@ -28,9 +28,11 @@
  * ```
  */
 
+#include <cmath>
 #include <string>
 
 #include "huira/units/units.hpp"
+#include "huira/util/logger.hpp"
 
 namespace huira {
 
@@ -147,11 +149,18 @@ class Time {
     double et_ = 0.0;
 
     /**
-     * @brief Private constructor from raw ET value.
+     * @brief Private constructor from raw ET value, which every other one comes to.
      *
      * @param et Ephemeris time in seconds past J2000.0 TDB.
+     * @throws std::runtime_error if it is not finite.
      */
-    explicit Time(double et) : et_(et) {}
+    explicit Time(double et) : et_(et)
+    {
+        if (!std::isfinite(et)) {
+            HUIRA_THROW_ERROR("Time - The time must be finite: " + std::to_string(et) +
+                              " s past J2000");
+        }
+    }
 };
 
 } // namespace huira

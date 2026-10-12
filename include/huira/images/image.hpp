@@ -142,6 +142,8 @@ class Image {
     Image operator+(const Image& other) const;
 
   private:
+    static std::size_t pixel_count_(int width, int height);
+
     std::vector<PixelT> data_;
     Resolution resolution_;
 

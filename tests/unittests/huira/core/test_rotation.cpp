@@ -1,4 +1,5 @@
 #include <cmath>
+#include <limits>
 #include <numbers>
 
 #include "catch2/catch_approx.hpp"
@@ -252,4 +253,43 @@ TEST_CASE("Rotation - Static Factory Methods", "[rotation][static]")
         Vec3<double> rotated_x = z_rot * x_axis;
         REQUIRE_THAT(rotated_x.y, Catch::Matchers::WithinAbs(1.0, 1e-10));
     }
+}
+
+TEMPLATE_TEST_CASE("Rotation - Inputs that are not rotations are refused",
+                   "[rotation][validation]",
+                   float,
+                   double)
+{
+    // Before, a NaN matrix passed the determinant check (|NaN - 1| > eps is false) and became a
+    // NaN rotation; a shear with a determinant of 1 was turned into some other rotation; a zero
+    // quaternion was taken as no rotation; and a zero axis with an angle silently did nothing.
+    using RotationType = Rotation<TestType>;
+    using Vec3Type = Vec3<TestType>;
+    using Mat3Type = Mat3<TestType>;
+    const TestType nan = std::numeric_limits<TestType>::quiet_NaN();
+
+    Mat3Type spoiled{1};
+    spoiled[1][2] = nan;
+    CHECK_THROWS(RotationType::from_local_to_parent(spoiled));
+    CHECK_THROWS(RotationType::from_parent_to_local(spoiled));
+
+    Mat3Type shear{1};
+    shear[1][0] = 5; // det 1, columns not at right angles
+    CHECK_THROWS(RotationType::from_local_to_parent(shear));
+    CHECK_THROWS(
+        RotationType::from_basis_vectors(Vec3Type{1, 0, 0}, Vec3Type{1, 1, 0}, Vec3Type{0, 0, 1}));
+    CHECK_NOTHROW(
+        RotationType::from_basis_vectors(Vec3Type{0, 1, 0}, Vec3Type{-1, 0, 0}, Vec3Type{0, 0, 1}));
+
+    CHECK_THROWS(RotationType::from_local_to_parent(Quaternion<TestType>{0, 0, 0, 0}));
+    CHECK_THROWS(RotationType::from_parent_to_local(Quaternion<TestType>{0, 0, 0, 0}));
+    CHECK_THROWS(RotationType::from_local_to_parent(Quaternion<TestType>{2, 0, 0, 0}));
+    CHECK_THROWS(RotationType::from_local_to_parent(Quaternion<TestType>{nan, 0, 0, 0}));
+
+    CHECK_THROWS(RotationType::from_local_to_parent(Vec3Type{nan, 0, 1}, units::Radian(0.5)));
+    CHECK_THROWS(RotationType::from_local_to_parent(Vec3Type{0, 0, 0}, units::Radian(0.5)));
+    CHECK_THROWS(RotationType::from_local_to_parent(
+        Vec3Type{0, 0, 1}, units::Radian(std::numeric_limits<double>::infinity())));
+    // No axis and no angle is no rotation (a guard):
+    CHECK_NOTHROW(RotationType::from_local_to_parent(Vec3Type{0, 0, 0}, units::Radian(0.0)));
 }

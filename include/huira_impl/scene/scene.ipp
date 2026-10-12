@@ -1,5 +1,8 @@
+#include <algorithm>
 #include <iostream>
+#include <iterator>
 #include <stdexcept>
+#include <string>
 
 #include "embree4/rtcore.h"
 #include "huira/assets/io/model_loader.hpp"
@@ -24,6 +27,7 @@
 #include "huira/stars/io/star_catalog.hpp"
 #include "huira/util/colorful_text.hpp"
 #include "huira/util/logger.hpp"
+#include "huira/util/validate.hpp"
 #include "huira/volumes/density/constant_density_field.hpp"
 #include "huira/volumes/scattering/isotropic_scatter.hpp"
 #include "tbb/blocked_range.h"
@@ -160,6 +164,9 @@ template <IsSpectral TSpectral>
 GeometryHandle<TSpectral>
 Scene<TSpectral>::add_geometry(std::shared_ptr<Geometry<TSpectral>> geometry, std::string name)
 {
+    if (geometry == nullptr) {
+        HUIRA_THROW_ERROR("Scene::add_geometry - Cannot add a null geometry");
+    }
     geometry->set_device(device_);
     geometries_.add(geometry, name);
     return GeometryHandle<TSpectral>{geometry};
@@ -983,25 +990,32 @@ MediumHandle<TSpectral> Scene<TSpectral>::add_medium(std::shared_ptr<Medium<TSpe
  * frame's edges, where the sky beyond them is missing.
  *
  * @param background The radiance, as an equirectangular map.
+ * @throws std::runtime_error if it has no pixels, or a pixel is negative or not finite.
  */
 template <IsSpectral TSpectral>
 void Scene<TSpectral>::set_background_radiance(Image<TSpectral> background)
 {
+    // As a texture's, which it is sampled as:
+    Texture<TSpectral>::check_(background);
     background_ = std::make_shared<Image<TSpectral>>(std::move(background));
 }
 
 /// @brief Set a uniform sky. See set_background_radiance(Image<TSpectral>).
+/// @throws std::runtime_error if it is negative or not finite.
 template <IsSpectral TSpectral>
 void Scene<TSpectral>::set_background_radiance(TSpectral background)
 {
+    validate_spectrum(background, "background radiance");
     background_ = std::make_shared<Image<TSpectral>>(1, 1, background);
 }
 
 /// @brief Set a uniform sky, from its total radiance spread over the spectrum (see
 /// SpectralBins::from_total()). See set_background_radiance(Image<TSpectral>).
+/// @throws std::runtime_error if it is negative or not finite.
 template <IsSpectral TSpectral>
 void Scene<TSpectral>::set_background_radiance(float background)
 {
+    validate_non_negative(background, "background radiance");
     background_ = std::make_shared<Image<TSpectral>>(1, 1, TSpectral::from_total(background));
 }
 
@@ -1030,12 +1044,25 @@ TextureHandle<Vec3<float>> Scene<TSpectral>::add_texture(Image<Vec3<float>>&& im
     return TextureHandle<Vec3<float>>{texture};
 }
 
+/**
+ * @brief Add a tangent-space normal map, each pixel's normal encoded as (n + 1) / 2.
+ *
+ * @throws std::runtime_error if the image has no pixels, or a pixel is not finite or encodes no
+ *         direction (0.5, 0.5, 0.5), which would make its normal NaN.
+ */
 template <IsSpectral TSpectral>
 TextureHandle<Vec3<float>> Scene<TSpectral>::add_normal_texture(Image<Vec3<float>>&& image,
                                                                 std::string name)
 {
+    Texture<Vec3<float>>::check_(image);
     for (std::size_t i = 0; i < image.size(); ++i) {
-        image[i] = glm::normalize(image[i] * 2.0f - Vec3<float>{1.0f});
+        const Vec3<float> normal = image[i] * 2.0f - Vec3<float>{1.0f};
+        const float length = glm::length(normal);
+        if (!(length > 1e-6f)) {
+            HUIRA_THROW_ERROR("Scene::add_normal_texture - Pixel " + std::to_string(i) +
+                              " encodes no direction: " + vec_to_string(image[i]));
+        }
+        image[i] = normal / length;
     }
     return add_texture(std::move(image), name);
 }
@@ -1066,6 +1093,27 @@ void Scene<TSpectral>::set_stars(const std::vector<Star<TSpectral>>& stars)
 }
 
 /**
+ * @brief The stars of a catalog that can be drawn (see Star::usable()), with a warning naming
+ * how many were left out: noisy photometry can give a star no finite temperature.
+ */
+template <IsSpectral TSpectral>
+std::vector<StarData> Scene<TSpectral>::usable_stars_(const std::vector<StarData>& star_data)
+{
+    std::vector<StarData> usable;
+    usable.reserve(star_data.size());
+    std::copy_if(star_data.begin(),
+                 star_data.end(),
+                 std::back_inserter(usable),
+                 [](const StarData& star) { return Star<TSpectral>::usable(star); });
+    if (usable.size() < star_data.size()) {
+        HUIRA_LOG_WARNING("Scene - Left out " + std::to_string(star_data.size() - usable.size()) +
+                          " of the catalog's " + std::to_string(star_data.size()) +
+                          " stars, whose position, temperature or solid angle is not finite");
+    }
+    return usable;
+}
+
+/**
  * @brief Loads stars from a catalog file.
  * @param star_catalog_path Path to the star catalog
  * @param time Time for proper motion
@@ -1078,7 +1126,7 @@ void Scene<TSpectral>::load_stars(const fs::path& star_catalog_path,
 {
     // Read the catalog:
     StarCatalog star_catalog = StarCatalog::read_star_data(star_catalog_path, min_magnitude);
-    const std::vector<StarData>& star_data = star_catalog.get_star_data();
+    const std::vector<StarData> star_data = usable_stars_(star_catalog.get_star_data());
 
     double tsince = time.julian_years_since_j2000(TimeScale::TT);
 
@@ -1113,7 +1161,7 @@ void Scene<TSpectral>::load_dynamic_stars(const fs::path& star_catalog_path,
 {
     // Read the catalog:
     StarCatalog star_catalog = StarCatalog::read_star_data(star_catalog_path, min_magnitude);
-    const std::vector<StarData>& star_data = star_catalog.get_star_data();
+    const std::vector<StarData> star_data = usable_stars_(star_catalog.get_star_data());
 
     double tsince = time.julian_years_since_j2000(TimeScale::TT);
 

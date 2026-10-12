@@ -4,6 +4,7 @@
 #include "huira/concepts/spectral_concepts.hpp"
 #include "huira/geometry/mesh.hpp"
 #include "huira/scene/state_callbacks/look_at.hpp"
+#include "huira/util/validate.hpp"
 
 namespace huira {
 
@@ -63,10 +64,15 @@ std::string Instance<TSpectral>::get_info() const
  * @brief Orient the instance to look at a target node, with an optional up vector.
  * @param target Target node to look at
  * @param up Up vector for orientation (default: {0, 0, 1})
+ * @throws std::runtime_error if the target is this instance, or up is not finite.
  */
 template <IsSpectral TSpectral>
 void Instance<TSpectral>::look_at(const Node<TSpectral>& target, const Vec3<double>& up)
 {
+    if (&target == this) {
+        HUIRA_THROW_ERROR(this->get_info() + " - An instance cannot look at itself");
+    }
+    validate_real(up, this->get_info() + " up vector");
     bool is_blender = false;
 
     // Check if the wrapped asset is a camera to determine conventions
@@ -84,10 +90,13 @@ void Instance<TSpectral>::look_at(const Node<TSpectral>& target, const Vec3<doub
  * @brief Orient the instance to look at a target position, with an optional up vector.
  * @param target_position Target position to look at
  * @param up Up vector for orientation (default: {0, 0, 1})
+ * @throws std::runtime_error if the target or up is not finite.
  */
 template <IsSpectral TSpectral>
 void Instance<TSpectral>::look_at(const Vec3<double>& target_position, const Vec3<double>& up)
 {
+    validate_real(target_position, this->get_info() + " target position");
+    validate_real(up, this->get_info() + " up vector");
     bool is_blender = false;
     if (std::holds_alternative<CameraModel<TSpectral>*>(asset_)) {
         is_blender = std::get<CameraModel<TSpectral>*>(asset_)->uses_blender_convention();

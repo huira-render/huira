@@ -34,6 +34,8 @@ namespace huira {
  * @param camera_instance Camera instance handle
  * @param obs_mode Observation mode
  * @param num_temporal_samples Number of temporal samples for motion blur (default: 1)
+ * @throws std::runtime_error if the interval ends before it starts, or there are no temporal
+ *         samples.
  */
 template <IsSpectral TSpectral>
 SceneView<TSpectral>::SceneView(const Scene<TSpectral>& scene,
@@ -46,10 +48,12 @@ SceneView<TSpectral>::SceneView(const Scene<TSpectral>& scene,
     HUIRA_TRACE_SCOPE("SceneView::SceneView");
     HUIRA_LOG_INFO("Created over interval [" + std::to_string(exposure_interval.start.et()) +
                    ",  " + std::to_string(exposure_interval.end.et()) + "]");
+    // Its fields can have been changed since it was made:
+    exposure_interval_.check();
 
     // Create the temporal samples:
     if (num_temporal_samples < 1) {
-        num_temporal_samples = 1;
+        HUIRA_THROW_ERROR("SceneView - At least one temporal sample is needed");
     }
     temporal_samples_ = exposure_interval_.samples(num_temporal_samples);
 

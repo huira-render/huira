@@ -18,7 +18,8 @@ struct KeplerianOrbitCallback : public PositionCallback {
                            const Time& epoch,
                            double mu)
     {
-        elements_[0] = a.to_si() / 1000.0;
+        // conics_c() takes the periapsis distance, in km, not the semi-major axis:
+        elements_[0] = a.to_si() * (1.0 - e) / 1000.0;
         elements_[1] = e;
         elements_[2] = i.to_si();
         elements_[3] = raan.to_si();

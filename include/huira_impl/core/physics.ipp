@@ -1,5 +1,6 @@
 #include <cmath>
 #include <cstddef>
+#include <string>
 #include <vector>
 
 #include "huira/concepts/numeric_concepts.hpp"
@@ -60,6 +61,10 @@ inline std::vector<double> plancks_law(double temp, const std::vector<double>& l
 template <IsFloatingPoint T>
 std::vector<T> linspace(T min, T max, size_t N)
 {
+    // One value has no spacing, and would divide by zero:
+    if (N < 2) {
+        return N == 1 ? std::vector<T>{min} : std::vector<T>{};
+    }
     std::vector<T> output(N);
     T step = (max - min) / static_cast<T>(N - 1);
     for (size_t i = 0; i < N; ++i) {
@@ -71,13 +76,23 @@ std::vector<T> linspace(T min, T max, size_t N)
 /**
  * @brief Compute the black-body spectral radiance for a given temperature.
  * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
- * @param temperature Temperature in Kelvin
- * @param steps Number of integration steps per bin
+ * @param temperature Temperature in Kelvin: finite, and not below absolute zero.
+ * @param steps Number of integration steps per bin: at least 2.
  * @return TSpectral Black-body radiance in each spectral bin
+ * @throws std::runtime_error if the temperature is negative or not finite, or steps is under 2.
  */
 template <IsSpectral TSpectral>
 TSpectral black_body(double temperature, std::size_t steps)
 {
+    if (!(temperature >= 0.0) || !std::isfinite(temperature)) {
+        HUIRA_THROW_ERROR("black_body - The temperature must be finite and not below absolute "
+                          "zero: " +
+                          std::to_string(temperature) + " K");
+    }
+    if (steps < 2) {
+        HUIRA_THROW_ERROR("black_body - At least two integration steps are needed: " +
+                          std::to_string(steps));
+    }
     TSpectral radiance{0};
     auto bins = TSpectral::get_all_bins();
     for (std::size_t i = 0; i < bins.size(); ++i) {
@@ -159,12 +174,23 @@ inline double v_band_irradiance(double visual_magnitude)
  * @brief Convert visual magnitude to spectral irradiance, assuming a solar spectrum.
  * @tparam TSpectral Spectral type
  * @param visual_magnitude Visual magnitude (V)
- * @param albedo Optional albedo scaling (default 1)
+ * @param albedo Optional albedo scaling (default 1): finite and non-negative.
  * @return TSpectral Spectral irradiance
+ * @throws std::runtime_error if the magnitude is not finite, or the albedo is negative or not
+ *         finite.
  */
 template <IsSpectral TSpectral>
 TSpectral visual_magnitude_to_irradiance(double visual_magnitude, TSpectral albedo)
 {
+    if (!std::isfinite(visual_magnitude)) {
+        HUIRA_THROW_ERROR("visual_magnitude_to_irradiance - The magnitude must be finite: " +
+                          std::to_string(visual_magnitude));
+    }
+    if (!albedo.valid()) {
+        HUIRA_THROW_ERROR("visual_magnitude_to_irradiance - The albedo must be finite and "
+                          "non-negative: " +
+                          albedo.to_string());
+    }
     // Solar spectral shape (coarse, in arbitrary radiance units — only ratios matter):
     TSpectral solar_template = black_body<TSpectral>(5778.0, 100);
     double solar_total = static_cast<double>(solar_template.total());
@@ -220,6 +246,14 @@ TSpectral visual_magnitude_to_irradiance(double visual_magnitude, TSpectral albe
  */
 inline double integrate(const std::vector<double>& x, const std::vector<double>& y)
 {
+    if (x.size() != y.size()) {
+        HUIRA_THROW_ERROR("integrate - x and y must be the same length: " +
+                          std::to_string(x.size()) + ", " + std::to_string(y.size()));
+    }
+    // Fewer than two points span nothing:
+    if (x.size() < 2) {
+        return 0.0;
+    }
     double sum = 0.0;
     for (size_t i = 0; i < x.size() - 1; ++i) {
         double dx = x[i + 1] - x[i];

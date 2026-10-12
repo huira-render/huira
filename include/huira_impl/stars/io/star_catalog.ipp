@@ -1,7 +1,9 @@
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <string>
 #include <vector>
 
 #include "huira/util/logger.hpp"
@@ -65,10 +67,15 @@ StarCatalog StarCatalog::read_star_data(const fs::path& filepath, float maximum_
         HUIRA_THROW_ERROR("StarCatalog - Failed to open file for reading: " + filepath.string());
     }
 
+    if (std::isnan(maximum_magnitude)) {
+        HUIRA_THROW_ERROR("StarCatalog - The maximum magnitude must not be NaN, which would load "
+                          "no stars");
+    }
+
     // Read and validate header
     HrscHeader header{};
     in.read(reinterpret_cast<char*>(&header), sizeof(header));
-    if (header.magic[0] != 'H' || header.magic[1] != 'R' || header.magic[2] != 'S' ||
+    if (!in || header.magic[0] != 'H' || header.magic[1] != 'R' || header.magic[2] != 'S' ||
         header.magic[3] != 'C') {
         HUIRA_THROW_ERROR("StarData - Invalid file format: " + filepath.string());
     }
@@ -78,6 +85,15 @@ StarCatalog StarCatalog::read_star_data(const fs::path& filepath, float maximum_
         HUIRA_THROW_ERROR("StarCatalog - " + name + " is out of date (version = " +
                           std::to_string(static_cast<unsigned int>(header.version)) +
                           ").  Please re-generate.");
+    }
+
+    // The stars it claims must all be there, or the search below reads past the end:
+    const std::uintmax_t size = fs::file_size(filepath);
+    if (size < sizeof(HrscHeader) ||
+        header.star_count > (size - sizeof(HrscHeader)) / sizeof(StarData)) {
+        HUIRA_THROW_ERROR("StarCatalog - " + filepath.string() +
+                          " is truncated: its header lists " + std::to_string(header.star_count) +
+                          " stars, more than it holds");
     }
 
     // Binary search on file to find cutoff index
@@ -101,6 +117,9 @@ StarCatalog StarCatalog::read_star_data(const fs::path& filepath, float maximum_
     in.seekg(static_cast<std::streamoff>(sizeof(HrscHeader)));
     in.read(reinterpret_cast<char*>(stars.data()),
             static_cast<std::streamsize>(low * sizeof(StarData)));
+    if (!in) {
+        HUIRA_THROW_ERROR("StarCatalog - Failed to read the stars from: " + filepath.string());
+    }
 
     StarCatalog star_catalog(stars);
     star_catalog.set_catalog_type(header.catalog_type);

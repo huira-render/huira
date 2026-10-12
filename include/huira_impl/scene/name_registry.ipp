@@ -17,6 +17,10 @@ namespace huira {
 template <typename T>
 void NameRegistry<T>::add(std::shared_ptr<T> object, std::string name)
 {
+    if (object == nullptr) {
+        HUIRA_THROW_ERROR("Scene - Cannot add a null object" +
+                          (name.empty() ? std::string() : " named '" + name + "'"));
+    }
     if (name.empty()) {
         name = object->type() + "." + std::to_string(object->id());
     }

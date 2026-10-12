@@ -1,6 +1,10 @@
 #pragma once
 
+#include <cmath>
+#include <string>
+
 #include "huira/materials/bsdfs/bsdf.hpp"
+#include "huira/util/logger.hpp"
 
 namespace huira {
 
@@ -26,7 +30,19 @@ namespace huira {
 template <IsSpectral TSpectral>
 class HapkeBSDF final : public BSDF<TSpectral> {
   public:
-    HapkeBSDF(float h, float B0, float b, float c) noexcept : h_(h), B0_(B0), b_(b), c_(c) {}
+    /// @throws std::runtime_error unless h and B0 are finite and non-negative (h = 0 has no
+    /// opposition effect), b is within (-1, 1), where the Henyey-Greenstein lobes are finite, and
+    /// c is from 0 to 1.
+    HapkeBSDF(float h, float B0, float b, float c) : h_(h), B0_(B0), b_(b), c_(c)
+    {
+        if (!(h >= 0.f) || !std::isfinite(h) || !(B0 >= 0.f) || !std::isfinite(B0) ||
+            !(std::abs(b) < 1.f) || !(c >= 0.f && c <= 1.f)) {
+            HUIRA_THROW_ERROR("HapkeBSDF - h and B0 must be finite and non-negative, b within "
+                              "(-1, 1), and c from 0 to 1: h " +
+                              std::to_string(h) + ", B0 " + std::to_string(B0) + ", b " +
+                              std::to_string(b) + ", c " + std::to_string(c));
+        }
+    }
 
     [[nodiscard]] BSDFRequirements requirements() const override;
 

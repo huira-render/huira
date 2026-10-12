@@ -16,15 +16,14 @@ class ConstantDensityField : public DensityField<TSpectral> {
 
     explicit ConstantDensityField(TSpectral absorption, TSpectral scattering)
     {
-        for (float val : absorption) {
-            if (val < 0.f) {
-                HUIRA_THROW_ERROR("Absorption coefficients must be non-negative.");
-            }
+        // valid() is false for NaN, which a test of val < 0 lets through:
+        if (!absorption.valid()) {
+            HUIRA_THROW_ERROR("Absorption coefficients must be finite and non-negative: " +
+                              absorption.to_string());
         }
-        for (float val : scattering) {
-            if (val < 0.f) {
-                HUIRA_THROW_ERROR("Scattering coefficients must be non-negative.");
-            }
+        if (!scattering.valid()) {
+            HUIRA_THROW_ERROR("Scattering coefficients must be finite and non-negative: " +
+                              scattering.to_string());
         }
         properties_.absorption = absorption;
         properties_.scattering = scattering;

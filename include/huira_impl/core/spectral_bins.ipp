@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <iostream>
 #include <string>
 
@@ -77,8 +78,8 @@ constexpr SpectralBins<N, Args...>::SpectralBins(Args2&&... args)
  * @param wavelengths Sample wavelengths in **nanometers**, strictly ascending.
  * @param values      Spectral values at each corresponding wavelength.
  * @return SpectralBins with the mean spectral value over each bin.
- * @throws std::invalid_argument if lengths differ, vectors are empty, or wavelengths
- *         are not strictly ascending.
+ * @throws std::runtime_error if lengths differ, vectors are empty, wavelengths are not positive,
+ *         finite and strictly ascending, or a value is not finite.
  */
 template <std::size_t N, auto... Args>
 SpectralBins<N, Args...>
@@ -94,8 +95,16 @@ SpectralBins<N, Args...>::integrate_over_data(const std::vector<double>& wavelen
         HUIRA_THROW_ERROR(
             "SpectralBins::integrate_over_data: wavelengths and values must not be empty");
     }
-    for (std::size_t k = 1; k < wavelengths.size(); ++k) {
-        if (wavelengths[k] <= wavelengths[k - 1]) {
+    for (std::size_t k = 0; k < wavelengths.size(); ++k) {
+        if (!(wavelengths[k] > 0.0) || !std::isfinite(wavelengths[k]) ||
+            !std::isfinite(values[k])) {
+            HUIRA_THROW_ERROR("SpectralBins::integrate_over_data: wavelengths must be positive "
+                              "and finite, and values finite, but sample " +
+                              std::to_string(k) + " is " + std::to_string(values[k]) + " at " +
+                              std::to_string(wavelengths[k]) + " nm");
+        }
+        // Written so that NaN fails it too:
+        if (k > 0 && !(wavelengths[k] > wavelengths[k - 1])) {
             HUIRA_THROW_ERROR(
                 "SpectralBins::integrate_over_data: wavelengths must be strictly ascending");
         }
@@ -709,8 +718,11 @@ constexpr std::array<Bin, N> SpectralBins<N, Args...>::initialize_bins_static_()
             "Must provide either 2 args (uniform), 2*N args (pairs), or N+1 args (edges)");
     }
 
-    // Check each bin has min < max
+    // Check each bin has 0 < min < max: a photon's energy is h c / wavelength
     for (std::size_t i = 0; i < N; ++i) {
+        if (!(bins[i].min_wavelength > 0)) {
+            throw "SpectralBins::initialize_bins_static_: Wavelengths must be positive";
+        }
         if (bins[i].min_wavelength >= bins[i].max_wavelength) {
             throw "SpectralBins::initialize_bins_static_: Bin has min_wavelength >= max_wavelength "
                   "(inverted or zero-width bin)";

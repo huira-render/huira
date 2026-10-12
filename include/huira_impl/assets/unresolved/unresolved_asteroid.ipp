@@ -50,6 +50,28 @@ static inline double asteroid_phi2(double alpha)
 };
 
 /**
+ * @brief Throws unless the H-G phase function, (1 - G) phi1 + G phi2, is positive at every phase
+ * angle short of 180 degrees, so that the magnitude is defined wherever the asteroid is seen.
+ * Beyond about 139 degrees phi2 falls below phi1, so a G much over 1, or much under 0, takes it
+ * below zero there.
+ */
+template <IsSpectral TSpectral>
+void UnresolvedAsteroid<TSpectral>::check_slope_(double G)
+{
+    constexpr int STEPS = 1800;
+    for (int k = 0; k < STEPS; ++k) {
+        const double alpha = PI<double>() * static_cast<double>(k) / STEPS;
+        const double phase = (1.0 - G) * asteroid_phi1(alpha) + G * asteroid_phi2(alpha);
+        if (!(phase > 0.0)) {
+            HUIRA_THROW_ERROR(
+                "UnresolvedAsteroid::UnresolvedAsteroid - With G = " + std::to_string(G) +
+                ", the H-G phase function is not positive at a phase angle of " +
+                std::to_string(alpha * 180.0 / PI<double>()) + " degrees");
+        }
+    }
+}
+
+/**
  * @brief Constructs an UnresolvedAsteroid with H-G magnitude parameters.
  *
  * Initializes an asteroid object using the H-G photometric system. The constructor
@@ -86,6 +108,7 @@ UnresolvedAsteroid<TSpectral>::UnresolvedAsteroid(double H,
     if (std::isnan(G) || std::isinf(G)) {
         HUIRA_THROW_ERROR("UnresolvedAsteroid::UnresolvedAsteroid - G must be real and finite");
     }
+    check_slope_(G);
 
     if (!albedo.valid_ratio()) {
         HUIRA_THROW_ERROR("UnresolvedAsteroid::UnresolvedAsteroid - Invalid spectral albedo: " +

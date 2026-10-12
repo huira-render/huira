@@ -6,6 +6,7 @@
 #include "huira/core/physics.hpp"
 #include "huira/sampling/cone_sampling.hpp"
 #include "huira/util/logger.hpp"
+#include "huira/util/validate.hpp"
 
 namespace huira {
 /**
@@ -16,7 +17,7 @@ namespace huira {
 template <IsSpectral TSpectral>
 SphereLight<TSpectral>::SphereLight(const units::Meter& radius,
                                     const units::SpectralWatts<TSpectral>& spectral_power)
-    : radius_(std::max(radius.to_si_f(), 1e-5f))
+    : radius_(checked_radius_(radius))
 {
     HUIRA_LOG_INFO("SphereLight::SphereLight(radius, spectral_power)");
     this->set_spectral_power(spectral_power);
@@ -31,9 +32,10 @@ template <IsSpectral TSpectral>
 SphereLight<TSpectral>::SphereLight(
     const units::Meter& radius,
     const units::SpectralWattsPerMeterSquaredSteradian<TSpectral>& spectral_radiance)
-    : radius_(std::max(radius.to_si_f(), 1e-5f)), radiance_{spectral_radiance.to_si()}
+    : radius_(checked_radius_(radius)), radiance_{spectral_radiance.to_si()}
 {
     HUIRA_LOG_INFO("SphereLight::SphereLight(radius, spectral_radiance)");
+    validate_spectrum(radiance_, "SphereLight radiance");
 }
 
 /**
@@ -43,7 +45,7 @@ SphereLight<TSpectral>::SphereLight(
  */
 template <IsSpectral TSpectral>
 SphereLight<TSpectral>::SphereLight(const units::Meter& radius, const units::Watt& power)
-    : radius_(std::max(radius.to_si_f(), 1e-5f))
+    : radius_(checked_radius_(radius))
 {
     HUIRA_LOG_INFO("SphereLight::SphereLight(radius, power)");
     this->set_spectral_power(power);
@@ -56,10 +58,25 @@ SphereLight<TSpectral>::SphereLight(const units::Meter& radius, const units::Wat
  */
 template <IsSpectral TSpectral>
 SphereLight<TSpectral>::SphereLight(const units::Meter& radius, const units::Kelvin& temperature)
-    : radius_(std::max(radius.to_si_f(), 1e-5f))
+    : radius_(checked_radius_(radius))
 {
     HUIRA_LOG_INFO("SphereLight::SphereLight(radius, temperature)");
+    // black_body() checks the temperature:
     this->radiance_ = black_body<TSpectral>(temperature.to_si(), 1000);
+    validate_spectrum(radiance_, "SphereLight radiance");
+}
+
+/// The radius a sphere light is given: finite and non-negative, and at least 1e-5 m, so that a
+/// point-like light (0) has an area to spread its power over.
+template <IsSpectral TSpectral>
+float SphereLight<TSpectral>::checked_radius_(const units::Meter& radius)
+{
+    const float r = radius.to_si_f();
+    if (!(r >= 0.f) || !std::isfinite(r)) {
+        HUIRA_THROW_ERROR("SphereLight - The radius must be non-negative and finite: " +
+                          std::to_string(radius.to_si()) + " m");
+    }
+    return std::max(r, 1e-5f);
 }
 
 template <IsSpectral TSpectral>
@@ -73,17 +90,22 @@ void SphereLight<TSpectral>::set_spectral_power(const units::Watt& power)
 
     // L = Phi / (4 * pi^2 * r^2)
     float surface_area = 4.0f * PI<float>() * radius_ * radius_;
-    this->radiance_ = TSpectral{power_si / (PI<float>() * surface_area)};
+    const TSpectral radiance{power_si / (PI<float>() * surface_area)};
+    validate_spectrum(radiance, "SphereLight radiance");
+    this->radiance_ = radiance;
 }
 
 template <IsSpectral TSpectral>
 void SphereLight<TSpectral>::set_spectral_power(
     const units::SpectralWatts<TSpectral>& spectral_power)
 {
-    // Assuming your units system allows extracting the raw TSpectral
     TSpectral power_si = spectral_power.to_si();
+    validate_spectrum(power_si, "SphereLight spectral power");
     float surface_area = 4.0f * PI<float>() * radius_ * radius_;
-    this->radiance_ = power_si / (PI<float>() * surface_area);
+    const TSpectral radiance = power_si / (PI<float>() * surface_area);
+    // Finite power over a tiny sphere can still overflow:
+    validate_spectrum(radiance, "SphereLight radiance");
+    this->radiance_ = radiance;
 }
 
 template <IsSpectral TSpectral>

@@ -1,4 +1,6 @@
 #include <algorithm>
+#include <cmath>
+#include <string>
 
 #include "embree4/rtcore.h"
 #include "huira/geometry/vertex.hpp"
@@ -22,9 +24,48 @@ Mesh<TSpectral>::Mesh(IndexBuffer index_buffer, VertexBuffer<TSpectral> vertex_b
     : index_buffer_(std::move(index_buffer)), vertex_buffer_(std::move(vertex_buffer))
 {
     HUIRA_TRACE_SCOPE("Mesh::Mesh(index_buffer, vertex_buffer)");
+    check_buffers_();
+}
+
+/**
+ * @brief Throws unless the buffers make triangles: indices in threes, each of a vertex there is,
+ * and every vertex finite, with an albedo that is finite and non-negative, and any tangents
+ * finite.
+ */
+template <IsSpectral TSpectral>
+void Mesh<TSpectral>::check_buffers_() const
+{
+    if (index_buffer_.size() % 3 != 0) {
+        HUIRA_THROW_ERROR("Mesh::Mesh - index_buffer must hold three indices per triangle, but "
+                          "holds " +
+                          std::to_string(index_buffer_.size()));
+    }
     const auto c = vertex_buffer_.size();
     if (std::ranges::any_of(index_buffer_, [c](std::uint32_t i) { return i >= c; })) {
         HUIRA_THROW_ERROR("Mesh::Mesh - index_buffer contains out-of-bounds indices.");
+    }
+    const auto finite = [](const auto& v) {
+        for (int i = 0; i < v.length(); ++i) {
+            if (!std::isfinite(v[i])) {
+                return false;
+            }
+        }
+        return true;
+    };
+    for (std::size_t k = 0; k < vertex_buffer_.size(); ++k) {
+        const auto& vertex = vertex_buffer_[k];
+        if (!finite(vertex.position) || !finite(vertex.normal) || !finite(vertex.uv) ||
+            !vertex.albedo.valid()) {
+            HUIRA_THROW_ERROR("Mesh::Mesh - Vertex " + std::to_string(k) +
+                              " must have a finite position, normal and uv, and a finite, "
+                              "non-negative albedo");
+        }
+    }
+    for (std::size_t k = 0; k < tangent_buffer_.size(); ++k) {
+        if (!finite(tangent_buffer_[k].tangent) || !finite(tangent_buffer_[k].bitangent)) {
+            HUIRA_THROW_ERROR("Mesh::Mesh - The tangent and bitangent of vertex " +
+                              std::to_string(k) + " must be finite");
+        }
     }
 }
 
@@ -36,11 +77,7 @@ Mesh<TSpectral>::Mesh(IndexBuffer index_buffer,
       tangent_buffer_(std::move(tangent_buffer))
 {
     HUIRA_TRACE_SCOPE("Mesh::Mesh(index_buffer, vertex_buffer, tangent_buffer)");
-    const auto vertex_count = vertex_buffer_.size();
-    if (std::ranges::any_of(index_buffer_,
-                            [vertex_count](std::uint32_t idx) { return idx >= vertex_count; })) {
-        HUIRA_THROW_ERROR("Mesh::Mesh - index_buffer contains out-of-bounds indices.");
-    }
+    check_buffers_();
 
     if (tangent_buffer_.size() != 0 && tangent_buffer_.size() != vertex_buffer_.size()) {
         HUIRA_THROW_ERROR("Mesh::Mesh - tangent_buffer must be the same size as vertex_buffer.");

@@ -2,6 +2,7 @@
 
 #include "huira/core/time.hpp"
 #include "huira/units/units.hpp"
+#include "huira/util/logger.hpp"
 
 namespace huira {
 
@@ -19,17 +20,31 @@ namespace huira {
  * A zero-duration interval (start == end) implies no motion blur.
  */
 struct Interval {
-    Interval(Time t0, Time tf) : start(t0), end(tf) {}
+    /// @throws std::runtime_error if it ends before it starts.
+    Interval(Time t0, Time tf) : start(t0), end(tf) { check(); }
 
     Time start;
     Time end;
+
+    /// Throws if the interval ends before it starts, which would give a negative exposure. (Its
+    /// times are finite, as every Time is.) SceneView checks it again, since the fields can be
+    /// changed.
+    void check() const
+    {
+        if (!(end >= start)) {
+            HUIRA_THROW_ERROR("Interval - The interval must not end before it starts: from " +
+                              std::to_string(start.et()) + " to " + std::to_string(end.et()) +
+                              " s past J2000");
+        }
+    }
 
     /**
      * @brief Construct an exposure interval centered on a given time.
      *
      * @param center The midpoint of the exposure.
-     * @param duration The total integration time.
+     * @param duration The total integration time: non-negative.
      * @return Interval spanning [center - duration/2, center + duration/2].
+     * @throws std::runtime_error if the duration is negative or not finite.
      */
     static Interval from_centered(const Time& center, units::Second duration)
     {
@@ -41,8 +56,9 @@ struct Interval {
      * @brief Construct an exposure interval from a start time and duration.
      *
      * @param start The beginning of the exposure.
-     * @param duration The total integration time.
+     * @param duration The total integration time: non-negative.
      * @return Interval spanning [start, start + duration].
+     * @throws std::runtime_error if the duration is negative or not finite.
      */
     static Interval from_start(const Time& start, units::Second duration)
     {

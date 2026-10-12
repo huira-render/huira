@@ -164,13 +164,17 @@ class SpectralBins {
     std::string to_string() const;
 
     // Access to bin information
+    // Made as constants, so that bins that are not valid fail to compile (see
+    // initialize_bins_static_()):
     static constexpr Bin get_bin(std::size_t index)
     {
-        return SpectralBins::initialize_bins_static_()[index];
+        constexpr std::array<Bin, N> bins = SpectralBins::initialize_bins_static_();
+        return bins[index];
     }
     static constexpr std::array<Bin, N> get_all_bins()
     {
-        return SpectralBins::initialize_bins_static_();
+        constexpr std::array<Bin, N> bins = SpectralBins::initialize_bins_static_();
+        return bins;
     }
     static constexpr SpectralBins photon_energies();
 

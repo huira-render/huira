@@ -11,6 +11,10 @@ namespace py = pybind11;
 
 namespace huira {
 
+/// A numpy array of doubles, made contiguous if it is not, which the bindings read through a
+/// pointer.
+using DoubleArray = py::array_t<double, py::array::c_style | py::array::forcecast>;
+
 /**
  * @brief Bind Rotation<double> to Python.
  *
@@ -56,7 +60,7 @@ inline void bind_rotation(py::module_& m)
         // NumPy overloads for from_local_to_parent:
         .def_static(
             "from_local_to_parent_matrix",
-            [](py::array_t<double, py::array::c_style | py::array::forcecast> arr) {
+            [](DoubleArray arr) {
                 auto buf = arr.request();
                 if (buf.ndim != 2 || buf.shape[0] != 3 || buf.shape[1] != 3) {
                     throw std::runtime_error("Expected a 3x3 numpy array");
@@ -74,7 +78,7 @@ inline void bind_rotation(py::module_& m)
             "Create from a 3x3 numpy array (row-major, local-to-parent)")
         .def_static(
             "from_local_to_parent_axis_angle",
-            [](py::array_t<double> axis_arr, const py::object& angle) {
+            [](DoubleArray axis_arr, const py::object& angle) {
                 auto buf = axis_arr.request();
                 if (buf.ndim != 1 || buf.shape[0] != 3) {
                     throw std::runtime_error("Axis must be a 1-D array of length 3");
@@ -114,7 +118,7 @@ inline void bind_rotation(py::module_& m)
         // NumPy overloads for from_parent_to_local:
         .def_static(
             "from_parent_to_local_matrix",
-            [](py::array_t<double, py::array::c_style | py::array::forcecast> arr) {
+            [](DoubleArray arr) {
                 auto buf = arr.request();
                 if (buf.ndim != 2 || buf.shape[0] != 3 || buf.shape[1] != 3) {
                     throw std::runtime_error("Expected a 3x3 numpy array");
@@ -132,7 +136,7 @@ inline void bind_rotation(py::module_& m)
             "Create from a 3x3 numpy array (row-major, parent-to-local)")
         .def_static(
             "from_parent_to_local_axis_angle",
-            [](py::array_t<double> axis_arr, const py::object& angle) {
+            [](DoubleArray axis_arr, const py::object& angle) {
                 auto buf = axis_arr.request();
                 if (buf.ndim != 1 || buf.shape[0] != 3) {
                     throw std::runtime_error("Axis must be a 1-D array of length 3");
@@ -192,8 +196,8 @@ inline void bind_rotation(py::module_& m)
                     "Create from three orthonormal basis vectors (Vec3)")
         .def_static(
             "from_basis_vectors",
-            [](py::array_t<double> x_arr, py::array_t<double> y_arr, py::array_t<double> z_arr) {
-                auto parse = [](py::array_t<double>& a, const char* name) {
+            [](DoubleArray x_arr, DoubleArray y_arr, DoubleArray z_arr) {
+                auto parse = [](DoubleArray& a, const char* name) {
                     auto buf = a.request();
                     if (buf.ndim != 1 || buf.shape[0] != 3) {
                         throw std::runtime_error(std::string(name) +
@@ -274,7 +278,7 @@ inline void bind_rotation(py::module_& m)
         // Apply rotation to a numpy vector:
         .def(
             "apply",
-            [](const Rot& r, py::array_t<double> arr) {
+            [](const Rot& r, DoubleArray arr) {
                 auto buf = arr.request();
                 if (buf.ndim != 1 || buf.shape[0] != 3) {
                     throw std::runtime_error("Expected a 1-D array of length 3");

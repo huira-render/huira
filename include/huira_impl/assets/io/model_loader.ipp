@@ -170,6 +170,13 @@ PrimitiveHandle<TSpectral> ModelLoader<TSpectral>::convert_mesh_(const aiMesh* a
     VertexBuffer<TSpectral> vertices;
     TangentBuffer tangent_buffer;
     vertices.reserve(ai_mesh->mNumVertices);
+    // ASSIMP gives degenerate triangles, which have no area, normals and tangents that are NaN.
+    // The mesh refuses those, so they are replaced, and counted:
+    std::size_t bad_normals = 0;
+    bool bad_tangents = false;
+    const auto finite = [](const Vec3<float>& v) {
+        return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z);
+    };
 
     for (unsigned int i = 0; i < ai_mesh->mNumVertices; ++i) {
         Vertex<TSpectral> vertex;
@@ -180,6 +187,10 @@ PrimitiveHandle<TSpectral> ModelLoader<TSpectral>::convert_mesh_(const aiMesh* a
         // Normal (should be present after aiProcess_GenNormals)
         if (ai_mesh->HasNormals()) {
             vertex.normal = convert_vec3_(ai_mesh->mNormals[i]);
+            if (!finite(vertex.normal)) {
+                vertex.normal = Vec3<float>{0.0, 1.0, 0.0};
+                ++bad_normals;
+            }
         } else {
             vertex.normal = Vec3<float>{0.0, 1.0, 0.0}; // Default up
         }
@@ -206,12 +217,27 @@ PrimitiveHandle<TSpectral> ModelLoader<TSpectral>::convert_mesh_(const aiMesh* a
             Tangent vertex_tangent;
             vertex_tangent.tangent = convert_vec3_(ai_mesh->mTangents[i]);
             vertex_tangent.bitangent = convert_vec3_(ai_mesh->mBitangents[i]);
+            bad_tangents = bad_tangents || !finite(vertex_tangent.tangent) ||
+                           !finite(vertex_tangent.bitangent);
             tangent_buffer.push_back(vertex_tangent);
         }
 
         vertices.push_back(vertex);
     }
 
+    if (bad_normals > 0) {
+        HUIRA_LOG_WARNING("ModelLoader::convert_mesh_ - " + std::to_string(bad_normals) +
+                          " normals of mesh " + std::string(ai_mesh->mName.C_Str()) +
+                          " were not finite, as on degenerate triangles, and were set to +y");
+    }
+    if (bad_tangents) {
+        // Without tangents the mesh is drawn as it is without a normal map's detail:
+        HUIRA_LOG_WARNING("ModelLoader::convert_mesh_ - Mesh " +
+                          std::string(ai_mesh->mName.C_Str()) +
+                          " has tangents that are not finite, as on degenerate texture "
+                          "coordinates, and is loaded without them");
+        tangent_buffer.clear();
+    }
     auto mesh = std::make_shared<Mesh<TSpectral>>(
         std::move(indices), std::move(vertices), std::move(tangent_buffer));
     auto geom_handle = ctx.scene->add_geometry(mesh, std::string(ai_mesh->mName.C_Str()));
