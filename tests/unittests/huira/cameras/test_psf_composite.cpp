@@ -10,6 +10,7 @@
 #include "huira/units/units.hpp"
 
 using namespace huira;
+using namespace huira::units::literals;
 
 namespace {
 double kernel_energy(const Image<RGB>& kernel, std::size_t channel)
@@ -22,20 +23,30 @@ double kernel_energy(const Image<RGB>& kernel, std::size_t channel)
     }
     return total;
 }
+
+double peak(const Image<RGB>& image)
+{
+    double most = 0.0;
+    for (std::size_t i = 0; i < image.size(); ++i) {
+        for (std::size_t c = 0; c < 3; ++c) {
+            most = std::max(most, static_cast<double>(image[i][c]));
+        }
+    }
+    return most;
+}
+
+/// 25 mm at f/5 with 6 mm across 256 pixels: 23.4 um pixels, a diffraction pattern well under
+/// a pixel, so that its images are small.
+void configure(CameraModel<RGB>& camera)
+{
+    camera.set_focal_length(units::Millimeter(25.0));
+    camera.configure_sensor_from_size(Resolution{256, 256}, units::Millimeter(6.0));
+    camera.set_fstop(5.f);
+}
 } // namespace
 
 TEST_CASE("HarveyShackScatter profile", "[cameras][psf][scatter]")
 {
-    SECTION("Convolution kernel is normalized to unit energy per channel")
-    {
-        HarveyShackScatter<RGB> scatter(2.5f, 0.5f);
-        Image<RGB> kernel = scatter.generate_convolution_kernel(64);
-        REQUIRE(kernel.width() == 129);
-        for (std::size_t c = 0; c < 3; ++c) {
-            REQUIRE(std::fabs(kernel_energy(kernel, c) - 1.0) < 1e-4);
-        }
-    }
-
     SECTION("Wings fall off with the configured power-law exponent")
     {
         const float b = 2.0f;
@@ -66,160 +77,157 @@ TEST_CASE("HarveyShackScatter profile", "[cameras][psf][scatter]")
     }
 }
 
-TEST_CASE("Composite total-system PSF via CameraModel", "[cameras][psf][scatter]")
+TEST_CASE("psf_image() is diffraction_image() and scatter_image() mixed by the scattered "
+          "fraction",
+          "[cameras][psf][scatter]")
 {
-    const int radius = 48;
-    const float f_s = 0.05f;
-    const float b = 2.5f;
-    const float r0 = 0.5f;
-
+    constexpr int RADIUS = 24;
+    constexpr float FRACTION = 0.05f;
     CameraModel<RGB> camera;
-    camera.set_focal_length(units::Millimeter(25.0));
-    camera.configure_sensor_from_size(Resolution{256, 256}, units::Millimeter(6.0));
-    camera.set_fstop(5.f);
-    camera.use_aperture_psf(4, 2);
-    camera.set_psf_convolution_radius(radius);
+    configure(camera);
+    const Image<RGB> diffraction = camera.diffraction_image(RADIUS, 0.3f, -0.2f);
+    // About a thousandth of the light is in the rings beyond the image:
+    for (std::size_t c = 0; c < 3; ++c) {
+        CHECK(kernel_energy(diffraction, c) > 0.997);
+        CHECK(kernel_energy(diffraction, c) < 1.0);
+    }
 
-    // Core-only kernel first:
-    Image<RGB> core_only = camera.get_psf_convolution_kernel();
-
-    // Enable scatter; the cached kernel must invalidate and rebuild as the composite:
-    camera.set_harvey_shack_scatter(f_s, b, r0);
-    Image<RGB> composite = camera.get_psf_convolution_kernel();
-
-    REQUIRE(composite.width() == 2 * radius + 1);
-
-    SECTION("Composite conserves unit energy")
-    {
+    // Without scattered light, the PSF is the diffraction pattern, and there is no scattered
+    // light to show:
+    const Image<RGB> unscattered = camera.psf_image(RADIUS, 0.3f, -0.2f);
+    CHECK_THROWS(camera.scatter_image(RADIUS));
+    double worst = 0.0;
+    for (std::size_t i = 0; i < diffraction.size(); ++i) {
         for (std::size_t c = 0; c < 3; ++c) {
-            REQUIRE(std::fabs(kernel_energy(composite, c) - 1.0) < 1e-4);
+            worst = std::max(worst,
+                             std::fabs(static_cast<double>(unscattered[i][c] - diffraction[i][c])));
         }
     }
+    CHECK(worst < 1e-6 * peak(diffraction));
 
-    SECTION("Composite matches (1 - f_s) * core + f_s * wings everywhere")
-    {
-        HarveyShackScatter<RGB> scatter(b, r0);
-        Image<RGB> wings = scatter.generate_convolution_kernel(radius);
-
-        float max_err = 0.f;
-        for (int y = 0; y < composite.height(); ++y) {
-            for (int x = 0; x < composite.width(); ++x) {
-                for (std::size_t c = 0; c < 3; ++c) {
-                    const float expected = core_only(x, y)[c] * (1.f - f_s) + wings(x, y)[c] * f_s;
-                    max_err = std::max(max_err, std::fabs(composite(x, y)[c] - expected));
-                }
-            }
-        }
-        REQUIRE(max_err < 1e-6f);
+    // With it, the PSF holds 1 - f of the pattern and f of the scattered light, which on its own
+    // holds all of its light:
+    camera.set_scatter(FRACTION, 2.5f, units::Arcsecond(200.0));
+    CHECK(camera.scatter_enabled());
+    const Image<RGB> scatter = camera.scatter_image(RADIUS, 0.3f, -0.2f);
+    const Image<RGB> composite = camera.psf_image(RADIUS, 0.3f, -0.2f);
+    // Its shoulder is 1.03 px, and as it falls as r^-2.5, about (1.03 / R)^0.5 of it lies beyond
+    // R, here the radius of a disc as large as the image, 49 / sqrt(pi) px:
+    const double beyond = std::sqrt(1.03 / (49.0 / std::sqrt(3.14159265358979323846)));
+    for (std::size_t c = 0; c < 3; ++c) {
+        CHECK(std::fabs(kernel_energy(scatter, c) - (1.0 - beyond)) < 0.005);
     }
-
-    SECTION("Disabling scatter invalidates the cache and restores the core kernel")
-    {
-        camera.disable_harvey_shack_scatter();
-        const Image<RGB>& restored = camera.get_psf_convolution_kernel();
-        float max_err = 0.f;
-        for (int y = 0; y < restored.height(); ++y) {
-            for (int x = 0; x < restored.width(); ++x) {
-                max_err = std::max(max_err, std::fabs(restored(x, y)[0] - core_only(x, y)[0]));
-            }
+    worst = 0.0;
+    for (std::size_t i = 0; i < composite.size(); ++i) {
+        for (std::size_t c = 0; c < 3; ++c) {
+            const double expected = (1.0 - FRACTION) * static_cast<double>(diffraction[i][c]) +
+                                    FRACTION * static_cast<double>(scatter[i][c]);
+            worst = std::max(worst, std::fabs(static_cast<double>(composite[i][c]) - expected));
         }
-        REQUIRE(max_err < 1e-7f);
     }
+    CHECK(worst < 1e-4 * peak(composite));
+
+    // Turning it off brings the pattern back:
+    camera.disable_scatter();
+    CHECK_FALSE(camera.scatter_enabled());
+    const Image<RGB> restored = camera.psf_image(RADIUS, 0.3f, -0.2f);
+    worst = 0.0;
+    for (std::size_t i = 0; i < restored.size(); ++i) {
+        worst = std::max(worst, std::fabs(static_cast<double>(restored[i][0] - unscattered[i][0])));
+    }
+    CHECK(worst < 1e-7);
 }
 
-TEST_CASE("Scatter-only camera (no core PSF)", "[cameras][psf][scatter]")
+TEST_CASE("Without diffraction, a point keeps the light that is not scattered",
+          "[cameras][psf][scatter]")
 {
+    constexpr int RADIUS = 16;
     CameraModel<RGB> camera;
-    camera.set_focal_length(units::Millimeter(25.0));
-    camera.configure_sensor_from_size(Resolution{256, 256}, units::Millimeter(6.0));
-    camera.delete_psf(); // the aperture's, by default
-    camera.set_harvey_shack_scatter(0.02f, 2.5f, 0.5f);
+    configure(camera);
+    camera.enable_diffraction(false);
+    CHECK_FALSE(camera.diffraction_enabled());
+    camera.set_scatter(0.02f, 2.5f, units::Arcsecond(200.0));
 
-    SECTION("Requires an explicit convolution radius")
-    {
-        REQUIRE_THROWS(camera.get_psf_convolution_kernel());
-    }
-
-    SECTION("Builds a delta-core composite with unit energy")
-    {
-        const int radius = 32;
-        camera.set_psf_convolution_radius(radius);
-        const Image<RGB>& kernel = camera.get_psf_convolution_kernel();
-        REQUIRE(kernel.width() == 2 * radius + 1);
-        for (std::size_t c = 0; c < 3; ++c) {
-            REQUIRE(std::fabs(kernel_energy(kernel, c) - 1.0) < 1e-4);
+    const Image<RGB> image = camera.psf_image(RADIUS);
+    const Image<RGB> scatter = camera.scatter_image(RADIUS);
+    double worst = 0.0;
+    for (int y = 0; y < image.height(); ++y) {
+        for (int x = 0; x < image.width(); ++x) {
+            const double point = (x == RADIUS && y == RADIUS) ? 0.98 : 0.0;
+            const double expected = point + 0.02 * static_cast<double>(scatter(x, y)[0]);
+            worst = std::max(worst, std::fabs(static_cast<double>(image(x, y)[0]) - expected));
         }
-        // The center pixel holds the unscattered delta plus the wings' center sample:
-        REQUIRE(kernel(radius, radius)[0] > 0.9f);
     }
+    CHECK(worst < 1e-6);
+
+    // The diffraction pattern can still be seen on its own:
+    CHECK(kernel_energy(camera.diffraction_image(RADIUS), 0) > 0.99);
 }
 
-TEST_CASE("Wings-only kernel for unresolved sources", "[cameras][psf][scatter]")
+TEST_CASE("defocus_image() is the uniform disc of defocus_blur_radius()", "[cameras][psf][defocus]")
 {
+    constexpr int RADIUS = 12;
     CameraModel<RGB> camera;
-    camera.set_focal_length(units::Millimeter(25.0));
-    camera.configure_sensor_from_size(Resolution{256, 256}, units::Millimeter(6.0));
-    camera.use_aperture_psf(4, 2);
-    camera.set_psf_convolution_radius(48);
+    configure(camera);
 
-    SECTION("Requires scattering to be enabled")
-    {
-        REQUIRE_THROWS(camera.get_psf_wings_kernel());
+    // In focus, the point falls in one pixel:
+    const Image<RGB> focused = camera.defocus_image(RADIUS, 0.3f, 0.7f);
+    CHECK(focused(RADIUS, RADIUS + 1)[0] == 1.f);
+    CHECK(kernel_energy(focused, 0) == 1.0);
+
+    // 25 mm at f/5 is 5 mm across: 1 diopter blurs a star 25 mm * 2.5 mm / 23.4 um = 2.67 px.
+    camera.set_focus_diopters(units::Diopter(3.0));
+    const double blur = static_cast<double>(camera.defocus_blur_radius());
+    CHECK(std::fabs(blur - 3.0 * 0.025 * 0.0025 / (6e-3 / 256.0)) < 1e-4);
+    const Image<RGB> disc = camera.defocus_image(RADIUS, 0.3f, -0.2f);
+    double worst = 0.0;
+    for (int y = 0; y < disc.height(); ++y) {
+        for (int x = 0; x < disc.width(); ++x) {
+            const double dx = x - RADIUS - 0.3;
+            const double dy = y - RADIUS + 0.2;
+            const double expected = grid_psf_detail::circle_rectangle_area(
+                                        dx - 0.5, dx + 0.5, dy - 0.5, dy + 0.5, blur) /
+                                    (3.14159265358979323846 * blur * blur);
+            worst = std::max(worst, std::fabs(static_cast<double>(disc(x, y)[0]) - expected));
+        }
     }
+    CHECK(worst < 1e-6);
+    CHECK(std::fabs(kernel_energy(disc, 0) - 1.0) < 1e-5);
 
-    SECTION("Wings kernel is the unit-energy scatter component")
-    {
-        const float b = 2.5f;
-        const float r0 = 0.5f;
-        camera.set_harvey_shack_scatter(0.05f, b, r0);
+    // A blur under half a pixel is the one sources are drawn with, not none, as it was given:
+    camera.set_focus_diopters(units::Diopter(0.1));
+    CHECK(std::fabs(camera.defocus_blur_radius() - 0.1 * 0.025 * 0.0025 / (6e-3 / 256.0)) < 1e-5);
+    camera.set_focus_diopters(units::Diopter(3.0));
 
-        const Image<RGB>& wings = camera.get_psf_wings_kernel();
-        REQUIRE(wings.width() == 97);
-        for (std::size_t c = 0; c < 3; ++c) {
-            REQUIRE(std::fabs(kernel_energy(wings, c) - 1.0) < 1e-4);
-        }
-
-        // It must match a directly generated scatter kernel (not scaled by f_s):
-        HarveyShackScatter<RGB> scatter(b, r0);
-        Image<RGB> expected = scatter.generate_convolution_kernel(48);
-        float max_err = 0.f;
-        for (int y = 0; y < wings.height(); ++y) {
-            for (int x = 0; x < wings.width(); ++x) {
-                max_err = std::max(max_err, std::fabs(wings(x, y)[0] - expected(x, y)[0]));
-            }
-        }
-        REQUIRE(max_err < 1e-7f);
-
-        // And the identity used by the renderer must hold:
-        //     composite == (1 - f_s) * core + f_s * wings
-        camera.disable_harvey_shack_scatter();
-        Image<RGB> core = camera.get_psf_convolution_kernel();
-        camera.set_harvey_shack_scatter(0.05f, b, r0);
-        const Image<RGB>& composite = camera.get_psf_convolution_kernel();
-        const Image<RGB>& wings2 = camera.get_psf_wings_kernel();
-        max_err = 0.f;
-        for (int y = 0; y < composite.height(); ++y) {
-            for (int x = 0; x < composite.width(); ++x) {
-                const float e = core(x, y)[0] * 0.95f + wings2(x, y)[0] * 0.05f;
-                max_err = std::max(max_err, std::fabs(composite(x, y)[0] - e));
-            }
-        }
-        REQUIRE(max_err < 1e-6f);
-    }
+    // A point focused on has none, and one nearer than that more:
+    CHECK(camera.defocus_blur_radius(units::Meter(1.0 / 3.0)) == 0.f);
+    CHECK(camera.defocus_blur_radius(units::Meter(0.1)) > camera.defocus_blur_radius());
+    CHECK_THROWS(camera.defocus_image(RADIUS, 0.f, 0.f, units::Meter(0.0)));
+    CHECK_THROWS(camera.defocus_blur_radius(units::Meter(-1.0)));
 }
 
-TEST_CASE("A PSF shape set without a stamp size gets the default one", "[cameras][psf]")
+TEST_CASE("A PSF set without a radius holds its light within the default one", "[cameras][psf]")
 {
-    // HarveyShackScatter, like a user's own PSF class, does not size the stamps for unresolved
-    // sources. Set as the camera's PSF it used to have none: precompute() never finished building
-    // them, and the convolution kernel, sized from them, could not be made.
+    // HarveyShackScatter, like a user's own PSF class, does not set its radius: the camera gives
+    // it DEFAULT_PSF_RADIUS, within which it holds all of a source's light.
     CameraModel<RGB> camera;
-    camera.set_focal_length(units::Millimeter(25.0));
-    camera.configure_sensor_from_size(Resolution{256, 256}, units::Millimeter(6.0));
+    configure(camera);
     camera.set_psf<HarveyShackScatter<RGB>>(2.5f, 0.5f);
+    CHECK(camera.has_set_psf());
 
-    CHECK(camera.get_psf_radius() == CameraModel<RGB>::DEFAULT_PSF_RADIUS);
-    const Image<RGB>& kernel = camera.get_psf_convolution_kernel();
-    CHECK(kernel.width() == 2 * CameraModel<RGB>::DEFAULT_PSF_RADIUS + 1);
-    CHECK(std::fabs(kernel_energy(kernel, 0) - 1.0) < 1e-4);
+    constexpr int RADIUS = CameraModel<RGB>::DEFAULT_PSF_RADIUS;
+    const Image<RGB> image = camera.psf_image(RADIUS + 4);
+    CHECK(std::fabs(kernel_energy(image, 0) - 1.0) < 1e-4);
+    CHECK(image(RADIUS + 4, 1)[0] == 0.f);
+    CHECK(image(RADIUS + 4, 5)[0] > 0.f);
+
+    // An Airy disk sets its own:
+    camera.set_psf<AiryDisk<RGB>>(units::Millimeter(25.0),
+                                  units::Micrometer(23.4375),
+                                  units::Micrometer(23.4375),
+                                  units::Millimeter(5.0),
+                                  8);
+    const Image<RGB> airy = camera.psf_image(12);
+    CHECK(std::fabs(kernel_energy(airy, 0) - 1.0) < 1e-4);
+    CHECK(airy(0, 12)[0] == 0.f);
 }

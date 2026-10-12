@@ -47,12 +47,43 @@ Image<RGB> make_measurement(float samples_per_pixel = 4.f, int extent_px = 16)
     }
     return data;
 }
+/// A camera of 25 mm over 23.4 um pixels, drawing unresolved sources with a measured PSF as
+/// psf_image() gives them, out to radius pixels around the source, offset as given.
+Image<RGB> camera_image(const Image<RGB>& data,
+                        float samples_per_pixel,
+                        PSFSampling sampling,
+                        int radius,
+                        float x_offset = 0.f,
+                        float y_offset = 0.f)
+{
+    CameraModel<RGB> camera;
+    camera.set_focal_length(units::Millimeter(25.0));
+    camera.configure_sensor_from_size(Resolution{256, 256}, units::Millimeter(6.0));
+    camera.set_measured_psf(data, samples_per_pixel, sampling);
+    return camera.psf_image(radius, x_offset, y_offset);
+}
+
+std::pair<double, double> centroid(const Image<RGB>& image, int radius)
+{
+    double cx = 0.0;
+    double cy = 0.0;
+    double total = 0.0;
+    for (int y = 0; y < image.height(); ++y) {
+        for (int x = 0; x < image.width(); ++x) {
+            const double v = static_cast<double>(image(x, y)[0]);
+            cx += v * (x - radius);
+            cy += v * (y - radius);
+            total += v;
+        }
+    }
+    return {cx / total, cy / total};
+}
 } // namespace
 
 TEST_CASE("MeasuredPSF interpolation and extent", "[cameras][psf][measured]")
 {
     Image<RGB> data = make_measurement();
-    MeasuredPSF<RGB> psf(data, 4.f, PSFSampling::PointSampled, 8, 4);
+    MeasuredPSF<RGB> psf(data, 4.f, PSFSampling::PointSampled);
 
     SECTION("Evaluate matches the underlying measurement")
     {
@@ -66,71 +97,48 @@ TEST_CASE("MeasuredPSF interpolation and extent", "[cameras][psf][measured]")
         REQUIRE(max_err < 5e-3f);
     }
 
-    SECTION("Evaluate is zero outside the measured extent")
+    SECTION("Evaluate is zero outside the measured extent, which is taken whole")
     {
         REQUIRE(psf.evaluate(17.f, 0.f)[0] == 0.f);
         REQUIRE(psf.evaluate(0.f, -17.f)[0] == 0.f);
-        REQUIRE(psf.measured_radius() == 16);
+        REQUIRE(psf.radius() == 16);
     }
 
-    SECTION("Convolution kernel matches the analytic pixel-integrated Gaussian")
+    SECTION("The camera draws it as the pixel-integrated Gaussian")
     {
         const int radius = 12;
-        Image<RGB> kernel = psf.generate_convolution_kernel(radius);
+        const Image<RGB> image = camera_image(data, 4.f, PSFSampling::PointSampled, radius);
 
-        // Build and normalize the analytic expectation over the same support:
-        const int dim = 2 * radius + 1;
-        std::vector<double> expected(static_cast<std::size_t>(dim) * dim);
+        // The analytic expectation, normalized over the measurement:
         double total = 0.0;
-        for (int y = 0; y < dim; ++y) {
-            for (int x = 0; x < dim; ++x) {
-                const double v = gaussian_pixel_integral(x - radius, y - radius);
-                expected[static_cast<std::size_t>(y) * dim + static_cast<std::size_t>(x)] = v;
-                total += v;
+        for (int y = -16; y <= 16; ++y) {
+            for (int x = -16; x <= 16; ++x) {
+                total += gaussian_pixel_integral(x, y);
             }
         }
-
-        float max_err = 0.f;
-        for (int y = 0; y < dim; ++y) {
-            for (int x = 0; x < dim; ++x) {
-                const float e = static_cast<float>(
-                    expected[static_cast<std::size_t>(y) * dim + static_cast<std::size_t>(x)] /
-                    total);
-                max_err = std::max(max_err, std::fabs(kernel(x, y)[0] - e));
+        double max_err = 0.0;
+        for (int y = 0; y < image.height(); ++y) {
+            for (int x = 0; x < image.width(); ++x) {
+                const double expected = gaussian_pixel_integral(x - radius, y - radius) / total;
+                max_err =
+                    std::max(max_err, std::fabs(static_cast<double>(image(x, y)[0]) - expected));
             }
         }
-        // The dominant error is bilinear interpolation bias, which converges as O(h^2) in
-        // the sampling density: measured 1.3e-4 at 4x oversampling, 3.2e-5 at 8x.
-        REQUIRE(max_err < 2.5e-4f);
+        // The cubic spline through samples 4 to a pixel follows the Gaussian closely:
+        REQUIRE(max_err < 1e-4);
     }
 }
 
-TEST_CASE("MeasuredPSF polyphase banks shift the centroid", "[cameras][psf][measured]")
+TEST_CASE("A measured PSF's image follows the source's subpixel position",
+          "[cameras][psf][measured]")
 {
     Image<RGB> data = make_measurement();
-    const int banks = 4;
-    MeasuredPSF<RGB> psf(data, 4.f, PSFSampling::PointSampled, 12, banks);
-
-    // The bank selected for a subpixel fraction f should hold a kernel whose centroid sits
-    // at +f relative to the kernel center (matching stamping semantics):
-    for (int b = 0; b < banks; ++b) {
-        const float frac = static_cast<float>(b) / static_cast<float>(banks);
-        const Image<RGB>& kernel = psf.get_kernel(frac + 1e-4f, 1e-4f);
-
-        double cx = 0.0, cy = 0.0, total = 0.0;
-        for (int y = 0; y < kernel.height(); ++y) {
-            for (int x = 0; x < kernel.width(); ++x) {
-                const double v = static_cast<double>(kernel(x, y)[0]);
-                cx += v * (x - 12);
-                cy += v * (y - 12);
-                total += v;
-            }
-        }
-        cx /= total;
-        cy /= total;
-
-        REQUIRE(std::fabs(cx - static_cast<double>(frac)) < 0.02);
-        REQUIRE(std::fabs(cy) < 0.02);
+    for (const float frac : {0.f, 0.25f, 0.5f, 0.75f}) {
+        INFO("offset " << frac);
+        const auto [cx, cy] =
+            centroid(camera_image(data, 4.f, PSFSampling::PointSampled, 12, frac, 0.f), 12);
+        CHECK(std::fabs(cx - static_cast<double>(frac)) < 1e-3);
+        CHECK(std::fabs(cy) < 1e-3);
     }
 }
 
@@ -139,16 +147,19 @@ TEST_CASE("MeasuredPSF input validation", "[cameras][psf][measured]")
     Image<RGB> data = make_measurement();
 
     constexpr PSFSampling POINTS = PSFSampling::PointSampled;
-    REQUIRE_THROWS(MeasuredPSF<RGB>(data, 0.f, POINTS));     // non-positive sampling
-    REQUIRE_THROWS(MeasuredPSF<RGB>(data, 4.f, POINTS, 32)); // radius beyond measured extent
+    REQUIRE_THROWS(MeasuredPSF<RGB>(data, 0.f, POINTS));             // non-positive sampling
     REQUIRE_THROWS(MeasuredPSF<RGB>(Image<RGB>(1, 1), 1.f, POINTS)); // degenerate data
+    REQUIRE_THROWS(MeasuredPSF<RGB>(Image<RGB>(5, 5), 4.f, POINTS)); // under a pixel across
 
-    // Auto radius selects the measured extent (capped at 64):
-    MeasuredPSF<RGB> psf(data, 4.f, POINTS);
-    REQUIRE(psf.get_radius() == 16);
+    // It reaches its farthest sample: of a 9 x 17 measurement at 2 per pixel, 2 px across from
+    // its center and 4 down. It used to be cut at the nearer edge, and at 64 px.
+    MeasuredPSF<RGB> psf(Image<RGB>(9, 17, RGB{1.f}), 2.f, POINTS);
+    CHECK(psf.radius() == 4);
+    MeasuredPSF<RGB> large(make_measurement(1.f, 100), 1.f, POINTS);
+    CHECK(large.radius() == 100);
 }
 
-TEST_CASE("MeasuredPSF as the camera's core PSF", "[cameras][psf][measured]")
+TEST_CASE("MeasuredPSF in place of diffraction, with scattered light", "[cameras][psf][measured]")
 {
     CameraModel<RGB> camera;
     camera.set_focal_length(units::Millimeter(25.0));
@@ -156,58 +167,45 @@ TEST_CASE("MeasuredPSF as the camera's core PSF", "[cameras][psf][measured]")
 
     Image<RGB> data = make_measurement();
     camera.set_psf<MeasuredPSF<RGB>>(data, 4.f, PSFSampling::PointSampled);
-    camera.set_psf_convolution_radius(24);
-    camera.set_harvey_shack_scatter(0.03f, 2.5f, 0.5f);
+    camera.set_scatter(0.03f, 2.5f, units::Radian(0.5 * 23.4375e-6 / 0.025));
 
-    const Image<RGB>& kernel = camera.get_psf_convolution_kernel();
-    REQUIRE(kernel.width() == 49);
-
+    // All of its light, with the scattered light's within the image:
+    const Image<RGB> image = camera.psf_image(24);
     double total = 0.0;
-    for (int y = 0; y < kernel.height(); ++y) {
-        for (int x = 0; x < kernel.width(); ++x) {
-            total += static_cast<double>(kernel(x, y)[0]);
+    for (int y = 0; y < image.height(); ++y) {
+        for (int x = 0; x < image.width(); ++x) {
+            total += static_cast<double>(image(x, y)[0]);
         }
     }
-    REQUIRE(std::fabs(total - 1.0) < 1e-4);
+    CHECK(total > 0.995);
+    CHECK(total < 1.0);
 }
 
 TEST_CASE("A pixel-integrated measurement is not integrated over the pixel again",
           "[cameras][psf][measured]")
 {
     // A star imaged into a single pixel, at the sensor's own resolution. Taken as the PSF's
-    // intensity at points, interpolation makes it a 2 px tent, and integrating that over each
-    // pixel keeps only 0.75^2 of the light in the center pixel. Before the sampling had to be
+    // intensity at points, it is spread over the pixels around it. Before the sampling had to be
     // given, every measurement was taken that way.
     Image<RGB> data(9, 9, RGB{0.f});
     data(4, 4) = RGB{1.f};
-    MeasuredPSF<RGB> pixels(data, 1.f, PSFSampling::PixelIntegrated, 4, 4);
-    MeasuredPSF<RGB> points(data, 1.f, PSFSampling::PointSampled, 4, 4);
 
-    // A source on a pixel's center (bank 0) puts all its light in that pixel, in the stamp and
-    // in the convolution kernel:
-    const Image<RGB>& centered = pixels.get_kernel(0.f, 0.f);
+    // A source on a pixel's center puts all its light in that pixel:
+    const Image<RGB> centered = camera_image(data, 1.f, PSFSampling::PixelIntegrated, 4);
     CHECK(std::fabs(centered(4, 4)[0] - 1.f) < 1e-6f);
-    CHECK(centered(5, 4)[0] == 0.f);
-    CHECK(centered(4, 5)[0] == 0.f);
-    const Image<RGB> kernel = pixels.generate_convolution_kernel(4);
-    CHECK(std::fabs(kernel(4, 4)[0] - 1.f) < 1e-6f);
-    CHECK(kernel(5, 4)[0] == 0.f);
+    CHECK(std::fabs(centered(5, 4)[0]) < 1e-6f);
+    CHECK(std::fabs(centered(4, 5)[0]) < 1e-6f);
 
-    // Halfway between two pixel centers (bank 2 of 4), it shares the light between them:
-    const Image<RGB>& halfway = pixels.get_kernel(0.5f, 0.f);
-    CHECK(std::fabs(halfway(4, 4)[0] - 0.5f) < 1e-6f);
-    CHECK(std::fabs(halfway(5, 4)[0] - 0.5f) < 1e-6f);
-
-    // As point samples:
-    CHECK(std::fabs(points.get_kernel(0.f, 0.f)(4, 4)[0] - 0.5625f) < 2e-3f);
-    CHECK(std::fabs(points.generate_convolution_kernel(4)(4, 4)[0] - 0.5625f) < 2e-3f);
+    // As point samples, it is not:
+    const Image<RGB> points = camera_image(data, 1.f, PSFSampling::PointSampled, 4);
+    CHECK(points(4, 4)[0] < 0.9f);
 }
 
 TEST_CASE("An oversampled pixel-integrated measurement gives the pixel response it holds",
           "[cameras][psf][measured]")
 {
     // An effective PSF: at 4 samples per pixel, the light a pixel centered at each sample
-    // receives from a Gaussian star. Stamps at quarter-pixel offsets land on the samples.
+    // receives from a Gaussian star. Sources at quarter-pixel offsets land on the samples.
     const int extent = 16;
     const int n = 2 * 4 * extent + 1;
     Image<RGB> data(n, n);
@@ -219,38 +217,28 @@ TEST_CASE("An oversampled pixel-integrated measurement gives the pixel response 
         }
     }
 
-    const int radius = 12;
-    const int banks = 4;
-    MeasuredPSF<RGB> pixels(data, 4.f, PSFSampling::PixelIntegrated, radius, banks);
-    MeasuredPSF<RGB> points(data, 4.f, PSFSampling::PointSampled, radius, banks);
-
     // Largest difference from the pixel response of a source frac pixels right of the middle
-    // pixel's center, normalized over the stamp:
-    auto error = [&](const Image<RGB>& stamp, double frac) {
-        double total = 0.0;
-        for (int y = 0; y < stamp.height(); ++y) {
-            for (int x = 0; x < stamp.width(); ++x) {
-                total += gaussian_pixel_integral(x - radius - frac, y - radius);
-            }
-        }
+    // pixel's center (gaussian_pixel_integral() is 4 times the share of the light):
+    const int radius = 12;
+    auto error = [&](const Image<RGB>& image, double frac) {
         double worst = 0.0;
-        for (int y = 0; y < stamp.height(); ++y) {
-            for (int x = 0; x < stamp.width(); ++x) {
-                const double expected = gaussian_pixel_integral(x - radius - frac, y - radius);
-                worst = std::max(worst,
-                                 std::fabs(static_cast<double>(stamp(x, y)[0]) - expected / total));
+        for (int y = 0; y < image.height(); ++y) {
+            for (int x = 0; x < image.width(); ++x) {
+                const double expected =
+                    0.25 * gaussian_pixel_integral(x - radius - frac, y - radius);
+                worst = std::max(worst, std::fabs(static_cast<double>(image(x, y)[0]) - expected));
             }
         }
         return worst;
     };
 
-    for (int b = 0; b < banks; ++b) {
-        const float frac = static_cast<float>(b) / static_cast<float>(banks);
-        INFO("bank " << b);
-        CHECK(error(pixels.get_kernel(frac + 1e-4f, 1e-4f), frac) < 1e-6);
+    for (const float frac : {0.f, 0.25f, 0.5f, 0.75f}) {
+        INFO("offset " << frac);
+        CHECK(error(camera_image(data, 4.f, PSFSampling::PixelIntegrated, radius, frac), frac) <
+              1e-5);
 
         // Taken as point samples, it is integrated over the pixel a second time, and blurred:
-        CHECK(error(points.get_kernel(frac + 1e-4f, 1e-4f), frac) > 5e-4);
+        CHECK(error(camera_image(data, 4.f, PSFSampling::PointSampled, radius, frac), frac) > 5e-4);
     }
 }
 
@@ -267,31 +255,14 @@ TEST_CASE("A measured PSF's last row and column are part of it", "[cameras][psf]
             data(x, y) = RGB{std::exp(-0.125f * (dx * dx + dy * dy))}; // sigma = 2 px
         }
     }
-    MeasuredPSF<RGB> psf(data, 1.f, PSFSampling::PixelIntegrated, 0, 4);
-    REQUIRE(psf.get_radius() == 4);
+    MeasuredPSF<RGB> psf(data, 1.f, PSFSampling::PixelIntegrated);
+    REQUIRE(psf.radius() == 4);
 
     CHECK(psf.evaluate(4.f, 0.f)[0] == data(8, 4)[0]);
     CHECK(psf.evaluate(0.f, 4.f)[0] == data(4, 8)[0]);
     CHECK(psf.evaluate(4.01f, 0.f)[0] == 0.f);
 
-    auto centroid = [](const Image<RGB>& kernel) {
-        double cx = 0.0;
-        double cy = 0.0;
-        double total = 0.0;
-        for (int y = 0; y < kernel.height(); ++y) {
-            for (int x = 0; x < kernel.width(); ++x) {
-                const double v = static_cast<double>(kernel(x, y)[0]);
-                cx += v * (x - 4);
-                cy += v * (y - 4);
-                total += v;
-            }
-        }
-        return std::pair<double, double>{cx / total, cy / total};
-    };
-    const auto [stamp_x, stamp_y] = centroid(psf.get_kernel(0.f, 0.f));
-    CHECK(std::fabs(stamp_x) < 1e-6);
-    CHECK(std::fabs(stamp_y) < 1e-6);
-    const auto [kernel_x, kernel_y] = centroid(psf.generate_convolution_kernel(4));
-    CHECK(std::fabs(kernel_x) < 1e-6);
-    CHECK(std::fabs(kernel_y) < 1e-6);
+    const auto [x, y] = centroid(camera_image(data, 1.f, PSFSampling::PixelIntegrated, 4), 4);
+    CHECK(std::fabs(x) < 1e-5);
+    CHECK(std::fabs(y) < 1e-5);
 }

@@ -30,20 +30,15 @@ void bind_renderer(py::module_& m)
         .def("set_unresolved_occlusion",
              &Renderer::set_unresolved_occlusion,
              py::arg("occlusion") = true)
-        .def("set_stamp_cropping",
-             &Renderer::set_stamp_cropping,
-             py::arg("enable") = true,
-             "Has no effect: unresolved sources are drawn from the PSF's tables or grid out to "
-             "where their light fades below set_unresolved_taper()'s threshold, keeping all of "
-             "their light.")
         .def("set_unresolved_taper",
              &Renderer::set_unresolved_taper,
              py::arg("fraction_of_read_noise"),
-             "Set how far an unresolved source, still or moving, is drawn with the aperture's "
-             "PSF: until the light it puts in a pixel, as read out, falls to this fraction of the "
-             "sensor's read noise (of an electron without read noise). It then fades out "
-             "smoothly by twice that distance, and the light left on the sensor is spread evenly "
-             "over the frame. The default is 0.001; 0 draws every source over the whole frame.")
+             "Set how far an unresolved source, still or moving, is drawn with its PSF and "
+             "scattered light: until the light it puts in a pixel, as read out, falls to this "
+             "fraction of the sensor's read noise (of an electron without read noise). It then "
+             "fades out smoothly by twice that distance, and the light left on the sensor is "
+             "spread evenly over the frame. The default is 0.001; 0 draws every source over the "
+             "whole frame, which takes as long as a frame per source.")
         .def("unresolved_taper", &Renderer::unresolved_taper)
         .def("set_fft_planning",
              &Renderer::set_fft_planning,

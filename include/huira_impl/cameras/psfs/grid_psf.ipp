@@ -60,7 +60,7 @@ inline double spline_integral(double t)
  * PSF's values every SAMPLE_STEP pixels out to its radius; then the coefficients of the cubic
  * B-spline through them, mirrored about the first and last, with MARGIN more on every side.
  *
- * @param psf The PSF, with its radius (PSF::get_radius()) set.
+ * @param psf The PSF, with its radius (PSF::radius()) set.
  * @param aspect The pixel's height over its width.
  * @throws std::runtime_error if the aspect is not positive and finite, the PSF has no radius, or
  *         its samples within the radius are fewer than three along an axis.
@@ -73,7 +73,7 @@ GridPsf<TSpectral>::GridPsf(PSF<TSpectral>& psf, double aspect)
         HUIRA_THROW_ERROR("GridPsf - The aspect must be positive and finite: " +
                           std::to_string(aspect));
     }
-    const int radius = psf.get_radius();
+    const int radius = psf.radius();
     if (radius < 1) {
         HUIRA_THROW_ERROR("GridPsf - The PSF needs a radius of at least 1 pixel: " +
                           std::to_string(radius));

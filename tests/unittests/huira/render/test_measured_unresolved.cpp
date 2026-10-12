@@ -86,7 +86,6 @@ Image<RGB> render_with(double x,
                        const Image<RGB>& data,
                        int per_pixel,
                        PSFSampling sampling,
-                       int radius,
                        bool scatter = false)
 {
     Scene<RGB> scene;
@@ -94,10 +93,11 @@ Image<RGB> render_with(double x,
     camera_model.set_pixel_convention(PixelConvention::colmap());
     camera_model.configure_sensor_from_pitch({SIZE, SIZE}, units::Meter(PITCH));
     camera_model.set_focal_length(units::Meter(FOCAL));
-    camera_model.set_measured_psf(data, static_cast<float>(per_pixel), sampling, radius);
+    camera_model.set_measured_psf(data, static_cast<float>(per_pixel), sampling);
     camera_model.set_sensor_read_noise(10.f);
     if (scatter) {
-        camera_model.set_harvey_shack_scatter(0.1f, 3.0f, 0.5f);
+        // A shoulder of half a pixel:
+        camera_model.set_scatter(0.1f, 3.0f, units::Radian(0.5 * PITCH / FOCAL));
     }
     auto camera = scene.root.new_instance(camera_model);
     auto source = scene.root.new_instance(scene.new_unresolved_emitter(units::Watt(watts)));
@@ -118,7 +118,7 @@ Image<RGB> render_with(double x,
 /// The same with the Gaussian.
 Image<RGB> render_at(double x, double y, double watts, int per_pixel, PSFSampling sampling)
 {
-    return render_with(x, y, watts, measurement(per_pixel, sampling), per_pixel, sampling, RADIUS);
+    return render_with(x, y, watts, measurement(per_pixel, sampling), per_pixel, sampling);
 }
 
 /// The green channel's sum.
@@ -238,10 +238,8 @@ TEST_CASE("A faint source with a measured PSF keeps its pixels' light where it i
     const double x = 31.27;
     const double y = 32.61;
     const Image<RGB> data = winged();
-    const Image<RGB> bright =
-        render_with(x, y, 1e3, data, 4, PSFSampling::PointSampled, WINGED_RADIUS);
-    const Image<RGB> faint =
-        render_with(x, y, 1e-6, data, 4, PSFSampling::PointSampled, WINGED_RADIUS);
+    const Image<RGB> bright = render_with(x, y, 1e3, data, 4, PSFSampling::PointSampled);
+    const Image<RGB> faint = render_with(x, y, 1e-6, data, 4, PSFSampling::PointSampled);
     double worst = 0.0;
     double peak = 0.0;
     for (std::size_t i = 0; i < bright.size(); ++i) {
@@ -270,9 +268,9 @@ TEST_CASE("A still source with a measured PSF and scattered light keeps its ligh
     for (const double watts : {1e3, 1e-6}) {
         INFO(watts << " W");
         const double without =
-            total(render_with(32.2, 32.3, watts, data, 8, PSFSampling::PointSampled, RADIUS));
+            total(render_with(32.2, 32.3, watts, data, 8, PSFSampling::PointSampled));
         const double with =
-            total(render_with(32.2, 32.3, watts, data, 8, PSFSampling::PointSampled, RADIUS, true));
+            total(render_with(32.2, 32.3, watts, data, 8, PSFSampling::PointSampled, true));
         CHECK(std::abs(with / without - (0.9 + 0.1 * scattered_on_frame)) < 1e-5);
     }
 }

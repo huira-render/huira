@@ -34,16 +34,14 @@ CameraModelHandle<RGB> make_camera(Scene<RGB>& scene, double focal_pixels = FOCA
 constexpr double BRIGHT = 1e12;
 constexpr double FAINT = 1.0;
 
-/// Renders one still unresolved source at a position on the sensor, with stamps uncropped unless
-/// asked.
+/// Renders one still unresolved source at a position on the sensor.
 Image<RGB> render_at(Scene<RGB>& scene,
                      CameraModelHandle<RGB>& camera_model,
                      const InstanceHandle<RGB>& camera,
                      const InstanceHandle<RGB>& source,
                      double x,
                      double y,
-                     double taper = Renderer<RGB>::DEFAULT_UNRESOLVED_TAPER,
-                     bool crop = false)
+                     double taper = Renderer<RGB>::DEFAULT_UNRESOLVED_TAPER)
 {
     const double axis = SIZE / 2.0;
     source.set_position(units::Meter((x - axis) / FOCAL_PIXELS * RANGE),
@@ -52,7 +50,6 @@ Image<RGB> render_at(Scene<RGB>& scene,
     auto frame_buffer = camera_model.make_frame_buffer();
     frame_buffer.enable_received_power();
     Renderer<RGB> renderer;
-    renderer.set_stamp_cropping(crop);
     renderer.set_unresolved_taper(taper);
     Interval exposure{Time::from_et(0.0), Time::from_et(1.0)};
     SceneView<RGB> scene_view(scene, exposure, camera, ObservationMode::GEOMETRIC_STATE);
@@ -81,7 +78,7 @@ TEST_CASE("A still source is drawn from the PSF's tables at its exact position",
     auto camera_model = make_camera(scene);
     auto camera = scene.root.new_instance(camera_model);
     auto source = scene.root.new_instance(scene.new_unresolved_emitter(units::Watt(BRIGHT)));
-    const int radius = camera_model.get_psf_radius();
+    constexpr int radius = 16;
 
     // Positions across a pixel, including just either side of its edges, where a PSF core
     // smaller than a pixel moves its centroid fastest. Stamps at sixteenths of a pixel put these
@@ -137,37 +134,6 @@ TEST_CASE("A still source is drawn from the PSF's tables at its exact position",
     }
 }
 
-TEST_CASE("The PSF's stamps are made from its tables", "[render][unresolved][psf]")
-{
-    Scene<RGB> scene;
-    auto camera_model = make_camera(scene);
-    camera_model.use_aperture_psf(8, 4);
-
-    // Bank (bx, by) holds a source bx / 4, by / 4 of a pixel from the center pixel's center,
-    // normalized per channel:
-    for (const auto& [bx, by] : {std::array<int, 2>{0, 0}, {1, 3}, {3, 2}}) {
-        const float u = static_cast<float>(bx) / 4.f;
-        const float v = static_cast<float>(by) / 4.f;
-        const Image<RGB>& stamp = camera_model.get_psf_kernel(u + 0.125f, v + 0.125f);
-        const Image<RGB> expected = camera_model.psf_image(8, u, v);
-        const std::array<double, 3> expected_sum = sums(expected);
-        REQUIRE(stamp.width() == expected.width());
-        double worst = 0.0;
-        for (int y = 0; y < stamp.height(); ++y) {
-            for (int x = 0; x < stamp.width(); ++x) {
-                for (std::size_t c = 0; c < 3; ++c) {
-                    worst = std::max(
-                        worst,
-                        std::abs(static_cast<double>(stamp(x, y)[c]) -
-                                 static_cast<double>(expected(x, y)[c]) / expected_sum[c]));
-                }
-            }
-        }
-        INFO("bank (" << bx << ", " << by << ")");
-        CHECK(worst < 1e-6);
-    }
-}
-
 namespace {
 
 /// Renders one still source of a power, alone, in a scene of its own.
@@ -175,8 +141,7 @@ Image<RGB> render_alone(double power,
                         double x,
                         double y,
                         double taper = Renderer<RGB>::DEFAULT_UNRESOLVED_TAPER,
-                        float read_noise = -1.0f,
-                        bool crop = false)
+                        float read_noise = -1.0f)
 {
     Scene<RGB> scene;
     auto camera_model = make_camera(scene);
@@ -185,7 +150,7 @@ Image<RGB> render_alone(double power,
     }
     auto camera = scene.root.new_instance(camera_model);
     auto source = scene.root.new_instance(scene.new_unresolved_emitter(units::Watt(power)));
-    return render_at(scene, camera_model, camera, source, x, y, taper, crop);
+    return render_at(scene, camera_model, camera, source, x, y, taper);
 }
 
 /// The light a source puts on the frame, as a fraction of all of it, per channel: the PSF's
@@ -264,12 +229,12 @@ TEST_CASE("A faint still source fades out smoothly below the taper", "[render][u
     const double y = 33.61;
     const Image<RGB> exact = render_alone(BRIGHT, x, y);
     const Image<RGB> tapered =
-        render_alone(FAINT, x, y, Renderer<RGB>::DEFAULT_UNRESOLVED_TAPER, READ_NOISE, true);
-    const Image<RGB> untapered = render_alone(FAINT, x, y, 0.0, READ_NOISE, true);
+        render_alone(FAINT, x, y, Renderer<RGB>::DEFAULT_UNRESOLVED_TAPER, READ_NOISE);
+    const Image<RGB> untapered = render_alone(FAINT, x, y, 0.0, READ_NOISE);
 
     // Every pixel is within the taper's threshold of the source drawn in full, with what the
-    // taper leaves out spread over the frame: no edge anywhere, whether or not stamps are
-    // cropped. Without a taper, it is drawn in full.
+    // taper leaves out spread over the frame: no edge anywhere. Without a taper, it is drawn in
+    // full.
     const double tau = Renderer<RGB>::DEFAULT_UNRESOLVED_TAPER * READ_NOISE;
     const double scale = FAINT / BRIGHT;
     double worst_tapered = 0.0;

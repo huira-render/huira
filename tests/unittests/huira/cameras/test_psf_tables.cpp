@@ -513,14 +513,14 @@ TEST_CASE("psf_image() follows the optics", "[cameras][psf]")
     CHECK(worst_error(camera, 0.2, 0.1, 30, pixels) < 1e-3);
 }
 
-TEST_CASE("psf_image() without the aperture's PSF", "[cameras][psf]")
+TEST_CASE("psf_image() without the aperture's diffraction pattern", "[cameras][psf]")
 {
     CameraModel<RGB> camera;
     configure(camera, JUPITER, Resolution{64, 64});
 
-    SECTION("With no PSF, the pixel the source falls in holds all its light")
+    SECTION("With diffraction off, the pixel the source falls in holds all its light")
     {
-        camera.delete_psf();
+        camera.enable_diffraction(false);
         const Image<RGB> image = camera.psf_image(2, 0.7f, -0.2f);
         for (int y = 0; y < image.height(); ++y) {
             for (int x = 0; x < image.width(); ++x) {
@@ -529,7 +529,7 @@ TEST_CASE("psf_image() without the aperture's PSF", "[cameras][psf]")
             }
         }
     }
-    SECTION("A PSF that was set is given as the renderer draws it, with its scattered light")
+    SECTION("A PSF set in its place is given as the renderer draws it, with scattered light")
     {
         // Taken as complete, it holds all of the source's light:
         camera.set_measured_psf(Image<RGB>(9, 9, RGB{1.f}), 1.f, PSFSampling::PointSampled);
@@ -738,75 +738,37 @@ TEST_CASE("set_scatter() checks its arguments", "[cameras][psf][scatter]")
     CHECK_NOTHROW(camera.set_scatter(0.f, 2.5f, shoulder));
 }
 
-TEST_CASE("psf_image() takes scattered light set in pixels as it does in angles",
+TEST_CASE("scatter_image() is the scattered light alone, at its size in pixels",
           "[cameras][psf][scatter]")
 {
     // 50 mm over 8.5 um pixels: 20 arcsec is 0.5704 px and 1 degree 102.66 px.
-    const double pixels_per_radian = 0.05 / JUPITER.pitch_x;
-    CameraModel<RGB> in_angles;
-    configure(in_angles, JUPITER, Resolution{64, 64});
-    in_angles.set_scatter(0.05f, 1.8f, units::Arcsecond(20.0), units::Degree(1.0));
-
-    CameraModel<RGB> in_pixels;
-    configure(in_pixels, JUPITER, Resolution{64, 64});
-    in_pixels.set_harvey_shack_scatter(
-        0.05f,
-        1.8f,
-        static_cast<float>(units::Arcsecond(20.0).to_si() * pixels_per_radian),
-        static_cast<float>(units::Degree(1.0).to_si() * pixels_per_radian));
-
-    const Image<RGB> angles = in_angles.psf_image(6, 0.2f, -0.3f);
-    const Image<RGB> pixels = in_pixels.psf_image(6, 0.2f, -0.3f);
-    double worst = 0.0;
-    for (int y = 0; y < angles.height(); ++y) {
-        for (int x = 0; x < angles.width(); ++x) {
-            for (std::size_t c = 0; c < 3; ++c) {
-                worst = std::max(worst,
-                                 std::abs(static_cast<double>(angles(x, y)[c] - pixels(x, y)[c])) /
-                                     static_cast<double>(angles(x, y)[c]));
+    CameraModel<RGB> camera;
+    configure(camera, JUPITER, Resolution{128, 128});
+    camera.set_scatter(0.05f, 1.8f, units::Arcsecond(20.0), units::Degree(1.0));
+    const auto check = [&](double focal_length) {
+        const double pixels_per_radian = focal_length / JUPITER.pitch_x;
+        const ReferenceScatter scatter(units::Arcsecond(20.0).to_si() * pixels_per_radian,
+                                       1.8,
+                                       units::Degree(1.0).to_si() * pixels_per_radian);
+        const Image<RGB> image = camera.scatter_image(40, 0.2f, -0.3f);
+        double worst = 0.0;
+        double peak = 0.0;
+        for (const auto& pixel : sample_pixels(3, 40, 60, 31)) {
+            const double exact =
+                reference::pixel_light(scatter, pixel[0] - 0.2, pixel[1] + 0.3, 0.05);
+            peak = std::max(peak, exact);
+            for (std::size_t c = 0; c < RGB::size(); ++c) {
+                const double light = static_cast<double>(image(pixel[0] + 40, pixel[1] + 40)[c]);
+                worst = std::max(worst, std::abs(light - exact));
             }
         }
-    }
-    CHECK(worst < 1e-5);
+        return worst / peak;
+    };
+    CHECK(check(0.05) < 3e-5);
 
-    // As in angles, the wings need an outer radius beyond the shoulder to fall as slowly as r^-2:
-    CHECK_THROWS(in_pixels.set_harvey_shack_scatter(0.05f, 2.f));
-    CHECK_THROWS(in_pixels.set_harvey_shack_scatter(0.05f, 1.8f, 2.f, 1.f));
-    CHECK_NOTHROW(in_pixels.set_harvey_shack_scatter(0.05f, 2.f, 0.5f, 100.f));
-    CHECK_NOTHROW(in_pixels.set_harvey_shack_scatter(0.f, 2.f));
-}
-
-TEST_CASE("Renders use scattered light set in angles at its size in pixels",
-          "[cameras][psf][scatter]")
-{
-    // 50 mm over 8.5 um pixels: 20 arcsec is 0.5704 px and 1 degree 102.66 px.
-    CameraModel<RGB> in_angles;
-    configure(in_angles, JUPITER, Resolution{128, 128});
-    in_angles.set_psf_convolution_radius(40);
-    in_angles.set_scatter(0.05f, 1.8f, units::Arcsecond(20.0), units::Degree(1.0));
-
-    CameraModel<RGB> in_pixels;
-    configure(in_pixels, JUPITER, Resolution{128, 128});
-    in_pixels.set_psf_convolution_radius(40);
-    const double pixels_per_radian = 0.05 / JUPITER.pitch_x;
-    in_pixels.set_harvey_shack_scatter(
-        0.05f,
-        1.8f,
-        static_cast<float>(units::Arcsecond(20.0).to_si() * pixels_per_radian),
-        static_cast<float>(units::Degree(1.0).to_si() * pixels_per_radian));
-
-    const Image<RGB>& angles = in_angles.get_psf_wings_kernel();
-    const Image<RGB>& pixels = in_pixels.get_psf_wings_kernel();
-    REQUIRE(angles.width() == pixels.width());
-    double worst = 0.0;
-    for (int y = 0; y < angles.height(); ++y) {
-        for (int x = 0; x < angles.width(); ++x) {
-            worst = std::max(worst,
-                             std::abs(static_cast<double>(angles(x, y)[0] - pixels(x, y)[0])) /
-                                 static_cast<double>(pixels(x, y)[0]));
-        }
-    }
-    CHECK(worst < 1e-5);
+    // It follows the focal length:
+    camera.set_focal_length(100_mm);
+    CHECK(check(0.1) < 3e-5);
 }
 
 TEST_CASE("psf_image() blurs a star by its defocus", "[cameras][psf][defocus]")
@@ -918,7 +880,7 @@ TEST_CASE("psf_image() blurs a source at a range by its own defocus", "[cameras]
     CHECK_THROWS(camera.psf_image(8, 0.f, 0.f, units::Meter(0.0)));
 
     // Without a PSF, the blur alone, a uniform disc: each pixel holds the disc's area within it.
-    camera.delete_psf();
+    camera.enable_diffraction(false);
     const Image<RGB> disc = camera.psf_image(8, 0.2f, 0.4f);
     const double blur = camera.defocus_blur_radius();
     double worst = 0.0;

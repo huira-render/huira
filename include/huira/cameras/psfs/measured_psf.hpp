@@ -64,18 +64,19 @@ enum class PSFFocus {
  * The measurement is assumed to be centered on the image: the PSF origin is placed at the
  * geometric center ((width - 1) / 2, (height - 1) / 2), so measurements should be centroided
  * before being supplied. Normalization of the supplied data does not matter: the PSF is taken
- * as complete, holding all of a source's light within the measured extent and the radius.
+ * as complete, holding all of a source's light within the measured extent, out to its farthest
+ * sample (radius()). To use less of a measurement, crop it before setting it.
  *
- * The renderer draws a still source from the samples on their grid, at its exact position (see
- * GridPsf): the cubic spline through them, integrated over each pixel for point samples. How
- * well that follows the real pattern depends on the sampling: a pattern sampled at least twice
- * as finely as its finest detail is followed within a few parts in 10^3. evaluate() bilinearly
- * interpolates the samples and returns zero outside the measured extent; the stamps for moving
- * sources and the convolution kernel are made from it.
+ * The renderer draws unresolved sources from the samples on their grid (see GridPsf): the cubic
+ * spline through them, integrated over each pixel for point samples, a still source at its
+ * exact position and a moving one along its path. How well that follows the real pattern
+ * depends on the sampling: a pattern sampled at least twice as finely as its finest detail is
+ * followed within a few parts in 10^3. evaluate() bilinearly interpolates the samples and
+ * returns zero outside the measured extent.
  *
- * A MeasuredPSF is the "core" component of the total system PSF: because real measurements
- * are dynamic-range limited, they rarely capture the faint far wings, so Harvey-Shack scatter
- * and veiling glare can still be layered on top via the camera model.
+ * A MeasuredPSF takes the place of the aperture's diffraction pattern. Real measurements are
+ * limited in dynamic range and rarely capture the faint far wings, so scattered light (see
+ * CameraModel::set_scatter()) and veiling glare are still added to it by the camera model.
  *
  * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
@@ -85,8 +86,6 @@ class MeasuredPSF : public PSF<TSpectral> {
     MeasuredPSF(const Image<TSpectral>& data,
                 float samples_per_pixel,
                 PSFSampling sampling,
-                int radius = 0,
-                int banks = 16,
                 PSFFocus focus = PSFFocus::InFocus);
     ~MeasuredPSF() override = default;
 
@@ -114,11 +113,6 @@ class MeasuredPSF : public PSF<TSpectral> {
     /// Samples per sensor pixel, per axis.
     [[nodiscard]] float samples_per_pixel() const { return samples_per_pixel_; }
 
-    /**
-     * @brief The largest radius (in sensor pixels) covered by the measured data.
-     */
-    int measured_radius() const { return measured_radius_; }
-
   private:
     Image<TSpectral> data_;
     float samples_per_pixel_;
@@ -126,7 +120,6 @@ class MeasuredPSF : public PSF<TSpectral> {
     PSFFocus focus_;
     float center_x_;
     float center_y_;
-    int measured_radius_;
 };
 } // namespace huira
 

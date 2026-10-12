@@ -525,34 +525,37 @@ TEST_CASE("Harvey-Shack scatter rejects infinite parameters", "[cameras][validat
 
     CameraModel<RGB> camera;
     camera.configure_sensor_from_pitch(Resolution{8, 8}, units::Micrometer(10.0));
-    CHECK_THROWS(camera.set_harvey_shack_scatter(0.1f, INF_F));
-    CHECK_THROWS(camera.set_harvey_shack_scatter(0.1f, 2.5f, INF_F));
-    CHECK_NOTHROW(camera.set_harvey_shack_scatter(0.1f, 2.5f, 0.5f));
+    CHECK_THROWS(camera.set_scatter(0.1f, INF_F, units::Arcsecond(20.0)));
+    CHECK_THROWS(camera.set_scatter(0.1f, 2.5f, units::Radian(INF_F)));
+    CHECK_NOTHROW(camera.set_scatter(0.1f, 2.5f, units::Arcsecond(20.0)));
 }
 
-TEST_CASE("use_aperture_psf(false) stops using the aperture's PSF, and only that", "[cameras][psf]")
+TEST_CASE("Diffraction can be turned off and on, and a set PSF takes its place until cleared",
+          "[cameras][psf]")
 {
     Scene<RGB> scene;
     auto camera = scene.new_camera_model();
     camera.configure_sensor_from_pitch({64, 64}, units::Micrometer(10.0));
+    const auto center = [&] { return camera.psf_image(4, 0.f, 0.f)(4, 4)[1]; };
+    const auto all_in_center = [&] { return std::abs(center() - 1.f) < 1e-6f; };
+    const float diffraction = center();
+    CHECK(diffraction < 1.f);
 
-    // A measured PSF is left as it is. It used to be deleted.
+    // A set PSF, here all of the light in one pixel, takes diffraction's place whether it is on
+    // or off:
     Image<RGB> data(9, 9, RGB{0.f});
     data(4, 4) = RGB{1.f};
-    camera.set_measured_psf(data, 1.f, PSFSampling::PixelIntegrated, 4);
-    camera.use_aperture_psf(false);
-    CHECK(camera.get_psf_radius() == 4);
+    camera.set_measured_psf(data, 1.f, PSFSampling::PixelIntegrated);
+    CHECK(camera.has_set_psf());
+    CHECK(all_in_center());
+    camera.enable_diffraction(false);
+    CHECK(camera.has_set_psf());
+    CHECK(all_in_center());
 
-    // True keeps the aperture PSF's stamp size, if it is already in use. It used to reset it to
-    // the default.
-    camera.use_aperture_psf(8, 4);
-    camera.use_aperture_psf(true);
-    CHECK(camera.get_psf_radius() == 8);
-
-    camera.use_aperture_psf(false);
-    CHECK(camera.get_psf_radius() == 0);
-
-    // Back on, it has the automatic stamp size, at least 16 px:
-    camera.use_aperture_psf(true);
-    CHECK(camera.get_psf_radius() == CameraModel<RGB>::MIN_AUTO_PSF_RADIUS);
+    // Cleared, it leaves no PSF while diffraction is off, and diffraction once it is on:
+    camera.clear_psf();
+    CHECK_FALSE(camera.has_set_psf());
+    CHECK(all_in_center());
+    camera.enable_diffraction(true);
+    CHECK(center() == diffraction);
 }

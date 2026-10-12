@@ -55,13 +55,6 @@ class Renderer {
     /// Enable or disable occlusion testing of unresolved point sources.
     void set_unresolved_occlusion(bool occlusion = true) { unresolved_occlusion_ = occlusion; }
 
-    /**
-     * @brief Has no effect: unresolved sources are no longer stamped, but drawn from the PSF's
-     * tables or grid out to where their light fades below set_unresolved_taper()'s threshold,
-     * keeping all of their light. Kept until the API is reworked.
-     */
-    void set_stamp_cropping(bool enable = true) { static_cast<void>(enable); }
-
     /// How faint, as a fraction of the sensor's read noise, the light an unresolved source puts
     /// in a pixel gets before it is tapered off. See set_unresolved_taper().
     static constexpr double DEFAULT_UNRESOLVED_TAPER = 1e-3;

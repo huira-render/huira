@@ -121,46 +121,43 @@ class CameraModelHandle : public Handle<CameraModel<TSpectral>> {
     template <IsAperture TAperture, typename... Args>
     void set_aperture(Args&&... args) const;
 
+    void enable_diffraction(bool diffraction = true) const;
+    bool diffraction_enabled() const;
+
     template <IsPSF TPSF, typename... Args>
     void set_psf(Args&&... args) const;
 
     void set_measured_psf(const Image<TSpectral>& data,
                           float samples_per_pixel,
                           PSFSampling sampling,
-                          int radius = 0,
-                          int banks = CameraModel<TSpectral>::DEFAULT_PSF_BANKS,
                           PSFFocus focus = PSFFocus::InFocus) const;
+    void clear_psf() const;
+    bool has_set_psf() const;
 
-    void use_aperture_psf(bool value) const;
-    void use_aperture_psf(int radius = 0,
-                          int banks = CameraModel<TSpectral>::DEFAULT_PSF_BANKS) const;
-    bool uses_aperture_psf() const;
-    bool has_psf() const;
-    void enable_psf_convolution(bool convolve_psf = true) const;
-    bool psf_convolution_enabled() const;
-    void set_psf_convolution_radius(int radius) const;
-    void delete_psf() const;
-
-    void set_veiling_glare(float alpha) const;
-    void disable_veiling_glare() const;
-    void set_harvey_shack_scatter(float scatter_fraction,
-                                  float falloff_exponent,
-                                  float r0 = 0.5f,
-                                  float radius = 0.f) const;
-    void disable_harvey_shack_scatter() const;
     void set_scatter(float fraction,
                      float slope,
                      units::Radian shoulder_angle,
                      std::optional<units::Radian> outer_angle = std::nullopt) const;
+    void disable_scatter() const;
+    bool scatter_enabled() const;
 
-    int get_psf_radius() const;
-    const Image<TSpectral>& get_psf_kernel(float u, float v) const;
-    const Image<TSpectral>& get_psf_convolution_kernel() const;
-    const Image<TSpectral>& get_psf_wings_kernel() const;
+    void set_veiling_glare(float alpha) const;
+    void disable_veiling_glare() const;
+
+    void enable_psf_convolution(bool convolve_psf = true) const;
+    bool psf_convolution_enabled() const;
+
     Image<TSpectral> psf_image(int radius,
                                float x_offset = 0.f,
                                float y_offset = 0.f,
                                std::optional<units::Meter> range = std::nullopt) const;
+    Image<TSpectral>
+    diffraction_image(int radius, float x_offset = 0.f, float y_offset = 0.f) const;
+    Image<TSpectral> scatter_image(int radius, float x_offset = 0.f, float y_offset = 0.f) const;
+    Image<TSpectral> defocus_image(int radius,
+                                   float x_offset = 0.f,
+                                   float y_offset = 0.f,
+                                   std::optional<units::Meter> range = std::nullopt) const;
 
     void precompute() const;
     bool is_precomputed() const;
@@ -178,7 +175,7 @@ class CameraModelHandle : public Handle<CameraModel<TSpectral>> {
     units::Diopter focus_diopters() const;
     units::Micrometer focus_sensor_offset() const;
 
-    float defocus_blur_radius() const;
+    float defocus_blur_radius(std::optional<units::Meter> range = std::nullopt) const;
 
     void set_pixel_convention(PixelConvention convention) const;
     PixelConvention pixel_convention() const;
@@ -265,6 +262,68 @@ class CameraModelHandle : public Handle<CameraModel<TSpectral>> {
         static_assert(detail::removed_api<Args...>,
                       "set_sensor_size() was removed in v0.9.4. Use configure_sensor_from_size() "
                       "instead.");
+    }
+
+    template <typename... Args>
+    void use_aperture_psf(Args&&...) const
+    {
+        static_assert(detail::removed_api<Args...>,
+                      "use_aperture_psf() was removed in v0.9.10. The aperture's diffraction "
+                      "pattern is on by default: use enable_diffraction() to turn it on or off, "
+                      "and clear_psf() to go back to it from a PSF that was set. Its extent is "
+                      "automatic.");
+    }
+
+    template <typename... Args>
+    void delete_psf(Args&&...) const
+    {
+        static_assert(detail::removed_api<Args...>,
+                      "delete_psf() was removed in v0.9.10. Use clear_psf() to remove a PSF "
+                      "that was set, and enable_diffraction(false) to turn the aperture's "
+                      "diffraction pattern off.");
+    }
+
+    template <typename... Args>
+    void set_psf_convolution_radius(Args&&...) const
+    {
+        static_assert(detail::removed_api<Args...>,
+                      "set_psf_convolution_radius() was removed in v0.9.10. Resolved bodies are "
+                      "convolved with the whole PSF across the frame; use psf_image() to see it.");
+    }
+
+    template <typename... Args>
+    void set_harvey_shack_scatter(Args&&...) const
+    {
+        static_assert(detail::removed_api<Args...>,
+                      "set_harvey_shack_scatter() was removed in v0.9.10. Use set_scatter(), "
+                      "which takes the shoulder and outer radius as angles.");
+    }
+
+    template <typename... Args>
+    void disable_harvey_shack_scatter(Args&&...) const
+    {
+        static_assert(detail::removed_api<Args...>,
+                      "disable_harvey_shack_scatter() was removed in v0.9.10. Use "
+                      "disable_scatter() instead.");
+    }
+
+    template <typename... Args>
+    int get_psf_radius(Args&&...) const
+    {
+        static_assert(detail::removed_api<Args...>,
+                      "get_psf_radius() was removed in v0.9.10. Sources are drawn as far as "
+                      "their light reaches (see Renderer::set_unresolved_taper()); psf_image() "
+                      "takes the radius to show.");
+        return {};
+    }
+
+    template <typename... Args>
+    Image<TSpectral> get_psf_convolution_kernel(Args&&...) const
+    {
+        static_assert(detail::removed_api<Args...>,
+                      "get_psf_convolution_kernel() was removed in v0.9.10. Use psf_image(), the "
+                      "whole PSF resolved bodies are convolved with.");
+        return {};
     }
 };
 } // namespace huira

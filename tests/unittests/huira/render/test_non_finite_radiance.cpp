@@ -89,7 +89,7 @@ TEST_CASE("The sky seen through a transparent surface", "[render][nan]")
         auto camera_model = scene.new_camera_model();
         camera_model.configure_sensor_from_pitch({SIZE, SIZE}, 10_um);
         camera_model.set_focal_length(50_mm);
-        camera_model.delete_psf();
+        camera_model.enable_diffraction(false);
         camera_model.enable_depth_of_field(false);
         auto camera = scene.root.new_instance(camera_model);
 
@@ -130,8 +130,6 @@ TEST_CASE("A pixel that is not finite stays where it is through the PSF convolut
     camera_model.configure_sensor_from_pitch({SIZE, SIZE}, 10_um);
     camera_model.set_focal_length(50_mm);
     camera_model.set_fstop(8.f);
-    camera_model.use_aperture_psf(4, 2); // small, so quick to build
-    camera_model.set_psf_convolution_radius(16);
     camera_model.enable_depth_of_field(false);
     auto camera = scene.root.new_instance(camera_model);
 

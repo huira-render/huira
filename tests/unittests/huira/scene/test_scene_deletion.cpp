@@ -86,7 +86,7 @@ Camera small_camera(Scene<RGB>& scene)
 {
     auto camera_model = scene.new_camera_model();
     camera_model.configure_sensor_from_pitch({16, 16}, 0.5_mm, 0.5_mm);
-    camera_model.delete_psf();
+    camera_model.enable_diffraction(false);
     camera_model.enable_depth_of_field(false);
     return {camera_model, scene.root.new_instance(camera_model)};
 }

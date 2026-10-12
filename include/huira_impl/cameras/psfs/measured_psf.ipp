@@ -8,29 +8,26 @@
 namespace huira {
 
 /**
- * @brief Constructs a MeasuredPSF from sampled data. Its polyphase cache is built on first use.
+ * @brief Constructs a MeasuredPSF from sampled data, taken as complete out to its edges.
  *
  * @param data Measured PSF samples, centered on the image.
  * @param samples_per_pixel Measurement samples per sensor pixel per axis (>= 1 recommended; must
  *                          be positive).
  * @param sampling What the samples are: the PSF's intensity at points, or the light a pixel
  *                 centered there receives (see PSFSampling).
- * @param radius Polyphase stamping kernel radius in sensor pixels. A value of 0 selects the largest
- *               radius covered by the measurement, capped at 64.
- * @param banks Number of polyphase banks per axis for subpixel stamping.
  * @param focus Whether the samples are a point's in focus, which the camera's focus blurs, or
  *              already hold its defocus (see PSFFocus).
+ * @throws std::runtime_error if the data has fewer than 2 x 2 samples, the sampling is not
+ *         positive and finite, or the data reaches less than a pixel from its center.
  */
 template <IsSpectral TSpectral>
 MeasuredPSF<TSpectral>::MeasuredPSF(const Image<TSpectral>& data,
                                     float samples_per_pixel,
                                     PSFSampling sampling,
-                                    int radius,
-                                    int banks,
                                     PSFFocus focus)
     : data_(data), samples_per_pixel_(samples_per_pixel), sampling_(sampling), focus_(focus),
       center_x_(static_cast<float>(data.width() - 1) * 0.5f),
-      center_y_(static_cast<float>(data.height() - 1) * 0.5f), measured_radius_(0)
+      center_y_(static_cast<float>(data.height() - 1) * 0.5f)
 {
     if (data_.width() < 2 || data_.height() < 2) {
         HUIRA_THROW_ERROR("MeasuredPSF - Measured data must be at least 2x2 samples");
@@ -40,25 +37,15 @@ MeasuredPSF<TSpectral>::MeasuredPSF(const Image<TSpectral>& data,
         HUIRA_THROW_ERROR("MeasuredPSF - samples_per_pixel must be a positive finite value: " +
                           std::to_string(samples_per_pixel_));
     }
-
-    // Largest radius (in sensor pixels) fully covered by the measurement:
-    const float extent_samples = std::min(center_x_, center_y_);
-    measured_radius_ = static_cast<int>(std::floor(extent_samples / samples_per_pixel_));
-    if (measured_radius_ < 1) {
+    if (std::min(center_x_, center_y_) < samples_per_pixel_) {
         HUIRA_THROW_ERROR("MeasuredPSF - Measured data covers less than one sensor pixel of "
                           "radius at samples_per_pixel = " +
                           std::to_string(samples_per_pixel_));
     }
 
-    if (radius == 0) {
-        radius = std::min(measured_radius_, 64);
-    } else if (radius > measured_radius_) {
-        HUIRA_THROW_ERROR("MeasuredPSF - Requested polyphase radius " + std::to_string(radius) +
-                          " exceeds the measured extent of " + std::to_string(measured_radius_) +
-                          " sensor pixels");
-    }
-
-    this->set_polyphase_size(radius, banks); // built on first use
+    // Out to the farthest sample, so that none is left out:
+    this->set_radius(
+        static_cast<int>(std::ceil(std::max(center_x_, center_y_) / samples_per_pixel_ - 1e-6f)));
 }
 
 /**

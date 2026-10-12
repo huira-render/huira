@@ -146,7 +146,7 @@ Image<RGB> render_source(
     camera_model.set_fstop(static_cast<float>(FSTOP));
     camera_model.set_focus_distance(units::Meter(FOCUS));
     camera_model.set_measured_psf(
-        measurement(), static_cast<float>(PER_PIXEL), PSFSampling::PointSampled, RADIUS, 16, focus);
+        measurement(), static_cast<float>(PER_PIXEL), PSFSampling::PointSampled, focus);
     camera_model.set_sensor_read_noise(10.f);
     auto camera = scene.root.new_instance(camera_model);
     auto source = scene.root.new_instance(scene.new_unresolved_emitter(units::Watt(1e12)));
@@ -238,7 +238,7 @@ TEST_CASE("psf_image gives a measured PSF blurred by the defocus at a range",
     camera.set_fstop(static_cast<float>(FSTOP));
     camera.set_focus_distance(units::Meter(FOCUS));
     camera.set_measured_psf(
-        measurement(), static_cast<float>(PER_PIXEL), PSFSampling::PointSampled, RADIUS, 16);
+        measurement(), static_cast<float>(PER_PIXEL), PSFSampling::PointSampled);
     constexpr int R = 12;
     const float ox = 0.23f;
     const float oy = -0.31f;

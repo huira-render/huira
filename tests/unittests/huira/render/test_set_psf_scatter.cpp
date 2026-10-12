@@ -114,12 +114,13 @@ CameraModelHandle<RGB> make_camera(Scene<RGB>& scene, bool with_psf)
     camera_model.set_focus_distance(units::Meter(FOCUS));
     if (with_psf) {
         camera_model.set_measured_psf(
-            measurement(), static_cast<float>(PER_PIXEL), PSFSampling::PointSampled, RADIUS);
+            measurement(), static_cast<float>(PER_PIXEL), PSFSampling::PointSampled);
     } else {
-        camera_model.delete_psf();
+        camera_model.enable_diffraction(false);
     }
-    camera_model.set_harvey_shack_scatter(
-        static_cast<float>(SCATTERED), static_cast<float>(SLOPE), static_cast<float>(SHOULDER));
+    camera_model.set_scatter(static_cast<float>(SCATTERED),
+                             static_cast<float>(SLOPE),
+                             units::Radian(SHOULDER * PITCH / FOCAL));
     camera_model.set_sensor_read_noise(10.f);
     return camera_model;
 }
@@ -134,7 +135,7 @@ CameraModelHandle<RGB> core_camera(Scene<RGB>& scene, bool depth_of_field)
     camera_model.set_focus_distance(units::Meter(FOCUS));
     camera_model.enable_depth_of_field(depth_of_field);
     camera_model.set_measured_psf(
-        measurement(), static_cast<float>(PER_PIXEL), PSFSampling::PointSampled, RADIUS);
+        measurement(), static_cast<float>(PER_PIXEL), PSFSampling::PointSampled);
     return camera_model;
 }
 
@@ -279,7 +280,7 @@ TEST_CASE("Without a PSF, scattered light needs no convolution radius",
           "[render][unresolved][psf][scatter]")
 {
     // The source's pixel takes nine tenths of its light, and the scattered light the rest, in
-    // focus. This used to throw unless set_psf_convolution_radius() was called.
+    // focus. This used to throw unless the convolution radius was set.
     const double x = 30.27;
     const double y = 33.61;
     const Image<RGB> image = render_source(false, FOCUS, x, y, false);

@@ -14,20 +14,18 @@ namespace huira {
  * @param pitch_x The pixel pitch in the x direction in meters.
  * @param pitch_y The pixel pitch in the y direction in meters.
  * @param aperture_diameter The diameter of the circular aperture in meters.
- * @param radius The kernel radius in pixels.
- * @param banks The number of polyphase banks.
+ * @param radius How far from the source, in pixels, the pattern is taken (see PSF::radius()).
  */
 template <IsSpectral TSpectral>
 AiryDisk<TSpectral>::AiryDisk(units::Meter focal_length,
                               units::Meter pitch_x,
                               units::Meter pitch_y,
                               units::Meter aperture_diameter,
-                              int radius,
-                              int banks)
+                              int radius)
     : f_number_(focal_length.to_si() / aperture_diameter.to_si()),
       pixel_pitch_(pitch_x.to_si(), pitch_y.to_si())
 {
-    this->set_polyphase_size(radius, banks); // built on first use
+    this->set_radius(radius);
 }
 
 /**

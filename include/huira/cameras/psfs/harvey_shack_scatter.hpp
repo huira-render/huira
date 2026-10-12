@@ -17,12 +17,10 @@ namespace huira {
  * which is flat near the origin (finite, integrable core) and falls off as r^-b for r >> r0.
  * Exponents b of roughly 2 to 3 match measured stellar PSF wings (King 1971, Racine 1996).
  *
- * This component is achromatic: all spectral channels receive the same profile. It is
- * intended to be mixed with a diffraction core (e.g. AiryDisk) by energy fraction to form the
- * total system PSF; the mixing is performed by CameraModel::get_psf_convolution_kernel().
- *
- * Note: this component is used for whole-image convolution via generate_convolution_kernel()
- * and does not require (or benefit from) a polyphase cache.
+ * This component is achromatic: all spectral channels receive the same profile. Set as a PSF
+ * (see CameraModel::set_psf()), it is taken as complete within its radius. The camera's own
+ * scattered light, added to diffraction or to a PSF that was set, is set in angles with
+ * CameraModel::set_scatter() instead, and reaches across the frame.
  *
  * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */

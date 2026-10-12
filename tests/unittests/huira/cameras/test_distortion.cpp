@@ -30,7 +30,7 @@ void wide_field(CameraModel<RGB>& camera, const BrownCoefficients& coefficients)
     camera.configure_sensor_from_pitch(Resolution{64, 48}, units::Micrometer(100.0));
     camera.set_focal_length(units::Millimeter(4.0));
     camera.set_brown_conrady_distortion(coefficients);
-    camera.delete_psf(); // the aperture's, by default: not needed here, and slow to build
+    camera.enable_diffraction(false); // not needed here, and slow to build
 }
 
 void wide_field(CameraModel<RGB>& camera, double k1)
@@ -269,7 +269,7 @@ TEST_CASE("A source past an OpenCV model's pole does not appear in the image",
     camera_model.configure_sensor_from_pitch(Resolution{64, 48}, units::Micrometer(100.0));
     camera_model.set_focal_length(units::Millimeter(4.0));
     camera_model.set_opencv_distortion(WIDE_RATIONAL);
-    camera_model.delete_psf(); // each source's light in one pixel
+    camera_model.enable_diffraction(false); // each source's light in one pixel
     camera_model.enable_depth_of_field(false);
     auto camera = scene.root.new_instance(camera_model);
     auto source = scene.root.new_instance(scene.new_unresolved_emitter(units::Watt(1.0)));
@@ -365,7 +365,7 @@ TEST_CASE("A distortion's error names the position in full", "[cameras][distorti
     camera.set_focal_length(units::Millimeter(4.0)); // the corners at a normalized radius of 1
     camera.set_brown_conrady_distortion(BrownCoefficients(-0.3, 0.0, 0.0, 0.0, 0.0));
     camera.set_pixel_convention(PixelConvention::fits());
-    camera.delete_psf();
+    camera.enable_diffraction(false);
 
     const std::string message = thrown_message([&] { camera.precompute(); });
     INFO(message);

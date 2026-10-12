@@ -88,8 +88,8 @@ inline double arc_in_rectangle(double x0, double x1, double y0, double y1, doubl
  * @brief Set how far an unresolved source is drawn: until the light it puts in a pixel, as the
  * sensor reads it out, falls to this fraction of the read noise.
  *
- * With the aperture's PSF, still sources are drawn at their exact position, pixel by pixel from
- * the PSF's tables, and moving ones along their path, as its line integral (see
+ * With the aperture's diffraction pattern, still sources are drawn at their exact position, pixel
+ * by pixel from the PSF's tables, and moving ones along their path, as its line integral (see
  * PsfTables::draw_line()), out to the distance r from the source or its path beyond which no
  * pixel reads out more than tau, this fraction of the sensor's read noise as configured (of an
  * electron for a sensor without read noise; the same whether or not noise is simulated, so that
@@ -1337,11 +1337,11 @@ struct RenderItem {
 
     static constexpr float RANGE_AT_INFINITY = std::numeric_limits<float>::max();
 
-    /// The PSF's tables it is drawn from, with the aperture's PSF: a star's, or for its own
+    /// The PSF's tables it is drawn from, with the diffraction pattern: a star's, or for its own
     /// blur (see CameraModel::tables_at_()).
     const PsfTables<TSpectral>* tables = nullptr;
 
-    /// The grid its core is drawn from, without the aperture's PSF: a star's, or for its own
+    /// The grid its core is drawn from, without the diffraction pattern: a star's, or for its own
     /// blur (see CameraModel::grids_at_()); none for a point, in focus without a PSF.
     const GridPsf<TSpectral>* grid = nullptr;
 
@@ -1425,15 +1425,15 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
     }
 
     // Each source's light is drawn in up to two parts, render() having brought the camera's
-    // kernels up to date. The tables' part (PsfTables): with the aperture's PSF, all of it,
-    // diffraction and scattered light; with a PSF that was set, or none, the scattered light's
-    // share, f, if any. The core's part, the rest: a PSF that was set, on its grid (see GridPsf),
-    // or without one the defocus blur alone on a grid of its own, or in focus the pixel the
-    // source falls in. Each part's tables or grid hold the source's own blur. A source that stays
-    // put during the exposure is drawn from them at its exact position, and a moving one along
-    // its path, as line integrals (see PsfTables::draw_line() and GridPsf::draw_line()), but
-    // without a grid, at each point of it.
-    const bool aperture = camera->use_aperture_psf_;
+    // kernels up to date. The tables' part (PsfTables): with the aperture's diffraction pattern,
+    // all of it, diffraction and scattered light; with a PSF set in its place, or neither, the
+    // scattered light's share, f, if any. The core's part, the rest: a PSF that was set, on its
+    // grid (see GridPsf), or without one the defocus blur alone on a grid of its own, or in
+    // focus the pixel the source falls in. Each part's tables or grid hold the source's own blur. A
+    // source that stays put during the exposure is drawn from them at its exact position, and a
+    // moving one along its path, as line integrals (see PsfTables::draw_line() and
+    // GridPsf::draw_line()), but without a grid, at each point of it.
+    const bool aperture = camera->uses_diffraction_();
     const PsfTables<TSpectral>* tables =
         aperture || camera->scatter_enabled_ ? camera->render_tables_.get() : nullptr;
     const bool use_tables = tables != nullptr;

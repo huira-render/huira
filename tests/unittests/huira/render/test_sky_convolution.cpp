@@ -18,7 +18,7 @@ enum class Content {
 
 struct Rendered {
     Image<RGB> power;  ///< Received power.
-    Image<RGB> kernel; ///< The camera's convolution kernel, reaching 32 px, when convolving.
+    Image<RGB> kernel; ///< The camera's PSF, reaching 32 px, when convolving.
     Image<RGB> psf;    ///< The PSF of a source at a pixel's center, to 63 px, when convolving.
 };
 
@@ -36,9 +36,7 @@ Rendered render(Content content, bool convolve, bool region_culling = true)
     camera_model.configure_sensor_from_pitch({SIZE, SIZE}, 10_um);
     camera_model.set_focal_length(50_mm);
     camera_model.set_fstop(8.0f);
-    camera_model.use_aperture_psf(8, 4);
     camera_model.set_scatter(0.2f, 2.5f, units::Radian(0.5 / 5000.0));
-    camera_model.set_psf_convolution_radius(32);
     camera_model.enable_psf_convolution(convolve);
     auto camera = scene.root.new_instance(camera_model);
 
@@ -85,7 +83,7 @@ Rendered render(Content content, bool convolve, bool region_culling = true)
     if (!convolve) {
         return {total, Image<RGB>(0, 0), Image<RGB>(0, 0)};
     }
-    return {total, camera_model.get_psf_convolution_kernel(), camera_model.psf_image(SIZE - 1)};
+    return {total, camera_model.psf_image(32), camera_model.psf_image(SIZE - 1)};
 }
 
 /// Largest relative difference between two images, in the green channel.
@@ -172,7 +170,6 @@ TEST_CASE("A background image is convolved even with nothing else in view", "[re
         camera_model.configure_sensor_from_pitch({64, 64}, 10_um);
         camera_model.set_focal_length(1_mm);
         camera_model.set_fstop(64.0f);
-        camera_model.use_aperture_psf(12, 4);
         camera_model.enable_psf_convolution(convolve);
         auto camera = scene.root.new_instance(camera_model);
 

@@ -2,7 +2,6 @@
 
 #include <memory>
 
-#include "huira/cameras/psfs/psf.hpp"
 #include "huira/concepts/spectral_concepts.hpp"
 #include "huira/core/types.hpp"
 #include "huira/images/image.hpp"
@@ -14,8 +13,9 @@ namespace huira {
 /**
  * @brief Abstract base class for optical apertures.
  *
- * Defines the interface for all aperture types: area, sampling (for depth of field), the
- * diffraction PSF it produces, and its shape (for defocus blur).
+ * Defines the interface for all aperture types: area, sampling (for depth of field), and its
+ * shape (for defocus blur). The diffraction pattern is a circular aperture's, of the aperture's
+ * bounding radius (see PsfTables).
  *
  * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
@@ -28,12 +28,6 @@ class Aperture {
     virtual void set_area(units::SquareMeter area) = 0;
 
     virtual Vec2<float> sample(Sampler<float>& sample) const = 0;
-
-    virtual std::unique_ptr<PSF<TSpectral>> make_psf(units::Meter focal_length,
-                                                     units::Meter pitch_x,
-                                                     units::Meter pitch_y,
-                                                     int radius,
-                                                     int banks) = 0;
 
     virtual units::Meter get_bounding_radius() const = 0;
 
