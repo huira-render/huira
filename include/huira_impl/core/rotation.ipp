@@ -35,8 +35,10 @@ template <IsFloatingPoint T>
 Rotation<T> Rotation<T>::from_local_to_parent(Quaternion<T> quaternion)
 {
     check_quaternion_(quaternion);
+    // Within the tolerance of unit length, it is taken as its direction: as it is, it would
+    // scale the matrix by up to its length squared, past the determinant's tolerance.
     Rotation<T> rotation;
-    rotation.set_matrix_(glm::mat3_cast(quaternion));
+    rotation.set_matrix_(glm::mat3_cast(glm::normalize(quaternion)));
     return rotation;
 }
 
@@ -51,7 +53,7 @@ Rotation<T> Rotation<T>::from_local_to_parent(ShusterQuaternion<T> shuster_quate
     const Quaternion<T> quaternion = to_hamilton(shuster_quaternion);
     check_quaternion_(quaternion);
     Rotation<T> rotation;
-    rotation.set_matrix_(glm::mat3_cast(quaternion));
+    rotation.set_matrix_(glm::mat3_cast(glm::normalize(quaternion)));
     return rotation;
 }
 
