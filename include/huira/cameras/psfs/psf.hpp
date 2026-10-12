@@ -50,6 +50,11 @@ class PSF {
      */
     [[nodiscard]] virtual bool includes_defocus() const { return false; }
 
+    /// The largest radius a PSF can have, in pixels. On its grid (see GridPsf), a PSF is sampled
+    /// more coarsely the farther it reaches, to keep within GridPsf::MEMORY_BUDGET: at this
+    /// radius, only every several pixels.
+    static constexpr int MAX_RADIUS = 4096;
+
     /// How far from the source, in pixels, the PSF holds light; 0 if not set, in which case
     /// CameraModel::set_psf() gives it CameraModel::DEFAULT_PSF_RADIUS.
     [[nodiscard]] int radius() const { return radius_; }
@@ -57,13 +62,13 @@ class PSF {
     /**
      * @brief Set how far from the source, in pixels, the PSF holds light.
      *
-     * @throws std::runtime_error if the radius is less than 1.
+     * @throws std::runtime_error if the radius is less than 1 or more than MAX_RADIUS.
      */
     void set_radius(int radius)
     {
-        if (radius < 1) {
-            HUIRA_THROW_ERROR("PSF::set_radius - The radius must be at least 1 pixel: " +
-                              std::to_string(radius));
+        if (radius < 1 || radius > MAX_RADIUS) {
+            HUIRA_THROW_ERROR("PSF::set_radius - The radius must be from 1 to " +
+                              std::to_string(MAX_RADIUS) + " pixels: " + std::to_string(radius));
         }
         radius_ = radius;
     }

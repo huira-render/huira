@@ -13,7 +13,7 @@ namespace {
 constexpr int SIZE = 48;
 
 struct Setup {
-    bool psf = false;     ///< The aperture's Airy pattern, in 13 px stamps.
+    bool psf = false;     ///< The aperture's diffraction pattern.
     bool scatter = false; ///< Harvey-Shack scatter, 10% of the light, out to 16 px.
     bool convolve =
         true; ///< Left at its default when true; enable_psf_convolution(false) when not.
@@ -101,9 +101,9 @@ double power_between(const Image<RGB>& image, double inner, double outer)
 
 TEST_CASE("Scattered light reaches stars whether or not bodies are convolved", "[render][psf]")
 {
-    // The wings used to need enable_psf_convolution() too. The Airy stamps reach 6 px from the
-    // star's pixel, so beyond 8 px there is little but scattered light: about 1% of the light,
-    // where the stamps' corners hold under 0.01%.
+    // The wings used to need enable_psf_convolution() too. Beyond 8 px from the star, the
+    // scattered light holds about 2.5% of the light (10% of it, falling as r^-2.5 from a half
+    // pixel shoulder), and the diffraction pattern under 0.5%.
     const Image<RGB> on = render({true, true, true});
     const Image<RGB> off = render({true, true, false});
     CHECK(identical(on, off));

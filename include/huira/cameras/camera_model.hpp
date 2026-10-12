@@ -12,6 +12,7 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -257,11 +258,16 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     /// Does nothing when the frame buffer's sensor response is disabled: there is nowhere to
     /// put the result, and sensor models write into it unconditionally.
     ///
-    /// @throws std::runtime_error if the sensor response is enabled but the received power it
-    ///         reads out is not (FrameBuffer::enable_received_power(false) after
-    ///         enable_sensor_response()).
+    /// @throws std::runtime_error if the exposure time is negative or not finite, or the sensor
+    ///         response is enabled but the received power it reads out is not
+    ///         (FrameBuffer::enable_received_power(false) after enable_sensor_response()).
     void readout(FrameBuffer<TSpectral>& fb, units::Second exposure_time) const
     {
+        if (!(exposure_time.to_si() >= 0.0) || !std::isfinite(exposure_time.to_si())) {
+            HUIRA_THROW_ERROR("CameraModel::readout - The exposure time must be non-negative and "
+                              "finite: " +
+                              std::to_string(exposure_time.to_si()) + " s");
+        }
         if (!fb.has_sensor_response()) {
             return;
         }
@@ -329,6 +335,43 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
         static_assert(detail::removed_api<Args...>,
                       "CameraModel::res() was removed in v0.9.10. Use resolution() instead.");
         return resolution();
+    }
+
+    // The old set_measured_psf(data, samples_per_pixel[, radius, banks]), with no sampling:
+    template <typename... Args>
+        requires(sizeof...(Args) <= 2 && (std::is_integral_v<std::remove_cvref_t<Args>> && ...))
+    void set_measured_psf(const Image<TSpectral>&, float, Args&&...)
+    {
+        static_assert(
+            detail::removed_api<Args...>,
+            "set_measured_psf(data, samples_per_pixel, radius, banks) changed in v0.9.10. Say "
+            "what the samples are: set_measured_psf(data, samples_per_pixel, "
+            "PSFSampling::PointSampled or PSFSampling::PixelIntegrated[, PSFFocus]). "
+            "The measurement is taken whole, out to its farthest sample: crop it to "
+            "use less.");
+    }
+
+    template <typename... Args>
+    void set_diopters(Args&&...)
+    {
+        static_assert(detail::removed_api<Args...>,
+                      "set_diopters() was removed in v0.9.10. Use set_focus_diopters() instead.");
+    }
+
+    template <typename... Args>
+    units::Diopter get_diopters(Args&&...) const
+    {
+        static_assert(detail::removed_api<Args...>,
+                      "get_diopters() was removed in v0.9.10. Use focus_diopters() instead.");
+        return {};
+    }
+
+    template <typename... Args>
+    units::Meter get_focus_distance(Args&&...) const
+    {
+        static_assert(detail::removed_api<Args...>,
+                      "get_focus_distance() was removed in v0.9.10. Use focus_distance() instead.");
+        return {};
     }
 
     template <typename... Args>
@@ -523,9 +566,10 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     };
     static constexpr std::size_t OBJECT_TABLES_KEPT_ = 8;
 
-    /// A PSF set with set_psf() or set_measured_psf(), on its grid (see GridPsf): in focus, and
-    /// blurred as a star is by the focus, with the blur, which the renderer draws still
-    /// unresolved sources from; and for objects whose blur differs from a star's, by their blur.
+    /// A PSF set with set_psf() or set_measured_psf(), on its grid (see GridPsf), or without one
+    /// a point, drawn exactly (see GridPsf::disc()): in focus, and blurred as a star is by the
+    /// focus, with the blur, which the renderer draws unresolved sources from; and for objects
+    /// whose blur differs from a star's, by their blur.
     std::shared_ptr<const GridPsf<TSpectral>> focused_grid_;
     std::shared_ptr<const GridPsf<TSpectral>> grid_psf_;
     double grid_psf_blur_ = 0.0;
@@ -590,6 +634,9 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
 
     bool auto_precompute_ = true;
     bool explicitly_precomputed_ = false;
+    /// Whether note_object_build_() has warned since precompute() was last called.
+    bool warned_object_build_ = false;
+    void note_object_build_();
 
     /// Held while building optics kernels or applying a convolution spectrum, so that renders
     /// sharing this camera on different threads do not race.
@@ -603,6 +650,8 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     tables_at_locked_(const std::vector<double>& inverse_depths);
     std::vector<std::shared_ptr<const GridPsf<TSpectral>>>
     grids_at_locked_(const std::vector<double>& inverse_depths);
+    [[nodiscard]] std::shared_ptr<const GridPsf<TSpectral>> blurred_grid_(double blur,
+                                                                          double aspect) const;
     [[nodiscard]] double source_blur_(double inverse_depth) const;
     [[nodiscard]] double tables_reach_() const;
     [[nodiscard]] bool render_tables_stale_() const;

@@ -530,6 +530,110 @@ TEST_CASE("Harvey-Shack scatter rejects infinite parameters", "[cameras][validat
     CHECK_NOTHROW(camera.set_scatter(0.1f, 2.5f, units::Arcsecond(20.0)));
 }
 
+namespace {
+/// An aperture of the user's own, which does not check its area.
+template <IsSpectral TSpectral>
+class UncheckedAperture : public Aperture<TSpectral> {
+  public:
+    explicit UncheckedAperture(double area) : area_{area} {}
+    units::SquareMeter get_area() const override { return units::SquareMeter(area_); }
+    void set_area(units::SquareMeter area) override { area_ = area.to_si(); }
+    Vec2<float> sample(Sampler<float>&) const override { return {0.f, 0.f}; }
+    units::Meter get_bounding_radius() const override
+    {
+        return units::Meter(std::sqrt(std::abs(area_) / 3.14159265358979323846));
+    }
+    void rasterize_shape(Image<float>&, float, float, float) const override {}
+
+  private:
+    double area_;
+};
+} // namespace
+
+TEST_CASE("The optics' other inputs are checked when they are given", "[cameras][validation][psf]")
+{
+    // Before, each was taken, and spoiled the PSF or the readout later.
+    CHECK_THROWS(AiryDisk<RGB>(units::Millimeter(25.0),
+                               units::Micrometer(10.0),
+                               units::Micrometer(10.0),
+                               units::Millimeter(0.0),
+                               8));
+    CHECK_THROWS(AiryDisk<RGB>(units::Millimeter(-25.0),
+                               units::Micrometer(10.0),
+                               units::Micrometer(10.0),
+                               units::Millimeter(5.0),
+                               8));
+    CHECK_THROWS(AiryDisk<RGB>(units::Millimeter(25.0),
+                               units::Micrometer(INF),
+                               units::Micrometer(10.0),
+                               units::Millimeter(5.0),
+                               8));
+    CHECK_NOTHROW(AiryDisk<RGB>(units::Millimeter(25.0),
+                                units::Micrometer(10.0),
+                                units::Micrometer(10.0),
+                                units::Millimeter(5.0),
+                                8));
+    // So small its square is 0 in single precision:
+    CHECK_THROWS(HarveyShackScatter<RGB>(2.5f, 1e-30f));
+    // A PSF can reach so far:
+    HarveyShackScatter<RGB> scatter(2.5f, 0.5f);
+    CHECK_THROWS(scatter.set_radius(PSF<RGB>::MAX_RADIUS + 1));
+    CHECK_NOTHROW(scatter.set_radius(PSF<RGB>::MAX_RADIUS));
+
+    // An aperture whose diameter is not finite, or of no area:
+    CircularAperture<RGB> aperture(units::Millimeter(5.0));
+    CHECK_THROWS(aperture.set_area(units::SquareMeter(3e38)));
+    CameraModel<RGB> camera;
+    camera.set_fstop(4.f);
+    CHECK_THROWS(camera.set_aperture<UncheckedAperture<RGB>>(0.0));
+    CHECK_THROWS(camera.set_aperture<UncheckedAperture<RGB>>(INF));
+    CHECK(camera.fstop() == 4.f);
+
+    // A coefficient that is infinite in single precision, which distortion is computed in:
+    CHECK_THROWS(BrownDistortion<RGB>(BrownCoefficients{1e300, 0, 0, 0, 0}));
+
+    // A bias at or above the largest value the bit depth holds reads out every pixel saturated:
+    SimpleSensor<RGB> sensor;
+    sensor.set_bit_depth(8);
+    CHECK_THROWS(sensor.set_bias_level_dn(255.f));
+    CHECK_NOTHROW(sensor.set_bias_level_dn(200.f));
+    CHECK_THROWS(sensor.set_bit_depth(7));
+    CHECK(sensor.bit_depth() == 8);
+    // A configuration is checked whatever order its fields would be set in (a guard):
+    SimpleSensorConfig<RGB> config;
+    config.bit_depth = 16;
+    config.bias_level_dn = 5000.f;
+    CHECK_NOTHROW(SimpleSensor<RGB>(config));
+
+    // An exposure that is negative or not finite:
+    camera.configure_sensor_from_pitch(Resolution{8, 8}, units::Micrometer(10.0));
+    auto frame_buffer = camera.make_frame_buffer();
+    frame_buffer.enable_received_power();
+    frame_buffer.enable_sensor_response();
+    CHECK_THROWS(camera.readout(frame_buffer, units::Second(-1.0)));
+    CHECK_THROWS(camera.readout(frame_buffer, units::Second(INF)));
+    CHECK_NOTHROW(camera.readout(frame_buffer, units::Second(1.0)));
+}
+
+TEST_CASE("Turning diffraction off and on with a PSF set leaves the camera precomputed",
+          "[cameras][psf]")
+{
+    // The set PSF is drawn either way. Before, it was rebuilt.
+    CameraModel<RGB> camera;
+    camera.configure_sensor_from_pitch(Resolution{64, 64}, units::Micrometer(10.0));
+    Image<RGB> data(9, 9, RGB{0.f});
+    data(4, 4) = RGB{1.f};
+    camera.set_measured_psf(data, 1.f, PSFSampling::PixelIntegrated);
+    camera.precompute();
+    camera.enable_diffraction(false);
+    CHECK(camera.is_precomputed());
+    camera.enable_diffraction(true);
+    CHECK(camera.is_precomputed());
+    // Cleared, diffraction is drawn again, which is built anew:
+    camera.clear_psf();
+    CHECK_FALSE(camera.is_precomputed());
+}
+
 TEST_CASE("Diffraction can be turned off and on, and a set PSF takes its place until cleared",
           "[cameras][psf]")
 {

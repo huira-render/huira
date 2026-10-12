@@ -41,8 +41,14 @@ void CircularAperture<TSpectral>::set_area(units::SquareMeter area)
         HUIRA_THROW_ERROR("CircularAperture::set_area - Area must be a positive finite value: " +
                           std::to_string(area.to_si()) + " m^2");
     }
+    const float diameter = std::sqrt(4.f * a / PI<float>());
+    if (!std::isfinite(diameter)) {
+        HUIRA_THROW_ERROR("CircularAperture::set_area - Area is too large for its diameter to be "
+                          "finite in single precision: " +
+                          std::to_string(area.to_si()) + " m^2");
+    }
     this->area_ = a;
-    diameter_ = std::sqrt(4.f * this->area_ / PI<float>());
+    diameter_ = diameter;
     radius_ = diameter_ / 2.f;
 }
 

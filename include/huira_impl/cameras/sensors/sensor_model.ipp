@@ -24,8 +24,10 @@ SensorModel<TSpectral>::SensorModel(SensorConfig<TSpectral> config)
     enable_noise(config.simulate_noise);
     set_read_noise(config.read_noise);
     set_dark_current(config.dark_current);
-    set_bias_level_dn(config.bias_level_dn);
+    // The bias is checked against the bit depth, so the bit depth first, from no bias:
+    config_.bias_level_dn = 0.f;
     set_bit_depth(config.bit_depth);
+    set_bias_level_dn(config.bias_level_dn);
     set_conversion_gain(config.gain);
     set_unity_db(config.unity_db);
     set_roll(config.rotation);
@@ -233,7 +235,8 @@ void SensorModel<TSpectral>::set_dark_current(float dark_current)
  * @brief Sets the bias level of the sensor in ADU.
  *
  * @param bias_level_dn The bias level in ADU.
- * @throws std::runtime_error if the value is invalid.
+ * @throws std::runtime_error if the value is negative or not finite, or at or above the largest
+ *         value the bit depth holds, where every pixel would read out saturated.
  */
 template <IsSpectral TSpectral>
 void SensorModel<TSpectral>::set_bias_level_dn(float bias_level_dn)
@@ -243,7 +246,23 @@ void SensorModel<TSpectral>::set_bias_level_dn(float bias_level_dn)
             "SensorModel::set_bias_level_dn - Bias level must be a non-negative value: " +
             std::to_string(bias_level_dn) + " ADU");
     }
+    check_bias_(bias_level_dn, config_.bit_depth, "set_bias_level_dn");
     config_.bias_level_dn = bias_level_dn;
+}
+
+/// Throws unless the bias is below the largest value the bit depth holds, where every pixel
+/// would read out saturated.
+template <IsSpectral TSpectral>
+void SensorModel<TSpectral>::check_bias_(float bias_level_dn, int bit_depth, const char* caller)
+{
+    const double max_dn = std::ldexp(1.0, bit_depth) - 1.0;
+    if (!(static_cast<double>(bias_level_dn) < max_dn)) {
+        HUIRA_THROW_ERROR(std::string("SensorModel::") + caller + " - The bias level, " +
+                          std::to_string(bias_level_dn) + " ADU, must be below the largest " +
+                          std::to_string(bit_depth) + "-bit value, " + std::to_string(max_dn) +
+                          ", or every pixel reads out saturated. Set the bias level first when "
+                          "lowering both.");
+    }
 }
 
 /**
@@ -252,7 +271,7 @@ void SensorModel<TSpectral>::set_bias_level_dn(float bias_level_dn)
  * @param bit_depth The bit depth (number of bits per pixel).
  * @throws std::runtime_error if the value is not between 1 and MAX_BIT_DEPTH (24): the sensor
  *         response is stored as a float, from which every DN is recovered exactly only up to 24
- *         bits.
+ *         bits; or if the bias level is at or above the largest value it holds.
  */
 template <IsSpectral TSpectral>
 void SensorModel<TSpectral>::set_bit_depth(int bit_depth)
@@ -264,6 +283,7 @@ void SensorModel<TSpectral>::set_bit_depth(int bit_depth)
                           "digital number is recovered exactly only up to " +
                           std::to_string(MAX_BIT_DEPTH) + " bits.)");
     }
+    check_bias_(config_.bias_level_dn, bit_depth, "set_bit_depth");
     config_.bit_depth = bit_depth;
 }
 

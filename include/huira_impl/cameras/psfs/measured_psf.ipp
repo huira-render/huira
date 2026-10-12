@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cmath>
 #include <string>
+#include <vector>
 
 #include "huira/util/logger.hpp"
 
@@ -17,8 +18,10 @@ namespace huira {
  *                 centered there receives (see PSFSampling).
  * @param focus Whether the samples are a point's in focus, which the camera's focus blurs, or
  *              already hold its defocus (see PSFFocus).
- * @throws std::runtime_error if the data has fewer than 2 x 2 samples, the sampling is not
- *         positive and finite, or the data reaches less than a pixel from its center.
+ * @throws std::runtime_error if the data has fewer than 2 x 2 samples, any sample is negative
+ *         or not finite, it holds no light in a channel, the sampling is not positive and finite,
+ *         or the data reaches less than a pixel or more than PSF::MAX_RADIUS pixels from its
+ *         center.
  */
 template <IsSpectral TSpectral>
 MeasuredPSF<TSpectral>::MeasuredPSF(const Image<TSpectral>& data,
@@ -42,10 +45,42 @@ MeasuredPSF<TSpectral>::MeasuredPSF(const Image<TSpectral>& data,
                           "radius at samples_per_pixel = " +
                           std::to_string(samples_per_pixel_));
     }
+    // Light is neither negative nor unbounded, and a PSF without any in a channel would take that
+    // channel's light from every source:
+    std::vector<double> total(TSpectral::size(), 0.0);
+    for (int y = 0; y < data_.height(); ++y) {
+        for (int x = 0; x < data_.width(); ++x) {
+            const TSpectral& value = data_(x, y);
+            for (std::size_t c = 0; c < TSpectral::size(); ++c) {
+                if (!(value[c] >= 0.f) || !std::isfinite(value[c])) {
+                    HUIRA_THROW_ERROR(
+                        "MeasuredPSF - The data must be finite and non-negative (clip a "
+                        "background-subtracted measurement at zero), but sample (" +
+                        std::to_string(x) + ", " + std::to_string(y) + ") is " +
+                        std::to_string(value[c]) + " in channel " + std::to_string(c));
+                }
+                total[c] += static_cast<double>(value[c]);
+            }
+        }
+    }
+    for (std::size_t c = 0; c < TSpectral::size(); ++c) {
+        if (!(total[c] > 0.0)) {
+            HUIRA_THROW_ERROR("MeasuredPSF - The data holds no light in channel " +
+                              std::to_string(c));
+        }
+    }
 
     // Out to the farthest sample, so that none is left out:
-    this->set_radius(
-        static_cast<int>(std::ceil(std::max(center_x_, center_y_) / samples_per_pixel_ - 1e-6f)));
+    const double radius = std::ceil(static_cast<double>(std::max(center_x_, center_y_)) /
+                                        static_cast<double>(samples_per_pixel_) -
+                                    1e-6);
+    if (!(radius <= static_cast<double>(PSF<TSpectral>::MAX_RADIUS))) {
+        HUIRA_THROW_ERROR(
+            "MeasuredPSF - At samples_per_pixel = " + std::to_string(samples_per_pixel_) +
+            ", the data reaches " + std::to_string(radius) + " pixels from its center, more than " +
+            std::to_string(PSF<TSpectral>::MAX_RADIUS));
+    }
+    this->set_radius(static_cast<int>(radius));
 }
 
 /**

@@ -62,8 +62,9 @@ inline double spline_integral(double t)
  *
  * @param psf The PSF, with its radius (PSF::radius()) set.
  * @param aspect The pixel's height over its width.
- * @throws std::runtime_error if the aspect is not positive and finite, the PSF has no radius, or
- *         its samples within the radius are fewer than three along an axis.
+ * @throws std::runtime_error if the aspect is not positive and finite, the PSF has no radius,
+ *         its samples within the radius are fewer than three along an axis, any is negative or not
+ *         finite, or they hold no light in a channel.
  */
 template <IsSpectral TSpectral>
 GridPsf<TSpectral>::GridPsf(PSF<TSpectral>& psf, double aspect)
@@ -151,6 +152,31 @@ GridPsf<TSpectral>::GridPsf(PSF<TSpectral>& psf, double aspect)
         HUIRA_THROW_ERROR("GridPsf - The PSF needs at least three samples across within its "
                           "radius");
     }
+    // A PSF is light, which is neither negative nor unbounded, and must hold some in every
+    // channel, or every source would lose that channel's light:
+    Light total{};
+    for (int j = 0; j < count_y; ++j) {
+        for (int i = 0; i < count_x; ++i) {
+            const double* value = sample_at(i, j);
+            for (std::size_t c = 0; c < N; ++c) {
+                if (!(value[c] >= 0.0) || !std::isfinite(value[c])) {
+                    HUIRA_THROW_ERROR(
+                        "GridPsf - The PSF must be finite and non-negative, but in channel " +
+                        std::to_string(c) + " at (" +
+                        std::to_string(left_ + static_cast<double>(i) * step_) + ", " +
+                        std::to_string(top_ + static_cast<double>(j) * step_) +
+                        ") pixels from its center it is " + std::to_string(value[c]));
+                }
+                total[c] += value[c];
+            }
+        }
+    }
+    for (std::size_t c = 0; c < N; ++c) {
+        if (!(total[c] > 0.0) || !std::isfinite(total[c])) {
+            HUIRA_THROW_ERROR("GridPsf - The PSF holds no light within its radius in channel " +
+                              std::to_string(c));
+        }
+    }
     build_from_samples_(samples, count_x, count_y);
 }
 
@@ -191,6 +217,9 @@ GridPsf<TSpectral>::GridPsf(const GridPsf& in_focus, double blur)
     if (!(blur > 0.0) || !std::isfinite(blur)) {
         HUIRA_THROW_ERROR("GridPsf - The blur must be positive and finite: " +
                           std::to_string(blur));
+    }
+    if (in_focus.exact()) {
+        HUIRA_THROW_ERROR("GridPsf - A disc drawn exactly cannot be blurred: see disc()");
     }
     const GridPsf& focused = in_focus.collected_();
     const double h = focused.step_;
@@ -485,21 +514,35 @@ void GridPsf<TSpectral>::build_from_samples_(std::vector<double>& samples, int c
         for (std::size_t k = 0; k < samples.size(); ++k) {
             total[k % N] += samples[k];
         }
+        check_light_(total);
         for (std::size_t k = 0; k < coefficients_.size(); ++k) {
-            const double light = total[k % N] * step_ * step_;
-            coefficients_[k] = light > 0.0 ? coefficients_[k] / light : 0.0;
+            coefficients_[k] /= total[k % N] * step_ * step_;
         }
     } else {
         build_point_sampled_();
         const Light total = rectangle_light_(left_, right_, top_, bottom_);
+        check_light_(total);
         for (auto* values : {&coefficients_, &row_, &column_, &below_}) {
             for (std::size_t k = 0; k < values->size(); ++k) {
-                const double light = total[k % N];
-                (*values)[k] = light > 0.0 ? (*values)[k] / light : 0.0;
+                (*values)[k] /= total[k % N];
             }
         }
     }
     build_bounds_();
+}
+
+/// Throws unless the light the samples hold is positive and finite in every channel, which every
+/// source would otherwise lose.
+template <IsSpectral TSpectral>
+void GridPsf<TSpectral>::check_light_(const Light& total)
+{
+    for (std::size_t c = 0; c < N; ++c) {
+        if (!(total[c] > 0.0) || !std::isfinite(total[c])) {
+            HUIRA_THROW_ERROR("GridPsf - The PSF must hold some light, and finitely much, in "
+                              "every channel, but holds " +
+                              std::to_string(total[c]) + " in channel " + std::to_string(c));
+        }
+    }
 }
 
 /// The running sums of the coefficients that corner_light_() takes.
@@ -617,9 +660,17 @@ void GridPsf<TSpectral>::build_bounds_()
         }
     }
 
-    // A line's light per unit length in a pixel at least r from it, the envelope integrated along
-    // it, from each bin's near edge: the envelope falls with distance, so the sums of its values
-    // at the near ends of steps along the line hold it.
+    build_line_envelope_();
+}
+
+/**
+ * @brief A line's light per unit length in a pixel at least r from it, the envelope integrated
+ * along it, from each bin's near edge: the envelope falls with distance, so the sums of its values
+ * at the near ends of steps along the line hold it.
+ */
+template <IsSpectral TSpectral>
+void GridPsf<TSpectral>::build_line_envelope_()
+{
     const double along = 1.0 / ENVELOPE_BINS;
     const auto line_bins = static_cast<std::size_t>(std::ceil(reach_ * ENVELOPE_BINS)) + 1;
     line_envelope_.assign(line_bins, {});
@@ -820,6 +871,9 @@ typename GridPsf<TSpectral>::Light GridPsf<TSpectral>::interpolate_(const Axis& 
 template <IsSpectral TSpectral>
 typename GridPsf<TSpectral>::Light GridPsf<TSpectral>::interpolate_(double x, double y) const
 {
+    if (exact()) {
+        return exact_light_(x, y);
+    }
     if (!(x >= left_ && x <= right_ && y >= top_ && y <= bottom_)) {
         return Light{};
     }
@@ -944,9 +998,10 @@ typename GridPsf<TSpectral>::Light GridPsf<TSpectral>::draw(Image<TSpectral>& ta
     };
 
     if (pixel_integrated_) {
-        // The spline at each pixel's center:
-        std::vector<Axis> columns(width);
-        for (std::size_t i = 0; i < width; ++i) {
+        // The spline at each pixel's center, or for a disc drawn exactly, its area within the
+        // pixel:
+        std::vector<Axis> columns(exact() ? 0 : width);
+        for (std::size_t i = 0; i < columns.size(); ++i) {
             columns[i] = value_axis_(
                 static_cast<double>(x_begin) + static_cast<double>(i) + 0.5 - source_x, x0_);
         }
@@ -955,7 +1010,7 @@ typename GridPsf<TSpectral>::Light GridPsf<TSpectral>::draw(Image<TSpectral>& ta
             if (!(dy >= top_ && dy <= bottom_)) {
                 continue;
             }
-            const Axis row = value_axis_(dy, y0_);
+            const Axis row = exact() ? Axis{} : value_axis_(dy, y0_);
             for (int x = x_begin; x < x_end; ++x) {
                 const double dx = static_cast<double>(x) + 0.5 - source_x;
                 const double r2 = dx * dx + aspect2 * dy * dy;
@@ -966,7 +1021,9 @@ typename GridPsf<TSpectral>::Light GridPsf<TSpectral>::draw(Image<TSpectral>& ta
                 if (!(share > 0.0)) {
                     continue;
                 }
-                Light value = interpolate_(columns[static_cast<std::size_t>(x - x_begin)], row);
+                Light value =
+                    exact() ? exact_light_(dx, dy)
+                            : interpolate_(columns[static_cast<std::size_t>(x - x_begin)], row);
                 for (std::size_t c = 0; c < N; ++c) {
                     value[c] *= scale[c];
                 }

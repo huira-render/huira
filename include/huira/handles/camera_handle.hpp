@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <type_traits>
 #include <utility>
 
 #include "huira/cameras/camera_model.hpp"
@@ -262,6 +263,20 @@ class CameraModelHandle : public Handle<CameraModel<TSpectral>> {
         static_assert(detail::removed_api<Args...>,
                       "set_sensor_size() was removed in v0.9.4. Use configure_sensor_from_size() "
                       "instead.");
+    }
+
+    // The old set_measured_psf(data, samples_per_pixel[, radius, banks]), with no sampling:
+    template <typename... Args>
+        requires(sizeof...(Args) <= 2 && (std::is_integral_v<std::remove_cvref_t<Args>> && ...))
+    void set_measured_psf(const Image<TSpectral>&, float, Args&&...) const
+    {
+        static_assert(
+            detail::removed_api<Args...>,
+            "set_measured_psf(data, samples_per_pixel, radius, banks) changed in v0.9.10. Say "
+            "what the samples are: set_measured_psf(data, samples_per_pixel, "
+            "PSFSampling::PointSampled or PSFSampling::PixelIntegrated[, PSFFocus]). "
+            "The measurement is taken whole, out to its farthest sample: crop it to "
+            "use less.");
     }
 
     template <typename... Args>

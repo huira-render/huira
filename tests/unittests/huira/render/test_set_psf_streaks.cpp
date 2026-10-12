@@ -121,15 +121,42 @@ double disc_pixel(int i, int j, double sx, double sy, double blur)
     return disc_area(i - sx, i + 1 - sx, j - sy, j + 1 - sy, blur) / (PI<double>() * blur * blur);
 }
 
+/// The share of a path from (x, y) by (dx, dy) within pixel (i, j), exactly: a point's light in
+/// focus, averaged along the path, or for a still point, all or none of it.
+double path_share(int i, int j, double x, double y, double dx, double dy)
+{
+    if (dx == 0.0 && dy == 0.0) {
+        return x >= i && x < i + 1 && y >= j && y < j + 1 ? 1.0 : 0.0;
+    }
+    double from = 0.0;
+    double to = 1.0;
+    const auto clip = [&](double start, double span, double lo, double hi) {
+        if (span == 0.0) {
+            if (start < lo || start >= hi) {
+                to = from;
+            }
+            return;
+        }
+        const double a = (lo - start) / span;
+        const double b = (hi - start) / span;
+        from = std::max(from, std::min(a, b));
+        to = std::min(to, std::max(a, b));
+    };
+    clip(x, dx, i, i + 1);
+    clip(y, dy, j, j + 1);
+    return std::max(0.0, to - from);
+}
+
 /// A source moving evenly from (x, y) by (dx, dy) over the exposure, on the frame: each pixel's
-/// light from a still source, averaged along the path by 8-point Gauss-Legendre quadrature on 64
-/// panels, for the pixels within reach of it.
+/// light from a still source, averaged along the path by 8-point Gauss-Legendre quadrature on
+/// panels (64 by default), for the pixels within reach of it.
 Image<RGB> expected_on_frame(double x,
                              double y,
                              double dx,
                              double dy,
                              double reach,
-                             const std::function<double(int, int, double, double)>& pixel)
+                             const std::function<double(int, int, double, double)>& pixel,
+                             int path_panels = 64)
 {
     constexpr std::array<double, 8> NODES{-0.9602898564975363,
                                           -0.7966664774136267,
@@ -147,7 +174,7 @@ Image<RGB> expected_on_frame(double x,
                                             0.3137066458778873,
                                             0.2223810344533745,
                                             0.1012285362903763};
-    const int panels = dx == 0.0 && dy == 0.0 ? 1 : 64;
+    const int panels = dx == 0.0 && dy == 0.0 ? 1 : path_panels;
     Image<RGB> image(SIZE, SIZE, RGB{0.f});
     for (int j = 0; j < SIZE; ++j) {
         for (int i = 0; i < SIZE; ++i) {
@@ -299,6 +326,46 @@ TEST_CASE("Without a PSF, an object is blurred by the defocus at its own depth, 
         const double dy = length * std::sin(0.8);
         const Image<RGB> image = render_source(false, true, 20.0, x, y, dx, dy);
         CHECK(worst_difference(image, expected_on_frame(x, y, dx, dy, blur + 2.0, disc)) < 5e-4);
+    }
+}
+
+TEST_CASE("Without a PSF, a point in focus and a disc under half a pixel are drawn exactly, "
+          "still or moving",
+          "[render][unresolved][defocus][streak]")
+{
+    // Before, a moving point in focus was put in the pixel each sample of its path fell in, up
+    // to a third of the brightest pixel off, and a disc under half a pixel was drawn from a
+    // spline through samples of its light, which rang across the pixels' edges: off by up to a
+    // tenth of the light at 0.003 px.
+    const double x = 27.31;
+    const double y = 30.77;
+    for (const double length : {0.0, 7.3}) {
+        const double dx = length * std::cos(0.8);
+        const double dy = length * std::sin(0.8);
+        {
+            INFO((length > 0.0 ? "moving" : "still") << " point");
+            const Image<RGB> image = render_source(false, false, 20.0, x, y, dx, dy);
+            const auto point = [&](int i, int j, double, double) {
+                return path_share(i, j, x, y, dx, dy);
+            };
+            CHECK(worst_difference(image, expected_on_frame(x, y, dx, dy, 2.0, point, 1)) < 1e-5);
+            const double still = total(render_source(false, false, 20.0, x, y, 0.0, 0.0));
+            CHECK(std::abs(total(image) / still - 1.0) < 1e-5);
+        }
+        for (const double blur : {0.003, 0.05, 0.3}) {
+            INFO((length > 0.0 ? "moving" : "still") << " disc of " << blur << " px");
+            const double range = 1.0 / (1.0 / FOCUS + blur / BLUR_SCALE);
+            REQUIRE(std::abs(blur_at(range) - blur) < 1e-9);
+            const auto disc = [blur](int i, int j, double sx, double sy) {
+                return disc_pixel(i, j, sx, sy, blur);
+            };
+            const Image<RGB> image = render_source(false, true, range, x, y, dx, dy);
+            CHECK(worst_difference(image, expected_on_frame(x, y, dx, dy, blur + 2.0, disc, 2048)) <
+                  2e-4);
+            // All of its light, which falls on the frame, as when still:
+            const double still = total(render_source(false, true, range, x, y, 0.0, 0.0));
+            CHECK(std::abs(total(image) / still - 1.0) < 1e-5);
+        }
     }
 }
 

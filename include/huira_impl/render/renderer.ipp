@@ -85,32 +85,6 @@ inline double arc_in_rectangle(double x0, double x1, double y0, double y1, doubl
 } // namespace detail
 
 /**
- * @brief Set how far an unresolved source is drawn: until the light it puts in a pixel, as the
- * sensor reads it out, falls to this fraction of the read noise.
- *
- * With the aperture's diffraction pattern, still sources are drawn at their exact position, pixel
- * by pixel from the PSF's tables, and moving ones along their path, as its line integral (see
- * PsfTables::draw_line()), out to the distance r from the source or its path beyond which no
- * pixel reads out more than tau, this fraction of the sensor's read noise as configured (of an
- * electron for a sensor without read noise; the same whether or not noise is simulated, so that
- * a noiseless frame is the mean of noisy ones). From r to 2 r they fade smoothly to nothing.
- * The light left on the sensor beyond that is added evenly over the frame, so that none is lost
- * and no edge appears. A source's rings are followed only as far as they change a pixel by more
- * than tau; beyond, its light is averaged over them. No pixel is off by more than about 2 tau.
- * A source is always drawn out to where it holds 90% of its light. A source with a PSF set with
- * CameraModel::set_psf() or set_measured_psf(), still or moving, is drawn the same way from the
- * PSF's grid (see GridPsf), without rings to follow, as is the defocus blur without a PSF; where
- * moving, its faint wings are interpolated between pixels where that is off by no more than half
- * of tau (see GridPsf::draw_line()). RGB sensors read out each channel; others, their sum.
- *
- * The default, DEFAULT_UNRESOLVED_TAPER, ends halos where a square-root stretch of a noiseless
- * frame to 30 electrons cannot show it. Larger values draw fewer pixels, and so take less time; 0
- * draws every source over the whole frame, which can take a long time.
- *
- * @param fraction_of_read_noise Non-negative and finite.
- * @throws std::runtime_error if it is negative or not finite.
- */
-/**
  * @brief Sets how much of the sensor's read noise (of an electron without read noise) the
  * rounding error of convolving bodies with the PSF in single precision may put in a pixel's
  * readout, as FftConvolver::rounding_error() predicts it, before they are convolved in double
@@ -138,6 +112,33 @@ void Renderer<TSpectral>::set_fft_rounding_tolerance(double fraction_of_read_noi
     fft_rounding_tolerance_ = fraction_of_read_noise;
 }
 
+/**
+ * @brief Set how far an unresolved source is drawn: until the light it puts in a pixel, as the
+ * sensor reads it out, falls to this fraction of the read noise.
+ *
+ * With the aperture's diffraction pattern, still sources are drawn at their exact position, pixel
+ * by pixel from the PSF's tables, and moving ones along their path, as its line integral (see
+ * PsfTables::draw_line()), out to the distance r from the source or its path beyond which no
+ * pixel reads out more than tau, this fraction of the sensor's read noise as configured (of an
+ * electron for a sensor without read noise; the same whether or not noise is simulated, so that
+ * a noiseless frame is the mean of noisy ones). From r to 2 r they fade smoothly to nothing.
+ * The light left on the sensor beyond that is added evenly over the frame, so that none is lost
+ * and no edge appears. A source's rings are followed only as far as they change a pixel by more
+ * than tau; beyond, its light is averaged over them. No pixel is off by more than about 2 tau.
+ * A source is always drawn out to where it holds 90% of its light. A source with a PSF set with
+ * CameraModel::set_psf() or set_measured_psf(), still or moving, is drawn the same way from the
+ * PSF's grid (see GridPsf), without rings to follow, as is the defocus blur, or a point in focus,
+ * without a PSF; where moving, its faint wings are interpolated between pixels where that is off
+ * by no more than half of tau (see GridPsf::draw_line()). RGB sensors read out each channel;
+ * others, their sum.
+ *
+ * The default, DEFAULT_UNRESOLVED_TAPER, ends halos where a square-root stretch of a noiseless
+ * frame to 30 electrons cannot show it. Larger values draw fewer pixels, and so take less time; 0
+ * draws every source over the whole frame, which can take a long time.
+ *
+ * @param fraction_of_read_noise Non-negative and finite.
+ * @throws std::runtime_error if it is negative or not finite.
+ */
 template <IsSpectral TSpectral>
 void Renderer<TSpectral>::set_unresolved_taper(double fraction_of_read_noise)
 {
@@ -1395,7 +1396,7 @@ struct RenderItem {
  * Each source is drawn from the PSF's tables or grid, at its exact position if it stays put
  * during the exposure and along its path as line integrals if it moves, tapered off where its
  * light fades below set_unresolved_taper()'s threshold, with the light beyond spread over the
- * frame; without a PSF, in focus, all of its light goes to the pixel it falls in.
+ * frame.
  *
  * The rendering pipeline:
  * 1. Collects all stars and unresolved objects, each with the tables and grid for its blur
@@ -1428,11 +1429,11 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
     // kernels up to date. The tables' part (PsfTables): with the aperture's diffraction pattern,
     // all of it, diffraction and scattered light; with a PSF set in its place, or neither, the
     // scattered light's share, f, if any. The core's part, the rest: a PSF that was set, on its
-    // grid (see GridPsf), or without one the defocus blur alone on a grid of its own, or in
-    // focus the pixel the source falls in. Each part's tables or grid hold the source's own blur. A
+    // grid (see GridPsf), or without one the defocus blur alone, or in focus a point, drawn
+    // exactly (see GridPsf::disc()). Each part's tables or grid hold the source's own blur. A
     // source that stays put during the exposure is drawn from them at its exact position, and a
     // moving one along its path, as line integrals (see PsfTables::draw_line() and
-    // GridPsf::draw_line()), but without a grid, at each point of it.
+    // GridPsf::draw_line()).
     const bool aperture = camera->uses_diffraction_();
     const PsfTables<TSpectral>* tables =
         aperture || camera->scatter_enabled_ ? camera->render_tables_.get() : nullptr;
@@ -1553,7 +1554,6 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
         std::size_t item_idx;
         Pixel projected; ///< Sensor coordinates.
         TSpectral power;
-        bool exact = false;
         double taper = 0.0;
         double draw = 0.0;
         double rings = 0.0;
@@ -1824,8 +1824,8 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
 
     // List a sample in the tiles its light reaches: drawn at its exact position from its item's
     // tables or grid, out to its drawn radius, and kept even if that misses the frame, for the
-    // light it puts on it beyond; or without either, the pixel it falls in.
-    enum class Draw { Point, Tables, Grid };
+    // light it puts on it beyond.
+    enum class Draw { Tables, Grid };
     auto emit_sample = [&](const RenderItem<TSpectral>& item,
                            std::size_t item_index,
                            const Pixel& p,
@@ -1837,41 +1837,31 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
         int x_hi = 0;
         int y_hi = 0;
         Sample sample{item_index, p, power};
-        const bool exact = how != Draw::Point;
-        if (exact) {
-            sample.exact = true;
-            if (how == Draw::Grid) {
-                sample.from_grid = true;
-                sample.scale = item.grid->scale(static_cast<double>(p.x), static_cast<double>(p.y));
-                sample.taper = grid_taper_radius(power, *item.grid);
-                sample.draw =
-                    std::min(std::isinf(sample.taper) ? farthest_corner(p) : 2.0 * sample.taper,
-                             item.grid->reach());
-            } else {
-                sample.rings = rings_radius(power, *item.tables);
-                sample.taper = taper_radius(power, sample.rings, *item.tables);
-                sample.draw = std::isinf(sample.taper) ? farthest_corner(p) : 2.0 * sample.taper;
-            }
-            const double reach_x = sample.draw;
-            const double reach_y = sample.draw / aspect;
-            x_lo = static_cast<int>(std::floor(std::max(static_cast<double>(p.x) - reach_x, -1.0)));
-            x_hi = static_cast<int>(std::floor(
-                std::min(static_cast<double>(p.x) + reach_x, static_cast<double>(fb_width))));
-            y_lo = static_cast<int>(std::floor(std::max(static_cast<double>(p.y) - reach_y, -1.0)));
-            y_hi = static_cast<int>(std::floor(
-                std::min(static_cast<double>(p.y) + reach_y, static_cast<double>(fb_height))));
+        if (how == Draw::Grid) {
+            sample.from_grid = true;
+            sample.scale = item.grid->scale(static_cast<double>(p.x), static_cast<double>(p.y));
+            sample.taper = grid_taper_radius(power, *item.grid);
+            sample.draw =
+                std::min(std::isinf(sample.taper) ? farthest_corner(p) : 2.0 * sample.taper,
+                         item.grid->reach());
         } else {
-            x_lo = x_hi = static_cast<int>(std::floor(p.x));
-            y_lo = y_hi = static_cast<int>(std::floor(p.y));
+            sample.rings = rings_radius(power, *item.tables);
+            sample.taper = taper_radius(power, sample.rings, *item.tables);
+            sample.draw = std::isinf(sample.taper) ? farthest_corner(p) : 2.0 * sample.taper;
         }
+        const double reach_x = sample.draw;
+        const double reach_y = sample.draw / aspect;
+        x_lo = static_cast<int>(std::floor(std::max(static_cast<double>(p.x) - reach_x, -1.0)));
+        x_hi = static_cast<int>(std::floor(
+            std::min(static_cast<double>(p.x) + reach_x, static_cast<double>(fb_width))));
+        y_lo = static_cast<int>(std::floor(std::max(static_cast<double>(p.y) - reach_y, -1.0)));
+        y_hi = static_cast<int>(std::floor(
+            std::min(static_cast<double>(p.y) + reach_y, static_cast<double>(fb_height))));
         x_lo = std::max(x_lo, 0);
         y_lo = std::max(y_lo, 0);
         x_hi = std::min(x_hi, fb_width - 1);
         y_hi = std::min(y_hi, fb_height - 1);
         const bool reaches_image = x_lo <= x_hi && y_lo <= y_hi;
-        if (!reaches_image && !exact) {
-            return;
-        }
 
         const auto sample_index = static_cast<std::uint32_t>(batch.samples.size());
         batch.samples.push_back(sample);
@@ -2254,10 +2244,8 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
             double still_weight = 0.0;
 
             // Otherwise its samples are the vertices of its path, drawn as lines from the tables
-            // and its grid; a core without a grid is drawn at each sample, in the pixel it falls
-            // in:
-            const bool core_lines = has_core && item.grid != nullptr;
-            const bool path = !still && (use_tables || core_lines);
+            // and its grid:
+            const bool path = !still && (use_tables || has_core);
             if (path) {
                 scratch.path.assign(params.size(), Vertex{});
             }
@@ -2351,14 +2339,11 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                                              rate,
                                              true};
                 }
-                if (has_core && !core_lines) {
-                    emit_sample(item, item_index, p, power * core_share, Draw::Point, batch);
-                }
             }
             if (path && use_tables) {
                 emit_path(item_index, item.tables, nullptr, tables_share, scratch, batch);
             }
-            if (path && core_lines) {
+            if (path && has_core) {
                 emit_path(item_index, nullptr, item.grid, core_share, scratch, batch);
             }
             if (still && still_weight > 0.0) {
@@ -2369,12 +2354,8 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                         item, item_index, mean, still_power * tables_share, Draw::Tables, batch);
                 }
                 if (has_core) {
-                    emit_sample(item,
-                                item_index,
-                                mean,
-                                still_power * core_share,
-                                item.grid != nullptr ? Draw::Grid : Draw::Point,
-                                batch);
+                    emit_sample(
+                        item, item_index, mean, still_power * core_share, Draw::Grid, batch);
                 }
             }
         }
@@ -2639,8 +2620,8 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                             entry_light[k][c] =
                                 power[c] > 0.f ? drawn[c] / static_cast<double>(power[c]) : 0.0;
                         }
-                    } else if (sample.exact) {
-                        // Drawn from the tables or a PSF's grid at its exact position, tapered, and
+                    } else {
+                        // Drawn from the tables or a grid at its exact position, tapered, and
                         // the light drawn added up per (tile, sample), for the light left to
                         // spread:
                         const double px = static_cast<double>(star_p.x);
@@ -2676,20 +2657,13 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                                                                               sample.rings,
                                                                               sample.draw,
                                                                               weight);
-                    } else {
-                        // A point: all the light goes to the pixel the source falls in.
-                        const int px = static_cast<int>(std::floor(star_p.x));
-                        const int py = static_cast<int>(std::floor(star_p.y));
-                        if (px >= tile_x0 && px < tile_x1 && py >= tile_y0 && py < tile_y1) {
-                            received_power(px, py) += power;
-                        }
                     }
                 }
             }
         });
 
     // The light sources drawn from the tables or a grid put on the sensor beyond what was drawn,
-    // spread evenly over it. See spread_light_().
+    // spread evenly over it.
     {
         // The light each source drew, per unit power: its entries' sums, in a fixed order.
         std::vector<std::array<double, TSpectral::size()>> drawn(samples.size());
@@ -2834,9 +2808,6 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                     const double power = static_cast<double>(sample.power[c]);
                     excess[i][c] = power > 0.0 ? on_frame[c] - drawn[i][c] : 0.0;
                 }
-                return;
-            }
-            if (!sample.exact) {
                 return;
             }
             if (sample.from_grid) {

@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <utility>
 
 #include "catch2/catch_test_macros.hpp"
@@ -157,6 +158,76 @@ TEST_CASE("MeasuredPSF input validation", "[cameras][psf][measured]")
     CHECK(psf.radius() == 4);
     MeasuredPSF<RGB> large(make_measurement(1.f, 100), 1.f, POINTS);
     CHECK(large.radius() == 100);
+}
+
+TEST_CASE("A PSF that is not finite, is negative or holds no light is refused when it is set",
+          "[cameras][psf][measured]")
+{
+    // Before, such a PSF was taken, and every source's light in the channels it spoiled was
+    // silently dropped when it was drawn.
+    constexpr PSFSampling POINTS = PSFSampling::PointSampled;
+    const auto spoiled = [](std::size_t channel, float value) {
+        Image<RGB> data = make_measurement();
+        data(40, 51)[channel] = value;
+        return data;
+    };
+    CHECK_THROWS(MeasuredPSF<RGB>(spoiled(1, std::nanf("")), 4.f, POINTS));
+    CHECK_THROWS(MeasuredPSF<RGB>(spoiled(0, std::numeric_limits<float>::infinity()), 4.f, POINTS));
+    CHECK_THROWS(MeasuredPSF<RGB>(spoiled(2, -1e-3f), 4.f, POINTS));
+    CHECK_THROWS(MeasuredPSF<RGB>(Image<RGB>(33, 33, RGB{0.f}), 4.f, POINTS));
+    Image<RGB> dark_red = make_measurement();
+    for (std::size_t i = 0; i < dark_red.size(); ++i) {
+        dark_red[i][0] = 0.f;
+    }
+    CHECK_THROWS(MeasuredPSF<RGB>(dark_red, 4.f, POINTS));
+    // At a sampling small enough, it would reach further than any PSF can:
+    CHECK_THROWS(MeasuredPSF<RGB>(make_measurement(), 1e-3f, POINTS));
+
+    // The camera keeps the PSF it had:
+    CameraModel<RGB> camera;
+    camera.set_focal_length(units::Millimeter(25.0));
+    camera.configure_sensor_from_size(Resolution{256, 256}, units::Millimeter(6.0));
+    camera.set_measured_psf(make_measurement(), 4.f, POINTS);
+    const Image<RGB> before = camera.psf_image(8, 0.2f, 0.1f);
+    CHECK_THROWS(camera.set_measured_psf(spoiled(1, std::nanf("")), 4.f, POINTS));
+    CHECK(camera.has_set_psf());
+    const Image<RGB> after = camera.psf_image(8, 0.2f, 0.1f);
+    for (std::size_t i = 0; i < before.size(); ++i) {
+        for (std::size_t c = 0; c < 3; ++c) {
+            CHECK(after[i][c] == before[i][c]);
+        }
+    }
+}
+
+namespace {
+/// A PSF of the user's own that is NaN, or negative, across a ring.
+template <IsSpectral TSpectral>
+class FaultyPSF : public PSF<TSpectral> {
+  public:
+    explicit FaultyPSF(bool negative) : negative_{negative} {}
+    TSpectral evaluate(float x, float y) override
+    {
+        const float r = std::hypot(x, y);
+        if (r > 3.f && r < 4.f) {
+            return TSpectral{negative_ ? -0.01f : std::nanf("")};
+        }
+        return TSpectral{std::exp(-r * r)};
+    }
+
+  private:
+    bool negative_;
+};
+} // namespace
+
+TEST_CASE("A PSF of the user's own is checked when it is set", "[cameras][psf]")
+{
+    // Before, it was sampled at the next render, where its NaN dropped every source's light.
+    CameraModel<RGB> camera;
+    camera.set_focal_length(units::Millimeter(25.0));
+    camera.configure_sensor_from_size(Resolution{256, 256}, units::Millimeter(6.0));
+    CHECK_THROWS(camera.set_psf<FaultyPSF<RGB>>(false));
+    CHECK_THROWS(camera.set_psf<FaultyPSF<RGB>>(true));
+    CHECK_FALSE(camera.has_set_psf());
 }
 
 TEST_CASE("MeasuredPSF in place of diffraction, with scattered light", "[cameras][psf][measured]")

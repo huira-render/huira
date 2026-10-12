@@ -211,14 +211,16 @@ class Distortion {
         }
     }
 
-    /// Throws if any coefficient is not finite.
+    /// Throws if any coefficient is not finite, in single precision too, in which distort()
+    /// takes them.
     static void check_coefficients_(std::initializer_list<double> coefficients,
                                     const std::string& caller)
     {
         if (!std::all_of(coefficients.begin(), coefficients.end(), [](double c) {
-                return std::isfinite(c);
+                return std::isfinite(c) && std::isfinite(static_cast<float>(c));
             })) {
-            HUIRA_THROW_ERROR(caller + " - Distortion coefficients must be finite");
+            HUIRA_THROW_ERROR(caller +
+                              " - Distortion coefficients must be finite, in single precision too");
         }
     }
 
