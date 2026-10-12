@@ -1,6 +1,9 @@
+#include <limits>
+
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
+#include "huira/core/interval.hpp"
 #include "huira/core/time.hpp"
 
 using namespace huira;
@@ -371,4 +374,27 @@ TEST_CASE("Time: Constants", "[time]")
     {
         REQUIRE_THAT(Time::TT_TAI_OFFSET, Catch::Matchers::WithinAbs(32.184, 1e-9));
     }
+}
+
+TEST_CASE("Time: Times and intervals that are not finite or run backwards are refused",
+          "[time][validation]")
+{
+    // Before, a NaN or infinite time was taken, and an interval could end before it started,
+    // which read out a negative exposure.
+    const double nan = std::numeric_limits<double>::quiet_NaN();
+    const double inf = std::numeric_limits<double>::infinity();
+    CHECK_THROWS(Time::from_et(nan));
+    CHECK_THROWS(Time::from_et(inf));
+    CHECK_THROWS(Time::from_ephemeris_time(-inf));
+    CHECK_THROWS(Time::from_julian_date(nan, TimeScale::TDB));
+    CHECK_THROWS(Time::from_et(0.0) + units::Second(inf));
+
+    const Time start = Time::from_et(100.0);
+    CHECK_THROWS(Interval(start, Time::from_et(99.0)));
+    CHECK_THROWS(Interval::from_bounds(start, Time::from_et(99.0)));
+    CHECK_THROWS(Interval::from_start(start, units::Second(-1.0)));
+    CHECK_THROWS(Interval::from_centered(start, units::Second(-1.0)));
+    CHECK_THROWS(Interval::from_centered(start, units::Second(inf)));
+    // An instant is an interval (a guard):
+    CHECK_NOTHROW(Interval(start, start));
 }

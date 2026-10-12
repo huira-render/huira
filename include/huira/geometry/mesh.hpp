@@ -64,6 +64,7 @@ class Mesh : public Geometry<TSpectral> {
 
   private:
     void build_blas_() const override;
+    void check_buffers_() const;
 
     IndexBuffer index_buffer_;
     VertexBuffer<TSpectral> vertex_buffer_;

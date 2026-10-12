@@ -42,6 +42,7 @@ class UnresolvedAsteroid : public UnresolvedObject<TSpectral> {
     std::string type() const override { return "UnresolvedAsteroid"; }
 
   private:
+    static void check_slope_(double G);
     double H_;
     double G_;
     std::shared_ptr<Instance<TSpectral>> light_instance_;

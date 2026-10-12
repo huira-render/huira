@@ -238,6 +238,8 @@ class Scene {
     void print_contents() const;
 
   private:
+    static std::vector<StarData> usable_stars_(const std::vector<StarData>& star_data);
+
     // Assets:
     NameRegistry<Geometry<TSpectral>> geometries_;
     NameRegistry<Primitive<TSpectral>> primitives_;

@@ -68,6 +68,11 @@ inline Time Time::from_ephemeris_time(double et)
  */
 inline Time Time::from_julian_date(double jd, TimeScale scale)
 {
+    // Before SPICE sees it:
+    if (!std::isfinite(jd)) {
+        HUIRA_THROW_ERROR("Time::from_julian_date - The date must be finite: " +
+                          std::to_string(jd));
+    }
     // Convert JD to seconds past J2000 in the input timescale
     double seconds_past_j2000 = (jd - J2000_JD) * SECONDS_PER_DAY;
 

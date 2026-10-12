@@ -14,6 +14,8 @@ class Star {
     Star(const StarData& star_data, Time time);
     Star(const StarData& star_data, double years_since_j2000);
 
+    [[nodiscard]] static bool usable(const StarData& star_data);
+
     void update_direction(const StarData& star_data, Time time);
     void update_direction(const StarData& star_data, double years_since_j2000);
 
@@ -27,6 +29,7 @@ class Star {
     void compute_direction_(
         double RA, double DEC, float pmRAmas, float pmDECmas, double years_since_j2000);
     void compute_irradiance_(float temperature, double solid_angle);
+    static void check_(const StarData& star_data);
 };
 
 } // namespace huira

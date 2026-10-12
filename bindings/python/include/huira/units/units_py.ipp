@@ -15,11 +15,39 @@ namespace py = pybind11;
 namespace huira {
 
 namespace detail {
+/// The SI units of a dimension, which name it, as each bound unit class records them.
+template <typename Dim>
+std::string dimension_name()
+{
+    const std::string name = Dim::to_si_string();
+    return name.empty() ? "dimensionless" : name;
+}
+
+/**
+ * @brief The SI value of a unit passed from Python, which must be of the dimension Dim: any unit
+ * has to_si(), so without the check a Second would be taken where a Meter is asked for.
+ *
+ * @throws py::type_error if it is not a huira unit of that dimension.
+ */
+template <typename Dim>
+double dimensioned_si_value(const py::object& obj)
+{
+    const std::string expected = dimension_name<Dim>();
+    if (!py::hasattr(obj, "_huira_dimension") ||
+        obj.attr("_huira_dimension").cast<std::string>() != expected) {
+        const std::string given = py::hasattr(obj, "_huira_dimension")
+                                      ? obj.attr("_huira_dimension").cast<std::string>()
+                                      : std::string(py::str(py::type::of(obj).attr("__name__")));
+        throw py::type_error("Expected a quantity in " + expected + ", but got one in " + given);
+    }
+    return obj.attr("to_si")().cast<double>();
+}
+
 template <typename UnitType>
 UnitType unit_from_py(const py::object& obj)
 {
-    double val = obj.attr("to_si")().cast<double>();
     using Dim = typename UnitType::dimension_type;
+    double val = dimensioned_si_value<Dim>(obj);
     using SIUnit = units::Quantity<Dim, std::ratio<1, 1>>;
     return UnitType(SIUnit(val));
 }
@@ -66,6 +94,10 @@ void bind_quantity_type(py::module& m, const std::string& name)
              static_cast<double (UnitType::*)() const>(&UnitType::to_si),
              "Return the value converted to SI base units (returns float).")
         .def("raw_value", &UnitType::raw_value, "Return the raw value in this unit's scale.")
+        .def_property_readonly_static(
+            "_huira_dimension",
+            [](const py::object&) { return detail::dimension_name<Dim>(); },
+            "The SI units of this unit's dimension, which arguments are checked against.")
         .def("__str__", &UnitType::to_string)
         .def("__repr__",
              [name](const UnitType& self) {
@@ -75,7 +107,7 @@ void bind_quantity_type(py::module& m, const std::string& name)
         .def(
             "__add__",
             [](const UnitType& self, const py::object& other) -> UnitType {
-                double other_si = other.attr("to_si")().cast<double>();
+                double other_si = detail::dimensioned_si_value<Dim>(other);
                 double result_si = self.to_si() + other_si;
                 using SIUnit = huira::units::Quantity<Dim, std::ratio<1, 1>>;
                 SIUnit si_result(result_si);
@@ -86,7 +118,7 @@ void bind_quantity_type(py::module& m, const std::string& name)
         .def(
             "__sub__",
             [](const UnitType& self, const py::object& other) -> UnitType {
-                double other_si = other.attr("to_si")().cast<double>();
+                double other_si = detail::dimensioned_si_value<Dim>(other);
                 double result_si = self.to_si() - other_si;
                 using SIUnit = huira::units::Quantity<Dim, std::ratio<1, 1>>;
                 SIUnit si_result(result_si);
@@ -115,35 +147,41 @@ void bind_quantity_type(py::module& m, const std::string& name)
         .def(
             "__eq__",
             [](const UnitType& self, const py::object& other) {
-                return self.to_si() == other.attr("to_si")().cast<double>();
+                // A quantity of another dimension, or anything else, is not equal to this one:
+                if (!py::hasattr(other, "_huira_dimension") ||
+                    other.attr("_huira_dimension").cast<std::string>() !=
+                        detail::dimension_name<Dim>()) {
+                    return false;
+                }
+                return self.to_si() == detail::dimensioned_si_value<Dim>(other);
             },
             py::arg("other"),
             "Equal comparison via SI values.")
         .def(
             "__lt__",
             [](const UnitType& self, const py::object& other) {
-                return self.to_si() < other.attr("to_si")().cast<double>();
+                return self.to_si() < detail::dimensioned_si_value<Dim>(other);
             },
             py::arg("other"),
             "Less-than comparison via SI values.")
         .def(
             "__le__",
             [](const UnitType& self, const py::object& other) {
-                return self.to_si() <= other.attr("to_si")().cast<double>();
+                return self.to_si() <= detail::dimensioned_si_value<Dim>(other);
             },
             py::arg("other"),
             "Less-or-equal comparison via SI values.")
         .def(
             "__gt__",
             [](const UnitType& self, const py::object& other) {
-                return self.to_si() > other.attr("to_si")().cast<double>();
+                return self.to_si() > detail::dimensioned_si_value<Dim>(other);
             },
             py::arg("other"),
             "Greater-than comparison via SI values.")
         .def(
             "__ge__",
             [](const UnitType& self, const py::object& other) {
-                return self.to_si() >= other.attr("to_si")().cast<double>();
+                return self.to_si() >= detail::dimensioned_si_value<Dim>(other);
             },
             py::arg("other"),
             "Greater-or-equal comparison via SI values.");

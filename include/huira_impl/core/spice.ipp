@@ -371,8 +371,8 @@ sxform(const std::string& FROM, const std::string& TO, const huira::Time& time)
 /**
  * @brief Compute the state (position and velocity) of an object in a conic orbit at a given time.
  * @tparam T Floating point type
- * @param elements Array of 8 orbital elements: [a, e, i, Ω, ω, M0, epoch, mu]
- * - a: Semi-major axis (km)
+ * @param elements Array of 8 orbital elements: [rp, e, i, Ω, ω, M0, epoch, mu]
+ * - rp: Periapsis distance (km)
  * - e: Eccentricity
  * - i: Inclination (radians)
  * - Ω: Longitude of ascending node (radians)

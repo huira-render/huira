@@ -34,6 +34,7 @@ Rotation<T> Rotation<T>::from_local_to_parent(Mat3<T> matrix)
 template <IsFloatingPoint T>
 Rotation<T> Rotation<T>::from_local_to_parent(Quaternion<T> quaternion)
 {
+    check_quaternion_(quaternion);
     Rotation<T> rotation;
     rotation.set_matrix_(glm::mat3_cast(quaternion));
     return rotation;
@@ -47,8 +48,10 @@ Rotation<T> Rotation<T>::from_local_to_parent(Quaternion<T> quaternion)
 template <IsFloatingPoint T>
 Rotation<T> Rotation<T>::from_local_to_parent(ShusterQuaternion<T> shuster_quaternion)
 {
+    const Quaternion<T> quaternion = to_hamilton(shuster_quaternion);
+    check_quaternion_(quaternion);
     Rotation<T> rotation;
-    rotation.set_matrix_(glm::mat3_cast(to_hamilton(shuster_quaternion)));
+    rotation.set_matrix_(glm::mat3_cast(quaternion));
     return rotation;
 }
 
@@ -57,13 +60,25 @@ Rotation<T> Rotation<T>::from_local_to_parent(ShusterQuaternion<T> shuster_quate
  * @param axis Rotation axis (will be normalized)
  * @param angle Rotation angle in radians
  * @return Rotation<T> Rotation object
+ * @throws std::runtime_error if the axis or angle is not finite, or the axis has no length
+ *         while the angle is not 0 (an axis of no length and an angle of 0 are no rotation).
  */
 template <IsFloatingPoint T>
 Rotation<T> Rotation<T>::from_local_to_parent(Vec3<T> axis, units::Radian angle)
 {
+    const double angle_si = angle.to_si();
+    if (!std::isfinite(axis.x) || !std::isfinite(axis.y) || !std::isfinite(axis.z) ||
+        !std::isfinite(angle_si)) {
+        HUIRA_THROW_ERROR("Rotation - The axis and angle must be finite: " + glm::to_string(axis) +
+                          ", " + std::to_string(angle_si) + " rad");
+    }
     // Normalize the axis vector
     T length = std::sqrt(axis.x * axis.x + axis.y * axis.y + axis.z * axis.z);
     if (length < std::numeric_limits<T>::epsilon()) {
+        if (angle_si != 0.0) {
+            HUIRA_THROW_ERROR("Rotation - An axis of no length has no direction to turn " +
+                              std::to_string(angle_si) + " rad about: " + glm::to_string(axis));
+        }
         Mat3<T> identity{1};
         Rotation<T> rotation;
         rotation.set_matrix_(identity);
@@ -118,6 +133,8 @@ Rotation<T> Rotation<T>::from_parent_to_local(Mat3<T> matrix)
 template <IsFloatingPoint T>
 Rotation<T> Rotation<T>::from_parent_to_local(Quaternion<T> quaternion)
 {
+    // Checked before it is inverted, which a zero quaternion would make NaN:
+    check_quaternion_(quaternion);
     return from_local_to_parent(glm::inverse(quaternion));
 }
 
@@ -234,6 +251,8 @@ Rotation<T> Rotation<T>::intrinsic_euler_angles(units::Radian angle1,
  * @param y_axis Y axis vector
  * @param z_axis Z axis vector
  * @return Rotation<T> Rotation object
+ * @throws std::runtime_error unless they are finite, of unit length and at right angles, and
+ *         right-handed, within 1e-3 (see set_matrix_()).
  */
 template <IsFloatingPoint T>
 Rotation<T> Rotation<T>::from_basis_vectors(Vec3<T> x_axis, Vec3<T> y_axis, Vec3<T> z_axis)
@@ -561,14 +580,51 @@ Mat3<T> Rotation<T>::parent_to_local_z(units::Radian angle)
 template <IsFloatingPoint T>
 void Rotation<T>::set_matrix_(Mat3<T> matrix)
 {
+    // Within this, a matrix is a rotation that rounding has nudged, and is made exactly one;
+    // beyond it, it is something else. Each test is written to pass only when it holds, since
+    // NaN fails every comparison:
     constexpr T loose_epsilon = static_cast<T>(1e-3);
+    for (int col = 0; col < 3; ++col) {
+        for (int row = 0; row < 3; ++row) {
+            if (!std::isfinite(matrix[col][row])) {
+                HUIRA_THROW_ERROR("Rotation matrix must be finite: " + glm::to_string(matrix));
+            }
+        }
+    }
     T det = glm::determinant(matrix);
-    if (std::fabs(det - 1.0) > loose_epsilon) {
+    if (!(std::fabs(det - static_cast<T>(1)) <= loose_epsilon)) {
         HUIRA_THROW_ERROR(
             "Rotation matrix must have a determinant close to 1. Given matrix has determinant: " +
             std::to_string(det));
     }
+    // A shear can have a determinant of 1 too; a rotation's columns are of unit length and at
+    // right angles:
+    const Mat3<T> gram = glm::transpose(matrix) * matrix;
+    for (int col = 0; col < 3; ++col) {
+        for (int row = 0; row < 3; ++row) {
+            const T identity = col == row ? static_cast<T>(1) : static_cast<T>(0);
+            if (!(std::fabs(gram[col][row] - identity) <= loose_epsilon)) {
+                HUIRA_THROW_ERROR("Rotation matrix must be orthonormal, its columns of unit length "
+                                  "and at right angles: " +
+                                  glm::to_string(matrix));
+            }
+        }
+    }
     this->matrix_ = orthonormalize_(matrix);
+}
+
+/// Throws unless a quaternion is finite and of unit length, within 1e-3: a zero quaternion
+/// would otherwise be taken as no rotation, and inverting it is NaN.
+template <IsFloatingPoint T>
+void Rotation<T>::check_quaternion_(const Quaternion<T>& quaternion)
+{
+    const T norm = std::sqrt(quaternion.w * quaternion.w + quaternion.x * quaternion.x +
+                             quaternion.y * quaternion.y + quaternion.z * quaternion.z);
+    if (!(std::fabs(norm - static_cast<T>(1)) <= static_cast<T>(1e-3))) {
+        HUIRA_THROW_ERROR("Rotation - A quaternion must be finite and of unit length, but its "
+                          "length is " +
+                          std::to_string(norm));
+    }
 }
 
 /**

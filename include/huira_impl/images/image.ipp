@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstring>
 #include <stdexcept>
+#include <string>
 
 #include "fftw3.h"
 #include "huira/images/fft_convolver.hpp"
@@ -26,6 +27,22 @@ Image<PixelT>::Image() : data_{}, resolution_{0, 0}
 }
 
 /**
+ * @brief The pixels an image width by height holds, in a size_t, which their product in int
+ * could overflow.
+ *
+ * @throws std::runtime_error if either is negative.
+ */
+template <IsImagePixel PixelT>
+std::size_t Image<PixelT>::pixel_count_(int width, int height)
+{
+    if (width < 0 || height < 0) {
+        HUIRA_THROW_ERROR("Image - The width and height must not be negative: " +
+                          std::to_string(width) + " x " + std::to_string(height));
+    }
+    return static_cast<std::size_t>(width) * static_cast<std::size_t>(height);
+}
+
+/**
  * @brief Constructs an image with the specified resolution.
  *
  * Pixels are default-initialized.
@@ -34,7 +51,7 @@ Image<PixelT>::Image() : data_{}, resolution_{0, 0}
  */
 template <IsImagePixel PixelT>
 Image<PixelT>::Image(Resolution resolution)
-    : data_(static_cast<std::size_t>(resolution.x * resolution.y)), resolution_{resolution}
+    : data_(pixel_count_(resolution.x, resolution.y)), resolution_{resolution}
 {
 }
 
@@ -48,8 +65,7 @@ Image<PixelT>::Image(Resolution resolution)
  */
 template <IsImagePixel PixelT>
 Image<PixelT>::Image(Resolution resolution, const PixelT& fill_value)
-    : data_(static_cast<std::size_t>(resolution.x * resolution.y), fill_value),
-      resolution_{resolution}
+    : data_(pixel_count_(resolution.x, resolution.y), fill_value), resolution_{resolution}
 {
 }
 
@@ -63,7 +79,7 @@ Image<PixelT>::Image(Resolution resolution, const PixelT& fill_value)
  */
 template <IsImagePixel PixelT>
 Image<PixelT>::Image(int width, int height)
-    : data_(static_cast<std::size_t>(width * height)), resolution_{width, height}
+    : data_(pixel_count_(width, height)), resolution_{width, height}
 {
 }
 
@@ -78,7 +94,7 @@ Image<PixelT>::Image(int width, int height)
  */
 template <IsImagePixel PixelT>
 Image<PixelT>::Image(int width, int height, const PixelT& fill_value)
-    : data_(static_cast<std::size_t>(width * height), fill_value), resolution_{width, height}
+    : data_(pixel_count_(width, height), fill_value), resolution_{width, height}
 {
 }
 

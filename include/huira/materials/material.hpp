@@ -118,6 +118,9 @@ class Material : public SceneObject<Material<TSpectral>> {
     bool has_alpha_texture() const noexcept { return alpha_image_ != default_alpha_image_; }
 
   private:
+    template <typename TPixel>
+    void check_image_(const std::shared_ptr<Image<TPixel>>& image, const char* what) const;
+
     bool eval_albedo_ = true;
     std::shared_ptr<Image<TSpectral>> default_albedo_image_;
 

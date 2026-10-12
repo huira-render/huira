@@ -163,6 +163,8 @@ class Node : public SceneObject<Node<TSpectral>> {
     [[nodiscard]] bool is_effectively_visible() const;
 
   protected:
+    void check_scale_(const Vec3<double>& scale) const;
+
     Transform<double> local_transform_;
 
     /// When true, local_transform_.angular_velocity was supplied via

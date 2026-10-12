@@ -1,6 +1,7 @@
 #pragma once
 
 #include "huira/core/time.hpp"
+#include "huira/units/units_py.ipp"
 #include "pybind11/chrono.h"
 #include "pybind11/operators.h"
 #include "pybind11/pybind11.h"
@@ -25,6 +26,12 @@ inline void bind_time(py::module_& m)
 
         // Constructor from Python datetime
         .def(py::init([](py::object dt) {
+                 // An aware datetime is moved to UTC first, which SPICE reads its string as; its
+                 // offset would otherwise be dropped or misread. A naive one is taken as UTC.
+                 if (!dt.attr("tzinfo").is_none()) {
+                     dt = dt.attr("astimezone")(
+                         py::module_::import("datetime").attr("timezone").attr("utc"));
+                 }
                  // Convert datetime to ISO 8601 string for SPICE
                  py::object isoformat = dt.attr("isoformat")();
                  std::string iso_str = isoformat.cast<std::string>();
@@ -38,7 +45,8 @@ inline void bind_time(py::module_& m)
                  return Time(iso_str);
              }),
              py::arg("datetime"),
-             "Construct from a Python datetime object (interpreted as UTC)")
+             "Construct from a Python datetime object: an aware one at its own offset, a naive "
+             "one as UTC")
 
         // Static factory methods
         .def_static("from_et",
@@ -95,7 +103,7 @@ inline void bind_time(py::module_& m)
         .def(
             "__add__",
             [](const Time& self, const py::object& delta) -> Time {
-                double seconds = delta.attr("to_si")().cast<double>();
+                double seconds = detail::dimensioned_si_value<units::Time>(delta);
                 return self + units::Second(seconds);
             },
             py::arg("delta"),
@@ -114,7 +122,7 @@ inline void bind_time(py::module_& m)
         .def(
             "__sub__",
             [](const Time& self, const py::object& delta) -> Time {
-                double seconds = delta.attr("to_si")().cast<double>();
+                double seconds = detail::dimensioned_si_value<units::Time>(delta);
                 return self + units::Second(-seconds);
             },
             py::arg("delta"),

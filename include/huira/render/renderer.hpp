@@ -1,9 +1,11 @@
 #pragma once
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <limits>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "huira/concepts/spectral_concepts.hpp"
@@ -11,6 +13,7 @@
 #include "huira/render/frame_buffer.hpp"
 #include "huira/sampling/sampler.hpp"
 #include "huira/scene/scene_view.hpp"
+#include "huira/util/logger.hpp"
 
 namespace huira {
 /**
@@ -34,23 +37,67 @@ class Renderer {
 
     virtual void render(SceneView<TSpectral>& scene_view, FrameBuffer<TSpectral>& frame_buffer);
 
-    /// Set the number of samples per pixel.
-    void set_samples_per_pixel(int spp) { spp_ = spp; }
+    /// Set the number of samples per pixel: at least 1, or every pixel would be NaN.
+    void set_samples_per_pixel(int spp)
+    {
+        if (spp < 1) {
+            HUIRA_THROW_ERROR("Renderer::set_samples_per_pixel - At least one sample per pixel is "
+                              "needed: " +
+                              std::to_string(spp));
+        }
+        spp_ = spp;
+    }
 
-    /// Set the maximum number of bounces for path tracing.
-    void set_max_bounces(int max_bounces) { max_bounces_ = max_bounces; }
+    /// Set the maximum number of bounces for path tracing: at least 1, the camera ray's first
+    /// hit, or every pixel would be black.
+    void set_max_bounces(int max_bounces)
+    {
+        if (max_bounces < 1) {
+            HUIRA_THROW_ERROR("Renderer::set_max_bounces - At least one bounce, the camera ray's "
+                              "first hit, is needed: " +
+                              std::to_string(max_bounces));
+        }
+        max_bounces_ = max_bounces;
+    }
 
     /// Enable or disable dynamic sampling of pixels based on variance.
     void set_dynamic_sampling(bool dynamic_sample = true) { dynamic_sampling_ = dynamic_sample; }
 
-    /// Set the minimum samples per pixel for dynamic sampling.
-    void set_min_samples(int min_samples) { min_spp_ = min_samples; }
+    /// Set the minimum samples per pixel for dynamic sampling: at least 2, since one sample has
+    /// no variance to judge by.
+    void set_min_samples(int min_samples)
+    {
+        if (min_samples < 2) {
+            HUIRA_THROW_ERROR("Renderer::set_min_samples - At least two samples are needed to "
+                              "estimate a pixel's variance: " +
+                              std::to_string(min_samples));
+        }
+        min_spp_ = min_samples;
+    }
 
-    /// Set the variance threshold for dynamic sampling.
-    void set_variance_threshold(float threshold) { variance_threshold_ = threshold; }
+    /// Set the variance threshold for dynamic sampling: non-negative and finite (0 never stops
+    /// early).
+    void set_variance_threshold(float threshold)
+    {
+        if (!(threshold >= 0.f) || !std::isfinite(threshold)) {
+            HUIRA_THROW_ERROR("Renderer::set_variance_threshold - The threshold must be "
+                              "non-negative and finite: " +
+                              std::to_string(threshold));
+        }
+        variance_threshold_ = threshold;
+    }
 
-    /// Set the indirect lighting clamp threshold.
-    void set_indirect_clamp(float indirect_clamp) { indirect_clamp_threshold_ = indirect_clamp; }
+    /// Set the indirect lighting clamp threshold: non-negative, or infinite (the default) for
+    /// none. A negative one would make indirect light negative.
+    void set_indirect_clamp(float indirect_clamp)
+    {
+        if (!(indirect_clamp >= 0.f)) {
+            HUIRA_THROW_ERROR("Renderer::set_indirect_clamp - The clamp must be non-negative, or "
+                              "infinite for none: " +
+                              std::to_string(indirect_clamp));
+        }
+        indirect_clamp_threshold_ = indirect_clamp;
+    }
 
     /// Enable or disable occlusion testing of unresolved point sources.
     void set_unresolved_occlusion(bool occlusion = true) { unresolved_occlusion_ = occlusion; }
@@ -93,9 +140,15 @@ class Renderer {
      */
     void set_region_culling(bool enable = true) { region_culling_ = enable; }
 
-    /// Scale the safety margin added to each tile's direction cone.
+    /// Scale the safety margin added to each tile's direction cone: finite, and taken as 1 if
+    /// less.
     void set_region_cull_margin_scale(float scale)
     {
+        if (!std::isfinite(scale)) {
+            HUIRA_THROW_ERROR(
+                "Renderer::set_region_cull_margin_scale - The scale must be finite: " +
+                std::to_string(scale));
+        }
         region_cull_margin_scale_ = std::max(1.0f, scale);
     }
 
