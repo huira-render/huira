@@ -43,9 +43,12 @@ inline double circle_rectangle_area(double x0, double x1, double y0, double y1, 
     std::size_t count = 0;
     breaks[count++] = y0;
     breaks[count++] = y1;
+    // Where either side meets the circle, or just touches it (at a height of 0, which splits
+    // the piece the width is tested at the middle of, where the chord's and the side's widths
+    // would otherwise compare equal):
     for (const double x : {x0, x1}) {
-        if (std::abs(x) < r) {
-            const double y = std::sqrt(r2 - x * x);
+        if (std::abs(x) <= r) {
+            const double y = std::sqrt(std::max(0.0, r2 - x * x));
             for (const double b : {-y, y}) {
                 if (b > y0 && b < y1) {
                     breaks[count++] = b;

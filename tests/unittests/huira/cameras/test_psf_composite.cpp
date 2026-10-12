@@ -35,6 +35,25 @@ double peak(const Image<RGB>& image)
     return most;
 }
 
+/// The area of [x0, x1] x [y0, y1] within the circle of radius r about the origin, independently
+/// of the renderer: the rectangle's width within the circle's chord, integrated over the height
+/// y = r sin(theta) by the midpoint rule, fine enough for 1e-9.
+double disc_area_reference(double x0, double x1, double y0, double y1, double r)
+{
+    const double from = std::asin(std::clamp(y0 / r, -1.0, 1.0));
+    const double to = std::asin(std::clamp(y1 / r, -1.0, 1.0));
+    constexpr int STEPS = 200000;
+    const double step = (to - from) / STEPS;
+    double area = 0.0;
+    for (int k = 0; k < STEPS; ++k) {
+        const double theta = from + (k + 0.5) * step;
+        const double half_chord = r * std::cos(theta);
+        const double width = std::min(x1, half_chord) - std::max(x0, -half_chord);
+        area += std::max(width, 0.0) * half_chord * step;
+    }
+    return area;
+}
+
 /// 25 mm at f/5 with 6 mm across 256 pixels: 23.4 um pixels, a diffraction pattern well under
 /// a pixel, so that its images are small.
 void configure(CameraModel<RGB>& camera)
@@ -204,6 +223,53 @@ TEST_CASE("defocus_image() is the uniform disc of defocus_blur_radius()", "[came
     CHECK(camera.defocus_blur_radius(units::Meter(0.1)) > camera.defocus_blur_radius());
     CHECK_THROWS(camera.defocus_image(RADIUS, 0.f, 0.f, units::Meter(0.0)));
     CHECK_THROWS(camera.defocus_blur_radius(units::Meter(-1.0)));
+}
+
+TEST_CASE("A disc's light in a pixel is exact where the disc's edge touches the pixel's",
+          "[cameras][psf][defocus]")
+{
+    // Where the disc's edge just touched one of the pixel's sides, the pixel was given the
+    // rectangle's area within the disc's height rather than the disc's: a disc of exactly half a
+    // pixel, centered, put 4/pi = 1.273 of its light in its pixel, and samples of a larger disc
+    // whose edge touched a pixel's were off by a few percent. 62.5 mm at f/1 with pixels of
+    // 2^-16 m blurs a point at 128 m by exactly 1 px, focused at infinity, and every blur here is
+    // exact in binary.
+    constexpr int SIZE = 64;
+    CameraModel<RGB> camera;
+    camera.set_focal_length(units::Meter(0.0625));
+    camera.configure_sensor_from_pitch(Resolution{SIZE, SIZE}, units::Meter(std::ldexp(1.0, -16)));
+    camera.set_fstop(1.f);
+    camera.enable_diffraction(false);
+    for (const double blur : {0.5, 1.0, 2.0}) {
+        const units::Meter range(128.0 / blur);
+        REQUIRE(camera.defocus_blur_radius(range) == static_cast<float>(blur));
+        // The source's offset from the center pixel's center at which the disc's edge touches
+        // that pixel's side:
+        const double offset = blur - 0.5;
+        const int radius = static_cast<int>(std::ceil(blur)) + 2;
+        for (const bool defocus_only : {false, true}) {
+            INFO("blur " << blur << " px, offset " << offset << " px, "
+                         << (defocus_only ? "defocus_image()" : "psf_image()"));
+            const Image<RGB> image =
+                defocus_only ? camera.defocus_image(radius, static_cast<float>(offset), 0.f, range)
+                             : camera.psf_image(radius, static_cast<float>(offset), 0.f, range);
+            double worst = 0.0;
+            for (int y = 0; y < image.height(); ++y) {
+                for (int x = 0; x < image.width(); ++x) {
+                    const double dx = x - radius - offset;
+                    const double dy = y - radius;
+                    const double expected =
+                        disc_area_reference(dx - 0.5, dx + 0.5, dy - 0.5, dy + 0.5, blur) /
+                        (3.14159265358979323846 * blur * blur);
+                    worst =
+                        std::max(worst, std::fabs(static_cast<double>(image(x, y)[0]) - expected));
+                }
+            }
+            // defocus_image() is the disc's exact area; psf_image() draws a disc of half a pixel
+            // or more from samples of it, to within 1e-4 of the light:
+            CHECK(worst < (defocus_only ? 1e-6 : 1e-4));
+        }
+    }
 }
 
 TEST_CASE("Without diffraction or a set PSF, psf_image() is defocus_image(), however small the "
