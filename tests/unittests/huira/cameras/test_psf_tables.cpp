@@ -6,6 +6,7 @@
 #include <optional>
 #include <random>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "catch2/catch_test_macros.hpp"
@@ -1053,6 +1054,29 @@ TEST_CASE("integrate() finds all of a profile's light", "[cameras][psf]")
         for (std::size_t c = 0; c < Visible8::size(); ++c) {
             INFO("channel " << c);
             CHECK(std::abs(inside[c] + tables.smooth_light_beyond(c, end) - 1.0) < 2e-5);
+        }
+    }
+}
+
+TEST_CASE("Tables whose blur reaches as far as they do are built as the uniform disc",
+          "[cameras][psf][defocus]")
+{
+    // A blur at or beyond the tables' reach (a source very near the camera, or a camera focused
+    // very near) leaves no rings to follow beyond the disc. Building such tables used to cast a
+    // negative distance to an unsigned count, which on x86 asked for an impossibly large table
+    // and threw std::length_error.
+    constexpr double REACH = 20.0;
+    for (const double blur : {REACH - 0.5, REACH, 30.0}) {
+        INFO("blur " << blur << " px, reach " << REACH << " px");
+        const auto tables = PsfTables<RGB>::airy(3.3, 8.5e-6, 8.5e-6, REACH, std::nullopt, blur);
+        // Well within the disc, a pixel holds its share of the disc's light, less the little
+        // of the diffraction pattern's that falls beyond the disc's edge (0.2%):
+        const double share = 1.0 / (reference::PI * blur * blur);
+        for (const auto& [dx, dy] : {std::pair{0.0, 0.0}, std::pair{3.3, -2.1}}) {
+            const RGB light = tables.pixel(dx, dy);
+            for (std::size_t c = 0; c < 3; ++c) {
+                CHECK(std::abs(static_cast<double>(light[c]) / share - 1.0) < 1e-2);
+            }
         }
     }
 }
