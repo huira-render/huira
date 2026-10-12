@@ -225,7 +225,10 @@ struct FftPrepared {
     FftPrepared() = default;
     FftPrepared(const FftPrepared&) = delete;
     FftPrepared& operator=(const FftPrepared&) = delete;
-    ~FftPrepared()
+    ~FftPrepared() { release(); }
+
+    /// Frees the spectra and scratch buffers, leaving it to be prepared again.
+    void release()
     {
         for (auto* buffer : spectra) {
             Api::free(buffer);
@@ -233,6 +236,10 @@ struct FftPrepared {
         for (auto* buffer : scratch) {
             Api::free(buffer);
         }
+        spectra.clear();
+        scratch.clear();
+        complex_size = 0;
+        ready = false;
     }
 
     [[nodiscard]] std::size_t memory_bytes() const
@@ -298,6 +305,9 @@ void prepare_fft(FftPrepared<Real>& prepared,
 {
     using Api = Fftw<Real>;
     constexpr std::size_t channels = ImagePixelTraits<PixelT>::channels;
+    // Whatever an earlier attempt that failed part of the way left, so that each channel's
+    // spectrum is at its own index:
+    prepared.release();
     // The kernel is transformed once, so its plans need not be measured:
     const auto kernel_plans =
         FftwPlanCache::instance().get<double>(padded_height, padded_width, false);

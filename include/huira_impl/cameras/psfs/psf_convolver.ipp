@@ -45,8 +45,10 @@ template <IsSpectral TSpectral>
 void PsfConvolver<TSpectral>::set_parts(const Parts& parts, Resolution resolution)
 {
     constexpr std::size_t N = TSpectral::size();
+    // Ready only once everything is built, so that a build that throws leaves the convolver to
+    // be built again, rather than taken as built for these parts:
+    ready_ = false;
     parts_ = parts;
-    ready_ = true;
     width_ = resolution.width;
     height_ = resolution.height;
     const PsfTables<TSpectral>* psf = parts_.tables.get();
@@ -124,6 +126,7 @@ void PsfConvolver<TSpectral>::set_parts(const Parts& parts, Resolution resolutio
     has_far_ = psf != nullptr && window_from < diagonal;
     if (!has_far_) {
         far_ = FftConvolver<TSpectral>{};
+        ready_ = true;
         return;
     }
 
@@ -177,6 +180,7 @@ void PsfConvolver<TSpectral>::set_parts(const Parts& parts, Resolution resolutio
         }
     });
     far_.set_kernel(far_kernel, Resolution{nx, ny});
+    ready_ = true;
 }
 
 /**
