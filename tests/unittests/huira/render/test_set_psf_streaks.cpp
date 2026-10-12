@@ -432,6 +432,25 @@ TEST_CASE("Many sources moving the same way with a measured PSF are drawn as exa
     CHECK(worst_difference(image, expected) < 3e-4);
 }
 
+TEST_CASE("A direction's line tables take the memory GridPsf reports for them",
+          "[render][unresolved][psf][measured][streak]")
+{
+    // The renderer chooses which directions to draw from tables within LINE_CACHE_BUDGET by
+    // line_table_bytes(). The tables are kept in single precision, but it counted them in double,
+    // so only half the budget was used.
+    MeasuredPSF<RGB> measured(
+        measurement(), static_cast<float>(PER_PIXEL), PSFSampling::PointSampled);
+    const GridPsf<RGB> grid(measured, 1.0);
+    REQUIRE(grid.line_cache_bytes() == 0);
+    // Along x, which is one of the tables' directions, so that only its tables are made:
+    Image<RGB> image(SIZE, SIZE, RGB{0.f});
+    static_cast<void>(grid.draw_line(
+        image, 0, SIZE, 0, SIZE, {20.3, 30.7}, {35.1, 30.7}, RGB{1.f}, 1e9, [](double) {
+            return 1.0;
+        }));
+    CHECK(grid.line_cache_bytes() == grid.line_table_bytes());
+}
+
 TEST_CASE("A faint line's wings are interpolated only as far as the tolerance allows",
           "[render][unresolved][psf][measured][streak]")
 {

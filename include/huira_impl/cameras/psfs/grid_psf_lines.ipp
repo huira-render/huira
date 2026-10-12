@@ -381,7 +381,7 @@ typename GridPsf<TSpectral>::LineLayout GridPsf<TSpectral>::line_layout_() const
     return layout;
 }
 
-/// The memory one direction's tables take.
+/// The memory one direction's tables take, as they are kept (in single precision; see Line).
 template <IsSpectral TSpectral>
 std::size_t GridPsf<TSpectral>::line_table_bytes() const
 {
@@ -389,7 +389,7 @@ std::size_t GridPsf<TSpectral>::line_table_bytes() const
         return 0;
     }
     const auto count = static_cast<std::size_t>(2 * line_layout_().half + 1);
-    return (count * count + count) * N * sizeof(double);
+    return (count * count + count) * N * sizeof(float);
 }
 
 /// About how many times the collected PSF is evaluated to make one direction's tables; a disc
