@@ -2105,6 +2105,14 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
         LineRadii radii;
         TSpectral radii_density{0.f};
         bool have_radii = false;
+        // A line is no brighter at a distance than a still source with all of its light there,
+        // which for a short one is the tighter bound: the bound for an endless line at its light
+        // per unit length is about 2 r / length too high at r, which drew a source moving just
+        // over STILL_TOLERANCE hundreds of pixels out. Found again once the line's light changes
+        // by RADII_TOLERANCE.
+        double point_taper = 0.0;
+        TSpectral point_power{0.f};
+        bool have_point_taper = false;
         std::size_t k = 0;
         while (k + 1 < count) {
             if (!usable(k)) {
@@ -2174,7 +2182,24 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
                     radii_density = density;
                     have_radii = true;
                 }
-                emit_line(item_index, start, end, length, power, radii, source_grid, batch);
+                bool same_power = have_point_taper;
+                for (std::size_t c = 0; same_power && c < TSpectral::size(); ++c) {
+                    same_power = std::abs(power[c] - point_power[c]) <=
+                                 RADII_TOLERANCE * std::max(power[c], point_power[c]);
+                }
+                if (!same_power) {
+                    point_taper = source_grid != nullptr
+                                      ? grid_taper_radius(power, *source_grid)
+                                      : taper_radius(power,
+                                                     std::numeric_limits<double>::infinity(),
+                                                     *source_tables);
+                    point_power = power;
+                    have_point_taper = true;
+                }
+                LineRadii line_radii_here = radii;
+                line_radii_here.taper = std::min(radii.taper, point_taper);
+                emit_line(
+                    item_index, start, end, length, power, line_radii_here, source_grid, batch);
             }
             k = last + 1;
         }
