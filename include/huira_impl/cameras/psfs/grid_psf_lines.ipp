@@ -152,12 +152,32 @@ const GridPsf<TSpectral>& GridPsf<TSpectral>::collected_() const
     return *line_cache_->integrated;
 }
 
+/**
+ * @brief The PSF as pixels collect it, as lines are drawn from it: itself if pixel-integrated,
+ * and otherwise integrated over a pixel at each point (see integrated_()) every LINE_TABLE_STEP,
+ * or as finely as it was sampled, made the first time it is needed. A line's light is the PSF
+ * integrated over the pixel and along the line, smooth enough that a spline through it this
+ * finely is within about 1e-4 of its peak, and the coarser samples keep its lookups in the
+ * processor's caches.
+ */
+template <IsSpectral TSpectral>
+const GridPsf<TSpectral>& GridPsf<TSpectral>::line_source_() const
+{
+    if (pixel_integrated_) {
+        return *this;
+    }
+    std::call_once(line_cache_->source_once, [this] {
+        line_cache_->source = std::make_shared<const GridPsf>(integrated_(*this, LINE_TABLE_STEP));
+    });
+    return *line_cache_->source;
+}
+
 /// The collected PSF's scale() at a pixel's center, which lines are drawn with.
 template <IsSpectral TSpectral>
 typename GridPsf<TSpectral>::Light GridPsf<TSpectral>::line_scale() const
 {
     std::call_once(line_cache_->scale_once,
-                   [this] { line_cache_->scale = collected_().scale(0.5, 0.5); });
+                   [this] { line_cache_->scale = line_source_().scale(0.5, 0.5); });
     return line_cache_->scale;
 }
 
@@ -184,13 +204,15 @@ typename GridPsf<TSpectral>::LineDirections GridPsf<TSpectral>::line_directions(
 template <IsSpectral TSpectral>
 typename GridPsf<TSpectral>::LineLayout GridPsf<TSpectral>::line_layout_() const
 {
-    const GridPsf& q = collected_();
+    const GridPsf& q = line_source_();
     LineLayout layout;
     layout.support = std::hypot(std::max(std::abs(q.left_), std::abs(q.right_)),
                                 std::max(std::abs(q.top_), std::abs(q.bottom_)));
     const double most =
         std::sqrt(static_cast<double>(MEMORY_BUDGET) / static_cast<double>(N * sizeof(double)));
-    layout.step = std::max(q.step_, 2.0 * layout.support / std::max(most - 5.0, 4.0));
+    layout.panels = std::max(1, static_cast<int>(std::floor(LINE_TABLE_STEP / q.step_ + 1e-9)));
+    layout.step =
+        std::max(q.step_ * layout.panels, 2.0 * layout.support / std::max(most - 5.0, 4.0));
     layout.half = static_cast<int>(std::ceil(layout.support / layout.step)) + 2;
     return layout;
 }
@@ -229,7 +251,7 @@ template <IsSpectral TSpectral>
 const typename GridPsf<TSpectral>::LineCache& GridPsf<TSpectral>::direct_setup_() const
 {
     std::call_once(line_cache_->direct_once, [this] {
-        const GridPsf& q = collected_();
+        const GridPsf& q = line_source_();
         const double h = q.step_;
         const double extent = std::hypot(std::max(std::abs(q.left_), std::abs(q.right_)),
                                          std::max(std::abs(q.top_), std::abs(q.bottom_)));
@@ -260,6 +282,7 @@ const typename GridPsf<TSpectral>::LineCache& GridPsf<TSpectral>::direct_setup_(
                 }
             }
         }
+        line_cache_->coefficients.assign(q.coefficients_.begin(), q.coefficients_.end());
         const auto spread = static_cast<std::size_t>(std::ceil(3.0 * h * PANEL_BINS));
         auto& limit = line_cache_->panel_limit;
         limit.assign(bins, 2.0 * extent);
@@ -309,6 +332,49 @@ GridPsf<TSpectral>::panel_length_(const LineCache& cache, double near, double fa
         length = std::min(length, limit[b]);
     }
     return length;
+}
+
+/**
+ * @brief Adds the collected PSF at (x, y), relative to the source in pixels, times a weight, to
+ * a sum: the spline within its rectangle, from its coefficients in single precision, which are
+ * within 1e-7 of its light; nothing beyond. Within the rectangle, the four coefficients around a
+ * place on either axis are always among them, MARGIN beyond it.
+ */
+template <IsSpectral TSpectral>
+void GridPsf<TSpectral>::add_collected_(
+    const LineCache& cache, double x, double y, double weight, Light& sum) const
+{
+    const GridPsf& q = line_source_();
+    if (!(x >= q.left_ && x <= q.right_ && y >= q.top_ && y <= q.bottom_)) {
+        return;
+    }
+    const auto weights = [&](double offset, double origin, long& first) {
+        const double u = (offset - origin) / q.step_;
+        const double floor_u = std::floor(u);
+        const double t = u - floor_u;
+        const double s = 1.0 - t;
+        first = static_cast<long>(floor_u) - 1;
+        return std::array<double, 4>{s * s * s / 6.0,
+                                     (4.0 - 6.0 * t * t + 3.0 * t * t * t) / 6.0,
+                                     (4.0 - 6.0 * s * s + 3.0 * s * s * s) / 6.0,
+                                     t * t * t / 6.0};
+    };
+    long first_x = 0;
+    long first_y = 0;
+    const std::array<double, 4> wx = weights(x, q.x0_, first_x);
+    const std::array<double, 4> wy = weights(y, q.y0_, first_y);
+    for (std::size_t b = 0; b < 4; ++b) {
+        const float* row = &cache.coefficients[q.at_(
+            static_cast<int>(first_x), static_cast<int>(first_y) + static_cast<int>(b))];
+        const double wb = weight * wy[b];
+        for (std::size_t a = 0; a < 4; ++a) {
+            const double w = wb * wx[a];
+            const float* at = row + a * N;
+            for (std::size_t c = 0; c < N; ++c) {
+                sum[c] += w * static_cast<double>(at[c]);
+            }
+        }
+    }
 }
 
 /**
@@ -407,7 +473,7 @@ GridPsf<TSpectral>::line_at_(int index) const
 template <IsSpectral TSpectral>
 typename GridPsf<TSpectral>::Line GridPsf<TSpectral>::build_line_(double cos, double sin) const
 {
-    const GridPsf& q = collected_();
+    const GridPsf& q = line_source_();
     const Light scale = line_scale();
     const LineLayout layout = line_layout_();
     Line line;
@@ -418,22 +484,26 @@ typename GridPsf<TSpectral>::Line GridPsf<TSpectral>::build_line_(double cos, do
     line.count = 2 * layout.half + 1;
     line.first = -static_cast<double>(layout.half) * line.step;
     const auto count = static_cast<std::size_t>(line.count);
-    line.cumulative.assign(count * count * N, 0.0);
-    line.spread.assign(count * N, 0.0);
+    std::vector<double> cumulative(count * count * N, 0.0);
+    std::vector<double> spread(count * N, 0.0);
 
     const double nx = -sin;
     const double ny = cos;
+    const double panel = line.step / static_cast<double>(layout.panels);
     tbb::parallel_for(std::size_t{0}, count, [&](std::size_t row) {
         const double p = line.first + static_cast<double>(row) * line.step;
-        double* out = &line.cumulative[row * count * N];
+        double* out = &cumulative[row * count * N];
         Light sum{};
         for (std::size_t k = 1; k < count; ++k) {
-            const double v0 = line.first + static_cast<double>(k - 1) * line.step;
-            for (std::size_t i = 0; i < grid_psf_detail::GL4_NODES.size(); ++i) {
-                const double v = v0 + 0.5 * line.step * (1.0 + grid_psf_detail::GL4_NODES[i]);
-                const Light value = q.interpolate_(p * nx + v * cos, p * ny + v * sin);
-                for (std::size_t c = 0; c < N; ++c) {
-                    sum[c] += 0.5 * line.step * grid_psf_detail::GL4_WEIGHTS[i] * value[c];
+            for (int j = 0; j < layout.panels; ++j) {
+                const double v0 = line.first + static_cast<double>(k - 1) * line.step +
+                                  static_cast<double>(j) * panel;
+                for (std::size_t i = 0; i < grid_psf_detail::GL4_NODES.size(); ++i) {
+                    const double v = v0 + 0.5 * panel * (1.0 + grid_psf_detail::GL4_NODES[i]);
+                    const Light value = q.interpolate_(p * nx + v * cos, p * ny + v * sin);
+                    for (std::size_t c = 0; c < N; ++c) {
+                        sum[c] += 0.5 * panel * grid_psf_detail::GL4_WEIGHTS[i] * value[c];
+                    }
                 }
             }
             for (std::size_t c = 0; c < N; ++c) {
@@ -441,26 +511,27 @@ typename GridPsf<TSpectral>::Line GridPsf<TSpectral>::build_line_(double cos, do
             }
         }
         for (std::size_t c = 0; c < N; ++c) {
-            line.spread[row * N + c] = sum[c] * scale[c];
+            spread[row * N + c] = sum[c] * scale[c];
         }
     });
 
-    // The splines' coefficients, along q and then along p:
+    // The splines' coefficients, along q and then along p, kept in single precision, which
+    // takes half the memory and time to look up, and is within 1e-7 of a line's light:
     for (std::size_t c = 0; c < N; ++c) {
-        psf_tables_detail::bspline_coefficients(&line.spread[c], count, N);
+        psf_tables_detail::bspline_coefficients(&spread[c], count, N);
     }
     tbb::parallel_for(std::size_t{0}, count, [&](std::size_t row) {
         for (std::size_t c = 0; c < N; ++c) {
-            psf_tables_detail::bspline_coefficients(
-                &line.cumulative[row * count * N + c], count, N);
+            psf_tables_detail::bspline_coefficients(&cumulative[row * count * N + c], count, N);
         }
     });
     tbb::parallel_for(std::size_t{0}, count, [&](std::size_t column) {
         for (std::size_t c = 0; c < N; ++c) {
-            psf_tables_detail::bspline_coefficients(
-                &line.cumulative[column * N + c], count, count * N);
+            psf_tables_detail::bspline_coefficients(&cumulative[column * N + c], count, count * N);
         }
     });
+    line.spread.assign(spread.begin(), spread.end());
+    line.cumulative.assign(cumulative.begin(), cumulative.end());
 
     return line;
 }
@@ -478,7 +549,7 @@ typename GridPsf<TSpectral>::Light GridPsf<TSpectral>::line_spread_(const Line& 
     for (long k = first; k < first + 4; ++k) {
         const long at = std::clamp(k, 0L, static_cast<long>(line.count) - 1);
         const double w = grid_psf_detail::spline(u - static_cast<double>(k));
-        const double* coefficient = &line.spread[static_cast<std::size_t>(at) * N];
+        const float* coefficient = &line.spread[static_cast<std::size_t>(at) * N];
         for (std::size_t c = 0; c < N; ++c) {
             value[c] += w * coefficient[c];
         }
@@ -523,11 +594,11 @@ GridPsf<TSpectral>::line_cumulative_(const Line& line, double p, double q)
             continue;
         }
         const double wp = grid_psf_detail::spline(u - static_cast<double>(row));
-        const double* coefficients =
+        const float* coefficients =
             &line.cumulative[static_cast<std::size_t>(row) * static_cast<std::size_t>(count) * N];
         for (std::size_t b = 0; b < 4; ++b) {
             const double w = wp * wq[b];
-            const double* at = coefficients + static_cast<std::size_t>(at_q[b]) * N;
+            const float* at = coefficients + static_cast<std::size_t>(at_q[b]) * N;
             for (std::size_t c = 0; c < N; ++c) {
                 value[c] += w * at[c];
             }
@@ -558,31 +629,33 @@ double GridPsf<TSpectral>::line_envelope(std::size_t channel, double r) const
  *
  * A pixel's light is the piece's line integral of the pixels' light from a still source (as
  * pixel() gives it), per unit length: the integral along the line up to the pixel's place along
- * it from the start, less that from the end, C(p, q) - C(p, q - length) (see Line), from the lines
- * either side of the piece's direction (see line()), in proportion.
+ * it from the start, less that from the end, C(p, q) - C(p, q - length) (see Line), from the
+ * tables for the directions either side of the piece's, in proportion. Where the tolerance
+ * allows, its faint wings are interpolated (see draw_line_pixels_()).
  *
  * @return The light drawn, per channel, as a fraction of the power.
  */
 template <IsSpectral TSpectral>
 template <class Weight>
-typename GridPsf<TSpectral>::Light GridPsf<TSpectral>::draw_line(Image<TSpectral>& target,
-                                                                 int x_begin,
-                                                                 int x_end,
-                                                                 int y_begin,
-                                                                 int y_end,
-                                                                 const std::array<double, 2>& start,
-                                                                 const std::array<double, 2>& end,
-                                                                 const TSpectral& power,
-                                                                 double reach,
-                                                                 const Weight& weight) const
+typename GridPsf<TSpectral>::Light
+GridPsf<TSpectral>::draw_line(Image<TSpectral>& target,
+                              int x_begin,
+                              int x_end,
+                              int y_begin,
+                              int y_end,
+                              const std::array<double, 2>& start,
+                              const std::array<double, 2>& end,
+                              const TSpectral& power,
+                              double reach,
+                              const Weight& weight,
+                              const LineTolerance& tolerance) const
 {
-    Light drawn{};
     // In pixels along the axes:
     const double span_x = end[0] - start[0];
     const double span_y = end[1] - start[1];
     const double length = std::hypot(span_x, span_y);
     if (!(length > 0.0) || x_end <= x_begin || y_end <= y_begin) {
-        return drawn;
+        return Light{};
     }
     const double ex = span_x / length;
     const double ey = span_y / length;
@@ -593,58 +666,105 @@ typename GridPsf<TSpectral>::Light GridPsf<TSpectral>::draw_line(Image<TSpectral
     const double fraction = directions.fraction;
     const auto below_line = line_at_(directions.below);
     const auto above_line = fraction > 0.0 ? line_at_(directions.above) : below_line;
-    const double support = below_line->support;
-    // The nearest point of the piece in pixel widths, for the distance the weight takes:
-    const double aspect2 = aspect_ * aspect_;
-    const double physical2 = span_x * span_x + aspect2 * span_y * span_y;
-    const double reach2 = reach * reach;
-    const auto piece = [&](const Line& line, double p, double q) {
-        const Light to_pixel = line_cumulative_(line, p, q);
-        const Light to_end = line_cumulative_(line, p, q - length);
-        Light light;
-        for (std::size_t c = 0; c < N; ++c) {
-            light[c] = to_pixel[c] - to_end[c];
-        }
-        return light;
-    };
 
-    for (int y = y_begin; y < y_end; ++y) {
-        const double qy = static_cast<double>(y) + 0.5 - start[1];
-        for (int x = x_begin; x < x_end; ++x) {
-            const double qx = static_cast<double>(x) + 0.5 - start[0];
-            const double p = qx * nx + qy * ny;
-            if (std::abs(p) > support) {
-                continue;
+    // A pixel's place among the tables' coefficients, which the two directions share: along p,
+    // the four rows around it and their weights, and along q, for C at q and at q less the
+    // piece's length, the same, or nothing before the tables, or the line spread beyond them.
+    const Line& layout = *below_line;
+    const long count = layout.count;
+    const double inverse_step = 1.0 / layout.step;
+    struct Place {
+        long first = 0;
+        std::array<double, 4> weights{};
+    };
+    const auto place = [&](double offset) {
+        const double u = (offset - layout.first) * inverse_step;
+        const double floor_u = std::floor(u);
+        const double t = u - floor_u;
+        const double s = 1.0 - t;
+        Place axis;
+        axis.first = static_cast<long>(floor_u) - 1;
+        axis.weights = {s * s * s / 6.0,
+                        (4.0 - 6.0 * t * t + 3.0 * t * t * t) / 6.0,
+                        (4.0 - 6.0 * s * s + 3.0 * s * s * s) / 6.0,
+                        t * t * t / 6.0};
+        return axis;
+    };
+    enum class Reach { Before, Within, Beyond };
+    const auto reach_of = [&](double offset) {
+        const double v = (offset - layout.first) * inverse_step;
+        return !(v > -2.0)                               ? Reach::Before
+               : !(v < static_cast<double>(count) + 1.0) ? Reach::Beyond
+                                                         : Reach::Within;
+    };
+    // C at a place along q, less C at another, for both directions in proportion:
+    const auto light_between = [&](const Place& across,
+                                   Reach near_reach,
+                                   const Place& near,
+                                   Reach far_reach,
+                                   const Place& far) {
+        Light light{};
+        const auto add = [&](const Line& line,
+                             double share,
+                             Reach reach_along,
+                             const Place& along,
+                             double sign) {
+            if (reach_along == Reach::Before || !(share > 0.0)) {
+                return;
             }
-            const double t =
-                std::clamp((qx * span_x + aspect2 * qy * span_y) / physical2, 0.0, 1.0);
-            const double fx = qx - t * span_x;
-            const double fy = qy - t * span_y;
-            const double distance2 = fx * fx + aspect2 * fy * fy;
-            if (distance2 > reach2) {
-                continue;
-            }
-            const double share = weight(std::sqrt(distance2));
-            if (!(share > 0.0)) {
-                continue;
-            }
-            const double q = qx * ex + qy * ey;
-            Light light = piece(*below_line, p, q);
-            if (fraction > 0.0) {
-                const Light upper = piece(*above_line, p, q);
-                for (std::size_t c = 0; c < N; ++c) {
-                    light[c] = (1.0 - fraction) * light[c] + fraction * upper[c];
+            for (long a = 0; a < 4; ++a) {
+                const long row = across.first + a;
+                if (row < 0 || row >= count) {
+                    continue;
+                }
+                const double wp = sign * share * across.weights[static_cast<std::size_t>(a)];
+                if (reach_along == Reach::Beyond) {
+                    const float* at = &line.spread[static_cast<std::size_t>(row) * N];
+                    for (std::size_t c = 0; c < N; ++c) {
+                        light[c] += wp * at[c];
+                    }
+                    continue;
+                }
+                const float* coefficients = &line.cumulative[static_cast<std::size_t>(row) *
+                                                             static_cast<std::size_t>(count) * N];
+                for (long b = 0; b < 4; ++b) {
+                    const long column = std::clamp(along.first + b, 0L, count - 1);
+                    const double w = wp * along.weights[static_cast<std::size_t>(b)];
+                    const float* at = coefficients + static_cast<std::size_t>(column) * N;
+                    for (std::size_t c = 0; c < N; ++c) {
+                        light[c] += w * at[c];
+                    }
                 }
             }
-            TSpectral& out = target(x, y);
-            for (std::size_t c = 0; c < N; ++c) {
-                const double part = share * light[c] / length;
-                drawn[c] += part;
-                out[c] += static_cast<float>(part * static_cast<double>(power[c]));
-            }
+        };
+        add(*below_line, 1.0 - fraction, near_reach, near, 1.0);
+        add(*above_line, fraction, near_reach, near, 1.0);
+        add(*below_line, 1.0 - fraction, far_reach, far, -1.0);
+        add(*above_line, fraction, far_reach, far, -1.0);
+        return light;
+    };
+    const auto light_at = [&](double qx, double qy) {
+        const double p = qx * nx + qy * ny;
+        const double u = (p - layout.first) * inverse_step;
+        if (!(u > -2.0) || !(u < static_cast<double>(count) + 1.0)) {
+            return Light{};
         }
-    }
-    return drawn;
+        const double q = qx * ex + qy * ey;
+        return light_between(
+            place(p), reach_of(q), place(q), reach_of(q - length), place(q - length));
+    };
+    return draw_line_pixels_(target,
+                             x_begin,
+                             x_end,
+                             y_begin,
+                             y_end,
+                             start,
+                             end,
+                             power,
+                             reach,
+                             weight,
+                             tolerance,
+                             light_at);
 }
 
 /**
@@ -653,7 +773,8 @@ typename GridPsf<TSpectral>::Light GridPsf<TSpectral>::draw_line(Image<TSpectral
  * along the piece, where it reaches the pixel, by three-point Gauss-Legendre quadrature on panels
  * as long as the PSF's roughness allows where they are (see direct_setup_()), which for most
  * PSFs grow with the distance from the source. It costs more for each pixel than the tables,
- * but nothing to make, and so suits pieces whose direction few others share.
+ * but nothing to make, and so suits pieces whose direction few others share. Where the tolerance
+ * allows, its faint wings are interpolated (see draw_line_pixels_()).
  *
  * @return The light drawn, per channel, as a fraction of the power.
  */
@@ -669,102 +790,343 @@ GridPsf<TSpectral>::draw_line_direct(Image<TSpectral>& target,
                                      const std::array<double, 2>& end,
                                      const TSpectral& power,
                                      double reach,
-                                     const Weight& weight) const
+                                     const Weight& weight,
+                                     const LineTolerance& tolerance) const
 {
-    Light drawn{};
     // In pixels along the axes:
     const double span_x = end[0] - start[0];
     const double span_y = end[1] - start[1];
     const double length = std::hypot(span_x, span_y);
     if (!(length > 0.0) || x_end <= x_begin || y_end <= y_begin) {
-        return drawn;
+        return Light{};
     }
-    const GridPsf& q = collected_();
-    const Light scale = line_scale();
     const LineCache& cache = direct_setup_();
     const double ex = span_x / length;
     const double ey = span_y / length;
     const double nx = -ey;
     const double ny = ex;
-    const double support = std::hypot(std::max(std::abs(q.left_), std::abs(q.right_)),
-                                      std::max(std::abs(q.top_), std::abs(q.bottom_)));
-    const double aspect2 = aspect_ * aspect_;
-    const double physical2 = span_x * span_x + aspect2 * span_y * span_y;
-    const double reach2 = reach * reach;
-    // Where along the piece a pixel's offset from it, c - v e, is within [lo, hi] on one axis:
-    const auto within = [](double c, double e, double lo, double hi, double& from, double& to) {
+    const Light scale = line_scale();
+    const auto light_at = [&](double qx, double qy) {
+        Light sum{};
+        // The part of the piece within the PSF's rectangle of the pixel, where its light is:
+        const auto [from, to] = clip_(qx, qy, ex, ey, length).range;
+        if (!(to > from)) {
+            return sum;
+        }
+        const double p = qx * nx + qy * ny;
+        const double foot = qx * ex + qy * ey;
+        const double nearest = std::clamp(foot, from, to);
+        const auto panel = [&](double a, double b) {
+            const double mid = 0.5 * (a + b);
+            const double half = 0.5 * (b - a);
+            for (std::size_t i = 0; i < grid_psf_detail::GL3_NODES.size(); ++i) {
+                const double v = mid + half * grid_psf_detail::GL3_NODES[i];
+                add_collected_(
+                    cache, qx - v * ex, qy - v * ey, half * grid_psf_detail::GL3_WEIGHTS[i], sum);
+            }
+        };
+        // Outward from the point nearest the pixel, each panel as long as its near end allows:
+        for (double v = nearest; v < to;) {
+            const double next =
+                std::min(to, v + panel_length_(cache, std::hypot(p, v - foot), to - v));
+            panel(v, next);
+            v = next;
+        }
+        for (double v = nearest; v > from;) {
+            const double next =
+                std::max(from, v - panel_length_(cache, std::hypot(p, v - foot), v - from));
+            panel(next, v);
+            v = next;
+        }
+        for (std::size_t c = 0; c < N; ++c) {
+            sum[c] *= scale[c];
+        }
+        return sum;
+    };
+    return draw_line_pixels_(target,
+                             x_begin,
+                             x_end,
+                             y_begin,
+                             y_end,
+                             start,
+                             end,
+                             power,
+                             reach,
+                             weight,
+                             tolerance,
+                             light_at);
+}
+
+/**
+ * @brief Where along a piece, from its start, a pixel's offset from it (qx - v ex, qy - v ey) is
+ * within the PSF's rectangle, where its light is, and what cuts that off at either end: the
+ * piece's start or end, or the rectangle's edges across x or y. Where the same things cut it off,
+ * a pixel's light changes smoothly from pixel to pixel; where they change, it can fall off
+ * sharply, at the edge of the PSF swept along the piece.
+ */
+template <IsSpectral TSpectral>
+typename GridPsf<TSpectral>::Clip
+GridPsf<TSpectral>::clip_(double qx, double qy, double ex, double ey, double length) const
+{
+    const GridPsf& q = line_source_();
+    Clip clip;
+    clip.range = {0.0, length};
+    const auto within = [&](double c, double e, double lo, double hi, int edge) {
         if (std::abs(e) < 1e-300) {
             if (c < lo || c > hi) {
-                to = from - 1.0;
+                clip.range[1] = clip.range[0] - 1.0;
             }
             return;
         }
         const double a = (c - hi) / e;
         const double b = (c - lo) / e;
-        from = std::max(from, std::min(a, b));
-        to = std::min(to, std::max(a, b));
+        if (std::min(a, b) > clip.range[0]) {
+            clip.range[0] = std::min(a, b);
+            clip.cut[0] = edge;
+        }
+        if (std::max(a, b) < clip.range[1]) {
+            clip.range[1] = std::max(a, b);
+            clip.cut[1] = edge;
+        }
     };
+    within(qx, ex, q.left_, q.right_, 1);
+    within(qy, ey, q.top_, q.bottom_, 2);
+    if (!(clip.range[1] > clip.range[0])) {
+        clip.cut = {-1, -1};
+    }
+    return clip;
+}
 
-    for (int y = y_begin; y < y_end; ++y) {
+/**
+ * @brief Adds a line's light to the pixels of a block of an image, out to reach pixel widths from
+ * it, times weight(r) at a distance r from it: each pixel's from light_at(qx, qy), its offset
+ * from the line's start, in pixels along the axes, the light integrated along the line, which is
+ * divided by its length.
+ *
+ * A faint line's pixels are mostly in its wings, where its light changes slowly, and there it is
+ * interpolated: the pixels are taken in cells of WING_CELL on a side, from multiples of it, and
+ * where a cell's light comes to no more than WING_LIGHT times the tolerance, by the line's
+ * envelope, it is computed at the cell's corners, and at its center and the middles of its
+ * sides, which are pixels too. If the same things cut the line's light off at all nine (see
+ * clip_()), so that the PSF's edge swept along the line does not cross the cell, and bilinear
+ * interpolation between the corners gives the other five to within a quarter of the tolerance,
+ * it gives the cell's other pixels; otherwise they are computed. Its error is greatest near those
+ * five, and in the wings, where the light is the PSF integrated along the line and over the pixel,
+ * nothing changes faster than over a few pixels. Every block shares the cells, so the choice does
+ * not depend on where blocks fall.
+ *
+ * @return The light drawn, per channel, as a fraction of the power.
+ */
+template <IsSpectral TSpectral>
+template <class Weight, class LightAt>
+typename GridPsf<TSpectral>::Light
+GridPsf<TSpectral>::draw_line_pixels_(Image<TSpectral>& target,
+                                      int x_begin,
+                                      int x_end,
+                                      int y_begin,
+                                      int y_end,
+                                      const std::array<double, 2>& start,
+                                      const std::array<double, 2>& end,
+                                      const TSpectral& power,
+                                      double reach,
+                                      const Weight& weight,
+                                      const LineTolerance& tolerance,
+                                      const LightAt& light_at) const
+{
+    Light drawn{};
+    const double span_x = end[0] - start[0];
+    const double span_y = end[1] - start[1];
+    const double length = std::hypot(span_x, span_y);
+    const double nx = -span_y / length;
+    const double ny = span_x / length;
+    const GridPsf& q = line_source_();
+    const double support = std::hypot(std::max(std::abs(q.left_), std::abs(q.right_)),
+                                      std::max(std::abs(q.top_), std::abs(q.bottom_)));
+    const double aspect2 = aspect_ * aspect_;
+    const double physical2 = span_x * span_x + aspect2 * span_y * span_y;
+    const double reach2 = reach * reach;
+
+    // A pixel's distance from the line, in pixel widths, if it is drawn, and how much:
+    const auto distance_of = [&](double qx, double qy) {
+        const double t = std::clamp((qx * span_x + aspect2 * qy * span_y) / physical2, 0.0, 1.0);
+        const double fx = qx - t * span_x;
+        const double fy = qy - t * span_y;
+        return std::sqrt(fx * fx + aspect2 * fy * fy);
+    };
+    const auto add = [&](int x, int y, double share, const Light& light) {
+        TSpectral& out = target(x, y);
+        for (std::size_t c = 0; c < N; ++c) {
+            const double part = share * light[c] / length;
+            drawn[c] += part;
+            out[c] += static_cast<float>(part * static_cast<double>(power[c]));
+        }
+    };
+    // The electrons a pixel's readout takes from light, as light_at() gives it:
+    const auto electrons = [&](const Light& light) {
+        double sum = 0.0;
+        for (std::size_t c = 0; c < N; ++c) {
+            const double value = std::abs(light[c]) / length * tolerance.electrons[c];
+            sum = tolerance.per_channel ? std::max(sum, value) : sum + value;
+        }
+        return sum;
+    };
+    const auto exact_pixel = [&](int x, int y) {
+        const double qx = static_cast<double>(x) + 0.5 - start[0];
         const double qy = static_cast<double>(y) + 0.5 - start[1];
-        for (int x = x_begin; x < x_end; ++x) {
-            const double qx = static_cast<double>(x) + 0.5 - start[0];
-            const double p = qx * nx + qy * ny;
-            if (std::abs(p) > support) {
-                continue;
+        if (std::abs(qx * nx + qy * ny) > support) {
+            return;
+        }
+        const double distance = distance_of(qx, qy);
+        if (distance * distance > reach2) {
+            return;
+        }
+        const double share = weight(distance);
+        if (share > 0.0) {
+            add(x, y, share, light_at(qx, qy));
+        }
+    };
+    if (!(tolerance.electrons_off > 0.0)) {
+        for (int y = y_begin; y < y_end; ++y) {
+            for (int x = x_begin; x < x_end; ++x) {
+                exact_pixel(x, y);
             }
-            const double t =
-                std::clamp((qx * span_x + aspect2 * qy * span_y) / physical2, 0.0, 1.0);
-            const double fx = qx - t * span_x;
-            const double fy = qy - t * span_y;
-            const double distance2 = fx * fx + aspect2 * fy * fy;
-            if (distance2 > reach2) {
-                continue;
+        }
+        return drawn;
+    }
+
+    // The light at the pixels on even rows and columns, which are the cells' corners, centers
+    // and sides' middles, computed as needed:
+    constexpr int CELL = WING_CELL;
+    constexpr int HALF = CELL / 2;
+    const int first_i = (x_begin / CELL) * CELL / HALF;
+    const int first_j = (y_begin / CELL) * CELL / HALF;
+    const int columns = ((x_end - 1) / CELL + 1) * CELL / HALF + 1 - first_i;
+    const int rows = ((y_end - 1) / CELL + 1) * CELL / HALF + 1 - first_j;
+    struct Node {
+        bool known = false;
+        std::array<int, 2> cut{};
+        Light light{};
+    };
+    std::vector<Node> nodes(static_cast<std::size_t>(columns) * static_cast<std::size_t>(rows));
+    const double ex = span_x / length;
+    const double ey = span_y / length;
+    const auto node_at = [&](int i, int j) -> const Node& {
+        Node& at = nodes[static_cast<std::size_t>(j - first_j) * static_cast<std::size_t>(columns) +
+                         static_cast<std::size_t>(i - first_i)];
+        if (!at.known) {
+            const double qx = static_cast<double>(i * HALF) + 0.5 - start[0];
+            const double qy = static_cast<double>(j * HALF) + 0.5 - start[1];
+            at.cut = clip_(qx, qy, ex, ey, length).cut;
+            at.light = light_at(qx, qy);
+            at.known = true;
+        }
+        return at;
+    };
+    const auto node = [&](int i, int j) -> const Light& { return node_at(i, j).light; };
+    const double faint = WING_LIGHT * tolerance.electrons_off;
+    const double cell_reach = HALF * std::hypot(1.0, aspect_);
+    Light envelope{};
+    for (int cy = (y_begin / CELL) * CELL; cy < y_end; cy += CELL) {
+        for (int cx = (x_begin / CELL) * CELL; cx < x_end; cx += CELL) {
+            const int x0 = std::max(x_begin, cx);
+            const int x1 = std::min(x_end, cx + CELL);
+            const int y0 = std::max(y_begin, cy);
+            const int y1 = std::min(y_end, cy + CELL);
+            // Faint enough everywhere in the cell, by the envelope from its center?
+            const double center_distance =
+                distance_of(static_cast<double>(cx + HALF) + 0.5 - start[0],
+                            static_cast<double>(cy + HALF) + 0.5 - start[1]);
+            const double nearest = std::max(0.0, center_distance - cell_reach);
+            for (std::size_t c = 0; c < N; ++c) {
+                envelope[c] = line_envelope(c, nearest);
             }
-            const double share = weight(std::sqrt(distance2));
-            if (!(share > 0.0)) {
-                continue;
-            }
-            // The part of the piece within the PSF's rectangle of the pixel, where its light is:
-            double from = 0.0;
-            double to = length;
-            within(qx, ex, q.left_, q.right_, from, to);
-            within(qy, ey, q.top_, q.bottom_, from, to);
-            if (!(to > from)) {
-                continue;
-            }
-            const double foot = qx * ex + qy * ey;
-            const double nearest = std::clamp(foot, from, to);
-            Light sum{};
-            const auto panel = [&](double a, double b) {
-                const double mid = 0.5 * (a + b);
-                const double half = 0.5 * (b - a);
-                for (std::size_t i = 0; i < grid_psf_detail::GL3_NODES.size(); ++i) {
-                    const double v = mid + half * grid_psf_detail::GL3_NODES[i];
-                    const Light value = q.interpolate_(qx - v * ex, qy - v * ey);
+            // ...and drawn everywhere, so that none of its corners is computed for nothing:
+            bool interpolate = center_distance + cell_reach <= reach && x1 - x0 == CELL &&
+                               y1 - y0 == CELL && electrons(envelope) <= faint;
+            const int i = cx / HALF;
+            const int j = cy / HALF;
+            if (interpolate) {
+                const Light& c00 = node(i, j);
+                const Light& c20 = node(i + 2, j);
+                const Light& c02 = node(i, j + 2);
+                const Light& c22 = node(i + 2, j + 2);
+                const auto off = [&](const Light& exact, double wx, double wy) {
+                    Light diff;
                     for (std::size_t c = 0; c < N; ++c) {
-                        sum[c] += half * grid_psf_detail::GL3_WEIGHTS[i] * value[c];
+                        diff[c] = exact[c] - ((1.0 - wy) * ((1.0 - wx) * c00[c] + wx * c20[c]) +
+                                              wy * ((1.0 - wx) * c02[c] + wx * c22[c]));
+                    }
+                    return electrons(diff);
+                };
+                // The same things cut the line's light off at all nine, so that the cell holds
+                // none of the PSF's edge swept along the line, where the light falls off between
+                // pixels:
+                const std::array<int, 2> cut = node_at(i, j).cut;
+                for (int b = 0; b <= 2 && interpolate; ++b) {
+                    for (int a = 0; a <= 2 && interpolate; ++a) {
+                        interpolate = node_at(i + a, j + b).cut == cut;
                     }
                 }
-            };
-            // Outward from the point nearest the pixel, each panel as long as its near end allows:
-            for (double v = nearest; v < to;) {
-                const double next =
-                    std::min(to, v + panel_length_(cache, std::hypot(p, v - foot), to - v));
-                panel(v, next);
-                v = next;
+                const double check = 0.25 * tolerance.electrons_off;
+                interpolate = interpolate && off(node(i + 1, j + 1), 0.5, 0.5) <= check &&
+                              off(node(i + 1, j), 0.5, 0.0) <= check &&
+                              off(node(i + 1, j + 2), 0.5, 1.0) <= check &&
+                              off(node(i, j + 1), 0.0, 0.5) <= check &&
+                              off(node(i + 2, j + 1), 1.0, 0.5) <= check;
+                if (interpolate) {
+                    for (int y = y0; y < y1; ++y) {
+                        for (int x = x0; x < x1; ++x) {
+                            const double qx = static_cast<double>(x) + 0.5 - start[0];
+                            const double qy = static_cast<double>(y) + 0.5 - start[1];
+                            if (std::abs(qx * nx + qy * ny) > support) {
+                                continue;
+                            }
+                            const double distance = distance_of(qx, qy);
+                            if (distance * distance > reach2) {
+                                continue;
+                            }
+                            const double share = weight(distance);
+                            if (!(share > 0.0)) {
+                                continue;
+                            }
+                            Light light;
+                            if ((x - cx) % HALF == 0 && (y - cy) % HALF == 0) {
+                                light = node(x / HALF, y / HALF);
+                            } else {
+                                const double wx = static_cast<double>(x - cx) / CELL;
+                                const double wy = static_cast<double>(y - cy) / CELL;
+                                for (std::size_t c = 0; c < N; ++c) {
+                                    light[c] = (1.0 - wy) * ((1.0 - wx) * c00[c] + wx * c20[c]) +
+                                               wy * ((1.0 - wx) * c02[c] + wx * c22[c]);
+                                }
+                            }
+                            add(x, y, share, light);
+                        }
+                    }
+                    continue;
+                }
             }
-            for (double v = nearest; v > from;) {
-                const double next =
-                    std::max(from, v - panel_length_(cache, std::hypot(p, v - foot), v - from));
-                panel(next, v);
-                v = next;
-            }
-            TSpectral& out = target(x, y);
-            for (std::size_t c = 0; c < N; ++c) {
-                const double part = share * sum[c] * scale[c] / length;
-                drawn[c] += part;
-                out[c] += static_cast<float>(part * static_cast<double>(power[c]));
+            for (int y = y0; y < y1; ++y) {
+                for (int x = x0; x < x1; ++x) {
+                    if ((x - cx) % HALF == 0 && (y - cy) % HALF == 0) {
+                        // Computed already for the cell's check, or as cheaply now:
+                        const double qx = static_cast<double>(x) + 0.5 - start[0];
+                        const double qy = static_cast<double>(y) + 0.5 - start[1];
+                        if (std::abs(qx * nx + qy * ny) > support) {
+                            continue;
+                        }
+                        const double distance = distance_of(qx, qy);
+                        if (distance * distance > reach2) {
+                            continue;
+                        }
+                        const double share = weight(distance);
+                        if (share > 0.0) {
+                            add(x, y, share, node(x / HALF, y / HALF));
+                        }
+                    } else {
+                        exact_pixel(x, y);
+                    }
+                }
             }
         }
     }

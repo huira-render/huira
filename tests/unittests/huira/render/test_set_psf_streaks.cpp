@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "catch2/catch_test_macros.hpp"
+#include "huira/cameras/psfs/grid_psf.hpp"
 #include "huira/huira.hpp"
 
 using namespace huira;
@@ -338,4 +339,66 @@ TEST_CASE("Many sources moving the same way with a measured PSF are drawn as exa
         }
     }
     CHECK(worst_difference(image, expected) < 3e-4);
+}
+
+TEST_CASE("A faint line's wings are interpolated only as far as the tolerance allows",
+          "[render][unresolved][psf][measured][streak]")
+{
+    // A line from a measured PSF with wings falling as r^-3 out to 16 px, drawn with and without
+    // leave to interpolate its faint wings, from its tables and directly: with leave, it is off
+    // by no more than the tolerance anywhere, and is interpolated somewhere. Before, nothing was
+    // interpolated.
+    constexpr int WINGS = 16;
+    constexpr int PER = 2;
+    const int side = 2 * PER * WINGS + 1;
+    Image<RGB> data(side, side);
+    for (int j = 0; j < side; ++j) {
+        for (int i = 0; i < side; ++i) {
+            const double x = static_cast<double>(i - PER * WINGS) / PER;
+            const double y = static_cast<double>(j - PER * WINGS) / PER;
+            data(i, j) = RGB{static_cast<float>(std::pow(1.0 + (x * x + y * y) / 0.64, -1.5))};
+        }
+    }
+    MeasuredPSF<RGB> measured(data, static_cast<float>(PER), PSFSampling::PointSampled, WINGS);
+    const GridPsf<RGB> grid(measured, 1.0);
+    constexpr int SIDE = 72;
+    const std::array<double, 2> start{24.31, 30.77};
+    const std::array<double, 2> end{start[0] + 17.3 * std::cos(0.37),
+                                    start[1] + 17.3 * std::sin(0.37)};
+    const auto everywhere = [](double) { return 1.0; };
+    // A source of 300 electrons in each channel, for a tolerance of 5e-3 electrons:
+    constexpr double ELECTRONS = 300.0;
+    GridPsf<RGB>::LineTolerance tolerance;
+    tolerance.electrons.fill(ELECTRONS);
+    tolerance.electrons_off = 5e-3;
+    tolerance.per_channel = true;
+    for (const bool tables : {true, false}) {
+        INFO((tables ? "from tables" : "directly"));
+        Image<RGB> exact(SIDE, SIDE, RGB{0.f});
+        Image<RGB> interpolated(SIDE, SIDE, RGB{0.f});
+        if (tables) {
+            static_cast<void>(
+                grid.draw_line(exact, 0, SIDE, 0, SIDE, start, end, RGB{1.f}, 1e9, everywhere));
+            static_cast<void>(grid.draw_line(
+                interpolated, 0, SIDE, 0, SIDE, start, end, RGB{1.f}, 1e9, everywhere, tolerance));
+        } else {
+            static_cast<void>(grid.draw_line_direct(
+                exact, 0, SIDE, 0, SIDE, start, end, RGB{1.f}, 1e9, everywhere));
+            static_cast<void>(grid.draw_line_direct(
+                interpolated, 0, SIDE, 0, SIDE, start, end, RGB{1.f}, 1e9, everywhere, tolerance));
+        }
+        double worst = 0.0;
+        std::size_t different = 0;
+        for (std::size_t i = 0; i < exact.size(); ++i) {
+            for (std::size_t c = 0; c < 3; ++c) {
+                const double off = ELECTRONS * std::abs(static_cast<double>(interpolated[i][c]) -
+                                                        static_cast<double>(exact[i][c]));
+                worst = std::max(worst, off);
+                different += off > 1e-6 * tolerance.electrons_off ? 1 : 0;
+            }
+        }
+        INFO("worst " << worst << " electrons, " << different << " values differ");
+        CHECK(worst <= tolerance.electrons_off);
+        CHECK(different > 300);
+    }
 }

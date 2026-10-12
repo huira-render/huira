@@ -393,7 +393,7 @@ GridPsf<TSpectral>::GridPsf(const GridPsf& in_focus, double blur)
  * whatever the PSF's own spacing, which takes the dip to a few thousandths of the drop.
  */
 template <IsSpectral TSpectral>
-GridPsf<TSpectral> GridPsf<TSpectral>::integrated_(const GridPsf& point)
+GridPsf<TSpectral> GridPsf<TSpectral>::integrated_(const GridPsf& point, double finest)
 {
     GridPsf result;
     result.aspect_ = point.aspect_;
@@ -404,7 +404,7 @@ GridPsf<TSpectral> GridPsf<TSpectral>::integrated_(const GridPsf& point)
     const double bytes = static_cast<double>(N * sizeof(double) * 2);
     const double most = std::sqrt(static_cast<double>(MEMORY_BUDGET) / bytes) - 2.0 * MARGIN - 1.0;
     const double step =
-        std::min(point.step_, std::max(SAMPLE_STEP, std::max(width, height) / std::max(most, 4.0)));
+        std::min(point.step_, std::max(finest, std::max(width, height) / std::max(most, 4.0)));
     const int count_x = static_cast<int>(std::ceil(width / step - 1e-9)) + 1;
     const int count_y = static_cast<int>(std::ceil(height / step - 1e-9)) + 1;
     result.step_ = step;
