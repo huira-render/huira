@@ -195,6 +195,67 @@ class ReferenceScatter {
     double peak_ = 1.0;
 };
 
+/// Scattered light blurred by a uniform disc of radius b: at r from the source, the light the
+/// disc centred there holds over its area, from S's circles about the source, of radius rho and
+/// half-angle theta inside the disc: whole within b - r, and arcs out to r + b. The arcs' ends
+/// have square-root branch points, which rho = lo + (hi - lo) sin^2(pi s / 2) smooths. Panels a
+/// quarter of a shoulder across, or less. Tabulated every 32nd of the shoulder, for 4-point
+/// cubic lookup.
+class ReferenceBlurredScatter {
+  public:
+    ReferenceBlurredScatter(const ReferenceScatter& scatter,
+                            double shoulder,
+                            double blur,
+                            double extent)
+        : step_{shoulder / 32.0}
+    {
+        const auto panels = [&](double length) {
+            return 8 + static_cast<int>(std::ceil(4.0 * length / shoulder));
+        };
+        for (double r = -step_; r <= extent + 3.0 * step_; r += step_) {
+            const double at = std::abs(r);
+            double light = 0.0;
+            if (at < blur) {
+                const auto circle = [&](double rho) { return 2.0 * PI * rho * scatter(rho); };
+                light += reference::gauss_legendre(circle, 0.0, blur - at, panels(blur - at));
+            }
+            const double lo = std::abs(at - blur);
+            const double hi = at + blur;
+            if (at > 0.0) {
+                const auto arc = [&](double s) {
+                    const double sine = std::sin(0.5 * PI * s);
+                    const double rho = lo + (hi - lo) * sine * sine;
+                    const double cosine = std::clamp(
+                        (rho * rho + at * at - blur * blur) / (2.0 * rho * at), -1.0, 1.0);
+                    const double jacobian = 0.5 * PI * (hi - lo) * std::sin(PI * s);
+                    return jacobian * 2.0 * rho * std::acos(cosine) * scatter(rho);
+                };
+                light += reference::gauss_legendre(arc, 0.0, 1.0, panels(0.5 * PI * (hi - lo)));
+            }
+            values_.push_back(light / (PI * blur * blur));
+        }
+    }
+
+    double operator()(double r) const
+    {
+        const double u = r / step_ + 1.0;
+        const auto k = std::clamp(static_cast<std::size_t>(u), std::size_t{1}, values_.size() - 3);
+        const double t = u - static_cast<double>(k);
+        const double p0 = values_[k - 1];
+        const double p1 = values_[k];
+        const double p2 = values_[k + 1];
+        const double p3 = values_[k + 2];
+        return p1 +
+               0.5 * t *
+                   (p2 - p0 +
+                    t * (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3 + t * (3.0 * (p1 - p2) + p3 - p0)));
+    }
+
+  private:
+    double step_;
+    std::vector<double> values_;
+};
+
 /// The band-averaged Airy pattern blurred by a uniform disc, by Hankel transform: the inverse
 /// of its optical transfer function, the band-averaged circular aperture's (in closed form)
 /// times the disc's jinc. An independent method from the library's, which works in real space.
@@ -536,6 +597,78 @@ TEST_CASE("Scattered light's profile holds all of its light", "[cameras][psf][sc
             CHECK(std::abs(d[1] - first) < 1e-5 * scale);
             CHECK(std::abs(d[2] - second) < 1e-4 * scale / std::max(r, c.shoulder));
         }
+    }
+}
+
+TEST_CASE("Tables of scattered light alone hold its pixel integrals, sampled to its shoulder",
+          "[cameras][psf][scatter]")
+{
+    // As the renderer builds them with a PSF that was set, or none: the scattered light alone,
+    // in focus or blurred, at f/3.3 with 8.5 um pixels, or 8.5 x 10 um. There are no rings, so
+    // the f-number makes no difference and the tables need not be sampled to follow them.
+    struct Case {
+        double shoulder;
+        double slope;
+        double outer;
+        double blur;
+        double pitch_y;
+    };
+    for (const Case& c : {Case{0.3, 3.0, 0.0, 0.0, 8.5e-6},
+                          Case{2.0, 1.8, 60.0, 0.0, 8.5e-6},
+                          Case{1.0, 2.5, 0.0, 0.0, 10e-6},
+                          Case{0.5, 2.5, 0.0, 3.0, 8.5e-6},
+                          Case{1.0, 2.2, 0.0, 5.6, 8.5e-6},
+                          Case{0.5, 2.5, 0.0, 15.0, 8.5e-6}}) {
+        INFO("shoulder " << c.shoulder << ", slope " << c.slope << ", outer " << c.outer
+                         << ", blur " << c.blur << ", pixel height " << c.pitch_y);
+        const auto tables = PsfTables<RGB>::airy(
+            3.3,
+            8.5e-6,
+            c.pitch_y,
+            256.0,
+            PsfTables<RGB>::Scatter{
+                1.0, c.slope, c.shoulder, c.outer > 0.0 ? std::optional(c.outer) : std::nullopt},
+            c.blur);
+        // Sampled to the shoulder, at least 16 points a pixel, not to the finest period of the
+        // diffraction they lack, at 56 points a pixel and more: they took 3 to 6 MiB.
+        CHECK(tables.near_samples() <= 16);
+        CHECK(tables.memory_bytes() < 600 * 1024);
+
+        const ReferenceScatter scatter(c.shoulder, c.slope, c.outer);
+        std::optional<ReferenceBlurredScatter> blurred;
+        if (c.blur > 0.0) {
+            blurred.emplace(scatter, c.shoulder, c.blur, 45.0);
+        }
+        const auto density = [&](double r) { return blurred ? (*blurred)(r) : scatter(r); };
+        const double aspect = c.pitch_y / 8.5e-6;
+        // Out to 40 px, and across the disc's edge, beyond which the far field takes over.
+        std::vector<double> radii;
+        for (double r = 0.0; r < 40.0; r = 1.2 * r + 0.13) {
+            radii.push_back(r);
+        }
+        if (c.blur > 0.0) {
+            for (double beyond : {-1.0, -0.5, -0.2, 0.1, 0.4, 0.8, 1.3, 2.0, 3.0}) {
+                radii.push_back(c.blur + beyond);
+            }
+        }
+        double worst = 0.0;
+        double peak = 0.0;
+        for (double r : radii) {
+            for (double angle : {0.3, 1.1, 2.0}) {
+                const double dx = r * std::cos(angle) + 0.17;
+                const double dy = r * std::sin(angle) - 0.29;
+                const double exact = reference::rectangle_light(
+                    density, dx - 0.5, dx + 0.5, aspect * (dy - 0.5), aspect * (dy + 0.5), 0.05);
+                const RGB light = tables.pixel(dx, dy);
+                peak = std::max(peak, exact);
+                for (std::size_t channel = 0; channel < RGB::size(); ++channel) {
+                    worst = std::max(worst, std::abs(static_cast<double>(light[channel]) - exact));
+                }
+            }
+        }
+        // Beyond MAX_NEAR_BLUR the projected integrals take the disc's edge, as they did:
+        // within 5e-5 of the peak at a 20 px blur, before as now.
+        CHECK(worst < (c.blur > PsfTables<RGB>::MAX_NEAR_BLUR ? 1e-4 : 3e-5) * peak);
     }
 }
 
@@ -897,6 +1030,54 @@ TEST_CASE("draw() adds each pixel's light, as pixel() gives it, times the weight
         for (std::size_t c = 0; c < Visible8::size(); ++c) {
             CHECK(std::abs(drawn[c] - expected_drawn[c]) < 1e-6);
         }
+    }
+}
+
+TEST_CASE("draw_line() follows a blurred line spread out to where the far field takes over",
+          "[cameras][psf][defocus][streak]")
+{
+    // Out of focus by 5.6 px, with the aperture's PSF and with scattered light alone (as with a
+    // PSF that was set). The line spread is tabulated as far as the rings are followed; the
+    // tables can follow it further, to their far field. They took its tabulated tail there,
+    // 0.6% off with the aperture's PSF and 0.2% with scattered light alone (in RGB).
+    constexpr double BLUR = 5.57;
+    const auto aperture = PsfTables<RGB>::airy(3.3, 8.5e-6, 8.5e-6, 400.0, std::nullopt, BLUR);
+    const auto scattered = PsfTables<RGB>::airy(
+        3.3, 8.5e-6, 8.5e-6, 400.0, PsfTables<RGB>::Scatter{1.0, 2.5, 0.5, {}}, BLUR);
+    for (const auto* tables : {&aperture, &scattered}) {
+        INFO((tables == &aperture ? "the aperture's PSF" : "scattered light alone"));
+        // A line 40 px long, its light followed exactly at every distance, as with no taper:
+        constexpr int WIDTH = 200;
+        constexpr int HEIGHT = 120;
+        const std::array<double, 2> start{80.3, 60.37};
+        const std::array<double, 2> end{120.3, 60.37};
+        PsfTables<RGB>::LineReach reach;
+        reach.ends_exact_within = tables->near_radius();
+        Image<RGB> image(WIDTH, HEIGHT, RGB{0.f});
+        static_cast<void>(tables->draw_line(
+            image, 0, WIDTH, 0, HEIGHT, start, end, RGB{1.f / 40.f}, reach, [](double) {
+                return 1.0;
+            }));
+
+        // Across its middle, against still sources' pixels, as pixel() gives them, along it.
+        constexpr int POINTS = 4000;
+        constexpr int X = 100;
+        double worst = 0.0;
+        for (int y = 30; y < 91; ++y) {
+            std::array<double, 3> expected{};
+            for (int k = 0; k < POINTS; ++k) {
+                const double along = start[0] + (k + 0.5) / POINTS * (end[0] - start[0]);
+                const RGB light = tables->pixel(X + 0.5 - along, y + 0.5 - start[1]);
+                for (std::size_t c = 0; c < 3; ++c) {
+                    expected[c] += static_cast<double>(light[c]) / POINTS;
+                }
+            }
+            for (std::size_t c = 0; c < 3; ++c) {
+                const double drawn = static_cast<double>(image(X, y)[c]);
+                worst = std::max(worst, std::abs(drawn - expected[c]) / expected[c]);
+            }
+        }
+        CHECK(worst < 1e-3);
     }
 }
 

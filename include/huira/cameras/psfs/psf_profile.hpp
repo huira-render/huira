@@ -71,6 +71,9 @@ class ScatterProfile {
     /// K, the profile's value at r = 0.
     [[nodiscard]] double peak() const { return peak_; }
 
+    /// The distance over which the profile turns from flat to falling, its finest detail.
+    [[nodiscard]] double shoulder() const { return std::sqrt(shoulder_squared_); }
+
   private:
     double shoulder_squared_;
     double falloff_;
@@ -109,6 +112,16 @@ class OpticsProfile {
     [[nodiscard]] const AiryBandProfile& diffraction() const { return diffraction_; }
     [[nodiscard]] double scatter_fraction() const { return scatter_fraction_; }
     [[nodiscard]] const std::optional<ScatterProfile>& scatter() const { return scatter_; }
+
+    /// Whether it is all scattered light, without the diffraction pattern's rings.
+    [[nodiscard]] bool scatter_only() const { return scatter_fraction_ >= 1.0; }
+
+    /// The period of the profile's finest detail: lambda N at the bluest wavelength, or for
+    /// scattered light alone, twice its shoulder.
+    [[nodiscard]] double finest_period() const
+    {
+        return scatter_only() ? 2.0 * scatter_->shoulder() : 1.0 / diffraction_.cutoff_blue();
+    }
 
   private:
     AiryBandProfile diffraction_;
