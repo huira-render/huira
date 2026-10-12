@@ -1,6 +1,8 @@
+#include <algorithm>
 #include <cmath>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "catch2/catch_test_macros.hpp"
@@ -201,4 +203,51 @@ TEST_CASE("A scene view needs a temporal sample and an exposure that runs forwar
     CHECK_THROWS(SceneView<RGB>(scene, exposure, camera, ObservationMode::TRUE_STATE, 0));
     exposure.end = Time::from_et(-1.0);
     CHECK_THROWS(SceneView<RGB>(scene, exposure, camera, ObservationMode::TRUE_STATE, 1));
+}
+
+TEST_CASE("An asteroid's slope parameter may be 1, and it may be seen at any phase angle",
+          "[scene][validation]")
+{
+    // Its H-G phase function, (1 - G) phi1 + G phi2, is positive at every phase angle short of
+    // 180 degrees for G from 0 to 1, but phi2 underflows to 0 near 180 degrees, so G = 1 was
+    // refused as if it were not. At 180 degrees itself (the asteroid in front of its Sun) the
+    // function is 0 for any G, and the render threw for the infinite magnitude it gave.
+    Scene<RGB> refusing;
+    auto refusing_sun = refusing.root.new_instance(refusing.new_sun_light());
+    CHECK_THROWS(refusing.new_unresolved_asteroid(15.0, 1.05, refusing_sun)); // negative at 155 deg
+
+    // The camera looks along z at the Sun, with the asteroid in front of it; the frame is the
+    // Sun's alone, the asteroid's lit side facing away.
+    const auto render = [](std::optional<double> G) {
+        Scene<RGB> scene;
+        auto sun = scene.root.new_instance(scene.new_sun_light());
+        sun.set_position(0_m, 0_m, units::Meter(2e11));
+        if (G) {
+            auto asteroid = scene.root.new_instance(scene.new_unresolved_asteroid(15.0, *G, sun));
+            asteroid.set_position(0_m, 0_m, units::Meter(1e9));
+        }
+        auto camera_model = scene.new_camera_model();
+        camera_model.configure_sensor_from_pitch({16, 16}, units::Micrometer(8.5));
+        auto camera = scene.root.new_instance(camera_model);
+        auto frame_buffer = camera_model.make_frame_buffer();
+        frame_buffer.enable_received_power();
+        Renderer<RGB> renderer;
+        SceneView<RGB> view(scene,
+                            Interval{Time::from_et(0.0), Time::from_et(1.0)},
+                            camera,
+                            ObservationMode::TRUE_STATE);
+        renderer.render(view, frame_buffer);
+        return frame_buffer.received_power();
+    };
+    const Image<RGB> sun_alone = render(std::nullopt);
+    for (const double G : {0.15, 1.0}) {
+        INFO("G = " << G);
+        Image<RGB> image;
+        REQUIRE_NOTHROW(image = render(G));
+        double most = 0.0;
+        for (std::size_t i = 0; i < image.size(); ++i) {
+            most = std::max(most, std::abs(static_cast<double>(image[i][1] - sun_alone[i][1])));
+        }
+        CHECK(most == 0.0);
+    }
 }

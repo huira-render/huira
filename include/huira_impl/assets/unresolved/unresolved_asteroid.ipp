@@ -53,7 +53,8 @@ static inline double asteroid_phi2(double alpha)
  * @brief Throws unless the H-G phase function, (1 - G) phi1 + G phi2, is positive at every phase
  * angle short of 180 degrees, so that the magnitude is defined wherever the asteroid is seen.
  * Beyond about 139 degrees phi2 falls below phi1, so a G much over 1, or much under 0, takes it
- * below zero there.
+ * below zero there. Near 180 degrees phi2 underflows to 0, and with it the function for G = 1,
+ * which is positive all the same: 0 is allowed, a negative value is not.
  */
 template <IsSpectral TSpectral>
 void UnresolvedAsteroid<TSpectral>::check_slope_(double G)
@@ -62,7 +63,7 @@ void UnresolvedAsteroid<TSpectral>::check_slope_(double G)
     for (int k = 0; k < STEPS; ++k) {
         const double alpha = PI<double>() * static_cast<double>(k) / STEPS;
         const double phase = (1.0 - G) * asteroid_phi1(alpha) + G * asteroid_phi2(alpha);
-        if (!(phase > 0.0)) {
+        if (!(phase >= 0.0)) {
             HUIRA_THROW_ERROR(
                 "UnresolvedAsteroid::UnresolvedAsteroid - With G = " + std::to_string(G) +
                 ", the H-G phase function is not positive at a phase angle of " +
@@ -208,7 +209,15 @@ void UnresolvedAsteroid<TSpectral>::resolve_irradiance(
         // Compute H-G Magnitude:
         double phi1 = asteroid_phi1(alpha_rad);
         double phi2 = asteroid_phi2(alpha_rad);
-        double reduced_mag = H_ - 2.5 * std::log10((1.0 - G_) * phi1 + G_ * phi2);
+        const double phase_function = (1.0 - G_) * phi1 + G_ * phi2;
+        if (phase_function == 0.0) {
+            // Seen from behind its lit side, at or within a hair of a phase angle of 180
+            // degrees, where the phase function underflows: no light, rather than an infinite
+            // magnitude.
+            irradiances[i] = TSpectral{0.f};
+            continue;
+        }
+        double reduced_mag = H_ - 2.5 * std::log10(phase_function);
 
         double r_au = r_m * AU<double>();
         double delta_au = delta_m * AU<double>();
