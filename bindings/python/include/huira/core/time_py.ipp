@@ -27,8 +27,9 @@ inline void bind_time(py::module_& m)
         // Constructor from Python datetime
         .def(py::init([](py::object dt) {
                  // An aware datetime is moved to UTC first, which SPICE reads its string as; its
-                 // offset would otherwise be dropped or misread. A naive one is taken as UTC.
-                 if (!dt.attr("tzinfo").is_none()) {
+                 // offset would otherwise be dropped or misread. A naive one is taken as UTC, as
+                 // is a date (at its midnight), which has no tzinfo at all.
+                 if (py::hasattr(dt, "tzinfo") && !dt.attr("tzinfo").is_none()) {
                      dt = dt.attr("astimezone")(
                          py::module_::import("datetime").attr("timezone").attr("utc"));
                  }
@@ -46,7 +47,7 @@ inline void bind_time(py::module_& m)
              }),
              py::arg("datetime"),
              "Construct from a Python datetime object: an aware one at its own offset, a naive "
-             "one as UTC")
+             "one as UTC; or from a date, at its midnight UTC")
 
         // Static factory methods
         .def_static("from_et",
