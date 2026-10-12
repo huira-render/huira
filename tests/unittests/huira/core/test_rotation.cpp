@@ -293,3 +293,33 @@ TEMPLATE_TEST_CASE("Rotation - Inputs that are not rotations are refused",
     // No axis and no angle is no rotation (a guard):
     CHECK_NOTHROW(RotationType::from_local_to_parent(Vec3Type{0, 0, 0}, units::Radian(0.0)));
 }
+
+TEMPLATE_TEST_CASE("Rotation - A quaternion within 1e-3 of unit length is taken as its direction",
+                   "[rotation][validation]",
+                   float,
+                   double)
+{
+    // A quaternion is accepted within 1e-3 of unit length, but it was turned into a matrix as it
+    // was, which scaled the matrix by up to its length squared, so the determinant check then
+    // refused one 2e-4 too long that turned by half a turn.
+    using RotationType = Rotation<TestType>;
+    using QuaternionType = Quaternion<TestType>;
+    const TestType half = static_cast<TestType>(std::sqrt(0.5));
+    for (const QuaternionType unit : {QuaternionType{0, 0, 0, 1},
+                                      QuaternionType{half, half, 0, 0},
+                                      QuaternionType{0.5, -0.5, 0.5, 0.5}}) {
+        for (const double length : {1.0002, 1.0009, 0.9991}) {
+            INFO("length " << length);
+            const QuaternionType scaled = unit * static_cast<TestType>(length);
+            const RotationType exact = RotationType::from_local_to_parent(unit);
+            RotationType local_to_parent;
+            REQUIRE_NOTHROW(local_to_parent = RotationType::from_local_to_parent(scaled));
+            CHECK_MAT3_EQUAL(
+                local_to_parent.local_to_parent_matrix(), exact.local_to_parent_matrix(), 1e-6);
+            RotationType parent_to_local;
+            REQUIRE_NOTHROW(parent_to_local = RotationType::from_parent_to_local(scaled));
+            CHECK_MAT3_EQUAL(
+                parent_to_local.local_to_parent_matrix(), exact.parent_to_local_matrix(), 1e-6);
+        }
+    }
+}
