@@ -141,7 +141,9 @@ get tables of their own, built by the render that first needs them (even with
 ``enable_auto_precompute(false)``, which then logs a warning) and kept while they are used. For a 125 mm f/3.3 lens with
 8.5 µm pixels (278.5 px of blur per diopter), each takes about 2 s and 10 MB; focused at
 infinity, objects beyond about 2,800 km count as at infinity, and nearer ones that move in depth
-can need new tables every frame.
+can need new tables every frame. A moving object's depth is its mean over the exposure while it
+is in front of the camera. An object that is behind the camera throughout, or whose blurred light
+cannot reach the image, is skipped before any tables are built for it.
 
 How resolved bodies are blurred
 -------------------------------

@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstddef>
 #include <optional>
+#include <string>
 #include <vector>
 
 #include "catch2/catch_test_macros.hpp"
@@ -220,5 +221,64 @@ TEST_CASE("An unresolved object far enough away is drawn with the stars' blur",
         const Image<RGB> image = render_source(scene, camera_model, FOCAL, 1e9, x, y);
         const Image<RGB> star = tables_on_frame(camera_model, x, y, std::nullopt);
         CHECK(worst_difference(image, star) < 1e-4);
+    }
+}
+
+TEST_CASE("Unresolved objects whose light cannot reach the image build no tables for their blur",
+          "[render][unresolved][psf][defocus]")
+{
+    // A nearby object beside or behind the camera has a large blur for its depth, and tables for
+    // it take seconds to minutes to build, the nearer the longer, though its light lands nowhere
+    // in the image. With auto precompute off, a render that builds an object's own tables warns
+    // that it does, which is what is checked; the frame stays dark. An object in view at the
+    // same blur is the guard: it does get tables of its own, and the warning.
+    constexpr double FOCAL = 50e-3;
+    std::vector<std::string> warnings;
+    set_log_sink([&warnings](const LogEntry& entry) {
+        if (entry.level == LogLevel::Warning) {
+            warnings.push_back(entry.message);
+        }
+    });
+    struct ClearSink {
+        ~ClearSink() { Logger::instance().clear_custom_sink(); }
+    } clear_sink;
+
+    struct Case {
+        const char* name;
+        double x;
+        double z;
+        bool visible;
+    };
+    for (const Case& c :
+         {Case{"behind the camera, 5 m away", 0.0, -5.0, false},
+          Case{"beside the camera, 1 km off its axis at a depth of 0.1 m", 1000.0, 0.1, false},
+          Case{"in view at 5 m", 0.0, 5.0, true}}) {
+        INFO(c.name);
+        Scene<RGB> scene;
+        auto camera_model = make_camera(scene, FOCAL);
+        auto camera = scene.root.new_instance(camera_model);
+        auto object = scene.root.new_instance(scene.new_unresolved_emitter(units::Watt(1.0)));
+        object.set_position(units::Meter(c.x), units::Meter(0.0), units::Meter(c.z));
+        camera_model.precompute();
+        camera_model.enable_auto_precompute(false);
+
+        auto frame_buffer = camera_model.make_frame_buffer();
+        frame_buffer.enable_received_power();
+        Renderer<RGB> renderer;
+        Interval exposure{Time::from_et(0.0), Time::from_et(1.0)};
+        SceneView<RGB> scene_view(scene, exposure, camera, ObservationMode::TRUE_STATE, 1);
+        warnings.clear();
+        renderer.render(scene_view, frame_buffer);
+
+        const bool built = std::any_of(warnings.begin(), warnings.end(), [](const auto& message) {
+            return message.find("unresolved object's own defocus") != std::string::npos;
+        });
+        CHECK(built == c.visible);
+        double light = 0.0;
+        const Image<RGB>& image = frame_buffer.received_power();
+        for (std::size_t i = 0; i < image.size(); ++i) {
+            light += static_cast<double>(image[i][1]);
+        }
+        CHECK((light > 0.0) == c.visible);
     }
 }
