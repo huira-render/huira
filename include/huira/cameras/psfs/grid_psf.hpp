@@ -45,6 +45,11 @@ namespace huira {
  * GridPsf(const GridPsf&, double)), and held as pixel-integrated samples, which sum over the
  * pixels to all of the light wherever the source is, so that scale() is 1.
  *
+ * Without a PSF, a source is the defocus blur alone, a uniform disc, or in focus a point (see
+ * disc()). A disc under EXACT_DISC pixel widths across its radius, or a point, has no samples:
+ * each pixel's light is the disc's area within it, and a line's that integrated along the line,
+ * computed exactly where it is drawn.
+ *
  * A moving source is drawn as a line integral of its pixels' light along each straight piece of
  * its path: from tables for the piece's direction (see Line and draw_line()), which pay for
  * themselves once enough pieces share it, or else directly (see draw_line_direct()).
@@ -73,6 +78,13 @@ class GridPsf {
     /// The most memory the tables lines are drawn from are kept in: beyond it, those used least
     /// recently are dropped, and made again if needed.
     static constexpr std::size_t LINE_CACHE_BUDGET = 8 * MEMORY_BUDGET;
+
+    /// The largest disc, by its radius in pixel widths, drawn exactly rather than from samples
+    /// (see disc()). A pixel's light from a smaller one bends sharply within its radius of the
+    /// pixel's edges, which a spline through samples every SAMPLE_STEP / 4 pixels rings across:
+    /// by about 2e-3 of the source's light at a radius of 0.15, and 4e-2 at 0.01, against 6e-5
+    /// at this one.
+    static constexpr double EXACT_DISC = 0.5;
 
     GridPsf(PSF<TSpectral>& psf, double aspect);
     GridPsf(const GridPsf& in_focus, double blur);
@@ -200,8 +212,11 @@ class GridPsf {
     /// The pixel's height over its width.
     [[nodiscard]] double aspect() const { return aspect_; }
 
-    /// The samples' spacing, in pixels.
+    /// The samples' spacing, in pixels; 0 for a disc drawn exactly (see exact()).
     [[nodiscard]] double step() const { return step_; }
+
+    /// Whether this is a disc, or a point, drawn exactly rather than from samples (see disc()).
+    [[nodiscard]] bool exact() const { return exact_blur_ >= 0.0; }
 
     [[nodiscard]] std::size_t memory_bytes() const;
 
@@ -228,6 +243,8 @@ class GridPsf {
     /// the source is, as they do when integrated from point samples: then scale() is 1.
     bool sums_to_one_ = false;
     double step_ = 1.0;
+    /// For a disc drawn exactly, its radius in pixel widths, or 0 for a point; otherwise -1.
+    double exact_blur_ = -1.0;
     int nx_ = 0;
     int ny_ = 0;
     double x0_ = 0.0; ///< The first coefficient's position, in pixels.
@@ -347,6 +364,11 @@ class GridPsf {
     [[nodiscard]] Light interpolate_(const Axis& x, const Axis& y) const;
     [[nodiscard]] Light interpolate_(double x, double y) const;
     [[nodiscard]] Light sum_over_pixels_(double source_x, double source_y) const;
+    [[nodiscard]] Light exact_light_(double dx, double dy) const;
+    [[nodiscard]] Light
+    exact_line_light_(double qx, double qy, double ex, double ey, double length) const;
+    void build_line_envelope_();
+    static void check_light_(const Light& total);
     void build_from_samples_(std::vector<double>& samples, int count_x, int count_y);
     void build_point_sampled_();
     void build_bounds_();

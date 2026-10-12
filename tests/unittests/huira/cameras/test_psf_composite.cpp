@@ -206,6 +206,36 @@ TEST_CASE("defocus_image() is the uniform disc of defocus_blur_radius()", "[came
     CHECK_THROWS(camera.defocus_blur_radius(units::Meter(-1.0)));
 }
 
+TEST_CASE("Without diffraction or a set PSF, psf_image() is defocus_image(), however small the "
+          "blur",
+          "[cameras][psf][defocus]")
+{
+    // Before, a disc under about a quarter of a pixel was drawn from a spline through samples of
+    // its light, which rang across the pixels' edges: at 0.003 px, a pixel was off by a tenth of
+    // the light, and the image summed to 1.008 or 0.976 of it, depending on the offset.
+    constexpr int RADIUS = 4;
+    CameraModel<RGB> camera;
+    configure(camera);
+    camera.enable_diffraction(false);
+    // 2.67 px per diopter (see the test case above):
+    const double per_diopter = 0.025 * 0.0025 / (6e-3 / 256.0);
+    for (const double blur : {0.0, 0.003, 0.03, 0.3, 0.7}) {
+        camera.set_focus_diopters(units::Diopter(blur / per_diopter));
+        for (const float offset : {0.f, 0.21f, 0.49f, 0.5f}) {
+            INFO("blur " << blur << " px, offset " << offset);
+            const Image<RGB> image = camera.psf_image(RADIUS, offset, -0.37f);
+            const Image<RGB> disc = camera.defocus_image(RADIUS, offset, -0.37f);
+            double worst = 0.0;
+            for (std::size_t i = 0; i < image.size(); ++i) {
+                worst = std::max(worst, std::fabs(static_cast<double>(image[i][0] - disc[i][0])));
+            }
+            // Larger discs are drawn from samples, to within 1e-4 of the light:
+            CHECK(worst < (blur < GridPsf<RGB>::EXACT_DISC ? 1e-6 : 1e-4));
+            CHECK(std::fabs(kernel_energy(image, 0) - 1.0) < 1e-4);
+        }
+    }
+}
+
 TEST_CASE("A PSF set without a radius holds its light within the default one", "[cameras][psf]")
 {
     // HarveyShackScatter, like a user's own PSF class, does not set its radius: the camera gives

@@ -101,13 +101,18 @@ ahead. If they are not:
   since it was last precomputed, and information otherwise, so that a camera changed on every
   frame (a focus pull, say) does not warn on every frame.
 - With ``enable_auto_precompute(false)`` it throws. Use this when no render may include that time,
-  such as a timed or hardware-in-the-loop run, and call ``precompute()`` after every change.
+  such as a timed or hardware-in-the-loop run, and call ``precompute()`` after every change. The
+  one exception is an unresolved object whose defocus blur is not a star's: its tables depend on
+  its depth, which only the render knows, so the render builds them either way, and warns (see
+  :doc:`psf_model`).
 
 The image is the same whichever way the tables were built, and whatever order the settings
 were made in.
 
 Setters check their own values straight away: ``set_scatter()`` with a slope of 2 or less and
-no outer angle, for example, throws then rather than at the render. Settings that make sense
+no outer angle, for example, throws then rather than at the render, and ``set_psf()`` and
+``set_measured_psf()`` put the PSF on its grid there and then, refusing one that is anywhere
+negative or not finite, or holds no light in a channel. Settings that make sense
 alone but not together, such as a lens distortion that folds over (or, for the OpenCV model,
 reaches the pole of its rational radial factor) inside the image at the current focal length
 and sensor, are reported by ``precompute()`` or the render.

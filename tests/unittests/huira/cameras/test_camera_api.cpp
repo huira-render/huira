@@ -109,7 +109,7 @@ TEST_CASE("Depth of field is on by default, and unresolved sources' defocus foll
     camera.enable_depth_of_field(false);
     CHECK_FALSE(camera.depth_of_field_enabled());
     CHECK(camera.defocus_blur_radius() == 0.f);
-    CHECK_FALSE(camera.is_precomputed()); // the defocus stamps are left over
+    CHECK_FALSE(camera.is_precomputed()); // the tables are for the blur
     camera.precompute();
     CHECK(camera.is_precomputed());
 

@@ -131,13 +131,14 @@ piece of their path, rather than as a row of stamps, so streaks do not bead. For
 scattered light the integral comes from the profile's line spread; for a set PSF, from tables
 of the grid's line integrals for the piece's direction (4096 directions around the turn), or
 directly when too few pieces share a direction to pay for them. With neither diffraction nor a
-set PSF, and in focus, there is nothing to integrate: the light is put in the pixel each of the
-path's samples falls in.
+set PSF, a point in focus, or a defocus disc under half a pixel across its radius, is integrated
+exactly: each pixel gets the length of the path within it, or the disc's area within it
+integrated along the path.
 
 **Unresolved objects at a finite range** are blurred by the defocus at their own depth. Those
 whose blur matches a star's within :math:`2.5 \times 10^{-6}` px share the stars' tables; others
 get tables of their own, built by the render that first needs them (even with
-``enable_auto_precompute(false)``) and kept while they are used. For a 125 mm f/3.3 lens with
+``enable_auto_precompute(false)``, which then logs a warning) and kept while they are used. For a 125 mm f/3.3 lens with
 8.5 µm pixels (278.5 px of blur per diopter), each takes about 2 s and 10 MB; focused at
 infinity, objects beyond about 2,800 km count as at infinity, and nearer ones that move in depth
 can need new tables every frame.

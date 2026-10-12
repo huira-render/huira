@@ -1,9 +1,11 @@
 
 #include <cmath>
+#include <string>
 
 #include "huira/concepts/spectral_concepts.hpp"
 #include "huira/core/constants.hpp"
 #include "huira/core/types.hpp"
+#include "huira/util/logger.hpp"
 
 namespace huira {
 
@@ -15,6 +17,8 @@ namespace huira {
  * @param pitch_y The pixel pitch in the y direction in meters.
  * @param aperture_diameter The diameter of the circular aperture in meters.
  * @param radius How far from the source, in pixels, the pattern is taken (see PSF::radius()).
+ * @throws std::runtime_error if a length is not positive and finite, the f-number is not finite,
+ *         or the radius is out of range (see PSF::set_radius()).
  */
 template <IsSpectral TSpectral>
 AiryDisk<TSpectral>::AiryDisk(units::Meter focal_length,
@@ -25,6 +29,25 @@ AiryDisk<TSpectral>::AiryDisk(units::Meter focal_length,
     : f_number_(focal_length.to_si() / aperture_diameter.to_si()),
       pixel_pitch_(pitch_x.to_si(), pitch_y.to_si())
 {
+    for (const double length : {focal_length.to_si(),
+                                pitch_x.to_si(),
+                                pitch_y.to_si(),
+                                aperture_diameter.to_si(),
+                                f_number_}) {
+        if (!(length > 0.0) || !std::isfinite(length)) {
+            HUIRA_THROW_ERROR("AiryDisk - The focal length, pixel pitches and aperture diameter "
+                              "must be positive and finite: " +
+                              std::to_string(focal_length.to_si()) + ", " +
+                              std::to_string(pitch_x.to_si()) + ", " +
+                              std::to_string(pitch_y.to_si()) + ", " +
+                              std::to_string(aperture_diameter.to_si()) + " m");
+        }
+    }
+    if (!(pixel_pitch_.x > 0.f) || !(pixel_pitch_.y > 0.f) || !std::isfinite(pixel_pitch_.x) ||
+        !std::isfinite(pixel_pitch_.y)) {
+        HUIRA_THROW_ERROR("AiryDisk - The pixel pitches must be positive and finite in single "
+                          "precision");
+    }
     this->set_radius(radius);
 }
 

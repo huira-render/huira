@@ -340,6 +340,8 @@ class SensorModel {
   protected:
     SensorConfig<TSpectral> config_;
 
+    static void check_bias_(float bias_level_dn, int bit_depth, const char* caller);
+
     /// The noise seed, and how many readouts have been made since it was set. Together with
     /// the row they key each row's random numbers (see detail::SensorRandom).
     std::uint64_t noise_seed_ = detail::next_default_noise_seed();

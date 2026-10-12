@@ -385,7 +385,9 @@ inline void bind_camera_model_handle(py::module_& m)
              &HandleType::diffraction_enabled,
              "Whether the aperture's diffraction pattern is on (the default).")
         .def("set_measured_psf",
-             &HandleType::set_measured_psf,
+             // Named by its type, past the stub for the old signature:
+             static_cast<void (HandleType::*)(const Image<TSpectral>&, float, PSFSampling, PSFFocus)
+                             const>(&HandleType::set_measured_psf),
              py::arg("data"),
              py::arg("samples_per_pixel"),
              py::arg("sampling"),

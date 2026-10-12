@@ -12,6 +12,8 @@ namespace huira {
  * @param falloff_exponent Power-law exponent b (typically 2 to 3).
  * @param r0 Shoulder radius in pixels.
  * @param cutoff_radius Hard cutoff radius in pixels (0 means no cutoff).
+ * @throws std::runtime_error if the exponent or r0 is not positive and finite, r0 is too small to
+ *         square, or the cutoff is negative or NaN.
  */
 template <IsSpectral TSpectral>
 HarveyShackScatter<TSpectral>::HarveyShackScatter(float falloff_exponent,
@@ -34,6 +36,10 @@ HarveyShackScatter<TSpectral>::HarveyShackScatter(float falloff_exponent,
                           std::to_string(cutoff_radius));
     }
     r0_inv_sq_ = 1.f / (r0 * r0);
+    if (!std::isfinite(r0_inv_sq_)) {
+        HUIRA_THROW_ERROR("HarveyShackScatter - r0 is too small to square in single precision: " +
+                          std::to_string(r0));
+    }
 }
 
 /**

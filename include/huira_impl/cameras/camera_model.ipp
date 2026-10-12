@@ -610,12 +610,23 @@ Mat3<float> CameraModel<TSpectral>::intrinsic_matrix() const
  * @tparam TAperture Aperture model type
  * @tparam Args Constructor arguments for the aperture
  * @param args Arguments to construct the aperture
+ * @throws std::runtime_error if the aperture's area or bounding radius is not positive and
+ *         finite; the camera then keeps the aperture it had.
  */
 template <IsSpectral TSpectral>
 template <IsAperture TAperture, typename... Args>
 void CameraModel<TSpectral>::set_aperture(Args&&... args)
 {
-    aperture_ = std::make_unique<TAperture>(std::forward<Args>(args)...);
+    auto aperture = std::make_unique<TAperture>(std::forward<Args>(args)...);
+    // An aperture of the user's own may not check itself:
+    const double area = aperture->get_area().to_si();
+    const double radius = aperture->get_bounding_radius().to_si();
+    if (!(area > 0.0) || !std::isfinite(area) || !(radius > 0.0) || !std::isfinite(radius)) {
+        HUIRA_THROW_ERROR("CameraModel::set_aperture - The aperture's area and bounding radius "
+                          "must be positive and finite: " +
+                          std::to_string(area) + " m^2, " + std::to_string(radius) + " m");
+    }
+    aperture_ = std::move(aperture);
     aperture_source_ = ApertureSource::Diameter;
     optics_changed_(OpticsInput::Aperture);
 }
@@ -643,7 +654,10 @@ void CameraModel<TSpectral>::enable_diffraction(bool diffraction)
         return;
     }
     diffraction_enabled_ = diffraction;
-    optics_changed_(OpticsInput::CorePSF);
+    // A PSF that was set is drawn either way, until it is cleared:
+    if (psf_ == nullptr) {
+        optics_changed_(OpticsInput::CorePSF);
+    }
 }
 
 /**
@@ -658,11 +672,15 @@ void CameraModel<TSpectral>::enable_diffraction(bool diffraction)
  * PSFFocus::IncludesDefocus). Scattered light, if set, is added to it.
  *
  * It stays in place until clear_psf(), whether diffraction is on or off (see
- * enable_diffraction()).
+ * enable_diffraction()). It is put on its grid here rather than at the next render, which
+ * checks every sample, and takes about a tenth of a second at the default radius.
  *
  * @tparam TPSF PSF model type
  * @tparam Args Constructor arguments for the PSF
  * @param args Arguments to construct the PSF
+ * @throws std::runtime_error if the PSF's constructor throws, or any of its samples within its
+ *         radius is negative or not finite, or they hold no light in a channel (see GridPsf). The
+ *         camera then keeps the PSF it had.
  */
 template <IsSpectral TSpectral>
 template <IsPSF TPSF, typename... Args>
@@ -672,14 +690,24 @@ void CameraModel<TSpectral>::set_psf(Args&&... args)
     if (psf->radius() < 1) {
         psf->set_radius(DEFAULT_PSF_RADIUS);
     }
+    // Put on its grid now, which checks every sample, so that a PSF that is not finite, is
+    // negative or holds no light is refused here, and the camera keeps the one it had:
+    const Vec2<float> pitch = sensor_->pixel_pitch();
+    auto grid = std::make_shared<const GridPsf<TSpectral>>(
+        *psf, static_cast<double>(pitch.y) / static_cast<double>(pitch.x));
     if (psf->includes_defocus()) {
         HUIRA_LOG_WARNING("CameraModel::set_psf - The PSF already holds the camera's defocus, so "
                           "none is added to it. Resolved bodies are still traced with depth of "
                           "field and then blurred by this PSF too, so their defocus is "
                           "approximate at best.");
     }
+    std::lock_guard<std::mutex> lock(optics_mutex_);
     psf_ = std::move(psf);
     optics_changed_(OpticsInput::CorePSF);
+    focused_grid_ = std::move(grid);
+    grid_source_built_at_ = optics_version_;
+    // Blurred from it as a star is when next needed:
+    grid_psf_ = nullptr;
 }
 
 /**
@@ -697,6 +725,8 @@ void CameraModel<TSpectral>::set_psf(Args&&... args)
  *                 (see PSFSampling).
  * @param focus Whether the samples are a point's in focus, which the camera's focus blurs as it
  *              blurs diffraction, or already hold the defocus the camera gives (see PSFFocus).
+ * @throws std::runtime_error if the data is not a valid measurement (see MeasuredPSF); the
+ *         camera then keeps the PSF it had.
  */
 template <IsSpectral TSpectral>
 void CameraModel<TSpectral>::set_measured_psf(const Image<TSpectral>& data,
@@ -812,8 +842,7 @@ Image<TSpectral> CameraModel<TSpectral>::psf_image(int radius,
     }
 
     // Otherwise the scattered light's share from its tables, and the rest from the PSF that
-    // was set, as the renderer draws a still source with it, or all in the pixel the source
-    // falls in without one:
+    // was set, or without one the defocus blur, as the renderer draws a still source:
     const double scattered = scatter_enabled_ ? static_cast<double>(scatter_fraction_) : 0.0;
     const int size = 2 * radius + 1;
     Image<TSpectral> image(size, size, TSpectral{0.f});
@@ -824,14 +853,6 @@ Image<TSpectral> CameraModel<TSpectral>::psf_image(int radius,
         }
     }
     const auto core = static_cast<float>(1.0 - scattered);
-    if (grid == nullptr) {
-        const auto x = static_cast<long>(std::floor(static_cast<double>(x_offset) + 0.5)) + radius;
-        const auto y = static_cast<long>(std::floor(static_cast<double>(y_offset) + 0.5)) + radius;
-        if (x >= 0 && x < size && y >= 0 && y < size) {
-            image(static_cast<int>(x), static_cast<int>(y)) += TSpectral{core};
-        }
-        return image;
-    }
     // The center pixel covers [0, 1) x [0, 1):
     const auto scale =
         grid->scale(0.5 + static_cast<double>(x_offset), 0.5 + static_cast<double>(y_offset));
@@ -933,9 +954,10 @@ Image<TSpectral> CameraModel<TSpectral>::defocus_image(int radius,
     const int size = 2 * radius + 1;
     Image<TSpectral> image(size, size, TSpectral{0.f});
     if (blur == 0.0) {
-        const auto x = static_cast<long>(std::floor(static_cast<double>(x_offset) + 0.5)) + radius;
-        const auto y = static_cast<long>(std::floor(static_cast<double>(y_offset) + 0.5)) + radius;
-        if (x >= 0 && x < size && y >= 0 && y < size) {
+        // In double, which holds any offset, until it is known to be within the image:
+        const double x = std::floor(static_cast<double>(x_offset) + 0.5) + radius;
+        const double y = std::floor(static_cast<double>(y_offset) + 0.5) + radius;
+        if (x >= 0.0 && x < size && y >= 0.0 && y < size) {
             image(static_cast<int>(x), static_cast<int>(y)) = TSpectral{1.f};
         }
         return image;
@@ -1124,6 +1146,7 @@ void CameraModel<TSpectral>::precompute()
 {
     std::lock_guard<std::mutex> lock(optics_mutex_);
     explicitly_precomputed_ = true;
+    warned_object_build_ = false;
     if (geometry_current_() && is_precomputed_locked_()) {
         check_distortion_("CameraModel::precompute");
         return;
@@ -1158,8 +1181,14 @@ bool CameraModel<TSpectral>::is_precomputed() const
  * @brief Choose what a render does when the camera's geometry or optics are out of date.
  *
  * Enabled by default: the render builds them, as precompute() would, and logs the time taken.
- * Disabled, the render throws instead, which guarantees that no render includes that time: a
- * timed or hardware-in-the-loop run can disable it and call precompute() after every change.
+ * Disabled, the render throws instead, which keeps that time out of every render: a timed or
+ * hardware-in-the-loop run can disable it and call precompute() after every change.
+ *
+ * The exception is an unresolved object whose defocus blur is not a star's (see psf_image()):
+ * what it is drawn from depends on its depth, which only the render knows, so the render builds
+ * it the first time that blur is needed either way, which for the aperture's diffraction can
+ * take a second or two. Disabled, the render warns when it does, once until precompute() is
+ * called again. Objects far enough away share the stars'.
  *
  * @param auto_precompute True for the render to build what is out of date, false to throw.
  */
@@ -1223,8 +1252,9 @@ void CameraModel<TSpectral>::precompute_locked_()
     //
     // With a PSF that was set, its share of each source is drawn from it on its grid, blurred by
     // the source's defocus: at its position if still, and along its path if moving. With neither,
-    // it is the defocus blur alone, on a grid of its own, or in focus the pixel the source falls
-    // in. The scattered light, if any, is drawn from its own tables, as diffraction's are.
+    // it is the defocus blur alone, or in focus a point, drawn the same way (see
+    // GridPsf::disc()). The scattered light, if any, is drawn from its own tables, as
+    // diffraction's are.
     //
     // Resolved bodies are convolved with the whole PSF across the frame, in focus, unless
     // enable_psf_convolution(false).
@@ -1283,16 +1313,13 @@ bool CameraModel<TSpectral>::grid_psf_stale_() const
         grid_psf_blur_ != blur) {
         return true;
     }
-    if (psf_ != nullptr) {
-        return focused_grid_ == nullptr || grid_psf_ == nullptr;
-    }
-    return (grid_psf_ == nullptr) != (blur == 0.0);
+    return focused_grid_ == nullptr || grid_psf_ == nullptr;
 }
 
 /**
  * @brief Put a PSF set with set_psf() or set_measured_psf() on its grid, in focus and blurred as
  * a star is by the focus, if out of date (see GridPsf). Without a PSF, a star's defocus blur
- * alone is put on a grid (see GridPsf::disc()), and in focus there is none.
+ * alone, a disc, or in focus a point, is drawn from a GridPsf of its own (see GridPsf::disc()).
  */
 template <IsSpectral TSpectral>
 void CameraModel<TSpectral>::ensure_grid_psf_()
@@ -1305,21 +1332,15 @@ void CameraModel<TSpectral>::ensure_grid_psf_()
     const double aspect = static_cast<double>(pitch.y) / static_cast<double>(pitch.x);
     if (stale_(grid_source_built_at_, {OpticsInput::CorePSF, OpticsInput::PixelPitch})) {
         focused_grid_ =
-            psf_ != nullptr ? std::make_shared<const GridPsf<TSpectral>>(*psf_, aspect) : nullptr;
+            psf_ != nullptr
+                ? std::make_shared<const GridPsf<TSpectral>>(*psf_, aspect)
+                : std::make_shared<const GridPsf<TSpectral>>(GridPsf<TSpectral>::disc(0.0, aspect));
         grid_source_built_at_ = optics_version_;
     }
     const double blur = source_blur_(0.0);
-    if (psf_ != nullptr) {
-        grid_psf_ = blur > 0.0 ? std::make_shared<const GridPsf<TSpectral>>(*focused_grid_, blur)
-                               : focused_grid_;
-    } else {
-        grid_psf_ =
-            blur > 0.0
-                ? std::make_shared<const GridPsf<TSpectral>>(GridPsf<TSpectral>::disc(blur, aspect))
-                : nullptr;
-    }
+    grid_psf_ = blur == 0.0 ? focused_grid_ : blurred_grid_(blur, aspect);
     grid_psf_blur_ = blur;
-    if (grid_psf_ == nullptr) {
+    if (grid_psf_->exact()) {
         return;
     }
 
@@ -1333,6 +1354,34 @@ void CameraModel<TSpectral>::ensure_grid_psf_()
         message << ", blurred by " << blur << " pixels";
     }
     HUIRA_LOG_INFO(message.str());
+}
+
+/// Warns, with auto precompute off, that what an unresolved object is drawn from for its own
+/// blur is being built, as it must be (see enable_auto_precompute()): once until precompute() is
+/// called again. optics_mutex_ must be held.
+template <IsSpectral TSpectral>
+void CameraModel<TSpectral>::note_object_build_()
+{
+    if (auto_precompute_ || warned_object_build_) {
+        return;
+    }
+    warned_object_build_ = true;
+    HUIRA_LOG_WARNING("CameraModel - Building the PSF for an unresolved object's own defocus "
+                      "blur, which depends on its depth, so that even with auto precompute "
+                      "disabled the render builds it the first time that blur is needed. Objects "
+                      "whose blur is a star's share the stars'.");
+}
+
+/// The grid a source with the given blur, in pixel widths, is drawn from: the PSF that was set,
+/// blurred by it, or without one the disc alone (see GridPsf::disc()).
+template <IsSpectral TSpectral>
+std::shared_ptr<const GridPsf<TSpectral>> CameraModel<TSpectral>::blurred_grid_(double blur,
+                                                                                double aspect) const
+{
+    if (psf_ != nullptr) {
+        return std::make_shared<const GridPsf<TSpectral>>(*focused_grid_, blur);
+    }
+    return std::make_shared<const GridPsf<TSpectral>>(GridPsf<TSpectral>::disc(blur, aspect));
 }
 
 /**
@@ -1388,11 +1437,14 @@ void CameraModel<TSpectral>::ensure_render_tables_()
     if (!render_tables_stale_()) {
         return;
     }
-    render_tables_reach_ = tables_reach_();
-    render_tables_blur_ = tables_blur_();
+    // What the tables were built for is recorded only once they are, so that a build that
+    // throws leaves them out of date:
+    const double reach = tables_reach_();
+    const double blur = tables_blur_();
+    render_tables_ = build_psf_tables_(blur, tables_scatter_(), reach);
+    render_tables_reach_ = reach;
+    render_tables_blur_ = blur;
     render_tables_scatter_only_ = !uses_diffraction_();
-    render_tables_ =
-        build_psf_tables_(render_tables_blur_, tables_scatter_(), render_tables_reach_);
     render_tables_built_at_ = optics_version_;
 }
 
@@ -1450,6 +1502,7 @@ CameraModel<TSpectral>::tables_at_locked_(const std::vector<double>& inverse_dep
             continue;
         }
         result.push_back(object_tables_.find(blur, used, [&] {
+            note_object_build_();
             return build_psf_tables_(blur, tables_scatter_(), object_tables_reach_);
         }));
     }
@@ -1498,12 +1551,13 @@ CameraModel<TSpectral>::grids_at_locked_(const std::vector<double>& inverse_dept
             result.push_back(focused_grid_);
         } else {
             result.push_back(object_grids_.find(blur, used, [&] {
-                if (focused_grid_ != nullptr) {
-                    return std::make_shared<const GridPsf<TSpectral>>(*focused_grid_, blur);
+                // A disc drawn exactly takes nothing to build:
+                if (psf_ != nullptr || blur >= GridPsf<TSpectral>::EXACT_DISC) {
+                    note_object_build_();
                 }
                 const Vec2<float> pitch = sensor_->pixel_pitch();
-                return std::make_shared<const GridPsf<TSpectral>>(GridPsf<TSpectral>::disc(
-                    blur, static_cast<double>(pitch.y) / static_cast<double>(pitch.x)));
+                return blurred_grid_(blur,
+                                     static_cast<double>(pitch.y) / static_cast<double>(pitch.x));
             }));
         }
     }
@@ -1598,9 +1652,10 @@ void CameraModel<TSpectral>::ensure_body_convolver_()
             ensure_render_tables_();
             body_tables_ = nullptr;
         } else if (body_tables_stale_()) {
-            body_tables_reach_ = tables_reach_();
+            const double reach = tables_reach_();
+            body_tables_ = build_psf_tables_(0.0, tables_scatter_(), reach);
+            body_tables_reach_ = reach;
             body_tables_scatter_only_ = !uses_diffraction_();
-            body_tables_ = build_psf_tables_(0.0, tables_scatter_(), body_tables_reach_);
             body_tables_built_at_ = optics_version_;
         }
     }
