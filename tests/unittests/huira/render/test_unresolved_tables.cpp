@@ -594,3 +594,59 @@ TEST_CASE("A faint moving source fades out smoothly below the taper",
     REQUIRE(peak > 20.0 * tau);
     CHECK(worst < 2.0 * tau);
 }
+
+TEST_CASE("A source that barely moves is drawn no further out than a still one",
+          "[render][unresolved][psf][streak]")
+{
+    // A source that moves just over the still tolerance (0.01 px) is drawn as a short line. Its
+    // taper was found for an endless line at its light per unit length, about 2 r / length too
+    // bright at a distance r for a line that short: a star drifting 0.02 px was drawn out to
+    // 368 px, where the still star stopped at 15, and a field of such stars took hundreds of
+    // times as long. Beyond where it is drawn, every pixel holds the same share of the light
+    // the taper left out, the frame's least.
+    constexpr int WIDE = 512;
+    const auto farthest_drawn = [&](double drift) {
+        Scene<RGB> scene;
+        auto camera_model = scene.new_camera_model();
+        camera_model.set_pixel_convention(PixelConvention::colmap());
+        camera_model.configure_sensor_from_pitch({WIDE, WIDE}, 8.5_um);
+        camera_model.set_focal_length(units::Meter(FOCAL_PIXELS * 8.5e-6));
+        camera_model.set_fstop(3.3f);
+        auto camera = scene.root.new_instance(camera_model);
+        auto source = scene.root.new_instance(scene.new_unresolved_emitter(units::Watt(FAINT)));
+        const double x = 256.3;
+        const double y = 255.6;
+        const double axis = WIDE / 2.0;
+        source.set_position(units::Meter((x - axis) / FOCAL_PIXELS * RANGE),
+                            units::Meter((y - axis) / FOCAL_PIXELS * RANGE),
+                            units::Meter(RANGE));
+        source.set_velocity(units::MetersPerSecond(drift / FOCAL_PIXELS * RANGE),
+                            units::MetersPerSecond(0.0),
+                            units::MetersPerSecond(0.0));
+        auto frame_buffer = camera_model.make_frame_buffer();
+        frame_buffer.enable_received_power();
+        Renderer<RGB> renderer;
+        Interval exposure{Time::from_et(0.0), Time::from_et(1.0)};
+        SceneView<RGB> scene_view(scene, exposure, camera, ObservationMode::TRUE_STATE, 3);
+        renderer.render(scene_view, frame_buffer);
+        const Image<RGB>& image = frame_buffer.received_power();
+        float least = image[0][1];
+        for (std::size_t i = 0; i < image.size(); ++i) {
+            least = std::min(least, image[i][1]);
+        }
+        double farthest = 0.0;
+        for (int j = 0; j < WIDE; ++j) {
+            for (int i = 0; i < WIDE; ++i) {
+                if (image(i, j)[1] > least) {
+                    farthest = std::max(farthest, std::hypot(i + 0.5 - x, j + 0.5 - y));
+                }
+            }
+        }
+        return farthest;
+    };
+    const double still = farthest_drawn(0.0);
+    const double drifting = farthest_drawn(0.02);
+    INFO("still drawn to " << still << " px, drifting 0.02 px drawn to " << drifting << " px");
+    REQUIRE(still < 100.0);
+    CHECK(drifting < still + 2.0);
+}
