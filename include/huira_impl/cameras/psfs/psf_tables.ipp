@@ -1234,7 +1234,10 @@ void PsfTables<TSpectral>::build_ring_deviation_()
         ring_start_ = std::min(ring_start_, smooth_from_[c]);
         limit = std::max(limit, strip_limit_[c]);
     }
-    const auto count = static_cast<std::size_t>(std::ceil((limit - ring_start_) / RING_STEP)) + 1;
+    // A blur that reaches the end of the tables leaves no rings to follow (and the difference
+    // negative, which must not be cast to an unsigned count):
+    const auto count =
+        static_cast<std::size_t>(std::ceil(std::max(limit - ring_start_, 0.0) / RING_STEP)) + 1;
     std::vector<Values> found(count);
     tbb::parallel_for(std::size_t{0}, count, [&](std::size_t k) {
         const double r = ring_start_ + static_cast<double>(k) * RING_STEP;
