@@ -14,6 +14,8 @@ If you use Huira in published work, please [cite it](#citing-huira).
 
 [![Coverage](https://codecov.io/gh/huira-render/huira/branch/main/graph/badge.svg)](https://app.codecov.io/gh/huira-render/huira/tree/main)
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23333475.svg)](https://doi.org/10.5281/zenodo.23333475)
+
 ![Example Render](https://www.huira.space/assets/examples/gateway_render.png)
 
 ## Installing Huira
@@ -112,6 +114,7 @@ If you use Huira in published work, please cite it. On GitHub, click
   author    = {Gnam, Christopher},
   title     = {Huira},
   year      = {2026},
+  doi       = {10.5281/zenodo.23333475},
   url       = {https://github.com/huira-render/huira}
 }
 ```
