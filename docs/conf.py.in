@@ -8,8 +8,8 @@ sys.path.insert(0, '@CMAKE_CURRENT_SOURCE_DIR@')
 conf_dir = os.path.abspath(os.path.dirname(__file__))
 
 # Project Name and Author:
-project = 'huira'
-copyright = '2025, Christopher Gnam'
+project = 'Huira'
+copyright = '2026, Christopher Gnam'
 author = 'Christopher Gnam'
 
 # Required Extensions:
@@ -65,7 +65,7 @@ breathe_show_include = False
 
 html_theme = "furo"
 html_static_path = ['_static']
-html_logo = '_static/logo/full/white_on_transparent.svg'
+html_favicon = '_static/logo/icon/icon_blue_on_white.svg'
 
 autosectionlabel_prefix_document = True
 
@@ -87,9 +87,7 @@ html_css_files = [
 ]
 
 # Custom JavaScript:
-html_js_files = [
-    'js/logo_link.js',
-]
+html_js_files = []
 
 # Furo theme options:
 html_theme_options = {
@@ -102,5 +100,7 @@ html_theme_options = {
         "color-brand-content": "#5ba3d0",
     },
     "sidebar_hide_name": True,
+    "light_logo": "logo/full/blue_on_transparent.svg",
+    "dark_logo": "logo/full/white_on_transparent.svg",
 }
 
