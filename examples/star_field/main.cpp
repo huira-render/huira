@@ -55,7 +55,8 @@ int main(int argc, char** argv)
     // defocus_blur_radius() with a range, and defocus_image()). Building the PSF's tables takes
     // a moment, so it is done here rather than in the render:
     camera_model.precompute();
-    std::cout << "Defocus blur radius: " << camera_model.defocus_blur_radius() << " px\n";
+    const float blur_radius = camera_model.defocus_blur_radius();
+    std::cout << "Defocus blur radius: " << blur_radius << " px\n";
 
     // Set the observation time
     huira::Time time("2016-09-19T16:22:05.728");

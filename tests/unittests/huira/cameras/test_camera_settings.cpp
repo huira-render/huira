@@ -640,7 +640,10 @@ TEST_CASE("Diffraction can be turned off and on, and a set PSF takes its place u
     Scene<RGB> scene;
     auto camera = scene.new_camera_model();
     camera.configure_sensor_from_pitch({64, 64}, units::Micrometer(10.0));
-    const auto center = [&] { return camera.psf_image(4, 0.f, 0.f)(4, 4)[1]; };
+    const auto center = [&] {
+        const auto pixel = camera.psf_image(4, 0.f, 0.f)(4, 4);
+        return pixel[1];
+    };
     const auto all_in_center = [&] { return std::abs(center() - 1.f) < 1e-6f; };
     const float diffraction = center();
     CHECK(diffraction < 1.f);

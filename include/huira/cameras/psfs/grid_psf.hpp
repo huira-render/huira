@@ -277,6 +277,13 @@ class GridPsf {
     /// collect it (itself, if pixel-integrated; see integrated_()), its scale() at a pixel's
     /// center, and the tables made so far, by direction, with when each was last used.
     struct LineCache {
+        // Holds once_flags and a mutex, so it is neither copied nor moved: copies of the PSF
+        // share it through line_cache_.
+        LineCache() = default;
+        LineCache(const LineCache&) = delete;
+        LineCache& operator=(const LineCache&) = delete;
+        ~LineCache() = default;
+
         std::once_flag collected_once;
         std::shared_ptr<const GridPsf> integrated;
         std::once_flag source_once;

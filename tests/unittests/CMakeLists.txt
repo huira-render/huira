@@ -143,9 +143,11 @@ function(add_unit_test test_name source_file)
         
     endif()
     
-    # Disable the problematic warning for MSVC
     if(MSVC)
-        target_compile_options(${test_name} PRIVATE /wd4868)
+        # /wd4868: left-to-right evaluation of braced initializer lists (Catch2 internals).
+        # /bigobj: the heavily templated renderer, instantiated for several spectral types in
+        # one test, exceeds the default COFF section limit (C1128) on newer toolsets.
+        target_compile_options(${test_name} PRIVATE /wd4868 /bigobj)
     endif()
     
     # Register with CTest and configure JUnit XML output

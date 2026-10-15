@@ -2908,8 +2908,9 @@ std::string CameraModel<TSpectral>::describe() const
         out << num(focus) << " m";
     }
     out << ", depth of field " << on_off(depth_of_field_);
-    if (depth_of_field_ && defocus_blur_radius() > 0.f) {
-        out << ", unresolved sources blurred over " << num(defocus_blur_radius()) << " px";
+    const float blur_radius = depth_of_field_ ? defocus_blur_radius() : 0.f;
+    if (blur_radius > 0.f) {
+        out << ", unresolved sources blurred over " << num(blur_radius) << " px";
     }
     out << "\n";
 

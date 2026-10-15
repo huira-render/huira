@@ -14,6 +14,17 @@ namespace huira {
 
 namespace grid_psf_detail {
 
+/// Replaces out with values rounded to single precision. The narrowing is deliberate (the line
+/// tables are kept in single precision; see build_line_() and direct_setup_()), and explicit here
+/// so that std::vector<float>::assign(double, double) does not narrow silently inside the STL.
+inline void narrow_to_float(const std::vector<double>& values, std::vector<float>& out)
+{
+    out.resize(values.size());
+    std::transform(values.begin(), values.end(), out.begin(), [](double value) {
+        return static_cast<float>(value);
+    });
+}
+
 constexpr std::array<double, 4> GL4_NODES{
     -0.8611363115940526, -0.3399810435848563, 0.3399810435848563, 0.8611363115940526};
 constexpr std::array<double, 4> GL4_WEIGHTS{
@@ -453,7 +464,7 @@ const typename GridPsf<TSpectral>::LineCache& GridPsf<TSpectral>::direct_setup_(
                 }
             }
         }
-        line_cache_->coefficients.assign(q.coefficients_.begin(), q.coefficients_.end());
+        grid_psf_detail::narrow_to_float(q.coefficients_, line_cache_->coefficients);
         const auto spread = static_cast<std::size_t>(std::ceil(3.0 * h * PANEL_BINS));
         auto& limit = line_cache_->panel_limit;
         limit.assign(bins, 2.0 * extent);
@@ -708,8 +719,8 @@ typename GridPsf<TSpectral>::Line GridPsf<TSpectral>::build_line_(double cos, do
             psf_tables_detail::bspline_coefficients(&cumulative[column * N + c], count, count * N);
         }
     });
-    line.spread.assign(spread.begin(), spread.end());
-    line.cumulative.assign(cumulative.begin(), cumulative.end());
+    grid_psf_detail::narrow_to_float(spread, line.spread);
+    grid_psf_detail::narrow_to_float(cumulative, line.cumulative);
 
     return line;
 }

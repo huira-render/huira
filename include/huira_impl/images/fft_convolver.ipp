@@ -253,6 +253,13 @@ struct FftState {
     FftPrepared<double> doubles;
     FftPrepared<float> singles;
 
+    // Neither precision's buffers can be copied, so neither can the state: FftConvolver moves
+    // the pointer to it instead.
+    FftState() = default;
+    FftState(const FftState&) = delete;
+    FftState& operator=(const FftState&) = delete;
+    ~FftState() = default;
+
     template <class Real>
     FftPrepared<Real>& prepared()
     {

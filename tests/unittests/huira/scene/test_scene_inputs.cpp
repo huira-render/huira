@@ -22,6 +22,11 @@ constexpr float INF_F = std::numeric_limits<float>::infinity();
 class TestNode : public Node<RGB> {
   public:
     TestNode() : Node<RGB>(nullptr) {}
+
+    TestNode(const TestNode&) = delete;
+    TestNode& operator=(const TestNode&) = delete;
+    TestNode(TestNode&&) = delete;
+    TestNode& operator=(TestNode&&) = delete;
 };
 } // namespace
 

@@ -57,6 +57,14 @@ class PsfConvolver {
         bool operator==(const Parts&) const = default;
     };
 
+    // Each part's FftConvolver owns FFT plans and buffers that cannot be copied, only moved.
+    PsfConvolver() = default;
+    PsfConvolver(const PsfConvolver&) = delete;
+    PsfConvolver& operator=(const PsfConvolver&) = delete;
+    PsfConvolver(PsfConvolver&&) noexcept = default;
+    PsfConvolver& operator=(PsfConvolver&&) noexcept = default;
+    ~PsfConvolver() = default;
+
     void set_parts(const Parts& parts, Resolution resolution);
     void set_tables(std::shared_ptr<const PsfTables<TSpectral>> tables, Resolution resolution)
     {
