@@ -2,6 +2,7 @@
 
 #include "huira/concepts/spectral_concepts.hpp"
 #include "huira/core/spectral_bins_py.ipp"
+#include "huira/geometry/vertex_py.ipp"
 #include "huira/handles/assets/light_handle_py.ipp"
 #include "huira/handles/assets/model_handle_py.ipp"
 #include "huira/handles/assets/primitive_handle_py.ipp"
@@ -42,6 +43,10 @@ void bind_spectral(pybind11::module_& m)
 {
     huira::bind_spectral_units_for_type<TSpectral>(m);
     huira::bind_spectral_bins<TSpectral>(m);
+
+    // --- Geometry ---
+    // The vertices Scene.add_mesh() takes. After the spectral bins, which a vertex's albedo is.
+    huira::bind_vertex<TSpectral>(m);
 
     // --- Geometry handles ---
     huira::bind_geometry_handle<TSpectral>(m);
