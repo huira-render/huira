@@ -235,7 +235,7 @@ void bind_spectral_quantity_type(py::module& m, const std::string& name)
         .def(py::self != py::self);
 }
 
-static void bind_units(py::module& m)
+inline void bind_units(py::module& m)
 {
     // ============================================== //
     // === Bind Scalar Quantity Types (Quantity)  === //

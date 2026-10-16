@@ -60,7 +60,7 @@ inline void StarCatalog::write_star_data(const fs::path& filepath)
                    " stars written to: " + filepath.string());
 }
 
-StarCatalog StarCatalog::read_star_data(const fs::path& filepath, float maximum_magnitude)
+inline StarCatalog StarCatalog::read_star_data(const fs::path& filepath, float maximum_magnitude)
 {
     std::ifstream in(filepath, std::ios::binary);
     if (!in) {

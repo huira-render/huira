@@ -63,7 +63,8 @@ and the README's feature list are updated by the maintainer when a release is cu
   `tests/unittests/explicit_instantiations.cpp`, so that coverage includes all of their members.
 - **Python bindings.** If you change a C++ interface that is exposed to Python, update its binding
   (the matching `*_py.ipp` under `bindings/python/include/`) in the same pull request. New bindings
-  are registered in `bindings/python/src/huira_module.cpp`.
+  are registered in `bind_spectral()` (`bindings/python/src/bind_spectral.hpp`) if they are
+  templated on the spectral type, and in `bind_core()` (`bindings/python/src/core.cpp`) if not.
 - **Documentation.** Public APIs need Doxygen comments (see
   [Documentation comments](#documentation-comments)). A new public class also needs a page under
   `docs/api_reference/cpp_api/`, and under `docs/api_reference/python_api/` if it is exposed to
@@ -154,6 +155,10 @@ The main rules:
 
 - Huira is header-only. Declarations go in `include/huira/**/*.hpp` and definitions in the matching
   `include/huira_impl/**/*.ipp`, which is included at the bottom of its `.hpp`.
+- Since a program may include Huira from any number of its source files, a function or variable
+  defined outside a class must be a template, `constexpr` or `inline`. Otherwise it is defined
+  again in each source file, and the program doesn't link (`test_translation_units` checks this).
+  Each header includes what it uses, rather than relying on what was included before it.
 - All library code lives in the `huira` namespace. Sub-namespaces such as `huira::detail` are fine.
 - Huira uses C++20, but only the parts that work with GCC, Clang and MSVC on Linux, macOS and
   Windows.
