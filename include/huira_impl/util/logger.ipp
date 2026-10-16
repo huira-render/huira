@@ -24,7 +24,7 @@ namespace huira {
  *
  * @return std::string Formatted log entry string
  */
-std::string LogEntry::to_string() const
+inline std::string LogEntry::to_string() const
 {
     std::ostringstream oss;
     auto time_t = std::chrono::system_clock::to_time_t(timestamp);
@@ -50,7 +50,7 @@ std::string LogEntry::to_string() const
  * @param level LogLevel to convert
  * @return const char* String representation of the log level
  */
-const char* LogEntry::level_to_string(LogLevel level)
+inline const char* LogEntry::level_to_string(LogLevel level)
 {
     switch (level) {
     case LogLevel::Debug:
@@ -86,7 +86,7 @@ HUIRA_PER_MODULE_STATE_END
  * - Debug and info console output disabled
  * - Crash handler automatically installed
  */
-Logger::Logger()
+inline Logger::Logger()
     : buffer_(1000), write_index_(0), min_level_(LogLevel::Info), crash_handler_enabled_(false),
       console_debug_(false), console_info_(false),
       console_warning_(true) // Warning is on by default
@@ -101,7 +101,7 @@ Logger::Logger()
 /**
  * @brief Destructor for the logger.
  */
-Logger::~Logger() = default;
+inline Logger::~Logger() = default;
 
 /**
  * @brief Set the minimum log level.
@@ -110,7 +110,7 @@ Logger::~Logger() = default;
  *
  * @param level Minimum severity level to log
  */
-void Logger::set_level(LogLevel level)
+inline void Logger::set_level(LogLevel level)
 {
     instance().min_level_.store(level, std::memory_order_relaxed);
 }
@@ -120,7 +120,7 @@ void Logger::set_level(LogLevel level)
  *
  * @return LogLevel Current minimum log level
  */
-LogLevel Logger::get_level()
+inline LogLevel Logger::get_level()
 {
     return instance().min_level_.load(std::memory_order_relaxed);
 }
@@ -133,7 +133,7 @@ LogLevel Logger::get_level()
  *
  * @param size New buffer size (minimum 1)
  */
-void Logger::set_buffer_size(size_t size)
+inline void Logger::set_buffer_size(size_t size)
 {
     if (size == 0) {
         size = 1;
@@ -159,7 +159,7 @@ void Logger::set_buffer_size(size_t size)
  *
  * @return size_t Number of log entries that can be stored
  */
-size_t Logger::get_buffer_size()
+inline size_t Logger::get_buffer_size()
 {
     return instance().buffer_.size();
 }
@@ -172,7 +172,7 @@ size_t Logger::get_buffer_size()
  *
  * @param sink Callback function to receive log entries
  */
-void Logger::set_custom_sink(CustomSink sink)
+inline void Logger::set_custom_sink(CustomSink sink)
 {
     instance().custom_sink_ = std::move(sink);
 }
@@ -180,7 +180,7 @@ void Logger::set_custom_sink(CustomSink sink)
 /**
  * @brief Clear the custom output sink.
  */
-void Logger::clear_custom_sink()
+inline void Logger::clear_custom_sink()
 {
     instance().custom_sink_ = nullptr;
 }
@@ -194,7 +194,7 @@ void Logger::clear_custom_sink()
  * @param level Severity level of the message
  * @param message Message to log
  */
-void Logger::log(LogLevel level, const std::string& message)
+inline void Logger::log(LogLevel level, const std::string& message)
 {
     if (level < instance().min_level_.load(std::memory_order_relaxed)) {
         return;
@@ -227,7 +227,7 @@ void Logger::log(LogLevel level, const std::string& message)
  * @param filepath Path to output file (empty for platform-specific default)
  * @return std::string Actual path where log was written, or empty on failure
  */
-std::string Logger::dump_to_file(const std::string& filepath)
+inline std::string Logger::dump_to_file(const std::string& filepath)
 {
     std::filesystem::path actual_path;
 
@@ -280,7 +280,7 @@ std::string Logger::dump_to_file(const std::string& filepath)
  *
  * @param enable True to enable crash handling
  */
-void Logger::enable_crash_handler(bool enable)
+inline void Logger::enable_crash_handler(bool enable)
 {
     instance().crash_handler_enabled_.store(enable, std::memory_order_relaxed);
     if (enable) {
@@ -295,7 +295,7 @@ void Logger::enable_crash_handler(bool enable)
  *
  * @param enable True to enable debug console output
  */
-void Logger::enable_console_debug(bool enable)
+inline void Logger::enable_console_debug(bool enable)
 {
     instance().console_debug_.store(enable, std::memory_order_relaxed);
     if (enable) {
@@ -313,7 +313,7 @@ void Logger::enable_console_debug(bool enable)
  *
  * @param enable True to enable info console output
  */
-void Logger::enable_console_info(bool enable)
+inline void Logger::enable_console_info(bool enable)
 {
     instance().console_info_.store(enable, std::memory_order_relaxed);
     if (enable) {
@@ -332,7 +332,7 @@ void Logger::enable_console_info(bool enable)
  *
  * @param enable True to enable warning console output
  */
-void Logger::enable_console_warning(bool enable)
+inline void Logger::enable_console_warning(bool enable)
 {
     instance().console_warning_.store(enable, std::memory_order_relaxed);
     if (!enable) {
@@ -347,7 +347,7 @@ void Logger::enable_console_warning(bool enable)
  *
  * @return bool True if debug console output is enabled
  */
-bool Logger::is_console_debug_enabled()
+inline bool Logger::is_console_debug_enabled()
 {
     return instance().console_debug_.load(std::memory_order_relaxed);
 }
@@ -357,7 +357,7 @@ bool Logger::is_console_debug_enabled()
  *
  * @return bool True if info console output is enabled
  */
-bool Logger::is_console_info_enabled()
+inline bool Logger::is_console_info_enabled()
 {
     return instance().console_info_.load(std::memory_order_relaxed);
 }
@@ -367,7 +367,7 @@ bool Logger::is_console_info_enabled()
  *
  * @return bool True if warning console output is enabled
  */
-bool Logger::is_console_warning_enabled()
+inline bool Logger::is_console_warning_enabled()
 {
     return instance().console_warning_.load(std::memory_order_relaxed);
 }
@@ -380,7 +380,7 @@ bool Logger::is_console_warning_enabled()
  *
  * @param log_path Path to the dumped log file
  */
-void Logger::output_crash_report(const std::string& log_path)
+inline void Logger::output_crash_report(const std::string& log_path)
 {
     if (!log_path.empty()) {
         std::cerr << red("HUIRA UNCAUGHT EXCEPTION") << "\n";
@@ -407,7 +407,7 @@ void Logger::output_crash_report(const std::string& log_path)
  *
  * @param signal Signal number that triggered the handler
  */
-void Logger::handle_crash(int signal)
+inline void Logger::handle_crash(int signal)
 {
     auto& logger = Logger::instance();
     if (!logger.crash_handler_enabled_.load(std::memory_order_relaxed)) {
@@ -452,7 +452,7 @@ void Logger::handle_crash(int signal)
  * @param exception_info Windows exception information structure
  * @return LONG EXCEPTION_CONTINUE_SEARCH to continue exception handling
  */
-long __stdcall Logger::windows_exception_handler(::_EXCEPTION_POINTERS* exception_info)
+inline long __stdcall Logger::windows_exception_handler(::_EXCEPTION_POINTERS* exception_info)
 {
     auto& logger = Logger::instance();
     if (!logger.crash_handler_enabled_.load(std::memory_order_relaxed)) {
@@ -478,7 +478,7 @@ long __stdcall Logger::windows_exception_handler(::_EXCEPTION_POINTERS* exceptio
  * dumps the log, outputs a crash report, and calls std::abort(). Ensures only
  * one crash report is generated per process.
  */
-[[noreturn]] void Logger::handle_terminate()
+[[noreturn]] inline void Logger::handle_terminate()
 {
     auto& logger = Logger::instance();
     if (!logger.crash_handler_enabled_.load(std::memory_order_relaxed)) {
@@ -522,7 +522,7 @@ long __stdcall Logger::windows_exception_handler(::_EXCEPTION_POINTERS* exceptio
  * Uses compiler pragmas to suppress warnings about potentially-throwing functions
  * in extern C contexts, as the handlers are designed to catch all exceptions internally.
  */
-void Logger::install_crash_handlers()
+inline void Logger::install_crash_handlers()
 {
     // Suppress C5039: passing potentially-throwing function to extern C function
     // Our handlers are carefully designed to catch all exceptions internally

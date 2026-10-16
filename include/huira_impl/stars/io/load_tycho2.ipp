@@ -12,7 +12,7 @@
 namespace fs = std::filesystem;
 
 namespace huira {
-static std::size_t count_lines_(const fs::path& filepath)
+inline std::size_t count_lines_(const fs::path& filepath)
 {
     std::ifstream file(filepath, std::ios::binary);
 
@@ -23,7 +23,7 @@ static std::size_t count_lines_(const fs::path& filepath)
     return static_cast<std::size_t>(count);
 }
 
-static bool has_mean_position_(const std::string& line)
+inline bool has_mean_position_(const std::string& line)
 {
     if (line.size() < 14) {
         return false;
@@ -31,7 +31,7 @@ static bool has_mean_position_(const std::string& line)
     return line[13] != 'X';
 }
 
-static double read_entry_(const std::string& line, std::size_t start, std::size_t end)
+inline double read_entry_(const std::string& line, std::size_t start, std::size_t end)
 {
     if (start >= line.size()) {
         return std::numeric_limits<double>::quiet_NaN();
@@ -51,13 +51,13 @@ static double read_entry_(const std::string& line, std::size_t start, std::size_
     }
 }
 
-static bool is_valid_line_(const std::string& line)
+inline bool is_valid_line_(const std::string& line)
 {
     // Data lines start with a digit (TYC1 number)
     return !line.empty() && std::isdigit(static_cast<unsigned char>(line[0]));
 }
 
-std::vector<StarData> read_tycho2_dat(const fs::path& filepath)
+inline std::vector<StarData> read_tycho2_dat(const fs::path& filepath)
 {
     std::vector<StarData> star_data(count_lines_(filepath));
     std::ifstream file(filepath);
@@ -138,7 +138,7 @@ std::vector<StarData> read_tycho2_dat(const fs::path& filepath)
     return star_data;
 }
 
-std::vector<StarData> read_tycho2_suppl(const fs::path& filepath)
+inline std::vector<StarData> read_tycho2_suppl(const fs::path& filepath)
 {
     std::vector<StarData> star_data(count_lines_(filepath));
     std::ifstream file(filepath);

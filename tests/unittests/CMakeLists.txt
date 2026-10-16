@@ -115,8 +115,9 @@ endif()
 ##############################
 ### Test Creation Function ###
 ##############################
+# Any sources after the first are built into the test too.
 function(add_unit_test test_name source_file)
-    add_executable(${test_name} ${source_file})
+    add_executable(${test_name} ${source_file} ${ARGN})
 
     # Tests include shared test code, such as the independent reference in reference/, from here
     target_include_directories(${test_name} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
@@ -181,6 +182,13 @@ foreach(source_file ${UNIT_TESTS})
     # Create the test
     add_unit_test(${test_name} ${source_file})
 endforeach()
+
+# Two source files that both include all of Huira, in one test: it doesn't link if a header
+# defines anything that isn't a template, constexpr or inline (see test_translation_units.cpp).
+add_unit_test(test_translation_units
+    huira/test_translation_units.cpp
+    huira/translation_units_other.cpp
+)
 
 
 #############################

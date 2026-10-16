@@ -1,5 +1,6 @@
 #pragma once
 
+#include "huira/handles/handle_py.ipp"
 #include "huira/handles/materials/texture_handle.hpp"
 #include "pybind11/pybind11.h"
 #include "pybind11/stl.h"
