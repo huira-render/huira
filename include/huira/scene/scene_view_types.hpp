@@ -5,6 +5,7 @@
 
 #include "huira/concepts/spectral_concepts.hpp"
 #include "huira/core/transform.hpp"
+#include "huira/scene/object_ids.hpp"
 
 namespace huira {
 // Forward declarations
@@ -45,5 +46,6 @@ template <IsSpectral TSpectral>
 struct PrimitiveBatch {
     std::shared_ptr<Primitive<TSpectral>> primitive;
     std::vector<std::vector<Transform<float>>> instances; // Instances Transforms at N times
+    std::vector<ObjectIds> ids;                           // What placed each instance
 };
 } // namespace huira

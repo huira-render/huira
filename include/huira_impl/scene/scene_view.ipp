@@ -434,6 +434,25 @@ template <IsSpectral TSpectral>
 }
 
 /**
+ * @brief Returns the IDs of the scene objects a hit landed on.
+ * @param hit The hit record to identify.
+ * @return The geometry, model, instance and part hit (see ObjectIds), or NO_OBJECT_ID for
+ *         each if the hit is invalid or on a light.
+ */
+template <IsSpectral TSpectral>
+ObjectIds SceneView<TSpectral>::object_ids(const HitRecord& hit) const
+{
+    if (!hit.hit() || hit.inst_id >= instance_mappings_.size()) {
+        return ObjectIds{};
+    }
+    const auto& mapping = instance_mappings_[hit.inst_id];
+    if (mapping.type != GeometryType::Primitive) {
+        return ObjectIds{};
+    }
+    return primitives_[mapping.batch_index].ids[mapping.instance_index];
+}
+
+/**
  * @brief Intersect a batch of rays with the scene and return their hit records.
  * @param rays The rays to intersect.
  * @param time The time for motion blur.
@@ -525,9 +544,18 @@ void SceneView<TSpectral>::traverse_and_collect_(
             begin_indirect_source_(render_transforms);
         }
 
+        // Everything the dispatch collects was placed by this instance. Until a model's
+        // graph says otherwise, it is also the part: a primitive placed directly.
+        const ObjectIds outer_ids = open_ids_;
+        open_ids_ = ObjectIds{};
+        open_ids_.instance = instance->id();
+        open_ids_.part = instance->id();
+
         const auto& asset_var = instance->asset();
         std::visit([&](auto* raw_ptr) noexcept { handle_asset_ptr_(raw_ptr, render_transforms); },
                    asset_var);
+
+        open_ids_ = outer_ids;
 
         if (designated) {
             end_indirect_source_(*instance);
@@ -634,8 +662,18 @@ void SceneView<TSpectral>::handle_asset_ptr_(
     if (!model) {
         return;
     }
+
+    // The model recorded is the one the scene graph's instance placed: a model within that
+    // model's graph is one of its parts.
+    const ObjectIds outer_ids = open_ids_;
+    if (open_ids_.model == NO_OBJECT_ID) {
+        open_ids_.model = model->id();
+    }
+
     std::shared_ptr<FrameNode<TSpectral>> model_graph_ptr = model->root_node_;
     traverse_model_graph_(model_graph_ptr, instance_apparent_transforms);
+
+    open_ids_ = outer_ids;
 }
 
 /**
@@ -651,14 +689,19 @@ void SceneView<TSpectral>::add_primitive_instance_(
     auto* key = primitive.get();
     auto it = batch_lookup_.find(key);
 
+    ObjectIds ids = open_ids_;
+    ids.geometry = primitive->geometry->id();
+
     std::size_t batch_index = 0;
     if (it != batch_lookup_.end()) {
         batch_index = it->second;
         primitives_[batch_index].instances.push_back(instance_apparent_transforms);
+        primitives_[batch_index].ids.push_back(ids);
     } else {
         PrimitiveBatch<TSpectral> batch;
         batch.primitive = primitive;
         batch.instances.push_back(instance_apparent_transforms);
+        batch.ids.push_back(ids);
 
         primitives_.push_back(std::move(batch));
         batch_index = primitives_.size() - 1;
@@ -966,9 +1009,16 @@ void SceneView<TSpectral>::traverse_model_graph_(
     }
 
     if (auto instance = std::dynamic_pointer_cast<Instance<TSpectral>>(node)) {
+        // A node within the model is the part: the innermost instance that placed what it
+        // holds.
+        const std::uint64_t outer_part = open_ids_.part;
+        open_ids_.part = instance->id();
+
         const auto& asset_var = instance->asset();
         std::visit([&](auto* raw_ptr) noexcept { handle_asset_ptr_(raw_ptr, current_transforms); },
                    asset_var);
+
+        open_ids_.part = outer_part;
     }
 
     for (const auto& child : node->get_children()) {
