@@ -2,6 +2,8 @@ set(HUIRA_EXAMPLE_NAMES
     01_first_render
     02_scene_graph
     03_load_a_model
+    04_truth_data
+    05_planetary_brdfs
 )
 
 foreach(example IN LISTS HUIRA_EXAMPLE_NAMES)

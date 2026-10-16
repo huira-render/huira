@@ -11,6 +11,8 @@ to run it. Each source file opens with the features it demonstrates.
 | 01 | [First render](01_first_render/) | A scene, a sphere, the Sun and a camera; rendering, and saving the image |
 | 02 | [Scene graph](02_scene_graph/) | Sharing assets, frames, rotations and scale, a mesh built in code, `look_at`, and Blender's camera convention |
 | 03 | [Load a model](03_load_a_model/) | Loading a glTF model; path tracing settings, and dynamic sampling |
+| 04 | [Truth data](04_truth_data/) | Depth, normals, albedo, IDs and received power; FITS; ray queries and pixel conventions |
+| 05 | [Planetary BRDFs](05_planetary_brdfs/) | Lambertian, Oren-Nayar, Lommel-Seeliger, McEwen and Hapke, and the phase angle |
 
 ## Running the examples
 
