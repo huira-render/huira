@@ -17,6 +17,7 @@
 #include "huira/handles/camera_handle.hpp"
 #include "huira/render/interaction.hpp"
 #include "huira/scene/indirect_source_instance.hpp"
+#include "huira/scene/object_ids.hpp"
 #include "huira/scene/scene.hpp"
 #include "huira/scene/scene_view_types.hpp"
 #include "huira/units/units.hpp"
@@ -94,6 +95,8 @@ class SceneView {
     }
 
     [[nodiscard]] std::size_t indirect_source_index(const HitRecord& hit) const;
+
+    [[nodiscard]] ObjectIds object_ids(const HitRecord& hit) const;
 
     [[nodiscard]] TSpectral direct_lit_radiance(
         const Ray<TSpectral>& ray,
@@ -205,6 +208,10 @@ class SceneView {
     /// Index into indirect_sources_ of the source currently being collected by the
     /// traversal, or NO_INDIRECT_SOURCE outside a designated instance's sub-graph.
     std::size_t open_indirect_index_ = NO_INDIRECT_SOURCE;
+
+    /// The model, instance and part the traversal is currently inside, which every primitive
+    /// instance collected is recorded with (its geometry is the primitive's own).
+    ObjectIds open_ids_;
 
     /**
      * @brief Apparent star directions over the exposure, in camera coordinates.

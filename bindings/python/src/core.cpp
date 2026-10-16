@@ -14,6 +14,7 @@
 #include "huira/images/image_py.ipp"
 #include "huira/render/ray_py.ipp"
 #include "huira/scene/node.hpp"
+#include "huira/scene/object_ids_py.ipp"
 #include "huira/scene/scene_view.hpp"
 #include "huira/units/units_py.ipp"
 #include "huira/util/logger_py.ipp"
@@ -33,6 +34,7 @@ void bind_core(py::module_& m)
     huira::bind_interval(m);
     huira::bind_bin(m);
     huira::bind_hit_record(m);
+    huira::bind_object_ids(m);
 
     huira::bind_types(m);
     huira::bind_rotation(m);

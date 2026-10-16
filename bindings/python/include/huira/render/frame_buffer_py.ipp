@@ -43,12 +43,46 @@ void bind_frame_buffer(py::module_& m)
             [](FB& fb) -> Image<TSpectral>& { return fb.albedo(); },
             py::return_value_policy::reference_internal)
 
-        // -- Geometry IDs -------------------------------------------------
-        .def("enable_geometry_ids", &FB::enable_geometry_ids, py::arg("enable") = true)
+        // -- Object IDs ---------------------------------------------------
+        // What each pixel sees, by the id() of each object (huira.NO_OBJECT_ID for nothing):
+        .def("enable_geometry_ids",
+             &FB::enable_geometry_ids,
+             py::arg("enable") = true,
+             "Record the ID of the geometry (mesh or ellipsoid) each pixel sees")
         .def("has_geometry_ids", &FB::has_geometry_ids)
         .def_property_readonly(
             "geometry_ids",
             [](FB& fb) -> Image<uint64_t>& { return fb.geometry_ids(); },
+            py::return_value_policy::reference_internal)
+        .def("enable_model_ids",
+             &FB::enable_model_ids,
+             py::arg("enable") = true,
+             "Record the ID of the model each pixel sees, NO_OBJECT_ID for a primitive placed "
+             "directly")
+        .def("has_model_ids", &FB::has_model_ids)
+        .def_property_readonly(
+            "model_ids",
+            [](FB& fb) -> Image<uint64_t>& { return fb.model_ids(); },
+            py::return_value_policy::reference_internal)
+        .def("enable_instance_ids",
+             &FB::enable_instance_ids,
+             py::arg("enable") = true,
+             "Record the ID of the instance in the scene graph that placed what each pixel "
+             "sees")
+        .def("has_instance_ids", &FB::has_instance_ids)
+        .def_property_readonly(
+            "instance_ids",
+            [](FB& fb) -> Image<uint64_t>& { return fb.instance_ids(); },
+            py::return_value_policy::reference_internal)
+        .def("enable_part_ids",
+             &FB::enable_part_ids,
+             py::arg("enable") = true,
+             "Record the ID of the part each pixel sees: the model's node that placed the "
+             "primitive, or the instance for a primitive placed directly")
+        .def("has_part_ids", &FB::has_part_ids)
+        .def_property_readonly(
+            "part_ids",
+            [](FB& fb) -> Image<uint64_t>& { return fb.part_ids(); },
             py::return_value_policy::reference_internal)
 
         // -- Camera Normals -----------------------------------------------
@@ -117,6 +151,15 @@ void bind_frame_buffer(py::module_& m)
             }
             if (fb.has_geometry_ids()) {
                 os << ", geometry_ids";
+            }
+            if (fb.has_model_ids()) {
+                os << ", model_ids";
+            }
+            if (fb.has_instance_ids()) {
+                os << ", instance_ids";
+            }
+            if (fb.has_part_ids()) {
+                os << ", part_ids";
             }
             if (fb.has_camera_normals()) {
                 os << ", camera_normals";
