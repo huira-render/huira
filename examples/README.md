@@ -9,6 +9,8 @@ to run it. Each source file opens with the features it demonstrates.
 | # | Example | What it demonstrates |
 |---|---|---|
 | 01 | [First render](01_first_render/) | A scene, a sphere, the Sun and a camera; rendering, and saving the image |
+| 02 | [Scene graph](02_scene_graph/) | Sharing assets, frames, rotations and scale, a mesh built in code, `look_at`, and Blender's camera convention |
+| 03 | [Load a model](03_load_a_model/) | Loading a glTF model; path tracing settings, and dynamic sampling |
 
 ## Running the examples
 
