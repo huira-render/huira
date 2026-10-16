@@ -5,6 +5,8 @@
 /out/
 build/
 **/build/
+output/
+**/output/
 
 bindings/python/build/
 bindings/python/*.egg-info/

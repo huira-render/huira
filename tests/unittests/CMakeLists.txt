@@ -46,6 +46,7 @@ set(UNIT_TESTS
     huira/scene/test_scene_inputs.cpp
     huira/scene/test_scene_deletion.cpp
 
+    huira/images/test_color_map.cpp
     huira/images/test_convolution.cpp
     huira/images/test_fits_io.cpp
     huira/images/test_image_output.cpp
