@@ -4,6 +4,7 @@ cmake_minimum_required(VERSION 3.16)
 ### Define Options and Initial Values ###
 #########################################
 option(HUIRA_TOOLS "Build huira command line tools" ON)
+option(HUIRA_BUILD_TOOLS "Build the developer tools that build huira's published data files" OFF)
 option(HUIRA_EXAMPLES "Build Examples" OFF)
 option(HUIRA_TESTS "Build Tests" OFF)
 option(HUIRA_DOCS "Build Documentation" OFF)
@@ -119,4 +120,9 @@ endif()
 if(HUIRA_TOOLS)
     message(STATUS "Building huira command line applications")
     add_subdirectory(apps)
+endif()
+
+if(HUIRA_BUILD_TOOLS)
+    message(STATUS "Building huira developer tools")
+    add_subdirectory(tools)
 endif()

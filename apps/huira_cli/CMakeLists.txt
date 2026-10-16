@@ -1,22 +1,18 @@
+# The huira command line application: a dispatcher (cli.cpp) and a set of subcommands.
+# Each subcommand is a source file in commands/ that registers itself with the Registry
+# (see cli.hpp). There are none at the moment; the data files huira needs are built once and
+# published on media.huira.space, by the tools behind HUIRA_BUILD_TOOLS.
 add_executable(huira_cli
     main.cpp
     cli.cpp
-
-    commands/fetch_tycho2.cpp
-    commands/process_tycho2.cpp
 )
 
 find_package(TCLAP REQUIRED)
-find_package(CURL REQUIRED)
 find_package(Indicators REQUIRED)
-
-include(CustomSanitizeTargets)
-huira_strip_unix_libm(CURL::libcurl)
 
 target_link_libraries(huira_cli PRIVATE
     huira::huira
     TCLAP::TCLAP
-    CURL::libcurl
     indicators::indicators
 )
 

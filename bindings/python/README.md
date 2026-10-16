@@ -19,7 +19,7 @@
 ## Quickstart Examples
 The [examples](https://github.com/huira-render/huira/tree/main/examples) walk through Huira one feature at a time, in both Python and C++. Each lists the data it needs, with links to download it, and their README has the full list and how to run them.
 
-The data the examples use, and that `huira fetch-tycho2` downloads, is not part of Huira: it comes from other providers, under their own licenses. See [Data Sources and Licenses](https://docs.huira.space/getting_started/data.html). In particular, the Tycho-2 star catalog is licensed for non-commercial use only.
+The data the examples use is not part of Huira: it comes from other providers, under their own licenses. See [Data Sources and Licenses](https://docs.huira.space/getting_started/data.html). In particular, the Tycho-2 star catalog is licensed for non-commercial use only.
 
 ## Features
 To see what features are currently being worked on, see the [open issues](https://github.com/huira-render/huira/issues?q=is%3Aissue+state%3Aopen+label%3Aenhancement).  If there's a feature you'd like that isn't among them, please submit a [Feature Request](https://github.com/huira-render/huira/issues/new?template=feature_request.md).

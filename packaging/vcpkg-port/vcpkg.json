@@ -46,10 +46,6 @@
     "tools": {
       "description": "Build huira command line tools",
       "dependencies": [
-        {
-          "name": "curl",
-          "default-features": false
-        },
         "indicators"
       ]
     },
