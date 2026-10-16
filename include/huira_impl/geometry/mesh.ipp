@@ -3,7 +3,9 @@
 #include <string>
 
 #include "embree4/rtcore.h"
+#include "glm/glm.hpp"
 #include "huira/geometry/vertex.hpp"
+#include "huira/render/interaction.hpp"
 #include "huira/util/logger.hpp"
 
 namespace huira {
@@ -84,6 +86,18 @@ Mesh<TSpectral>::Mesh(IndexBuffer index_buffer,
     }
 }
 
+/**
+ * @brief Fills in the surface at a hit, by interpolating the hit triangle's vertices.
+ *
+ * The tangent frame is interpolated from the tangent buffer. A mesh without one (made without
+ * tangents, or loaded from a model without texture coordinates) gets a frame built around the
+ * hit's shading normal instead, so that every hit has one. It is built per hit rather than per
+ * vertex: per-vertex frames can point opposite ways at a triangle's corners, as any frame field
+ * over a closed surface must somewhere, and interpolate to zero between them.
+ *
+ * @param hit The hit, on one of this mesh's triangles.
+ * @param isect The interaction to fill in, in the mesh's own frame.
+ */
 template <IsSpectral TSpectral>
 void Mesh<TSpectral>::compute_surface_interaction(const HitRecord& hit,
                                                   Interaction<TSpectral>& isect) const
@@ -107,14 +121,16 @@ void Mesh<TSpectral>::compute_surface_interaction(const HitRecord& hit,
                           hit.v * vertex_buffer_[idx2].albedo;
 
     // Interpolate tangent frame:
-    isect.tangent = Vec3<float>{0.0f};
-    isect.bitangent = Vec3<float>{0.0f};
     if (has_tangents()) {
         isect.tangent = w * tangent_buffer_[idx0].tangent + hit.u * tangent_buffer_[idx1].tangent +
                         hit.v * tangent_buffer_[idx2].tangent;
         isect.bitangent = w * tangent_buffer_[idx0].bitangent +
                           hit.u * tangent_buffer_[idx1].bitangent +
                           hit.v * tangent_buffer_[idx2].bitangent;
+    } else {
+        // Without tangents, any frame around the shading normal will do. (Left at zero, the
+        // tangent was normalized into NaN when the hit was resolved.)
+        build_default_tangent_frame(glm::normalize(isect.normal_s), isect.tangent, isect.bitangent);
     }
 }
 

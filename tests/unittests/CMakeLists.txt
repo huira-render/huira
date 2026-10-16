@@ -24,6 +24,8 @@ set(UNIT_TESTS
     huira/core/test_time.cpp
     huira/core/test_transform.cpp
 
+    huira/geometry/test_mesh.cpp
+
     huira/materials/test_cook_torrance.cpp
 
     huira/render/test_bright_bodies.cpp
