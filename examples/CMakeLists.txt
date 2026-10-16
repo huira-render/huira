@@ -4,6 +4,7 @@ set(HUIRA_EXAMPLE_NAMES
     03_load_a_model
     04_truth_data
     05_planetary_brdfs
+    06_materials_and_textures
 )
 
 foreach(example IN LISTS HUIRA_EXAMPLE_NAMES)

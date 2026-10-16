@@ -114,7 +114,8 @@ roughness map.
 - **Source:** the day, night, cloud and normal maps are from
   [Solar System Scope](https://www.solarsystemscope.com/textures/), based on NASA imagery. The
   roughness map (`8k_earth_roughness_map.tif`) was made for Huira by Christopher Gnam, by
-  modifying Solar System Scope's specular map.
+  modifying Solar System Scope's specular map.  The city emission map (`8k_earth_ctiy_emission.jpg`) 
+  was made for Huira by Christopher Gnam, by modifying Solar System Scope's Night map.
 - **License:** [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The roughness map, an
   adaptation, is distributed under the same license.
 - **Credit:** "Earth textures: Solar System Scope (solarsystemscope.com), CC BY 4.0. Roughness map

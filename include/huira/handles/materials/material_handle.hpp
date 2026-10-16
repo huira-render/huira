@@ -46,8 +46,15 @@ class MaterialHandle : public Handle<Material<TSpectral>> {
     void set_transmission_factor(TSpectral normal_factor);
     void reset_transmission();
 
+    /// Set the emissive texture, which scales the emissive factor across the surface (and sets
+    /// the factor to 1 if it was 0).
     void set_emissive_image(const TextureHandle<TSpectral>& emissive_texture);
+
+    /// Set the emissive factor: the radiance the surface emits, from either side, in
+    /// W/(m^2 sr) in each spectral bin, times the emissive texture's value. 0 by default.
     void set_emissive_factor(TSpectral emissive_factor);
+
+    /// Remove the emissive texture and factor: the surface emits nothing.
     void reset_emissive();
 };
 } // namespace huira

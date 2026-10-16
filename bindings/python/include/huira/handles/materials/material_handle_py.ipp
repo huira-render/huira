@@ -95,12 +95,17 @@ inline void bind_material_handle(py::module_& m)
             .def("set_emissive_image",
                  &HandleType::set_emissive_image,
                  py::arg("emissive_texture"),
-                 "Set the emissive texture")
+                 "Set the emissive texture, which scales the emissive factor across the "
+                 "surface (and sets the factor to 1 if it was 0)")
             .def("set_emissive_factor",
                  &HandleType::set_emissive_factor,
                  py::arg("emissive_factor"),
-                 "Set the emissive factor")
-            .def("reset_emissive", &HandleType::reset_emissive, "Reset emissive to default")
+                 "Set the emissive factor: the radiance the surface emits, from either side, "
+                 "in W/(m^2 sr) in each spectral bin, times the emissive texture's value. 0 by "
+                 "default.")
+            .def("reset_emissive",
+                 &HandleType::reset_emissive,
+                 "Remove the emissive texture and factor: the surface emits nothing")
 
             // --- Handle basics ---
             .def("__bool__", &HandleType::valid)
