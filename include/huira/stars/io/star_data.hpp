@@ -9,19 +9,22 @@
 namespace fs = std::filesystem;
 
 namespace huira {
+// The layout of this struct is the record layout of the .hrsc file (see star_catalog.hpp):
+// 48 bytes, every field at its natural alignment, no padding. Reordering, adding or
+// changing a field changes the file format.
 struct StarData {
     // Catalog identifier (interpretation depends on CatalogType in file header)
     std::uint64_t id = 0;
 
-    // RA/DEC in radians:
-    double RA;
-    double DEC;
+    // RA/DEC in radians (ICRS, epoch J2000.0):
+    double RA = 0.0;
+    double DEC = 0.0;
 
     // Proper motions in Milliarcseconds-per-year:
     float pmRA = 0.f;
     float pmDEC = 0.f;
 
-    // Calibratied Spectrophotometric Properties:
+    // Calibrated Spectrophotometric Properties:
     double solid_angle = std::numeric_limits<double>::quiet_NaN();
     float temperature = std::numeric_limits<float>::quiet_NaN();
     float visual_magnitude = std::numeric_limits<float>::quiet_NaN();
