@@ -13,6 +13,7 @@ to run it. Each source file opens with the features it demonstrates.
 | 03 | [Load a model](03_load_a_model/) | Loading a glTF model; path tracing settings, and dynamic sampling |
 | 04 | [Truth data](04_truth_data/) | Depth, normals, albedo, IDs and received power; FITS; ray queries and pixel conventions |
 | 05 | [Planetary BRDFs](05_planetary_brdfs/) | Lambertian, Oren-Nayar, Lommel-Seeliger, McEwen and Hapke, and the phase angle |
+| 06 | [Materials and textures](06_materials_and_textures/) | Cook-Torrance; albedo, roughness, normal and emissive images |
 
 ## Running the examples
 

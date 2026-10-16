@@ -853,6 +853,18 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                                         albedo_total += params.albedo;
                                     }
 
+                                    // The surface's own emission along the ray, from either
+                                    // side. An emissive surface is not a light: nothing samples
+                                    // it (lights, nor reflector NEE, whose
+                                    // direct_lit_radiance() leaves emission out), so it is
+                                    // only ever reached here, and counted in full.
+                                    const TSpectral Le = throughput * params.emission;
+                                    if (bounce == 0) {
+                                        direct_radiance += Le;
+                                    } else {
+                                        indirect_radiance += Le;
+                                    }
+
                                     float reflector_nee_weight = 1.0f;
                                     const std::size_t hit_source =
                                         scene_view.indirect_source_index(hit);

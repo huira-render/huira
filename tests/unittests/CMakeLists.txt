@@ -29,6 +29,7 @@ set(UNIT_TESTS
     huira/materials/test_cook_torrance.cpp
 
     huira/render/test_bright_bodies.cpp
+    huira/render/test_emission.cpp
     huira/render/test_measured_defocus.cpp
     huira/render/test_measured_unresolved.cpp
     huira/render/test_non_finite_radiance.cpp
