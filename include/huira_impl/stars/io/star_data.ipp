@@ -1,3 +1,5 @@
+#include <cmath>
+#include <cstddef>
 #include <filesystem>
 #include <vector>
 
@@ -64,7 +66,11 @@ inline void StarData::normalize_epoch(double epochRA, double epochDEC)
     double pmDEC_rad = static_cast<double>(pmDEC) * MAS_TO_RAD;
 
     DEC += pmDEC_rad * years_DEC;
-    RA += pmRA_rad * years_RA / std::cos(DEC);
+    // At a pole, right ascension has no meaning, and its motion would divide by zero:
+    const double cos_dec = std::cos(DEC);
+    if (std::abs(cos_dec) > 1e-12) {
+        RA += pmRA_rad * years_RA / cos_dec;
+    }
 }
 
 } // namespace huira
