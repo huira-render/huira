@@ -14,6 +14,7 @@ to run it. Each source file opens with the features it demonstrates.
 | 04 | [Truth data](04_truth_data/) | Depth, normals, albedo, IDs and received power; FITS; ray queries and pixel conventions |
 | 05 | [Planetary BRDFs](05_planetary_brdfs/) | Lambertian, Oren-Nayar, Lommel-Seeliger, McEwen and Hapke, and the phase angle |
 | 06 | [Materials and textures](06_materials_and_textures/) | Cook-Torrance; albedo, roughness, normal and emissive images |
+| 07 | [Clouds and atmosphere](07_clouds_and_atmosphere/) | Alpha textures, layered shells, and participating media |
 
 ## Running the examples
 
