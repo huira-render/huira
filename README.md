@@ -62,43 +62,12 @@ Please see the platform specific build guides:
 If you wish to build the python bindings from source (perhaps for local edits or development), see the **[Python Bindings](docs/getting_started/build_instructions/python-bindings.md)** guide.
 
 ## Quickstart Examples
-Example code (both C++ and python) can be found in [`examples/`](examples/).  Several scenarios intended to demonstrate various features are provided, along with instructions for fetching the required data.
+The [`examples/`](examples/) walk through Huira one feature at a time, in both Python and C++. Each lists the data it needs, with links to download it. See [`examples/README.md`](examples/README.md) for the full list and how to run them.
+
+The data the examples use is not part of Huira: it comes from other providers, under their own licenses. See [Data Sources and Licenses](docs/getting_started/data.md). In particular, the Tycho-2 star catalog is licensed for non-commercial use only.
 
 ## Features
-Initial work on Huira has been on the basic architecture as well as distribution/cross-platform compatibility.  As much of that work is now completed, new features are expected to be released in relatively short order.
-
-If there are features you wish to see, that you don't see listed here, please feel free to submit a [Feature Request](https://github.com/huira-render/huira/issues/new?template=feature_request.md)
-
-### Currently Stable Features (as of v0.9.10)
-- Radiometrically accurate rendering
-- Planetary BRDFs including Lambertian, Oren-Nayar, Cook-Torrance, McEwen, Lommel-Seeliger
-- Basic volumetric rendering of planetary atmospheres
-- Calibrated camera distortion models and common camera controls
-- Modeling of Point Spread Functions (diffraction and optical scattering)
-- Motion blur
-- Depth-of-Field
-- SPICE toolkit integration for spacecraft ephemeris and reference frames
-- Star field and unresolved rendering
-- Spherical light sources with Next Event Estimation and Multiple Importance Sampling
-- Python Bindings
-- Logging and crash report generation
-- API Reference Documentation (NOTE: Some docs may appear incomplete or poorly formatted)
-
-### Features Coming Soon (Order of Priority)
-| Feature | Status |
-| --- | --- |
-| SRP and Unresolved 3d Models | In-Progress |
-| Digital Elevation Maps | In-Progress |
-| Level-of-Detail | Designed |
-| LIDAR simulation | Planned |
-| Comprehensive Tutorials | In-Progress |
-| TLE support | Licensing\* |
-
-\* There are licensing concerns with SGP4 that need to be understood before TLE support can be added.
-
-### Long Term Plans
-- Vulkan based GPU Acceleration
-- Desktop application (GUI)
+To see what features are currently being worked on, see the [open issues](https://github.com/huira-render/huira/issues?q=is%3Aissue+state%3Aopen+label%3Aenhancement).  If there's a feature you'd like that isn't among them, please submit a [Feature Request](https://github.com/huira-render/huira/issues/new?template=feature_request.md).
 
 ## Background
 Huira is a complete rewrite providing similar functionality to the [vira](https://github.com/nasa/vira) project originally developed by the same author while at NASA's Goddard Space Flight Center. While inspired by vira, huira is built from scratch with new code and is released under the MIT license.
@@ -139,4 +108,6 @@ submitting a pull request. It covers code style, commit conventions, and the
 requirements for AI-assisted contributions.
 
 ## License
-Huira is licensed under the [MIT License](./LICENSE)
+Huira is licensed under the [MIT License](./LICENSE).
+
+The MIT License covers Huira's code. It does not cover the data that the examples use or that the `huira` command-line tool downloads, such as star catalogs, SPICE kernels, models and textures: each has its own license, listed in [Data Sources and Licenses](docs/getting_started/data.md).
