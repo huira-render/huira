@@ -8,6 +8,7 @@ to run it. Each source file opens with the features it demonstrates.
 
 | # | Example | What it demonstrates |
 |---|---|---|
+| 01 | [First render](01_first_render/) | A scene, a sphere, the Sun and a camera; rendering, and saving the image |
 
 ## Running the examples
 

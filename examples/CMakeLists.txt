@@ -1,5 +1,5 @@
 set(HUIRA_EXAMPLE_NAMES
-    
+    01_first_render
 )
 
 foreach(example IN LISTS HUIRA_EXAMPLE_NAMES)
