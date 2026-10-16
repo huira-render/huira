@@ -1,8 +1,8 @@
 # Data Sources and Licenses
 
 Huira's code is released under the [MIT License](https://github.com/huira-render/huira/blob/main/LICENSE).
-The data that Huira's [examples](https://github.com/huira-render/huira/tree/main/examples) use,
-and that the `huira` command-line tool downloads, is not part of Huira. Some of it is hosted at
+The data that Huira's [examples](https://github.com/huira-render/huira/tree/main/examples) use
+is not part of Huira. Some of it is hosted at
 [media.huira.space](https://media.huira.space): 3D models, textures and star catalogs. The rest
 comes straight from its provider, such as SPICE kernels from NASA's NAIF. Each dataset has its
 own license, listed on this page, and each example's README lists the files it uses.
@@ -16,7 +16,7 @@ images.
 
 | Data | Where to get it | License |
 |---|---|---|
-| [Tycho-2 star catalog](#tycho-2-star-catalog) | `huira fetch-tycho2`; media.huira.space | CC BY-NC 3.0 IGO (non-commercial) |
+| [Tycho-2 star catalog](#tycho-2-star-catalog) | media.huira.space | CC BY-NC 3.0 IGO (non-commercial) |
 | [SPICE kernels](#spice-kernels) | NASA's NAIF | Redistributable unmodified |
 | [Gateway model](#gateway-model) | media.huira.space | No copyright; NASA's media guidelines |
 | [Earth textures](#earth-textures) | media.huira.space | CC BY 4.0 |
@@ -30,10 +30,17 @@ how to credit it, and a `SHA256SUMS`, to check downloads with `sha256sum -c SHA2
 The Tycho-2 Catalogue of the 2.5 million brightest stars, from ESA's Hipparcos mission, as
 distributed by CDS, Strasbourg (VizieR catalog I/259).
 
-- **Get it:** `huira fetch-tycho2 <folder> --process --clean` downloads the catalog from CDS and
-  converts it to Huira's star catalog format, as `<folder>/tycho2.hrsc`. The catalog's original
-  files are also at
-  [media.huira.space/data/stars/tycho2/archive/](https://media.huira.space/data/stars/tycho2/archive/).
+- **Get it:** download the pre-built catalog, in Huira's star catalog format, from
+  [media.huira.space/data/stars/tycho2/tycho2.hrsc](https://media.huira.space/data/stars/tycho2/tycho2.hrsc):
+
+  ```sh
+  curl -fLO https://media.huira.space/data/stars/tycho2/tycho2.hrsc
+  ```
+
+  `tycho2.hrsc` is always the latest build. Earlier builds stay at
+  [media.huira.space/data/stars/tycho2/archive/](https://media.huira.space/data/stars/tycho2/archive/)
+  as `tycho2-d<N>.hrsc`, where `N` is the build's data version (below), next to the catalog's
+  original files from CDS.
 - **Source:** [cdsarc.cds.unistra.fr/viz-bin/cat/I/259](https://cdsarc.cds.unistra.fr/viz-bin/cat/I/259)
 - **License:** [CC BY-NC 3.0 IGO](https://creativecommons.org/licenses/by-nc/3.0/igo/). You may
   share and adapt the catalog, with credit, for non-commercial purposes only.
@@ -42,6 +49,17 @@ distributed by CDS, Strasbourg (VizieR catalog I/259).
   motion; computes an approximate Johnson V magnitude, an effective temperature and a solid angle
   from the catalog's BT and VT magnitudes; drops the stars without magnitudes and the catalog's
   other columns; and sorts the stars by V magnitude.
+- **Versions:** an `.hrsc` file carries two version numbers in its header, which Huira logs when
+  it loads one. The *format version* is the file's layout; Huira refuses a format it cannot
+  read and says whether Huira or the catalog is the older side. The *data version* is how the
+  values were computed, and goes up whenever a new build changes them (a better temperature
+  from B-V, say); Huira loads any data version. If your stars differ from someone else's,
+  compare data versions. The format is documented in
+  [`star_catalog.hpp`](https://github.com/huira-render/huira/blob/main/include/huira/stars/io/star_catalog.hpp).
+- **Building it yourself:** the catalog is built from the CDS files by `build_star_catalog`,
+  in Huira's [`tools/`](https://github.com/huira-render/huira/tree/main/tools) directory,
+  built with `-DHUIRA_BUILD_TOOLS=ON`. You only need this to change how the values are
+  computed.
 - **Cite:**
   - Høg, E., et al. 2000, "The Tycho-2 Catalogue of the 2.5 Million Brightest Stars",
     *Astronomy & Astrophysics*, 355, L27

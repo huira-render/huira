@@ -35,7 +35,6 @@ requirements:
     - gdal
     - glm
     - indicators
-    - libcurl
     - libtiff
     - libpng
     - libjpeg-turbo
@@ -52,8 +51,6 @@ test:
   commands:
     - python -c "from huira.rgb import Scene; print('Python bindings OK')"
     - huira --help
-    - huira fetch-tycho2 --help
-    - huira process-tycho2 --help
     - test -f $PREFIX/include/huira/huira.hpp                                    # [unix]
     - if not exist %LIBRARY_INC%\\huira\\huira.hpp exit 1                        # [win]
     - test -f $PREFIX/lib/cmake/huira/huiraConfig.cmake                          # [unix]
