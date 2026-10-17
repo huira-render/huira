@@ -468,7 +468,6 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
     int tiles_x = (fb_width + TILE_SIZE - 1) / TILE_SIZE;
     int tiles_y = (fb_height + TILE_SIZE - 1) / TILE_SIZE;
     int num_tiles = tiles_x * tiles_y;
-    float time = 0.f;
     const bool has_motion_blur = scene_view.temporal_samples_.size() > 1;
 
     // Regions of the frame that provably contain no geometry take the same miss path
@@ -617,6 +616,17 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                         int samples_taken = 0; ///< Those with a finite radiance.
                         float inv_samples = 0.0f;
 
+                        // With motion blur, each sample is traced at its own time in the
+                        // exposure. A pixel's samples step through the exposure by the golden
+                        // ratio from a random start (an additive recurrence), so however many are
+                        // taken, as when dynamic sampling stops early, they cover it evenly,
+                        // where independent random times clump and leave gaps: an object that
+                        // crosses a pixel for a short part of the exposure is caught a steady
+                        // number of times rather than a random one. Each time is still uniform
+                        // over the exposure, as the start is random.
+                        constexpr double inv_golden_ratio = 0.6180339887498949;
+                        const double time_start = has_motion_blur ? sampler.get_1d() : 0.0;
+
                         for (int s = 0; s < spp_; ++s) {
                             ++samples_drawn;
 
@@ -627,10 +637,15 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                             // Generate camera ray from pixel coordinates:
                             Ray<TSpectral> ray = camera->sensor_ray_(Pixel{sx, sy}, sampler);
 
-                            // Motion blur: randomize time sample per ray
-                            if (has_motion_blur) {
-                                time = sampler.get_1d(); // [0, 1] maps to shutter interval
-                            }
+                            // The sample's time, from 0 to 1 over the exposure. It is this
+                            // sample's own: every ray of its path (bounces, shadow rays) is traced
+                            // at it.
+                            const float time =
+                                has_motion_blur
+                                    ? static_cast<float>(std::fmod(
+                                          time_start + inv_golden_ratio * static_cast<double>(s),
+                                          1.0))
+                                    : 0.f;
 
                             TSpectral throughput{1};
                             TSpectral direct_radiance{0};
