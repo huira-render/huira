@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstdint>
@@ -167,6 +168,22 @@ TEST_CASE("HRSC reader rejects what it cannot read, saying which side is behind"
         bytes[0] = 'X';
         write_bytes(path, bytes);
         CHECK_THROWS_WITH(StarCatalog::read_star_data(path), ContainsSubstring("Not a Huira"));
+    }
+
+    SECTION("a file from before the format was versioned")
+    {
+        // The pre-release header was the memory image of a struct: "HRSC", uint8 version 1
+        // and 3 bytes of padding, uint64 reserved, uint8 catalog type and 7 bytes of padding,
+        // uint64 star count. Only its magic and first version byte line up with the versioned
+        // header, so it must be told apart before anything else is checked.
+        std::vector<char> bytes = good;
+        std::fill(bytes.begin() + 4, bytes.begin() + 32, '\0');
+        bytes[4] = 1;
+        bytes[16] = static_cast<char>(CatalogType::Tycho2);
+        bytes[24] = 3;
+        write_bytes(path, bytes);
+        CHECK_THROWS_WITH(StarCatalog::read_star_data(path),
+                          ContainsSubstring("before the star catalog format was versioned"));
     }
 
     SECTION("a newer format asks for a newer huira")
