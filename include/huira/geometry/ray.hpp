@@ -69,6 +69,7 @@ struct HitRecord {
     unsigned int geom_id = RTC_INVALID_GEOMETRY_ID;   ///< Geometry ID in BLAS
     unsigned int prim_id = 0;                         ///< Triangle index
     Vec3<float> Ng{};                                 ///< Geometric face normal (unnormalized)
+    float time = 0.f; ///< When in the exposure the ray was traced, from 0 to 1 (motion blur)
 
     [[nodiscard]] bool hit() const noexcept { return inst_id != RTC_INVALID_GEOMETRY_ID; }
 };
