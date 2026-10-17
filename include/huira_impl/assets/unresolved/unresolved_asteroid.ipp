@@ -10,6 +10,7 @@
 #include "huira/core/constants.hpp"
 #include "huira/core/physics.hpp"
 #include "huira/core/types.hpp"
+#include "huira/render/shading_utils.hpp"
 #include "huira/scene/scene_view.hpp"
 #include "huira/scene/scene_view_types.hpp"
 #include "huira/util/logger.hpp"
@@ -182,9 +183,13 @@ void UnresolvedAsteroid<TSpectral>::resolve_irradiance(
     for (std::size_t i = 0; i < self_transforms.size(); ++i) {
         const Transform<float>& self_transform = self_transforms[i];
 
-        // Use the light transform matching this temporal sample:
-        const std::size_t li = std::min(i, found_light->transforms.size() - 1);
-        const Transform<float>& light_transform = found_light->transforms[li];
+        // The light where it is at this sample's time (the light has samples of its own):
+        const float fraction =
+            (self_transforms.size() > 1)
+                ? static_cast<float>(i) / static_cast<float>(self_transforms.size() - 1)
+                : 0.5f;
+        const Transform<float> light_transform =
+            instance_transform_at(found_light->transforms, fraction);
 
         Vec3<double> to_obs = -self_transform.position;
         Vec3<double> to_light = light_transform.position - self_transform.position;

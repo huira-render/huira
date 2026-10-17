@@ -9,6 +9,7 @@
 #include "huira/concepts/spectral_concepts.hpp"
 #include "huira/geometry/ray.hpp"
 #include "huira/render/interaction.hpp"
+#include "huira/render/shading_utils.hpp"
 #include "huira/scene/scene_view.hpp"
 #include "huira/scene/scene_view_types.hpp"
 #include "huira/util/logger.hpp"
@@ -206,9 +207,9 @@ void UnresolvedLambertianSphere<TSpectral>::resolve_irradiance(
             }
             filter_light_found = true;
 
-            // Use the light transform matching this temporal sample:
-            const std::size_t li = std::min(i, light_inst.transforms.size() - 1);
-            const Transform<float>& light_transform = light_inst.transforms[li];
+            // The light where it is at this sample's time (the light has samples of its own):
+            const Transform<float> light_transform =
+                instance_transform_at(light_inst.transforms, trace_time);
 
             TSpectral light_sum{0};
             for (std::size_t s = 0; s < light_samples_; ++s) {
@@ -241,11 +242,11 @@ void UnresolvedLambertianSphere<TSpectral>::resolve_irradiance(
         // --- Designated indirect sources (earthshine, moonshine, ...) ---
         for (std::size_t src_idx = 0; src_idx < indirect_sources.size(); ++src_idx) {
             const auto& source = indirect_sources[src_idx];
-            const std::size_t ti = std::min(i, source.transforms.size() - 1);
 
             TSpectral source_sum{0};
             for (std::size_t s = 0; s < indirect_source_samples_; ++s) {
-                SphereConeSample sample = source.sample_toward(self_position, ti, sampler);
+                // The source's bound at this sample's time (it has samples of its own):
+                SphereConeSample sample = source.sample_toward(self_position, trace_time, sampler);
 
                 Ray<TSpectral> ray(self_position, sample.wi);
                 HitRecord hit = scene_view.intersect(ray, trace_time);
