@@ -304,3 +304,50 @@ TEST_CASE("Tycho-2 records are parsed at the columns of the distributed files", 
 
     fs::remove(path);
 }
+
+TEST_CASE("Tycho-2 colors outside the range of real stars are clamped, not rejected",
+          "[stars][tycho2]")
+{
+    // TYC 10-415-1: BT = 12.380, VT = 13.209, so B-V = -0.705, past the pole of the
+    // temperature relation at -0.674. Unclamped, its temperature was -158297 K and its solid
+    // angle negative, and the renderer dropped it with a warning.
+    StarData noisy_blue;
+    noisy_blue.process_magnitude(12.380, 13.209);
+
+    StarData bluest;
+    bluest.process_magnitude(13.0, 13.0 - BV_COLOR_INDEX_MIN / 0.850);
+
+    CHECK(noisy_blue.temperature == bluest.temperature);
+    CHECK(noisy_blue.solid_angle > 0.0);
+    CHECK(std::isfinite(noisy_blue.solid_angle));
+    CHECK_THAT(noisy_blue.visual_magnitude, WithinRel(13.209 - 0.090 * (12.380 - 13.209), 1e-6));
+
+    // The reddest real stars, and beyond:
+    StarData noisy_red;
+    noisy_red.process_magnitude(16.0, 12.0);
+    StarData reddest;
+    reddest.process_magnitude(13.0, 13.0 - BV_COLOR_INDEX_MAX / 0.850);
+    CHECK(noisy_red.temperature == reddest.temperature);
+    CHECK(noisy_red.solid_angle > 0.0);
+
+    // The limits of the clamp are the limits of real stars, roughly O-type to M giants:
+    CHECK(bluest.temperature > 20000.f);
+    CHECK(bluest.temperature < 25000.f);
+    CHECK(reddest.temperature > 2500.f);
+    CHECK(reddest.temperature < 3000.f);
+
+    // An ordinary color is untouched:
+    StarData sun_like;
+    sun_like.process_magnitude(13.0, 13.0 - 0.65 / 0.850);
+    CHECK_THAT(sun_like.temperature, WithinRel(5800.f, 0.03f));
+
+    // Whatever the photometry, what the builder writes passes the renderer's checks:
+    for (double bt_minus_vt : {-5.0, -1.8, -0.8, -0.3, 0.0, 0.76, 2.0, 3.5, 10.0}) {
+        StarData star;
+        star.process_magnitude(13.0 + bt_minus_vt, 13.0);
+        CHECK(star.temperature > 0.f);
+        CHECK(std::isfinite(star.temperature));
+        CHECK(star.solid_angle > 0.0);
+        CHECK(std::isfinite(star.solid_angle));
+    }
+}
