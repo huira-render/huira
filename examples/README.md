@@ -16,6 +16,7 @@ to run it. Each source file opens with the features it demonstrates.
 | 06 | [Materials and textures](06_materials_and_textures/) | Cook-Torrance; albedo, roughness, normal and emissive images |
 | 07 | [Clouds and atmosphere](07_clouds_and_atmosphere/) | Alpha textures, layered shells, and participating media |
 | 08 | [Lights](08_lights/) | Colored sphere lights, and planetshine from an indirect source |
+| 09 | [Stars](09_stars/) | The Tycho-2 catalog, pointing by right ascension and declination, and proper motion |
 
 ## Running the examples
 
