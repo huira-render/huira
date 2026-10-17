@@ -30,7 +30,7 @@ namespace huira {
  * Collects geometry, lights, unresolved objects, and stars for rendering.
  *
  * @param scene Scene to view
- * @param exposure_interval Exposure interval
+ * @param exposure_interval Exposure interval. Poses set by hand hold at its reference time.
  * @param camera_instance Camera instance handle
  * @param obs_mode Observation mode
  * @param num_temporal_samples Number of temporal samples for motion blur (default: 1)
@@ -66,13 +66,15 @@ SceneView<TSpectral>::SceneView(const Scene<TSpectral>& scene,
     }
     this->camera_model_ = std::get<CameraModel<TSpectral>*>(asset_var)->shared_from_this();
 
-    // Extract camera pose:
+    // Extract camera pose. Poses set by hand hold at the interval's reference time, whatever the
+    // number of temporal samples, so a render without motion blur (one sample, at the exposure's
+    // center) shows things where a motion-blurred one does, on average:
     std::vector<Transform<double>> observer_transforms(temporal_samples_.size());
     std::vector<Transform<double>> observer_inverses(temporal_samples_.size());
     camera_to_world_ = std::vector<Transform<float>>(temporal_samples_.size());
     for (std::size_t i = 0; i < temporal_samples_.size(); ++i) {
         Transform<double> obs_ssb =
-            camera_node->get_ssb_transform_(temporal_samples_[0], temporal_samples_[i]);
+            camera_node->get_ssb_transform_(exposure_interval_.reference, temporal_samples_[i]);
         Rotation<double> sensor_orientation = camera_model_->sensor_orientation();
         obs_ssb.rotation = obs_ssb.rotation * sensor_orientation;
 
@@ -526,8 +528,9 @@ void SceneView<TSpectral>::traverse_and_collect_(
             const Transform<double>& obs_ssb = observer_transforms[i];
             const Transform<double>& obs_inv = observer_inverses[i];
 
+            // Poses set by hand hold at the reference time, as the camera's do:
             Transform<double> instance_ssb = node->get_apparent_transform(
-                obs_mode, temporal_samples_[0], temporal_samples_[i], obs_ssb);
+                obs_mode, exposure_interval_.reference, temporal_samples_[i], obs_ssb);
 
             Transform<double> local_apparent = obs_inv * instance_ssb;
 

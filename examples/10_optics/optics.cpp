@@ -150,7 +150,8 @@ int main(int argc, char** argv)
     // can be given in diopters (set_focus_diopters(0.02_dpt)), or as how far the sensor sits
     // from the focal plane (set_focus_sensor_offset).
     camera_model.set_focus_distance(50_m);
-    std::cout << "Defocus blur radius: " << camera_model.defocus_blur_radius() << " px\n";
+    auto blur_radius = camera_model.defocus_blur_radius();
+    std::cout << "Defocus blur radius: " << blur_radius << " px\n";
     render(camera, camera_model, "10_optics_defocus.png");
     camera_model.set_focus_diopters(0_dpt); // back to infinity
 
