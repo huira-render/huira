@@ -3,7 +3,9 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <limits>
+#include <map>
 #include <memory>
 #include <string>
 #include <type_traits>
@@ -19,6 +21,7 @@
 #include "huira/geometry/mesh.hpp"
 #include "huira/handles/camera_handle.hpp"
 #include "huira/render/shading_utils.hpp"
+#include "huira/render/trajectory_arc.hpp"
 #include "huira/scene/scene.hpp"
 #include "tbb/blocked_range.h"
 #include "tbb/parallel_for.h"
@@ -33,17 +36,25 @@ namespace huira {
  * @param exposure_interval Exposure interval. Poses set by hand hold at its reference time.
  * @param camera_instance Camera instance handle
  * @param obs_mode Observation mode
- * @param num_temporal_samples Number of temporal samples for motion blur (default: 1)
- * @throws std::runtime_error if the interval ends before it starts, or there are no temporal
- *         samples.
+ * @param num_temporal_samples The number of temporal samples every moving thing is given, evenly
+ *        spaced through the exposure, or none (the default) to choose them for each thing:
+ *        one for whatever does not move in view, and otherwise as many as keep the path it is
+ *        drawn along within motion_tolerance pixels of its true path (see choose_fractions_()).
+ *        One sample renders a still frame, at the middle of the exposure.
+ * @param motion_tolerance How far, in pixels, the path a thing is drawn along may stray from its
+ *        true path, when the samples are chosen. Positive.
+ * @throws std::runtime_error if the interval ends before it starts, no temporal samples or more
+ *         than Embree's 129 are asked for, or the tolerance is not positive and finite.
  */
 template <IsSpectral TSpectral>
 SceneView<TSpectral>::SceneView(const Scene<TSpectral>& scene,
                                 const Interval& exposure_interval,
                                 const InstanceHandle<TSpectral>& camera_instance,
                                 ObservationMode obs_mode,
-                                std::size_t num_temporal_samples)
-    : exposure_interval_{exposure_interval}, device_{scene.device_}
+                                std::optional<std::size_t> num_temporal_samples,
+                                double motion_tolerance)
+    : exposure_interval_{exposure_interval}, requested_temporal_samples_{num_temporal_samples},
+      motion_tolerance_{motion_tolerance}, obs_mode_{obs_mode}, device_{scene.device_}
 {
     HUIRA_TRACE_SCOPE("SceneView::SceneView");
     HUIRA_LOG_INFO("Created over interval [" + std::to_string(exposure_interval.start.et()) +
@@ -51,11 +62,18 @@ SceneView<TSpectral>::SceneView(const Scene<TSpectral>& scene,
     // Its fields can have been changed since it was made:
     exposure_interval_.check();
 
-    // Create the temporal samples:
-    if (num_temporal_samples < 1) {
+    if (num_temporal_samples && *num_temporal_samples < 1) {
         HUIRA_THROW_ERROR("SceneView - At least one temporal sample is needed");
     }
-    temporal_samples_ = exposure_interval_.samples(num_temporal_samples);
+    if (num_temporal_samples && *num_temporal_samples > RTC_MAX_TIME_STEP_COUNT) {
+        HUIRA_THROW_ERROR("SceneView - At most " + std::to_string(RTC_MAX_TIME_STEP_COUNT) +
+                          " temporal samples can be used (Embree's limit): " +
+                          std::to_string(*num_temporal_samples));
+    }
+    if (!(motion_tolerance > 0.0) || !std::isfinite(motion_tolerance)) {
+        HUIRA_THROW_ERROR("SceneView - The motion tolerance must be positive and finite: " +
+                          std::to_string(motion_tolerance) + " pixels");
+    }
 
     // Get the camera model:
     auto camera_node = camera_instance.get();
@@ -65,32 +83,40 @@ SceneView<TSpectral>::SceneView(const Scene<TSpectral>& scene,
             "SceneView received an Instance for the observer that does not contain a CameraModel!");
     }
     this->camera_model_ = std::get<CameraModel<TSpectral>*>(asset_var)->shared_from_this();
+    camera_node_ = camera_node.get();
 
-    // Extract camera pose. Poses set by hand hold at the interval's reference time, whatever the
-    // number of temporal samples, so a render without motion blur (one sample, at the exposure's
-    // center) shows things where a motion-blurred one does, on average:
-    std::vector<Transform<double>> observer_transforms(temporal_samples_.size());
-    std::vector<Transform<double>> observer_inverses(temporal_samples_.size());
-    camera_to_world_ = std::vector<Transform<float>>(temporal_samples_.size());
-    for (std::size_t i = 0; i < temporal_samples_.size(); ++i) {
-        Transform<double> obs_ssb = camera_node->get_ssb_transform_(
-            PoseContext{temporal_samples_[i], exposure_interval_.reference, obs_mode});
-        Rotation<double> sensor_orientation = camera_model_->sensor_orientation();
-        obs_ssb.rotation = obs_ssb.rotation * sensor_orientation;
-
-        observer_transforms[i] = obs_ssb;
-        observer_inverses[i] = obs_ssb.inverse();
-        camera_to_world_[i] = static_cast<Transform<float>>(observer_inverses[i]);
+    // How many pixels a small angle spans, at most, anywhere in the frame: off the axis, a
+    // rectilinear camera's pixels span smaller angles, by the square of the cosine of the angle
+    // off axis, out to the frame's corners. (Lens distortion is not counted.)
+    {
+        const Mat3<float> k = camera_model_->intrinsic_matrix();
+        const Resolution resolution = camera_model_->resolution();
+        const double fx = static_cast<double>(k[0][0]);
+        const double fy = static_cast<double>(k[1][1]);
+        const double cx = static_cast<double>(k[2][0]);
+        const double cy = static_cast<double>(k[2][1]);
+        const double reach_x = std::max(cx, static_cast<double>(resolution.x) - cx) / fx;
+        const double reach_y = std::max(cy, static_cast<double>(resolution.y) - cy) / fy;
+        const double corner = std::atan(std::hypot(reach_x, reach_y));
+        const double cos_corner = std::cos(corner);
+        pixels_per_radian_ = std::max(fx, fy) / std::max(cos_corner * cos_corner, 0.1);
     }
+
+    // The camera's pose at the middle of the exposure, which a still frame is seen from:
+    camera_to_world_ = {static_cast<Transform<float>>(observer_at_(0.5).inverse)};
 
     // Copy the background radiance:
     background_ = scene.background_;
 
     // Collect geometry and lights by traversing the scene graph:
-    traverse_and_collect_(scene.root_node_, observer_transforms, observer_inverses, obs_mode);
+    traverse_and_collect_(scene.root_node_);
     HUIRA_LOG_INFO("SceneView collected " + std::to_string(primitives_.size()) +
                    " unique primitive batches and " + std::to_string(lights_.size()) +
                    " light instances.");
+    if (has_motion_blur_) {
+        HUIRA_LOG_INFO("SceneView: motion blur, with up to " +
+                       std::to_string(max_temporal_samples_) + " temporal samples");
+    }
 
     // Check for objects that were not collected. An object under a hidden node was
     // deliberately left out and is reported as such; anything else never reached the
@@ -153,7 +179,49 @@ SceneView<TSpectral>::SceneView(const Scene<TSpectral>& scene,
     // float - exactly what Star's constructor did.
     {
         const std::size_t n_stars = scene.stars_.size();
-        const std::size_t n_samples = temporal_samples_.size();
+
+        // The stars all move together, as the camera turns (and as its velocity aberrates
+        // them): one set of temporal samples serves them all. Their motion is followed by the
+        // sky directions under the frame's center, corners and edge midpoints at mid-exposure.
+        std::vector<double> fractions{0.5};
+        if (n_stars > 0) {
+            const Resolution resolution = camera_model_->resolution();
+            const Rotation<double> middle = observer_at_(0.5).ssb.rotation;
+            std::vector<Vec3<double>> sky;
+            for (int j = 0; j <= 2; ++j) {
+                for (int i = 0; i <= 2; ++i) {
+                    const Pixel pixel{0.5f * static_cast<float>(i * resolution.x),
+                                      0.5f * static_cast<float>(j * resolution.y)};
+                    const Vec3<double> camera_direction =
+                        glm::normalize(Vec3<double>{camera_model_->sensor_ray_(pixel).direction()});
+                    sky.push_back(middle * camera_direction);
+                }
+            }
+            std::map<double, std::vector<Vec3<double>>> star_probes;
+            auto probes_at = [&](double fraction) -> const std::vector<Vec3<double>>& {
+                auto [it, inserted] = star_probes.try_emplace(fraction);
+                if (inserted) {
+                    const Transform<double>& observer = observer_at_(fraction).ssb;
+                    const Rotation<double> to_camera = observer.rotation.inverse();
+                    for (const Vec3<double>& direction : sky) {
+                        it->second.push_back(
+                            to_camera * compute_aberrated_direction(direction, observer.velocity));
+                    }
+                }
+                return it->second;
+            };
+            auto turn_rate = [&]() {
+                double rate = 0.0;
+                for (double fraction : {0.0, 0.5, 1.0}) {
+                    rate = std::max(rate, glm::length(observer_at_(fraction).ssb.angular_velocity));
+                }
+                return rate;
+            };
+            fractions = choose_fractions_(
+                probes_at, turn_rate, Interpolation::Arc, MAX_AUTOMATIC_STAR_SAMPLES, "The stars");
+            max_temporal_samples_ = std::max(max_temporal_samples_, fractions.size());
+        }
+        const std::size_t n_samples = fractions.size();
 
         stars_.sample_count = n_samples;
         stars_.directions.resize(n_stars * n_samples);
@@ -163,8 +231,9 @@ SceneView<TSpectral>::SceneView(const Scene<TSpectral>& scene,
         std::vector<Rotation<double>> inverse_rotations(n_samples);
         std::vector<Vec3<double>> observer_velocities(n_samples);
         for (std::size_t j = 0; j < n_samples; ++j) {
-            inverse_rotations[j] = observer_transforms[j].rotation.inverse();
-            observer_velocities[j] = observer_transforms[j].velocity;
+            const Transform<double>& observer = observer_at_(fractions[j]).ssb;
+            inverse_rotations[j] = observer.rotation.inverse();
+            observer_velocities[j] = observer.velocity;
         }
 
         tbb::parallel_for(tbb::blocked_range<std::size_t>(0, n_stars),
@@ -200,7 +269,7 @@ SceneView<TSpectral>::SceneView(const Scene<TSpectral>& scene,
         RandomSampler<float> sampler(
             static_cast<unsigned int>(unresolved_object.unresolved_object->id()));
         unresolved_object.unresolved_object->resolve_irradiance(
-            unresolved_object.transforms, temporal_samples_, *this, sampler);
+            unresolved_object.transforms, unresolved_object.times, *this, sampler);
     }
 }
 
@@ -501,22 +570,15 @@ SceneView<TSpectral>::resolve_hits(const std::vector<Ray<TSpectral>>& rays,
 }
 
 /**
- * @brief Traverse the scene graph and collect renderable objects.
+ * @brief Traverse the scene graph and collect assets.
  *
- * Recursively visits nodes and collects mesh, light, unresolved, and model instances.
+ * Recursively visits nodes and collects mesh, light, unresolved, and model instances, each with
+ * its transforms in the camera's frame at its own temporal samples (see sample_instance_()).
  *
  * @param node Node to traverse
- * @param t_obs Observation time
- * @param obs_ssb Observer SSB transforms
- * @param obs_ssb Observer SSB inverse transforms
- * @param obs_mode Observation mode
  */
 template <IsSpectral TSpectral>
-void SceneView<TSpectral>::traverse_and_collect_(
-    const std::shared_ptr<Node<TSpectral>>& node,
-    const std::vector<Transform<double>>& observer_transforms,
-    const std::vector<Transform<double>>& observer_inverses,
-    ObservationMode obs_mode)
+void SceneView<TSpectral>::traverse_and_collect_(const std::shared_ptr<Node<TSpectral>>& node)
 {
     // Hidden nodes and their descendants are not collected. Their assets are still
     // recorded, so the unlinked check can tell hidden apart from unattached.
@@ -526,19 +588,12 @@ void SceneView<TSpectral>::traverse_and_collect_(
     }
 
     if (auto instance = std::dynamic_pointer_cast<Instance<TSpectral>>(node)) {
-        std::vector<Transform<float>> render_transforms(temporal_samples_.size());
-        for (std::size_t i = 0; i < temporal_samples_.size(); ++i) {
-            const Transform<double>& obs_ssb = observer_transforms[i];
-            const Transform<double>& obs_inv = observer_inverses[i];
+        const auto& asset_var = instance->asset();
 
-            // Poses set by hand hold at the reference time, as the camera's do:
-            Transform<double> instance_ssb = node->get_apparent_transform(
-                obs_mode, exposure_interval_.reference, temporal_samples_[i], obs_ssb);
-
-            Transform<double> local_apparent = obs_inv * instance_ssb;
-
-            // Down-cast to single precision once in local space:
-            render_transforms[i] = static_cast<Transform<float>>(local_apparent);
+        // A camera in the scene is not rendered, so it needs no samples:
+        std::vector<Transform<float>> render_transforms;
+        if (!std::holds_alternative<CameraModel<TSpectral>*>(asset_var)) {
+            render_transforms = sample_instance_(*instance);
         }
 
         // Indirect-source designation brackets the asset dispatch (the asset is
@@ -557,7 +612,6 @@ void SceneView<TSpectral>::traverse_and_collect_(
         open_ids_.instance = instance->id();
         open_ids_.part = instance->id();
 
-        const auto& asset_var = instance->asset();
         std::visit([&](auto* raw_ptr) noexcept { handle_asset_ptr_(raw_ptr, render_transforms); },
                    asset_var);
 
@@ -569,8 +623,391 @@ void SceneView<TSpectral>::traverse_and_collect_(
     }
 
     for (const auto& child : node->get_children()) {
-        traverse_and_collect_(child, observer_transforms, observer_inverses, obs_mode);
+        traverse_and_collect_(child);
     }
+}
+
+/**
+ * @brief The camera's pose at a time in the exposure, evaluated once and kept.
+ *
+ * Poses set by hand hold at the interval's reference time, whatever the number of temporal
+ * samples, so a still frame (one sample, at the middle of the exposure) shows things where a
+ * motion-blurred one does, on average.
+ *
+ * @param fraction The time, as a fraction of the exposure from 0 to 1.
+ */
+template <IsSpectral TSpectral>
+const typename SceneView<TSpectral>::ObserverPose&
+SceneView<TSpectral>::observer_at_(double fraction)
+{
+    auto [it, inserted] = observer_poses_.try_emplace(fraction);
+    if (inserted) {
+        Transform<double> ssb = camera_node_->get_ssb_transform_(
+            PoseContext{time_at_(fraction), exposure_interval_.reference, obs_mode_});
+        ssb.rotation = ssb.rotation * camera_model_->sensor_orientation();
+        it->second.ssb = ssb;
+        it->second.inverse = ssb.inverse();
+    }
+    return it->second;
+}
+
+/// The time a fraction of the way through the exposure.
+template <IsSpectral TSpectral>
+Time SceneView<TSpectral>::time_at_(double fraction) const
+{
+    return exposure_interval_.start +
+           units::Second(fraction * exposure_interval_.duration().value());
+}
+
+/// Evenly spaced fractions of the exposure: its middle for one, and otherwise from its start to
+/// its end.
+template <IsSpectral TSpectral>
+std::vector<double> SceneView<TSpectral>::uniform_fractions_(std::size_t count)
+{
+    if (count <= 1) {
+        return {0.5};
+    }
+    std::vector<double> fractions(count);
+    for (std::size_t i = 0; i < count; ++i) {
+        fractions[i] = static_cast<double>(i) / static_cast<double>(count - 1);
+    }
+    return fractions;
+}
+
+/**
+ * @brief Choose the temporal samples for one thing in view.
+ *
+ * Between its samples the renderer draws a thing along straight lines (geometry and lights,
+ * interpolated by Embree) or along a curve fitted through them (point sources: see
+ * TrajectoryArc). The samples are evenly spaced, and as few as keep that path within the
+ * motion tolerance of the true one, as seen from the camera:
+ *
+ * - A thing whose probes (points standing for its motion; see local_probes_()) move less than
+ *   the tolerance during the exposure, and that does not turn by more, is still: one sample, at
+ *   the middle of the exposure.
+ * - Otherwise, the samples start at the exposure's start and end, and as many more as keep it
+ *   from turning more than 45 degrees between two, so that a turn is not mistaken for none (a
+ *   full turn between two samples looks like no turn at all).
+ * - Then, as long as the path drawn strays from the true one by more than the tolerance at any
+ *   point halfway between two samples, the samples are doubled: the halfway points, already
+ *   evaluated, become samples. So choosing costs about two evaluations per sample chosen (the
+ *   last halfway points checked are not kept).
+ *
+ * A light is also followed in its distance, within distance_tolerance relative to it, since
+ * its light falls off with it: a straight line between two samples passes nearer the camera than
+ * a light swinging round it (as everything does when the camera turns), brightening it.
+ *
+ * The number of samples is capped, with a warning: something that moves in a way samples
+ * cannot follow within the tolerance is drawn as near as the cap allows.
+ *
+ * @param probes_at The probes' positions in the camera's frame at a fraction of the exposure,
+ *        each evaluated once (the reference returned must stay valid).
+ * @param turn_rate How fast it turns, in rad/s, relative to the camera: asked for only when the
+ *        samples are chosen.
+ * @param interpolation How the renderer draws it between samples.
+ * @param max_samples The most samples it may be given.
+ * @param what What it is, for the warning.
+ * @param distance_tolerance How closely its probes' distances must be followed, relative to them
+ *        (infinite, the default, for not at all).
+ * @return The fractions of the exposure to sample it at.
+ */
+template <IsSpectral TSpectral>
+std::vector<double> SceneView<TSpectral>::choose_fractions_(
+    const std::function<const std::vector<Vec3<double>>&(double)>& probes_at,
+    const std::function<double()>& turn_rate,
+    Interpolation interpolation,
+    std::size_t max_samples,
+    const std::string& what,
+    double distance_tolerance) const
+{
+    if (requested_temporal_samples_) {
+        return uniform_fractions_(*requested_temporal_samples_);
+    }
+
+    // The tolerance as an angle. A direction in single precision, as the renderer holds them,
+    // is good to about 1e-7 rad: no number of samples does better.
+    constexpr double FLOAT_DIRECTION_PRECISION = 2.4e-7;
+    const double tolerance =
+        std::max(motion_tolerance_ / pixels_per_radian_, FLOAT_DIRECTION_PRECISION);
+    const double duration = exposure_interval_.duration().value();
+
+    // The largest angle, as seen from the camera, between two sets of the same probes, and the
+    // largest difference in their distances, relative to the first's:
+    auto largest_angle = [](const std::vector<Vec3<double>>& a,
+                            const std::vector<Vec3<double>>& b) {
+        double largest = 0.0;
+        for (std::size_t i = 0; i < a.size(); ++i) {
+            largest = std::max(largest, angle_between_(a[i], b[i]));
+        }
+        return largest;
+    };
+    auto largest_distance_change = [](const std::vector<Vec3<double>>& a,
+                                      const std::vector<Vec3<double>>& b) {
+        double largest = 0.0;
+        for (std::size_t i = 0; i < a.size(); ++i) {
+            const double distance = glm::length(a[i]);
+            if (distance > 0.0) {
+                largest = std::max(largest, std::abs(glm::length(b[i]) - distance) / distance);
+            }
+        }
+        return largest;
+    };
+
+    // Still, if nothing moves or turns by the tolerance. The turn is checked by its rate, times
+    // how far the probes reach from the first, which stands at the center, as seen from the
+    // camera. Something that does not move at all (the same at the exposure's start, middle and
+    // end, and not turning) is still at once; otherwise the probes are also compared at its
+    // quarters.
+    const std::vector<Vec3<double>>& middle = probes_at(0.5);
+    if (middle.empty()) {
+        return {0.5};
+    }
+    double reach = 0.0;
+    const double center_distance = glm::length(middle[0]);
+    for (const Vec3<double>& probe : middle) {
+        reach = std::max(reach, glm::length(probe - middle[0]));
+    }
+    const double turn = turn_rate() * duration;
+    if (turn == 0.0 && probes_at(0.0) == middle && probes_at(1.0) == middle) {
+        return {0.5};
+    }
+    double moved = 0.0;
+    double approached = 0.0;
+    for (double fraction : {0.0, 0.25, 0.75, 1.0}) {
+        moved = std::max(moved, largest_angle(probes_at(fraction), middle));
+        approached = std::max(approached, largest_distance_change(middle, probes_at(fraction)));
+    }
+    const double turn_seen = center_distance > 0.0 ? turn * reach / center_distance : turn;
+    if (moved <= tolerance && turn_seen <= tolerance && approached <= distance_tolerance) {
+        return {0.5};
+    }
+
+    // Enough samples that it turns no more than 45 degrees between two:
+    std::size_t intervals = 1;
+    while (static_cast<double>(intervals) * (0.25 * PI<double>()) < turn &&
+           2 * intervals + 1 <= max_samples) {
+        intervals *= 2;
+    }
+
+    while (true) {
+        const double step = 1.0 / static_cast<double>(intervals);
+        double error = 0.0;
+        double distance_error = 0.0;
+        if (interpolation == Interpolation::Straight) {
+            for (std::size_t j = 0; j < intervals; ++j) {
+                const double a = static_cast<double>(j) * step;
+                const std::vector<Vec3<double>>& start = probes_at(a);
+                const std::vector<Vec3<double>>& end = probes_at(a + step);
+                const std::vector<Vec3<double>>& halfway = probes_at(a + 0.5 * step);
+                std::vector<Vec3<double>> drawn(halfway.size());
+                for (std::size_t i = 0; i < halfway.size(); ++i) {
+                    drawn[i] = 0.5 * (start[i] + end[i]);
+                }
+                error = std::max(error, largest_angle(halfway, drawn));
+                distance_error = std::max(distance_error, largest_distance_change(halfway, drawn));
+            }
+        } else {
+            const std::size_t n_probes = middle.size();
+            for (std::size_t i = 0; i < n_probes; ++i) {
+                std::vector<Vec3<float>> directions(intervals + 1);
+                for (std::size_t j = 0; j <= intervals; ++j) {
+                    directions[j] =
+                        Vec3<float>{glm::normalize(probes_at(static_cast<double>(j) * step)[i])};
+                }
+                const TrajectoryArc arc(directions);
+                for (std::size_t j = 0; j < intervals; ++j) {
+                    const double halfway = (static_cast<double>(j) + 0.5) * step;
+                    const Vec3<double> drawn{arc.evaluate(static_cast<float>(halfway))};
+                    error = std::max(error, angle_between_(probes_at(halfway)[i], drawn));
+                }
+            }
+        }
+
+        if (error <= tolerance && distance_error <= distance_tolerance) {
+            break;
+        }
+        if (2 * intervals + 1 > max_samples) {
+            HUIRA_LOG_WARNING(what + " moves in a way that " + std::to_string(intervals + 1) +
+                              " temporal samples, the most it is given, follow only to within " +
+                              std::to_string(error * pixels_per_radian_) + " pixels and " +
+                              std::to_string(100.0 * distance_error) +
+                              "% in distance. Give the SceneView a number of temporal samples, "
+                              "or a larger motion tolerance.");
+            break;
+        }
+        intervals *= 2;
+    }
+    return uniform_fractions_(intervals + 1);
+}
+
+/**
+ * @brief Points in an instance's own frame whose motion stands for its asset's.
+ *
+ * For geometry, the corners and center of its bounding box (for a model, of all its parts),
+ * and the origins of any of a model's parts outside it. Each is treated as interpolated along a
+ * straight line, which errs at least as much as Embree's interpolation of each part about its
+ * origin: more for something that only turns, which so takes more samples than it needs. For a
+ * light or an unresolved object, its origin. The first probe is the center.
+ */
+template <IsSpectral TSpectral>
+std::vector<Vec3<double>>
+SceneView<TSpectral>::local_probes_(const Instance<TSpectral>& instance) const
+{
+    Vec3<double> lower{std::numeric_limits<double>::infinity()};
+    Vec3<double> upper{-std::numeric_limits<double>::infinity()};
+    auto include = [&](const Primitive<TSpectral>& primitive, const Transform<double>& placement) {
+        RTCScene blas = primitive.geometry->blas();
+        if (blas == nullptr) {
+            return;
+        }
+        RTCBounds bounds{};
+        rtcGetSceneBounds(blas, &bounds);
+        if (!(bounds.upper_x >= bounds.lower_x) || !(bounds.upper_y >= bounds.lower_y) ||
+            !(bounds.upper_z >= bounds.lower_z)) {
+            return;
+        }
+        for (std::size_t corner = 0; corner < 8; ++corner) {
+            const Vec3<double> local{(corner & 1) ? bounds.upper_x : bounds.lower_x,
+                                     (corner & 2) ? bounds.upper_y : bounds.lower_y,
+                                     (corner & 4) ? bounds.upper_z : bounds.lower_z};
+            const Vec3<double> point = placement.apply_to_point(local);
+            lower = glm::min(lower, point);
+            upper = glm::max(upper, point);
+        }
+    };
+
+    // A model's parts, placed by its graph (which does not move within the model). Each part is
+    // interpolated about its own origin, which can lie outside its geometry, so the origins are
+    // kept too:
+    std::vector<Vec3<double>> part_origins;
+    std::function<void(const std::shared_ptr<Node<TSpectral>>&, const Transform<double>&)>
+        include_model =
+            [&](const std::shared_ptr<Node<TSpectral>>& node, const Transform<double>& parent) {
+                const Transform<double> placement = parent * node->local_transform_;
+                if (auto part = std::dynamic_pointer_cast<Instance<TSpectral>>(node)) {
+                    part_origins.push_back(placement.position);
+                    std::visit(
+                        [&](auto* raw_ptr) {
+                            using T = std::remove_pointer_t<decltype(raw_ptr)>;
+                            if constexpr (std::is_same_v<T, Primitive<TSpectral>>) {
+                                if (raw_ptr) {
+                                    include(*raw_ptr, placement);
+                                }
+                            } else if constexpr (std::is_same_v<T, Model<TSpectral>>) {
+                                if (raw_ptr) {
+                                    include_model(raw_ptr->root_node_, placement);
+                                }
+                            }
+                        },
+                        part->asset());
+                }
+                for (const auto& child : node->get_children()) {
+                    include_model(child, placement);
+                }
+            };
+
+    std::visit(
+        [&](auto* raw_ptr) {
+            using T = std::remove_pointer_t<decltype(raw_ptr)>;
+            if constexpr (std::is_same_v<T, Primitive<TSpectral>>) {
+                if (raw_ptr) {
+                    include(*raw_ptr, Transform<double>{});
+                }
+            } else if constexpr (std::is_same_v<T, Model<TSpectral>>) {
+                if (raw_ptr) {
+                    include_model(raw_ptr->root_node_, Transform<double>{});
+                }
+            }
+        },
+        instance.asset());
+
+    if (!(upper.x >= lower.x) || !std::isfinite(glm::dot(upper - lower, upper - lower))) {
+        return {Vec3<double>{0.0}};
+    }
+    std::vector<Vec3<double>> probes{0.5 * (lower + upper)};
+    for (std::size_t corner = 0; corner < 8; ++corner) {
+        probes.push_back(Vec3<double>{(corner & 1) ? upper.x : lower.x,
+                                      (corner & 2) ? upper.y : lower.y,
+                                      (corner & 4) ? upper.z : lower.z});
+    }
+    // A part's origin outside the bounds can stray from its true path more than the corners:
+    for (const Vec3<double>& origin : part_origins) {
+        if (glm::any(glm::lessThan(origin, lower)) || glm::any(glm::greaterThan(origin, upper))) {
+            probes.push_back(origin);
+        }
+    }
+    return probes;
+}
+
+/**
+ * @brief An instance's transforms in the camera's frame, at its temporal samples.
+ *
+ * Each pose is evaluated once, at a time on a grid that halves (see choose_fractions_()), and
+ * kept, so that choosing the samples costs about one evaluation per sample chosen.
+ */
+template <IsSpectral TSpectral>
+std::vector<Transform<float>>
+SceneView<TSpectral>::sample_instance_(const Instance<TSpectral>& instance)
+{
+    const std::vector<Vec3<double>> local_probes = local_probes_(instance);
+    const bool point_source =
+        std::holds_alternative<UnresolvedObject<TSpectral>*>(instance.asset());
+
+    struct Sample {
+        Transform<double> local;          // In the camera's frame.
+        std::vector<Vec3<double>> probes; // In the camera's frame.
+        double turn_rate = 0.0;           // Relative to the camera, rad/s, at most.
+    };
+    std::map<double, Sample> samples;
+    auto sample_at = [&](double fraction) -> const Sample& {
+        auto [it, inserted] = samples.try_emplace(fraction);
+        if (inserted) {
+            const ObserverPose& observer = observer_at_(fraction);
+            const Transform<double> ssb = instance.get_apparent_transform(
+                obs_mode_, exposure_interval_.reference, time_at_(fraction), observer.ssb);
+            Sample& sample = it->second;
+            sample.local = observer.inverse * ssb;
+            for (const Vec3<double>& probe : local_probes) {
+                sample.probes.push_back(sample.local.apply_to_point(probe));
+            }
+            // How fast it turns as seen from the camera: its own turning and the camera's, and
+            // for a point, how fast its direction swings as it passes the camera.
+            sample.turn_rate =
+                glm::length(observer.ssb.angular_velocity) +
+                (point_source ? glm::length(ssb.velocity - observer.ssb.velocity) /
+                                    std::max(glm::length(ssb.position - observer.ssb.position),
+                                             std::numeric_limits<double>::min())
+                              : glm::length(ssb.angular_velocity));
+        }
+        return it->second;
+    };
+
+    const std::vector<double> fractions = choose_fractions_(
+        [&](double fraction) -> const std::vector<Vec3<double>>& {
+            return sample_at(fraction).probes;
+        },
+        [&]() {
+            double rate = 0.0;
+            for (double fraction : {0.0, 0.5, 1.0}) {
+                rate = std::max(rate, sample_at(fraction).turn_rate);
+            }
+            return rate;
+        },
+        point_source ? Interpolation::Arc : Interpolation::Straight,
+        MAX_AUTOMATIC_SAMPLES,
+        instance.get_info(),
+        std::holds_alternative<Light<TSpectral>*>(instance.asset())
+            ? LIGHT_DISTANCE_TOLERANCE
+            : std::numeric_limits<double>::infinity());
+
+    std::vector<Transform<float>> transforms;
+    transforms.reserve(fractions.size());
+    for (double fraction : fractions) {
+        // Down-cast to single precision once in the camera's frame:
+        transforms.push_back(static_cast<Transform<float>>(sample_at(fraction).local));
+    }
+    max_temporal_samples_ = std::max(max_temporal_samples_, transforms.size());
+    return transforms;
 }
 
 /**
@@ -697,6 +1134,7 @@ void SceneView<TSpectral>::add_primitive_instance_(
 
     ObjectIds ids = open_ids_;
     ids.geometry = primitive->geometry->id();
+    has_motion_blur_ = has_motion_blur_ || instance_apparent_transforms.size() > 1;
 
     std::size_t batch_index = 0;
     if (it != batch_lookup_.end()) {
@@ -739,6 +1177,7 @@ void SceneView<TSpectral>::add_light_instance_(
     LightInstance<TSpectral> instance;
     instance.light = light;
     instance.transforms = instance_apparent_transforms;
+    has_motion_blur_ = has_motion_blur_ || instance.transforms.size() > 1;
 
     lights_.push_back(std::move(instance));
 }
@@ -756,6 +1195,9 @@ void SceneView<TSpectral>::add_unresolved_instance_(
     UnresolvedInstance<TSpectral> instance;
     instance.unresolved_object = unresolved_object;
     instance.transforms = instance_apparent_transforms;
+    for (double fraction : uniform_fractions_(instance_apparent_transforms.size())) {
+        instance.times.push_back(time_at_(fraction));
+    }
 
     unresolved_objects_.push_back(std::move(instance));
 }
@@ -1111,7 +1553,7 @@ template <IsSpectral TSpectral>
 void SceneView<TSpectral>::build_tlas_()
 {
     tlas_ = rtcNewScene(device_->get());
-    bool motion_blur = (temporal_samples_.size() != 1);
+    const bool motion_blur = has_motion_blur_;
     // Robust traversal: required so BVH plane tests cannot drop marginal hits
     // at extreme coordinate ranges (planetary camera-relative scenes).
     RTCSceneFlags scene_flags = RTC_SCENE_FLAG_ROBUST;

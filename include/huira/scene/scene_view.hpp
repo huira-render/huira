@@ -1,8 +1,13 @@
 #pragma once
 
+#include <cmath>
 #include <cstddef>
+#include <functional>
 #include <limits>
+#include <map>
 #include <memory>
+#include <optional>
+#include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -54,11 +59,16 @@ enum class AlphaMode {
 template <IsSpectral TSpectral>
 class SceneView {
   public:
+    /// How far, by default, the path a thing is drawn along may stray from its true path during
+    /// the exposure, in pixels, when the number of temporal samples is chosen automatically.
+    static constexpr double DEFAULT_MOTION_TOLERANCE = 0.1;
+
     SceneView(const Scene<TSpectral>& scene,
               const Interval& exposure_interval,
               const InstanceHandle<TSpectral>& camera_instance,
               ObservationMode obs_mode,
-              std::size_t num_temporal_samples = 1);
+              std::optional<std::size_t> num_temporal_samples = std::nullopt,
+              double motion_tolerance = DEFAULT_MOTION_TOLERANCE);
 
     ~SceneView();
 
@@ -108,6 +118,16 @@ class SceneView {
     /// True when the TLAS contains nothing that a ray could ever hit.
     [[nodiscard]] bool tlas_is_empty() const noexcept { return tlas_empty_; }
 
+    /// Whether anything rays can hit (geometry and lights) moves in view during the exposure, as
+    /// the view samples it: rays are then traced at times through the exposure.
+    [[nodiscard]] bool has_motion_blur() const noexcept { return has_motion_blur_; }
+
+    /// The most temporal samples anything in the view was given (1 when nothing moves).
+    [[nodiscard]] std::size_t max_temporal_samples() const noexcept
+    {
+        return max_temporal_samples_;
+    }
+
     /// Conservative camera-space bounding sphere of one TLAS occupant.
     struct OccupancyBound {
         Vec3<float> center; ///< Camera-frame centre.
@@ -140,7 +160,63 @@ class SceneView {
 
   private:
     Interval exposure_interval_;
-    std::vector<Time> temporal_samples_;
+
+    // Temporal sampling. Each thing in view (each instance, and the star field) has its own
+    // samples, evenly spaced through the exposure: one, at its middle, for something that does
+    // not move in view, and otherwise as many as its motion needs (see choose_fractions_()), or
+    // the number asked for. Times are given as fractions of the exposure, from 0 to 1.
+    std::optional<std::size_t> requested_temporal_samples_;
+    double motion_tolerance_ = DEFAULT_MOTION_TOLERANCE;
+    ObservationMode obs_mode_ = ObservationMode::GEOMETRIC_STATE;
+    const Node<TSpectral>* camera_node_ = nullptr;
+    double pixels_per_radian_ = 1.0;
+    bool has_motion_blur_ = false;
+    std::size_t max_temporal_samples_ = 1;
+
+    /// The most samples one thing is given automatically, and the star field, whose memory grows
+    /// with its samples times the number of stars.
+    static constexpr std::size_t MAX_AUTOMATIC_SAMPLES = RTC_MAX_TIME_STEP_COUNT; // Embree's
+    static constexpr std::size_t MAX_AUTOMATIC_STAR_SAMPLES = 17;
+
+    /// The camera's pose in the solar system barycentric frame, and its inverse, at a time.
+    struct ObserverPose {
+        Transform<double> ssb;
+        Transform<double> inverse;
+    };
+    std::map<double, ObserverPose> observer_poses_;
+    const ObserverPose& observer_at_(double fraction);
+    [[nodiscard]] Time time_at_(double fraction) const;
+    [[nodiscard]] static std::vector<double> uniform_fractions_(std::size_t count);
+
+    /// How the renderer draws something between its temporal samples: geometry and lights along
+    /// straight lines (Embree), and point sources along a curve fitted through them.
+    enum class Interpolation { Straight, Arc };
+
+    /// How closely a light's distance is followed, relative to it, when its samples are chosen:
+    /// its light falls off as the square of the distance, so this keeps it within 0.1%.
+    static constexpr double LIGHT_DISTANCE_TOLERANCE = 5e-4;
+
+    std::vector<double>
+    choose_fractions_(const std::function<const std::vector<Vec3<double>>&(double)>& probes_at,
+                      const std::function<double()>& turn_rate,
+                      Interpolation interpolation,
+                      std::size_t max_samples,
+                      const std::string& what,
+                      double distance_tolerance = std::numeric_limits<double>::infinity()) const;
+
+    /// Points in an instance's own frame whose motion stands for its asset's: the corners and
+    /// center of its bounds, or its origin.
+    [[nodiscard]] std::vector<Vec3<double>>
+    local_probes_(const Instance<TSpectral>& instance) const;
+
+    /// An instance's transforms in the camera's frame at its temporal samples.
+    std::vector<Transform<float>> sample_instance_(const Instance<TSpectral>& instance);
+
+    /// The angle between two directions (which need not be unit vectors), precise at any size.
+    [[nodiscard]] static double angle_between_(const Vec3<double>& a, const Vec3<double>& b)
+    {
+        return std::atan2(glm::length(glm::cross(a, b)), glm::dot(a, b));
+    }
 
     template <typename TMaterial, typename TParams>
     TSpectral sample_light_contribution_(const LightInstance<TSpectral>& light_instance,
@@ -152,10 +228,7 @@ class SceneView {
                                          RandomSampler<float>& sampler,
                                          float time) const;
 
-    void traverse_and_collect_(const std::shared_ptr<Node<TSpectral>>& node,
-                               const std::vector<Transform<double>>& observer_transforms,
-                               const std::vector<Transform<double>>& observer_inverses,
-                               ObservationMode obs_mode);
+    void traverse_and_collect_(const std::shared_ptr<Node<TSpectral>>& node);
 
     void handle_asset_ptr_(Primitive<TSpectral>* primitive,
                            const std::vector<Transform<float>>& instance_apparent_transforms);

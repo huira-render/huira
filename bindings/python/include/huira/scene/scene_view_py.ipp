@@ -20,12 +20,25 @@ void bind_scene_view(py::module_& m)
                       const Interval&,
                       const InstanceHandle<TSpectral>&,
                       ObservationMode,
-                      std::size_t>(),
+                      std::optional<std::size_t>,
+                      double>(),
              py::arg("scene"),
              py::arg("exposure_interval"),
              py::arg("camera_instance"),
              py::arg("observation_mode"),
-             py::arg("num_temporal_samples") = 1)
+             py::arg("num_temporal_samples") = py::none(),
+             py::arg("motion_tolerance") = SV::DEFAULT_MOTION_TOLERANCE,
+             "A view of the scene over an exposure, from a camera. With num_temporal_samples None "
+             "(the default), each thing in view is given as many temporal samples as its motion "
+             "needs, to be drawn within motion_tolerance pixels of its path: one, a still frame, "
+             "if it does not move in view. A number gives everything that many; 1 renders a "
+             "still frame.")
+        .def("has_motion_blur",
+             &SV::has_motion_blur,
+             "Whether anything rays can hit moves in view during the exposure, as sampled")
+        .def("max_temporal_samples",
+             &SV::max_temporal_samples,
+             "The most temporal samples anything in the view was given")
 
         // Ray tracing — single ray
         .def("intersect",
