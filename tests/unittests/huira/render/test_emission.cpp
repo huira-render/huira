@@ -1,5 +1,6 @@
 #include <cmath>
 #include <cstddef>
+#include <utility>
 
 #include "catch2/catch_test_macros.hpp"
 #include "huira/huira.hpp"
@@ -13,6 +14,13 @@ namespace {
 struct TestCamera {
     CameraModelHandle<RGB> model;
     InstanceHandle<RGB> instance;
+
+    // A constructor, rather than an aggregate: the handles have no default constructor, so an
+    // aggregate's would be deleted, which MSVC warns about (C4623).
+    TestCamera(CameraModelHandle<RGB> m, InstanceHandle<RGB> i)
+        : model(std::move(m)), instance(std::move(i))
+    {
+    }
 };
 
 TestCamera add_camera(Scene<RGB>& scene, units::Meter x)

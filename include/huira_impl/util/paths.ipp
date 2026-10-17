@@ -1,6 +1,7 @@
 #include <filesystem>
 
 #include "huira/platform/get_exe_path.hpp"
+#include "huira/util/macros.hpp"
 
 namespace fs = std::filesystem;
 
@@ -13,7 +14,9 @@ namespace huira {
 
 inline Paths& Paths::instance()
 {
+    HUIRA_PER_MODULE_STATE_BEGIN
     static Paths instance;
+    HUIRA_PER_MODULE_STATE_END
     return instance;
 }
 
