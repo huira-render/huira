@@ -176,10 +176,46 @@ class Renderer {
     }
 
     /// A set of ray directions, as a cone about a unit axis.
+    ///
+    /// Region culling works at the angular scale of a pixel, which for a narrow field of view is
+    /// far smaller than an arc cosine of a single-precision dot product can resolve: near 1, the
+    /// cosine changes too little. So angles are measured in double precision, between directions
+    /// by atan2 of their cross and dot products (angle_between_()), and between cones by the
+    /// chord between their axes, which keeps its precision at small angles.
     struct DirectionCone {
-        Vec3<float> axis{0.f, 0.f, 1.f};
-        float half_angle = 0.f;
+        Vec3<double> axis{0.0, 0.0, 1.0};
+        double half_angle = 0.0;
+        double sin_quarter = 0.0; ///< sin(half_angle / 2)
+        double cos_quarter = 1.0; ///< cos(half_angle / 2)
+
+        void set_half_angle(double angle)
+        {
+            half_angle = angle;
+            sin_quarter = std::sin(0.5 * angle);
+            cos_quarter = std::cos(0.5 * angle);
+        }
+
+        /// Whether two cones share a direction: their axes are no further apart than the sum of
+        /// their half-angles, compared by the chord between the axes, 2 sin(angle / 2).
+        [[nodiscard]] bool overlaps(const DirectionCone& other) const
+        {
+            if (half_angle + other.half_angle >= PI<double>()) {
+                return true;
+            }
+            // sin((a + b) / 2), from the halves of each half-angle, which is positive as
+            // (a + b) / 2 is below a right angle, so the squared chords compare:
+            const double sin_half_sum =
+                sin_quarter * other.cos_quarter + cos_quarter * other.sin_quarter;
+            const Vec3<double> chord = axis - other.axis;
+            return glm::dot(chord, chord) <= 4.0 * sin_half_sum * sin_half_sum;
+        }
     };
+
+    /// The angle between two unit directions, precise at any size.
+    [[nodiscard]] static double angle_between_(const Vec3<double>& a, const Vec3<double>& b)
+    {
+        return std::atan2(glm::length(glm::cross(a, b)), glm::dot(a, b));
+    }
 
     /// Cones subtending each TLAS occupant as seen from the camera.
     bool build_occupancy_cones_(SceneView<TSpectral>& scene_view,
