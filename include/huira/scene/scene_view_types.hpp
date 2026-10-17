@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "huira/concepts/spectral_concepts.hpp"
+#include "huira/core/time.hpp"
 #include "huira/core/transform.hpp"
 #include "huira/scene/object_ids.hpp"
 
@@ -36,6 +37,7 @@ template <IsSpectral TSpectral>
 struct UnresolvedInstance {
     std::shared_ptr<UnresolvedObject<TSpectral>> unresolved_object;
     std::vector<Transform<float>> transforms; // Transform at N times
+    std::vector<Time> times;                  // The N times, evenly spaced through the exposure
 };
 
 /**

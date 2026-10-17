@@ -470,7 +470,7 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
     int tiles_x = (fb_width + TILE_SIZE - 1) / TILE_SIZE;
     int tiles_y = (fb_height + TILE_SIZE - 1) / TILE_SIZE;
     int num_tiles = tiles_x * tiles_y;
-    const bool has_motion_blur = scene_view.temporal_samples_.size() > 1;
+    const bool has_motion_blur = scene_view.has_motion_blur();
 
     // Regions of the frame that provably contain no geometry take the same miss path
     // the empty-scene case above uses. In space scenes the field of view is mostly
@@ -1467,7 +1467,6 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
     const bool has_core = core_share > 0.f;
     const GridPsf<TSpectral>* grid = !aperture ? camera->grid_psf_.get() : nullptr;
 
-    const auto& times = scene_view.temporal_samples_;
     const auto& star_field = scene_view.stars_;
 
     if (star_field.empty() && scene_view.unresolved_objects_.empty()) {
@@ -1526,7 +1525,7 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
             for (std::size_t i = 0; i < instance.transforms.size(); ++i) {
                 const Vec3<float>& position = instance.transforms[i].position;
                 directions[i] = glm::normalize(position);
-                irradiances[i] = instance.unresolved_object->get_irradiance(times[i]);
+                irradiances[i] = instance.unresolved_object->get_irradiance(instance.times[i]);
                 ranges[i] = glm::length(position);
                 const double depth = static_cast<double>(depth_sign * position.z);
                 if (depth > 0.0) {

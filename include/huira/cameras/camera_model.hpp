@@ -48,6 +48,9 @@ class CameraModelHandle;
 template <IsSpectral TSpectral>
 class Renderer;
 
+template <IsSpectral TSpectral>
+class SceneView;
+
 /**
  * @brief CameraModel represents a pinhole or thin-lens camera with configurable sensor, aperture,
  * and distortion models.
@@ -896,6 +899,7 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
 
     friend class CameraModelHandle<TSpectral>;
     friend class Renderer<TSpectral>;
+    friend class SceneView<TSpectral>;
 };
 } // namespace huira
 
