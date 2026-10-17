@@ -832,6 +832,10 @@ void SceneView<TSpectral>::end_indirect_source_(const Instance<TSpectral>& insta
  * each temporal sample, and a sphere is fitted around them. Sphere lights are bounded
  * directly from their radius.
  *
+ * With motion blur, a ray can hit an occupant at any time in the exposure, not only at the
+ * temporal samples, so each bound covers everything the occupant passes through between two
+ * consecutive samples (see swept_bound_()). A static occupant still gets one bound.
+ *
  * Every hit that a ray can register lies inside one of these spheres, so a set of ray
  * directions that misses all of them cannot hit anything. Any occupant that cannot be
  * bounded clears occupancy_bounds_complete_, which disables culling entirely rather
@@ -879,7 +883,9 @@ void SceneView<TSpectral>::compute_occupancy_bounds_()
             corners_local[corner] = box_corner(lower, upper, corner);
         }
 
+        std::vector<SampleBound> sample_bounds;
         for (const auto& instance_transforms : batch.instances) {
+            sample_bounds.clear();
             for (const Transform<float>& xf : instance_transforms) {
                 Vec3<float> lo{std::numeric_limits<float>::infinity()};
                 Vec3<float> hi{-std::numeric_limits<float>::infinity()};
@@ -902,7 +908,15 @@ void SceneView<TSpectral>::compute_occupancy_bounds_()
                     occupancy_bounds_complete_ = false;
                     return;
                 }
-                occupancy_bounds_.push_back({center, radius});
+                // The box's center is its transformed local center (an affine map keeps the
+                // corners' central symmetry), so this is how far the rotation carries it:
+                const float lever = glm::length(center - xf.position);
+                sample_bounds.push_back(
+                    {center, radius, lever, xf.rotation.local_to_parent_quaternion()});
+            }
+            if (!push_swept_bounds_(sample_bounds)) {
+                occupancy_bounds_complete_ = false;
+                return;
             }
         }
     }
@@ -916,12 +930,70 @@ void SceneView<TSpectral>::compute_occupancy_bounds_()
             return;
         }
         const float radius = sphere_light->radius().to_si_f();
+        std::vector<SampleBound> sample_bounds;
         for (const Transform<float>& xf : light_inst.transforms) {
             // The sphere is placed at the instance origin and is not scaled by the
-            // TLAS instancing, matching how build_tlas_() attaches it.
-            occupancy_bounds_.push_back({xf.position, radius});
+            // TLAS instancing, matching how build_tlas_() attaches it. Its center is the
+            // instance's origin, so a rotation does not move it.
+            sample_bounds.push_back(
+                {xf.position, radius, 0.f, xf.rotation.local_to_parent_quaternion()});
+        }
+        if (!push_swept_bounds_(sample_bounds)) {
+            occupancy_bounds_complete_ = false;
+            return;
         }
     }
+}
+
+/**
+ * @brief Add the bounds that hold an occupant over the whole exposure, from its bounds at each
+ *        temporal sample.
+ *
+ * Between two temporal samples, Embree interpolates an instance's translation and scale
+ * linearly, and its rotation along the shorter arc between the two (slerp). A point of the
+ * geometry at a distance @c lever from the instance's origin follows the line between its
+ * positions at the two samples, except that the rotation carries it off that line: by at most
+ * @c lever times the angle turned, as a rotation by an angle moves a point at most that far.
+ * So between two samples the occupant stays within a sphere around the middle of that line,
+ * whose radius is half the line's length, plus that drift, plus the larger of the two radii
+ * (the scale changes linearly, so the geometry never reaches further from the moving center
+ * than it does at one end or the other).
+ *
+ * @param sample_bounds The occupant's bound at each temporal sample. A static occupant (one
+ *        sample, or the same bound at every sample) gets one bound.
+ * @return False if a bound is not finite.
+ */
+template <IsSpectral TSpectral>
+bool SceneView<TSpectral>::push_swept_bounds_(const std::vector<SampleBound>& sample_bounds)
+{
+    const bool moves =
+        std::any_of(sample_bounds.begin(), sample_bounds.end(), [&](const SampleBound& b) {
+            return b.center != sample_bounds.front().center ||
+                   b.radius != sample_bounds.front().radius ||
+                   b.rotation != sample_bounds.front().rotation;
+        });
+    if (!moves) {
+        occupancy_bounds_.push_back({sample_bounds.front().center, sample_bounds.front().radius});
+        return true;
+    }
+
+    for (std::size_t i = 0; i + 1 < sample_bounds.size(); ++i) {
+        const SampleBound& a = sample_bounds[i];
+        const SampleBound& b = sample_bounds[i + 1];
+
+        // The angle between the two rotations, along the shorter arc, as Embree turns:
+        const float cos_half = std::min(1.f, std::abs(glm::dot(a.rotation, b.rotation)));
+        const float angle = 2.f * std::acos(cos_half);
+
+        const Vec3<float> center = 0.5f * (a.center + b.center);
+        const float radius = 0.5f * glm::length(b.center - a.center) +
+                             std::max(a.lever, b.lever) * angle + std::max(a.radius, b.radius);
+        if (!std::isfinite(radius) || !std::isfinite(glm::dot(center, center))) {
+            return false;
+        }
+        occupancy_bounds_.push_back({center, radius});
+    }
+    return true;
 }
 
 template <IsSpectral TSpectral>

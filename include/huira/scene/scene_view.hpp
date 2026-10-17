@@ -111,7 +111,7 @@ class SceneView {
     /// Conservative camera-space bounding sphere of one TLAS occupant.
     struct OccupancyBound {
         Vec3<float> center; ///< Camera-frame centre.
-        float radius;       ///< Radius enclosing the occupant at that instant.
+        float radius;       ///< Radius enclosing the occupant over the time it covers.
     };
 
     /// Per-occupant bounds for every instance in the TLAS, over the exposure.
@@ -256,6 +256,15 @@ class SceneView {
     bool occupancy_bounds_complete_ = true;
 
     void compute_occupancy_bounds_();
+
+    /// An occupant's bound at one temporal sample, and what Embree interpolates it from.
+    struct SampleBound {
+        Vec3<float> center;         ///< Camera-frame center.
+        float radius;               ///< Radius enclosing the occupant.
+        float lever;                ///< Distance from the instance's origin to the center.
+        Quaternion<float> rotation; ///< The instance's rotation.
+    };
+    bool push_swept_bounds_(const std::vector<SampleBound>& sample_bounds);
 
     uint32_t MASK_GEOMETRY_ = 0x01;
     uint32_t MASK_LIGHT_ = 0x02;
