@@ -307,3 +307,118 @@ TEST_CASE("Region culling keeps what a moving object passes through between temp
         CHECK(mismatched_pixels(culled, reference) == 0);
     }
 }
+
+TEST_CASE("A hit on a moving object is placed where the ray found it", "[render][motion_blur]")
+{
+    // An ellipsoid 4 m long, 1 km in front of the camera, that moves 10 m sideways and turns a
+    // quarter turn about the line of sight during the exposure, with 2 temporal samples. A ray
+    // traced at any time must find it where it is then, and the hit must be placed there, on
+    // the ray, with its normal turned as the ellipsoid is.
+    Scene<RGB> scene;
+    auto material = scene.new_material(scene.new_bsdf_lambertian());
+    auto body =
+        scene.root.new_instance(scene.add_primitive(scene.add_ellipsoid(2_m, 1_m, 1_m), material));
+    body.set_position(0_m, 0_m, 1000_m);
+    body.set_velocity(10_mps, 0_mps, 0_mps);
+    body.set_angular_velocity(units::RadiansPerSecond(0.0),
+                              units::RadiansPerSecond(0.0),
+                              units::RadiansPerSecond(PI<double>() / 2.0));
+    auto camera = scene.root.new_instance(scene.new_camera_model());
+    SceneView<RGB> scene_view(scene,
+                              Interval{Time::from_et(0.0), Time::from_et(1.0)},
+                              camera,
+                              ObservationMode::TRUE_STATE,
+                              2);
+
+    for (float time : {0.f, 0.25f, 0.5f, 0.75f, 1.f}) {
+        INFO("time " << time);
+        // Where the ellipsoid is, and how far it has turned, at that time:
+        const Vec3<float> center{10.f * time, 0.f, 1000.f};
+        const float angle = 0.5f * PI<float>() * time;
+        const float c = std::cos(angle);
+        const float s = std::sin(angle);
+
+        // A ray toward a point half a meter off its center, across its long axis:
+        const Vec3<float> aim = center + Vec3<float>{-0.5f * s, 0.5f * c, 0.f};
+        const Ray<RGB> ray(Vec3<float>{0.f}, glm::normalize(aim));
+        const HitRecord hit = scene_view.intersect(ray, time);
+        REQUIRE(hit.hit());
+        const Interaction<RGB> isect = scene_view.resolve_hit(ray, hit);
+
+        // On the ray:
+        CHECK(glm::length(isect.position - ray.at(hit.t)) < 1e-3f);
+
+        // On the ellipsoid as it is at that time, in its own frame:
+        const Vec3<float> d = isect.position - center;
+        const Vec3<float> local{c * d.x + s * d.y, -s * d.x + c * d.y, d.z};
+        CHECK(std::abs((local.x / 2.f) * (local.x / 2.f) + local.y * local.y + local.z * local.z -
+                       1.f) < 1e-3f);
+
+        // With the normal of the ellipsoid there, turned with it:
+        const Vec3<float> local_normal =
+            glm::normalize(Vec3<float>{local.x / 4.f, local.y, local.z});
+        const Vec3<float> normal{c * local_normal.x - s * local_normal.y,
+                                 s * local_normal.x + c * local_normal.y,
+                                 local_normal.z};
+        CHECK(std::abs(glm::dot(isect.normal_g, normal)) > 0.9999f);
+    }
+}
+
+TEST_CASE("A turning camera sees a still body shaded as when it holds still",
+          "[render][motion_blur]")
+{
+    // A ball 100 m in front of the camera, lit from behind it. As the camera turns, the ball
+    // streaks across the image, but neither it nor its light moves, so it must be shaded as when
+    // the camera holds still. A glowing ball, whose brightness does not depend on how it is
+    // shaded, shows what the turn alone does to the image (the light reaching the sensor from
+    // off its axis falls off a little): the lit ball must gain or lose no more light than the
+    // glowing one, and its streak must be centered as the glowing one's is. Shading the ball as
+    // it stood at the start of the exposure, while its light turned with the camera, lost 3%.
+    const auto render_ball = [](double turn_rate, bool glowing) {
+        Scene<RGB> scene;
+        auto material = scene.new_material(scene.new_bsdf_lambertian());
+        if (glowing) {
+            material.set_albedo_factor(RGB{0.f});
+            material.set_emissive_factor(RGB{1.f});
+        }
+        auto ball = scene.root.new_instance(
+            scene.add_primitive(scene.add_ellipsoid(2_m, 2_m, 2_m), material));
+        ball.set_position(0_m, 0_m, 100_m);
+        auto sun = scene.root.new_instance(scene.new_sun_light());
+        sun.set_position(0_m, 0_m, -1_au);
+
+        auto camera_model = scene.new_camera_model();
+        camera_model.configure_sensor_from_size({200, 200}, 36_mm);
+        camera_model.set_focal_length(50_mm);
+        camera_model.enable_diffraction(false);
+        camera_model.enable_depth_of_field(false);
+        auto camera = scene.root.new_instance(camera_model);
+        camera.set_angular_velocity(units::RadiansPerSecond(0.0),
+                                    units::RadiansPerSecond(turn_rate),
+                                    units::RadiansPerSecond(0.0));
+
+        auto frame_buffer = camera_model.make_frame_buffer();
+        frame_buffer.enable_received_power();
+        Renderer<RGB> renderer;
+        renderer.set_samples_per_pixel(64);
+        SceneView<RGB> scene_view(scene,
+                                  Interval::from_centered(Time::from_et(0.0), 1_s),
+                                  camera,
+                                  ObservationMode::TRUE_STATE,
+                                  16);
+        renderer.render(scene_view, frame_buffer);
+        return frame_buffer.received_power();
+    };
+
+    // Turning 0.4 rad/s, the ball sweeps about 112 pixels:
+    const Image<RGB> lit_still = render_ball(0.0, false);
+    const Image<RGB> lit_turning = render_ball(0.4, false);
+    const Image<RGB> glowing_still = render_ball(0.0, true);
+    const Image<RGB> glowing_turning = render_ball(0.4, true);
+    const double lit_ratio = total(lit_turning) / total(lit_still);
+    const double glowing_ratio = total(glowing_turning) / total(glowing_still);
+    CHECK(std::abs(lit_ratio / glowing_ratio - 1.0) < 0.01);
+    const double lit_shift = centroid_column(lit_turning) - centroid_column(lit_still);
+    const double glowing_shift = centroid_column(glowing_turning) - centroid_column(glowing_still);
+    CHECK(std::abs(lit_shift - glowing_shift) < 0.25);
+}

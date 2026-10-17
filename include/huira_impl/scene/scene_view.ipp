@@ -268,6 +268,7 @@ SceneView<TSpectral>::intersect(const Ray<TSpectral>& ray, float time, unsigned 
         rec.geom_id = rayhit.hit.geomID;
         rec.prim_id = rayhit.hit.primID;
         rec.Ng = Vec3<float>{rayhit.hit.Ng_x, rayhit.hit.Ng_y, rayhit.hit.Ng_z};
+        rec.time = time;
     }
     return rec;
 }
@@ -385,8 +386,10 @@ Interaction<TSpectral> SceneView<TSpectral>::resolve_hit(const Ray<TSpectral>& r
     // Get the hit:
     batch.primitive->geometry->compute_surface_interaction(hit, isect);
     isect.wo = -ray.direction();
-    const auto& instance_transforms = batch.instances[mapping.instance_index];
-    const Transform<float>& xf = instance_transforms[0];
+    // The instance as Embree placed it when the ray hit it, at the ray's time in the exposure:
+    // with motion blur, it moves and turns between temporal samples.
+    const Transform<float> xf =
+        instance_transform_at(batch.instances[mapping.instance_index], hit.time);
 
     // Position error accumulates in the primitive's LOCAL frame (surface
     // reconstruction / barycentric interpolation, rotation) and in the WORLD

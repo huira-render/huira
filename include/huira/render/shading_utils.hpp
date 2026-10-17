@@ -30,6 +30,45 @@ inline float power_heuristic(float f_pdf, float g_pdf)
 }
 
 /**
+ * @brief The transform Embree gives an instance at a normalized time in the exposure.
+ *
+ * Between two temporal samples, Embree interpolates an instance's translation and scale
+ * linearly, and its rotation along the shorter arc between the two (slerp). This does the same,
+ * so that what a ray hits is placed, and its normals turned, as Embree placed it when the ray
+ * found it.
+ *
+ * @param transforms The instance's transforms at uniformly spaced temporal samples.
+ * @param t Normalized time in [0, 1] across the sequence.
+ * @return The instance's transform at that time.
+ */
+inline Transform<float> instance_transform_at(const std::vector<Transform<float>>& transforms,
+                                              float t)
+{
+    if (transforms.empty()) {
+        return Transform<float>{};
+    }
+    if (transforms.size() == 1) {
+        return transforms[0];
+    }
+
+    t = std::clamp(t, 0.0f, 1.0f);
+    const float scaled_t = t * static_cast<float>(transforms.size() - 1);
+    std::size_t idx = static_cast<std::size_t>(std::floor(scaled_t));
+    idx = std::min(idx, transforms.size() - 2);
+    const float frac = scaled_t - static_cast<float>(idx);
+    const Transform<float>& a = transforms[idx];
+    const Transform<float>& b = transforms[idx + 1];
+
+    Transform<float> result;
+    result.position = a.position * (1.0f - frac) + b.position * frac;
+    result.scale = a.scale * (1.0f - frac) + b.scale * frac;
+    // glm::slerp takes the shorter arc, as Embree does:
+    result.rotation = Rotation<float>::from_local_to_parent(glm::slerp(
+        a.rotation.local_to_parent_quaternion(), b.rotation.local_to_parent_quaternion(), frac));
+    return result;
+}
+
+/**
  * @brief Interpolates a per-temporal-sample transform sequence at a normalized time.
  *
  * @param transforms Transforms at uniformly spaced temporal samples.
