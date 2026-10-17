@@ -32,6 +32,7 @@ set(UNIT_TESTS
     huira/render/test_emission.cpp
     huira/render/test_measured_defocus.cpp
     huira/render/test_measured_unresolved.cpp
+    huira/render/test_motion_blur.cpp
     huira/render/test_non_finite_radiance.cpp
     huira/render/test_object_ids.cpp
     huira/render/test_psf_switch.cpp
