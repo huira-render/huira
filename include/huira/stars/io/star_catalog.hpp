@@ -59,7 +59,8 @@ constexpr std::uint16_t HRSC_FORMAT_VERSION = 1;
 /// Bump when the *values* written by the catalog builder change for the same layout.
 ///   1  2026-10  Initial release: V = VT - 0.090 (BT - VT); B-V = 0.850 (BT - VT);
 ///               T_eff from B-V by Ballesteros (2012); solid angle from a Planck spectrum
-///               through an approximate Johnson V band; B-V = 0.3 when only one band exists.
+///               through an approximate Johnson V band; B-V = 0.3 when only one band exists,
+///               and is clamped to [-0.4, 2.5] (BV_COLOR_INDEX_MIN/MAX) before the relation.
 constexpr std::uint16_t HRSC_DATA_VERSION = 1;
 
 constexpr std::size_t HRSC_HEADER_SIZE = 32;

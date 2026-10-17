@@ -9,6 +9,11 @@
 namespace fs = std::filesystem;
 
 namespace huira {
+/// The B-V color index is clamped to this range before the temperature is computed from it:
+/// about 21,700 K to 2,700 K. Outside it, Tycho-2's colors are photometric noise.
+constexpr double BV_COLOR_INDEX_MIN = -0.4;
+constexpr double BV_COLOR_INDEX_MAX = 2.5;
+
 // The layout of this struct is the record layout of the .hrsc file (see star_catalog.hpp):
 // 48 bytes, every field at its natural alignment, no padding. Reordering, adding or
 // changing a field changes the file format.

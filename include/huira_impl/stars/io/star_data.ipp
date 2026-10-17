@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <filesystem>
@@ -26,7 +27,13 @@ inline void StarData::process_magnitude(double BTmag, double VTmag)
         vmag = has_vt ? VTmag : BTmag;
     }
 
-    // Compute effective temperature from B-V color index:
+    // Noisy photometry of faint stars gives colors no star has (Tycho-2 has BT - VT down to
+    // -1.8), and past B-V = -0.674 the relation below has a pole and goes negative. Clamp to
+    // the range of real stars (about O-type to the reddest M giants) so the star keeps its
+    // measured brightness with a plausible color, rather than a value the renderer rejects:
+    bv_color_index = std::clamp(bv_color_index, BV_COLOR_INDEX_MIN, BV_COLOR_INDEX_MAX);
+
+    // Compute effective temperature from B-V color index (Ballesteros 2012):
     double temp =
         4600.0 * (1.0 / (0.92 * bv_color_index + 1.7) + 1.0 / (0.92 * bv_color_index + 0.62));
 
