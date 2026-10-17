@@ -20,10 +20,15 @@ inline void bind_instance_handle(py::module_& m)
             .def("__repr__", [](const HandleType&) { return "<InstanceHandle>"; })
             // Bind the overload taking another InstanceHandle target
             .def("look_at",
-                 py::overload_cast<const InstanceHandle<TSpectral>&, const Vec3<double>&>(
-                     &HandleType::look_at),
+                 py::overload_cast<const InstanceHandle<TSpectral>&,
+                                   const Vec3<double>&,
+                                   std::optional<ObservationMode>>(&HandleType::look_at),
                  py::arg("target"),
-                 py::arg("up") = Vec3<double>{0.0, 0.0, 1.0})
+                 py::arg("up") = Vec3<double>{0.0, 0.0, 1.0},
+                 py::arg("observation_mode") = py::none(),
+                 "Look at another instance, following it through the exposure. It is aimed at "
+                 "where it is seen in the given observation mode, or by default (None) in the "
+                 "scene view's, which keeps it where the scene view renders it.")
             // Bind the overload taking a static target position
             .def("look_at",
                  py::overload_cast<const Vec3<double>&, const Vec3<double>&>(&HandleType::look_at),

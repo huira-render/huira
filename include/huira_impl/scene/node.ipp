@@ -444,8 +444,8 @@ Node<TSpectral>::get_apparent_transform(ObservationMode obs_mode,
                                         const Time& t_obs,
                                         const Transform<double>& observer_ssb_state) const
 {
-    bool iterate = (obs_mode != ObservationMode::TRUE_STATE);
-    auto [apparent_state, _] = get_geometric_state_(epoch, t_obs, observer_ssb_state, iterate);
+    const PoseContext context{t_obs, epoch, obs_mode};
+    auto [apparent_state, _] = get_geometric_state_(context, observer_ssb_state);
 
     if (obs_mode == ObservationMode::ABERRATED_STATE) {
         // Geometric Direction:
@@ -468,30 +468,25 @@ Node<TSpectral>::get_apparent_transform(ObservationMode obs_mode,
 
 /**
  * @brief Get the geometric state (transform and light time) of the node.
- * @param epoch Time that the manually set transform corresponds to
- * @param t_obs Observation time
+ * @param context The observation time, the time poses set by hand hold at, and the observation
+ *        mode: light time is solved for unless it is TRUE_STATE
  * @param observer_ssb_state Observer's SSB transform
- * @param iterate Whether to iterate for aberration
  * @param tol Tolerance for iteration
  * @return std::pair<Transform<double>, double> {transform, light time}
  */
 template <IsSpectral TSpectral>
-std::pair<Transform<double>, double>
-Node<TSpectral>::get_geometric_state_(const Time& epoch,
-                                      const Time& t_obs,
-                                      const Transform<double>& observer_ssb_state,
-                                      bool iterate,
-                                      double tol) const
+std::pair<Transform<double>, double> Node<TSpectral>::get_geometric_state_(
+    const PoseContext& context, const Transform<double>& observer_ssb_state, double tol) const
 {
-    if (!iterate) {
-        return {this->get_ssb_transform_(epoch, t_obs), 0.0};
+    if (context.observation_mode == ObservationMode::TRUE_STATE) {
+        return {this->get_ssb_transform_(context), 0.0};
     }
 
-    Transform<double> full_ssb_transform = this->get_ssb_transform_(epoch, t_obs);
+    Transform<double> full_ssb_transform = this->get_ssb_transform_(context);
     double dt = glm::length(observer_ssb_state.position - full_ssb_transform.position) /
                 SPEED_OF_LIGHT<double>();
     for (std::size_t i = 0; i < 10; ++i) {
-        full_ssb_transform = this->get_ssb_transform_(epoch, t_obs, dt);
+        full_ssb_transform = this->get_ssb_transform_(context, dt);
 
         const double new_dt =
             glm::length(observer_ssb_state.position - full_ssb_transform.position) /
@@ -510,16 +505,18 @@ Node<TSpectral>::get_geometric_state_(const Time& epoch,
 
 /**
  * @brief Get the node's transform in the Solar System Barycenter (SSB) frame.
- * @param epoch Time that the manually set transform corresponds to
- * @param t_obs Observation time
+ * @param context The observation time, the time poses set by hand hold at, and the observation
+ *        mode, which callbacks are given (at the emission time)
  * @param dt Light time delay
  * @return Transform<double> SSB transform
  */
 template <IsSpectral TSpectral>
-Transform<double>
-Node<TSpectral>::get_ssb_transform_(const Time& epoch, const Time& t_obs, double dt) const
+Transform<double> Node<TSpectral>::get_ssb_transform_(const PoseContext& context, double dt) const
 {
+    const Time& epoch = context.reference;
+    const Time& t_obs = context.time;
     Time t_emit = Time::from_et(t_obs.et() - dt);
+    const PoseContext emit_context = context.at(t_emit);
 
     // Fully SPICE-defined: no parent needed, compute directly against SSB
     if (position_mode_ == TransformMode::SPICE_TRANSFORM &&
@@ -542,12 +539,12 @@ Node<TSpectral>::get_ssb_transform_(const Time& epoch, const Time& t_obs, double
             this->get_info() +
             " - cannot compute SSB transform: non-SPICE transform mode but no parent");
     }
-    Transform<double> parent_ssb = parent_->get_ssb_transform_(epoch, t_obs, dt);
+    Transform<double> parent_ssb = parent_->get_ssb_transform_(context, dt);
 
     // Full transform callback: single source defines the entire local state
     if (position_mode_ == TransformMode::TRANSFORM_CALLBACK &&
         rotation_mode_ == TransformMode::TRANSFORM_CALLBACK) {
-        transform_callback_->evaluate(t_emit);
+        transform_callback_->evaluate(emit_context);
         Transform<double> local = transform_callback_->state;
         local.scale = this->get_static_scale();
         Transform<double> ssb_state = parent_ssb * local;
@@ -582,13 +579,13 @@ Node<TSpectral>::get_ssb_transform_(const Time& epoch, const Time& t_obs, double
 
     // Mixed case - Step 2:
     if (position_mode_ == TransformMode::POSITION_CALLBACK) {
-        position_callback_->evaluate(t_emit, local.rotation, local.angular_velocity);
+        position_callback_->evaluate(emit_context, local.rotation, local.angular_velocity);
         local.position = position_callback_->position;
         local.velocity = position_callback_->velocity;
     }
 
     if (rotation_mode_ == TransformMode::ROTATION_CALLBACK) {
-        rotation_callback_->evaluate(t_emit, local.position, local.velocity);
+        rotation_callback_->evaluate(emit_context, local.position, local.velocity);
         local.rotation = rotation_callback_->rotation;
         local.angular_velocity = rotation_callback_->angular_velocity;
     }

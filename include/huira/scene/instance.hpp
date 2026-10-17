@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <string>
 #include <variant>
 
@@ -72,7 +73,9 @@ class Instance : public Node<TSpectral> {
 
     std::string get_info() const override;
 
-    void look_at(const Node<TSpectral>& target, const Vec3<double>& up = {0.0, 0.0, 1.0});
+    void look_at(const Node<TSpectral>& target,
+                 const Vec3<double>& up = {0.0, 0.0, 1.0},
+                 std::optional<ObservationMode> observation_mode = std::nullopt);
     void look_at(const Vec3<double>& target_position, const Vec3<double>& up = {0.0, 0.0, 1.0});
 
   private:

@@ -73,8 +73,8 @@ SceneView<TSpectral>::SceneView(const Scene<TSpectral>& scene,
     std::vector<Transform<double>> observer_inverses(temporal_samples_.size());
     camera_to_world_ = std::vector<Transform<float>>(temporal_samples_.size());
     for (std::size_t i = 0; i < temporal_samples_.size(); ++i) {
-        Transform<double> obs_ssb =
-            camera_node->get_ssb_transform_(exposure_interval_.reference, temporal_samples_[i]);
+        Transform<double> obs_ssb = camera_node->get_ssb_transform_(
+            PoseContext{temporal_samples_[i], exposure_interval_.reference, obs_mode});
         Rotation<double> sensor_orientation = camera_model_->sensor_orientation();
         obs_ssb.rotation = obs_ssb.rotation * sensor_orientation;
 

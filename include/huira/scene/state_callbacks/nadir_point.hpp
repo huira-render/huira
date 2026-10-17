@@ -6,10 +6,11 @@
 
 namespace huira {
 struct ZUpYForwardCallback : public RotationCallback {
-    void
-    evaluate(const Time& epoch, const Vec3<double>& position, const Vec3<double>& velocity) override
+    void evaluate(const PoseContext& context,
+                  const Vec3<double>& position,
+                  const Vec3<double>& velocity) override
     {
-        (void)epoch;
+        (void)context;
 
         Vec3<float> z_axis = glm::normalize(position);
         Vec3<float> y_axis = glm::normalize(velocity);
@@ -22,10 +23,11 @@ struct ZUpYForwardCallback : public RotationCallback {
 };
 
 struct ZDownYForwardCallback : public RotationCallback {
-    void
-    evaluate(const Time& epoch, const Vec3<double>& position, const Vec3<double>& velocity) override
+    void evaluate(const PoseContext& context,
+                  const Vec3<double>& position,
+                  const Vec3<double>& velocity) override
     {
-        (void)epoch;
+        (void)context;
 
         Vec3<float> z_axis = -glm::normalize(position);
         Vec3<float> y_axis = glm::normalize(velocity);
