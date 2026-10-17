@@ -67,7 +67,8 @@ TEST_CASE("A Keplerian orbit starts at its periapsis, a (1 - e) away", "[scene][
                                  units::Radian(0.0),
                                  epoch,
                                  398600.4418);
-    orbit.evaluate(epoch, Rotation<double>{}, Vec3<double>{});
+    orbit.evaluate(
+        PoseContext{epoch, epoch, ObservationMode::TRUE_STATE}, Rotation<double>{}, Vec3<double>{});
     CHECK(std::abs(glm::length(orbit.position) / (a * (1.0 - e)) - 1.0) < 1e-9);
 
     // And the elements must describe an orbit:

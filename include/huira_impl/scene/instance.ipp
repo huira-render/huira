@@ -62,12 +62,22 @@ std::string Instance<TSpectral>::get_info() const
 
 /**
  * @brief Orient the instance to look at a target node, with an optional up vector.
+ *
+ * The target is followed through the exposure. It is aimed at where it is seen from this
+ * instance in an observation mode: by default the scene view's, so that a camera keeps the
+ * target where the scene view renders it, or the one given, to aim by another model (where the
+ * target truly is, say, while rendering where it appears).
+ *
  * @param target Target node to look at
  * @param up Up vector for orientation (default: {0, 0, 1})
+ * @param observation_mode The observation mode to aim in, or none (the default) for the scene
+ *        view's
  * @throws std::runtime_error if the target is this instance, or up is not finite.
  */
 template <IsSpectral TSpectral>
-void Instance<TSpectral>::look_at(const Node<TSpectral>& target, const Vec3<double>& up)
+void Instance<TSpectral>::look_at(const Node<TSpectral>& target,
+                                  const Vec3<double>& up,
+                                  std::optional<ObservationMode> observation_mode)
 {
     if (&target == this) {
         HUIRA_THROW_ERROR(this->get_info() + " - An instance cannot look at itself");
@@ -83,7 +93,7 @@ void Instance<TSpectral>::look_at(const Node<TSpectral>& target, const Vec3<doub
 
     // Set the node to defer rotation evaluation to our new callback
     this->template set_custom_rotation_callback<LookAtCallback<TSpectral>>(
-        this, target, up, is_blender);
+        this, target, up, is_blender, observation_mode);
 }
 
 /**

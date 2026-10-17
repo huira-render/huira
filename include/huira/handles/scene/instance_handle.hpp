@@ -1,5 +1,7 @@
 #pragma once
 
+#include <optional>
+
 #include "huira/concepts/spectral_concepts.hpp"
 #include "huira/handles/handle.hpp"
 #include "huira/scene/instance.hpp"
@@ -26,9 +28,13 @@ class InstanceHandle : public NodeHandle<TSpectral, Instance<TSpectral>> {
     InstanceHandle() = delete;
     using NodeHandle<TSpectral, Instance<TSpectral>>::NodeHandle;
 
-    void look_at(const InstanceHandle<TSpectral>& target, const Vec3<double>& up = {0.0, 0.0, 1.0})
+    /// Look at another instance, following it through the exposure (see Instance::look_at).
+    /// It is aimed at in the given observation mode, or by default the scene view's.
+    void look_at(const InstanceHandle<TSpectral>& target,
+                 const Vec3<double>& up = {0.0, 0.0, 1.0},
+                 std::optional<ObservationMode> observation_mode = std::nullopt)
     {
-        this->get()->look_at(*target.get(), up);
+        this->get()->look_at(*target.get(), up, observation_mode);
     }
 
     void look_at(const Vec3<double>& target_position, const Vec3<double>& up = {0.0, 0.0, 1.0})
