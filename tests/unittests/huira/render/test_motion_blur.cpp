@@ -11,11 +11,20 @@ using namespace huira::units::literals;
 
 namespace {
 
+/// A 10 ms exposure, made from the time it is centered on.
+Interval centered_exposure()
+{
+    return Interval::from_centered(Time::from_et(0.0), 10_ms);
+}
+
 /// The received power of a sphere 1 m across, 1 km in front of the camera, moving sideways at
-/// `speed` during a 10 ms exposure, on a strip of sensor 512 x 32 pixels of 0.1 m at that range.
-/// At 1750 m/s it crosses 175 pixels, so a pixel on its path sees it for about 6% of the
+/// `speed` during the exposure, on a strip of sensor 512 x 32 pixels of 0.1 m at that range. At
+/// 1750 m/s it crosses 175 pixels in 10 ms, so a pixel on its path sees it for about 6% of the
 /// exposure.
-Image<RGB> render_sphere(units::MetersPerSecond speed, int samples_per_pixel)
+Image<RGB> render_sphere(units::MetersPerSecond speed,
+                         int samples_per_pixel,
+                         const Interval& exposure = centered_exposure(),
+                         std::size_t temporal_samples = 8)
 {
     Scene<RGB> scene;
     auto material = scene.new_material(scene.new_bsdf_lambertian());
@@ -38,8 +47,8 @@ Image<RGB> render_sphere(units::MetersPerSecond speed, int samples_per_pixel)
     frame_buffer.enable_received_power();
     Renderer<RGB> renderer;
     renderer.set_samples_per_pixel(samples_per_pixel);
-    Interval exposure = Interval::from_centered(Time::from_et(0.0), 10_ms);
-    SceneView<RGB> scene_view(scene, exposure, camera, ObservationMode::GEOMETRIC_STATE, 8);
+    SceneView<RGB> scene_view(
+        scene, exposure, camera, ObservationMode::GEOMETRIC_STATE, temporal_samples);
     renderer.render(scene_view, frame_buffer);
     return frame_buffer.received_power();
 }
@@ -93,6 +102,21 @@ double mean(const std::vector<double>& values)
     return sum / static_cast<double>(values.size());
 }
 
+/// The column of the image's center of brightness, in pixels.
+double centroid_column(const Image<RGB>& image)
+{
+    double sum = 0.0;
+    double moment = 0.0;
+    for (int y = 0; y < image.height(); ++y) {
+        for (int x = 0; x < image.width(); ++x) {
+            const double power = image(x, y).total();
+            sum += power;
+            moment += power * static_cast<double>(x);
+        }
+    }
+    return moment / sum;
+}
+
 double relative_spread(const std::vector<double>& values)
 {
     const double m = mean(values);
@@ -128,4 +152,37 @@ TEST_CASE("A moving object's streak converges with few samples", "[render][motio
     // from the sphere held still.
     const Image<RGB> still = render_sphere(0_mps, 64);
     CHECK(std::abs(total(moving) / total(still) - 1.0) < 0.03);
+}
+
+TEST_CASE("A pose set by hand refers to the same time with and without motion blur",
+          "[render][motion_blur]")
+{
+    // Held still, the sphere marks the position set by hand. Moving, it crosses 175 pixels during
+    // the 10 ms exposure. With motion blur its light is spread along the streak, and without it
+    // the sphere is drawn at mid-exposure, which must be the middle of the streak: an image
+    // measured with motion blur or without gives the same position. (Within 2 pixels: the
+    // streak's centroid varies by a few tenths of a pixel with the samples taken, where the two
+    // references differ by 87.5 pixels.)
+    const Time t = Time::from_et(0.0);
+    const double still = centroid_column(render_sphere(0_mps, 16, Interval::from_start(t, 10_ms)));
+
+    SECTION("An interval made from its start refers to its start")
+    {
+        // The streak starts at the position set, so its middle is half the crossing on:
+        const Interval exposure = Interval::from_start(t, 10_ms);
+        const double blurred = centroid_column(render_sphere(1750_mps, 64, exposure, 8));
+        const double unblurred = centroid_column(render_sphere(1750_mps, 16, exposure, 1));
+        CHECK(std::abs(blurred - (still + 87.5)) < 2.0);
+        CHECK(std::abs(unblurred - (still + 87.5)) < 2.0);
+    }
+
+    SECTION("An interval made from its center refers to its center")
+    {
+        // The streak is centered on the position set:
+        const Interval exposure = Interval::from_centered(t, 10_ms);
+        const double blurred = centroid_column(render_sphere(1750_mps, 64, exposure, 8));
+        const double unblurred = centroid_column(render_sphere(1750_mps, 16, exposure, 1));
+        CHECK(std::abs(blurred - still) < 2.0);
+        CHECK(std::abs(unblurred - still) < 2.0);
+    }
 }
