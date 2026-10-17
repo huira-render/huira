@@ -8,7 +8,7 @@ Demonstrates:
       estimation), and weighs that against the BSDF's own samples (multiple importance
       sampling), so several lights converge as quickly as one
     - Indirect sources: marking a sunlit body as a reflector to sample, for planetshine
-    - Focusing the camera at a distance (example 11 covers focus)
+    - Focusing the camera at a distance (example 10 covers focus)
 
 Builds on: 05 Planetary BRDFs
 Data: none

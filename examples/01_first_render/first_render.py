@@ -38,8 +38,10 @@ def main():
     huira.enable_console_info()
 
     # A Scene holds everything that is rendered. Its spectral type is chosen by the module it
-    # comes from: huira.rgb renders in three bins (red, green and blue), and huira.visible8 and
-    # huira.swir8 in eight (see example 09). Everything in the scene shares the type.
+    # comes from: huira.rgb makes pictures, filling red, green and blue channels separately, as
+    # renderers usually do. All other spectral types (such as huira.visible8 and huira.swir8)
+    # simulate a real sensor, whose pixels each collect one value from every wavelength (see 
+    # example 11). Everything in the scene shares the type.
     scene = Scene()
 
     # Assets are the things a scene can hold. A primitive is a geometry with a material; a
@@ -85,7 +87,7 @@ def main():
 
     # A SceneView is the scene as the camera sees it over the exposure. The observation mode
     # says how light travel time is handled: GEOMETRIC_STATE corrects for it, TRUE_STATE does
-    # not, and ABERRATED_STATE also applies stellar aberration (see example 15).
+    # not, and ABERRATED_STATE also applies stellar aberration (see example 14).
     scene_view = SceneView(scene, exposure, camera, huira.ObservationMode.GEOMETRIC_STATE)
 
     # The frame buffer holds the rendered images. The sensor response is what the camera's

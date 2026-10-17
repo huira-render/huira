@@ -108,7 +108,7 @@ int main(int argc, char** argv)
     camera_model.configure_sensor_from_size({1080, 1080}, 6_mm);
     camera_model.set_fstop(5);
 
-    // The sensor's settings, for these exposures (example 12 covers them):
+    // The sensor's settings, for these exposures (example 11 covers them):
     camera_model.set_sensor_bit_depth(12);
     camera_model.set_sensor_conversion_gain(1.f);
     camera_model.set_sensor_quantum_efficiency(0.8);

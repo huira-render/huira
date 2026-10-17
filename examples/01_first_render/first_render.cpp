@@ -27,8 +27,10 @@ namespace fs = std::filesystem;
 
 using namespace huira::units::literals;
 
-// The spectral type the scene renders in. huira::RGB has three bins (red, green and blue);
-// huira::Visible8 and huira::SWIR8 have eight (see example 09). Everything in a scene shares it.
+// The spectral type the scene renders in. huira::RGB makes pictures: it fills red, green and blue
+// channels separately, as renderers usually do.  All other spectral types (such as huira::Visible8
+// and huira::SWIR8) simulate a real sensor, whose pixels each collect one value from every
+// wavelength (see example 11). Everything in a scene shares it.
 using TSpectral = huira::RGB;
 
 int main()
@@ -83,7 +85,7 @@ int main()
 
     // A SceneView is the scene as the camera sees it over the exposure. The observation mode
     // says how light travel time is handled: GEOMETRIC_STATE corrects for it, TRUE_STATE does
-    // not, and ABERRATED_STATE also applies stellar aberration (see example 15).
+    // not, and ABERRATED_STATE also applies stellar aberration (see example 14).
     huira::SceneView<TSpectral> scene_view(
         scene, exposure, camera, huira::ObservationMode::GEOMETRIC_STATE);
 

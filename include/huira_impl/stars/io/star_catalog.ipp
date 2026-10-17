@@ -159,6 +159,17 @@ inline StarCatalog StarCatalog::read_star_data(const fs::path& filepath, float m
     const HrscHeader header = HrscHeader::read(in, filepath);
     const std::string name = filepath.filename().string();
 
+    // Before the format was versioned, huira wrote the header as the memory image of a struct:
+    // "HRSC", a one-byte version (1) and padding, then reserved zeros, so the bytes that now
+    // hold record_size and header_size are zero. No versioned file has either at zero.
+    if (header.record_size == 0 || header.header_size == 0) {
+        HUIRA_THROW_ERROR(
+            "StarCatalog - " + name +
+            " was written by a version of huira from before the "
+            "star catalog format was versioned. Please download the current "
+            "catalog from https://media.huira.space/data/stars/tycho2/tycho2.hrsc or re-build it.");
+    }
+
     // The layout must be one this build reads. The message says which side is behind:
     if (header.format_version > HRSC_FORMAT_VERSION) {
         HUIRA_THROW_ERROR("StarCatalog - " + name + " uses star catalog format " +
