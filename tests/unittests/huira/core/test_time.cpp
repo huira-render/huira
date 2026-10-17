@@ -398,3 +398,19 @@ TEST_CASE("Time: Times and intervals that are not finite or run backwards are re
     // An instant is an interval (a guard):
     CHECK_NOTHROW(Interval(start, start));
 }
+
+TEST_CASE("Interval: poses set by hand refer to the time the interval was made from",
+          "[time][interval]")
+{
+    const Time t = Time::from_et(100.0);
+    const Time later = Time::from_et(110.0);
+    CHECK(Interval(t, later).reference.et() == t.et());
+    CHECK(Interval::from_bounds(t, later).reference.et() == t.et());
+    CHECK(Interval::from_start(t, units::Second(10.0)).reference.et() == t.et());
+
+    // from_centered is made from its center, and refers to it:
+    const Interval centered = Interval::from_centered(t, units::Second(10.0));
+    CHECK(centered.start.et() == 95.0);
+    CHECK(centered.end.et() == 105.0);
+    CHECK(centered.reference.et() == t.et());
+}
