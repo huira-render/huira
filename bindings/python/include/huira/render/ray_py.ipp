@@ -55,6 +55,9 @@ inline void bind_hit_record(py::module_& m)
         .def_readwrite("geom_id", &HitRecord::geom_id, "Geometry ID in BLAS")
         .def_readwrite("prim_id", &HitRecord::prim_id, "Triangle index")
         .def_readwrite("Ng", &HitRecord::Ng, "Geometric face normal (unnormalized)")
+        .def_readwrite("time",
+                       &HitRecord::time,
+                       "When in the exposure the ray was traced, from 0 to 1 (motion blur)")
 
         .def("hit", &HitRecord::hit, "Returns true if the record represents a valid intersection")
 
