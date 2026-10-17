@@ -266,13 +266,14 @@ bool Renderer<TSpectral>::build_occupancy_cones_(SceneView<TSpectral>& scene_vie
 
     const auto& camera = scene_view.camera_model_;
     // Only depth-of-field rays leave the origin; otherwise every ray starts at (0,0,0).
-    const float aperture_radius = (camera->depth_of_field_ && camera->aperture_)
-                                      ? camera->aperture_->get_bounding_radius().to_si_f()
-                                      : 0.f;
+    const double aperture_radius = (camera->depth_of_field_ && camera->aperture_)
+                                       ? camera->aperture_->get_bounding_radius().to_si()
+                                       : 0.0;
 
     for (const auto& bound : scene_view.occupancy_bounds()) {
-        const float distance = glm::length(bound.center);
-        const float radius = bound.radius + aperture_radius;
+        const Vec3<double> center{bound.center};
+        const double distance = glm::length(center);
+        const double radius = static_cast<double>(bound.radius) + aperture_radius;
 
         // The camera is inside this occupant: it subtends every direction, so no tile
         // can be rejected and the whole test is worthless for this view.
@@ -281,8 +282,8 @@ bool Renderer<TSpectral>::build_occupancy_cones_(SceneView<TSpectral>& scene_vie
         }
 
         DirectionCone cone;
-        cone.axis = bound.center / distance;
-        cone.half_angle = std::asin(std::clamp(radius / distance, 0.f, 1.f));
+        cone.axis = center / distance;
+        cone.set_half_angle(std::asin(std::clamp(radius / distance, 0.0, 1.0)));
         cones.push_back(cone);
     }
 
@@ -304,7 +305,7 @@ typename Renderer<TSpectral>::DirectionCone Renderer<TSpectral>::tile_direction_
     // distortion the direction field bulges between the corners, and the widening
     // below is only as good as the sample spacing that measures it.
     constexpr int GRID = 5;
-    std::array<Vec3<float>, GRID * GRID> dirs;
+    std::array<Vec3<double>, GRID * GRID> dirs;
 
     for (int j = 0; j < GRID; ++j) {
         const float ty = static_cast<float>(j) / static_cast<float>(GRID - 1);
@@ -312,28 +313,28 @@ typename Renderer<TSpectral>::DirectionCone Renderer<TSpectral>::tile_direction_
             const float tx = static_cast<float>(i) / static_cast<float>(GRID - 1);
             const Pixel pixel{x0 + tx * (x1 - x0), y0 + ty * (y1 - y0)};
             dirs[static_cast<std::size_t>(j * GRID + i)] =
-                glm::normalize(camera.sensor_ray_(pixel).direction());
+                glm::normalize(Vec3<double>{camera.sensor_ray_(pixel).direction()});
         }
     }
 
-    Vec3<float> mean{0.f};
-    for (const Vec3<float>& d : dirs) {
+    Vec3<double> mean{0.0};
+    for (const Vec3<double>& d : dirs) {
         mean += d;
     }
 
     DirectionCone cone;
-    const float mean_length = glm::length(mean);
-    if (mean_length <= 0.f) {
+    const double mean_length = glm::length(mean);
+    if (mean_length <= 0.0) {
         // Degenerate: the tile spans more than a hemisphere. Accept everything.
-        cone.axis = Vec3<float>{0.f, 0.f, 1.f};
-        cone.half_angle = PI<float>();
+        cone.axis = Vec3<double>{0.0, 0.0, 1.0};
+        cone.set_half_angle(PI<double>());
         return cone;
     }
     cone.axis = mean / mean_length;
 
-    float half_angle = 0.f;
-    for (const Vec3<float>& d : dirs) {
-        half_angle = std::max(half_angle, std::acos(std::clamp(glm::dot(cone.axis, d), -1.f, 1.f)));
+    double half_angle = 0.0;
+    for (const Vec3<double>& d : dirs) {
+        half_angle = std::max(half_angle, angle_between_(cone.axis, d));
     }
 
     // Widen by the largest gap between adjacent grid points. The true directions
@@ -341,9 +342,9 @@ typename Renderer<TSpectral>::DirectionCone Renderer<TSpectral>::tile_direction_
     // roughly the gap itself for a smooth distortion field, so this covers the
     // curvature the grid cannot see. It is an estimate, not a bound - hence
     // set_region_cull_margin_scale() and set_region_cull_validation().
-    float max_gap = 0.f;
+    double max_gap = 0.0;
     auto gap = [&](std::size_t a, std::size_t b) {
-        max_gap = std::max(max_gap, std::acos(std::clamp(glm::dot(dirs[a], dirs[b]), -1.f, 1.f)));
+        max_gap = std::max(max_gap, angle_between_(dirs[a], dirs[b]));
     };
     for (int j = 0; j < GRID; ++j) {
         for (int i = 0; i + 1 < GRID; ++i) {
@@ -365,17 +366,18 @@ typename Renderer<TSpectral>::DirectionCone Renderer<TSpectral>::tile_direction_
     // sin(tilt) <= |a| / |F - a| <= R / (|F| - R), and |F| >= |d| because F lies on the focal
     // plane at axial distance |d|. Close enough that this bound reaches a right angle, any
     // direction is possible.
-    float dof_tilt = 0.f;
+    double dof_tilt = 0.0;
     if (camera.depth_of_field_ && camera.aperture_ && !std::isinf(camera.d_)) {
-        const float aperture_radius = camera.aperture_->get_bounding_radius().to_si_f();
-        const float focus_distance = std::abs(camera.d_);
-        dof_tilt = (focus_distance > 2.f * aperture_radius)
+        const double aperture_radius = camera.aperture_->get_bounding_radius().to_si();
+        const double focus_distance = std::abs(static_cast<double>(camera.d_));
+        dof_tilt = (focus_distance > 2.0 * aperture_radius)
                        ? std::asin(aperture_radius / (focus_distance - aperture_radius))
-                       : PI<float>();
+                       : PI<double>();
     }
 
-    cone.half_angle =
-        std::min(PI<float>(), half_angle + region_cull_margin_scale_ * max_gap + dof_tilt);
+    cone.set_half_angle(
+        std::min(PI<double>(),
+                 half_angle + static_cast<double>(region_cull_margin_scale_) * max_gap + dof_tilt));
     return cone;
 }
 
@@ -529,9 +531,7 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
 
                     tile_culled = true;
                     for (const DirectionCone& occ : occupancy_cones) {
-                        const float separation =
-                            std::acos(std::clamp(glm::dot(tile_cone.axis, occ.axis), -1.f, 1.f));
-                        if (separation <= tile_cone.half_angle + occ.half_angle) {
+                        if (tile_cone.overlaps(occ)) {
                             tile_culled = false;
                             break;
                         }
