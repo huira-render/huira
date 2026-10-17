@@ -8,6 +8,7 @@ set(HUIRA_EXAMPLE_NAMES
     07_clouds_and_atmosphere
     08_lights
     09_stars
+    10_optics
 )
 
 foreach(example IN LISTS HUIRA_EXAMPLE_NAMES)
