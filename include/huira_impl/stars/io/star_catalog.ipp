@@ -128,9 +128,11 @@ inline void StarCatalog::write_star_data(const fs::path& filepath) const
         HUIRA_THROW_ERROR("StarCatalog - Failed to write the stars to: " + filepath.string());
     }
 
-    HUIRA_LOG_INFO("StarCatalog - " + std::to_string(valid_stars.size()) + " stars written to: " +
-                   filepath.string() + " (format " + std::to_string(header.format_version) +
-                   ", data version " + std::to_string(header.data_version) + ")");
+    HUIRA_LOG_INFO("StarCatalog - " + std::to_string(valid_stars.size()) +
+                   " stars written to: " + filepath.string() + " (format " +
+                   std::to_string(static_cast<unsigned>(header.format_version)) +
+                   ", data version " + std::to_string(static_cast<unsigned>(header.data_version)) +
+                   ")");
 }
 
 inline HrscHeader StarCatalog::read_header(const fs::path& filepath)
@@ -160,17 +162,18 @@ inline StarCatalog StarCatalog::read_star_data(const fs::path& filepath, float m
     // The layout must be one this build reads. The message says which side is behind:
     if (header.format_version > HRSC_FORMAT_VERSION) {
         HUIRA_THROW_ERROR("StarCatalog - " + name + " uses star catalog format " +
-                          std::to_string(header.format_version) +
+                          std::to_string(static_cast<unsigned>(header.format_version)) +
                           ", newer than this build of "
                           "huira reads (format " +
-                          std::to_string(HRSC_FORMAT_VERSION) + "). Please update huira.");
+                          std::to_string(static_cast<unsigned>(HRSC_FORMAT_VERSION)) +
+                          "). Please update huira.");
     }
     if (header.format_version < HRSC_FORMAT_VERSION) {
         HUIRA_THROW_ERROR("StarCatalog - " + name + " uses star catalog format " +
-                          std::to_string(header.format_version) +
+                          std::to_string(static_cast<unsigned>(header.format_version)) +
                           ", which this build of huira "
                           "no longer reads (format " +
-                          std::to_string(HRSC_FORMAT_VERSION) +
+                          std::to_string(static_cast<unsigned>(HRSC_FORMAT_VERSION)) +
                           "). Please download or build a current catalog.");
     }
     if (!(header.flags & HRSC_FLAG_LITTLE_ENDIAN) || !hrsc_detail::host_is_little_endian) {
@@ -179,15 +182,17 @@ inline StarCatalog StarCatalog::read_star_data(const fs::path& filepath, float m
                           "little-endian host, the only combination huira supports");
     }
     if (header.record_size != sizeof(StarData)) {
-        HUIRA_THROW_ERROR("StarCatalog - " + name + " has " + std::to_string(header.record_size) +
-                          "-byte star records; format " + std::to_string(HRSC_FORMAT_VERSION) +
-                          " expects " + std::to_string(sizeof(StarData)));
+        HUIRA_THROW_ERROR("StarCatalog - " + name + " has " +
+                          std::to_string(static_cast<unsigned>(header.record_size)) +
+                          "-byte star records; format " +
+                          std::to_string(static_cast<unsigned>(HRSC_FORMAT_VERSION)) + " expects " +
+                          std::to_string(sizeof(StarData)));
     }
     if (header.header_size < HRSC_HEADER_SIZE) {
         HUIRA_THROW_ERROR("StarCatalog - " + name + " declares a " +
                           std::to_string(header.header_size) + "-byte header, shorter than the " +
                           std::to_string(HRSC_HEADER_SIZE) + " bytes format " +
-                          std::to_string(HRSC_FORMAT_VERSION) + " defines");
+                          std::to_string(static_cast<unsigned>(HRSC_FORMAT_VERSION)) + " defines");
     }
 
     // The stars it claims must all be there, or the search below reads past the end:
@@ -235,9 +240,11 @@ inline StarCatalog StarCatalog::read_star_data(const fs::path& filepath, float m
     star_catalog.format_version_ = header.format_version;
     star_catalog.data_version_ = header.data_version;
 
-    HUIRA_LOG_INFO("StarCatalog - " + std::to_string(star_catalog.size()) + " stars read from: " +
-                   filepath.string() + " (format " + std::to_string(header.format_version) +
-                   ", data version " + std::to_string(header.data_version) + ")");
+    HUIRA_LOG_INFO("StarCatalog - " + std::to_string(star_catalog.size()) +
+                   " stars read from: " + filepath.string() + " (format " +
+                   std::to_string(static_cast<unsigned>(header.format_version)) +
+                   ", data version " + std::to_string(static_cast<unsigned>(header.data_version)) +
+                   ")");
 
     return star_catalog;
 }

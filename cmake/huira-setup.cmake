@@ -11,6 +11,13 @@ target_include_directories(huira
 
 target_compile_features(huira INTERFACE cxx_std_20)
 
+# A translation unit that includes Huira instantiates most of the renderer, which with MSVC can
+# exceed the default number of sections an object file may hold (C1128), in Debug builds above
+# all. /bigobj lifts the limit. As a usage requirement of the target, it reaches every program
+# built against Huira: the tests and examples here, and anyone's through find_package(huira).
+# clang-cl needs no flag: it switches to the larger format by itself when it needs to.
+target_compile_options(huira INTERFACE $<$<CXX_COMPILER_ID:MSVC>:/bigobj>)
+
 
 set(HUIRA_DATA_DIR_BUILD "${CMAKE_CURRENT_SOURCE_DIR}/data")
 set(HUIRA_DATA_DIR_INSTALL "${CMAKE_INSTALL_FULL_DATADIR}/huira/data")

@@ -104,10 +104,6 @@ target_link_libraries(huira_test_instantiations
     PUBLIC huira::huira
 )
 
-if(MSVC)
-    target_compile_options(huira_test_instantiations PRIVATE /bigobj)
-endif()
-
 # Add coverage flags to the instantiation library
 if(HUIRA_COVERAGE)
     target_compile_options(huira_test_instantiations PRIVATE ${COVERAGE_FLAGS})
@@ -152,9 +148,8 @@ function(add_unit_test test_name source_file)
     
     if(MSVC)
         # /wd4868: left-to-right evaluation of braced initializer lists (Catch2 internals).
-        # /bigobj: the heavily templated renderer, instantiated for several spectral types in
-        # one test, exceeds the default COFF section limit (C1128) on newer toolsets.
-        target_compile_options(${test_name} PRIVATE /wd4868 /bigobj)
+        # (/bigobj comes from the huira target.)
+        target_compile_options(${test_name} PRIVATE /wd4868)
     endif()
     
     # Register with CTest and configure JUnit XML output
