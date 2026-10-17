@@ -40,8 +40,6 @@ enum class TransformMode {
     TRANSFORM_CALLBACK
 };
 
-enum class ObservationMode { TRUE_STATE, GEOMETRIC_STATE, ABERRATED_STATE };
-
 /**
  * @brief Base class for all scene graph nodes.
  *
@@ -204,14 +202,11 @@ class Node : public SceneObject<Node<TSpectral>> {
     find_spice_frame_ancestor_() const;
 
     std::pair<Transform<double>, double>
-    get_geometric_state_(const Time& epoch,
-                         const Time& t_obs,
+    get_geometric_state_(const PoseContext& context,
                          const Transform<double>& observer_ssb_state,
-                         bool iterate,
                          double tol = 1e-12) const;
 
-    Transform<double>
-    get_ssb_transform_(const Time& epoch, const Time& t_obs, double dt = 0.0) const;
+    Transform<double> get_ssb_transform_(const PoseContext& context, double dt = 0.0) const;
     Transform<double> get_local_position_at_(const Time& epoch, const Time& t_obs, double dt) const;
     Transform<double> get_local_rotation_at_(const Time& epoch, const Time& t_obs, double dt) const;
 

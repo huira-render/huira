@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <memory>
+#include <optional>
 
 #include "glm/glm.hpp"
 #include "huira/concepts/spectral_concepts.hpp"
@@ -35,23 +36,24 @@ class LookAtCallbackBase : public RotationCallback {
     {
     }
 
-    void evaluate(const Time& t_emit,
+    void evaluate(const PoseContext& context,
                   const Vec3<double>& local_pos,
                   const Vec3<double>& local_vel) override
     {
-        this->rotation = compute_local_rotation_(t_emit, local_pos);
+        this->rotation = compute_local_rotation_(context, local_pos, local_vel);
 
-        // Central finite difference of the orientation for a continuous angular
-        // velocity (needed for accurate motion blur). The +/- samples advance
-        // both time and the linearly extrapolated local position.
+        // The angular velocity, by a central finite difference of the orientation, from which
+        // the velocities of the node's children follow. (Motion blur does not use it: the scene
+        // view evaluates the orientation itself at each temporal sample.) The +/- samples
+        // advance both time and the linearly extrapolated local position.
         constexpr double epsilon = 1e-4;
-        const Time t_plus = Time::from_et(t_emit.et() + epsilon);
-        const Time t_minus = Time::from_et(t_emit.et() - epsilon);
+        const PoseContext plus = context.at(Time::from_et(context.time.et() + epsilon));
+        const PoseContext minus = context.at(Time::from_et(context.time.et() - epsilon));
         const Vec3<double> pos_plus = local_pos + local_vel * epsilon;
         const Vec3<double> pos_minus = local_pos - local_vel * epsilon;
 
-        const Rotation<double> R_plus = compute_local_rotation_(t_plus, pos_plus);
-        const Rotation<double> R_minus = compute_local_rotation_(t_minus, pos_minus);
+        const Rotation<double> R_plus = compute_local_rotation_(plus, pos_plus, local_vel);
+        const Rotation<double> R_minus = compute_local_rotation_(minus, pos_minus, local_vel);
         const Rotation<double> delta_R = R_plus * R_minus.inverse();
 
         const double angle = delta_R.angle().to_si();
@@ -63,9 +65,11 @@ class LookAtCallbackBase : public RotationCallback {
     }
 
   protected:
-    /// World-space (SSB) position of the aim target at time @p t. This is the
-    /// only thing that differs between the tracked-node and fixed-point variants.
-    virtual Vec3<double> resolve_target_position_(const Time& t) const = 0;
+    /// World-space (SSB) position to aim at, as seen by @p observer: the looking node's own SSB
+    /// state (its position and velocity) in @p context. This is the only thing that differs
+    /// between the tracked-node and fixed-point variants.
+    virtual Vec3<double> resolve_target_position_(const PoseContext& context,
+                                                  const Transform<double>& observer) const = 0;
 
   private:
     /// Below this squared cross-product length the forward/up pair is treated as
@@ -73,21 +77,27 @@ class LookAtCallbackBase : public RotationCallback {
     /// up it corresponds to theta < ~1e-6 rad.
     static constexpr double kDegenerateFrameEps2 = 1e-12;
 
-    /// Builds the node's local orientation at time @p t, given its local position.
-    Rotation<double> compute_local_rotation_(const Time& t, const Vec3<double>& pos) const
+    /// Builds the node's local orientation in @p context, given its local position and velocity.
+    Rotation<double> compute_local_rotation_(const PoseContext& context,
+                                             const Vec3<double>& pos,
+                                             const Vec3<double>& vel) const
     {
-        // Resolve this node's world position at time t (through its parent, if any).
-        Vec3<double> current_ssb_pos;
+        // This node's SSB state (through its parent, if any), placed as the scene view places
+        // it. Its position and velocity do not depend on its own rotation, which is what is
+        // being found.
+        Transform<double> local;
+        local.position = pos;
+        local.velocity = vel;
         Transform<double> parent_ssb;
+        Transform<double> self_ssb = local;
         const bool has_parent = self_->get_parent().valid();
         if (has_parent) {
-            parent_ssb = self_->get_parent().get()->get_ssb_transform_(t, t);
-            current_ssb_pos = parent_ssb.apply_to_point(pos);
-        } else {
-            current_ssb_pos = pos;
+            parent_ssb = self_->get_parent().get()->get_ssb_transform_(context);
+            self_ssb = parent_ssb * local;
         }
 
-        const Vec3<double> forward = glm::normalize(resolve_target_position_(t) - current_ssb_pos);
+        const Vec3<double> forward =
+            glm::normalize(resolve_target_position_(context, self_ssb) - self_ssb.position);
 
         // Right vector, guarded against the classic look-at singularity where the
         // requested up is (near-)parallel to forward -- e.g. aiming straight along
@@ -127,7 +137,10 @@ class LookAtCallbackBase : public RotationCallback {
  * @brief Orients a node to track another (possibly moving) node.
  *
  * The target is re-resolved at every evaluated time, so a moving target is
- * followed continuously (including across the motion-blur interval).
+ * followed continuously (including across the motion-blur interval). It is placed as the scene
+ * view places it (poses set by hand hold at its reference time), and aimed at as seen from this
+ * node in an observation mode: by default the scene view's own, so that a camera keeps the
+ * target where it renders it, or one given to look_at.
  *
  * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
@@ -137,16 +150,18 @@ class LookAtCallback : public LookAtCallbackBase<TSpectral> {
     LookAtCallback(const Node<TSpectral>* self,
                    const Node<TSpectral>& target,
                    const Vec3<double>& up_vector,
-                   bool is_blender)
+                   bool is_blender,
+                   std::optional<ObservationMode> observation_mode = std::nullopt)
         : LookAtCallbackBase<TSpectral>(self, up_vector, is_blender),
-          target_(target.weak_from_this())
+          target_(target.weak_from_this()), observation_mode_(observation_mode)
     {
     }
 
   protected:
     /// The target is held weakly: it may be deleted from the scene while this node still looks
     /// at it, and is then reported rather than read from freed memory.
-    Vec3<double> resolve_target_position_(const Time& t) const override
+    Vec3<double> resolve_target_position_(const PoseContext& context,
+                                          const Transform<double>& observer) const override
     {
         const std::shared_ptr<const Node<TSpectral>> target = target_.lock();
         if (!target || !target->is_scene_owned()) {
@@ -154,11 +169,19 @@ class LookAtCallback : public LookAtCallbackBase<TSpectral> {
                               "scene. Call look_at() again with another target, or set the "
                               "node's rotation.");
         }
-        return target->get_ssb_transform_(t, t).position;
+        return target
+            ->get_apparent_transform(observation_mode_.value_or(context.observation_mode),
+                                     context.reference,
+                                     context.time,
+                                     observer)
+            .position;
     }
 
   private:
     std::weak_ptr<const Node<TSpectral>> target_;
+
+    /// The observation mode to aim in, or none for the scene view's.
+    std::optional<ObservationMode> observation_mode_;
 };
 
 /**
@@ -178,7 +201,9 @@ class LookAtPositionCallback : public LookAtCallbackBase<TSpectral> {
     }
 
   protected:
-    Vec3<double> resolve_target_position_(const Time& /*t*/) const override
+    /// A fixed position is aimed at as it is given.
+    Vec3<double> resolve_target_position_(const PoseContext& /*context*/,
+                                          const Transform<double>& /*observer*/) const override
     {
         return target_position_;
     }
