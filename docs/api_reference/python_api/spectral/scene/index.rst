@@ -6,3 +6,4 @@ Scene API
 
    scene
    scene_view
+   vertex

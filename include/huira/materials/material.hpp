@@ -38,7 +38,11 @@ struct MaterialEval {
  *   - metallic_image:    1x1 with metallic_factor (typically 0.0)
  *   - roughness_image:   1x1 with roughness_factor (typically 0.5)
  *   - normal_image:      1x1 with {0.5, 0.5, 1.0} (unperturbed normal)
- *   - emissive_image:    1x1 black (TSpectral{0})
+ *   - emissive_image:    1x1 white (TSpectral{1}), with an emissive factor of 0
+ *
+ * The emission is the radiance the surface emits, from either side, in W/(m^2 sr) in each
+ * spectral bin: the emissive image times the emissive factor. It is added where a ray meets
+ * the surface, on top of the light it reflects.
  *
  * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */

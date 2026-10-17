@@ -21,6 +21,13 @@ std::atomic<bool> armed{false};
 std::atomic<std::size_t> fail_size{0};
 } // namespace
 
+#if defined(__clang__)
+#pragma clang diagnostic push
+#if __has_warning("-Wallocator-wrappers")
+#pragma clang diagnostic ignored "-Wallocator-wrappers"
+#endif
+#endif
+
 void* operator new(std::size_t size)
 {
     bool expected = true;
@@ -32,6 +39,10 @@ void* operator new(std::size_t size)
     }
     throw std::bad_alloc();
 }
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
+
 void operator delete(void* memory) noexcept
 {
     std::free(memory);

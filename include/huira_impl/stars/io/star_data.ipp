@@ -1,3 +1,6 @@
+#include <algorithm>
+#include <cmath>
+#include <cstddef>
 #include <filesystem>
 #include <vector>
 
@@ -24,7 +27,13 @@ inline void StarData::process_magnitude(double BTmag, double VTmag)
         vmag = has_vt ? VTmag : BTmag;
     }
 
-    // Compute effective temperature from B-V color index:
+    // Noisy photometry of faint stars gives colors no star has (Tycho-2 has BT - VT down to
+    // -1.8), and past B-V = -0.674 the relation below has a pole and goes negative. Clamp to
+    // the range of real stars (about O-type to the reddest M giants) so the star keeps its
+    // measured brightness with a plausible color, rather than a value the renderer rejects:
+    bv_color_index = std::clamp(bv_color_index, BV_COLOR_INDEX_MIN, BV_COLOR_INDEX_MAX);
+
+    // Compute effective temperature from B-V color index (Ballesteros 2012):
     double temp =
         4600.0 * (1.0 / (0.92 * bv_color_index + 1.7) + 1.0 / (0.92 * bv_color_index + 0.62));
 
@@ -64,7 +73,11 @@ inline void StarData::normalize_epoch(double epochRA, double epochDEC)
     double pmDEC_rad = static_cast<double>(pmDEC) * MAS_TO_RAD;
 
     DEC += pmDEC_rad * years_DEC;
-    RA += pmRA_rad * years_RA / std::cos(DEC);
+    // At a pole, right ascension has no meaning, and its motion would divide by zero:
+    const double cos_dec = std::cos(DEC);
+    if (std::abs(cos_dec) > 1e-12) {
+        RA += pmRA_rad * years_RA / cos_dec;
+    }
 }
 
 } // namespace huira

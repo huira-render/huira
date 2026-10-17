@@ -63,6 +63,7 @@
 // #include "huira/scene/frame_node.hpp"  // Not part of the public API
 // #include "huira/scene/instance.hpp"    // Not part of the public API
 // #include "huira/scene/node.hpp"        // Not part of the public API
+#include "huira/scene/object_ids.hpp"
 #include "huira/scene/scene.hpp"
 #include "huira/scene/scene_view.hpp"
 

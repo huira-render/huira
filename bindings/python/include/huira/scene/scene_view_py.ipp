@@ -49,6 +49,11 @@ void bind_scene_view(py::module_& m)
              py::arg("ray"),
              py::arg("hit"),
              "Resolve a HitRecord into a full Interaction")
+        .def("object_ids",
+             &SV::object_ids,
+             py::arg("hit"),
+             "The IDs of the geometry, model, instance and part a HitRecord landed on, as an "
+             "ObjectIds: each NO_OBJECT_ID for a miss or a light")
 
         // Ray tracing — batch
         .def("intersect_batch",

@@ -5,6 +5,7 @@ This document explains the various options that can be set when building Huira w
 |       Option        | Default | Description |
 | ------------------- | ------- | ----------- |
 | [`HUIRA_TOOLS`](#huira_tools) | `ON`  | Build Huira's command line tools. |
+| [`HUIRA_BUILD_TOOLS`](#huira_build_tools) | `OFF` | Build the developer tools that build the data files published on media.huira.space. |
 | [`HUIRA_EXAMPLES`](#huira_examples)    | `OFF` | Build Huira's example applications. |
 | [`HUIRA_TESTS`](#huira_tests)       | `OFF` | Build Huira's unit tests. |
 | [`HUIRA_DOCS`](#huira_docs)        | `OFF` | Build Huira's documentation. This requires additional dependencies to be installed.  Please see below.|
@@ -14,7 +15,11 @@ This document explains the various options that can be set when building Huira w
 
 ## HUIRA_TOOLS
 
-This option enables the `huira` command line tool for various, often required, operations (such as creating star catalogs for rendering star fields).  In general, this should always be built, and thus it is set to `ON`.
+This option enables the `huira` command line tool.  In general, this should always be built, and thus it is set to `ON`.
+
+## HUIRA_BUILD_TOOLS
+
+This option builds the developer tools in `tools/`, which produce the data files that Huira publishes on [media.huira.space](https://media.huira.space), such as `build_star_catalog`, which converts the Tycho-2 catalog into Huira's star catalog format.  Users download those files ready-made (see [Data Sources and Licenses](../data.md)), so this is `OFF` by default; the tools are not installed.
 
 ## HUIRA_EXAMPLES
 

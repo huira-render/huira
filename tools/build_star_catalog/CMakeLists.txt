@@ -1,0 +1,5 @@
+add_executable(build_star_catalog main.cpp)
+
+target_link_libraries(build_star_catalog PRIVATE huira::huira)
+target_compile_features(build_star_catalog PRIVATE cxx_std_20)
+set_target_properties(build_star_catalog PROPERTIES CXX_SCAN_FOR_MODULES OFF)

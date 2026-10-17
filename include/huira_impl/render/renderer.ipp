@@ -413,7 +413,7 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
         const bool has_direct = frame_buffer.has_received_direct_power();
         const bool has_indirect = frame_buffer.has_received_indirect_power();
         const bool has_albedo = frame_buffer.has_albedo();
-        const bool has_geom = frame_buffer.has_geometry_ids();
+        const bool has_ids = frame_buffer.has_object_ids();
         const bool has_cam_n = frame_buffer.has_camera_normals();
         const bool has_world_n = frame_buffer.has_world_normals();
 
@@ -440,9 +440,8 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                         if (has_albedo) {
                             frame_buffer.albedo()(x, y) = TSpectral{0.f};
                         }
-                        if (has_geom) {
-                            frame_buffer.geometry_ids()(x, y) =
-                                std::numeric_limits<std::size_t>::max();
+                        if (has_ids) {
+                            frame_buffer.set_object_ids(x, y, ObjectIds{});
                         }
                         if (has_cam_n) {
                             frame_buffer.camera_normals()(x, y) = miss_normal;
@@ -566,9 +565,8 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                             if (frame_buffer.has_albedo()) {
                                 frame_buffer.albedo()(x, y) = TSpectral{0.f};
                             }
-                            if (frame_buffer.has_geometry_ids()) {
-                                frame_buffer.geometry_ids()(x, y) =
-                                    std::numeric_limits<std::size_t>::max();
+                            if (frame_buffer.has_object_ids()) {
+                                frame_buffer.set_object_ids(x, y, ObjectIds{});
                             }
                             if (frame_buffer.has_camera_normals()) {
                                 frame_buffer.camera_normals()(x, y) = miss_normal_tile;
@@ -609,7 +607,7 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                         float closest_depth = std::numeric_limits<float>::infinity();
                         bool primary_occluder = false;
                         bool pixel_hit_geometry = false; ///< By any of its rays.
-                        std::size_t geometry_id = std::numeric_limits<std::size_t>::max();
+                        ObjectIds object_ids{};          ///< Of the surface closest_depth records.
                         TSpectral albedo_total{0};
                         Vec3<float> camera_normals{0};
 
@@ -815,10 +813,6 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                                     break;
                                 } else {
 
-                                    if (s == 0) {
-                                        geometry_id = hit.geom_id;
-                                    }
-
                                     // Resolve full shading data:
                                     Interaction<TSpectral> isect = scene_view.resolve_hit(ray, hit);
 
@@ -851,9 +845,24 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
 
                                     // Record primary ray info:
                                     if (bounce == 0) {
+                                        if (hit.t < closest_depth) {
+                                            object_ids = scene_view.object_ids(hit);
+                                        }
                                         closest_depth = std::min(closest_depth, hit.t);
                                         camera_normals += shading_isect.normal_s;
                                         albedo_total += params.albedo;
+                                    }
+
+                                    // The surface's own emission along the ray, from either
+                                    // side. An emissive surface is not a light: nothing samples
+                                    // it (lights, nor reflector NEE, whose
+                                    // direct_lit_radiance() leaves emission out), so it is
+                                    // only ever reached here, and counted in full.
+                                    const TSpectral Le = throughput * params.emission;
+                                    if (bounce == 0) {
+                                        direct_radiance += Le;
+                                    } else {
+                                        indirect_radiance += Le;
                                     }
 
                                     float reflector_nee_weight = 1.0f;
@@ -1074,8 +1083,8 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                             frame_buffer.albedo()(x, y) = albedo_total * inv_drawn;
                         }
 
-                        if (frame_buffer.has_geometry_ids()) {
-                            frame_buffer.geometry_ids()(x, y) = geometry_id;
+                        if (frame_buffer.has_object_ids()) {
+                            frame_buffer.set_object_ids(x, y, object_ids);
                         }
 
                         if (frame_buffer.has_camera_normals()) {

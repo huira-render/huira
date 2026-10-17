@@ -14,7 +14,7 @@
 #endif
 
 namespace huira {
-std::string get_platform()
+inline std::string get_platform()
 {
 #ifdef _WIN32
     return "Windows";
@@ -27,7 +27,7 @@ std::string get_platform()
 #endif
 }
 
-std::string get_compiler_info()
+inline std::string get_compiler_info()
 {
 #ifdef _MSC_VER
     return "MSVC " + std::to_string(_MSC_VER);
@@ -40,7 +40,7 @@ std::string get_compiler_info()
 #endif
 }
 
-std::string get_memory_usage()
+inline std::string get_memory_usage()
 {
     std::string output;
 
@@ -91,8 +91,8 @@ std::string get_memory_usage()
     return output;
 }
 
-std::string get_time_as_string(const std::chrono::system_clock::time_point& tp,
-                               const std::string fmt)
+inline std::string get_time_as_string(const std::chrono::system_clock::time_point& tp,
+                                      const std::string fmt)
 {
     auto time_t = std::chrono::system_clock::to_time_t(tp);
 
@@ -114,7 +114,7 @@ std::string get_time_as_string(const std::chrono::system_clock::time_point& tp,
     return oss.str();
 }
 
-std::string get_time_as_string(const std::string& fmt)
+inline std::string get_time_as_string(const std::string& fmt)
 {
     return get_time_as_string(std::chrono::system_clock::now(), fmt);
 }

@@ -90,6 +90,20 @@ void bind_quantity_type(py::module& m, const std::string& name)
         .def(py::init<double>(), py::arg("value"), ("Create a " + name + " from a float.").c_str())
         .def(py::init<int>(), py::arg("value"), ("Create a " + name + " from an int.").c_str())
         .def(py::init<float>(), py::arg("value"), ("Create a " + name + " from a float.").c_str())
+        // From another unit of the same dimension, as Second(Millisecond(5)): the conversions
+        // register_unit_conversions() registers call this, so functions that take this unit
+        // accept the others too. Anything else is taken as a number, as by the constructors
+        // above (which a numpy number, say, reaches only after them).
+        .def(
+            py::init([](const py::object& value) {
+                if (py::hasattr(value, "_huira_dimension")) {
+                    using SIUnit = units::Quantity<Dim, std::ratio<1, 1>>;
+                    return UnitType(SIUnit(detail::dimensioned_si_value<Dim>(value)));
+                }
+                return UnitType(value.cast<double>());
+            }),
+            py::arg("value"),
+            ("Create a " + name + " from another unit of the same dimension, or a number.").c_str())
         .def("to_si",
              static_cast<double (UnitType::*)() const>(&UnitType::to_si),
              "Return the value converted to SI base units (returns float).")
@@ -235,7 +249,7 @@ void bind_spectral_quantity_type(py::module& m, const std::string& name)
         .def(py::self != py::self);
 }
 
-static void bind_units(py::module& m)
+inline void bind_units(py::module& m)
 {
     // ============================================== //
     // === Bind Scalar Quantity Types (Quantity)  === //

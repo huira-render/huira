@@ -1,6 +1,7 @@
 #include <filesystem>
 
 #include "huira/platform/get_exe_path.hpp"
+#include "huira/util/macros.hpp"
 
 namespace fs = std::filesystem;
 
@@ -11,30 +12,32 @@ namespace fs = std::filesystem;
 
 namespace huira {
 
-Paths& Paths::instance()
+inline Paths& Paths::instance()
 {
+    HUIRA_PER_MODULE_STATE_BEGIN
     static Paths instance;
+    HUIRA_PER_MODULE_STATE_END
     return instance;
 }
 
-fs::path Paths::executable_path()
+inline fs::path Paths::executable_path()
 {
     return get_executable_path();
 }
 
-fs::path Paths::executable_dir()
+inline fs::path Paths::executable_dir()
 {
     return std::filesystem::path(executable_path()).parent_path().string();
 }
 
-fs::path Paths::relative_to_executable(const fs::path& relativePath)
+inline fs::path Paths::relative_to_executable(const fs::path& relativePath)
 {
     namespace fs = std::filesystem;
     auto resolved = fs::path(executable_dir()) / relativePath;
     return fs::weakly_canonical(resolved).string();
 }
 
-fs::path Paths::data_dir() const
+inline fs::path Paths::data_dir() const
 {
     if (data_dir_override_) {
         return *data_dir_override_;
@@ -42,7 +45,7 @@ fs::path Paths::data_dir() const
     return HUIRA_DEFAULT_DATA_DIR;
 }
 
-void Paths::set_data_dir(const fs::path& path)
+inline void Paths::set_data_dir(const fs::path& path)
 {
     namespace fs = std::filesystem;
 
@@ -55,7 +58,7 @@ void Paths::set_data_dir(const fs::path& path)
     }
 }
 
-void Paths::reset_data_dir()
+inline void Paths::reset_data_dir()
 {
     data_dir_override_.reset();
 }

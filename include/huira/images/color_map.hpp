@@ -9,11 +9,25 @@
 #include "huira/images/image.hpp"
 
 namespace huira {
+/**
+ * @brief Colors an image of normals for viewing: each component, from -1 to 1, as red, green and
+ * blue from 0 to 1.
+ *
+ * Pixels whose normal isn't finite, as a frame buffer's normals are where a pixel sees nothing,
+ * are black, as depth_map() makes them white.
+ *
+ * @param normals Unit normals, such as a frame buffer's camera or world normals.
+ * @return The colors, in linear RGB.
+ */
 inline Image<huira::RGB> normal_map(Image<Vec3<float>> normals)
 {
     Image<huira::RGB> output(normals.resolution());
     for (std::size_t i = 0; i < normals.size(); ++i) {
-        Vec3<float> n = normals[i];
+        const Vec3<float> n = normals[i];
+        if (!std::isfinite(n.x) || !std::isfinite(n.y) || !std::isfinite(n.z)) {
+            output[i] = huira::RGB{0.f};
+            continue;
+        }
         output[i] = huira::RGB{(n.x * 0.5f + 0.5f), (n.y * 0.5f + 0.5f), (n.z * 0.5f + 0.5f)};
     }
     return output;

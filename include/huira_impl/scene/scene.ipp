@@ -1108,7 +1108,9 @@ std::vector<StarData> Scene<TSpectral>::usable_stars_(const std::vector<StarData
     if (usable.size() < star_data.size()) {
         HUIRA_LOG_WARNING("Scene - Left out " + std::to_string(star_data.size() - usable.size()) +
                           " of the catalog's " + std::to_string(star_data.size()) +
-                          " stars, whose position, temperature or solid angle is not finite");
+                          " stars, whose position is not finite or whose temperature or solid "
+                          "angle is not finite or is negative. A catalog built by huira has "
+                          "none of these; please re-download or re-build it");
     }
     return usable;
 }

@@ -1,2 +1,0 @@
-add_executable(jupiter_range_example main.cpp)
-target_link_libraries(jupiter_range_example PRIVATE huira)

@@ -14,9 +14,5 @@ find_package(huira REQUIRED)
 add_executable(packaging_test main.cpp)
 target_link_libraries(packaging_test PRIVATE huira::huira)
 
-if(MSVC)
-    target_compile_options(packaging_test PRIVATE /bigobj)
-endif()
-
 enable_testing()
 add_test(NAME packaging_test COMMAND packaging_test)

@@ -5,6 +5,7 @@
 #include <type_traits>
 
 #include "huira/images/image.hpp"
+#include "huira/scene/object_ids.hpp"
 
 namespace huira {
 template <IsSpectral TSpectral>
@@ -32,9 +33,56 @@ class FrameBuffer {
     Image<TSpectral>& albedo() { return albedo_; }
     bool has_albedo() const { return has_(albedo_); }
 
-    void enable_geometry_ids(bool enable = true) { enable_(geometry_ids_, uint64_t{0}, enable); }
+    /**
+     * @brief Enable the IDs of the geometry (mesh or ellipsoid) each pixel sees.
+     *
+     * This and the model, instance and part IDs are those of the nearest surface the pixel's
+     * camera rays hit, the one depth() records (see ObjectIds). A pixel that sees nothing, or
+     * only a light, holds NO_OBJECT_ID.
+     */
+    void enable_geometry_ids(bool enable = true) { enable_(geometry_ids_, NO_OBJECT_ID, enable); }
     Image<uint64_t>& geometry_ids() { return geometry_ids_; }
     bool has_geometry_ids() const { return has_(geometry_ids_); }
+
+    /// Enable the IDs of the model each pixel sees: NO_OBJECT_ID where the primitive seen was
+    /// placed directly rather than by a model.
+    void enable_model_ids(bool enable = true) { enable_(model_ids_, NO_OBJECT_ID, enable); }
+    Image<uint64_t>& model_ids() { return model_ids_; }
+    bool has_model_ids() const { return has_(model_ids_); }
+
+    /// Enable the IDs of the instance in the scene graph that placed what each pixel sees.
+    void enable_instance_ids(bool enable = true) { enable_(instance_ids_, NO_OBJECT_ID, enable); }
+    Image<uint64_t>& instance_ids() { return instance_ids_; }
+    bool has_instance_ids() const { return has_(instance_ids_); }
+
+    /// Enable the IDs of the part each pixel sees: the innermost instance that placed the
+    /// primitive, within a model, or the instance itself for a primitive placed directly.
+    void enable_part_ids(bool enable = true) { enable_(part_ids_, NO_OBJECT_ID, enable); }
+    Image<uint64_t>& part_ids() { return part_ids_; }
+    bool has_part_ids() const { return has_(part_ids_); }
+
+    /// Whether any of the object ID images is enabled.
+    bool has_object_ids() const
+    {
+        return has_geometry_ids() || has_model_ids() || has_instance_ids() || has_part_ids();
+    }
+
+    /// Record the IDs of what pixel (x, y) sees in the enabled object ID images.
+    void set_object_ids(int x, int y, const ObjectIds& ids)
+    {
+        if (has_geometry_ids()) {
+            geometry_ids_(x, y) = ids.geometry;
+        }
+        if (has_model_ids()) {
+            model_ids_(x, y) = ids.model;
+        }
+        if (has_instance_ids()) {
+            instance_ids_(x, y) = ids.instance;
+        }
+        if (has_part_ids()) {
+            part_ids_(x, y) = ids.part;
+        }
+    }
 
     void enable_camera_normals(bool enable = true)
     {
@@ -116,7 +164,16 @@ class FrameBuffer {
             albedo_.fill(TSpectral{0});
         }
         if (has_geometry_ids()) {
-            geometry_ids_.fill(uint64_t{0});
+            geometry_ids_.fill(NO_OBJECT_ID);
+        }
+        if (has_model_ids()) {
+            model_ids_.fill(NO_OBJECT_ID);
+        }
+        if (has_instance_ids()) {
+            instance_ids_.fill(NO_OBJECT_ID);
+        }
+        if (has_part_ids()) {
+            part_ids_.fill(NO_OBJECT_ID);
         }
         if (has_camera_normals()) {
             camera_normals_.fill(Vec3<float>{0, 0, 0});
@@ -146,6 +203,9 @@ class FrameBuffer {
     Image<float> depth_;
     Image<TSpectral> albedo_;
     Image<uint64_t> geometry_ids_;
+    Image<uint64_t> model_ids_;
+    Image<uint64_t> instance_ids_;
+    Image<uint64_t> part_ids_;
     Image<Vec3<float>> camera_normals_;
     Image<Vec3<float>> world_normals_;
 

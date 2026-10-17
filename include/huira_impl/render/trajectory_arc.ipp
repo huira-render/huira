@@ -15,7 +15,7 @@ namespace huira {
  *
  * @param samples Direction vectors at each sample time. Must have at least 2 elements.
  */
-TrajectoryArc::TrajectoryArc(const std::vector<Vec3<float>>& samples)
+inline TrajectoryArc::TrajectoryArc(const std::vector<Vec3<float>>& samples)
 {
     reset(samples);
 }
@@ -28,7 +28,7 @@ TrajectoryArc::TrajectoryArc(const std::vector<Vec3<float>>& samples)
  *
  * @param samples Direction vectors at each sample time. Must have at least 1 element.
  */
-void TrajectoryArc::reset(const std::vector<Vec3<float>>& samples)
+inline void TrajectoryArc::reset(const std::vector<Vec3<float>>& samples)
 {
     if (samples.size() < 1) {
         HUIRA_THROW_ERROR("TrajectoryArc::reset - requires at least 1 sample point.");
@@ -49,7 +49,7 @@ void TrajectoryArc::reset(const std::vector<Vec3<float>>& samples)
  * @param t Parameter value in [0, 1].
  * @return Interpolated direction vector.
  */
-Vec3<float> TrajectoryArc::evaluate(float t) const
+inline Vec3<float> TrajectoryArc::evaluate(float t) const
 {
     if (is_polynomial_()) {
         return evaluate_polynomial_(t);
@@ -66,7 +66,7 @@ Vec3<float> TrajectoryArc::evaluate(float t) const
  * @param plane_normal Inward-pointing normal of a plane through the origin.
  * @return Sorted list of parameter values where the crossing occurs.
  */
-std::vector<float> TrajectoryArc::find_plane_crossings(const Vec3<float>& plane_normal) const
+inline std::vector<float> TrajectoryArc::find_plane_crossings(const Vec3<float>& plane_normal) const
 {
     std::vector<float> out;
     find_plane_crossings(plane_normal, out);
@@ -79,8 +79,8 @@ std::vector<float> TrajectoryArc::find_plane_crossings(const Vec3<float>& plane_
  * @param plane_normal Inward-pointing normal of a plane through the origin.
  * @param out Cleared and filled with the parameter values of the crossings.
  */
-void TrajectoryArc::find_plane_crossings(const Vec3<float>& plane_normal,
-                                         std::vector<float>& out) const
+inline void TrajectoryArc::find_plane_crossings(const Vec3<float>& plane_normal,
+                                                std::vector<float>& out) const
 {
     out.clear();
     if (is_polynomial_()) {
@@ -98,7 +98,7 @@ void TrajectoryArc::find_plane_crossings(const Vec3<float>& plane_normal,
  *   f(t) = p0(1 - 3t + 2t^2) + p1(4t - 4t^2) + p2(-t + 2t^2)
  *   Coefficients: a0 = p0, a1 = -3*p0 + 4*p1 - p2, a2 = 2*p0 - 4*p1 + 2*p2
  */
-void TrajectoryArc::build_polynomial_(const std::vector<Vec3<float>>& samples)
+inline void TrajectoryArc::build_polynomial_(const std::vector<Vec3<float>>& samples)
 {
     if (samples.size() == 1) {
         // Constant: f(t) = p0
@@ -133,7 +133,7 @@ void TrajectoryArc::build_polynomial_(const std::vector<Vec3<float>>& samples)
  *   S_i(u) = a_i + b_i*u + c_i*u^2 + d_i*u^3
  * where u = t - knots_[i].
  */
-void TrajectoryArc::build_cubic_spline_(const std::vector<Vec3<float>>& samples)
+inline void TrajectoryArc::build_cubic_spline_(const std::vector<Vec3<float>>& samples)
 {
     const std::size_t n = samples.size();
     const std::size_t num_segments = n - 1;
@@ -194,7 +194,7 @@ void TrajectoryArc::build_cubic_spline_(const std::vector<Vec3<float>>& samples)
     }
 }
 
-Vec3<float> TrajectoryArc::evaluate_polynomial_(float t) const
+inline Vec3<float> TrajectoryArc::evaluate_polynomial_(float t) const
 {
     // Horner's method:
     Vec3<float> result = poly_coeffs_[poly_count_ - 1];
@@ -204,7 +204,7 @@ Vec3<float> TrajectoryArc::evaluate_polynomial_(float t) const
     return result;
 }
 
-Vec3<float> TrajectoryArc::evaluate_spline_(float t) const
+inline Vec3<float> TrajectoryArc::evaluate_spline_(float t) const
 {
     t = std::clamp(t, 0.0f, 1.0f);
 
@@ -228,8 +228,8 @@ Vec3<float> TrajectoryArc::evaluate_spline_(float t) const
  *
  * dot(normal, f(t)) = 0 becomes a scalar polynomial in t.
  */
-void TrajectoryArc::find_crossings_polynomial_(const Vec3<float>& normal,
-                                               std::vector<float>& out) const
+inline void TrajectoryArc::find_crossings_polynomial_(const Vec3<float>& normal,
+                                                      std::vector<float>& out) const
 {
     float roots[3];
     std::size_t count = 0;
@@ -256,8 +256,8 @@ void TrajectoryArc::find_crossings_polynomial_(const Vec3<float>& normal,
  *
  * For each segment, dot(normal, S_i(u)) = 0 is a cubic in u.
  */
-void TrajectoryArc::find_crossings_spline_(const Vec3<float>& normal,
-                                           std::vector<float>& all_roots) const
+inline void TrajectoryArc::find_crossings_spline_(const Vec3<float>& normal,
+                                                  std::vector<float>& all_roots) const
 {
     for (std::size_t i = 0; i < segments_.size(); ++i) {
         const auto& s = segments_[i];
@@ -286,7 +286,8 @@ void TrajectoryArc::find_crossings_spline_(const Vec3<float>& normal,
 // Root-finding utilities
 // =========================================================================
 
-std::size_t TrajectoryArc::solve_linear_(float a, float b, float t_min, float t_max, float* out)
+inline std::size_t
+TrajectoryArc::solve_linear_(float a, float b, float t_min, float t_max, float* out)
 {
     constexpr float eps = 1e-10f;
     if (std::abs(a) < eps) {
@@ -300,7 +301,7 @@ std::size_t TrajectoryArc::solve_linear_(float a, float b, float t_min, float t_
     return 0;
 }
 
-std::size_t
+inline std::size_t
 TrajectoryArc::solve_quadratic_(float a, float b, float c, float t_min, float t_max, float* out)
 {
     constexpr float eps = 1e-10f;
@@ -347,7 +348,7 @@ TrajectoryArc::solve_quadratic_(float a, float b, float c, float t_min, float t_
  *
  * Uses the depressed cubic (Cardano's method) for analytic solution.
  */
-std::size_t TrajectoryArc::solve_cubic_(
+inline std::size_t TrajectoryArc::solve_cubic_(
     float a, float b, float c, float d, float t_min, float t_max, float* out)
 {
     constexpr float eps = 1e-10f;

@@ -24,12 +24,16 @@ set(UNIT_TESTS
     huira/core/test_time.cpp
     huira/core/test_transform.cpp
 
+    huira/geometry/test_mesh.cpp
+
     huira/materials/test_cook_torrance.cpp
 
     huira/render/test_bright_bodies.cpp
+    huira/render/test_emission.cpp
     huira/render/test_measured_defocus.cpp
     huira/render/test_measured_unresolved.cpp
     huira/render/test_non_finite_radiance.cpp
+    huira/render/test_object_ids.cpp
     huira/render/test_psf_switch.cpp
     huira/render/test_region_culling.cpp
     huira/render/test_set_psf_scatter.cpp
@@ -44,9 +48,11 @@ set(UNIT_TESTS
     huira/scene/test_scene_inputs.cpp
     huira/scene/test_scene_deletion.cpp
 
+    huira/images/test_color_map.cpp
     huira/images/test_convolution.cpp
     huira/images/test_fits_io.cpp
     huira/images/test_image_output.cpp
+    huira/stars/test_star_catalog.cpp
 
     huira/units/test_units.cpp
 
@@ -98,10 +104,6 @@ target_link_libraries(huira_test_instantiations
     PUBLIC huira::huira
 )
 
-if(MSVC)
-    target_compile_options(huira_test_instantiations PRIVATE /bigobj)
-endif()
-
 # Add coverage flags to the instantiation library
 if(HUIRA_COVERAGE)
     target_compile_options(huira_test_instantiations PRIVATE ${COVERAGE_FLAGS})
@@ -115,8 +117,9 @@ endif()
 ##############################
 ### Test Creation Function ###
 ##############################
+# Any sources after the first are built into the test too.
 function(add_unit_test test_name source_file)
-    add_executable(${test_name} ${source_file})
+    add_executable(${test_name} ${source_file} ${ARGN})
 
     # Tests include shared test code, such as the independent reference in reference/, from here
     target_include_directories(${test_name} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
@@ -145,9 +148,8 @@ function(add_unit_test test_name source_file)
     
     if(MSVC)
         # /wd4868: left-to-right evaluation of braced initializer lists (Catch2 internals).
-        # /bigobj: the heavily templated renderer, instantiated for several spectral types in
-        # one test, exceeds the default COFF section limit (C1128) on newer toolsets.
-        target_compile_options(${test_name} PRIVATE /wd4868 /bigobj)
+        # (/bigobj comes from the huira target.)
+        target_compile_options(${test_name} PRIVATE /wd4868)
     endif()
     
     # Register with CTest and configure JUnit XML output
@@ -181,6 +183,13 @@ foreach(source_file ${UNIT_TESTS})
     # Create the test
     add_unit_test(${test_name} ${source_file})
 endforeach()
+
+# Two source files that both include all of Huira, in one test: it doesn't link if a header
+# defines anything that isn't a template, constexpr or inline (see test_translation_units.cpp).
+add_unit_test(test_translation_units
+    huira/test_translation_units.cpp
+    huira/translation_units_other.cpp
+)
 
 
 #############################

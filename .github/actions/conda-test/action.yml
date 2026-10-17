@@ -61,8 +61,6 @@ runs:
       shell: bash -el {0}
       run: |
         huira --help
-        huira fetch-tycho2 --help
-        huira process-tycho2 --help
 
     - name: Build and run packaging test (Linux/macOS)
       if: inputs.platform != 'windows'
@@ -82,8 +80,6 @@ runs:
       shell: bash -el {0}
       run: |
         huira --help
-        huira fetch-tycho2 --help
-        huira process-tycho2 --help
 
     - name: Build and run packaging test (Windows)
       if: inputs.platform == 'windows'

@@ -1,8 +1,12 @@
 #include <algorithm>
+#include <cctype>
+#include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <limits>
+#include <string>
 #include <vector>
 
 #include "huira/stars/io/star_data.hpp"
@@ -12,7 +16,7 @@
 namespace fs = std::filesystem;
 
 namespace huira {
-static std::size_t count_lines_(const fs::path& filepath)
+inline std::size_t count_lines_(const fs::path& filepath)
 {
     std::ifstream file(filepath, std::ios::binary);
 
@@ -23,7 +27,13 @@ static std::size_t count_lines_(const fs::path& filepath)
     return static_cast<std::size_t>(count);
 }
 
-static bool has_mean_position_(const std::string& line)
+// Field positions below are 0-based [start, end), i.e. 1-based ReadMe columns start+1..end.
+// The CDS ReadMe for I/259 lists the observed-position block (RAdeg, DEdeg, EpRA-1990,
+// EpDE-1990) one column to the left of where it sits in the distributed tyc2.dat files:
+// the files have the '|' separator at column 153 and RAdeg at 154-165. The positions here
+// match the files, not the ReadMe; check against a real record before "correcting" them.
+
+inline bool has_mean_position_(const std::string& line)
 {
     if (line.size() < 14) {
         return false;
@@ -31,7 +41,7 @@ static bool has_mean_position_(const std::string& line)
     return line[13] != 'X';
 }
 
-static double read_entry_(const std::string& line, std::size_t start, std::size_t end)
+inline double read_entry_(const std::string& line, std::size_t start, std::size_t end)
 {
     if (start >= line.size()) {
         return std::numeric_limits<double>::quiet_NaN();
@@ -51,13 +61,13 @@ static double read_entry_(const std::string& line, std::size_t start, std::size_
     }
 }
 
-static bool is_valid_line_(const std::string& line)
+inline bool is_valid_line_(const std::string& line)
 {
     // Data lines start with a digit (TYC1 number)
     return !line.empty() && std::isdigit(static_cast<unsigned char>(line[0]));
 }
 
-std::vector<StarData> read_tycho2_dat(const fs::path& filepath)
+inline std::vector<StarData> read_tycho2_dat(const fs::path& filepath)
 {
     std::vector<StarData> star_data(count_lines_(filepath));
     std::ifstream file(filepath);
@@ -69,7 +79,11 @@ std::vector<StarData> read_tycho2_dat(const fs::path& filepath)
     std::size_t i = 0;
     while (std::getline(file, line)) {
         if (is_valid_line_(line)) {
-            // Read identifer:
+            // A record that is skipped below leaves this slot partly written, and a blank
+            // proper motion does not overwrite it, so start each record from defaults:
+            star_data[i] = StarData{};
+
+            // Read identifier:
             int tyc1 = static_cast<int>(read_entry_(line, 0, 4));
             int tyc2 = static_cast<int>(read_entry_(line, 5, 10));
             int tyc3 = static_cast<int>(read_entry_(line, 11, 12));
@@ -89,7 +103,7 @@ std::vector<StarData> read_tycho2_dat(const fs::path& filepath)
                 star_data[i].RA = RA * PI<double>() / 180.;
                 star_data[i].DEC = DEC * PI<double>() / 180.;
             } else {
-                // Observed position at bytes 153-165 and 166-178
+                // Observed position at bytes 154-165 and 167-178 (see the note above)
                 double RA = read_entry_(line, 153, 165);
                 double DEC = read_entry_(line, 166, 178);
                 if (std::isnan(RA) || std::isnan(DEC)) {
@@ -98,7 +112,7 @@ std::vector<StarData> read_tycho2_dat(const fs::path& filepath)
                 star_data[i].RA = RA * PI<double>() / 180.;
                 star_data[i].DEC = DEC * PI<double>() / 180.;
 
-                // Epoch of observed position: epRA at bytes 179-183, epDE at 184-188
+                // Epoch of observed position: epRA at bytes 180-183, epDE at 185-188
                 // These are "epoch - 1990", so add 1990 to get Julian year
                 double epRA = read_entry_(line, 179, 183);
                 double epDE = read_entry_(line, 184, 188);
@@ -138,7 +152,7 @@ std::vector<StarData> read_tycho2_dat(const fs::path& filepath)
     return star_data;
 }
 
-std::vector<StarData> read_tycho2_suppl(const fs::path& filepath)
+inline std::vector<StarData> read_tycho2_suppl(const fs::path& filepath)
 {
     std::vector<StarData> star_data(count_lines_(filepath));
     std::ifstream file(filepath);
@@ -150,7 +164,11 @@ std::vector<StarData> read_tycho2_suppl(const fs::path& filepath)
     std::size_t i = 0;
     while (std::getline(file, line)) {
         if (is_valid_line_(line)) {
-            // Read identifer:
+            // A record that is skipped below leaves this slot partly written, and a blank
+            // proper motion does not overwrite it, so start each record from defaults:
+            star_data[i] = StarData{};
+
+            // Read identifier:
             int tyc1 = static_cast<int>(read_entry_(line, 0, 4));
             int tyc2 = static_cast<int>(read_entry_(line, 5, 10));
             int tyc3 = static_cast<int>(read_entry_(line, 11, 12));
@@ -167,7 +185,7 @@ std::vector<StarData> read_tycho2_suppl(const fs::path& filepath)
             star_data[i].RA = RA * PI<double>() / 180.;
             star_data[i].DEC = DEC * PI<double>() / 180.;
 
-            // Proper motion at bytes 42-49 and 50-57
+            // Proper motion at bytes 42-48 and 50-56
             double pmRA = read_entry_(line, 41, 48);
             double pmDEC = read_entry_(line, 49, 56);
             if (!std::isnan(pmRA)) {
