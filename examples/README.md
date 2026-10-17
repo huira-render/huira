@@ -18,6 +18,7 @@ to run it. Each source file opens with the features it demonstrates.
 | 08 | [Lights](08_lights/) | Colored sphere lights, and planetshine from an indirect source |
 | 09 | [Stars](09_stars/) | The Tycho-2 catalog, pointing by right ascension and declination, and proper motion |
 | 10 | [Optics](10_optics/) | Diffraction, focus, scattered light, measured PSFs, and distortion |
+| 11 | [Sensor](11_sensor/) | The physical signal chain; quantum efficiency, gain, bit depth and noise; FITS and TIFF |
 
 ## Running the examples
 
