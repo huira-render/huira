@@ -17,6 +17,7 @@ runs:
           -DCMAKE_TOOLCHAIN_FILE="${GITHUB_WORKSPACE}/cmake/conda-toolchain.cmake" \
           -DCMAKE_BUILD_TYPE=Release \
           -DHUIRA_TOOLS=ON \
+          -DHUIRA_BUILD_TOOLS=ON \
           -DHUIRA_EXAMPLES=ON \
           -G Ninja
 
@@ -31,6 +32,7 @@ runs:
             -DCMAKE_TOOLCHAIN_FILE="${GITHUB_WORKSPACE}/cmake/conda-toolchain.cmake" \
             -DCMAKE_BUILD_TYPE=Release \
             -DHUIRA_TOOLS=ON \
+            -DHUIRA_BUILD_TOOLS=ON \
             -DHUIRA_EXAMPLES=ON \
             -G Ninja
         else
@@ -43,6 +45,7 @@ runs:
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_MAKE_PROGRAM="$SYSTEM_NINJA" \
             -DHUIRA_TOOLS=ON \
+            -DHUIRA_BUILD_TOOLS=ON \
             -DHUIRA_EXAMPLES=ON \
             -G Ninja
         fi
@@ -57,6 +60,7 @@ runs:
           -DCMAKE_TOOLCHAIN_FILE="${GITHUB_WORKSPACE}/cmake/conda-toolchain.cmake" \
           -DCMAKE_BUILD_TYPE=Release \
           -DHUIRA_TOOLS=ON \
+          -DHUIRA_BUILD_TOOLS=ON \
           -DHUIRA_EXAMPLES=ON \
           -G "Visual Studio 17 2022" \
           -A x64
