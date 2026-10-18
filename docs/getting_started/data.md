@@ -111,19 +111,20 @@ NASA's 3D model of the Gateway core module.
 
 ## Earth textures
 
-8k textures of the Earth: its surface by day and by night, its clouds, a normal map and a
-roughness map.
+8k textures of the Earth: its surface by day and by night, its clouds, a normal map, a
+roughness map and a city emission map.
 
 - **Get them:** [media.huira.space/data/textures/earth/](https://media.huira.space/data/textures/earth/)
 - **Source:** the day, night, cloud and normal maps are from
   [Solar System Scope](https://www.solarsystemscope.com/textures/), based on NASA imagery. The
   roughness map (`8k_earth_roughness_map.tif`) was made for Huira by Christopher Gnam, by
-  modifying Solar System Scope's specular map.  The city emission map (`8k_earth_ctiy_emission.jpg`) 
-  was made for Huira by Christopher Gnam, by modifying Solar System Scope's Night map.
-- **License:** [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The roughness map, an
-  adaptation, is distributed under the same license.
-- **Credit:** "Earth textures: Solar System Scope (solarsystemscope.com), CC BY 4.0. Roughness map
-  adapted from its specular map." Images rendered with the textures should carry this credit too.
+  modifying Solar System Scope's specular map, and the city emission map
+  (`8k_earth_city_emission.jpg`) likewise, by modifying its night map.
+- **License:** [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The roughness and city
+  emission maps, adaptations, are distributed under the same license.
+- **Credit:** "Earth textures: Solar System Scope (solarsystemscope.com), CC BY 4.0. Roughness
+  map adapted from its specular map; city emission map adapted from its night map." Images
+  rendered with the textures should carry this credit too.
 
 ## Kernels that ship with Huira
 
