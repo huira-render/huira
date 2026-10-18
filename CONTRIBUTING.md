@@ -1,7 +1,7 @@
 # Contributing to Huira
 
 Thanks for your interest in improving Huira! This guide covers how to propose a change, what a
-pull request should look like, the code and commit conventions, and how to disclose AI assistance.
+pull request should look like, the code and commit conventions, and PR submission.
 
 ## Before you start
 
@@ -197,34 +197,39 @@ To build and install the Python bindings from source, run `pip install bindings/
 [Python Bindings](docs/getting_started/build_instructions/python-bindings.md)). Other CMake options
 are described in [Build Options](docs/getting_started/build_instructions/options.md).
 
-## AI-Assisted Contributions
+## PR Submission
 
-AI tools are allowed, but you remain responsible for understanding every line you submit, and
-should be able to explain it in review.
+This default PR template includes a checklist of what to include in a pull request.  When creating
+a pull request, please ensure you've properly filled it out, and keep the following in mind before
+submitting:
 
-If any part of a pull request was generated or substantially shaped by an AI tool, disclose it in
-the pull request description, using the section provided in the template:
-
-1. Check the **AI-assisted** box.
-2. Name the model(s) used, including the version.
-3. List the categories it was used for, from the table below.
-4. If `algorithm` is listed, describe what the AI contributed and how you verified the result
-   (e.g. reference values, comparison renders, analytical checks).
-
-Commit messages don't need to mention AI use.
-
-| Category | Use for |
-| --- | --- |
-| `docs` | Docstrings, comments, Markdown documentation |
-| `tests` | Unit tests, test fixtures |
-| `ci` | CI workflows |
-| `build` | CMake, packaging, distribution |
-| `boilerplate` | Repetitive or structural code (bindings, accessors, etc.) |
-| `refactor` | Restructuring existing code without changing behavior |
-| `algorithm` | Implementing or modifying numerical, physical, or rendering logic |
-| `review` | Using AI to review or debug code you wrote |
-
-Disclosure is not grounds for rejection; it helps reviewers know where to look more closely.
+- Keep each pull request focused and small. A PR should implement one clear change that can be
+  described in a single sentence. Aim for a few hundred changed lines; if you exceed roughly 1,000
+  lines (excluding tests and mechanical renames), split the work or open an issue to coordinate a
+  multi-PR approach.
+- Narrow scope makes reviews faster and less error-prone: separate behavior changes, refactors,
+  formatting and tests into distinct pull requests when practical.
+- Link related issues and PRs in the description. If the PR depends on another open PR, note
+  "Depends on #123" so reviewers can follow the chain.
+- Write a concise title and a description that explains:
+  - what changed,
+  - why it changed,
+  - any design alternatives considered,
+  - how you verified the change (tests, reference values, renders, etc.),
+  - any manual steps or environment requirements to reproduce verification.
+- Include tests, docs and Python bindings (if applicable) in the same PR as the code change.
+- Run the full formatting and test suite locally before opening the PR:
+  - apply `clang-format` and ensure the repo passes the CI formatting check,
+  - build and run unit tests (`ctest ... --output-on-failure`).
+- Use Conventional Commits for your commit messages and keep each commit buildable and testable
+  on its own when possible. Use `git commit --fixup=` and `git rebase -i --autosquash main` to fold
+  review fixes into the relevant commits.
+- Open a draft PR for early feedback on larger or design-heavy changes.
+- Be responsive to review comments. If you disagree with a requested change, reply explaining the
+  rationale rather than leaving it unresolved.
+- Ensure all CI checks pass. PRs will only be merged after successful CI and satisfactory review.
+- Prefer small, incremental PRs for large features: use the Preparation → Internals → Exposure
+  sequence described above so `main` stays releasable.
 
 ## License
 
