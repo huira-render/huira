@@ -51,14 +51,15 @@ Scene<TSpectral>::Scene()
     HUIRA_TRACE_SCOPE("Scene::Scene");
     root_node_->set_spice("SOLAR SYSTEM BARYCENTER", "J2000");
 
-    // Initialize default textures:
+    // Initialize default textures, each holding the value a material starts with (see
+    // Material): factors default to 1, so these are the values themselves.
     default_albedo_image_ = std::make_shared<Image<TSpectral>>(1, 1, TSpectral{1});
     default_alpha_image_ = std::make_shared<Image<float>>(1, 1, 1.f);
-    default_metallic_image_ = std::make_shared<Image<float>>(1, 1, 1.f);
+    default_metallic_image_ = std::make_shared<Image<float>>(1, 1, 0.f);
     default_roughness_image_ = std::make_shared<Image<float>>(1, 1, 1.f);
     default_normal_image_ = std::make_shared<Image<Vec3<float>>>(1, 1, Vec3<float>{0, 0, 1});
-    default_transmission_image_ = std::make_shared<Image<TSpectral>>(1, 1, TSpectral{1.f});
-    default_emission_image_ = std::make_shared<Image<TSpectral>>(1, 1, TSpectral{1});
+    default_transmission_image_ = std::make_shared<Image<TSpectral>>(1, 1, TSpectral{0.f});
+    default_emission_image_ = std::make_shared<Image<TSpectral>>(1, 1, TSpectral{0.f});
 
     // Initialize default material:
     default_material_ =

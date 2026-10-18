@@ -149,11 +149,20 @@ TEST_CASE("Scene assets are checked when made", "[scene][validation]")
     CHECK_NOTHROW(scene.new_bsdf_hapke(0.06f, 1.f, 0.3f, 0.5f));
     auto material = scene.new_material(scene.new_bsdf_lambertian());
     CHECK_THROWS(material.set_roughness_factor(NaN_F));
+    CHECK_THROWS(material.set_roughness(1.5f));
     CHECK_THROWS(material.set_alpha_factor(1.5f));
+    CHECK_THROWS(material.set_alpha(-0.1f));
     CHECK_THROWS(material.set_metallic_factor(-0.1f));
+    CHECK_THROWS(material.set_metallic(NaN_F));
     CHECK_THROWS(material.set_albedo_factor(RGB{NaN_F}));
+    CHECK_THROWS(material.set_albedo_factor(RGB{1.5f})); // a reflectance, so at most 1
+    CHECK_THROWS(material.set_albedo(RGB{-0.1f}));
     CHECK_THROWS(material.set_transmission_factor(RGB{2.f}));
+    CHECK_THROWS(material.set_transmission(RGB{INF_F}));
     CHECK_THROWS(material.set_emissive_factor(RGB{-1.f}));
+    CHECK_THROWS(material.set_emissive(RGB{NaN_F}));
+    CHECK_NOTHROW(material.set_emissive(RGB{1000.f})); // a radiance, with no upper bound
+    CHECK_THROWS(material.set_normal_factor(NaN_F));
     CHECK_THROWS(material.set_bsdf(nullptr));
     CHECK_THROWS(scene.new_constant_density_field(RGB{NaN_F}, RGB{0.f}));
     CHECK_THROWS(scene.new_constant_density_field(RGB{0.f}, RGB{INF_F}));

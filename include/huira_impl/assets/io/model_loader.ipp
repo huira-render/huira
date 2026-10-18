@@ -397,20 +397,32 @@ void ModelLoader<TSpectral>::process_materials_(LoadContext& ctx)
         std::string name = std::string(ai_mat->GetName().C_Str());
         MaterialHandle<TSpectral> material = ctx.scene->new_material(ct_bsdf, name);
 
+        // glTF gives each value as a factor and an optional texture, multiplied. With a
+        // texture, the factor is its multiplier; without one, the factor is the value itself.
+
         // Assign albedos:
-        if (auto [tex, alpha] = load_material_texture_<TSpectral>(
-                ai_mat, aiTextureType_BASE_COLOR, ctx, true, true);
-            tex) {
-            material.set_albedo_image(tex.value());
-            if (alpha.has_value()) {
-                material.set_alpha_image(alpha.value());
+        auto [albedo_tex, alpha_tex] =
+            load_material_texture_<TSpectral>(ai_mat, aiTextureType_BASE_COLOR, ctx, true, true);
+        if (albedo_tex) {
+            material.set_albedo_image(albedo_tex.value());
+            if (alpha_tex.has_value()) {
+                material.set_alpha_image(alpha_tex.value());
             }
         }
         aiColor4D base_color;
         if (ai_mat->Get(AI_MATKEY_BASE_COLOR, base_color) == AI_SUCCESS) {
-            material.set_albedo_factor(
-                ctx.spectral_conversion(RGB{base_color.r, base_color.g, base_color.b}));
-            material.set_alpha_factor(base_color.a);
+            const TSpectral albedo =
+                ctx.spectral_conversion(RGB{base_color.r, base_color.g, base_color.b});
+            if (albedo_tex) {
+                material.set_albedo_factor(albedo);
+            } else {
+                material.set_albedo(albedo);
+            }
+            if (alpha_tex.has_value()) {
+                material.set_alpha_factor(base_color.a);
+            } else {
+                material.set_alpha(base_color.a);
+            }
         }
 
         // Load roughness and metallic from packed textures:
@@ -467,14 +479,26 @@ void ModelLoader<TSpectral>::process_materials_(LoadContext& ctx)
             }
         }
 
+        const bool has_metallic_roughness_texture =
+            ai_mat->GetTextureCount(aiTextureType_DIFFUSE_ROUGHNESS) > 0 ||
+            ai_mat->GetTextureCount(aiTextureType_METALNESS) > 0;
+
         float roughness_factor = 1.0f;
         if (ai_mat->Get(AI_MATKEY_ROUGHNESS_FACTOR, roughness_factor) == AI_SUCCESS) {
-            material.set_roughness_factor(roughness_factor);
+            if (has_metallic_roughness_texture) {
+                material.set_roughness_factor(roughness_factor);
+            } else {
+                material.set_roughness(roughness_factor);
+            }
         }
 
         float metallic_factor = 1.0f;
         if (ai_mat->Get(AI_MATKEY_METALLIC_FACTOR, metallic_factor) == AI_SUCCESS) {
-            material.set_metallic_factor(metallic_factor);
+            if (has_metallic_roughness_texture) {
+                material.set_metallic_factor(metallic_factor);
+            } else {
+                material.set_metallic(metallic_factor);
+            }
         }
 
         // Assign normals:
@@ -485,15 +509,20 @@ void ModelLoader<TSpectral>::process_materials_(LoadContext& ctx)
         }
 
         // Assign emissive:
-        if (auto [tex, _] = load_material_texture_<TSpectral>(
-                ai_mat, aiTextureType_EMISSION_COLOR, ctx, false, false);
-            tex) {
-            material.set_emissive_image(tex.value());
+        auto [emissive_tex, _] = load_material_texture_<TSpectral>(
+            ai_mat, aiTextureType_EMISSION_COLOR, ctx, false, false);
+        if (emissive_tex) {
+            material.set_emissive_image(emissive_tex.value());
         }
         aiColor3D emissive;
         if (ai_mat->Get(AI_MATKEY_COLOR_EMISSIVE, emissive) == AI_SUCCESS) {
-            material.set_emissive_factor(
-                ctx.spectral_conversion(RGB{emissive.r, emissive.g, emissive.b}));
+            const TSpectral emission =
+                ctx.spectral_conversion(RGB{emissive.r, emissive.g, emissive.b});
+            if (emissive_tex) {
+                material.set_emissive_factor(emission);
+            } else {
+                material.set_emissive(emission);
+            }
         }
 
         ctx.material_map.emplace(i, material);

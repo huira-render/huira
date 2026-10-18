@@ -123,8 +123,17 @@ void Material<TSpectral>::set_bsdf(std::shared_ptr<BSDF<TSpectral>> bsdf)
     eval_normal_ = reqs.needs_normal;
 }
 
+// Albedo: a reflectance, so its values and factor are from 0 to 1.
+
 template <IsSpectral TSpectral>
-void Material<TSpectral>::set_albedo(std::shared_ptr<Image<TSpectral>> albedo_image)
+void Material<TSpectral>::set_albedo(TSpectral albedo)
+{
+    validate_spectral_ratio(albedo, this->get_info() + " albedo");
+    albedo_image_ = std::make_shared<Image<TSpectral>>(1, 1, albedo);
+}
+
+template <IsSpectral TSpectral>
+void Material<TSpectral>::set_albedo_image(std::shared_ptr<Image<TSpectral>> albedo_image)
 {
     check_image_(albedo_image, "albedo");
     albedo_image_ = albedo_image;
@@ -133,7 +142,7 @@ void Material<TSpectral>::set_albedo(std::shared_ptr<Image<TSpectral>> albedo_im
 template <IsSpectral TSpectral>
 void Material<TSpectral>::set_albedo_factor(TSpectral albedo_factor)
 {
-    validate_spectrum(albedo_factor, this->get_info() + " albedo factor");
+    validate_spectral_ratio(albedo_factor, this->get_info() + " albedo factor");
     albedo_factor_ = albedo_factor;
 }
 
@@ -144,12 +153,28 @@ void Material<TSpectral>::reset_albedo()
     albedo_factor_ = TSpectral{1.0f};
 }
 
+// Alpha: an opacity from 0 to 1.
+
 template <IsSpectral TSpectral>
-void Material<TSpectral>::set_alpha(std::shared_ptr<Image<float>> alpha_image)
+void Material<TSpectral>::update_has_alpha_()
+{
+    has_alpha_ = alpha_image_ != default_alpha_image_ || alpha_factor_ < 1.0f;
+}
+
+template <IsSpectral TSpectral>
+void Material<TSpectral>::set_alpha(float alpha)
+{
+    validate_unit_interval(alpha, this->get_info() + " alpha");
+    alpha_image_ = std::make_shared<Image<float>>(1, 1, alpha);
+    update_has_alpha_();
+}
+
+template <IsSpectral TSpectral>
+void Material<TSpectral>::set_alpha_image(std::shared_ptr<Image<float>> alpha_image)
 {
     check_image_(alpha_image, "alpha");
     alpha_image_ = alpha_image;
-    has_alpha_ = true;
+    update_has_alpha_();
 }
 
 template <IsSpectral TSpectral>
@@ -157,9 +182,7 @@ void Material<TSpectral>::set_alpha_factor(float alpha_factor)
 {
     validate_unit_interval(alpha_factor, this->get_info() + " alpha factor");
     alpha_factor_ = alpha_factor;
-    if (alpha_factor_ < 1.0f) {
-        has_alpha_ = true;
-    }
+    update_has_alpha_();
 }
 
 template <IsSpectral TSpectral>
@@ -167,7 +190,16 @@ void Material<TSpectral>::reset_alpha()
 {
     alpha_image_ = default_alpha_image_;
     alpha_factor_ = 1.0f;
-    has_alpha_ = false;
+    update_has_alpha_();
+}
+
+// Metallic: from 0 to 1.
+
+template <IsSpectral TSpectral>
+void Material<TSpectral>::set_metallic(float metallic)
+{
+    validate_unit_interval(metallic, this->get_info() + " metallic");
+    metallic_image_ = std::make_shared<Image<float>>(1, 1, metallic);
 }
 
 template <IsSpectral TSpectral>
@@ -175,9 +207,6 @@ void Material<TSpectral>::set_metallic_image(std::shared_ptr<Image<float>> metal
 {
     check_image_(metallic_image, "metallic");
     metallic_image_ = metallic_image;
-    if (metallic_factor_ == 0.f) {
-        metallic_factor_ = 1.f;
-    }
 }
 
 template <IsSpectral TSpectral>
@@ -191,7 +220,16 @@ template <IsSpectral TSpectral>
 void Material<TSpectral>::reset_metallic()
 {
     metallic_image_ = default_metallic_image_;
-    metallic_factor_ = 0.0f;
+    metallic_factor_ = 1.0f;
+}
+
+// Roughness: from 0 to 1.
+
+template <IsSpectral TSpectral>
+void Material<TSpectral>::set_roughness(float roughness)
+{
+    validate_unit_interval(roughness, this->get_info() + " roughness");
+    roughness_image_ = std::make_shared<Image<float>>(1, 1, roughness);
 }
 
 template <IsSpectral TSpectral>
@@ -215,6 +253,9 @@ void Material<TSpectral>::reset_roughness()
     roughness_factor_ = 1.0f;
 }
 
+// Normal: a tangent-space normal map; its factor scales the perturbation. There is no
+// constant form, as a uniform tilt of every normal is not a material property.
+
 template <IsSpectral TSpectral>
 void Material<TSpectral>::set_normal_image(std::shared_ptr<Image<Vec3<float>>> normal_image)
 {
@@ -236,15 +277,21 @@ void Material<TSpectral>::reset_normal()
     normal_factor_ = 1.0f;
 }
 
+// Transmission: the fraction of light that passes through, from 0 to 1.
+
+template <IsSpectral TSpectral>
+void Material<TSpectral>::set_transmission(TSpectral transmission)
+{
+    validate_spectral_ratio(transmission, this->get_info() + " transmission");
+    transmission_image_ = std::make_shared<Image<TSpectral>>(1, 1, transmission);
+}
+
 template <IsSpectral TSpectral>
 void Material<TSpectral>::set_transmission_image(
     std::shared_ptr<Image<TSpectral>> transmission_image)
 {
     check_image_(transmission_image, "transmission");
     transmission_image_ = transmission_image;
-    if (transmission_factor_ == TSpectral{0.f}) {
-        transmission_factor_ = TSpectral{1.f};
-    }
 }
 
 template <IsSpectral TSpectral>
@@ -258,7 +305,16 @@ template <IsSpectral TSpectral>
 void Material<TSpectral>::reset_transmission()
 {
     transmission_image_ = default_transmission_image_;
-    transmission_factor_ = TSpectral{0.0f};
+    transmission_factor_ = TSpectral{1.0f};
+}
+
+// Emission: a radiance, so finite and non-negative, with no upper bound.
+
+template <IsSpectral TSpectral>
+void Material<TSpectral>::set_emissive(TSpectral emissive)
+{
+    validate_spectrum(emissive, this->get_info() + " emissive");
+    emissive_image_ = std::make_shared<Image<TSpectral>>(1, 1, emissive);
 }
 
 template <IsSpectral TSpectral>
@@ -266,9 +322,6 @@ void Material<TSpectral>::set_emissive_image(std::shared_ptr<Image<TSpectral>> e
 {
     check_image_(emissive_image, "emissive");
     emissive_image_ = emissive_image;
-    if (emissive_factor_ == TSpectral{0.f}) {
-        emissive_factor_ = TSpectral{1.f};
-    }
 }
 
 template <IsSpectral TSpectral>
@@ -282,7 +335,7 @@ template <IsSpectral TSpectral>
 void Material<TSpectral>::reset_emissive()
 {
     emissive_image_ = default_emissive_image_;
-    emissive_factor_ = TSpectral{0.0f};
+    emissive_factor_ = TSpectral{1.0f};
 }
 
 template <IsSpectral TSpectral>

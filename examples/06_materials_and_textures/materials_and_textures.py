@@ -6,8 +6,8 @@ Demonstrates:
     - rgb_to_spectral: converting a color texture to the scene's spectral type
     - Textures: add_texture for albedo, roughness and emission, add_normal_texture for a normal
       map
-    - A material's images and factors: albedo, roughness, normal and emissive images, and a
-      metallic factor
+    - A material's images and values: albedo, roughness, normal and emissive images, and a
+      constant metalness
     - The Cook-Torrance BSDF, for surfaces with a specular highlight (here, the oceans)
     - Emission: light a surface gives off itself (here, the cities at night)
     - An ellipsoid with the Earth's equatorial and polar radii
@@ -72,9 +72,10 @@ def main():
     roughness_texture = scene.add_texture(roughness.image)
     earth_material.set_roughness_image(roughness_texture)
 
-    # Values without an image can be set as factors. (A factor also scales its image when both
-    # are set.) The Earth is not metallic:
-    earth_material.set_metallic_factor(0)
+    # A value without an image is set as a constant. (A factor, set_metallic_factor and the
+    # like, multiplies the image or constant instead.) The Earth is not metallic, which is also
+    # the default:
+    earth_material.set_metallic(0)
 
     # A normal map tilts the surface's normal at each point, for relief that the geometry does
     # not have. add_normal_texture reads the map's colors as directions:
