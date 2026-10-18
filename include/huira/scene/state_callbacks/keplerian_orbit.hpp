@@ -29,17 +29,11 @@ struct KeplerianOrbitCallback : public PositionCallback {
         elements_[7] = mu;
     }
 
-    void evaluate(const PoseContext& context,
-                  const Rotation<double>& rotation,
-                  const Vec3<double>& angular_rate) override
+    [[nodiscard]] PositionState evaluate(const PoseContext& context,
+                                         const RotationState& /*rotation*/) const override
     {
-        (void)rotation;
-        (void)angular_rate;
-
         auto [r, v] = spice::conics<double>(elements_, context.time);
-
-        this->position = r;
-        this->velocity = v;
+        return {r, v};
     }
 
     std::array<double, 8> elements_;

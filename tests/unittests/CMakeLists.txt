@@ -49,6 +49,7 @@ set(UNIT_TESTS
     huira/render/test_unresolved_tables.cpp
 
     huira/scene/test_node_rates.cpp
+    huira/scene/test_pose_sources.cpp
     huira/scene/test_scene_inputs.cpp
     huira/scene/test_scene_deletion.cpp
 

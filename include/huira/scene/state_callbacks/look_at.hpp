@@ -36,11 +36,13 @@ class LookAtCallbackBase : public RotationCallback {
     {
     }
 
-    void evaluate(const PoseContext& context,
-                  const Vec3<double>& local_pos,
-                  const Vec3<double>& local_vel) override
+    [[nodiscard]] RotationState evaluate(const PoseContext& context,
+                                         const PositionState& state) const override
     {
-        this->rotation = compute_local_rotation_(context, local_pos, local_vel);
+        const Vec3<double>& local_pos = state.position;
+        const Vec3<double>& local_vel = state.velocity;
+        RotationState result;
+        result.rotation = compute_local_rotation_(context, local_pos, local_vel);
 
         // The angular velocity, by a central finite difference of the orientation, from which
         // the velocities of the node's children follow. (Motion blur does not use it: the scene
@@ -58,10 +60,11 @@ class LookAtCallbackBase : public RotationCallback {
 
         const double angle = delta_R.angle().to_si();
         if (std::abs(angle) < 1e-12) {
-            this->angular_velocity = Vec3<double>{0.0, 0.0, 0.0};
+            result.angular_velocity = Vec3<double>{0.0, 0.0, 0.0};
         } else {
-            this->angular_velocity = delta_R.axis() * (angle / (2.0 * epsilon));
+            result.angular_velocity = delta_R.axis() * (angle / (2.0 * epsilon));
         }
+        return result;
     }
 
   protected:

@@ -343,13 +343,75 @@ void Node<TSpectral>::set_spice(const std::string& spice_origin, const std::stri
     this->rotation_mode_ = TransformMode::SPICE_TRANSFORM;
 }
 
+/**
+ * @brief Place the node by a position callback of a class of one's own, made from the arguments
+ * given.
+ *
+ * Its evaluate() gives the node's position and velocity in its parent's frame for a pose context
+ * (see PositionCallback). It replaces the node's position source: a position set by hand, a SPICE
+ * origin, or another callback.
+ *
+ * @tparam TCallback A class derived from PositionCallback.
+ * @throws std::runtime_error if a child of the node is placed by SPICE, which places its children
+ *         only under nodes placed by SPICE.
+ */
 template <IsSpectral TSpectral>
 template <IsPositionCallback TCallback, typename... Args>
 void Node<TSpectral>::set_custom_position_callback(Args&&... args)
 {
+    if (this->position_must_be_spice_()) {
+        HUIRA_THROW_ERROR(this->get_info() +
+                          " - cannot set a position source when child has a spice_origin");
+    }
     position_callback_ = std::make_unique<TCallback>(std::forward<Args>(args)...);
     this->position_mode_ = TransformMode::POSITION_CALLBACK;
     this->spice_origin_ = "";
+}
+
+/**
+ * @brief Place the node by a function of the pose context.
+ *
+ * The function is called with a PoseContext, whose time is when the position is wanted, and
+ * returns the node's position in its parent's frame, in meters: a Vec3<double>, whose velocity is
+ * then estimated from nearby times, or a PositionState (position and velocity, in meters per
+ * second), or a PositionSample. It is called many times while a scene view is built, at times in
+ * any order, and never while it renders. It must give the same answer for the same context.
+ *
+ * @throws std::runtime_error if a child of the node is placed by SPICE.
+ */
+template <IsSpectral TSpectral>
+template <typename TFunction>
+    requires std::invocable<const TFunction&, const PoseContext&>
+void Node<TSpectral>::set_position_function(TFunction function)
+{
+    HUIRA_LOG_INFO(this->get_info() + " - set_position_function()");
+    this->set_custom_position_callback<PositionFunctionCallback>(
+        [function = std::move(function)](const PoseContext& context) {
+            return detail::to_position_sample(function(context));
+        },
+        this->get_info());
+}
+
+/**
+ * @brief Place the node by a table of times and positions, with or without velocities, in its
+ * parent's frame (see PositionTableCallback).
+ *
+ * @param times When each entry is: at least two, each later than the one before.
+ * @param positions The position at each time, in meters.
+ * @param velocities The velocity at each time, in meters per second, or none (the default) to
+ *        estimate them from the positions.
+ * @throws std::runtime_error if the table is not valid, or a child of the node is placed by
+ *         SPICE.
+ */
+template <IsSpectral TSpectral>
+void Node<TSpectral>::set_position_table(const std::vector<Time>& times,
+                                         std::vector<Vec3<double>> positions,
+                                         std::vector<Vec3<double>> velocities)
+{
+    HUIRA_LOG_INFO(this->get_info() + " - set_position_table(" + std::to_string(times.size()) +
+                   " entries)");
+    this->set_custom_position_callback<PositionTableCallback>(
+        times, std::move(positions), std::move(velocities), this->get_info());
 }
 
 /**
@@ -397,13 +459,76 @@ void Node<TSpectral>::set_keplerian_orbit(units::Meter semi_major_axis,
         semi_major_axis, eccentricity, inclination, raan, arg_periapsis, mean_anomaly, epoch, mu);
 }
 
+/**
+ * @brief Orient the node by a rotation callback of a class of one's own, made from the arguments
+ * given.
+ *
+ * Its evaluate() gives the node's rotation and angular velocity relative to its parent for a
+ * pose context and the node's position (see RotationCallback). It replaces the node's rotation
+ * source: a rotation set by hand, a SPICE frame, or another callback, such as look_at().
+ *
+ * @tparam TCallback A class derived from RotationCallback.
+ * @throws std::runtime_error if a child of the node is oriented by SPICE, which orients its
+ *         children only under nodes oriented by SPICE.
+ */
 template <IsSpectral TSpectral>
 template <IsRotationCallback TCallback, typename... Args>
 void Node<TSpectral>::set_custom_rotation_callback(Args&&... args)
 {
+    if (this->rotation_must_be_spice_()) {
+        HUIRA_THROW_ERROR(this->get_info() +
+                          " - cannot set a rotation source when child has a spice_frame");
+    }
     rotation_callback_ = std::make_unique<TCallback>(std::forward<Args>(args)...);
     this->rotation_mode_ = TransformMode::ROTATION_CALLBACK;
     this->spice_frame_ = "";
+}
+
+/**
+ * @brief Orient the node by a function of the pose context.
+ *
+ * The function is called with a PoseContext, whose time is when the rotation is wanted, and
+ * returns the node's rotation relative to its parent: a Rotation<double>, whose angular velocity
+ * is then estimated from nearby times, or a RotationState (rotation and angular velocity, in
+ * radians per second about the parent's axes), or a RotationSample. It is called many times while
+ * a scene view is built, at times in any order, and never while it renders. It must give the same
+ * answer for the same context.
+ *
+ * @throws std::runtime_error if a child of the node is oriented by SPICE.
+ */
+template <IsSpectral TSpectral>
+template <typename TFunction>
+    requires std::invocable<const TFunction&, const PoseContext&>
+void Node<TSpectral>::set_rotation_function(TFunction function)
+{
+    HUIRA_LOG_INFO(this->get_info() + " - set_rotation_function()");
+    this->set_custom_rotation_callback<RotationFunctionCallback>(
+        [function = std::move(function)](const PoseContext& context) {
+            return detail::to_rotation_sample(function(context));
+        },
+        this->get_info());
+}
+
+/**
+ * @brief Orient the node by a table of times and rotations, with or without angular velocities,
+ * relative to its parent (see RotationTableCallback).
+ *
+ * @param times When each entry is: at least two, each later than the one before.
+ * @param rotations The rotation at each time, from the node's frame to its parent's.
+ * @param angular_velocities The angular velocity at each time, in radians per second about the
+ *        parent's axes, or none (the default) to take the steady rate between entries.
+ * @throws std::runtime_error if the table is not valid, or a child of the node is oriented by
+ *         SPICE.
+ */
+template <IsSpectral TSpectral>
+void Node<TSpectral>::set_rotation_table(const std::vector<Time>& times,
+                                         std::vector<Rotation<double>> rotations,
+                                         std::vector<Vec3<double>> angular_velocities)
+{
+    HUIRA_LOG_INFO(this->get_info() + " - set_rotation_table(" + std::to_string(times.size()) +
+                   " entries)");
+    this->set_custom_rotation_callback<RotationTableCallback>(
+        times, std::move(rotations), std::move(angular_velocities), this->get_info());
 }
 
 template <IsSpectral TSpectral>
@@ -544,8 +669,7 @@ Transform<double> Node<TSpectral>::get_ssb_transform_(const PoseContext& context
     // Full transform callback: single source defines the entire local state
     if (position_mode_ == TransformMode::TRANSFORM_CALLBACK &&
         rotation_mode_ == TransformMode::TRANSFORM_CALLBACK) {
-        transform_callback_->evaluate(emit_context);
-        Transform<double> local = transform_callback_->state;
+        Transform<double> local = transform_callback_->evaluate(emit_context);
         local.scale = this->get_static_scale();
         Transform<double> ssb_state = parent_ssb * local;
         return ssb_state;
@@ -579,15 +703,17 @@ Transform<double> Node<TSpectral>::get_ssb_transform_(const PoseContext& context
 
     // Mixed case - Step 2:
     if (position_mode_ == TransformMode::POSITION_CALLBACK) {
-        position_callback_->evaluate(emit_context, local.rotation, local.angular_velocity);
-        local.position = position_callback_->position;
-        local.velocity = position_callback_->velocity;
+        const PositionState state =
+            position_callback_->evaluate(emit_context, {local.rotation, local.angular_velocity});
+        local.position = state.position;
+        local.velocity = state.velocity;
     }
 
     if (rotation_mode_ == TransformMode::ROTATION_CALLBACK) {
-        rotation_callback_->evaluate(emit_context, local.position, local.velocity);
-        local.rotation = rotation_callback_->rotation;
-        local.angular_velocity = rotation_callback_->angular_velocity;
+        const RotationState state =
+            rotation_callback_->evaluate(emit_context, {local.position, local.velocity});
+        local.rotation = state.rotation;
+        local.angular_velocity = state.angular_velocity;
     }
     local.scale = this->get_static_scale();
 

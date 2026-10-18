@@ -31,5 +31,19 @@ class RootFrameHandle : public FrameHandle<TSpectral> {
     void set_velocity(const Vec3<double>&) = delete;
     void set_angular_velocity(const Vec3<double>&) = delete;
     void set_body_angular_velocity(const Vec3<double>&) = delete;
+    template <typename... Args>
+    void set_position_function(Args&&...) = delete;
+    template <typename... Args>
+    void set_position_table(Args&&...) = delete;
+    template <typename... Args>
+    void set_keplerian_orbit(Args&&...) = delete;
+    template <typename... Args>
+    void set_custom_position_callback(Args&&...) = delete;
+    template <typename... Args>
+    void set_rotation_function(Args&&...) = delete;
+    template <typename... Args>
+    void set_rotation_table(Args&&...) = delete;
+    template <typename... Args>
+    void set_custom_rotation_callback(Args&&...) = delete;
 };
 } // namespace huira

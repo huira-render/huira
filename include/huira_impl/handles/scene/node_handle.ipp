@@ -307,6 +307,109 @@ std::string NodeHandle<TSpectral, TNode>::get_spice_frame() const
 }
 
 /**
+ * @brief Places the node by a function of the pose context: see Node::set_position_function.
+ *
+ * @param function Called with a PoseContext; returns the position in the parent's frame, in
+ *        meters (a Vec3<double>, whose velocity is then estimated), or a PositionState.
+ */
+template <IsSpectral TSpectral, typename TNode>
+template <typename TFunction>
+    requires std::invocable<const TFunction&, const PoseContext&>
+void NodeHandle<TSpectral, TNode>::set_position_function(TFunction function) const
+{
+    this->get_()->set_position_function(std::move(function));
+}
+
+/**
+ * @brief Places the node by a table of times and positions: see Node::set_position_table.
+ *
+ * @param times When each entry is: at least two, each later than the one before.
+ * @param positions The position at each time in the parent's frame, in meters.
+ * @param velocities The velocity at each time, in meters per second, or none to estimate them.
+ */
+template <IsSpectral TSpectral, typename TNode>
+void NodeHandle<TSpectral, TNode>::set_position_table(const std::vector<Time>& times,
+                                                      std::vector<Vec3<double>> positions,
+                                                      std::vector<Vec3<double>> velocities) const
+{
+    this->get_()->set_position_table(times, std::move(positions), std::move(velocities));
+}
+
+/**
+ * @brief Moves the node on a Keplerian orbit about its parent: see Node::set_keplerian_orbit.
+ */
+template <IsSpectral TSpectral, typename TNode>
+void NodeHandle<TSpectral, TNode>::set_keplerian_orbit(units::Meter semi_major_axis,
+                                                       double eccentricity,
+                                                       units::Radian inclination,
+                                                       units::Radian raan,
+                                                       units::Radian arg_periapsis,
+                                                       units::Radian mean_anomaly,
+                                                       Time epoch,
+                                                       double mu) const
+{
+    this->get_()->set_keplerian_orbit(
+        semi_major_axis, eccentricity, inclination, raan, arg_periapsis, mean_anomaly, epoch, mu);
+}
+
+/**
+ * @brief Places the node by a position callback of a class of one's own, made from the arguments
+ * given: see Node::set_custom_position_callback.
+ *
+ * @tparam TCallback A class derived from PositionCallback.
+ */
+template <IsSpectral TSpectral, typename TNode>
+template <IsPositionCallback TCallback, typename... Args>
+void NodeHandle<TSpectral, TNode>::set_custom_position_callback(Args&&... args) const
+{
+    this->get_()->template set_custom_position_callback<TCallback>(std::forward<Args>(args)...);
+}
+
+/**
+ * @brief Orients the node by a function of the pose context: see Node::set_rotation_function.
+ *
+ * @param function Called with a PoseContext; returns the rotation relative to the parent (a
+ *        Rotation<double>, whose angular velocity is then estimated), or a RotationState.
+ */
+template <IsSpectral TSpectral, typename TNode>
+template <typename TFunction>
+    requires std::invocable<const TFunction&, const PoseContext&>
+void NodeHandle<TSpectral, TNode>::set_rotation_function(TFunction function) const
+{
+    this->get_()->set_rotation_function(std::move(function));
+}
+
+/**
+ * @brief Orients the node by a table of times and rotations: see Node::set_rotation_table.
+ *
+ * @param times When each entry is: at least two, each later than the one before.
+ * @param rotations The rotation at each time, from the node's frame to its parent's.
+ * @param angular_velocities The angular velocity at each time, in radians per second about the
+ *        parent's axes, or none to take the steady rate between entries.
+ */
+template <IsSpectral TSpectral, typename TNode>
+void NodeHandle<TSpectral, TNode>::set_rotation_table(
+    const std::vector<Time>& times,
+    std::vector<Rotation<double>> rotations,
+    std::vector<Vec3<double>> angular_velocities) const
+{
+    this->get_()->set_rotation_table(times, std::move(rotations), std::move(angular_velocities));
+}
+
+/**
+ * @brief Orients the node by a rotation callback of a class of one's own, made from the arguments
+ * given: see Node::set_custom_rotation_callback.
+ *
+ * @tparam TCallback A class derived from RotationCallback.
+ */
+template <IsSpectral TSpectral, typename TNode>
+template <IsRotationCallback TCallback, typename... Args>
+void NodeHandle<TSpectral, TNode>::set_custom_rotation_callback(Args&&... args) const
+{
+    this->get_()->template set_custom_rotation_callback<TCallback>(std::forward<Args>(args)...);
+}
+
+/**
  * @brief Gets a handle to the parent node.
  *
  * Returns a base NodeHandle to the parent. This is safe for all node types

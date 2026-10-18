@@ -5,6 +5,7 @@ Scene Graph
    :maxdepth: 1
 
    node
+   pose_sources
    frame_node
    instance
    scene
