@@ -46,17 +46,6 @@ If you use Huira in published work, please cite it. On the [Huira GitHub page](h
 
 Please also note which version of Huira you used.
 
-## Use of AI Tools
-
-As the physical correctness of this library is critical, I feel it's important to acknowledge that AI coding assistants have been used during Huira's development. This has primarily been for:
-- Boilerplate
-- CI configuration and packaging
-- Documentation
-
-AI has also been involved in the development of several algorithms, and used as a "sounding board" during architectural brainstorming.
-
-With that said, every architecture and design decision in Huira is my own (and the core architecture was established before any AI usage). Every line of AI-generated code has been reviewed by me before being merged.
-
 ## License
 Huira is licensed under the [MIT License](https://github.com/huira-render/huira/blob/main/LICENSE).
 
