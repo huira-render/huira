@@ -14,7 +14,9 @@
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23333475.svg)](https://doi.org/10.5281/zenodo.23333475)
 
-![Example Render](https://www.huira.space/assets/examples/gateway_render.png)
+| Gateway | Earth |
+|:--:|:--|
+| ![Gateway Render](https://media.huira.space/examples/03_load_a_model.png) | ![Earth Render](https://media.huira.space/examples/07_clouds_and_atmosphere.png) |
 
 ## Quickstart Examples
 The [examples](https://github.com/huira-render/huira/tree/main/examples) walk through Huira one feature at a time, in both Python and C++. Each lists the data it needs, with links to download it, and their README has the full list and how to run them.
@@ -58,4 +60,4 @@ With that said, every architecture and design decision in Huira is my own (and t
 ## License
 Huira is licensed under the [MIT License](https://github.com/huira-render/huira/blob/main/LICENSE).
 
-The MIT License covers Huira's code. It does not cover the data that the examples use or that the `huira` command-line tool downloads, such as star catalogs, SPICE kernels, models and textures: each has its own license, listed in [Data Sources and Licenses](https://docs.huira.space/getting_started/data.html).
+The MIT License covers Huira's code. It does not cover the data that the examples use, such as star catalogs, SPICE kernels, models and textures: each has its own license, listed in [Data Sources and Licenses](https://docs.huira.space/getting_started/data.html).

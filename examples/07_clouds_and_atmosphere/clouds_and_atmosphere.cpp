@@ -57,7 +57,8 @@ int main(int argc, char** argv)
 
     // The surface: the daymap, on a Lambertian BSDF. (Example 06 builds the full material.)
     auto surface = scene.new_material(scene.new_bsdf_lambertian());
-    auto daymap = huira::read_image(daymap_path);
+    auto daymap_srgb = huira::read_image(daymap_path);
+    auto daymap = huira::srgb_to_linear(daymap_srgb); // JPEG textures are in sRGB color space
     surface.set_albedo_image(scene.add_texture(huira::rgb_to_spectral<TSpectral>(daymap.image)));
     scene.root.new_instance(scene.add_primitive(earth_shell(scene, 0.0), surface));
 

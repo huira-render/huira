@@ -16,7 +16,9 @@ If you use Huira in published work, please [cite it](#citing-huira).
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23333475.svg)](https://doi.org/10.5281/zenodo.23333475)
 
-![Example Render](https://www.huira.space/assets/examples/gateway_render.png)
+| Gateway | Earth |
+|:--:|:--|
+| ![Gateway Render](https://media.huira.space/examples/03_load_a_model.png) | ![Earth Render](https://media.huira.space/examples/07_clouds_and_atmosphere.png) |
 
 ## Installing Huira
 
@@ -110,4 +112,4 @@ requirements for AI-assisted contributions.
 ## License
 Huira is licensed under the [MIT License](./LICENSE).
 
-The MIT License covers Huira's code. It does not cover the data that the examples use or that the `huira` command-line tool downloads, such as star catalogs, SPICE kernels, models and textures: each has its own license, listed in [Data Sources and Licenses](docs/getting_started/data.md).
+The MIT License covers Huira's code. It does not cover the data that the examples use such as star catalogs, SPICE kernels, models and textures: each has its own license, listed in [Data Sources and Licenses](docs/getting_started/data.md).
