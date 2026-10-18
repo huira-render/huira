@@ -89,11 +89,13 @@ Mesh<TSpectral>::Mesh(IndexBuffer index_buffer,
 /**
  * @brief Fills in the surface at a hit, by interpolating the hit triangle's vertices.
  *
- * The tangent frame is interpolated from the tangent buffer. A mesh without one (made without
- * tangents, or loaded from a model without texture coordinates) gets a frame built around the
- * hit's shading normal instead, so that every hit has one. It is built per hit rather than per
- * vertex: per-vertex frames can point opposite ways at a triangle's corners, as any frame field
- * over a closed surface must somewhere, and interpolate to zero between them.
+ * The tangent frame is interpolated from the tangent buffer, then made orthonormal around the
+ * shading normal, keeping the buffer's handedness. Where that is not possible, the hit gets a
+ * frame built around the shading normal instead, so that every hit has one: a mesh without a
+ * tangent buffer (made without tangents, or loaded from a model without texture coordinates),
+ * and a hit whose interpolated tangent vanishes or lies along the normal, as happens between
+ * corners whose tangents point opposite ways (any frame field over a closed surface must flip
+ * somewhere, and a UV seam or mirrored patch puts the flip inside a triangle).
  *
  * @param hit The hit, on one of this mesh's triangles.
  * @param isect The interaction to fill in, in the mesh's own frame.
@@ -120,17 +122,37 @@ void Mesh<TSpectral>::compute_surface_interaction(const HitRecord& hit,
     isect.vertex_albedo = w * vertex_buffer_[idx0].albedo + hit.u * vertex_buffer_[idx1].albedo +
                           hit.v * vertex_buffer_[idx2].albedo;
 
-    // Interpolate tangent frame:
+    // The tangent frame, orthonormal around the shading normal:
+    const Vec3<float> n = glm::normalize(isect.normal_s);
+    bool has_frame = false;
     if (has_tangents()) {
-        isect.tangent = w * tangent_buffer_[idx0].tangent + hit.u * tangent_buffer_[idx1].tangent +
-                        hit.v * tangent_buffer_[idx2].tangent;
-        isect.bitangent = w * tangent_buffer_[idx0].bitangent +
-                          hit.u * tangent_buffer_[idx1].bitangent +
-                          hit.v * tangent_buffer_[idx2].bitangent;
-    } else {
-        // Without tangents, any frame around the shading normal will do. (Left at zero, the
-        // tangent was normalized into NaN when the hit was resolved.)
-        build_default_tangent_frame(glm::normalize(isect.normal_s), isect.tangent, isect.bitangent);
+        const Vec3<float> t = w * tangent_buffer_[idx0].tangent +
+                              hit.u * tangent_buffer_[idx1].tangent +
+                              hit.v * tangent_buffer_[idx2].tangent;
+        const Vec3<float> b = w * tangent_buffer_[idx0].bitangent +
+                              hit.u * tangent_buffer_[idx1].bitangent +
+                              hit.v * tangent_buffer_[idx2].bitangent;
+
+        // Interpolated tangents cancel between corners that point opposite ways, and the part
+        // along the normal is not a tangent at all. What remains must have a length, or it
+        // cannot be normalized:
+        const Vec3<float> t_in_plane = t - glm::dot(t, n) * n;
+        constexpr float min_length2 = 1e-8f; // a unit tangent shrunk to 1e-4 is cancelling
+        if (glm::dot(t_in_plane, t_in_plane) > min_length2) {
+            isect.tangent = glm::normalize(t_in_plane);
+            // The bitangent completes the frame, with the handedness the buffer gave it (a
+            // mirrored UV patch flips it; a cancelling bitangent keeps the right-handed one):
+            isect.bitangent = glm::cross(n, isect.tangent);
+            if (glm::dot(isect.bitangent, b) < 0.f) {
+                isect.bitangent = -isect.bitangent;
+            }
+            has_frame = true;
+        }
+    }
+    if (!has_frame) {
+        // Any frame around the shading normal will do. (Left at zero, or at the cancelled
+        // interpolation, the tangent was normalized into NaN when the hit was resolved.)
+        build_default_tangent_frame(n, isect.tangent, isect.bitangent);
     }
 }
 

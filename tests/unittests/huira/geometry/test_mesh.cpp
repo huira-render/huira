@@ -61,6 +61,84 @@ TEST_CASE("A mesh without tangents gives every hit an orthonormal tangent frame"
     }
 }
 
+TEST_CASE("Interpolated tangents that cancel or lie along the normal get a frame anyway",
+          "[geometry][mesh]")
+{
+    // A flat triangle facing +z. Its vertex tangents are a valid frame at each corner, but
+    // two of them point the other way, as at a UV seam, so the interpolated tangent passes
+    // through zero inside the triangle: at the point where the weights are 1/2, 1/4, 1/4 it is
+    // (1/2) t + (1/4)(-t) + (1/4)(-t) = 0.
+    const Vec3<float> n{0.f, 0.f, 1.f};
+    const Vec3<float> t{1.f, 0.f, 0.f};
+    const Vec3<float> b = glm::cross(n, t);
+    const Mesh<RGB> mesh(IndexBuffer{0, 1, 2},
+                         VertexBuffer<RGB>{
+                             vertex({0.f, 0.f, 0.f}, n),
+                             vertex({1.f, 0.f, 0.f}, n),
+                             vertex({0.f, 1.f, 0.f}, n),
+                         },
+                         TangentBuffer{{t, b}, {-t, -b}, {-t, -b}});
+    REQUIRE(mesh.has_tangents());
+
+    auto frame_at = [&](float u, float v) {
+        HitRecord hit;
+        hit.prim_id = 0;
+        hit.u = u;
+        hit.v = v;
+        Interaction<RGB> isect;
+        mesh.compute_surface_interaction(hit, isect);
+        return isect;
+    };
+
+    auto check_frame = [&](const Interaction<RGB>& isect) {
+        REQUIRE(finite(isect.tangent));
+        REQUIRE(finite(isect.bitangent));
+        CHECK(std::abs(glm::length(isect.tangent) - 1.f) < 1e-5f);
+        CHECK(std::abs(glm::length(isect.bitangent) - 1.f) < 1e-5f);
+        CHECK(std::abs(glm::dot(isect.tangent, n)) < 1e-5f);
+        CHECK(std::abs(glm::dot(isect.bitangent, n)) < 1e-5f);
+        CHECK(std::abs(glm::dot(isect.tangent, isect.bitangent)) < 1e-5f);
+    };
+
+    // At the cancellation, and all around it:
+    check_frame(frame_at(0.25f, 0.25f));
+    for (float u = 0.f; u <= 1.f; u += 0.125f) {
+        for (float v = 0.f; u + v <= 1.f; v += 0.125f) {
+            check_frame(frame_at(u, v));
+        }
+    }
+
+    // Away from it, the frame is the buffer's, normalized, with its handedness:
+    const Interaction<RGB> corner = frame_at(0.f, 0.f);
+    CHECK(glm::dot(corner.tangent, t) > 0.999f);
+    CHECK(glm::dot(corner.bitangent, b) > 0.999f);
+    const Interaction<RGB> flipped = frame_at(1.f, 0.f);
+    CHECK(glm::dot(flipped.tangent, -t) > 0.999f);
+    CHECK(glm::dot(flipped.bitangent, -b) > 0.999f);
+
+    // A tangent with a component along the normal is projected into the surface; one lying
+    // entirely along the normal is no tangent, and gets a frame built instead:
+    const Mesh<RGB> tilted(IndexBuffer{0, 1, 2},
+                           VertexBuffer<RGB>{
+                               vertex({0.f, 0.f, 0.f}, n),
+                               vertex({1.f, 0.f, 0.f}, n),
+                               vertex({0.f, 1.f, 0.f}, n),
+                           },
+                           TangentBuffer{{n, b}, {n, b}, {t + n, b}});
+    HitRecord hit;
+    hit.prim_id = 0;
+    hit.u = 0.f;
+    hit.v = 0.f;
+    Interaction<RGB> along_normal;
+    tilted.compute_surface_interaction(hit, along_normal);
+    check_frame(along_normal);
+    hit.v = 1.f;
+    Interaction<RGB> projected;
+    tilted.compute_surface_interaction(hit, projected);
+    check_frame(projected);
+    CHECK(glm::dot(projected.tangent, t) > 0.999f);
+}
+
 TEST_CASE("A mesh without tangents renders", "[geometry][mesh][nan]")
 {
     // A square of two triangles, made with add_mesh() and no tangents, facing a camera with the
