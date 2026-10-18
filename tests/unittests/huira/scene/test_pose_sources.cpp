@@ -297,7 +297,7 @@ TEST_CASE("A body placed by a table or a function is rendered where it is", "[sc
         camera_model.enable_depth_of_field(false);
         auto camera = scene.root.new_instance(camera_model);
         auto material = scene.new_material(scene.new_bsdf_lambertian());
-        material.set_emissive_factor(RGB{1.f});
+        material.set_emissive(RGB{1.f});
         auto ball = scene.root.new_instance(
             scene.add_primitive(scene.add_ellipsoid(1_m, 1_m, 1_m), material));
         place(ball);

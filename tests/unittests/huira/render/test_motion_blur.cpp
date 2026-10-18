@@ -379,7 +379,7 @@ TEST_CASE("A turning camera sees a still body shaded as when it holds still",
         auto material = scene.new_material(scene.new_bsdf_lambertian());
         if (glowing) {
             material.set_albedo_factor(RGB{0.f});
-            material.set_emissive_factor(RGB{1.f});
+            material.set_emissive(RGB{1.f});
         }
         auto ball = scene.root.new_instance(
             scene.add_primitive(scene.add_ellipsoid(2_m, 2_m, 2_m), material));

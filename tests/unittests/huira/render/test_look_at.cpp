@@ -64,7 +64,7 @@ CameraModelHandle<RGB> wide_camera(Scene<RGB>& scene)
 InstanceHandle<RGB> add_ball(Scene<RGB>& scene, units::Meter radius = 1_m)
 {
     auto material = scene.new_material(scene.new_bsdf_lambertian());
-    material.set_emissive_factor(RGB{1.f});
+    material.set_emissive(RGB{1.f});
     return scene.root.new_instance(
         scene.add_primitive(scene.add_ellipsoid(radius, radius, radius), material));
 }
