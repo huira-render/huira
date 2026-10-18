@@ -1,16 +1,20 @@
 #pragma once
 
+#include <concepts>
 #include <memory>
 #include <span>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 #include "huira/concepts/numeric_concepts.hpp"
 #include "huira/concepts/spectral_concepts.hpp"
 #include "huira/core/time.hpp"
 #include "huira/core/transform.hpp"
 #include "huira/scene/scene_object.hpp"
+#include "huira/scene/state_callbacks/function_callbacks.hpp"
 #include "huira/scene/state_callbacks/state_callbacks.hpp"
+#include "huira/scene/state_callbacks/table_callbacks.hpp"
 
 namespace huira {
 // Forward declare:
@@ -88,8 +92,18 @@ class Node : public SceneObject<Node<TSpectral>> {
     void set_spice_frame(const std::string& spice_frame);
     void set_spice(const std::string& spice_origin, const std::string& spice_frame);
 
+    // Position sources other than SPICE and positions set by hand. Each replaces the last.
     template <IsPositionCallback TCallback, typename... Args>
     void set_custom_position_callback(Args&&... args);
+
+    template <typename TFunction>
+        requires std::invocable<const TFunction&, const PoseContext&>
+    void set_position_function(TFunction function);
+
+    void set_position_table(const std::vector<Time>& times,
+                            std::vector<Vec3<double>> positions,
+                            std::vector<Vec3<double>> velocities = {});
+
     void set_keplerian_orbit(units::Meter semi_major_axis,
                              double eccentricity,
                              units::Radian inclination,
@@ -99,8 +113,18 @@ class Node : public SceneObject<Node<TSpectral>> {
                              Time epoch,
                              double mu);
 
+    // Rotation sources other than SPICE and rotations set by hand. Each replaces the last.
     template <IsRotationCallback TCallback, typename... Args>
     void set_custom_rotation_callback(Args&&... args);
+
+    template <typename TFunction>
+        requires std::invocable<const TFunction&, const PoseContext&>
+    void set_rotation_function(TFunction function);
+
+    void set_rotation_table(const std::vector<Time>& times,
+                            std::vector<Rotation<double>> rotations,
+                            std::vector<Vec3<double>> angular_velocities = {});
+
     void set_z_up_y_forward_callback();
     void set_z_down_y_forward_callback();
 

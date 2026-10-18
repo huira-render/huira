@@ -1,5 +1,10 @@
 #pragma once
 
+#include <concepts>
+#include <string>
+#include <utility>
+#include <vector>
+
 #include "huira/concepts/numeric_concepts.hpp"
 #include "huira/concepts/spectral_concepts.hpp"
 #include "huira/handles/handle.hpp"
@@ -69,6 +74,34 @@ class NodeHandle : public Handle<TNode> {
     void set_spice(const std::string& spice_origin, const std::string& spice_frame) const;
     std::string get_spice_origin() const;
     std::string get_spice_frame() const;
+
+    // Other position sources (see Node): each replaces the node's position source.
+    template <typename TFunction>
+        requires std::invocable<const TFunction&, const PoseContext&>
+    void set_position_function(TFunction function) const;
+    void set_position_table(const std::vector<Time>& times,
+                            std::vector<Vec3<double>> positions,
+                            std::vector<Vec3<double>> velocities = {}) const;
+    void set_keplerian_orbit(units::Meter semi_major_axis,
+                             double eccentricity,
+                             units::Radian inclination,
+                             units::Radian raan,
+                             units::Radian arg_periapsis,
+                             units::Radian mean_anomaly,
+                             Time epoch,
+                             double mu) const;
+    template <IsPositionCallback TCallback, typename... Args>
+    void set_custom_position_callback(Args&&... args) const;
+
+    // Other rotation sources (see Node): each replaces the node's rotation source.
+    template <typename TFunction>
+        requires std::invocable<const TFunction&, const PoseContext&>
+    void set_rotation_function(TFunction function) const;
+    void set_rotation_table(const std::vector<Time>& times,
+                            std::vector<Rotation<double>> rotations,
+                            std::vector<Vec3<double>> angular_velocities = {}) const;
+    template <IsRotationCallback TCallback, typename... Args>
+    void set_custom_rotation_callback(Args&&... args) const;
 
     // Parent access
     NodeHandle<TSpectral, Node<TSpectral>> get_parent() const;

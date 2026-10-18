@@ -1,5 +1,8 @@
 #pragma once
 
+#include <cmath>
+#include <concepts>
+
 #include "huira/core/rotation.hpp"
 #include "huira/core/time.hpp"
 #include "huira/core/transform.hpp"
@@ -35,39 +38,111 @@ struct PoseContext {
     [[nodiscard]] PoseContext at(const Time& t) const { return {t, reference, observation_mode}; }
 };
 
+/**
+ * @brief A node's position and velocity, in its parent's frame.
+ */
+struct PositionState {
+    Vec3<double> position{}; ///< In meters.
+    Vec3<double> velocity{}; ///< In meters per second.
+};
+
+/**
+ * @brief A node's orientation and angular velocity, relative to its parent.
+ */
+struct RotationState {
+    Rotation<double> rotation{};     ///< From the node's frame to its parent's.
+    Vec3<double> angular_velocity{}; ///< In radians per second, about the parent's axes.
+};
+
+/**
+ * @brief Where a node is, as a function of time: the base of the position sources other than
+ * SPICE and poses set by hand.
+ *
+ * A callback is evaluated many times while a scene view is built, at times in any order
+ * (temporal samples, light-time iterations, and estimates of rates), and never while it renders.
+ * It must give the same answer for the same context.
+ */
 struct PositionCallback {
     virtual ~PositionCallback() = default;
-    virtual void evaluate(const PoseContext& context,
-                          const Rotation<double>& rotation,
-                          const Vec3<double>& angular_rate) = 0;
 
-    Vec3<double> position{};
-    Vec3<double> velocity{};
+    /**
+     * @brief The node's position and velocity in its parent's frame.
+     * @param context The time it is wanted at, and how the scene is observed.
+     * @param rotation The node's rotation at that time, from its own source: identity if that is
+     *        a callback too, which is evaluated after this one, and given this position.
+     */
+    [[nodiscard]] virtual PositionState evaluate(const PoseContext& context,
+                                                 const RotationState& rotation) const = 0;
 };
 
 template <typename T>
 concept IsPositionCallback = std::derived_from<T, PositionCallback>;
 
+/**
+ * @brief How a node is oriented, as a function of time: the base of the rotation sources other
+ * than SPICE and rotations set by hand. As for PositionCallback, it must give the same answer for
+ * the same context.
+ */
 struct RotationCallback {
     virtual ~RotationCallback() = default;
-    virtual void evaluate(const PoseContext& context,
-                          const Vec3<double>& position,
-                          const Vec3<double>& velocity) = 0;
 
-    Rotation<double> rotation{};
-    Vec3<double> angular_velocity{};
+    /**
+     * @brief The node's rotation and angular velocity relative to its parent.
+     * @param context The time it is wanted at, and how the scene is observed.
+     * @param position The node's position and velocity in its parent's frame at that time.
+     */
+    [[nodiscard]] virtual RotationState evaluate(const PoseContext& context,
+                                                 const PositionState& position) const = 0;
 };
 
 template <typename T>
 concept IsRotationCallback = std::derived_from<T, RotationCallback>;
 
+/**
+ * @brief A node's whole pose (position, velocity, rotation and angular velocity) relative to its
+ * parent, as a function of time. Its scale is the node's own.
+ */
 struct StateCallback {
     virtual ~StateCallback() = default;
-    virtual void evaluate(const PoseContext& context) = 0;
 
-    Transform<double> state{};
+    [[nodiscard]] virtual Transform<double> evaluate(const PoseContext& context) const = 0;
 };
 
 template <typename T>
 concept IsTransformCallback = std::derived_from<T, StateCallback>;
+
+/**
+ * @brief A rotation as its rotation vector: its axis times its angle, the shorter way round, in
+ * the frame it rotates (for a change of a node's rotation, its parent's).
+ *
+ * Found from its quaternion, so it is precise at any angle, however small.
+ */
+[[nodiscard]] inline Vec3<double> rotation_vector(const Rotation<double>& rotation)
+{
+    Quaternion<double> q = rotation.local_to_parent_quaternion();
+    if (q.w < 0.0) {
+        q = -q;
+    }
+    const Vec3<double> v{q.x, q.y, q.z};
+    const double sin_half = glm::length(v);
+    if (sin_half == 0.0) {
+        return Vec3<double>{0.0};
+    }
+    return v * (2.0 * std::atan2(sin_half, q.w) / sin_half);
+}
+
+/**
+ * @brief The rotation by a rotation vector: about its direction, by its length in radians.
+ */
+[[nodiscard]] inline Rotation<double> rotation_from_vector(const Vec3<double>& vector)
+{
+    const double angle = glm::length(vector);
+    if (angle == 0.0) {
+        return Rotation<double>{};
+    }
+    const Vec3<double> v = vector * (std::sin(0.5 * angle) / angle);
+    return Rotation<double>::from_local_to_parent(
+        Quaternion<double>(std::cos(0.5 * angle), v.x, v.y, v.z));
+}
+
 } // namespace huira

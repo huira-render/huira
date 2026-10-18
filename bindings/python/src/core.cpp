@@ -15,6 +15,7 @@
 #include "huira/render/ray_py.ipp"
 #include "huira/scene/node.hpp"
 #include "huira/scene/object_ids_py.ipp"
+#include "huira/scene/pose_sources_py.ipp"
 #include "huira/scene/scene_view.hpp"
 #include "huira/units/units_py.ipp"
 #include "huira/util/logger_py.ipp"
@@ -58,6 +59,10 @@ void bind_core(py::module_& m)
         .value("TRUE_STATE", huira::ObservationMode::TRUE_STATE)
         .value("GEOMETRIC_STATE", huira::ObservationMode::GEOMETRIC_STATE)
         .value("ABERRATED_STATE", huira::ObservationMode::ABERRATED_STATE);
+
+    // What position and rotation functions are called with (after ObservationMode, which its
+    // constructor takes by default):
+    huira::bind_pose_context(m);
 
     // Alpha Mode Enum:
     // Not templated on the spectral type, so it is registered once here rather than

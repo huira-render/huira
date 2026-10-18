@@ -1,6 +1,7 @@
 #pragma once
 
 #include "huira/handles/scene/node_handle.hpp"
+#include "huira/scene/pose_sources_py.ipp"
 #include "huira/units/units_py.ipp"
 #include "pybind11/pybind11.h"
 #include "pybind11/stl.h"
@@ -41,8 +42,9 @@ as well as its appearance.)")
  * @brief Injects all NodeHandle methods into an existing py::class_ binding.
  *
  * Call this on any handle whose C++ type inherits from NodeHandle<TSpectral, TNode>.
- * It adds position, velocity, rotation, angular velocity, scale, SPICE, and parent
- * access methods without requiring pybind11 inheritance.
+ * It adds position, velocity, rotation, angular velocity, scale, SPICE, the other position and
+ * rotation sources (functions, tables and the Keplerian orbit), and parent access methods without
+ * requiring pybind11 inheritance.
  */
 template <typename TSpectral, typename TNode, typename PyClass>
 inline void bind_node_handle_methods(PyClass& cls)
@@ -199,6 +201,7 @@ inline void bind_node_handle_methods(PyClass& cls)
         // Parent access
         .def("get_parent", &HandleType::get_parent);
 
+    bind_pose_source_methods<TSpectral, TNode>(cls);
     bind_visibility_methods<TSpectral, TNode>(cls);
 }
 } // namespace huira
