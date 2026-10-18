@@ -197,7 +197,7 @@ TEST_CASE("HRSC reader rejects what it cannot read, saying which side is behind"
     SECTION("an older format asks for a newer catalog")
     {
         std::vector<char> bytes = good;
-        bytes[4] = 0;
+        bytes[4] = 1; // retired: the pre-release reader's version byte, never written since
         write_bytes(path, bytes);
         CHECK_THROWS_WITH(StarCatalog::read_star_data(path),
                           ContainsSubstring("download or build a current catalog"));
@@ -252,10 +252,11 @@ TEST_CASE("HRSC reader rejects what it cannot read, saying which side is behind"
     fs::remove(path);
 }
 
-TEST_CASE("Tycho-2 records are parsed at the columns of the distributed files", "[stars][tycho2]")
+TEST_CASE("Tycho-2 records are parsed in both the raw CDS and VizieR export shapes",
+          "[stars][tycho2]")
 {
-    // Two records from tyc2.dat.00: one with a mean position, one (pflag 'X') with only an
-    // observed position and no proper motion.
+    // Two records from tyc2.dat.00 as VizieR's text export writes them: one with a mean
+    // position, one (pflag 'X') with only an observed position and no proper motion.
     const std::string normal =
         "0001|00008|1| |  2.31750494   2.23184345|  -16.3|   -9.0| 68| 73| 1.7| 1.8|1958.89|"
         "1951.94| 4|1.0|1.0|0.9|1.0|12.146|0.158|12.146|0.223|999| |      |   |  2.31754222   "
@@ -301,6 +302,56 @@ TEST_CASE("Tycho-2 records are parsed at the columns of the distributed files", 
     // The skipped record must not leak its proper motion into the next star's slot:
     CHECK(stars[1].pmRA == 0.f);
     CHECK(stars[1].pmDEC == 0.f);
+
+    // The raw CDS file has no separator between HIP (bytes 143-148) and CCDM (149-151), so
+    // from there on it sits one byte to the left of the export. The same record, raw:
+    std::string observed_only_raw = observed_only;
+    REQUIRE(observed_only_raw[148] == '|');
+    observed_only_raw.erase(148, 1);
+    REQUIRE(observed_only_raw[151] == '|');
+    REQUIRE(observed_only_raw[177] == '|');
+    {
+        std::ofstream out(path);
+        out << normal << "\n" << observed_only_raw << "\n";
+    }
+    const std::vector<StarData> raw = read_tycho2_dat(path);
+    REQUIRE(raw.size() == 2);
+    CHECK(raw[1].id == stars[1].id);
+    CHECK(raw[1].RA == stars[1].RA);
+    CHECK(raw[1].DEC == stars[1].DEC);
+    CHECK(raw[1].visual_magnitude == stars[1].visual_magnitude);
+
+    // A record with a proper motion and an epoch, in both shapes, lands in the same place:
+    // the RA (100.13 deg) keeps its hundreds digit and the epoch its integer part.
+    std::string moving = observed_only;
+    moving.replace(41, 7, "  -30.0"); // pmRA
+    moving.replace(49, 7, "   20.0"); // pmDE
+    moving.replace(153, 12, "100.13082417");
+    moving.replace(166, 12, " -10.5979541");
+    moving.replace(179, 4, "1.95");
+    moving.replace(184, 4, "1.89");
+    std::string moving_raw = moving;
+    moving_raw.erase(148, 1);
+    {
+        std::ofstream out(path);
+        out << moving << "\n" << moving_raw << "\n";
+    }
+    const std::vector<StarData> both = read_tycho2_dat(path);
+    REQUIRE(both.size() == 2);
+    CHECK(both[0].RA == both[1].RA);
+    CHECK(both[0].DEC == both[1].DEC);
+    CHECK(both[0].RA > 100.0 * deg);
+    CHECK(both[0].DEC < -10.0 * deg);
+    CHECK(both[0].pmRA == -30.f);
+
+    // Anything else is refused rather than read at the wrong columns:
+    std::string broken = observed_only;
+    broken.erase(148, 2);
+    {
+        std::ofstream out(path);
+        out << broken << "\n";
+    }
+    CHECK_THROWS_WITH(read_tycho2_dat(path), ContainsSubstring("neither a raw CDS"));
 
     fs::remove(path);
 }

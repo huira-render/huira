@@ -5,13 +5,16 @@
 //
 //   build_star_catalog <tycho2_dir> [output.hrsc]
 //
-// <tycho2_dir> holds the files as distributed by CDS (VizieR catalog I/259) and mirrored at
-// media.huira.space/data/stars/tycho2/archive/: tyc2.dat.00 .. tyc2.dat.19, suppl_1.dat and
-// suppl_2.dat, uncompressed. The output defaults to <tycho2_dir>/tycho2.hrsc.
+// <tycho2_dir> holds tyc2.dat.00 .. tyc2.dat.19, suppl_1.dat and suppl_2.dat, uncompressed,
+// in either of the two shapes CDS serves VizieR catalog I/259 in: the raw files from its FTP
+// archive (cdsarc.cds.unistra.fr/ftp/I/259/), or VizieR's text export of them
+// (viz-bin/nph-Cat/txt?I/259/<file>.gz, with "#Table:" header lines), which is what
+// media.huira.space/data/stars/tycho2/archive/ mirrors. The reader tells them apart by
+// record. The output defaults to <tycho2_dir>/tycho2.hrsc.
 //
 // Publishing a new build: if the values changed (see HRSC_DATA_VERSION in star_catalog.hpp),
 // bump that constant first, so the file says which build it is; then upload the file as
-// archive/tycho2-d<N>.hrsc, copy it to tycho2.hrsc, and add both to SHA256SUMS.
+// versions/tycho2-d<N>.hrsc, copy it to tycho2.hrsc, and add each to its folder's SHA256SUMS.
 
 #include <cstdint>
 #include <exception>
@@ -41,7 +44,8 @@ int usage(std::ostream& os)
     os << "Usage: build_star_catalog <tycho2_dir> [output.hrsc]\n"
           "\n"
           "Converts the Tycho-2 catalog (tyc2.dat.00 .. tyc2.dat.19, suppl_1.dat, suppl_2.dat\n"
-          "in <tycho2_dir>) into a Huira star catalog. The output defaults to\n"
+          "in <tycho2_dir>, uncompressed, either the raw CDS FTP files or VizieR's text\n"
+          "export of them) into a Huira star catalog. The output defaults to\n"
           "<tycho2_dir>/tycho2.hrsc.\n";
     return 2;
 }
@@ -109,9 +113,9 @@ int main(int argc, char** argv)
                   << "\nIf the computed values changed since the last published build, make "
                      "sure HRSC_DATA_VERSION\n"
                      "in star_catalog.hpp was bumped before this build. To publish: upload as "
-                     "archive/tycho2-d"
+                     "versions/tycho2-d"
                   << header.data_version
-                  << ".hrsc, copy to tycho2.hrsc, and add both to SHA256SUMS.\n";
+                  << ".hrsc, copy to tycho2.hrsc, and add each to its folder's SHA256SUMS.\n";
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << "\n";
         return 1;
