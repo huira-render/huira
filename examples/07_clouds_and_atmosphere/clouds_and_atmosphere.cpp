@@ -84,7 +84,7 @@ int main(int argc, char** argv)
     // and a transmission of 1, so light crosses the boundary unchanged and only the medium
     // inside acts on it.
     auto boundary = scene.new_material(scene.new_bsdf_null());
-    boundary.set_transmission_factor(TSpectral{1.f});
+    boundary.set_transmission(TSpectral{1.f});
     scene.root.new_instance(scene.add_primitive(earth_shell(scene, 100.0), boundary, air));
 
     auto sun = scene.root.new_instance(scene.new_sun_light());

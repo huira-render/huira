@@ -6,9 +6,15 @@ void MaterialHandle<TSpectral>::set_bsdf(std::shared_ptr<BSDF<TSpectral>> bsdf)
 }
 
 template <IsSpectral TSpectral>
+void MaterialHandle<TSpectral>::set_albedo(TSpectral albedo)
+{
+    this->get_()->set_albedo(albedo);
+}
+
+template <IsSpectral TSpectral>
 void MaterialHandle<TSpectral>::set_albedo_image(const TextureHandle<TSpectral>& albedo_texture)
 {
-    this->get_()->set_albedo(albedo_texture.get()->shared_image());
+    this->get_()->set_albedo_image(albedo_texture.get()->shared_image());
 }
 
 template <IsSpectral TSpectral>
@@ -24,9 +30,15 @@ void MaterialHandle<TSpectral>::reset_albedo()
 }
 
 template <IsSpectral TSpectral>
+void MaterialHandle<TSpectral>::set_alpha(float alpha)
+{
+    this->get_()->set_alpha(alpha);
+}
+
+template <IsSpectral TSpectral>
 void MaterialHandle<TSpectral>::set_alpha_image(const TextureHandle<float>& alpha_texture)
 {
-    this->get_()->set_alpha(alpha_texture.get()->shared_image());
+    this->get_()->set_alpha_image(alpha_texture.get()->shared_image());
 }
 
 template <IsSpectral TSpectral>
@@ -39,6 +51,12 @@ template <IsSpectral TSpectral>
 void MaterialHandle<TSpectral>::reset_alpha()
 {
     this->get_()->reset_alpha();
+}
+
+template <IsSpectral TSpectral>
+void MaterialHandle<TSpectral>::set_metallic(float metallic)
+{
+    this->get_()->set_metallic(metallic);
 }
 
 template <IsSpectral TSpectral>
@@ -57,6 +75,12 @@ template <IsSpectral TSpectral>
 void MaterialHandle<TSpectral>::reset_metallic()
 {
     this->get_()->reset_metallic();
+}
+
+template <IsSpectral TSpectral>
+void MaterialHandle<TSpectral>::set_roughness(float roughness)
+{
+    this->get_()->set_roughness(roughness);
 }
 
 template <IsSpectral TSpectral>
@@ -96,6 +120,12 @@ void MaterialHandle<TSpectral>::reset_normal()
 }
 
 template <IsSpectral TSpectral>
+void MaterialHandle<TSpectral>::set_transmission(TSpectral transmission)
+{
+    this->get_()->set_transmission(transmission);
+}
+
+template <IsSpectral TSpectral>
 void MaterialHandle<TSpectral>::set_transmission_image(
     const TextureHandle<TSpectral>& transmission_texture)
 {
@@ -112,6 +142,12 @@ template <IsSpectral TSpectral>
 void MaterialHandle<TSpectral>::reset_transmission()
 {
     this->get_()->reset_transmission();
+}
+
+template <IsSpectral TSpectral>
+void MaterialHandle<TSpectral>::set_emissive(TSpectral emissive)
+{
+    this->get_()->set_emissive(emissive);
 }
 
 template <IsSpectral TSpectral>

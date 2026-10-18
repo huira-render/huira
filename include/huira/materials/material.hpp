@@ -27,18 +27,32 @@ struct MaterialEval {
  * @brief Surface material: holds image pointers and a BSDF pointer, provides
  *        the primary shading interface for integrators.
  *
- * Material is a concrete class. It does not own any of its referenced data —
- * the Scene owns all Images, BSDFs, and Materials. Material holds non-owning
- * pointers to Scene-managed assets.
+ * Material is a concrete class. The Scene owns BSDFs and Materials, and the images that
+ * textures are made from; a Material holds shared pointers to them.
  *
- * Every image slot is a non-null pointer. For slots without a texture, the
- * Scene provides a 1x1 Image filled with the appropriate default value:
+ * Every material value (albedo, alpha, metallic, roughness, normal, transmission, emission)
+ * is an image times a factor, and the three ways to set one never touch each other:
  *
- *   - base_color_image:  1x1 white (TSpectral{1})
- *   - metallic_image:    1x1 with metallic_factor (typically 0.0)
- *   - roughness_image:   1x1 with roughness_factor (typically 0.5)
- *   - normal_image:      1x1 with {0.5, 0.5, 1.0} (unperturbed normal)
- *   - emissive_image:    1x1 white (TSpectral{1}), with an emissive factor of 0
+ *   - set_X(value) makes the image a 1x1 of that value: a constant across the surface.
+ *   - set_X_image(image) makes the image a texture.
+ *   - set_X_factor(f) sets the factor, a multiplier on whichever image is set. It is 1 by
+ *     default, so an image shows as it is unless the factor is changed on purpose.
+ *   - reset_X() restores the default image and a factor of 1.
+ *
+ * Every image slot is a non-null pointer. The Scene provides the default 1x1 images, each
+ * holding the value a material has until that slot is set:
+ *
+ *   - albedo:        1 (white)
+ *   - alpha:         1 (opaque)
+ *   - metallic:      0
+ *   - roughness:     1
+ *   - normal:        {0, 0, 1} (unperturbed)
+ *   - transmission:  0
+ *   - emissive:      0
+ *
+ * Every setter validates its argument: albedo, alpha, metallic, roughness and transmission
+ * values and factors are from 0 to 1; emission is finite and non-negative; the normal
+ * factor is finite.
  *
  * The emission is the radiance the surface emits, from either side, in W/(m^2 sr) in each
  * spectral bin: the emissive image times the emissive factor. It is added where a ray meets
@@ -78,18 +92,22 @@ class Material : public SceneObject<Material<TSpectral>> {
 
     void set_bsdf(std::shared_ptr<BSDF<TSpectral>> bsdf);
 
-    void set_albedo(std::shared_ptr<Image<TSpectral>> albedo_image);
+    void set_albedo(TSpectral albedo);
+    void set_albedo_image(std::shared_ptr<Image<TSpectral>> albedo_image);
     void set_albedo_factor(TSpectral albedo_factor);
     void reset_albedo();
 
-    void set_alpha(std::shared_ptr<Image<float>> alpha_image);
+    void set_alpha(float alpha);
+    void set_alpha_image(std::shared_ptr<Image<float>> alpha_image);
     void set_alpha_factor(float alpha_factor);
     void reset_alpha();
 
+    void set_metallic(float metallic);
     void set_metallic_image(std::shared_ptr<Image<float>> metallic_image);
     void set_metallic_factor(float metallic_factor);
     void reset_metallic();
 
+    void set_roughness(float roughness);
     void set_roughness_image(std::shared_ptr<Image<float>> roughness_image);
     void set_roughness_factor(float roughness_factor);
     void reset_roughness();
@@ -98,13 +116,23 @@ class Material : public SceneObject<Material<TSpectral>> {
     void set_normal_factor(float normal_factor);
     void reset_normal();
 
+    void set_transmission(TSpectral transmission);
     void set_transmission_image(std::shared_ptr<Image<TSpectral>> transmission_image);
     void set_transmission_factor(TSpectral transmission_factor);
     void reset_transmission();
 
+    void set_emissive(TSpectral emissive);
     void set_emissive_image(std::shared_ptr<Image<TSpectral>> emissive_image);
     void set_emissive_factor(TSpectral emissive_factor);
     void reset_emissive();
+
+    TSpectral albedo_factor() const noexcept { return albedo_factor_; }
+    float alpha_factor() const noexcept { return alpha_factor_; }
+    float metallic_factor() const noexcept { return metallic_factor_; }
+    float roughness_factor() const noexcept { return roughness_factor_; }
+    float normal_factor() const noexcept { return normal_factor_; }
+    TSpectral transmission_factor() const noexcept { return transmission_factor_; }
+    TSpectral emissive_factor() const noexcept { return emissive_factor_; }
 
     std::string type() const override { return "Material"; }
 
@@ -117,13 +145,15 @@ class Material : public SceneObject<Material<TSpectral>> {
     std::shared_ptr<Image<TSpectral>> transmission_image_;
     std::shared_ptr<Image<TSpectral>> emissive_image_;
 
-    float alpha_factor() const noexcept { return alpha_factor_; }
     bool has_alpha() const noexcept { return has_alpha_; }
     bool has_alpha_texture() const noexcept { return alpha_image_ != default_alpha_image_; }
 
   private:
     template <typename TPixel>
     void check_image_(const std::shared_ptr<Image<TPixel>>& image, const char* what) const;
+
+    /// Whether anything about the alpha can make the surface less than opaque.
+    void update_has_alpha_();
 
     bool eval_albedo_ = true;
     std::shared_ptr<Image<TSpectral>> default_albedo_image_;
@@ -146,13 +176,15 @@ class Material : public SceneObject<Material<TSpectral>> {
 
     std::shared_ptr<BSDF<TSpectral>> bsdf_;
 
+    // Factors multiply their image, so they default to 1 for every slot; the default images
+    // hold the values a material starts with.
     TSpectral albedo_factor_{1.0f};
     float alpha_factor_ = 1.0f;
-    float metallic_factor_ = 0.0f;
+    float metallic_factor_ = 1.0f;
     float roughness_factor_ = 1.0f;
     float normal_factor_ = 1.0f;
-    TSpectral transmission_factor_{0.0f};
-    TSpectral emissive_factor_{0.0f};
+    TSpectral transmission_factor_{1.0f};
+    TSpectral emissive_factor_{1.0f};
 
     friend class Scene<TSpectral>;
 };

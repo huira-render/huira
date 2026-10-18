@@ -27,6 +27,7 @@ set(UNIT_TESTS
     huira/geometry/test_mesh.cpp
 
     huira/materials/test_cook_torrance.cpp
+    huira/materials/test_material_values.cpp
 
     huira/render/test_bright_bodies.cpp
     huira/render/test_emission.cpp

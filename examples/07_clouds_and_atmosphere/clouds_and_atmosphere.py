@@ -6,7 +6,7 @@ Demonstrates:
     - Layered shells: one geometry inside another, each with its own material
     - Participating media: a constant density field (absorption and scattering), an isotropic
       phase function, and a medium made of the two
-    - A primitive with both a material and a medium; the null BSDF and a transmission factor,
+    - A primitive with both a material and a medium; the null BSDF and a transmission of 1,
       for a boundary that light crosses unchanged
 
 Builds on: 06 Materials and textures
@@ -84,7 +84,7 @@ def main():
     # and a transmission of 1, so light crosses the boundary unchanged and only the medium
     # inside acts on it.
     boundary = scene.new_material(scene.new_bsdf_null())
-    boundary.set_transmission_factor(SpectralBins(1.0))
+    boundary.set_transmission(SpectralBins(1.0))
     scene.root.new_instance(scene.add_primitive(earth_shell(scene, 100), boundary, air))
 
     sun = scene.root.new_instance(scene.new_sun_light())

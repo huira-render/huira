@@ -64,7 +64,7 @@ TEST_CASE("An emissive surface is seen at the radiance it emits", "[render][emis
     // A glowing sphere in the dark: no lights, and a black background.
     Scene<RGB> scene;
     auto glowing = scene.new_material(scene.new_bsdf_lambertian());
-    glowing.set_emissive_factor(emission);
+    glowing.set_emissive(emission);
     scene.root.new_instance(scene.add_primitive(scene.add_ellipsoid(1_m, 1_m, 1_m), glowing));
     const TestCamera camera = add_camera(scene, 0_m);
     auto frame_buffer = render(scene, camera);
@@ -102,7 +102,7 @@ TEST_CASE("An emissive surface lights the surfaces around it", "[render][emissio
     scene.root.new_instance(scene.add_primitive(scene.add_ellipsoid(1_m, 1_m, 1_m), plain));
 
     auto glowing = scene.new_material(scene.new_bsdf_lambertian());
-    glowing.set_emissive_factor(RGB{1.f});
+    glowing.set_emissive(RGB{1.f});
     auto lamp = scene.root.new_instance(
         scene.add_primitive(scene.add_ellipsoid(0.5_m, 0.5_m, 0.5_m), glowing));
     lamp.set_position(2_m, 0_m, -2_m);
