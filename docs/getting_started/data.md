@@ -37,10 +37,12 @@ distributed by CDS, Strasbourg (VizieR catalog I/259).
   curl -fLO https://media.huira.space/data/stars/tycho2/tycho2.hrsc
   ```
 
-  `tycho2.hrsc` is always the latest build. Earlier builds stay at
-  [media.huira.space/data/stars/tycho2/archive/](https://media.huira.space/data/stars/tycho2/archive/)
-  as `tycho2-d<N>.hrsc`, where `N` is the build's data version (below), next to the catalog's
-  original files from CDS.
+  `tycho2.hrsc` is always the latest build. Every build stays at
+  [media.huira.space/data/stars/tycho2/versions/](https://media.huira.space/data/stars/tycho2/versions/)
+  as `tycho2-d<N>.hrsc`, where `N` is the build's data version (below). The catalog's
+  original files from CDS are at
+  [media.huira.space/data/stars/tycho2/archive/](https://media.huira.space/data/stars/tycho2/archive/).
+  Each folder has its own `ATTRIBUTION.txt` and `SHA256SUMS`.
 - **Source:** [cdsarc.cds.unistra.fr/viz-bin/cat/I/259](https://cdsarc.cds.unistra.fr/viz-bin/cat/I/259)
 - **License:** [CC BY-NC 3.0 IGO](https://creativecommons.org/licenses/by-nc/3.0/igo/). You may
   share and adapt the catalog, with credit, for non-commercial purposes only.
@@ -58,8 +60,10 @@ distributed by CDS, Strasbourg (VizieR catalog I/259).
   [`star_catalog.hpp`](https://github.com/huira-render/huira/blob/main/include/huira/stars/io/star_catalog.hpp).
 - **Building it yourself:** the catalog is built from the CDS files by `build_star_catalog`,
   in Huira's [`tools/`](https://github.com/huira-render/huira/tree/main/tools) directory,
-  built with `-DHUIRA_BUILD_TOOLS=ON`. You only need this to change how the values are
-  computed.
+  built with `-DHUIRA_BUILD_TOOLS=ON`. It reads the files either as CDS's FTP archive
+  serves them or as VizieR's text export writes them (the form in `archive/`, with
+  `#Table:` header lines); the two differ by one column from the HIP number on. You only
+  need this to change how the values are computed.
 - **Cite:**
   - Høg, E., et al. 2000, "The Tycho-2 Catalogue of the 2.5 Million Brightest Stars",
     *Astronomy & Astrophysics*, 355, L27

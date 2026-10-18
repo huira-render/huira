@@ -53,8 +53,16 @@ namespace huira {
  */
 
 /// Bump when the *layout* of an .hrsc file changes.
-///   1  2026-10  Initial layout: 32-byte header, 48-byte StarData records.
-constexpr std::uint16_t HRSC_FORMAT_VERSION = 1;
+///   1  (retired) Before the format was versioned, huira <= 0.9.10 wrote the header as the
+///               memory image of a struct with a one-byte version of 1 at byte 4, and its
+///               reader accepted any file with a 1 there, then took star_count from bytes
+///               24-31, which the versioned layout holds as reserved zeros. A versioned file
+///               marked 1 would load in those versions as an empty catalog, without error.
+///               Starting at 2 makes them reject it instead.
+///   2  2026-10  First versioned layout: 32-byte header, 48-byte StarData records.
+constexpr std::uint16_t HRSC_FORMAT_VERSION = 2;
+static_assert(HRSC_FORMAT_VERSION != 1,
+              "Format version 1 is the unversioned pre-release layout; see the note above");
 
 /// Bump when the *values* written by the catalog builder change for the same layout.
 ///   1  2026-10  Initial release: V = VT - 0.090 (BT - VT); B-V = 0.850 (BT - VT);
