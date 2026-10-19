@@ -57,7 +57,7 @@ cmake --install . --config Release --prefix "$env:CONDA_PREFIX"
 ```
 
 If you're in cmd prompt or miniforge prompt:
-```cmd
+```bat
 cmake --install . --config Release --prefix "%CONDA_PREFIX%"
 ```
 

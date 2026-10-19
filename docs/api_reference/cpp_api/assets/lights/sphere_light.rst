@@ -1,5 +1,5 @@
-Point Light
-===========
+Sphere Light
+============
 
 .. doxygenclass:: huira::SphereLight
    :members:
