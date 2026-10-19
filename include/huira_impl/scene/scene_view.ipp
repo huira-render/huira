@@ -1838,7 +1838,7 @@ SceneView<TSpectral>::sample_light_contribution_(const LightInstance<TSpectral>&
                                                  RandomSampler<float>& sampler,
                                                  float time) const
 {
-    Transform<float> current_transform = interpolate_transform(light_instance.transforms, time);
+    Transform<float> current_transform = instance_transform_at(light_instance.transforms, time);
 
     auto sample = light_instance.light->sample_li(isect, current_transform, sampler);
 

@@ -35,7 +35,7 @@ inline float power_heuristic(float f_pdf, float g_pdf)
  * Between two temporal samples, Embree interpolates an instance's translation and scale
  * linearly, and its rotation along the shorter arc between the two (slerp). This does the same,
  * so that what a ray hits is placed, and its normals turned, as Embree placed it when the ray
- * found it.
+ * found it, and a light is sampled where rays find it.
  *
  * @param transforms The instance's transforms at uniformly spaced temporal samples.
  * @param t Normalized time in [0, 1] across the sequence.
@@ -65,47 +65,6 @@ inline Transform<float> instance_transform_at(const std::vector<Transform<float>
     // glm::slerp takes the shorter arc, as Embree does:
     result.rotation = Rotation<float>::from_local_to_parent(glm::slerp(
         a.rotation.local_to_parent_quaternion(), b.rotation.local_to_parent_quaternion(), frac));
-    return result;
-}
-
-/**
- * @brief Interpolates a per-temporal-sample transform sequence at a normalized time.
- *
- * @param transforms Transforms at uniformly spaced temporal samples.
- * @param t Normalized time in [0, 1] across the sequence.
- * @return The interpolated transform (lerped position, slerped rotation).
- */
-inline Transform<float> interpolate_transform(const std::vector<Transform<float>>& transforms,
-                                              float t)
-{
-    if (transforms.empty()) {
-        return Transform<float>{};
-    }
-    if (transforms.size() == 1) {
-        return transforms[0];
-    }
-
-    t = std::clamp(t, 0.0f, 1.0f);
-
-    float scaled_t = t * static_cast<float>(transforms.size() - 1);
-    std::size_t idx = static_cast<std::size_t>(std::floor(scaled_t));
-    idx = std::min(idx, transforms.size() - 2);
-    float frac = scaled_t - static_cast<float>(idx);
-
-    Transform<float> result;
-
-    // Linearly interpolate position
-    result.position =
-        transforms[idx].position * (1.0f - frac) + transforms[idx + 1].position * frac;
-
-    // Slerp rotation (assuming you are using glm::quat for rotations)
-    auto quat = transforms[idx].rotation.local_to_parent_quaternion();
-    auto next_quat = transforms[idx + 1].rotation.local_to_parent_quaternion();
-    result.rotation.from_local_to_parent(glm::slerp(quat, next_quat, frac));
-
-    // Scale interpolation
-    // result.scale = transforms[idx].scale * (1.0f - frac) + transforms[idx + 1].scale * frac;
-
     return result;
 }
 } // namespace huira
