@@ -95,8 +95,8 @@ TEST_CASE("The renderer's settings are checked when set", "[render][validation]"
     CHECK_THROWS(renderer.set_samples_per_pixel(0));
     CHECK_THROWS(renderer.set_max_bounces(0));
     CHECK_THROWS(renderer.set_min_samples(1));
-    CHECK_THROWS(renderer.set_variance_threshold(NaN_F));
-    CHECK_THROWS(renderer.set_variance_threshold(-1.f));
+    CHECK_THROWS(renderer.set_noise_threshold(NaN_F));
+    CHECK_THROWS(renderer.set_noise_threshold(-1.f));
     CHECK_THROWS(renderer.set_indirect_clamp(-1.f));
     CHECK_THROWS(renderer.set_indirect_clamp(NaN_F));
     CHECK_THROWS(renderer.set_region_cull_margin_scale(INF_F));
