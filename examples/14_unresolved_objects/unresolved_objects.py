@@ -110,14 +110,14 @@ def main():
     output_dir = Path("output")
     output_dir.mkdir(exist_ok=True)
 
-    # The observation mode decides where each body appears:
+    # The observation mode decides where each thing appears:
     #   - TRUE_STATE: where it is at the instant of the exposure
     #   - GEOMETRIC_STATE: where it was when the light now arriving left it (light time)
     #   - ABERRATED_STATE: that, shifted by stellar aberration from the camera's own velocity,
     #     as a real camera sees it
-    # Between the two images here, light time moves Jupiter by about 9 arcseconds, and
-    # aberration from the Earth's 30 km/s about the Sun and the camera's 8 km/s about the Earth
-    # by about 25 more: two and a half pixels in all.
+    # Between the two images here, aberration from the Earth's 30 km/s about the Sun and the
+    # camera's 8 km/s about the Earth moves everything by about 25 arcseconds, nearly two
+    # pixels, and light time moves Jupiter 9 arcseconds more.
     exposure = huira.Interval.from_centered(time, sec(1))
     renders = [
         (huira.ObservationMode.ABERRATED_STATE, "14_unresolved_objects.png"),

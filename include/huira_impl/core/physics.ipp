@@ -267,7 +267,7 @@ inline double integrate(const std::vector<double>& x, const std::vector<double>&
  * @brief Compute relativistic aberration of a direction vector for a moving observer.
  * @param direction Incoming direction (unit vector)
  * @param v_obs Observer velocity (m/s)
- * @return Vec3<double> Aberrated direction
+ * @return Vec3<double> Aberrated direction, a unit vector when direction is one
  */
 inline Vec3<double> compute_aberrated_direction(Vec3<double> direction, Vec3<double> v_obs)
 {
@@ -283,16 +283,19 @@ inline Vec3<double> compute_aberrated_direction(Vec3<double> direction, Vec3<dou
 
         // Relativistic Aberration Formula
         //    Transforms the direction vector 'u' into the moving frame 'u_app'.
-        //    Formula: u_app = (u + beta + (gamma / (1+gamma)) * (u . beta) * beta)
-        //                     ----------------------------------------------------
-        //                             gamma * (1 + u . beta)
+        //    Formula: u_app = (u / gamma + beta + (gamma / (1+gamma)) * (u . beta) * beta)
+        //                     ------------------------------------------------------------
+        //                                         1 + u . beta
+        //
+        //    which is a unit vector when u is. Its angle from beta, theta', follows from u's,
+        //    theta, as cos(theta') = (cos(theta) + |beta|) / (1 + |beta| cos(theta)).
         //
         // Because 'u' is (Observer -> Object) and we move 'v',
-        // the object should appear shifted TOWARDS 'v'.
-        // (u + beta) in the numerator achieves this correctly.
+        // the object should appear shifted TOWARDS 'v':
+        // the + beta in the numerator achieves this.
 
-        Vec3<double> num = direction + beta + (gamma / (1.0 + gamma)) * u_dot_beta * beta;
-        double den = gamma * (1.0 + u_dot_beta);
+        Vec3<double> num = direction / gamma + beta + (gamma / (1.0 + gamma)) * u_dot_beta * beta;
+        double den = 1.0 + u_dot_beta;
 
         return num / den;
     } else {
