@@ -323,3 +323,30 @@ TEMPLATE_TEST_CASE("Rotation - A quaternion within 1e-3 of unit length is taken 
         }
     }
 }
+
+TEMPLATE_TEST_CASE("Rotation - The axis of a small turn is its own",
+                   "[rotation][axis]",
+                   float,
+                   double)
+{
+    // A turn so small that the cosine of half of it rounds to 1 still has its own axis (the z
+    // axis was given, below about 3e-8 rad in double precision), and its angle about that axis
+    // makes it up again.
+    using T = TestType;
+    // Within the rounding of the rotation's matrix, whose entries near 1 limit how precisely a
+    // small turn's axis is held (the z axis is 0.63 from this one):
+    const T tolerance = T(1e-3);
+    const Vec3<T> axis = glm::normalize(Vec3<T>{1, 2, 3});
+    for (double angle : {0.5, 1e-4, 1e-8, 1e-12}) {
+        INFO("angle " << angle);
+        const Rotation<T> turn = Rotation<T>::from_local_to_parent(axis, units::Radian(angle));
+        const Vec3<T> found = turn.axis();
+        CHECK(glm::length(found - axis) < tolerance);
+        const Rotation<T> again =
+            Rotation<T>::from_local_to_parent(found, units::Radian(turn.angle()));
+        CHECK_MAT3_EQUAL(again.local_to_parent_matrix(), turn.local_to_parent_matrix(), 1e-6);
+    }
+
+    // No turn at all has no axis of its own: the x axis is given.
+    CHECK(Rotation<T>{}.axis() == Vec3<T>{1, 0, 0});
+}
