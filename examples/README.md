@@ -19,6 +19,7 @@ to run it. Each source file opens with the features it demonstrates.
 | 09 | [Stars](09_stars/) | The Tycho-2 catalog, pointing by right ascension and declination, and proper motion |
 | 10 | [Optics](10_optics/) | Diffraction, focus, scattered light, measured PSFs, and distortion |
 | 11 | [Sensor](11_sensor/) | The physical signal chain; quantum efficiency, gain, bit depth and noise; FITS and TIFF |
+| 12 | [Motion blur](12_motion_blur/) | Spinning and moving instances, exposure time against motion, temporal samples, tracking with `look_at`, and turning motion blur off |
 
 ## Running the examples
 

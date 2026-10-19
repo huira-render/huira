@@ -386,8 +386,8 @@ void Node<TSpectral>::set_position_function(TFunction function)
 {
     HUIRA_LOG_INFO(this->get_info() + " - set_position_function()");
     this->set_custom_position_callback<PositionFunctionCallback>(
-        [function = std::move(function)](const PoseContext& context) {
-            return detail::to_position_sample(function(context));
+        [func = std::move(function)](const PoseContext& context) {
+            return detail::to_position_sample(func(context));
         },
         this->get_info());
 }
@@ -503,8 +503,8 @@ void Node<TSpectral>::set_rotation_function(TFunction function)
 {
     HUIRA_LOG_INFO(this->get_info() + " - set_rotation_function()");
     this->set_custom_rotation_callback<RotationFunctionCallback>(
-        [function = std::move(function)](const PoseContext& context) {
-            return detail::to_rotation_sample(function(context));
+        [func = std::move(function)](const PoseContext& context) {
+            return detail::to_rotation_sample(func(context));
         },
         this->get_info());
 }

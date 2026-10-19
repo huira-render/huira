@@ -10,6 +10,7 @@ set(HUIRA_EXAMPLE_NAMES
     09_stars
     10_optics
     11_sensor
+    12_motion_blur
 )
 
 foreach(example IN LISTS HUIRA_EXAMPLE_NAMES)
