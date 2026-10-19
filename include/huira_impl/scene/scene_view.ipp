@@ -187,11 +187,22 @@ SceneView<TSpectral>::SceneView(const Scene<TSpectral>& scene,
     // This runs over the whole catalogue on every view, so it is written to touch the
     // heap a fixed number of times rather than once per star, and the observer
     // orientation is inverted once per temporal sample rather than once per star per
-    // sample. The arithmetic per star is unchanged: aberrate in the SSB frame, rotate
-    // into camera coordinates, normalize in double precision, and only then narrow to
-    // float - exactly what Star's constructor did.
+    // sample. The arithmetic per star is unchanged: aberrate in the SSB frame (when observing
+    // in ABERRATED_STATE), rotate into camera coordinates, normalize in double precision, and
+    // only then narrow to float - exactly what Star's constructor did.
     {
         const std::size_t n_stars = scene.stars_.size();
+
+        // A star's catalog direction is where its light comes from as seen from the solar
+        // system's barycenter, so its light time is already in it: TRUE_STATE and
+        // GEOMETRIC_STATE leave it as it is, and ABERRATED_STATE aberrates it by the observer's
+        // velocity, as it does everything else.
+        const bool aberrate_stars = obs_mode_ == ObservationMode::ABERRATED_STATE;
+        const auto apparent_direction = [aberrate_stars](const Vec3<double>& direction,
+                                                         const Vec3<double>& observer_velocity) {
+            return aberrate_stars ? compute_aberrated_direction(direction, observer_velocity)
+                                  : direction;
+        };
 
         // The stars all move together, as the camera turns (and as its velocity aberrates
         // them): one set of temporal samples serves them all. Their motion is followed by the
@@ -217,8 +228,8 @@ SceneView<TSpectral>::SceneView(const Scene<TSpectral>& scene,
                     const Transform<double>& observer = observer_at_(fraction).ssb;
                     const Rotation<double> to_camera = observer.rotation.inverse();
                     for (const Vec3<double>& direction : sky) {
-                        it->second.push_back(
-                            to_camera * compute_aberrated_direction(direction, observer.velocity));
+                        it->second.push_back(to_camera *
+                                             apparent_direction(direction, observer.velocity));
                     }
                 }
                 return it->second;
@@ -257,13 +268,10 @@ SceneView<TSpectral>::SceneView(const Scene<TSpectral>& scene,
 
                                   Vec3<float>* out = stars_.directions.data() + i * n_samples;
                                   for (std::size_t j = 0; j < n_samples; ++j) {
-                                      // Compute stellar aberration:
-                                      Vec3<double> aberrated_direction =
-                                          compute_aberrated_direction(direction,
-                                                                      observer_velocities[j]);
-                                      Vec3<double> apparent_direction =
-                                          inverse_rotations[j] * aberrated_direction;
-                                      out[j] = Vec3<float>(glm::normalize(apparent_direction));
+                                      const Vec3<double> camera_direction =
+                                          inverse_rotations[j] *
+                                          apparent_direction(direction, observer_velocities[j]);
+                                      out[j] = Vec3<float>(glm::normalize(camera_direction));
                                   }
                               }
                           });
