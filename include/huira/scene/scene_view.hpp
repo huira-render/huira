@@ -72,6 +72,13 @@ class SceneView {
 
     ~SceneView();
 
+    // A scene view owns its Embree scene, which it releases when it is destroyed: a copy would
+    // release it a second time. It is built where it is used, and neither copied nor moved.
+    SceneView(const SceneView&) = delete;
+    SceneView& operator=(const SceneView&) = delete;
+    SceneView(SceneView&&) = delete;
+    SceneView& operator=(SceneView&&) = delete;
+
     [[nodiscard]] HitRecord
     intersect(const Ray<TSpectral>& ray, float time = 0.5f, unsigned int mask = 0xFFFFFFFF) const;
 
