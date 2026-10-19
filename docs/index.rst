@@ -9,6 +9,7 @@ Huira
     :caption: Getting Started
 
     getting_started/build_instructions/index
+    examples/index
     getting_started/data
 
 .. toctree::

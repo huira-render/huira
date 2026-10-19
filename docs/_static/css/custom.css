@@ -13,3 +13,22 @@ span.eqno {
 	margin: 10px auto;
 	display: block;
 }
+
+/* Sidebar links to the other huira.space sites (sidebar/website_link.html) */
+.huira-site-links {
+	text-align: center;
+	margin-bottom: 1rem;
+	font-size: 0.6em;
+}
+.huira-site-links a {
+	text-decoration: none;
+	color: var(--color-sidebar-link-text);
+}
+.huira-site-links a:hover {
+	color: var(--color-brand-primary);
+}
+.huira-site-links .sep {
+	color: var(--color-sidebar-link-text--top-level);
+	opacity: 0.5;
+	margin: 0 0.25em;
+}

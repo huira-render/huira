@@ -27,6 +27,16 @@ add_custom_command(OUTPUT ${DOXYGEN_INDEX_FILE}
 add_custom_target(Doxygen ALL DEPENDS ${DOXYGEN_INDEX_FILE})
 
 set(SPHINX_SOURCE ${CMAKE_CURRENT_SOURCE_DIR})
+
+# The example walkthroughs on docs.huira.space are generated from the READMEs
+# and sources in examples/ (see huira_examples_ext.py), so changes there must
+# re-run Sphinx too.
+file(GLOB_RECURSE EXAMPLE_DOC_SOURCES CONFIGURE_DEPENDS
+    ${PROJECT_SOURCE_DIR}/examples/README.md
+    ${PROJECT_SOURCE_DIR}/examples/*/README.md
+    ${PROJECT_SOURCE_DIR}/examples/*/*.py
+    ${PROJECT_SOURCE_DIR}/examples/*/*.cpp
+)
 set(SPHINX_BUILD ${CMAKE_BINARY_DIR}/huira_docs)
 set(SPHINX_INDEX_FILE ${SPHINX_BUILD}/index.html)
 
@@ -37,6 +47,8 @@ add_custom_command(OUTPUT ${SPHINX_INDEX_FILE}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     DEPENDS
         ${DOXYGEN_INDEX_FILE}
+        ${EXAMPLE_DOC_SOURCES}
+        ${SPHINX_SOURCE}/huira_examples_ext.py
     MAIN_DEPENDENCY ${SPHINX_SOURCE}/conf.py
     COMMENT "Generating Sphinx documentation"
     VERBATIM
