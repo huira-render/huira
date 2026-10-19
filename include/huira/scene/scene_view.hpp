@@ -321,6 +321,15 @@ class SceneView {
 
     void build_tlas_();
 
+    /// When anything moves, things that do not are given two identical poses, so that Embree
+    /// keeps every instance in one BVH (see build_tlas_()), unless they outnumber what moves by
+    /// more than this.
+    static constexpr std::size_t MOST_STILL_PER_MOVING_IN_ONE_BVH = 64;
+
+    void set_instance_poses_(RTCGeometry geometry,
+                             const std::vector<Transform<float>>& transforms,
+                             bool still_given_two_poses) const;
+
     std::shared_ptr<EmbreeDevice> device_ = nullptr;
     RTCScene tlas_ = nullptr;
     bool tlas_empty_ = true;

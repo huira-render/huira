@@ -1547,13 +1547,94 @@ void SceneView<TSpectral>::traverse_model_graph_(
 }
 
 /**
+ * @brief Gives an instance in the TLAS its poses at its temporal samples.
+ *
+ * Embree draws an instance between two poses by one of two interpolations, chosen by how the
+ * poses are given: as quaternion decompositions, it moves the instance's origin in a straight
+ * line and turns it rigidly (slerp), and as matrices, it interpolates the matrices, moving each
+ * point of the instance in a straight line. For an instance whose rotation and scale are exactly
+ * the same at every sample, the two are the same rigid motion, and matrices are given: Embree
+ * builds their BVH an order of magnitude faster, since it bounds motion by matrices in closed
+ * form, and quaternion motion with a root solver. Any other instance turns, and is given
+ * quaternion decompositions, so that it turns rigidly. An instance with one pose has no motion,
+ * and is given it as a quaternion decomposition, as before.
+ *
+ * @param geometry A new instance geometry.
+ * @param transforms Its poses at its temporal samples, evenly spaced through the exposure.
+ * @param still_given_two_poses Whether an instance with one pose is given it twice (see
+ *        build_tlas_()).
+ */
+template <IsSpectral TSpectral>
+void SceneView<TSpectral>::set_instance_poses_(RTCGeometry geometry,
+                                               const std::vector<Transform<float>>& transforms,
+                                               bool still_given_two_poses) const
+{
+    const std::size_t n_samples = transforms.size();
+    const std::size_t n_poses = (n_samples == 1 && still_given_two_poses) ? 2 : n_samples;
+    rtcSetGeometryTimeStepCount(geometry, static_cast<unsigned int>(n_poses));
+    if (n_poses > 1) {
+        rtcSetGeometryTimeRange(geometry, 0.0f, 1.0f);
+    }
+
+    // One pose is given as it always was; several, as matrices if they do not turn:
+    const Quaternion<float> rotation = transforms.front().rotation.local_to_parent_quaternion();
+    bool quaternions = n_poses == 1;
+    for (const Transform<float>& transform : transforms) {
+        quaternions = quaternions || transform.rotation.local_to_parent_quaternion() != rotation ||
+                      transform.scale != transforms.front().scale;
+    }
+
+    for (std::size_t i = 0; i < n_poses; ++i) {
+        const Transform<float>& transform = transforms[std::min(i, n_samples - 1)];
+        if (quaternions) {
+            const RTCQuaternionDecomposition decomposition = transform.to_embree();
+            rtcSetGeometryTransformQuaternion(
+                geometry, static_cast<unsigned int>(i), &decomposition);
+        } else {
+            const std::array<float, 12> matrix = transform.to_embree_matrix();
+            rtcSetGeometryTransform(geometry,
+                                    static_cast<unsigned int>(i),
+                                    RTC_FORMAT_FLOAT3X4_COLUMN_MAJOR,
+                                    matrix.data());
+        }
+    }
+}
+
+/**
  * @brief Builds the top-level acceleration structure (TLAS) for the scene.
+ *
+ * Embree keeps instances with one pose and instances with several (that move during the
+ * exposure) in separate BVHs, and traces every ray through both. With a few still instances
+ * among many moving ones (a still Sun, say, among moving bodies), the second traversal costs
+ * more than the still ones cost in the moving BVH: rays were traced up to 2.4 times slower. So
+ * when anything moves, still instances are given their pose twice, and every instance is in one
+ * BVH. Where still instances greatly outnumber moving ones, a BVH of their own is faster (by
+ * about 10% at 256 to 1), and they keep it beyond MOST_STILL_PER_MOVING_IN_ONE_BVH to 1.
  */
 template <IsSpectral TSpectral>
 void SceneView<TSpectral>::build_tlas_()
 {
     tlas_ = rtcNewScene(device_->get());
     const bool motion_blur = has_motion_blur_;
+
+    std::size_t n_still = 0;
+    std::size_t n_moving = 0;
+    auto count = [&](const std::vector<Transform<float>>& transforms) {
+        (transforms.size() > 1 ? n_moving : n_still) += 1;
+    };
+    for (const auto& batch : primitives_) {
+        for (const auto& transforms : batch.instances) {
+            count(transforms);
+        }
+    }
+    for (const auto& light_inst : lights_) {
+        if (std::dynamic_pointer_cast<SphereLight<TSpectral>>(light_inst.light) &&
+            !light_inst.transforms.empty()) {
+            count(light_inst.transforms);
+        }
+    }
+    const bool still_given_two_poses =
+        motion_blur && n_still <= MOST_STILL_PER_MOVING_IN_ONE_BVH * n_moving;
     // Robust traversal: required so BVH plane tests cannot drop marginal hits
     // at extreme coordinate ranges (planetary camera-relative scenes).
     RTCSceneFlags scene_flags = RTC_SCENE_FLAG_ROBUST;
@@ -1584,22 +1665,9 @@ void SceneView<TSpectral>::build_tlas_()
         RTCScene blas = batch.primitive->geometry->blas();
 
         for (std::size_t inst_idx = 0; inst_idx < batch.instances.size(); ++inst_idx) {
-            std::size_t N = batch.instances[inst_idx].size();
-
             RTCGeometry inst_geom = rtcNewGeometry(device_->get(), RTC_GEOMETRY_TYPE_INSTANCE);
             rtcSetGeometryInstancedScene(inst_geom, blas);
-            rtcSetGeometryTimeStepCount(inst_geom, static_cast<unsigned int>(N));
-
-            if (motion_blur) {
-                rtcSetGeometryTimeRange(inst_geom, 0.0f, 1.0f);
-            }
-
-            for (std::size_t t_idx = 0; t_idx < N; ++t_idx) {
-                RTCQuaternionDecomposition decomp = batch.instances[inst_idx][t_idx].to_embree();
-                rtcSetGeometryTransformQuaternion(
-                    inst_geom, static_cast<unsigned int>(t_idx), &decomp);
-            }
-
+            set_instance_poses_(inst_geom, batch.instances[inst_idx], still_given_two_poses);
             rtcSetGeometryMask(inst_geom, MASK_GEOMETRY_);
 
             rtcCommitGeometry(inst_geom);
@@ -1670,18 +1738,7 @@ void SceneView<TSpectral>::build_tlas_()
         // Instance the sphere BLAS into the TLAS
         RTCGeometry inst_geom = rtcNewGeometry(device_->get(), RTC_GEOMETRY_TYPE_INSTANCE);
         rtcSetGeometryInstancedScene(inst_geom, sphere_blas);
-        rtcSetGeometryTimeStepCount(inst_geom, static_cast<unsigned int>(N));
-
-        if (N > 1) {
-            rtcSetGeometryTimeRange(inst_geom, 0.0f, 1.0f);
-        }
-
-        for (std::size_t t_idx = 0; t_idx < N; ++t_idx) {
-            // Because we instance it, we get to use your existing Transform logic natively!
-            RTCQuaternionDecomposition decomp = light_inst.transforms[t_idx].to_embree();
-            rtcSetGeometryTransformQuaternion(inst_geom, static_cast<unsigned int>(t_idx), &decomp);
-        }
-
+        set_instance_poses_(inst_geom, light_inst.transforms, still_given_two_poses);
         rtcSetGeometryMask(inst_geom, MASK_LIGHT_);
         rtcCommitGeometry(inst_geom);
         unsigned int geom_id = rtcAttachGeometry(tlas_, inst_geom);

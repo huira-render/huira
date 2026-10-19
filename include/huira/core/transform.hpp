@@ -43,6 +43,9 @@ struct Transform {
 
     RTCQuaternionDecomposition to_embree() const;
 
+    /// The transform as Embree's 3x4 column-major matrix (RTC_FORMAT_FLOAT3X4_COLUMN_MAJOR).
+    std::array<float, 12> to_embree_matrix() const;
+
     std::string to_string() const;
 
     Transform<T> inverse() const;

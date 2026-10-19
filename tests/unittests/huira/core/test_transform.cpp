@@ -1,3 +1,4 @@
+#include <array>
 #include <cmath>
 #include <numbers>
 
@@ -104,5 +105,24 @@ TEST_CASE("Transform - angular velocity frame conventions", "[transform][rates]"
 
         Vec3<double> x = identity.rotation * Vec3<double>{1, 0, 0};
         CHECK_VEC3_EQUAL(x, Vec3<double>{1, 0, 0}, 1e-10);
+    }
+}
+
+TEST_CASE("Transform - as Embree's matrix, it places points as it does", "[transform]")
+{
+    Transform<double> transform;
+    transform.position = Vec3<double>{3.0, -2.0, 7.0};
+    transform.rotation = Rotation<double>::from_local_to_parent(
+        glm::normalize(Vec3<double>{1.0, 2.0, 3.0}), units::Radian(0.7));
+    transform.scale = Vec3<double>{2.0, 0.5, 1.5};
+
+    // Column-major 3x4: three columns for the axes, then the translation.
+    const std::array<float, 12> m = transform.to_embree_matrix();
+    for (const Vec3<double>& point :
+         {Vec3<double>{0.0, 0.0, 0.0}, Vec3<double>{1.0, 0.0, 0.0}, Vec3<double>{-0.3, 2.0, 0.5}}) {
+        const Vec3<double> placed{m[0] * point.x + m[3] * point.y + m[6] * point.z + m[9],
+                                  m[1] * point.x + m[4] * point.y + m[7] * point.z + m[10],
+                                  m[2] * point.x + m[5] * point.y + m[8] * point.z + m[11]};
+        CHECK_VEC3_EQUAL(placed, transform.apply_to_point(point), 1e-5);
     }
 }
