@@ -16,17 +16,17 @@ images.
 
 | Data | Where to get it | License |
 |---|---|---|
-| [Tycho-2 star catalog](#tycho-2-star-catalog) | media.huira.space | CC BY-NC 3.0 IGO (non-commercial) |
-| [SPICE kernels](#spice-kernels) | NASA's NAIF | Redistributable unmodified |
-| [Gateway model](#gateway-model) | media.huira.space | No copyright; NASA's media guidelines |
-| [Earth textures](#earth-textures) | media.huira.space | CC BY 4.0 |
+| [Tycho-2 star catalog](#tycho-2-star-catalog) | [media.huira.space/data/stars/tycho2/](https://media.huira.space/data/stars/tycho2/) | CC BY-NC 3.0 IGO (non-commercial) |
+| [SPICE kernels](#spice-kernels) | [NASA's NAIF](https://naif.jpl.nasa.gov/naif/data.html) | Redistributable unmodified |
+| [NASA spacecraft models](#nasa-spacecraft-models) | [media.huira.space/data/models/nasa/](https://media.huira.space/data/models/nasa/) | No copyright; NASA's media guidelines |
+| [Solar System textures](#solar-system-textures) | [media.huira.space/data/textures/solar_system/](https://media.huira.space/data/textures/solar_system/) | CC BY 4.0 |
 | [Kernels that ship with Huira](#kernels-that-ship-with-huira) | Included with Huira | Redistributable unmodified |
 
-Each folder on media.huira.space holds an `ATTRIBUTION.txt`, with its data's source, license and
+Each folder on media.huira.space holds an `ATTRIBUTIONS.txt`, with its data's source, license and
 how to credit it, and a `SHA256SUMS`, to check downloads with `sha256sum -c SHA256SUMS`.
 
-## Tycho-2 star catalog
 
+## Tycho-2 star catalog
 The Tycho-2 Catalogue of the 2.5 million brightest stars, from ESA's Hipparcos mission, as
 distributed by CDS, Strasbourg (VizieR catalog I/259).
 
@@ -42,7 +42,7 @@ distributed by CDS, Strasbourg (VizieR catalog I/259).
   as `tycho2-d<N>.hrsc`, where `N` is the build's data version (below). The catalog's
   original files from CDS are at
   [media.huira.space/data/stars/tycho2/archive/](https://media.huira.space/data/stars/tycho2/archive/).
-  Each folder has its own `ATTRIBUTION.txt` and `SHA256SUMS`.
+  Each folder has its own `ATTRIBUTIONS.txt` and `SHA256SUMS`.
 - **Source:** [cdsarc.cds.unistra.fr/viz-bin/cat/I/259](https://cdsarc.cds.unistra.fr/viz-bin/cat/I/259)
 - **License:** [CC BY-NC 3.0 IGO](https://creativecommons.org/licenses/by-nc/3.0/igo/). You may
   share and adapt the catalog, with credit, for non-commercial purposes only.
@@ -72,8 +72,8 @@ distributed by CDS, Strasbourg (VizieR catalog I/259).
   - and acknowledge CDS: "This research has made use of the VizieR catalogue access tool, CDS,
     Strasbourg, France (DOI: 10.26093/cds/vizier)."
 
-## SPICE kernels
 
+## SPICE kernels
 SPICE kernels hold ephemerides, orientations, frames and clocks. Huira does not host them: they
 come straight from NASA's Navigation and Ancillary Information Facility (NAIF), which keeps them
 at permanent addresses. The examples that use SPICE list the kernels they load, with links.
@@ -97,37 +97,42 @@ at permanent addresses. The examples that use SPICE list the kernels they load, 
   - A mission's archive is cited by its DOI, which the PDS Engineering Node's DOI search finds
     from the archive's identifier (for example, `urn:nasa:pds:orex.spice` for OSIRIS-REx).
 
-## Gateway model
 
-NASA's 3D model of the Gateway core module.
+## NASA spacecraft models
+NASA's 3D models of spacecraft: the Gateway core module and OSIRIS-REx. The folder's
+`ATTRIBUTIONS.txt` gives each model's source page and original file name.
 
-- **Get it:** [media.huira.space/data/models/gateway/](https://media.huira.space/data/models/gateway/)
-- **Source:** [NASA's 3D Resources](https://science.nasa.gov/3d-resources/), published there as
-  `Gateway Core.glb`. Huira's copy is renamed `gateway.glb`, and otherwise unchanged.
-- **License:** NASA's 3D resources are free to use and not copyrighted. NASA's
-  [media usage guidelines](https://www.nasa.gov/nasa-brand-center/images-and-media/) apply: credit
-  NASA, do not use the model to imply that NASA endorses anything, and do not use NASA's insignia.
-- **Credit:** "Gateway model: NASA."
+- **Get them:** [media.huira.space/data/models/nasa/](https://media.huira.space/data/models/nasa/)
+  - `gateway.glb`: the Gateway core module, from [NASA's 3D Resources](https://science.nasa.gov/3d-resources/), published there as `Gateway Core.glb`.
+  - `orex.glb`: the OSIRIS-REx spacecraft, from [NASA Science](https://science.nasa.gov/resource/osiris-rex-3d-model/), published there as `Osiris_Rex.glb`, credited to NASA's Visualization Technology Applications and Development group (VTAD).
 
-## Earth textures
+  Huira's copies are renamed, and otherwise unchanged.
+- **License:** NASA's media are generally not copyrighted and may be used without permission.
+  NASA's [media usage guidelines](https://www.nasa.gov/nasa-brand-center/images-and-media/)
+  apply: credit NASA, do not use the models to imply that NASA endorses anything, and do not
+  use NASA's insignia.
+- **Credit:** "Gateway model: NASA." and "OSIRIS-REx model: NASA/VTAD." Or, for several models
+  at once, "Spacecraft models: NASA."
 
-8k textures of the Earth: its surface by day and by night, its clouds, a normal map, a
-roughness map and a city emission map.
 
-- **Get them:** [media.huira.space/data/textures/earth/](https://media.huira.space/data/textures/earth/)
-- **Source:** the day, night, cloud and normal maps are from
-  [Solar System Scope](https://www.solarsystemscope.com/textures/), based on NASA imagery. The
-  roughness map (`8k_earth_roughness_map.tif`) was made for Huira by Christopher Gnam, by
-  modifying Solar System Scope's specular map, and the city emission map
-  (`8k_earth_city_emission.jpg`) likewise, by modifying its night map.
+## Solar System textures
+Textures of the Earth and the planets, from Solar System Scope: Mercury, Venus (surface and
+atmosphere), Mars, Jupiter, Saturn and its rings, Uranus and Neptune, and for the Earth its
+surface by day and by night, its clouds, a normal map, a roughness map and a city emission map.
+
+- **Get them:** [media.huira.space/data/textures/solar_system/](https://media.huira.space/data/textures/solar_system/)
+- **Source:** [Solar System Scope](https://www.solarsystemscope.com/textures/), based on NASA elevation and imagery data, with colors tuned to true-color photographs from Messenger, Viking, Cassini and the Hubble Space Telescope. Solar System Scope notes that unmapped regions are filled with fictional terrain, and that colors are slightly more saturated than true color. Uranus and Neptune are only published at 2k; the rest are 8k (Venus's atmosphere, 4k).
+- **Modifications:** Two Earth maps were made for Huira by Christopher Gnam: 
+  - The roughness map (`8k_earth_roughness_map.tif`), by modifying the specular map.
+  - The city emission map (`8k_earth_city_emission.jpg`), by modifying the night map.
 - **License:** [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The roughness and city
   emission maps, adaptations, are distributed under the same license.
-- **Credit:** "Earth textures: Solar System Scope (solarsystemscope.com), CC BY 4.0. Roughness
-  map adapted from its specular map; city emission map adapted from its night map." Images
-  rendered with the textures should carry this credit too.
+- **Credit:** "Textures: Solar System Scope (solarsystemscope.com), CC BY 4.0." For the Earth,
+  add "Roughness map adapted from its specular map; city emission map adapted from its night
+  map." Images rendered with the textures should carry this credit too.
+
 
 ## Kernels that ship with Huira
-
 Huira includes two of NAIF's generic kernels, in its `data/kernels/` folder:
 
 - `lsk/naif0012.tls`: leap seconds, which Huira loads when it first converts a time.
@@ -135,3 +140,5 @@ Huira includes two of NAIF's generic kernels, in its `data/kernels/` folder:
   `huira.spice.load_default_pck()` loads.
 
 Both are unmodified, and redistributed under [NAIF's rules](https://naif.jpl.nasa.gov/naif/rules.html).
+
+ > Leap seconds are to be discontinued by 2035 (CGPM resolution, 2022), so `naif0012.tls` is unlikely to change often, if ever. It stays included either way: SPICE's time system needs a leap-seconds kernel to run.

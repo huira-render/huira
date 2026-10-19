@@ -80,7 +80,7 @@ kernels, for example, come from NASA's NAIF), and the commands to download them 
 which comes with Windows 10 and later, macOS and Linux. For example:
 
 ```bash
-curl -fLO https://media.huira.space/data/models/gateway/gateway.glb
+curl -fLO https://media.huira.space/data/models/nasa/gateway.glb
 ```
 
 In Windows PowerShell 5, type `curl.exe` rather than `curl`, which there is another command.
