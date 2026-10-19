@@ -2,6 +2,6 @@ Image API
 =========
 
 .. toctree::
-   :hidden:
+   :maxdepth: 1
 
    image

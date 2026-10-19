@@ -2,7 +2,7 @@ Scene API
 =========
 
 .. toctree::
-   :hidden:
+   :maxdepth: 1
 
    scene
    scene_view

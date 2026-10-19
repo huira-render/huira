@@ -1,7 +1,7 @@
 C++ API Reference
 =================
 
-The Huira C++ API is organized into four main modules. Select a module below to explore.
+The Huira C++ API is organized into the modules below. Select one to explore it.
 
 .. grid:: 2
     :gutter: 3
@@ -10,39 +10,73 @@ The Huira C++ API is organized into four main modules. Select a module below to 
         :link: core/index
         :link-type: doc
 
-        Fundamental types, math utilities, spectral bins, and unit systems. 
+        Types, constants, physics, time and intervals, rotations and transforms, spectral bins, units, and the concepts the templates are written against.
+
+    .. grid-item-card:: Scene Graph
+        :link: scene/index
+        :link-type: doc
+
+        Nodes, frames and instances; the Scene that holds them and the SceneView that fixes it at an instant for rendering.
 
     .. grid-item-card:: Handles API
         :link: handles/index
         :link-type: doc
 
-        Safe, smart-pointer wrappers for interacting with the Scene Graph. 
-        (Lights, Cameras, Frames).
+        Safe, smart-pointer wrappers for working with the Scene Graph: cameras, instances, lights, unresolved objects, meshes, models and frames.
 
-    .. grid-item-card:: Images API
-        :link: images/index
+    .. grid-item-card:: Assets
+        :link: assets/index
         :link-type: doc
 
-        Buffers, pixel formats, and I/O operations for rendering results.
+        Meshes and models, the glTF loader, lights, and unresolved objects: distant bodies rendered as points.
+
+    .. grid-item-card:: Cameras
+        :link: cameras/index
+        :link-type: doc
+
+        The camera model and pixel conventions, with apertures, distortion models, point spread functions and sensors.
 
     .. grid-item-card:: Render API
         :link: render/index
         :link-type: doc
 
-        Integrators, sampling strategies, and the main rendering pipeline.
+        The renderer and its frame buffer, rays and ray hits, and the sampler behind path tracing.
+
+    .. grid-item-card:: Images API
+        :link: images/index
+        :link-type: doc
+
+        The Image class and readers and writers for PNG, JPEG, TIFF, FITS, HDR, BMP and TGA.
+
+    .. grid-item-card:: Stars
+        :link: stars/index
+        :link-type: doc
+
+        The Star class behind catalog rendering.
+
+    .. grid-item-card:: Ephemeris
+        :link: ephemeris/index
+        :link-type: doc
+
+        The SPICE interface: kernels, ephemerides and frames from NAIF.
+
+    .. grid-item-card:: Logger
+        :link: util/logger
+        :link-type: doc
+
+        Huira's logging utilities.
 
 .. toctree::
    :hidden:
    :maxdepth: 2
 
+   core/index
+   scene/index
+   handles/index
    assets/index
    cameras/index
-   core/index
-   ephemeris/index
-   handles/index
-   images/index
    render/index
-   scene/index
+   images/index
    stars/index
-
+   ephemeris/index
    util/logger

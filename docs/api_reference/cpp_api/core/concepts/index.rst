@@ -2,7 +2,7 @@ Concepts
 ========
 
 .. toctree::
-   :hidden:
+   :maxdepth: 1
 
    numeric_concepts
    pixel_concepts
