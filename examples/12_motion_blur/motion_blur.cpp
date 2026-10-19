@@ -103,8 +103,7 @@ int main(int argc, char** argv)
         // in view, and otherwise as many as keep it within a tenth of a pixel of where it truly
         // is (the motion tolerance, which can be given after the number of samples). A number
         // of samples can be given instead, the same for everything.
-        huira::SceneView<TSpectral> scene_view(
-            scene, exposure, viewer, huira::ObservationMode::GEOMETRIC_STATE);
+        huira::SceneView<TSpectral> scene_view(scene, exposure, viewer);
         const std::size_t samples = scene_view.max_temporal_samples();
         std::cout << name << ": up to " << samples << " temporal sample"
                   << (samples == 1 ? "" : "s") << "\n";

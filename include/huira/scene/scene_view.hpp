@@ -66,7 +66,7 @@ class SceneView {
     SceneView(const Scene<TSpectral>& scene,
               const Interval& exposure_interval,
               const InstanceHandle<TSpectral>& camera_instance,
-              ObservationMode obs_mode,
+              ObservationMode obs_mode = ObservationMode::ABERRATED_STATE,
               std::optional<std::size_t> num_temporal_samples = std::nullopt,
               double motion_tolerance = DEFAULT_MOTION_TOLERANCE);
 
@@ -168,7 +168,7 @@ class SceneView {
     // of the exposure, from 0 to 1.
     std::optional<std::size_t> requested_temporal_samples_;
     double motion_tolerance_ = DEFAULT_MOTION_TOLERANCE;
-    ObservationMode obs_mode_ = ObservationMode::GEOMETRIC_STATE;
+    ObservationMode obs_mode_ = ObservationMode::ABERRATED_STATE;
     const Node<TSpectral>* camera_node_ = nullptr;
     double pixels_per_radian_ = 1.0;
     bool has_motion_blur_ = false;

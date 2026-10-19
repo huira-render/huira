@@ -107,8 +107,7 @@ int main()
                          huira::units::AstronomicalUnit(-std::sin(phase)),
                          huira::units::AstronomicalUnit(-std::cos(phase)));
 
-        huira::SceneView<TSpectral> scene_view(
-            scene, exposure, camera, huira::ObservationMode::GEOMETRIC_STATE);
+        huira::SceneView<TSpectral> scene_view(scene, exposure, camera);
         auto frame_buffer = camera_model.make_frame_buffer();
         frame_buffer.enable_sensor_response();
         renderer.render(scene_view, frame_buffer);

@@ -107,7 +107,7 @@ def main():
 
     time = huira.Time("2026-01-01T00:00:00")
     exposure = huira.Interval.from_start(time, us(25))
-    scene_view = SceneView(scene, exposure, camera, huira.ObservationMode.GEOMETRIC_STATE)
+    scene_view = SceneView(scene, exposure, camera)
 
     frame_buffer = camera_model.make_frame_buffer()
     frame_buffer.enable_sensor_response()

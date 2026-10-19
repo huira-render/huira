@@ -47,8 +47,7 @@ static void render(huira::Scene<TSpectral>& scene,
                    const huira::Interval& exposure,
                    const std::string& filename)
 {
-    huira::SceneView<TSpectral> scene_view(
-        scene, exposure, camera, huira::ObservationMode::GEOMETRIC_STATE);
+    huira::SceneView<TSpectral> scene_view(scene, exposure, camera);
     auto frame_buffer = camera_model.make_frame_buffer();
     frame_buffer.enable_sensor_response();
     huira::Renderer<TSpectral> renderer;

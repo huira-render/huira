@@ -84,7 +84,7 @@ def main():
 
     time = huira.Time("2026-01-01T00:00:00")
     exposure = huira.Interval.from_start(time, ms(1))
-    scene_view = SceneView(scene, exposure, camera, huira.ObservationMode.GEOMETRIC_STATE)
+    scene_view = SceneView(scene, exposure, camera)
 
     # Besides the sensor response, a frame buffer can hold images of what each pixel sees. Each
     # is filled only if enabled, since each costs memory and time:

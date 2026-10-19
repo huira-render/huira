@@ -129,8 +129,7 @@ int main(int argc, char** argv)
     const huira::Time time("2026-01-01T00:00:00");
 
     auto render = [&](const huira::Interval& exposure, const std::string& filename) {
-        huira::SceneView<TSpectral> scene_view(
-            scene, exposure, camera, huira::ObservationMode::GEOMETRIC_STATE);
+        huira::SceneView<TSpectral> scene_view(scene, exposure, camera);
         auto frame_buffer = camera_model.make_frame_buffer();
         frame_buffer.enable_sensor_response();
         renderer.render(scene_view, frame_buffer);

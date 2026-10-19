@@ -32,7 +32,7 @@ struct PoseContext {
     Time reference;
 
     /// How the scene view observes the scene.
-    ObservationMode observation_mode = ObservationMode::GEOMETRIC_STATE;
+    ObservationMode observation_mode = ObservationMode::ABERRATED_STATE;
 
     /// The same context at another time.
     [[nodiscard]] PoseContext at(const Time& t) const { return {t, reference, observation_mode}; }

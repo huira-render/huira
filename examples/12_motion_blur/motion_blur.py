@@ -101,7 +101,7 @@ def main():
         # in view, and otherwise as many as keep it within a tenth of a pixel of where it truly
         # is (the motion tolerance, which can be given after the number of samples). A number
         # of samples can be given instead, the same for everything.
-        scene_view = SceneView(scene, exposure, viewer, huira.ObservationMode.GEOMETRIC_STATE)
+        scene_view = SceneView(scene, exposure, viewer)
         samples = scene_view.max_temporal_samples()
         print(f"{name}: up to {samples} temporal sample{'' if samples == 1 else 's'}")
 

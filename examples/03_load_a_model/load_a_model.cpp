@@ -77,8 +77,7 @@ int main(int argc, char** argv)
 
     huira::Time time("2026-01-01T00:00:00");
     huira::Interval exposure = huira::Interval::from_start(time, 1_ms);
-    huira::SceneView<TSpectral> scene_view(
-        scene, exposure, camera, huira::ObservationMode::GEOMETRIC_STATE);
+    huira::SceneView<TSpectral> scene_view(scene, exposure, camera);
 
     auto frame_buffer = camera_model.make_frame_buffer();
     frame_buffer.enable_sensor_response();

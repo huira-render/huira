@@ -35,7 +35,9 @@ namespace huira {
  * @param scene Scene to view
  * @param exposure_interval Exposure interval. Poses set by hand hold at its reference time.
  * @param camera_instance Camera instance handle
- * @param obs_mode Observation mode
+ * @param obs_mode Where each thing is seen: ABERRATED_STATE (the default), with light time and
+ *        the aberration from the camera's velocity, as a camera really sees it;
+ *        GEOMETRIC_STATE, with light time alone; or TRUE_STATE, where it is at the instant
  * @param num_temporal_samples The number of temporal samples every moving thing is given, evenly
  *        spaced through the exposure, or none (the default) to choose them for each thing:
  *        one for whatever does not move in view, and otherwise as many as keep the path it is

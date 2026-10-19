@@ -83,11 +83,10 @@ int main()
     huira::Time time("2026-01-01T00:00:00");
     huira::Interval exposure = huira::Interval::from_start(time, 100_us);
 
-    // A SceneView is the scene as the camera sees it over the exposure. The observation mode
-    // says how light travel time is handled: GEOMETRIC_STATE corrects for it, TRUE_STATE does
-    // not, and ABERRATED_STATE also applies stellar aberration (see example 14).
-    huira::SceneView<TSpectral> scene_view(
-        scene, exposure, camera, huira::ObservationMode::GEOMETRIC_STATE);
+    // A SceneView is the scene as the camera sees it over the exposure: by default, as a real
+    // camera sees it, with the time light takes to arrive and the aberration from the camera's
+    // own motion (ABERRATED_STATE). Example 14 shows the other observation modes.
+    huira::SceneView<TSpectral> scene_view(scene, exposure, camera);
 
     // The frame buffer holds the rendered images. The sensor response is what the camera's
     // sensor reads out; example 04 shows the other images a frame buffer can hold.
