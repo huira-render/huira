@@ -1,8 +1,11 @@
 #pragma once
 
+#include <memory>
 #include <string>
+#include <vector>
 
 #include "huira/handles/camera_handle.hpp"
+#include "huira/scene/pose_sources_py.ipp"
 #include "huira/scene/scene.hpp"
 #include "pybind11/pybind11.h"
 #include "pybind11/stl.h"
@@ -11,13 +14,66 @@
 namespace py = pybind11;
 
 namespace huira {
+namespace detail {
+
+/// The scene a Python Scene object holds, or null before it is made.
+template <typename TSpectral>
+Scene<TSpectral>* scene_of(PyObject* self)
+{
+    auto* instance = reinterpret_cast<py::detail::instance*>(self);
+    const py::detail::value_and_holder held = instance->get_value_and_holder();
+    return held.holder_constructed() ? held.template value_ptr<Scene<TSpectral>>() : nullptr;
+}
+
+/// Show Python's garbage collector the functions the scene's nodes hold (tp_traverse).
+template <typename TSpectral>
+int traverse_scene(PyObject* self, visitproc visit, void* arg)
+{
+    Py_VISIT(Py_TYPE(self));
+    const Scene<TSpectral>* scene = scene_of<TSpectral>(self);
+    if (scene == nullptr) {
+        return 0;
+    }
+    std::vector<std::shared_ptr<py::function>> functions;
+    collect_held_pose_functions(*scene->root.get(), functions);
+    for (const auto& function : functions) {
+        Py_VISIT(function->ptr());
+    }
+    return 0;
+}
+
+/// Release the functions the scene's nodes hold, to break a cycle through them (tp_clear).
+template <typename TSpectral>
+int clear_scene(PyObject* self)
+{
+    const Scene<TSpectral>* scene = scene_of<TSpectral>(self);
+    if (scene == nullptr) {
+        return 0;
+    }
+    std::vector<std::shared_ptr<py::function>> functions;
+    collect_held_pose_functions(*scene->root.get(), functions);
+    for (const auto& function : functions) {
+        *function = py::function();
+    }
+    return 0;
+}
+
+} // namespace detail
 
 template <typename TSpectral>
 inline void bind_scene(py::module_& m)
 {
     using SceneType = Scene<TSpectral>;
 
-    py::class_<SceneType>(m, "Scene")
+    // The scene shows Python's garbage collector the position and rotation functions its nodes
+    // hold, and releases them when the collector clears it, so that a function that refers to
+    // the scene does not keep both alive (see detail::HeldPoseFunctions).
+    py::class_<SceneType>(m, "Scene", py::custom_type_setup([](PyHeapTypeObject* heap_type) {
+                              auto* type = &heap_type->ht_type;
+                              type->tp_flags |= Py_TPFLAGS_HAVE_GC;
+                              type->tp_traverse = &detail::traverse_scene<TSpectral>;
+                              type->tp_clear = &detail::clear_scene<TSpectral>;
+                          }))
         .def(py::init<>())
 
         // Root frame access
