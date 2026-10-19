@@ -14,6 +14,7 @@
 #include "huira/sampling/sampler.hpp"
 #include "huira/scene/scene_view.hpp"
 #include "huira/util/logger.hpp"
+#include "huira/util/removed_api.hpp"
 
 namespace huira {
 /**
@@ -60,7 +61,9 @@ class Renderer {
         max_bounces_ = max_bounces;
     }
 
-    /// Enable or disable dynamic sampling of pixels based on variance.
+    /// Turn dynamic sampling on or off (the default). On, each pixel is traced with as many of
+    /// its spp samples as bring its noise under the noise threshold, and at least the minimum,
+    /// judged with its neighbours' (see set_noise_threshold()).
     void set_dynamic_sampling(bool dynamic_sample = true) { dynamic_sampling_ = dynamic_sample; }
 
     /// Set the minimum samples per pixel for dynamic sampling: at least 2, since one sample has
@@ -75,16 +78,41 @@ class Renderer {
         min_spp_ = min_samples;
     }
 
-    /// Set the variance threshold for dynamic sampling: non-negative and finite (0 never stops
-    /// early).
-    void set_variance_threshold(float threshold)
+    /// The default noise threshold for dynamic sampling (see set_noise_threshold()).
+    static constexpr float DEFAULT_NOISE_THRESHOLD = 0.01f;
+
+    /**
+     * @brief Set how noisy dynamic sampling leaves a pixel: non-negative and finite (0 never
+     * stops early).
+     *
+     * A pixel's noise is the standard error of its mean radiance, relative to that mean: 0.01
+     * leaves it within about 1% of what more samples would give. Pixels are traced in rounds,
+     * the minimum number of samples and then twice as many each round, up to spp, and a pixel
+     * samples on while it or any of its eight neighbours is noisier than the threshold. A pixel
+     * whose samples have all happened to find no light so samples on among neighbours that found
+     * some; where no pixel's samples differ (nothing but sky, or no light at all), the pixels
+     * stop after the minimum.
+     */
+    void set_noise_threshold(float threshold)
     {
         if (!(threshold >= 0.f) || !std::isfinite(threshold)) {
-            HUIRA_THROW_ERROR("Renderer::set_variance_threshold - The threshold must be "
+            HUIRA_THROW_ERROR("Renderer::set_noise_threshold - The threshold must be "
                               "non-negative and finite: " +
                               std::to_string(threshold));
         }
-        variance_threshold_ = threshold;
+        noise_threshold_ = threshold;
+    }
+
+    /// How noisy dynamic sampling leaves a pixel (see set_noise_threshold()).
+    [[nodiscard]] float noise_threshold() const { return noise_threshold_; }
+
+    template <typename... Args>
+    void set_variance_threshold(Args&&...)
+    {
+        static_assert(detail::removed_api<Args...>,
+                      "set_variance_threshold() was removed in v0.9.11. Dynamic sampling now "
+                      "judges a pixel by the noise in its mean relative to it, with its "
+                      "neighbours: use set_noise_threshold(), where 0.01 is about 1% noise.");
     }
 
     /// Set the indirect lighting clamp threshold: non-negative, or infinite (the default) for
@@ -251,7 +279,7 @@ class Renderer {
 
     bool dynamic_sampling_ = false;
     int min_spp_ = 16;
-    float variance_threshold_ = 0.001f;
+    float noise_threshold_ = DEFAULT_NOISE_THRESHOLD;
 
     float indirect_clamp_threshold_ = std::numeric_limits<float>::infinity();
 };

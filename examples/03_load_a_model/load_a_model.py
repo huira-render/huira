@@ -91,12 +91,13 @@ def main():
     renderer.set_max_bounces(3)
     renderer.set_indirect_clamp(10.0)
 
-    # Dynamic sampling stops tracing a pixel once its variance, relative to its brightness, is
-    # below a threshold (0.001 by default), after a minimum number of samples: flat and empty
-    # parts of the image finish early, and the samples go where the noise is.
+    # Dynamic sampling stops tracing a pixel once its noise (the uncertainty in its brightness,
+    # relative to it) and its neighbours' is below a threshold (0.01, about 1%, by default),
+    # after a minimum number of samples: flat and empty parts of the image finish early, and
+    # the samples go where the noise is.
     renderer.set_dynamic_sampling(True)
     renderer.set_min_samples(16)
-    renderer.set_variance_threshold(0.001)
+    renderer.set_noise_threshold(0.01)
 
     # The camera's optics are precomputed before the first render. Doing it here keeps that time
     # out of the render (and is when any problem with the settings is reported):

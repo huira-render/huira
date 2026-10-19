@@ -37,6 +37,7 @@ set(UNIT_TESTS
     huira/render/test_look_at.cpp
     huira/render/test_motion_poses.cpp
     huira/render/test_temporal_samples.cpp
+    huira/render/test_dynamic_sampling.cpp
     huira/render/test_non_finite_radiance.cpp
     huira/render/test_object_ids.cpp
     huira/render/test_psf_switch.cpp

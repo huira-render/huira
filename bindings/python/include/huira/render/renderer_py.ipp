@@ -1,11 +1,26 @@
 #pragma once
 
+#include <map>
+#include <string>
+
 #include "huira/render/renderer.hpp"
 #include "pybind11/pybind11.h"
 
 namespace py = pybind11;
 
 namespace huira {
+namespace detail {
+/// Renderer methods removed from the Python API, with when and what to use instead.
+inline const std::map<std::string, std::string>& removed_renderer_methods()
+{
+    static const std::map<std::string, std::string> removed{
+        {"set_variance_threshold",
+         "v0.9.11. Dynamic sampling now judges a pixel by the noise in its mean relative to it, "
+         "with its neighbours: use set_noise_threshold(), where 0.01 is about 1% noise."},
+    };
+    return removed;
+}
+} // namespace detail
 
 template <IsSpectral TSpectral>
 void bind_renderer(py::module_& m)
@@ -23,9 +38,22 @@ void bind_renderer(py::module_& m)
         .def("set_max_bounces", &Renderer::set_max_bounces, py::arg("max_bounces"))
         .def("set_dynamic_sampling",
              &Renderer::set_dynamic_sampling,
-             py::arg("dynamic_sampling") = true)
+             py::arg("dynamic_sampling") = true,
+             "Turn dynamic sampling on or off (the default). On, each pixel is traced with as "
+             "many of its samples as bring its noise under the noise threshold, and at least the "
+             "minimum, judged with its neighbours'. See set_noise_threshold().")
         .def("set_min_samples", &Renderer::set_min_samples, py::arg("min_samples"))
-        .def("set_variance_threshold", &Renderer::set_variance_threshold, py::arg("threshold"))
+        .def("set_noise_threshold",
+             &Renderer::set_noise_threshold,
+             py::arg("threshold"),
+             "Set how noisy dynamic sampling leaves a pixel: the standard error of its mean "
+             "radiance, relative to that mean (0.01, the default, is about 1%). Pixels are traced "
+             "in rounds, the minimum number of samples and then twice as many each round, up to "
+             "the samples per pixel, and a pixel samples on while it or any of its eight "
+             "neighbours is noisier than this. 0 never stops early.")
+        .def("noise_threshold",
+             &Renderer::noise_threshold,
+             "How noisy dynamic sampling leaves a pixel. See set_noise_threshold().")
         .def("set_indirect_clamp", &Renderer::set_indirect_clamp, py::arg("indirect_clamp"))
         .def("set_unresolved_occlusion",
              &Renderer::set_unresolved_occlusion,
@@ -69,7 +97,22 @@ void bind_renderer(py::module_& m)
         .def("set_region_cull_validation",
              &Renderer::set_region_cull_validation,
              py::arg("enable") = true)
-        .def("__repr__", [](const Renderer&) { return "Renderer()"; });
+        .def("__repr__", [](const Renderer&) { return "Renderer()"; })
+
+        // Methods removed in earlier versions do not exist, so hasattr() is False for them, but
+        // using one names what replaced it. (Python calls __getattr__ only for names it cannot
+        // find otherwise.)
+        .def("__getattr__", [](const py::object& self, const std::string& name) -> py::object {
+            const auto& removed = detail::removed_renderer_methods();
+            const auto it = removed.find(name);
+            if (it != removed.end()) {
+                throw py::attribute_error("API BREAKING CHANGE: " + name + " was removed in " +
+                                          it->second);
+            }
+            throw py::attribute_error(
+                "'" + py::str(py::type::of(self).attr("__name__")).cast<std::string>() +
+                "' object has no attribute '" + name + "'");
+        });
 }
 
 } // namespace huira

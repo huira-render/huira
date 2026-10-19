@@ -227,20 +227,6 @@ void Renderer<TSpectral>::render(SceneView<TSpectral>& scene_view,
 }
 
 /**
- * @brief Path trace a scene view into a frame buffer.
- *
- * Traces camera rays through each pixel, evaluating direct lighting with
- * shadow rays and indirect illumination via recursive path tracing with
- * Russian roulette termination.
- *
- * The rendering is parallelized over tiles using TBB. Each tile accumulates
- * results from multiple samples per pixel (spp_) into the frame buffer.
- *
- * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
- * @param scene_view The scene view containing geometry, lights, and environment
- * @param frame_buffer The frame buffer to render into
- */
-/**
  * @brief Build the cones subtending each TLAS occupant, as seen from the camera.
  *
  * Each occupant's bounding sphere is inflated by the aperture's bounding radius before
@@ -381,6 +367,22 @@ typename Renderer<TSpectral>::DirectionCone Renderer<TSpectral>::tile_direction_
     return cone;
 }
 
+/**
+ * @brief Path trace a scene view into a frame buffer.
+ *
+ * Traces camera rays through each pixel, evaluating direct lighting with
+ * shadow rays and indirect illumination via recursive path tracing with
+ * Russian roulette termination.
+ *
+ * The rendering is parallelized over tiles using TBB. Each tile accumulates
+ * results from multiple samples per pixel (spp_) into the frame buffer: all of
+ * them at once, or, with dynamic sampling, in rounds, as many as each pixel and
+ * its neighbours need (see set_noise_threshold()).
+ *
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
+ * @param scene_view The scene view containing geometry, lights, and environment
+ * @param frame_buffer The frame buffer to render into
+ */
 template <IsSpectral TSpectral>
 Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_view,
                                                   FrameBuffer<TSpectral>& frame_buffer)
@@ -508,9 +510,565 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
     std::atomic<std::size_t> dropped_samples{0};
     std::atomic<std::size_t> pixels_without_estimate{0};
 
+    // What the frame buffer records, and where each pixel's samples are summed: in the images
+    // that receive them, divided by the samples once the pixel is done (see finish_pixel).
+    const bool has_power = frame_buffer.has_received_power();
+    const bool has_direct = frame_buffer.has_received_direct_power();
+    const bool has_indirect = frame_buffer.has_received_indirect_power();
+    const bool has_albedo = frame_buffer.has_albedo();
+    const bool has_ids = frame_buffer.has_object_ids();
+    const bool has_depth = frame_buffer.has_depth();
+    const bool has_camera_normals = frame_buffer.has_camera_normals();
+    const bool has_world_normals = frame_buffer.has_world_normals();
+    const bool has_normals = has_camera_normals || has_world_normals;
+    Image<Vec3<float>> normal_sum(
+        has_normals ? fb_width : 0, has_normals ? fb_height : 0, Vec3<float>{0.f});
+
+    // A pixel's progress, kept from one round of samples to the next.
+    struct PixelProgress {
+        double time_start = 0.0; ///< Where its samples' times start (see trace_pixel).
+        float mean = 0.f;        ///< Of its samples' total radiance, kept finite.
+        float m2 = 0.f;          ///< Their sum of squared deviations from the mean.
+        float closest_depth = std::numeric_limits<float>::infinity();
+        int drawn = 0; ///< Samples traced.
+        int taken = 0; ///< Those with a finite radiance.
+        bool primary_occluder = false;
+        bool hit_geometry = false; ///< By any of its rays.
+    };
+
+    // What a tile's samples found in one round:
+    struct TileTally {
+        bool hit_geometry = false;
+        std::size_t dropped_samples = 0;
+    };
+
+    // Trace a pixel's samples from the next one it has not traced up to (but not including)
+    // s_end, adding them to its sums.
+    auto trace_pixel = [&](int x,
+                           int y,
+                           PixelProgress& px,
+                           int s_end,
+                           RandomSampler<float>& sampler,
+                           std::vector<float>& prev_reflector_pdf,
+                           TileTally& tally) {
+        // With motion blur, each sample is traced at its own time in the exposure. A pixel's
+        // samples step through the exposure by the golden ratio from a random start (an
+        // additive recurrence), so however many are taken, as when dynamic sampling stops
+        // early, they cover it evenly, where independent random times clump and leave gaps: an
+        // object that crosses a pixel for a short part of the exposure is caught a steady number
+        // of times rather than a random one. Each time is still uniform over the exposure, as
+        // the start is random.
+        constexpr double inv_golden_ratio = 0.6180339887498949;
+
+        for (int s = px.drawn; s < s_end; ++s) {
+            ++px.drawn;
+            // Jittered sub-pixel sample:
+            float sx = static_cast<float>(x) + sampler.get_1d();
+            float sy = static_cast<float>(y) + sampler.get_1d();
+
+            // Generate camera ray from pixel coordinates:
+            Ray<TSpectral> ray = camera->sensor_ray_(Pixel{sx, sy}, sampler);
+
+            // The sample's time, from 0 to 1 over the exposure. It is this
+            // sample's own: every ray of its path (bounces, shadow rays) is traced
+            // at it.
+            const float time =
+                has_motion_blur
+                    ? static_cast<float>(
+                          std::fmod(px.time_start + inv_golden_ratio * static_cast<double>(s), 1.0))
+                    : 0.f;
+
+            TSpectral throughput{1};
+            TSpectral direct_radiance{0};
+            TSpectral indirect_radiance{0};
+
+            float prev_roughness = 0.0f;
+
+            float prev_bsdf_pdf = 1.0f;
+            Interaction<TSpectral> prev_isect;
+
+            MediumStack<TSpectral> medium_stack;
+
+            for (int bounce = 0; bounce < max_bounces_; ++bounce) {
+                HitRecord hit = scene_view.intersect(ray, time);
+
+                if (!medium_stack.is_empty()) {
+                    const Medium<TSpectral>* current_medium = medium_stack.top();
+
+                    const float t_seg_start = ray.tnear();
+                    const Ray<TSpectral> march_ray(ray.at(t_seg_start), ray.direction());
+                    const float t_seg = hit.t - t_seg_start;
+
+                    auto opt_mi = current_medium->sample_free_path(march_ray, sampler);
+                    auto props = current_medium->get_properties(march_ray.origin());
+                    TSpectral ext = props.extinction();
+
+                    float avg_ext = 0.0f;
+                    for (std::size_t c = 0; c < TSpectral::size(); ++c) {
+                        avg_ext += ext[c];
+                    }
+                    avg_ext /= static_cast<float>(TSpectral::size());
+
+                    if (opt_mi && opt_mi->t < t_seg) {
+                        float t = opt_mi->t;
+                        TSpectral Tr{0.f};
+                        for (std::size_t c = 0; c < TSpectral::size(); ++c) {
+                            Tr[c] = std::exp(-ext[c] * t);
+                        }
+                        float pdf = avg_ext * std::exp(-avg_ext * t);
+                        throughput = throughput * props.scattering * Tr * (1.0f / pdf);
+
+                        Interaction<TSpectral> vol_isect;
+                        vol_isect.position = opt_mi->p;
+                        vol_isect.wo = opt_mi->wo;
+                        vol_isect.normal_g = Vec3<float>{0.f};
+                        vol_isect.normal_s = Vec3<float>{0.f};
+
+                        for (const auto& light_instance : lights) {
+                            Transform<float> current_transform =
+                                interpolate_transform(light_instance.transforms, time);
+
+                            auto sample = light_instance.light->sample_li(
+                                vol_isect, current_transform, sampler);
+
+                            if (!sample) {
+                                continue;
+                            }
+
+                            const auto& ls = *sample;
+
+                            Ray<TSpectral> shadow_ray(opt_mi->p, ls.wi);
+                            TSpectral shadow_transmittance = scene_view.evaluate_transmittance(
+                                shadow_ray, ls.distance, medium_stack, sampler, time);
+
+                            if (shadow_transmittance.max() <= 0.0f) {
+                                continue;
+                            }
+                            float phase_val = opt_mi->phase_function->evaluate(opt_mi->wo, ls.wi);
+
+                            TSpectral Ld =
+                                throughput * (ls.Li / ls.pdf) * phase_val * shadow_transmittance;
+
+                            if (bounce == 0) {
+                                direct_radiance += Ld;
+                            } else {
+                                indirect_radiance += Ld;
+                            }
+                        }
+
+                        PhaseSample ps = opt_mi->phase_function->sample(opt_mi->wo, sampler);
+
+                        float phase_eval = opt_mi->phase_function->evaluate(opt_mi->wo, ps.wi);
+                        throughput = throughput * (phase_eval / ps.p);
+
+                        ray = Ray<TSpectral>(opt_mi->p, ps.wi);
+                        prev_bsdf_pdf = ps.p;
+                        continue;
+
+                    } else if (std::isinf(t_seg)) {
+                        // The ray leaves the scene without leaving the medium
+                        // it entered, as it does after passing through a
+                        // surface that encloses nothing (an alpha-cut panel,
+                        // say): every primitive carries a medium, a vacuum by
+                        // default. Over an infinite path the transmittance is 1
+                        // in a vacuum and 0 otherwise; computed as below, it
+                        // would be exp(-0 * inf) / exp(-0 * inf): NaN.
+                        TSpectral Tr{0.f};
+                        for (std::size_t c = 0; c < TSpectral::size(); ++c) {
+                            Tr[c] = (ext[c] > 0.f) ? 0.f : 1.f;
+                        }
+                        throughput = throughput * Tr;
+                    } else {
+                        TSpectral Tr{0.f};
+                        for (std::size_t c = 0; c < TSpectral::size(); ++c) {
+                            Tr[c] = std::exp(-ext[c] * t_seg);
+                        }
+                        float pdf = std::exp(-avg_ext * t_seg);
+                        throughput = throughput * Tr * (1.0f / pdf);
+                    }
+                }
+
+                if (!hit.hit()) {
+                    // Sample environment map using ray direction
+                    Vec3<float> d = glm::normalize(ray.direction());
+                    float u = 0.5f + std::atan2(d.z, d.x) * (0.5f * INV_PI<float>());
+                    float v = 0.5f - std::asin(std::clamp(d.y, -1.0f, 1.0f)) * INV_PI<float>();
+
+                    TSpectral env_radiance = background->sample_bilinear(u, v);
+
+                    if (bounce == 0) {
+                        direct_radiance += throughput * env_radiance;
+                    } else {
+                        indirect_radiance += throughput * env_radiance;
+                    }
+                    break;
+                }
+
+                tally.hit_geometry = true;
+                px.hit_geometry = true;
+
+                const auto& mapping = scene_view.instance_mappings_[hit.inst_id];
+
+                if (bounce == 0 && mapping.type == GeometryType::Primitive) {
+                    px.primary_occluder = true;
+                }
+
+                if (mapping.type == GeometryType::Light) {
+                    const auto& light_instance = lights[mapping.light_index];
+
+                    Vec3<float> hit_p = ray.origin() + ray.direction() * hit.t;
+                    Vec3<float> emission_dir = -ray.direction();
+                    TSpectral Le = light_instance.light->radiance(hit_p, emission_dir);
+
+                    float mis_weight = 1.0f;
+
+                    // Only apply MIS weighting if this wasn't the first camera ray,
+                    // and if it wasn't a perfect mirror reflection (delta BSDF).
+                    if (bounce > 0) {
+                        Transform<float> current_transform =
+                            interpolate_transform(light_instance.transforms, time);
+
+                        float light_pdf = light_instance.light->pdf_li(
+                            prev_isect, current_transform, ray.direction());
+                        mis_weight = power_heuristic(prev_bsdf_pdf, light_pdf);
+                    }
+
+                    TSpectral final_radiance = throughput * Le * mis_weight;
+
+                    if (bounce == 0) {
+                        direct_radiance += final_radiance;
+                    } else {
+                        indirect_radiance += final_radiance;
+                    }
+
+                    // Terminate for hitting light:
+                    break;
+                } else {
+
+                    // Resolve full shading data:
+                    Interaction<TSpectral> isect = scene_view.resolve_hit(ray, hit);
+
+                    // Look up mesh material:
+                    const auto& batch = scene_view.primitives_[mapping.batch_index];
+                    const auto* material = batch.primitive->material.get();
+
+                    // Evaluate material textures to get the opacity parameter:
+                    auto [params, shading_isect] = material->evaluate(isect);
+
+                    if (params.opacity < 1.0f) {
+                        if (sampler.get_1d() > params.opacity) {
+                            ray =
+                                Ray<TSpectral>(ray.origin(), ray.direction(), advance_ray_t(hit.t));
+
+                            medium_stack.toggle(batch.primitive.get());
+
+                            bounce--; // Don't count this towards bounce counts
+                            continue;
+                        }
+                    }
+
+                    // Path regulatization
+                    if (bounce > 0) {
+                        params.roughness = std::max(params.roughness, prev_roughness);
+                    }
+                    prev_roughness = params.roughness;
+
+                    // Record primary ray info:
+                    if (bounce == 0) {
+                        if (has_ids && hit.t < px.closest_depth) {
+                            frame_buffer.set_object_ids(x, y, scene_view.object_ids(hit));
+                        }
+                        px.closest_depth = std::min(px.closest_depth, hit.t);
+                        if (has_normals) {
+                            normal_sum(x, y) += shading_isect.normal_s;
+                        }
+                        if (has_albedo) {
+                            frame_buffer.albedo()(x, y) += params.albedo;
+                        }
+                    }
+
+                    // The surface's own emission along the ray, from either
+                    // side. An emissive surface is not a light: nothing samples
+                    // it (lights, nor reflector NEE, whose
+                    // direct_lit_radiance() leaves emission out), so it is
+                    // only ever reached here, and counted in full.
+                    const TSpectral Le = throughput * params.emission;
+                    if (bounce == 0) {
+                        direct_radiance += Le;
+                    } else {
+                        indirect_radiance += Le;
+                    }
+
+                    float reflector_nee_weight = 1.0f;
+                    const std::size_t hit_source = scene_view.indirect_source_index(hit);
+                    if (bounce > 0 && hit_source != SceneView<TSpectral>::NO_INDIRECT_SOURCE) {
+                        reflector_nee_weight =
+                            power_heuristic(prev_bsdf_pdf, prev_reflector_pdf[hit_source]);
+                    }
+
+                    // Direct lighting (next event estimation):
+                    for (const auto& light_instance : lights) {
+                        TSpectral Ld = throughput * reflector_nee_weight *
+                                       scene_view.sample_light_contribution_(light_instance,
+                                                                             isect,
+                                                                             material,
+                                                                             params,
+                                                                             shading_isect,
+                                                                             medium_stack,
+                                                                             sampler,
+                                                                             time);
+                        if (bounce == 0) {
+                            direct_radiance += Ld;
+                        } else {
+                            indirect_radiance += Ld;
+                        }
+                    }
+
+                    // Reflector next event estimation:
+                    const auto& sources = scene_view.indirect_sources();
+                    for (std::size_t k = 0; k < sources.size(); ++k) {
+                        const auto& source = sources[k];
+
+                        SphereConeSample cs = source.sample_toward(isect.position, time, sampler);
+                        if (cs.pdf <= 0.0f) {
+                            continue;
+                        }
+
+                        // Evaluate the surface response first
+                        TSpectral f = material->bsdf_eval(isect.wo, cs.wi, {params, shading_isect});
+                        float cos_theta = std::max(0.0f, glm::dot(shading_isect.normal_s, cs.wi));
+                        if (cos_theta <= 0.0f || f.max() <= 0.0f) {
+                            continue;
+                        }
+
+                        // Trace toward the source's bounding proxy:
+                        Vec3<float> probe_normal = (glm::dot(cs.wi, isect.normal_g) < 0.0f)
+                                                       ? -isect.normal_g
+                                                       : isect.normal_g;
+                        Vec3<float> probe_origin =
+                            offset_spawn_point(isect.position, probe_normal, isect.p_err);
+                        Ray<TSpectral> probe_ray(probe_origin, cs.wi);
+                        HitRecord probe_hit = scene_view.intersect(probe_ray, time);
+
+                        if (scene_view.indirect_source_index(probe_hit) != k) {
+                            continue;
+                        }
+
+                        // Radiance leaving the reflector toward this vertex:
+                        TSpectral Lr = scene_view.direct_lit_radiance(
+                            probe_ray, probe_hit, sampler, time, medium_stack);
+                        if (Lr.max() <= 0.0f) {
+                            continue;
+                        }
+
+                        // MIS against BSDF sampling
+                        float bsdf_pdf =
+                            material->bsdf_pdf(isect.wo, cs.wi, {params, shading_isect});
+                        const bool partner_truncated = (bounce + 1 >= max_bounces_);
+                        float w = partner_truncated ? 1.0f : power_heuristic(cs.pdf, bsdf_pdf);
+
+                        TSpectral Lr_contrib = throughput * f * cos_theta * (Lr / cs.pdf) * w;
+                        if (bounce == 0) {
+                            direct_radiance += Lr_contrib;
+                        } else {
+                            indirect_radiance += Lr_contrib;
+                        }
+                    }
+
+                    // Sample the BSDF:
+                    float u1 = sampler.get_1d();
+                    float u2 = sampler.get_1d();
+
+                    BSDFSample<TSpectral> bs =
+                        material->bsdf_sample(isect.wo, {params, shading_isect}, u1, u2);
+
+                    if (!bs.is_valid()) {
+                        break;
+                    }
+
+                    // Direction changes: offset along the geometric normal by
+                    // the propagated position-error bound (see interaction.hpp).
+                    Vec3<float> bounce_normal =
+                        (glm::dot(bs.wi, isect.normal_g) < 0.0f) ? -isect.normal_g : isect.normal_g;
+                    Vec3<float> bounce_origin =
+                        offset_spawn_point(isect.position, bounce_normal, isect.p_err);
+
+                    prev_bsdf_pdf = bs.is_delta ? 0.0f : bs.pdf;
+                    prev_isect = shading_isect;
+
+                    for (std::size_t k = 0; k < prev_reflector_pdf.size(); ++k) {
+                        prev_reflector_pdf[k] = sources[k].pdf_toward(isect.position, time, bs.wi);
+                    }
+
+                    throughput = throughput * bs.value;
+
+                    // Russian roulette (after a few bounces):
+                    if (bounce >= 3) {
+                        float p_continue = std::clamp(throughput.max(), 0.05f, 0.95f);
+                        if (sampler.get_1d() > p_continue) {
+                            break;
+                        }
+                        throughput = throughput / p_continue;
+                    }
+
+                    // Spawn next ray:
+                    ray = Ray<TSpectral>(bounce_origin, bs.wi);
+
+                    const float wo_side = glm::dot(isect.wo, isect.normal_g);
+                    const float wi_side = glm::dot(bs.wi, isect.normal_g);
+                    const bool is_transmission = (wo_side * wi_side) < 0.0f;
+                    if (is_transmission) {
+                        medium_stack.toggle(batch.primitive.get());
+                    }
+                }
+            }
+
+            // Indirect radiance clamping:
+            float current_indirect_max = indirect_radiance.max();
+            if (current_indirect_max > indirect_clamp_threshold_) {
+                indirect_radiance *= (indirect_clamp_threshold_ / current_indirect_max);
+            }
+
+            TSpectral sample_radiance = direct_radiance + indirect_radiance;
+
+            // A sample whose radiance is not finite, in any channel, is left out of the pixel's
+            // average, and counted (see the warning below).
+            if (!detail::all_finite(sample_radiance)) {
+                ++tally.dropped_samples;
+                continue;
+            }
+
+            ++px.taken;
+
+            // The mean and spread of the samples' total radiance (Welford's online update), by
+            // which dynamic sampling judges the pixel's noise:
+            const float total = sample_radiance.total();
+            const float delta = total - px.mean;
+            px.mean += delta / static_cast<float>(px.taken);
+            px.m2 += delta * (total - px.mean);
+
+            if (has_direct) {
+                frame_buffer.received_direct_power()(x, y) += direct_radiance;
+            }
+            if (has_indirect) {
+                frame_buffer.received_indirect_power()(x, y) += indirect_radiance;
+            }
+            if (has_power) {
+                received_power(x, y) += sample_radiance;
+            }
+        }
+    };
+
+    // Start a pixel: clear its sums, which the frame buffer can hold from an earlier render, and
+    // draw where its samples' times start.
+    auto start_pixel = [&](int x, int y, PixelProgress& px, RandomSampler<float>& sampler) {
+        px = PixelProgress{};
+        px.time_start = has_motion_blur ? sampler.get_1d() : 0.0;
+        if (has_direct) {
+            frame_buffer.received_direct_power()(x, y) = TSpectral{0};
+        }
+        if (has_indirect) {
+            frame_buffer.received_indirect_power()(x, y) = TSpectral{0};
+        }
+        if (has_power) {
+            received_power(x, y) = TSpectral{0};
+        }
+        if (has_albedo) {
+            frame_buffer.albedo()(x, y) = TSpectral{0};
+        }
+        if (has_ids) {
+            frame_buffer.set_object_ids(x, y, ObjectIds{});
+        }
+        if (has_normals) {
+            normal_sum(x, y) = Vec3<float>{0.f};
+        }
+    };
+
+    // Finish a pixel: average its sums. The radiance is averaged over the samples kept; a pixel
+    // with none has no estimate of it, and is NaN, which the sensor's readout reports. What the
+    // rays hit first (albedo, normals) is averaged over every sample.
+    auto finish_pixel =
+        [&](int x, int y, const PixelProgress& px, std::size_t& pixels_with_no_estimate) {
+            const bool has_estimate = px.taken > 0;
+            if (!has_estimate) {
+                ++pixels_with_no_estimate;
+            }
+            const float inv_spp = has_estimate ? 1.0f / static_cast<float>(px.taken) : 0.0f;
+            const float inv_drawn = 1.0f / static_cast<float>(px.drawn);
+            const TSpectral no_estimate{std::numeric_limits<float>::quiet_NaN()};
+            const auto average_power = [&](TSpectral& sum) {
+                sum = camera->pixel_radiance_to_power(x, y) *
+                      (has_estimate ? sum * inv_spp : no_estimate);
+            };
+
+            if (px.primary_occluder) {
+                occluder_mask_(x, y) = uint8_t{1};
+                any_occluder.store(true, std::memory_order_relaxed);
+            }
+
+            if (split_sky && !px.hit_geometry) {
+                saw_only_sky(x, y) = uint8_t{1};
+            }
+
+            if (has_depth && px.closest_depth < std::numeric_limits<float>::infinity()) {
+                frame_buffer.depth()(x, y) = px.closest_depth;
+            }
+
+            if (has_albedo) {
+                frame_buffer.albedo()(x, y) = frame_buffer.albedo()(x, y) * inv_drawn;
+            }
+
+            if (has_normals) {
+                const Vec3<float> avg_camera_normals = glm::normalize(normal_sum(x, y) * inv_drawn);
+                if (has_camera_normals) {
+                    frame_buffer.camera_normals()(x, y) = avg_camera_normals;
+                }
+                if (has_world_normals) {
+                    frame_buffer.world_normals()(x, y) =
+                        scene_view.camera_to_world_[0].apply_to_direction(avg_camera_normals);
+                }
+            }
+
+            if (has_direct) {
+                average_power(frame_buffer.received_direct_power()(x, y));
+            }
+            if (has_indirect) {
+                average_power(frame_buffer.received_indirect_power()(x, y));
+            }
+            if (has_power) {
+                average_power(received_power(x, y));
+            }
+        };
+
+    // Dynamic sampling. The pixels are traced in rounds: first min_spp samples each, then, while
+    // any is still noisier than the noise threshold, twice as many as before, up to spp, for the
+    // pixels near one. A pixel's noise is the standard error of its mean radiance, relative to
+    // that mean: it falls as samples accumulate, and does not depend on how bright the scene is.
+    // A pixel samples on while it, or any of its eight neighbours, is too noisy. Judged alone, a
+    // pixel whose samples have all happened to find no light (as in a shadow that only light from
+    // nearby surfaces reaches) would stop, black, since samples with no spread look exact; among
+    // neighbours that found some, it samples on with them. An area that truly gets no light, or
+    // nothing but a uniform sky, has no spread anywhere, and stops after the first round.
+    //
+    // Each tile's samples in a round come from a sampler seeded by the tile and the round, so the
+    // image does not depend on how the tiles are shared among threads. Without dynamic sampling
+    // there is one round, of spp samples, seeded by the tile alone.
+    const bool dynamic = dynamic_sampling_;
+    const int first_round_samples = dynamic ? std::min(min_spp_, spp_) : spp_;
+    const auto pixel_index = [fb_width](int x, int y) {
+        return static_cast<std::size_t>(y) * static_cast<std::size_t>(fb_width) +
+               static_cast<std::size_t>(x);
+    };
+    std::vector<PixelProgress> progress(dynamic ? pixel_index(0, fb_height) : 0);
+    const std::size_t n_tiles = static_cast<std::size_t>(num_tiles);
+    std::vector<uint8_t> tile_skipped(n_tiles, uint8_t{0});
+    std::vector<uint8_t> tile_was_culled(n_tiles, uint8_t{0});
+    std::vector<uint8_t> tile_hit_geometry(n_tiles, uint8_t{0});
+
     tbb::parallel_for(
         tbb::blocked_range<int>(0, num_tiles), [&](const tbb::blocked_range<int>& range) {
             for (int tile_idx = range.begin(); tile_idx < range.end(); ++tile_idx) {
+                const std::size_t tile = static_cast<std::size_t>(tile_idx);
                 int tile_y = tile_idx / tiles_x;
                 int tile_x = tile_idx % tiles_x;
 
@@ -518,7 +1076,6 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                 int y0 = tile_y * TILE_SIZE;
                 int x1 = std::min(x0 + TILE_SIZE, fb_width);
                 int y1 = std::min(y0 + TILE_SIZE, fb_height);
-
                 bool tile_culled = false;
                 if (cull_regions) {
                     // The jittered sample domain is the closed rectangle [x0, x1] x
@@ -541,6 +1098,7 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                 if (tile_culled) {
                     culled_tiles.fetch_add(1, std::memory_order_relaxed);
                 }
+                tile_was_culled[tile] = tile_culled ? uint8_t{1} : uint8_t{0};
 
                 // In validation mode nothing is actually skipped; the tile is traced
                 // normally and checked afterwards against the decision that was made.
@@ -582,12 +1140,9 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                             // matching a tile in which every sample missed.
                         }
                     }
+                    tile_skipped[tile] = uint8_t{1};
                     continue;
                 }
-
-                bool tile_hit_geometry = false;
-                std::size_t tile_dropped_samples = 0;
-                std::size_t tile_pixels_without_estimate = 0;
 
                 // Per-tile RNG seeded from tile index for reproducibility:
                 RandomSampler<float> sampler(static_cast<unsigned int>(tile_idx));
@@ -596,549 +1151,206 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                 // the reflector-NEE PDF of the most recent BSDF-sampled direction.
                 std::vector<float> prev_reflector_pdf(scene_view.indirect_sources().size(), 0.0f);
 
+                TileTally tally;
+                std::size_t tile_pixels_without_estimate = 0;
+                PixelProgress this_pixel{};
                 for (int y = y0; y < y1; ++y) {
                     for (int x = x0; x < x1; ++x) {
-
-                        TSpectral pixel_direct_radiance{0};
-                        TSpectral pixel_indirect_radiance{0};
-                        TSpectral pixel_radiance{0};
-
-                        float closest_depth = std::numeric_limits<float>::infinity();
-                        bool primary_occluder = false;
-                        bool pixel_hit_geometry = false; ///< By any of its rays.
-                        ObjectIds object_ids{};          ///< Of the surface closest_depth records.
-                        TSpectral albedo_total{0};
-                        Vec3<float> camera_normals{0};
-
-                        TSpectral mean{0};
-                        TSpectral M2{0}; // sum of squared deviations
-                        int samples_drawn = 0;
-                        int samples_taken = 0; ///< Those with a finite radiance.
-                        float inv_samples = 0.0f;
-
-                        // With motion blur, each sample is traced at its own time in the
-                        // exposure. A pixel's samples step through the exposure by the golden
-                        // ratio from a random start (an additive recurrence), so however many are
-                        // taken, as when dynamic sampling stops early, they cover it evenly,
-                        // where independent random times clump and leave gaps: an object that
-                        // crosses a pixel for a short part of the exposure is caught a steady
-                        // number of times rather than a random one. Each time is still uniform
-                        // over the exposure, as the start is random.
-                        constexpr double inv_golden_ratio = 0.6180339887498949;
-                        const double time_start = has_motion_blur ? sampler.get_1d() : 0.0;
-
-                        for (int s = 0; s < spp_; ++s) {
-                            ++samples_drawn;
-
-                            // Jittered sub-pixel sample:
-                            float sx = static_cast<float>(x) + sampler.get_1d();
-                            float sy = static_cast<float>(y) + sampler.get_1d();
-
-                            // Generate camera ray from pixel coordinates:
-                            Ray<TSpectral> ray = camera->sensor_ray_(Pixel{sx, sy}, sampler);
-
-                            // The sample's time, from 0 to 1 over the exposure. It is this
-                            // sample's own: every ray of its path (bounces, shadow rays) is traced
-                            // at it.
-                            const float time =
-                                has_motion_blur
-                                    ? static_cast<float>(std::fmod(
-                                          time_start + inv_golden_ratio * static_cast<double>(s),
-                                          1.0))
-                                    : 0.f;
-
-                            TSpectral throughput{1};
-                            TSpectral direct_radiance{0};
-                            TSpectral indirect_radiance{0};
-
-                            float prev_roughness = 0.0f;
-
-                            float prev_bsdf_pdf = 1.0f;
-                            Interaction<TSpectral> prev_isect;
-
-                            MediumStack<TSpectral> medium_stack;
-
-                            for (int bounce = 0; bounce < max_bounces_; ++bounce) {
-                                HitRecord hit = scene_view.intersect(ray, time);
-
-                                if (!medium_stack.is_empty()) {
-                                    const Medium<TSpectral>* current_medium = medium_stack.top();
-
-                                    const float t_seg_start = ray.tnear();
-                                    const Ray<TSpectral> march_ray(ray.at(t_seg_start),
-                                                                   ray.direction());
-                                    const float t_seg = hit.t - t_seg_start;
-
-                                    auto opt_mi =
-                                        current_medium->sample_free_path(march_ray, sampler);
-                                    auto props = current_medium->get_properties(march_ray.origin());
-                                    TSpectral ext = props.extinction();
-
-                                    float avg_ext = 0.0f;
-                                    for (std::size_t c = 0; c < TSpectral::size(); ++c) {
-                                        avg_ext += ext[c];
-                                    }
-                                    avg_ext /= static_cast<float>(TSpectral::size());
-
-                                    if (opt_mi && opt_mi->t < t_seg) {
-                                        float t = opt_mi->t;
-                                        TSpectral Tr{0.f};
-                                        for (std::size_t c = 0; c < TSpectral::size(); ++c) {
-                                            Tr[c] = std::exp(-ext[c] * t);
-                                        }
-                                        float pdf = avg_ext * std::exp(-avg_ext * t);
-                                        throughput =
-                                            throughput * props.scattering * Tr * (1.0f / pdf);
-
-                                        Interaction<TSpectral> vol_isect;
-                                        vol_isect.position = opt_mi->p;
-                                        vol_isect.wo = opt_mi->wo;
-                                        vol_isect.normal_g = Vec3<float>{0.f};
-                                        vol_isect.normal_s = Vec3<float>{0.f};
-
-                                        for (const auto& light_instance : lights) {
-                                            Transform<float> current_transform =
-                                                interpolate_transform(light_instance.transforms,
-                                                                      time);
-
-                                            auto sample = light_instance.light->sample_li(
-                                                vol_isect, current_transform, sampler);
-
-                                            if (!sample) {
-                                                continue;
-                                            }
-
-                                            const auto& ls = *sample;
-
-                                            Ray<TSpectral> shadow_ray(opt_mi->p, ls.wi);
-                                            TSpectral shadow_transmittance =
-                                                scene_view.evaluate_transmittance(shadow_ray,
-                                                                                  ls.distance,
-                                                                                  medium_stack,
-                                                                                  sampler,
-                                                                                  time);
-
-                                            if (shadow_transmittance.max() <= 0.0f) {
-                                                continue;
-                                            }
-                                            float phase_val =
-                                                opt_mi->phase_function->evaluate(opt_mi->wo, ls.wi);
-
-                                            TSpectral Ld = throughput * (ls.Li / ls.pdf) *
-                                                           phase_val * shadow_transmittance;
-
-                                            if (bounce == 0) {
-                                                direct_radiance += Ld;
-                                            } else {
-                                                indirect_radiance += Ld;
-                                            }
-                                        }
-
-                                        PhaseSample ps =
-                                            opt_mi->phase_function->sample(opt_mi->wo, sampler);
-
-                                        float phase_eval =
-                                            opt_mi->phase_function->evaluate(opt_mi->wo, ps.wi);
-                                        throughput = throughput * (phase_eval / ps.p);
-
-                                        ray = Ray<TSpectral>(opt_mi->p, ps.wi);
-                                        prev_bsdf_pdf = ps.p;
-                                        continue;
-
-                                    } else if (std::isinf(t_seg)) {
-                                        // The ray leaves the scene without leaving the medium
-                                        // it entered, as it does after passing through a
-                                        // surface that encloses nothing (an alpha-cut panel,
-                                        // say): every primitive carries a medium, a vacuum by
-                                        // default. Over an infinite path the transmittance is 1
-                                        // in a vacuum and 0 otherwise; computed as below, it
-                                        // would be exp(-0 * inf) / exp(-0 * inf): NaN.
-                                        TSpectral Tr{0.f};
-                                        for (std::size_t c = 0; c < TSpectral::size(); ++c) {
-                                            Tr[c] = (ext[c] > 0.f) ? 0.f : 1.f;
-                                        }
-                                        throughput = throughput * Tr;
-                                    } else {
-                                        TSpectral Tr{0.f};
-                                        for (std::size_t c = 0; c < TSpectral::size(); ++c) {
-                                            Tr[c] = std::exp(-ext[c] * t_seg);
-                                        }
-                                        float pdf = std::exp(-avg_ext * t_seg);
-                                        throughput = throughput * Tr * (1.0f / pdf);
-                                    }
-                                }
-
-                                if (!hit.hit()) {
-                                    // Sample environment map using ray direction
-                                    Vec3<float> d = glm::normalize(ray.direction());
-                                    float u =
-                                        0.5f + std::atan2(d.z, d.x) * (0.5f * INV_PI<float>());
-                                    float v = 0.5f - std::asin(std::clamp(d.y, -1.0f, 1.0f)) *
-                                                         INV_PI<float>();
-
-                                    TSpectral env_radiance = background->sample_bilinear(u, v);
-
-                                    if (bounce == 0) {
-                                        direct_radiance += throughput * env_radiance;
-                                    } else {
-                                        indirect_radiance += throughput * env_radiance;
-                                    }
-                                    break;
-                                }
-
-                                tile_hit_geometry = true;
-                                pixel_hit_geometry = true;
-
-                                const auto& mapping = scene_view.instance_mappings_[hit.inst_id];
-
-                                if (bounce == 0 && mapping.type == GeometryType::Primitive) {
-                                    primary_occluder = true;
-                                }
-
-                                if (mapping.type == GeometryType::Light) {
-                                    const auto& light_instance = lights[mapping.light_index];
-
-                                    Vec3<float> hit_p = ray.origin() + ray.direction() * hit.t;
-                                    Vec3<float> emission_dir = -ray.direction();
-                                    TSpectral Le =
-                                        light_instance.light->radiance(hit_p, emission_dir);
-
-                                    float mis_weight = 1.0f;
-
-                                    // Only apply MIS weighting if this wasn't the first camera ray,
-                                    // and if it wasn't a perfect mirror reflection (delta BSDF).
-                                    if (bounce > 0) {
-                                        Transform<float> current_transform =
-                                            interpolate_transform(light_instance.transforms, time);
-
-                                        float light_pdf = light_instance.light->pdf_li(
-                                            prev_isect, current_transform, ray.direction());
-                                        mis_weight = power_heuristic(prev_bsdf_pdf, light_pdf);
-                                    }
-
-                                    TSpectral final_radiance = throughput * Le * mis_weight;
-
-                                    if (bounce == 0) {
-                                        direct_radiance += final_radiance;
-                                    } else {
-                                        indirect_radiance += final_radiance;
-                                    }
-
-                                    // Terminate for hitting light:
-                                    break;
-                                } else {
-
-                                    // Resolve full shading data:
-                                    Interaction<TSpectral> isect = scene_view.resolve_hit(ray, hit);
-
-                                    // Look up mesh material:
-                                    const auto& batch = scene_view.primitives_[mapping.batch_index];
-                                    const auto* material = batch.primitive->material.get();
-
-                                    // Evaluate material textures to get the opacity parameter:
-                                    auto [params, shading_isect] = material->evaluate(isect);
-
-                                    if (params.opacity < 1.0f) {
-                                        if (sampler.get_1d() > params.opacity) {
-                                            ray = Ray<TSpectral>(ray.origin(),
-                                                                 ray.direction(),
-                                                                 advance_ray_t(hit.t));
-
-                                            medium_stack.toggle(batch.primitive.get());
-
-                                            bounce--; // Don't count this towards bounce counts
-                                            continue;
-                                        }
-                                    }
-
-                                    // Path regulatization
-                                    if (bounce > 0) {
-                                        params.roughness =
-                                            std::max(params.roughness, prev_roughness);
-                                    }
-                                    prev_roughness = params.roughness;
-
-                                    // Record primary ray info:
-                                    if (bounce == 0) {
-                                        if (hit.t < closest_depth) {
-                                            object_ids = scene_view.object_ids(hit);
-                                        }
-                                        closest_depth = std::min(closest_depth, hit.t);
-                                        camera_normals += shading_isect.normal_s;
-                                        albedo_total += params.albedo;
-                                    }
-
-                                    // The surface's own emission along the ray, from either
-                                    // side. An emissive surface is not a light: nothing samples
-                                    // it (lights, nor reflector NEE, whose
-                                    // direct_lit_radiance() leaves emission out), so it is
-                                    // only ever reached here, and counted in full.
-                                    const TSpectral Le = throughput * params.emission;
-                                    if (bounce == 0) {
-                                        direct_radiance += Le;
-                                    } else {
-                                        indirect_radiance += Le;
-                                    }
-
-                                    float reflector_nee_weight = 1.0f;
-                                    const std::size_t hit_source =
-                                        scene_view.indirect_source_index(hit);
-                                    if (bounce > 0 &&
-                                        hit_source != SceneView<TSpectral>::NO_INDIRECT_SOURCE) {
-                                        reflector_nee_weight = power_heuristic(
-                                            prev_bsdf_pdf, prev_reflector_pdf[hit_source]);
-                                    }
-
-                                    // Direct lighting (next event estimation):
-                                    for (const auto& light_instance : lights) {
-                                        TSpectral Ld =
-                                            throughput * reflector_nee_weight *
-                                            scene_view.sample_light_contribution_(light_instance,
-                                                                                  isect,
-                                                                                  material,
-                                                                                  params,
-                                                                                  shading_isect,
-                                                                                  medium_stack,
-                                                                                  sampler,
-                                                                                  time);
-                                        if (bounce == 0) {
-                                            direct_radiance += Ld;
-                                        } else {
-                                            indirect_radiance += Ld;
-                                        }
-                                    }
-
-                                    // Reflector next event estimation:
-                                    const auto& sources = scene_view.indirect_sources();
-                                    for (std::size_t k = 0; k < sources.size(); ++k) {
-                                        const auto& source = sources[k];
-
-                                        SphereConeSample cs =
-                                            source.sample_toward(isect.position, time, sampler);
-                                        if (cs.pdf <= 0.0f) {
-                                            continue;
-                                        }
-
-                                        // Evaluate the surface response first
-                                        TSpectral f = material->bsdf_eval(
-                                            isect.wo, cs.wi, {params, shading_isect});
-                                        float cos_theta =
-                                            std::max(0.0f, glm::dot(shading_isect.normal_s, cs.wi));
-                                        if (cos_theta <= 0.0f || f.max() <= 0.0f) {
-                                            continue;
-                                        }
-
-                                        // Trace toward the source's bounding proxy:
-                                        Vec3<float> probe_normal =
-                                            (glm::dot(cs.wi, isect.normal_g) < 0.0f)
-                                                ? -isect.normal_g
-                                                : isect.normal_g;
-                                        Vec3<float> probe_origin = offset_spawn_point(
-                                            isect.position, probe_normal, isect.p_err);
-                                        Ray<TSpectral> probe_ray(probe_origin, cs.wi);
-                                        HitRecord probe_hit = scene_view.intersect(probe_ray, time);
-
-                                        if (scene_view.indirect_source_index(probe_hit) != k) {
-                                            continue;
-                                        }
-
-                                        // Radiance leaving the reflector toward this vertex:
-                                        TSpectral Lr = scene_view.direct_lit_radiance(
-                                            probe_ray, probe_hit, sampler, time, medium_stack);
-                                        if (Lr.max() <= 0.0f) {
-                                            continue;
-                                        }
-
-                                        // MIS against BSDF sampling
-                                        float bsdf_pdf = material->bsdf_pdf(
-                                            isect.wo, cs.wi, {params, shading_isect});
-                                        const bool partner_truncated = (bounce + 1 >= max_bounces_);
-                                        float w = partner_truncated
-                                                      ? 1.0f
-                                                      : power_heuristic(cs.pdf, bsdf_pdf);
-
-                                        TSpectral Lr_contrib =
-                                            throughput * f * cos_theta * (Lr / cs.pdf) * w;
-                                        if (bounce == 0) {
-                                            direct_radiance += Lr_contrib;
-                                        } else {
-                                            indirect_radiance += Lr_contrib;
-                                        }
-                                    }
-
-                                    // Sample the BSDF:
-                                    float u1 = sampler.get_1d();
-                                    float u2 = sampler.get_1d();
-
-                                    BSDFSample<TSpectral> bs = material->bsdf_sample(
-                                        isect.wo, {params, shading_isect}, u1, u2);
-
-                                    if (!bs.is_valid()) {
-                                        break;
-                                    }
-
-                                    // Direction changes: offset along the geometric normal by
-                                    // the propagated position-error bound (see interaction.hpp).
-                                    Vec3<float> bounce_normal =
-                                        (glm::dot(bs.wi, isect.normal_g) < 0.0f) ? -isect.normal_g
-                                                                                 : isect.normal_g;
-                                    Vec3<float> bounce_origin = offset_spawn_point(
-                                        isect.position, bounce_normal, isect.p_err);
-
-                                    prev_bsdf_pdf = bs.is_delta ? 0.0f : bs.pdf;
-                                    prev_isect = shading_isect;
-
-                                    for (std::size_t k = 0; k < prev_reflector_pdf.size(); ++k) {
-                                        prev_reflector_pdf[k] =
-                                            sources[k].pdf_toward(isect.position, time, bs.wi);
-                                    }
-
-                                    throughput = throughput * bs.value;
-
-                                    // Russian roulette (after a few bounces):
-                                    if (bounce >= 3) {
-                                        float p_continue =
-                                            std::clamp(throughput.max(), 0.05f, 0.95f);
-                                        if (sampler.get_1d() > p_continue) {
-                                            break;
-                                        }
-                                        throughput = throughput / p_continue;
-                                    }
-
-                                    // Spawn next ray:
-                                    ray = Ray<TSpectral>(bounce_origin, bs.wi);
-
-                                    const float wo_side = glm::dot(isect.wo, isect.normal_g);
-                                    const float wi_side = glm::dot(bs.wi, isect.normal_g);
-                                    const bool is_transmission = (wo_side * wi_side) < 0.0f;
-                                    if (is_transmission) {
-                                        medium_stack.toggle(batch.primitive.get());
-                                    }
-                                }
-                            }
-
-                            // Indirect radiance clamping:
-                            float current_indirect_max = indirect_radiance.max();
-                            if (current_indirect_max > indirect_clamp_threshold_) {
-                                indirect_radiance *=
-                                    (indirect_clamp_threshold_ / current_indirect_max);
-                            }
-
-                            TSpectral sample_radiance = direct_radiance + indirect_radiance;
-
-                            // A sample whose radiance is not finite, in any channel, is left
-                            // out of the pixel's average, and counted (see the warning below).
-                            if (!detail::all_finite(sample_radiance)) {
-                                ++tile_dropped_samples;
-                                continue;
-                            }
-
-                            samples_taken++;
-
-                            // Welford's online mean/variance update:
-                            TSpectral delta = sample_radiance - mean;
-                            inv_samples = (1.0f / static_cast<float>(samples_taken));
-                            mean += delta * inv_samples;
-                            TSpectral delta2 = sample_radiance - mean;
-                            M2 += delta * delta2;
-
-                            pixel_direct_radiance += direct_radiance;
-                            pixel_indirect_radiance += indirect_radiance;
-                            pixel_radiance += sample_radiance;
-
-                            // Early exit check (only after min_spp samples):
-                            if (dynamic_sampling_) {
-                                if (s >= min_spp_ - 1) {
-                                    TSpectral variance = M2 * inv_samples;
-                                    // Normalize variance relative to mean luminance to avoid
-                                    // over-sampling dark regions:
-                                    float rel_variance = variance.max() / (mean.max() + 1e-4f);
-                                    if (rel_variance < variance_threshold_) {
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                        // Average over samples and write to frame buffer. The radiance is
-                        // averaged over the samples kept; a pixel with none has no estimate of
-                        // it, and is NaN, which the sensor's readout reports. What the rays hit
-                        // first (albedo, normals) is averaged over every sample.
-                        const bool has_estimate = samples_taken > 0;
-                        if (!has_estimate) {
-                            ++tile_pixels_without_estimate;
-                        }
-                        const float inv_spp =
-                            has_estimate ? 1.0f / static_cast<float>(samples_taken) : 0.0f;
-                        const float inv_drawn = 1.0f / static_cast<float>(samples_drawn);
-                        const TSpectral no_estimate{std::numeric_limits<float>::quiet_NaN()};
-                        TSpectral avg_radiance =
-                            has_estimate ? pixel_radiance * inv_spp : no_estimate;
-                        TSpectral direct_radiance =
-                            has_estimate ? pixel_direct_radiance * inv_spp : no_estimate;
-                        TSpectral indirect_radiance =
-                            has_estimate ? pixel_indirect_radiance * inv_spp : no_estimate;
-                        Vec3<float> avg_camera_normals = glm::normalize(camera_normals * inv_drawn);
-
-                        if (primary_occluder) {
-                            occluder_mask_(x, y) = uint8_t{1};
-                            any_occluder.store(true, std::memory_order_relaxed);
-                        }
-
-                        if (split_sky && !pixel_hit_geometry) {
-                            saw_only_sky(x, y) = uint8_t{1};
-                        }
-
-                        if (frame_buffer.has_depth()) {
-                            if (closest_depth < std::numeric_limits<float>::infinity()) {
-                                frame_buffer.depth()(x, y) = closest_depth;
-                            }
-                        }
-
-                        if (frame_buffer.has_albedo()) {
-                            frame_buffer.albedo()(x, y) = albedo_total * inv_drawn;
-                        }
-
-                        if (frame_buffer.has_object_ids()) {
-                            frame_buffer.set_object_ids(x, y, object_ids);
-                        }
-
-                        if (frame_buffer.has_camera_normals()) {
-                            frame_buffer.camera_normals()(x, y) = avg_camera_normals;
-                        }
-
-                        if (frame_buffer.has_world_normals()) {
-                            frame_buffer.world_normals()(x, y) =
-                                scene_view.camera_to_world_[0].apply_to_direction(
-                                    avg_camera_normals);
-                        }
-
-                        if (frame_buffer.has_received_direct_power()) {
-                            frame_buffer.received_direct_power()(x, y) =
-                                camera->pixel_radiance_to_power(x, y) * direct_radiance;
-                        }
-
-                        if (frame_buffer.has_received_indirect_power()) {
-                            frame_buffer.received_indirect_power()(x, y) =
-                                camera->pixel_radiance_to_power(x, y) * indirect_radiance;
-                        }
-
-                        if (frame_buffer.has_received_power()) {
-                            received_power(x, y) =
-                                camera->pixel_radiance_to_power(x, y) * avg_radiance;
+                        PixelProgress& px = dynamic ? progress[pixel_index(x, y)] : this_pixel;
+                        start_pixel(x, y, px, sampler);
+                        trace_pixel(
+                            x, y, px, first_round_samples, sampler, prev_reflector_pdf, tally);
+                        if (!dynamic) {
+                            finish_pixel(x, y, px, tile_pixels_without_estimate);
                         }
                     }
                 }
 
-                if (tile_culled && tile_hit_geometry) {
-                    validation_failures.fetch_add(1, std::memory_order_relaxed);
+                tile_hit_geometry[tile] = tally.hit_geometry ? uint8_t{1} : uint8_t{0};
+                if (tally.dropped_samples > 0) {
+                    dropped_samples.fetch_add(tally.dropped_samples, std::memory_order_relaxed);
                 }
-                if (tile_dropped_samples > 0) {
-                    dropped_samples.fetch_add(tile_dropped_samples, std::memory_order_relaxed);
+                if (tile_pixels_without_estimate > 0) {
                     pixels_without_estimate.fetch_add(tile_pixels_without_estimate,
                                                       std::memory_order_relaxed);
                 }
             }
         });
+
+    if (dynamic) {
+        const auto in_skipped_tile = [&](int x, int y) {
+            return tile_skipped[static_cast<std::size_t>((y / TILE_SIZE) * tiles_x +
+                                                         x / TILE_SIZE)] != 0;
+        };
+
+        // Whether a pixel's mean is noisier than the threshold allows: whether the variance of
+        // the mean (the samples' variance over their number) exceeds the square of the threshold
+        // times the mean. Samples that are all the same have no noise to reduce.
+        const auto too_noisy = [&](const PixelProgress& px) {
+            if (!(noise_threshold_ > 0.f)) {
+                return true; // 0 never stops early
+            }
+            if (px.taken < 2) {
+                return true; // no spread to judge by
+            }
+            if (!(px.m2 > 0.f)) {
+                return false;
+            }
+            const float n = static_cast<float>(px.taken);
+            const float variance_of_mean = px.m2 / (n * (n - 1.f));
+            const float allowed = noise_threshold_ * px.mean;
+            return variance_of_mean > allowed * allowed;
+        };
+
+        std::vector<uint8_t> noisy(progress.size(), uint8_t{0});
+        std::vector<uint8_t> active(progress.size(), uint8_t{0});
+        std::vector<uint8_t> tile_active(n_tiles, uint8_t{0});
+        const auto for_each_row = [&](const auto& row) {
+            tbb::parallel_for(tbb::blocked_range<int>(0, fb_height),
+                              [&](const tbb::blocked_range<int>& rows) {
+                                  for (int y = rows.begin(); y < rows.end(); ++y) {
+                                      row(y);
+                                  }
+                              });
+        };
+
+        int samples = first_round_samples;
+        for (unsigned int round = 1; samples < spp_; ++round) {
+            const int next = samples > spp_ / 2 ? spp_ : 2 * samples;
+
+            for_each_row([&](int y) {
+                for (int x = 0; x < fb_width; ++x) {
+                    const std::size_t i = pixel_index(x, y);
+                    noisy[i] =
+                        !in_skipped_tile(x, y) && too_noisy(progress[i]) ? uint8_t{1} : uint8_t{0};
+                }
+            });
+
+            // A pixel samples on if it is short of this round's samples and it or a neighbour is
+            // too noisy:
+            for_each_row([&](int y) {
+                const int ny0 = std::max(0, y - 1);
+                const int ny1 = std::min(fb_height - 1, y + 1);
+                for (int x = 0; x < fb_width; ++x) {
+                    const std::size_t i = pixel_index(x, y);
+                    active[i] = uint8_t{0};
+                    if (in_skipped_tile(x, y) || progress[i].drawn >= next) {
+                        continue;
+                    }
+                    const int nx0 = std::max(0, x - 1);
+                    const int nx1 = std::min(fb_width - 1, x + 1);
+                    for (int ny = ny0; ny <= ny1 && active[i] == 0; ++ny) {
+                        for (int nx = nx0; nx <= nx1; ++nx) {
+                            if (noisy[pixel_index(nx, ny)] != 0) {
+                                active[i] = uint8_t{1};
+                                break;
+                            }
+                        }
+                    }
+                }
+            });
+
+            std::atomic<bool> any_active{false};
+            tbb::parallel_for(
+                tbb::blocked_range<int>(0, num_tiles), [&](const tbb::blocked_range<int>& range) {
+                    for (int tile_idx = range.begin(); tile_idx < range.end(); ++tile_idx) {
+                        const int x0 = (tile_idx % tiles_x) * TILE_SIZE;
+                        const int y0 = (tile_idx / tiles_x) * TILE_SIZE;
+                        const int x1 = std::min(x0 + TILE_SIZE, fb_width);
+                        const int y1 = std::min(y0 + TILE_SIZE, fb_height);
+                        uint8_t any = 0;
+                        for (int y = y0; y < y1 && any == 0; ++y) {
+                            for (int x = x0; x < x1; ++x) {
+                                if (active[pixel_index(x, y)] != 0) {
+                                    any = 1;
+                                    break;
+                                }
+                            }
+                        }
+                        tile_active[static_cast<std::size_t>(tile_idx)] = any;
+                        if (any != 0) {
+                            any_active.store(true, std::memory_order_relaxed);
+                        }
+                    }
+                });
+            if (!any_active.load()) {
+                break;
+            }
+
+            tbb::parallel_for(
+                tbb::blocked_range<int>(0, num_tiles), [&](const tbb::blocked_range<int>& range) {
+                    for (int tile_idx = range.begin(); tile_idx < range.end(); ++tile_idx) {
+                        const std::size_t tile = static_cast<std::size_t>(tile_idx);
+                        if (tile_active[tile] == 0) {
+                            continue;
+                        }
+                        const int x0 = (tile_idx % tiles_x) * TILE_SIZE;
+                        const int y0 = (tile_idx / tiles_x) * TILE_SIZE;
+                        const int x1 = std::min(x0 + TILE_SIZE, fb_width);
+                        const int y1 = std::min(y0 + TILE_SIZE, fb_height);
+
+                        RandomSampler<float> sampler(round * static_cast<unsigned int>(num_tiles) +
+                                                     static_cast<unsigned int>(tile_idx));
+                        std::vector<float> prev_reflector_pdf(scene_view.indirect_sources().size(),
+                                                              0.0f);
+                        TileTally tally;
+                        for (int y = y0; y < y1; ++y) {
+                            for (int x = x0; x < x1; ++x) {
+                                const std::size_t i = pixel_index(x, y);
+                                if (active[i] != 0) {
+                                    trace_pixel(x,
+                                                y,
+                                                progress[i],
+                                                next,
+                                                sampler,
+                                                prev_reflector_pdf,
+                                                tally);
+                                }
+                            }
+                        }
+                        if (tally.hit_geometry) {
+                            tile_hit_geometry[tile] = uint8_t{1};
+                        }
+                        if (tally.dropped_samples > 0) {
+                            dropped_samples.fetch_add(tally.dropped_samples,
+                                                      std::memory_order_relaxed);
+                        }
+                    }
+                });
+
+            samples = next;
+        }
+
+        tbb::parallel_for(
+            tbb::blocked_range<int>(0, num_tiles), [&](const tbb::blocked_range<int>& range) {
+                for (int tile_idx = range.begin(); tile_idx < range.end(); ++tile_idx) {
+                    if (tile_skipped[static_cast<std::size_t>(tile_idx)] != 0) {
+                        continue;
+                    }
+                    const int x0 = (tile_idx % tiles_x) * TILE_SIZE;
+                    const int y0 = (tile_idx / tiles_x) * TILE_SIZE;
+                    const int x1 = std::min(x0 + TILE_SIZE, fb_width);
+                    const int y1 = std::min(y0 + TILE_SIZE, fb_height);
+                    std::size_t tile_pixels_without_estimate = 0;
+                    for (int y = y0; y < y1; ++y) {
+                        for (int x = x0; x < x1; ++x) {
+                            finish_pixel(
+                                x, y, progress[pixel_index(x, y)], tile_pixels_without_estimate);
+                        }
+                    }
+                    if (tile_pixels_without_estimate > 0) {
+                        pixels_without_estimate.fetch_add(tile_pixels_without_estimate,
+                                                          std::memory_order_relaxed);
+                    }
+                }
+            });
+    }
+
+    for (std::size_t tile = 0; tile < n_tiles; ++tile) {
+        if (tile_was_culled[tile] != 0 && tile_hit_geometry[tile] != 0) {
+            validation_failures.fetch_add(1, std::memory_order_relaxed);
+        }
+    }
 
     const std::size_t dropped = dropped_samples.load();
     if (dropped > 0) {
@@ -1228,9 +1440,6 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
     // component holds none of it. A background image is not uniform, so a frame with one is
     // convolved as it is, and the image darkens toward the frame's edges.
     if (camera->convolves_bodies_()) {
-        const bool has_power = frame_buffer.has_received_power();
-        const bool has_direct = frame_buffer.has_received_direct_power();
-
         // Calls f(x, y, s) for every pixel, in parallel, with s the pixel's value in S:
         auto for_each_pixel_with_sky = [&](auto&& f) {
             tbb::parallel_for(
