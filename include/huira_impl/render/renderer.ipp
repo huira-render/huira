@@ -626,7 +626,7 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
 
                         for (const auto& light_instance : lights) {
                             Transform<float> current_transform =
-                                interpolate_transform(light_instance.transforms, time);
+                                instance_transform_at(light_instance.transforms, time);
 
                             auto sample = light_instance.light->sample_li(
                                 vol_isect, current_transform, sampler);
@@ -726,7 +726,7 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                     // and if it wasn't a perfect mirror reflection (delta BSDF).
                     if (bounce > 0) {
                         Transform<float> current_transform =
-                            interpolate_transform(light_instance.transforms, time);
+                            instance_transform_at(light_instance.transforms, time);
 
                         float light_pdf = light_instance.light->pdf_li(
                             prev_isect, current_transform, ray.direction());

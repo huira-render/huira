@@ -175,7 +175,7 @@ struct IndirectSourceInstance {
 
   private:
     /// Linearly interpolates (center, radius) at normalized time t in [0, 1],
-    /// indexing temporal samples exactly as interpolate_transform() does.
+    /// indexing temporal samples exactly as instance_transform_at() does.
     std::pair<Vec3<float>, float> interpolated_bound_(float t) const
     {
         const std::size_t n = bounding_centers.size();
