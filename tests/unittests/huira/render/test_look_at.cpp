@@ -199,3 +199,28 @@ TEST_CASE("look_at aims where the scene view places the target, or in the mode i
     CHECK(std::abs(geometric_aim.dx) < 0.5);
     CHECK(std::abs(std::abs(geometric_aim.dy) - 10.0) < 1.0);
 }
+
+TEST_CASE("look_at turns about the right axis, however slowly", "[scene][look_at]")
+{
+    // A ball 1 km away drifting sideways at 5 cm/s: a camera tracking it turns at 5e-5 rad/s,
+    // about the axis across both the line of sight and the motion. Its rate is found from its
+    // turn over 2e-4 s, 1e-8 rad, small enough that the turn's axis was taken to be z.
+    Scene<RGB> scene;
+    auto ball = add_ball(scene);
+    ball.set_position(0_m, 0_m, 1_Km);
+    ball.set_velocity(0_mps, units::MetersPerSecond(0.05), 0_mps);
+    auto camera_model = wide_camera(scene);
+    auto camera = scene.root.new_instance(camera_model);
+    camera.look_at(ball, Vec3<double>{0.0, -1.0, 0.0});
+
+    const Time time = Time::from_et(0.0);
+    const Vec3<double> angular_velocity =
+        camera.get()
+            ->get_apparent_transform(ObservationMode::TRUE_STATE, time, time, Transform<double>{})
+            .angular_velocity;
+    // (r x v) / |r|^2, for r = (0, 0, 1000) m and v = (0, 0.05, 0) m/s:
+    const Vec3<double> expected{-5e-5, 0.0, 0.0};
+    INFO("angular velocity " << angular_velocity.x << ", " << angular_velocity.y << ", "
+                             << angular_velocity.z);
+    CHECK(glm::length(angular_velocity - expected) < 1e-3 * glm::length(expected));
+}

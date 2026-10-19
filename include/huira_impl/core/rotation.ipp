@@ -407,23 +407,24 @@ units::Radian Rotation<T>::angle() const
 }
 
 /**
- * @brief Get the normalized rotation axis.
+ * @brief Get the normalized rotation axis: the direction of its quaternion's vector part, the
+ * axis that angle() turns about. Precise at any angle, however small; for no rotation at all,
+ * the x axis.
  * @return Vec3<T> Normalized rotation axis
  */
 template <IsFloatingPoint T>
 Vec3<T> Rotation<T>::axis() const
 {
-    // Convert matrix to quaternion to safely extract the axis
-    Quaternion<T> q = this->local_to_parent_quaternion();
-    Vec3<T> ax = glm::axis(q);
-
-    // Safety check: if there is no rotation, return a default valid axis
-    T length2 = ax.x * ax.x + ax.y * ax.y + ax.z * ax.z;
-    if (length2 < std::numeric_limits<T>::epsilon()) {
+    // The vector part is the axis times the sine of half the angle. Found from the scalar part
+    // (as glm::axis does), the sine is lost once the cosine rounds to 1: below about 3e-8 rad in
+    // double precision, where glm::axis gives the z axis whatever the turn's.
+    const Quaternion<T> q = this->local_to_parent_quaternion();
+    const Vec3<T> vector_part{q.x, q.y, q.z};
+    const T length = glm::length(vector_part);
+    if (!(length > T(0))) {
         return Vec3<T>{1.0, 0.0, 0.0};
     }
-
-    return glm::normalize(ax);
+    return vector_part / length;
 }
 
 /**
