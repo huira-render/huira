@@ -3,6 +3,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -10,6 +11,7 @@
 #include "huira/core/time.hpp"
 #include "huira/core/types.hpp"
 #include "huira/core/types_py.ipp"
+#include "huira/scene/node.hpp"
 #include "huira/scene/state_callbacks/function_callbacks.hpp"
 #include "huira/scene/state_callbacks/state_callbacks.hpp"
 #include "huira/units/units_py.ipp"
@@ -82,7 +84,7 @@ class PyPoseFunction {
     PositionSample position(const PoseContext& context) const
     {
         py::gil_scoped_acquire gil;
-        const py::object result = (*function_)(context);
+        const py::object result = call_(context);
         if (!py::isinstance<Vec3<double>>(result) && py::hasattr(result, "__len__") &&
             py::len(result) == 2) {
             const py::sequence pair = py::reinterpret_borrow<py::sequence>(result);
@@ -94,7 +96,7 @@ class PyPoseFunction {
     RotationSample rotation(const PoseContext& context) const
     {
         py::gil_scoped_acquire gil;
-        const py::object result = (*function_)(context);
+        const py::object result = call_(context);
         if (py::isinstance<Rotation<double>>(result)) {
             return {result.cast<Rotation<double>>(), std::nullopt};
         }
@@ -108,8 +110,21 @@ class PyPoseFunction {
                              "angular velocity (three numbers, in radians per second)");
     }
 
+    /// The callable, for its scene to show Python's garbage collector (see HeldPoseFunctions).
+    [[nodiscard]] std::weak_ptr<py::function> held() const { return function_; }
+
   private:
     std::shared_ptr<py::function> function_;
+
+    py::object call_(const PoseContext& context) const
+    {
+        if (!*function_) {
+            // Its scene was garbage collected, which released it:
+            throw py::value_error("This node's position or rotation function was released when "
+                                  "its scene was garbage collected");
+        }
+        return (*function_)(context);
+    }
 
     /// A Vec3, or three numbers (a sequence or array).
     static Vec3<double> to_vec3_(const py::handle& value, const std::string& what)
@@ -130,6 +145,59 @@ class PyPoseFunction {
                              " from a position or rotation function is a Vec3, or three numbers");
     }
 };
+
+/**
+ * @brief The Python callables that nodes hold as position or rotation functions, by node.
+ *
+ * A function that refers to its scene, directly or through anything else that does, makes a
+ * cycle with it: the scene holds the function, through its node, and the function holds the
+ * scene. Python's garbage collector cannot follow the cycle through C++, so it would keep both
+ * until the interpreter exits. A Scene's Python object shows the collector the functions its
+ * nodes hold, from here (see bind_scene), so that the cycle is collected. Kept by the GIL.
+ */
+struct HeldPoseFunctions {
+    std::weak_ptr<py::function> position;
+    std::weak_ptr<py::function> rotation;
+};
+
+inline std::unordered_map<const void*, HeldPoseFunctions>& held_pose_functions()
+{
+    static std::unordered_map<const void*, HeldPoseFunctions> held;
+    return held;
+}
+
+/// Record the function a node now holds, as its position or rotation function, and forget those
+/// that nodes no longer hold.
+template <typename TSpectral>
+void hold_pose_function(const Node<TSpectral>* node, const PyPoseFunction& function, bool rotation)
+{
+    auto& held = held_pose_functions();
+    std::erase_if(held, [](const auto& entry) {
+        return entry.second.position.expired() && entry.second.rotation.expired();
+    });
+    HeldPoseFunctions& node_held = held[static_cast<const void*>(node)];
+    (rotation ? node_held.rotation : node_held.position) = function.held();
+}
+
+/// The functions held by a node and the nodes under it.
+template <typename TSpectral>
+void collect_held_pose_functions(const Node<TSpectral>& node,
+                                 std::vector<std::shared_ptr<py::function>>& functions)
+{
+    const auto& held = held_pose_functions();
+    const auto it = held.find(static_cast<const void*>(&node));
+    if (it != held.end()) {
+        for (const std::weak_ptr<py::function>* weak :
+             {&it->second.position, &it->second.rotation}) {
+            if (std::shared_ptr<py::function> function = weak->lock(); function && *function) {
+                functions.push_back(std::move(function));
+            }
+        }
+    }
+    for (const auto& child : node.get_children()) {
+        collect_held_pose_functions(*child, functions);
+    }
+}
 
 /// Rows of an array of shape (N, 3), as vectors.
 inline std::vector<Vec3<double>> vec3_rows(const DoubleArray& array, const std::string& what)
@@ -163,6 +231,8 @@ inline void bind_pose_source_methods(PyClass& cls)
                self.template set_custom_position_callback<PositionFunctionCallback>(
                    [held](const PoseContext& context) { return held.position(context); },
                    self.get()->get_info());
+               detail::hold_pose_function(
+                   static_cast<const Node<TSpectral>*>(self.get().get()), held, false);
            },
            py::arg("function"),
            R"(Place the node by a function of time.
@@ -244,6 +314,8 @@ Any other position source the node had is replaced.)")
                 self.template set_custom_rotation_callback<RotationFunctionCallback>(
                     [held](const PoseContext& context) { return held.rotation(context); },
                     self.get()->get_info());
+                detail::hold_pose_function(
+                    static_cast<const Node<TSpectral>*>(self.get().get()), held, true);
             },
             py::arg("function"),
             R"(Orient the node by a function of time.
