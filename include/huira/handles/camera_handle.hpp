@@ -168,6 +168,9 @@ class CameraModelHandle : public Handle<CameraModel<TSpectral>> {
     void enable_depth_of_field(bool depth_of_field = true) const;
     bool depth_of_field_enabled() const;
 
+    void enable_motion_blur(bool motion_blur = true) const;
+    bool motion_blur_enabled() const;
+
     void set_focus_distance(units::Meter focus_distance) const;
     void set_focus_diopters(units::Diopter diopters) const;
     void set_focus_sensor_offset(units::Micrometer offset) const;

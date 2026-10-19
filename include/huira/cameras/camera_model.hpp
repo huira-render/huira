@@ -218,6 +218,11 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     /// Whether depth of field is on (the default). See enable_depth_of_field().
     bool depth_of_field_enabled() const { return depth_of_field_; }
 
+    void enable_motion_blur(bool motion_blur = true);
+
+    /// Whether motion blur is on (the default). See enable_motion_blur().
+    [[nodiscard]] bool motion_blur_enabled() const { return motion_blur_; }
+
     // Focus. The three setters are alternative ways of specifying the same state, and all
     // three getters are always available and mutually consistent, whichever was set.
     void set_focus_distance(units::Meter focus_distance);
@@ -780,6 +785,7 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     void compute_intrinsics_();
 
     bool depth_of_field_ = true;
+    bool motion_blur_ = true;
 
     template <IsFloatingPoint TFloat>
     Vec3<TFloat> pixel_to_direction_(const Pixel& pixel) const;

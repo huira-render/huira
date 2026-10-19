@@ -1,6 +1,9 @@
 #include <cmath>
 #include <cstddef>
+#include <filesystem>
+#include <fstream>
 #include <optional>
+#include <string>
 
 #include "catch2/catch_test_macros.hpp"
 #include "huira/huira.hpp"
@@ -79,6 +82,40 @@ std::size_t lit_pixels(const Image<RGB>& image)
     return lit;
 }
 
+/// A glTF model of two 1 m square panels facing -z, its parts, placed by its graph at x = -offset
+/// and x = offset.
+std::filesystem::path two_panel_model(double offset)
+{
+    const auto path = std::filesystem::temp_directory_path() /
+                      ("huira_test_spinning_panels_" + std::to_string(offset) + ".gltf");
+    std::ofstream(path) << R"({
+  "asset": {"version": "2.0"},
+  "scene": 0,
+  "scenes": [{"nodes": [0, 1]}],
+  "nodes": [
+    {"name": "PanelLeft", "mesh": 0, "translation": [)"
+                        << -offset << R"(, 0.0, 0.0]},
+    {"name": "PanelRight", "mesh": 0, "translation": [)"
+                        << offset << R"(, 0.0, 0.0]}
+  ],
+  "meshes": [{"name": "Panel", "primitives": [{"attributes": {"POSITION": 0}, "indices": 1}]}],
+  "buffers": [{
+    "byteLength": 60,
+    "uri": "data:application/octet-stream;base64,AAAAvwAAAL8AAAAAAAAAPwAAAL8AAAAAAAAAPwAAAD8AAAAAAAAAvwAAAD8AAAAAAAABAAIAAAACAAMA"
+  }],
+  "bufferViews": [
+    {"buffer": 0, "byteOffset": 0, "byteLength": 48},
+    {"buffer": 0, "byteOffset": 48, "byteLength": 12}
+  ],
+  "accessors": [
+    {"bufferView": 0, "componentType": 5126, "count": 4, "type": "VEC3",
+     "min": [-0.5, -0.5, 0.0], "max": [0.5, 0.5, 0.0]},
+    {"bufferView": 1, "componentType": 5123, "count": 6, "type": "SCALAR"}
+  ]
+})";
+    return path;
+}
+
 } // namespace
 
 TEST_CASE("What does not move in view is rendered as a still frame", "[render][motion_blur]")
@@ -132,6 +169,36 @@ TEST_CASE("A number of temporal samples, if given, is used for everything", "[re
     CHECK_THROWS(scene.view(std::nullopt, -1.0));
 }
 
+TEST_CASE("With the camera's motion blur off, a still frame is rendered", "[render][motion_blur]")
+{
+    BallScene scene;
+    scene.ball.set_velocity(20_mps, 0_mps, 0_mps);
+    CHECK(scene.camera_model.motion_blur_enabled());
+
+    scene.camera_model.enable_motion_blur(false);
+    CHECK_FALSE(scene.camera_model.motion_blur_enabled());
+    const SceneView<RGB> off = scene.view();
+    CHECK_FALSE(off.has_motion_blur());
+    CHECK(off.max_temporal_samples() == 1);
+
+    // Whatever number of samples is given (with a warning that it is not used):
+    const SceneView<RGB> five_off = scene.view(5);
+    CHECK_FALSE(five_off.has_motion_blur());
+    CHECK(five_off.max_temporal_samples() == 1);
+    CHECK_THROWS(scene.view(0)); // Still not a number of samples
+
+    // It is the frame one sample renders, at the middle of the exposure:
+    const Image<RGB> still = scene.render();
+    scene.camera_model.enable_motion_blur(true);
+    const Image<RGB> one = scene.render(1);
+    CHECK(glm::length(centroid(still) - centroid(one)) < 1e-9);
+    CHECK(lit_pixels(still) == lit_pixels(one));
+
+    // On again, the samples are chosen, or given:
+    CHECK(scene.view().max_temporal_samples() == 2);
+    CHECK(scene.view(5).max_temporal_samples() == 5);
+}
+
 TEST_CASE("A turning camera's view is followed within the tolerance", "[render][motion_blur]")
 {
     // The camera turns 0.4 rad (23 degrees) during the exposure, so the ball, which holds still,
@@ -178,14 +245,70 @@ TEST_CASE("A spinning body is not taken for a still one", "[render][motion_blur]
                                 units::RadiansPerSecond(2.0 * PI<double>()));
     scene.ball.set_visible(false);
 
+    // Turned about its origin, it is drawn exactly between any two samples, so it takes only
+    // those that keep it from turning more than 45 degrees between two:
     const SceneView<RGB> view = scene.view();
     CHECK(view.has_motion_blur());
-    CHECK(view.max_temporal_samples() >= 9); // At most 45 degrees between two
+    CHECK(view.max_temporal_samples() == 9);
 
     // Swept round, it covers a disk:
     const std::size_t automatic = lit_pixels(scene.render());
     const std::size_t many = lit_pixels(scene.render(129));
     CHECK(std::abs(static_cast<double>(automatic) / static_cast<double>(many) - 1.0) < 0.02);
+}
+
+TEST_CASE("A model's parts are followed as each is turned about its own origin",
+          "[render][motion_blur]")
+{
+    // Two 1 m panels, a model's parts, turning a full turn about the line of sight during the
+    // exposure, about the model's origin. Embree turns each part about the part's own origin,
+    // and moves that origin along straight lines between samples.
+    const auto add_spinning_panels = [](BallScene& scene, double offset) {
+        scene.ball.set_visible(false);
+        auto panels =
+            scene.scene.root.new_instance(scene.scene.load_model(two_panel_model(offset)));
+        panels.set_position(0_m, 0_m, 100_m);
+        panels.set_angular_velocity(units::RadiansPerSecond(0.0),
+                                    units::RadiansPerSecond(0.0),
+                                    units::RadiansPerSecond(2.0 * PI<double>()));
+    };
+
+    // Placed at the model's origin, the parts turn as the model does, and are drawn exactly: the
+    // samples are those that keep them from turning more than 45 degrees between two.
+    BallScene centered;
+    add_spinning_panels(centered, 0.0);
+    CHECK(centered.view().max_temporal_samples() == 9);
+
+    // Placed 5 m either side of it, their origins swing round a circle, and are drawn cutting
+    // across it: they take more samples, which draw them where many do. With 9, they are drawn
+    // nearer the middle, by about 0.7 pixels on average.
+    BallScene apart;
+    add_spinning_panels(apart, 5.0);
+    const std::size_t chosen = apart.view().max_temporal_samples();
+    CHECK(chosen > 9);
+    CHECK(chosen < 129);
+
+    // How far the light lies, on average, from the middle of the frame, in pixels:
+    const auto mean_radius = [](const Image<RGB>& image) {
+        const Vec2<double> middle{0.5 * (image.width() - 1), 0.5 * (image.height() - 1)};
+        double sum = 0.0;
+        double moment = 0.0;
+        for (int y = 0; y < image.height(); ++y) {
+            for (int x = 0; x < image.width(); ++x) {
+                const double power = image(x, y).total();
+                sum += power;
+                moment += power * glm::length(Vec2<double>{x, y} - middle);
+            }
+        }
+        return moment / sum;
+    };
+    const double automatic = mean_radius(apart.render(std::nullopt, 256));
+    const double many = mean_radius(apart.render(129, 256));
+    const double nine = mean_radius(apart.render(9, 256));
+    INFO(chosen << " samples chosen; mean radius " << automatic << " px, " << many
+                << " px with 129 samples and " << nine << " px with 9");
+    CHECK(std::abs(automatic - many) < 0.1);
+    CHECK(many - nine > 0.3);
 }
 
 TEST_CASE("Stars are followed along their arcs as the camera rolls", "[render][motion_blur]")
