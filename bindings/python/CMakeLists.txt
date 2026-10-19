@@ -2,17 +2,50 @@ include(FetchPybind)
 
 # The bindings are split over several translation units (see src/bindings.hpp), so that no one
 # file needs more memory to compile than many machines have.
+#
+# Each spectral submodule (huira.rgb and the others) is bound in parts, in this order: each part
+# is a header in src/ (bind_spectral_assets.hpp and so on), compiled for each spectral type in a
+# file of its own, made from src/bind_spectral_part.cpp.in. A submodule is listed by its name and
+# its spectral type.
+set(HUIRA_PYTHON_SPECTRAL_SUBMODULES rgb:RGB visible8:Visible8 swir8:SWIR8)
+set(HUIRA_PYTHON_SPECTRAL_PARTS assets nodes images scene render)
+
+set(_huira_spectral_sources)
+set(HUIRA_SPECTRAL_SUBMODULES "")
+foreach(_submodule IN LISTS HUIRA_PYTHON_SPECTRAL_SUBMODULES)
+    string(REPLACE ":" ";" _submodule "${_submodule}")
+    list(GET _submodule 0 HUIRA_SPECTRAL_NAME)
+    list(GET _submodule 1 HUIRA_SPECTRAL_TYPE)
+    set(_calls "")
+    string(APPEND HUIRA_SPECTRAL_SUBMODULES "\n")
+    foreach(HUIRA_SPECTRAL_PART IN LISTS HUIRA_PYTHON_SPECTRAL_PARTS)
+        set(_source "${CMAKE_CURRENT_BINARY_DIR}/src/${HUIRA_SPECTRAL_NAME}_${HUIRA_SPECTRAL_PART}.cpp")
+        configure_file(src/bind_spectral_part.cpp.in "${_source}" @ONLY)
+        list(APPEND _huira_spectral_sources "${_source}")
+        set(_part "bind_${HUIRA_SPECTRAL_NAME}_${HUIRA_SPECTRAL_PART}")
+        string(APPEND HUIRA_SPECTRAL_SUBMODULES "void ${_part}(pybind11::module_& m);\n")
+        string(APPEND _calls "    ${_part}(m);\n")
+    endforeach()
+    string(APPEND HUIRA_SPECTRAL_SUBMODULES
+        "\n/// The huira.${HUIRA_SPECTRAL_NAME} submodule.\n"
+        "inline void bind_${HUIRA_SPECTRAL_NAME}(pybind11::module_& m)\n{\n${_calls}}\n")
+endforeach()
+configure_file(src/spectral_submodules.hpp.in
+               "${CMAKE_CURRENT_BINARY_DIR}/src/spectral_submodules.hpp" @ONLY)
+
 pybind11_add_module(_huira
     src/huira_module.cpp
     src/core.cpp
-    src/rgb.cpp
-    src/visible8.cpp
-    src/swir8.cpp
+    ${_huira_spectral_sources}
 )
 set_target_properties(_huira PROPERTIES CXX_SCAN_FOR_MODULES OFF)
 
 target_link_libraries(_huira PRIVATE huira::huira)
-target_include_directories(_huira PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_include_directories(_huira PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_BINARY_DIR}/src
+)
 target_compile_definitions(_huira PRIVATE PYBIND11_DETAILED_ERROR_MESSAGES)
 
 # Output directory for local development (cmake --build)
