@@ -92,6 +92,31 @@ RTCQuaternionDecomposition Transform<T>::to_embree() const
     return decomp;
 }
 
+/**
+ * @brief Convert the transform to Embree's 3x4 column-major matrix.
+ *
+ * Its first three columns are the rotation's, each scaled by the scale along it, and its last
+ * the translation: the same transform as to_embree() gives, as a matrix.
+ *
+ * @return std::array<float, 12> The matrix, column by column
+ */
+template <IsFloatingPoint T>
+std::array<float, 12> Transform<T>::to_embree_matrix() const
+{
+    const Mat3<T> basis = rotation.local_to_parent_matrix();
+    std::array<float, 12> matrix{};
+    for (int column = 0; column < 3; ++column) {
+        for (int row = 0; row < 3; ++row) {
+            matrix[static_cast<std::size_t>(3 * column + row)] =
+                static_cast<float>(basis[column][row] * scale[column]);
+        }
+    }
+    matrix[9] = static_cast<float>(position.x);
+    matrix[10] = static_cast<float>(position.y);
+    matrix[11] = static_cast<float>(position.z);
+    return matrix;
+}
+
 template <IsFloatingPoint T>
 std::string Transform<T>::to_string() const
 {
