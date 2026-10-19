@@ -8,12 +8,12 @@ NASA's model of the Gateway, loaded from a glTF file and path traced.
 
 | File | What it is | From |
 |---|---|---|
-| `gateway.glb` | NASA's model of the Gateway | [media.huira.space](https://media.huira.space/data/models/gateway/) |
+| `gateway.glb` | NASA's model of the Gateway | [media.huira.space](https://media.huira.space/data/models/nasa/) |
 
 Download it into this folder:
 
 ```bash
-curl -fLO https://media.huira.space/data/models/gateway/gateway.glb
+curl -fLO https://media.huira.space/data/models/nasa/gateway.glb
 ```
 
 Licenses, and how to credit the data: [Gateway model](../../docs/getting_started/data.md#gateway-model).

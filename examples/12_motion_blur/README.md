@@ -16,12 +16,12 @@ Then the Gateway passes the camera at 60 m/s. A camera that stares sees it smear
 
 | File | What it is | From |
 |---|---|---|
-| `gateway.glb` | NASA's model of the Gateway | [media.huira.space](https://media.huira.space/data/models/gateway/) |
+| `gateway.glb` | NASA's model of the Gateway | [media.huira.space](https://media.huira.space/data/models/nasa/) |
 
 This is the model from [03 - Load a model](../03_load_a_model/): if you have it already, pass its path instead. Otherwise, download it into this folder:
 
 ```bash
-curl -fLO https://media.huira.space/data/models/gateway/gateway.glb
+curl -fLO https://media.huira.space/data/models/nasa/gateway.glb
 ```
 
 Licenses, and how to credit the data: [Gateway model](../../docs/getting_started/data.md#gateway-model).
