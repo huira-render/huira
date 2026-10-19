@@ -30,6 +30,11 @@ struct BallScene {
         scene.root.new_instance(scene.new_sun_light()).set_position(0_m, 0_m, -1_au);
     }
 
+    BallScene(const BallScene&) = delete;
+    BallScene& operator=(const BallScene&) = delete;
+    BallScene(BallScene&&) = delete;
+    BallScene& operator=(BallScene&&) = delete;
+
     InstanceHandle<RGB> add_ball(units::Meter x, units::Meter y, units::Meter z)
     {
         auto instance = scene.root.new_instance(ball);
