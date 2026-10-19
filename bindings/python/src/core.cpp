@@ -66,10 +66,9 @@ void bind_core(py::module_& m)
 
     // Alpha Mode Enum:
     // Not templated on the spectral type, so it is registered once here rather than
-    // per spectral submodule. Must precede the spectral submodules, whose bind_spectral() binds
-    // SceneView::evaluate_transmittance with an AlphaMode default argument -
-    // pybind11 casts default values at definition time and would throw on an
-    // unregistered type.
+    // per spectral submodule. Must precede the spectral submodules, whose bind_spectral_render()
+    // binds SceneView::evaluate_transmittance with an AlphaMode default argument - pybind11 casts
+    // default values at definition time and would throw on an unregistered type.
     py::enum_<huira::AlphaMode>(m, "AlphaMode")
         .value("STOCHASTIC", huira::AlphaMode::Stochastic)
         .value("EXPECTED", huira::AlphaMode::Expected);

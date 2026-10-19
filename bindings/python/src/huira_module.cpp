@@ -1,5 +1,6 @@
 #include "bindings.hpp"
 #include "pybind11/pybind11.h"
+#include "spectral_submodules.hpp"
 
 namespace py = pybind11;
 
