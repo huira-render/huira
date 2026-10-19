@@ -814,7 +814,7 @@ Vec3<double> Node<TSpectral>::get_static_position() const
 template <IsSpectral TSpectral>
 Rotation<double> Node<TSpectral>::get_static_rotation() const
 {
-    if (position_mode_ != TransformMode::MANUAL_TRANSFORM) {
+    if (rotation_mode_ != TransformMode::MANUAL_TRANSFORM) {
         HUIRA_THROW_ERROR(
             this->get_info() +
             " - cannot get static rotation when rotation mode is not MANUAL_TRANSFORM");
@@ -839,7 +839,7 @@ Vec3<double> Node<TSpectral>::get_static_velocity() const
 template <IsSpectral TSpectral>
 Vec3<double> Node<TSpectral>::get_static_angular_velocity() const
 {
-    if (position_mode_ != TransformMode::MANUAL_TRANSFORM) {
+    if (rotation_mode_ != TransformMode::MANUAL_TRANSFORM) {
         HUIRA_THROW_ERROR(
             this->get_info() +
             " - cannot get static angular velocity when rotation mode is not MANUAL_TRANSFORM");
@@ -860,7 +860,7 @@ std::string Node<TSpectral>::get_spice_origin() const
 template <IsSpectral TSpectral>
 std::string Node<TSpectral>::get_spice_frame() const
 {
-    if (position_mode_ != TransformMode::SPICE_TRANSFORM) {
+    if (rotation_mode_ != TransformMode::SPICE_TRANSFORM) {
         HUIRA_THROW_ERROR(this->get_info() +
                           " - cannot get spice frame when rotation mode is not SPICE_TRANSFORM");
     }
@@ -1022,17 +1022,6 @@ NodeHandle<TSpectral, Node<TSpectral>> Node<TSpectral>::get_parent() const
 }
 
 /**
- * @brief Gets a handle to the parent node with a specific type.
- *
- * Returns a handle to the parent cast to the specified node type. This performs
- * a dynamic cast to verify the parent is actually of the requested type at runtime.
- *
- * @tparam TParentNode The expected type of the parent node (e.g., FrameNode<TSpectral>)
- * @return NodeHandle<TSpectral, TParentNode> Handle to the parent with the specified type
- * @throws std::runtime_error If this node has no parent
- * @throws std::runtime_error If the parent is not of type TParentNode
- */
-/**
  * @brief Walk up to the root, checking each node's visibility flag.
  * @return bool True only if this node and every ancestor are visible
  */
@@ -1047,6 +1036,17 @@ bool Node<TSpectral>::is_effectively_visible() const
     return true;
 }
 
+/**
+ * @brief Gets a handle to the parent node with a specific type.
+ *
+ * Returns a handle to the parent cast to the specified node type. This performs
+ * a dynamic cast to verify the parent is actually of the requested type at runtime.
+ *
+ * @tparam TParentNode The expected type of the parent node (e.g., FrameNode<TSpectral>)
+ * @return NodeHandle<TSpectral, TParentNode> Handle to the parent with the specified type
+ * @throws std::runtime_error If this node has no parent
+ * @throws std::runtime_error If the parent is not of type TParentNode
+ */
 template <IsSpectral TSpectral>
 template <typename TParentNode>
 NodeHandle<TSpectral, TParentNode> Node<TSpectral>::get_parent_as() const

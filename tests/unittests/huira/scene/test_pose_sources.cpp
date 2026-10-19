@@ -284,6 +284,38 @@ TEST_CASE("Each position or rotation source replaces the last", "[scene][pose_so
     CHECK(earth.get()->get_rotation_mode() == TransformMode::SPICE_TRANSFORM);
 }
 
+TEST_CASE("A rotation set by hand is read back whatever places the node", "[scene][pose_sources]")
+{
+    // The getters of a rotation set by hand, and of a SPICE frame, check where the rotation comes
+    // from, not where the position does.
+    Scene<RGB> scene;
+    auto node = scene.root.new_subframe();
+    node.set_keplerian_orbit(7000_Km, 0.1, 0_rad, 0_rad, 0_rad, 0_rad, at(0.0), 398600.4418);
+    const Rotation<double> turned =
+        Rotation<double>::from_local_to_parent(Vec3<double>{0.0, 0.0, 1.0}, units::Radian(0.5));
+    node.set_rotation(turned);
+    node.set_angular_velocity(
+        units::RadiansPerSecond(0.1), units::RadiansPerSecond(0.0), units::RadiansPerSecond(0.0));
+    CHECK(rotation_difference(node.get_static_rotation(), turned) == 0.0);
+    CHECK(node.get_static_angular_velocity() == Vec3<double>{0.1, 0.0, 0.0});
+    CHECK_THROWS(node.get_static_position());
+
+    // And not when the rotation comes from elsewhere, wherever the position does:
+    node.set_position(1_m, 2_m, 3_m);
+    node.set_rotation_function([](const PoseContext&) { return Rotation<double>{}; });
+    CHECK(node.get_static_position() == Vec3<double>{1.0, 2.0, 3.0});
+    CHECK_THROWS(node.get_static_rotation());
+    CHECK_THROWS(node.get_static_angular_velocity());
+
+    auto framed = scene.root.new_subframe();
+    framed.set_spice_frame("IAU_EARTH");
+    CHECK(framed.get_spice_frame() == "IAU_EARTH");
+    auto placed = scene.root.new_subframe();
+    placed.set_spice_origin("EARTH");
+    CHECK(placed.get_spice_origin() == "EARTH");
+    CHECK_THROWS(placed.get_spice_frame());
+}
+
 TEST_CASE("A body placed by a table or a function is rendered where it is", "[scene][pose_sources]")
 {
     // A ball 100 m in front of a camera about 40 degrees across, crossing 20 m (about 55 pixels)
