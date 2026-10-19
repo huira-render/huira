@@ -2,7 +2,7 @@ Camera API
 ==========
 
 .. toctree::
-   :hidden:
+   :maxdepth: 1
 
    distortion_coeffs
    pixel_convention

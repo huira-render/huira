@@ -2,7 +2,7 @@ Handle API
 ==========
 
 .. toctree::
-   :hidden:
+   :maxdepth: 1
 
    camera_handle
    

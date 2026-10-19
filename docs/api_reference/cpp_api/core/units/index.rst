@@ -2,7 +2,7 @@ Units
 =====
 
 .. toctree::
-   :hidden:
+   :maxdepth: 1
 
    units
    dimensionality

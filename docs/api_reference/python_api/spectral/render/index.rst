@@ -2,7 +2,7 @@ Render API
 ==========
 
 .. toctree::
-   :hidden:
+   :maxdepth: 1
 
    frame_buffer
    renderer
