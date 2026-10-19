@@ -26,8 +26,15 @@ extensions = [
     'sphinx_toolbox.sidebar_links',
     'sphinx_design',
     'myst_parser',
-    'huira_spectral_ext'
+    'huira_spectral_ext',
+    'huira_examples_ext',
 ]
+
+# Example walkthroughs: copied from examples/*/README.md into docs/examples/
+# at build time by huira_examples_ext (see that file for the rewrites it does).
+examples_source_dir = '../examples'
+examples_output_dir = 'examples'
+examples_github_url = 'https://github.com/huira-render/huira/tree/main/examples'
 
 # Required: the submodule names as Python sees them
 spectral_submodules = ['huira.rgb', 'huira.visible8', 'huira.swir8']
