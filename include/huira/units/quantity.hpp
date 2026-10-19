@@ -397,6 +397,9 @@ constexpr double Quantity<SolidAngle, SquareDegreeTag>::get_ratio() const
 struct CelsiusTag {};
 template <>
 struct is_unit_tag<CelsiusTag> : std::true_type {};
+/// @cond INTERNAL
+// Doxygen lists member specializations as extra members of Quantity, which
+// Sphinx reports as duplicate declarations; hide the bodies from the docs.
 template <>
 constexpr double Quantity<Temperature, CelsiusTag>::to_si(double value) const
 {
@@ -408,10 +411,12 @@ constexpr double Quantity<Temperature, CelsiusTag>::from_si(double value_si) con
 {
     return value_si - 273.15;
 }
+/// @endcond
 
 struct FahrenheitTag {};
 template <>
 struct is_unit_tag<FahrenheitTag> : std::true_type {};
+/// @cond INTERNAL
 template <>
 constexpr double Quantity<Temperature, FahrenheitTag>::to_si(double value) const
 {
@@ -423,6 +428,7 @@ constexpr double Quantity<Temperature, FahrenheitTag>::from_si(double value_si) 
 {
     return value_si * (9. / 5.) - 459.67;
 }
+/// @endcond
 
 struct ElectronVoltTag {};
 template <>

@@ -64,6 +64,9 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', 'api_reference/python_ap
 myst_heading_anchors = 3
 numfig = True
 autosectionlabel_prefix_document = True
+# Label page titles only: headings Breathe renders from Doxygen comments
+# (e.g. '## Example Usage' in several classes) would otherwise collide.
+autosectionlabel_maxdepth = 1
 
 # Breathe Configuration
 breathe_default_project = "huira"
@@ -73,8 +76,6 @@ breathe_show_include = False
 html_theme = "furo"
 html_static_path = ['_static']
 html_favicon = '_static/logo/icon/icon_blue_on_white.svg'
-
-autosectionlabel_prefix_document = True
 
 # Custom sidebar structure:
 html_sidebars = {

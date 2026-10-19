@@ -265,7 +265,7 @@ position source the node had is replaced.)")
 times: a list of Time, at least two, each later than the one before.
 positions: an array of shape (N, 3), in meters, in the parent's frame.
 velocities: an array of shape (N, 3), in meters per second, or None to
-    estimate them from the positions.
+estimate them from the positions.
 
 Between two entries, the position follows the cubic through both that has
 their velocities there. Velocities not given are estimated at each entry from
@@ -302,7 +302,7 @@ error. Any other position source the node had is replaced.)")
             R"(Move the node on a Keplerian orbit about its parent.
 
 semi_major_axis: a distance, positive for an ellipse and negative for a
-    hyperbola.
+hyperbola.
 inclination, raan, arg_periapsis, mean_anomaly: angles, in any angle unit.
 epoch: when the body is at mean_anomaly.
 mu: the central body's gravitational parameter, in km^3/s^2.
@@ -348,7 +348,7 @@ source the node had is replaced.)")
 times: a list of Time, at least two, each later than the one before.
 rotations: a list of Rotation, relative to the parent.
 angular_velocities: an array of shape (N, 3), in radians per second about the
-    parent's axes, or None to take the steady rate between entries.
+parent's axes, or None to take the steady rate between entries.
 
 Between two entries, the rotation turns at a steady rate about a fixed axis,
 the shorter way round, as in a SPICE type 3 C-kernel; angular velocities given
