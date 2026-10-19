@@ -34,6 +34,11 @@ struct BallScene {
         scene.root.new_instance(scene.new_sun_light()).set_position(0_m, 0_m, -1_au);
     }
 
+    BallScene(const BallScene&) = delete;
+    BallScene& operator=(const BallScene&) = delete;
+    BallScene(BallScene&&) = delete;
+    BallScene& operator=(BallScene&&) = delete;
+
     SceneView<RGB> view(std::optional<std::size_t> samples = std::nullopt,
                         double tolerance = SceneView<RGB>::DEFAULT_MOTION_TOLERANCE) const
     {
