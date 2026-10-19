@@ -38,12 +38,17 @@ Vec2<double> drawn_at(Source source, std::optional<ObservationMode> mode)
     camera.set_velocity(0_mps, units::MetersPerSecond(3e5), 0_mps);
 
     const Interval exposure = Interval::from_centered(Time::from_et(0.0), 1_ms);
-    SceneView<RGB> scene_view = mode ? SceneView<RGB>(scene, exposure, camera, *mode)
-                                     : SceneView<RGB>(scene, exposure, camera);
+    // Built in place, as a scene view is neither copied nor moved:
+    std::optional<SceneView<RGB>> scene_view;
+    if (mode) {
+        scene_view.emplace(scene, exposure, camera, *mode);
+    } else {
+        scene_view.emplace(scene, exposure, camera);
+    }
     auto frame_buffer = camera_model.make_frame_buffer();
     frame_buffer.enable_received_power();
     Renderer<RGB> renderer;
-    renderer.render(scene_view, frame_buffer);
+    renderer.render(*scene_view, frame_buffer);
     const Image<RGB>& image = frame_buffer.received_power();
 
     double sum = 0.0;

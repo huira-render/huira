@@ -3,6 +3,7 @@
 #include <limits>
 #include <memory>
 #include <optional>
+#include <type_traits>
 #include <vector>
 
 #include "catch2/catch_test_macros.hpp"
@@ -218,6 +219,16 @@ TEST_CASE("A scene view needs a temporal sample and an exposure that runs forwar
     CHECK_THROWS(SceneView<RGB>(scene, exposure, camera, ObservationMode::TRUE_STATE, 0));
     exposure.end = Time::from_et(-1.0);
     CHECK_THROWS(SceneView<RGB>(scene, exposure, camera, ObservationMode::TRUE_STATE, 1));
+}
+
+TEST_CASE("A scene view is neither copied nor moved", "[scene]")
+{
+    // It owns its Embree scene, which it releases when it is destroyed: a copy would release it
+    // a second time.
+    STATIC_REQUIRE_FALSE(std::is_copy_constructible_v<SceneView<RGB>>);
+    STATIC_REQUIRE_FALSE(std::is_copy_assignable_v<SceneView<RGB>>);
+    STATIC_REQUIRE_FALSE(std::is_move_constructible_v<SceneView<RGB>>);
+    STATIC_REQUIRE_FALSE(std::is_move_assignable_v<SceneView<RGB>>);
 }
 
 TEST_CASE("An asteroid's slope parameter may be 1, and it may be seen at any phase angle",
