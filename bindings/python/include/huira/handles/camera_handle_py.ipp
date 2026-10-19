@@ -566,6 +566,18 @@ inline void bind_camera_model_handle(py::module_& m)
              &HandleType::depth_of_field_enabled,
              "Whether depth of field is on (the default).")
 
+        // Motion blur
+        .def("enable_motion_blur",
+             &HandleType::enable_motion_blur,
+             py::arg("motion_blur") = true,
+             "Turn motion blur on (the default) or off. On, a SceneView through the camera shows "
+             "what moves during the exposure blurred along its path, with as many temporal "
+             "samples as its motion needs, or the number it is given. Off, it renders a still "
+             "frame, at the middle of the exposure, whatever number it is given.")
+        .def("motion_blur_enabled",
+             &HandleType::motion_blur_enabled,
+             "Whether motion blur is on (the default).")
+
         // Focus
         .def(
             "set_focus_distance",

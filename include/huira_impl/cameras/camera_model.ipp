@@ -1940,6 +1940,22 @@ void CameraModel<TSpectral>::enable_depth_of_field(bool depth_of_field)
 }
 
 /**
+ * @brief Turn motion blur on (the default) or off.
+ *
+ * On, a view through the camera (a SceneView) shows what moves during the exposure blurred
+ * along its path: it gives each thing as many temporal samples as its motion needs, or the
+ * number it is given. Off, it renders a still frame, at the middle of the exposure, as one
+ * temporal sample does, whatever number it is given.
+ *
+ * @param motion_blur True to turn motion blur on, false to turn it off.
+ */
+template <IsSpectral TSpectral>
+void CameraModel<TSpectral>::enable_motion_blur(bool motion_blur)
+{
+    motion_blur_ = motion_blur;
+}
+
+/**
  * @brief Get the radius, in pixel widths, of the defocus blur of a point at a range, or of a
  * star without one.
  *
@@ -2820,7 +2836,8 @@ Frustum<TSpectral> CameraModel<TSpectral>::view_frustum_with_margin_(float pixel
 }
 /**
  * @brief A summary of the camera's settings, one per line, for reading: its optics, sensor,
- * focus, PSF and conventions. Builds nothing. The format is for people, and may change.
+ * focus, PSF, motion blur and conventions. Builds nothing. The format is for people, and may
+ * change.
  */
 template <IsSpectral TSpectral>
 std::string CameraModel<TSpectral>::describe() const
@@ -2981,6 +2998,7 @@ std::string CameraModel<TSpectral>::describe() const
     out << "  Noise:      " << on_off(sensor.noise_enabled()) << ", read noise "
         << num(sensor.read_noise()) << " e-, dark current " << num(sensor.dark_current())
         << " e-/s, seed " << sensor.noise_seed() << "\n";
+    out << "  Motion blur: " << on_off(motion_blur_) << "\n";
 
     out << "  Precomputed: " << (is_precomputed() ? "yes" : "no")
         << (auto_precompute_ ? " (a render builds what is out of date)"

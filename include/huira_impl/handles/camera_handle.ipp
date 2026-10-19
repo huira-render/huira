@@ -731,6 +731,23 @@ bool CameraModelHandle<TSpectral>::depth_of_field_enabled() const
 }
 
 /**
+ * @brief Turn motion blur on (the default) or off. See CameraModel::enable_motion_blur().
+ * @param motion_blur True to turn motion blur on, false to turn it off.
+ */
+template <IsSpectral TSpectral>
+void CameraModelHandle<TSpectral>::enable_motion_blur(bool motion_blur) const
+{
+    this->get_()->enable_motion_blur(motion_blur);
+}
+
+/// Whether motion blur is on (the default).
+template <IsSpectral TSpectral>
+bool CameraModelHandle<TSpectral>::motion_blur_enabled() const
+{
+    return this->get_()->motion_blur_enabled();
+}
+
+/**
  * @brief Focus the camera at a distance.
  *
  * Positive values focus in front of the camera, infinity focuses at infinity, and negative

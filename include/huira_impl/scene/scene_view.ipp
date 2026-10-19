@@ -40,7 +40,9 @@ namespace huira {
  *        spaced through the exposure, or none (the default) to choose them for each thing:
  *        one for whatever does not move in view, and otherwise as many as keep the path it is
  *        drawn along within motion_tolerance pixels of its true path (see choose_fractions_()).
- *        One sample renders a still frame, at the middle of the exposure.
+ *        One sample renders a still frame, at the middle of the exposure, as does turning the
+ *        camera's motion blur off (see CameraModel::enable_motion_blur()), whatever number is
+ *        given.
  * @param motion_tolerance How far, in pixels, the path a thing is drawn along may stray from its
  *        true path, when the samples are chosen. Positive.
  * @throws std::runtime_error if the interval ends before it starts, no temporal samples or more
@@ -84,6 +86,17 @@ SceneView<TSpectral>::SceneView(const Scene<TSpectral>& scene,
     }
     this->camera_model_ = std::get<CameraModel<TSpectral>*>(asset_var)->shared_from_this();
     camera_node_ = camera_node.get();
+
+    // With the camera's motion blur off, a still frame:
+    if (!camera_model_->motion_blur_enabled()) {
+        if (requested_temporal_samples_ && *requested_temporal_samples_ > 1) {
+            HUIRA_LOG_WARNING("SceneView - Motion blur is off for " + camera_model_->get_info() +
+                              ": the " + std::to_string(*requested_temporal_samples_) +
+                              " temporal samples asked for are not used, and a still frame is "
+                              "rendered at the middle of the exposure");
+        }
+        requested_temporal_samples_ = 1;
+    }
 
     // How many pixels a small angle spans, at most, anywhere in the frame: off the axis, a
     // rectilinear camera's pixels span smaller angles, by the square of the cosine of the angle
@@ -218,7 +231,7 @@ SceneView<TSpectral>::SceneView(const Scene<TSpectral>& scene,
                 return rate;
             };
             fractions = choose_fractions_(
-                probes_at, turn_rate, Interpolation::Arc, MAX_AUTOMATIC_STAR_SAMPLES, "The stars");
+                probes_at, turn_rate, DrawnHalfway{}, MAX_AUTOMATIC_STAR_SAMPLES, "The stars");
             max_temporal_samples_ = std::max(max_temporal_samples_, fractions.size());
         }
         const std::size_t n_samples = fractions.size();
@@ -677,10 +690,11 @@ std::vector<double> SceneView<TSpectral>::uniform_fractions_(std::size_t count)
 /**
  * @brief Choose the temporal samples for one thing in view.
  *
- * Between its samples the renderer draws a thing along straight lines (geometry and lights,
- * interpolated by Embree) or along a curve fitted through them (point sources: see
- * TrajectoryArc). The samples are evenly spaced, and as few as keep that path within the
- * motion tolerance of the true one, as seen from the camera:
+ * Between its samples the renderer draws a thing by interpolating its poses (geometry and
+ * lights, which Embree moves along straight lines and turns along the shorter arc: see
+ * drawn_halfway) or along a curve fitted through them (point sources: see TrajectoryArc). The
+ * samples are evenly spaced, and as few as keep it within the motion tolerance of where it
+ * truly is, as seen from the camera:
  *
  * - A thing whose probes (points standing for its motion; see local_probes_()) move less than
  *   the tolerance during the exposure, and that does not turn by more, is still: one sample, at
@@ -688,10 +702,11 @@ std::vector<double> SceneView<TSpectral>::uniform_fractions_(std::size_t count)
  * - Otherwise, the samples start at the exposure's start and end, and as many more as keep it
  *   from turning more than 45 degrees between two, so that a turn is not mistaken for none (a
  *   full turn between two samples looks like no turn at all).
- * - Then, as long as the path drawn strays from the true one by more than the tolerance at any
- *   point halfway between two samples, the samples are doubled: the halfway points, already
+ * - Then, as long as it is drawn further than the tolerance from where it truly is at any point
+ *   halfway between two samples, the samples are doubled: the halfway points, already
  *   evaluated, become samples. So choosing costs about two evaluations per sample chosen (the
- *   last halfway points checked are not kept).
+ *   last halfway points checked are not kept). Something that only spins about its origin is
+ *   drawn exactly, and takes only the samples that keep its turns under 45 degrees.
  *
  * A light is also followed in its distance, within distance_tolerance relative to it, since
  * its light falls off with it: a straight line between two samples passes nearer the camera than
@@ -704,7 +719,8 @@ std::vector<double> SceneView<TSpectral>::uniform_fractions_(std::size_t count)
  *        each evaluated once (the reference returned must stay valid).
  * @param turn_rate How fast it turns, in rad/s, relative to the camera: asked for only when the
  *        samples are chosen.
- * @param interpolation How the renderer draws it between samples.
+ * @param drawn_halfway Where the renderer draws its probes halfway between two samples, or
+ *        empty for a curve fitted through them.
  * @param max_samples The most samples it may be given.
  * @param what What it is, for the warning.
  * @param distance_tolerance How closely its probes' distances must be followed, relative to them
@@ -715,7 +731,7 @@ template <IsSpectral TSpectral>
 std::vector<double> SceneView<TSpectral>::choose_fractions_(
     const std::function<const std::vector<Vec3<double>>&(double)>& probes_at,
     const std::function<double()>& turn_rate,
-    Interpolation interpolation,
+    const DrawnHalfway& drawn_halfway,
     std::size_t max_samples,
     const std::string& what,
     double distance_tolerance) const
@@ -793,16 +809,11 @@ std::vector<double> SceneView<TSpectral>::choose_fractions_(
         const double step = 1.0 / static_cast<double>(intervals);
         double error = 0.0;
         double distance_error = 0.0;
-        if (interpolation == Interpolation::Straight) {
+        if (drawn_halfway) {
             for (std::size_t j = 0; j < intervals; ++j) {
                 const double a = static_cast<double>(j) * step;
-                const std::vector<Vec3<double>>& start = probes_at(a);
-                const std::vector<Vec3<double>>& end = probes_at(a + step);
                 const std::vector<Vec3<double>>& halfway = probes_at(a + 0.5 * step);
-                std::vector<Vec3<double>> drawn(halfway.size());
-                for (std::size_t i = 0; i < halfway.size(); ++i) {
-                    drawn[i] = 0.5 * (start[i] + end[i]);
-                }
+                const std::vector<Vec3<double>> drawn = drawn_halfway(a, a + 0.5 * step, a + step);
                 error = std::max(error, largest_angle(halfway, drawn));
                 distance_error = std::max(distance_error, largest_distance_change(halfway, drawn));
             }
@@ -841,21 +852,22 @@ std::vector<double> SceneView<TSpectral>::choose_fractions_(
 }
 
 /**
- * @brief Points in an instance's own frame whose motion stands for its asset's.
+ * @brief Points whose motion stands for an instance's asset's.
  *
- * For geometry, the corners and center of its bounding box (for a model, of all its parts),
- * and the origins of any of a model's parts outside it. Each is treated as interpolated along a
- * straight line, which errs at least as much as Embree's interpolation of each part about its
- * origin: more for something that only turns, which so takes more samples than it needs. For a
- * light or an unresolved object, its origin. The first probe is the center.
+ * The renderer moves each of the asset's parts on its own (a model's, placed by its graph, or
+ * the asset itself), interpolating the part's pose about its origin, so the points are kept by
+ * part, in the part's frame: for geometry, the corners of its bounding box, where it is drawn
+ * furthest from where it is (the gap is affine in a point of the part, so largest at a corner),
+ * and for a light or a point source, its origin. The center of all of them stands for how far
+ * they reach.
  */
 template <IsSpectral TSpectral>
-std::vector<Vec3<double>>
+typename SceneView<TSpectral>::LocalProbes
 SceneView<TSpectral>::local_probes_(const Instance<TSpectral>& instance) const
 {
-    Vec3<double> lower{std::numeric_limits<double>::infinity()};
-    Vec3<double> upper{-std::numeric_limits<double>::infinity()};
-    auto include = [&](const Primitive<TSpectral>& primitive, const Transform<double>& placement) {
+    LocalProbes probes;
+    auto add_primitive = [&](const Primitive<TSpectral>& primitive,
+                             const Transform<double>& placement) {
         RTCScene blas = primitive.geometry->blas();
         if (blas == nullptr) {
             return;
@@ -866,77 +878,87 @@ SceneView<TSpectral>::local_probes_(const Instance<TSpectral>& instance) const
             !(bounds.upper_z >= bounds.lower_z)) {
             return;
         }
+        typename LocalProbes::Part part{placement, {}};
         for (std::size_t corner = 0; corner < 8; ++corner) {
-            const Vec3<double> local{(corner & 1) ? bounds.upper_x : bounds.lower_x,
-                                     (corner & 2) ? bounds.upper_y : bounds.lower_y,
-                                     (corner & 4) ? bounds.upper_z : bounds.lower_z};
-            const Vec3<double> point = placement.apply_to_point(local);
-            lower = glm::min(lower, point);
-            upper = glm::max(upper, point);
+            part.points.push_back(Vec3<double>{(corner & 1) ? bounds.upper_x : bounds.lower_x,
+                                               (corner & 2) ? bounds.upper_y : bounds.lower_y,
+                                               (corner & 4) ? bounds.upper_z : bounds.lower_z});
         }
+        probes.parts.push_back(std::move(part));
     };
 
-    // A model's parts, placed by its graph (which does not move within the model). Each part is
-    // interpolated about its own origin, which can lie outside its geometry, so the origins are
-    // kept too:
-    std::vector<Vec3<double>> part_origins;
+    // An asset placed in the instance's frame, and a model's parts, placed by its graph (which
+    // does not move within the model):
     std::function<void(const std::shared_ptr<Node<TSpectral>>&, const Transform<double>&)>
-        include_model =
-            [&](const std::shared_ptr<Node<TSpectral>>& node, const Transform<double>& parent) {
-                const Transform<double> placement = parent * node->local_transform_;
-                if (auto part = std::dynamic_pointer_cast<Instance<TSpectral>>(node)) {
-                    part_origins.push_back(placement.position);
-                    std::visit(
-                        [&](auto* raw_ptr) {
-                            using T = std::remove_pointer_t<decltype(raw_ptr)>;
-                            if constexpr (std::is_same_v<T, Primitive<TSpectral>>) {
-                                if (raw_ptr) {
-                                    include(*raw_ptr, placement);
-                                }
-                            } else if constexpr (std::is_same_v<T, Model<TSpectral>>) {
-                                if (raw_ptr) {
-                                    include_model(raw_ptr->root_node_, placement);
-                                }
-                            }
-                        },
-                        part->asset());
+        add_model;
+    auto add_asset = [&](const Instantiable<TSpectral>& asset, const Transform<double>& placement) {
+        std::visit(
+            [&](auto* raw_ptr) {
+                using T = std::remove_pointer_t<decltype(raw_ptr)>;
+                if (raw_ptr == nullptr) {
+                    return;
                 }
-                for (const auto& child : node->get_children()) {
-                    include_model(child, placement);
+                if constexpr (std::is_same_v<T, Primitive<TSpectral>>) {
+                    add_primitive(*raw_ptr, placement);
+                } else if constexpr (std::is_same_v<T, Model<TSpectral>>) {
+                    add_model(raw_ptr->root_node_, placement);
+                } else if constexpr (std::is_same_v<T, Light<TSpectral>> ||
+                                     std::is_same_v<T, UnresolvedObject<TSpectral>>) {
+                    probes.parts.push_back({placement, {Vec3<double>{0.0}}});
                 }
-            };
+            },
+            asset);
+    };
+    add_model = [&](const std::shared_ptr<Node<TSpectral>>& node, const Transform<double>& parent) {
+        const Transform<double> placement = parent * node->local_transform_;
+        if (auto part = std::dynamic_pointer_cast<Instance<TSpectral>>(node)) {
+            add_asset(part->asset(), placement);
+        }
+        for (const auto& child : node->get_children()) {
+            add_model(child, placement);
+        }
+    };
+    add_asset(instance.asset(), Transform<double>{});
 
-    std::visit(
-        [&](auto* raw_ptr) {
-            using T = std::remove_pointer_t<decltype(raw_ptr)>;
-            if constexpr (std::is_same_v<T, Primitive<TSpectral>>) {
-                if (raw_ptr) {
-                    include(*raw_ptr, Transform<double>{});
-                }
-            } else if constexpr (std::is_same_v<T, Model<TSpectral>>) {
-                if (raw_ptr) {
-                    include_model(raw_ptr->root_node_, Transform<double>{});
-                }
-            }
-        },
-        instance.asset());
+    // Nothing to draw (an empty model, say): its origin stands for it.
+    if (probes.parts.empty()) {
+        probes.parts.push_back({Transform<double>{}, {Vec3<double>{0.0}}});
+    }
 
-    if (!(upper.x >= lower.x) || !std::isfinite(glm::dot(upper - lower, upper - lower))) {
-        return {Vec3<double>{0.0}};
-    }
-    std::vector<Vec3<double>> probes{0.5 * (lower + upper)};
-    for (std::size_t corner = 0; corner < 8; ++corner) {
-        probes.push_back(Vec3<double>{(corner & 1) ? upper.x : lower.x,
-                                      (corner & 2) ? upper.y : lower.y,
-                                      (corner & 4) ? upper.z : lower.z});
-    }
-    // A part's origin outside the bounds can stray from its true path more than the corners:
-    for (const Vec3<double>& origin : part_origins) {
-        if (glm::any(glm::lessThan(origin, lower)) || glm::any(glm::greaterThan(origin, upper))) {
-            probes.push_back(origin);
+    Vec3<double> lower{std::numeric_limits<double>::infinity()};
+    Vec3<double> upper{-std::numeric_limits<double>::infinity()};
+    for (const typename LocalProbes::Part& part : probes.parts) {
+        for (const Vec3<double>& point : part.points) {
+            const Vec3<double> placed = part.placement.apply_to_point(point);
+            lower = glm::min(lower, placed);
+            upper = glm::max(upper, placed);
         }
     }
+    if (std::isfinite(glm::dot(upper - lower, upper - lower))) {
+        probes.center = 0.5 * (lower + upper);
+    }
     return probes;
+}
+
+/**
+ * @brief Where Embree draws something halfway between two of its poses.
+ *
+ * Its position and scale halfway along straight lines, and its rotation halfway along the
+ * shorter arc between the two, as instance_transform_at() emulates for shading.
+ */
+template <IsSpectral TSpectral>
+Transform<double> SceneView<TSpectral>::halfway_pose_(const Transform<double>& start,
+                                                      const Transform<double>& end)
+{
+    Transform<double> pose;
+    pose.position = 0.5 * (start.position + end.position);
+    pose.scale = 0.5 * (start.scale + end.scale);
+    // glm::slerp takes the shorter arc, as Embree does:
+    pose.rotation = Rotation<double>::from_local_to_parent(
+        glm::slerp(start.rotation.local_to_parent_quaternion(),
+                   end.rotation.local_to_parent_quaternion(),
+                   0.5));
+    return pose;
 }
 
 /**
@@ -949,9 +971,17 @@ template <IsSpectral TSpectral>
 std::vector<Transform<float>>
 SceneView<TSpectral>::sample_instance_(const Instance<TSpectral>& instance)
 {
-    const std::vector<Vec3<double>> local_probes = local_probes_(instance);
+    const LocalProbes local = local_probes_(instance);
     const bool point_source =
         std::holds_alternative<UnresolvedObject<TSpectral>*>(instance.asset());
+
+    // The probes in the instance's frame: the center, then each part's points.
+    std::vector<Vec3<double>> local_points{local.center};
+    for (const typename LocalProbes::Part& part : local.parts) {
+        for (const Vec3<double>& point : part.points) {
+            local_points.push_back(part.placement.apply_to_point(point));
+        }
+    }
 
     struct Sample {
         Transform<double> local;          // In the camera's frame.
@@ -967,8 +997,8 @@ SceneView<TSpectral>::sample_instance_(const Instance<TSpectral>& instance)
                 obs_mode_, exposure_interval_.reference, time_at_(fraction), observer.ssb);
             Sample& sample = it->second;
             sample.local = observer.inverse * ssb;
-            for (const Vec3<double>& probe : local_probes) {
-                sample.probes.push_back(sample.local.apply_to_point(probe));
+            for (const Vec3<double>& point : local_points) {
+                sample.probes.push_back(sample.local.apply_to_point(point));
             }
             // How fast it turns as seen from the camera: its own turning and the camera's, and
             // for a point, how fast its direction swings as it passes the camera.
@@ -982,6 +1012,27 @@ SceneView<TSpectral>::sample_instance_(const Instance<TSpectral>& instance)
         return it->second;
     };
 
+    // Embree draws each part halfway between two samples where its pose, interpolated, puts it.
+    // The center only stands for how far the probes reach, and is taken as drawn where it is:
+    // within the bounds, a part is drawn furthest from where it is at a corner.
+    DrawnHalfway drawn_halfway;
+    if (!point_source) {
+        drawn_halfway = [&](double start, double halfway, double end) {
+            const Transform<double>& start_pose = sample_at(start).local;
+            const Transform<double>& end_pose = sample_at(end).local;
+            std::vector<Vec3<double>> drawn{sample_at(halfway).probes[0]};
+            drawn.reserve(local_points.size());
+            for (const typename LocalProbes::Part& part : local.parts) {
+                const Transform<double> pose =
+                    halfway_pose_(start_pose * part.placement, end_pose * part.placement);
+                for (const Vec3<double>& point : part.points) {
+                    drawn.push_back(pose.apply_to_point(point));
+                }
+            }
+            return drawn;
+        };
+    }
+
     const std::vector<double> fractions = choose_fractions_(
         [&](double fraction) -> const std::vector<Vec3<double>>& {
             return sample_at(fraction).probes;
@@ -993,7 +1044,7 @@ SceneView<TSpectral>::sample_instance_(const Instance<TSpectral>& instance)
             }
             return rate;
         },
-        point_source ? Interpolation::Arc : Interpolation::Straight,
+        drawn_halfway,
         MAX_AUTOMATIC_SAMPLES,
         instance.get_info(),
         std::holds_alternative<Light<TSpectral>*>(instance.asset())

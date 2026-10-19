@@ -164,7 +164,8 @@ class SceneView {
     // Temporal sampling. Each thing in view (each instance, and the star field) has its own
     // samples, evenly spaced through the exposure: one, at its middle, for something that does
     // not move in view, and otherwise as many as its motion needs (see choose_fractions_()), or
-    // the number asked for. Times are given as fractions of the exposure, from 0 to 1.
+    // the number asked for (one with the camera's motion blur off). Times are given as fractions
+    // of the exposure, from 0 to 1.
     std::optional<std::size_t> requested_temporal_samples_;
     double motion_tolerance_ = DEFAULT_MOTION_TOLERANCE;
     ObservationMode obs_mode_ = ObservationMode::GEOMETRIC_STATE;
@@ -188,9 +189,12 @@ class SceneView {
     [[nodiscard]] Time time_at_(double fraction) const;
     [[nodiscard]] static std::vector<double> uniform_fractions_(std::size_t count);
 
-    /// How the renderer draws something between its temporal samples: geometry and lights along
-    /// straight lines (Embree), and point sources along a curve fitted through them.
-    enum class Interpolation { Straight, Arc };
+    /// Where the renderer draws something's probes halfway between two of its temporal samples,
+    /// given the fractions of the exposure at the two and halfway between them. Empty for point
+    /// sources and the stars, which are drawn along a curve fitted through their samples (see
+    /// TrajectoryArc).
+    using DrawnHalfway =
+        std::function<std::vector<Vec3<double>>(double start, double halfway, double end)>;
 
     /// How closely a light's distance is followed, relative to it, when its samples are chosen:
     /// its light falls off as the square of the distance, so this keeps it within 0.1%.
@@ -199,18 +203,34 @@ class SceneView {
     std::vector<double>
     choose_fractions_(const std::function<const std::vector<Vec3<double>>&(double)>& probes_at,
                       const std::function<double()>& turn_rate,
-                      Interpolation interpolation,
+                      const DrawnHalfway& drawn_halfway,
                       std::size_t max_samples,
                       const std::string& what,
                       double distance_tolerance = std::numeric_limits<double>::infinity()) const;
 
-    /// Points in an instance's own frame whose motion stands for its asset's: the corners and
-    /// center of its bounds, or its origin.
-    [[nodiscard]] std::vector<Vec3<double>>
-    local_probes_(const Instance<TSpectral>& instance) const;
+    /// Points whose motion stands for an instance's asset's (see local_probes_()).
+    struct LocalProbes {
+        /// The center of its bounds, in the instance's frame.
+        Vec3<double> center{0.0};
+
+        /// A part of it that the renderer moves on its own: its placement in the instance's
+        /// frame, and points in its own frame.
+        struct Part {
+            Transform<double> placement;
+            std::vector<Vec3<double>> points;
+        };
+        std::vector<Part> parts;
+    };
+    [[nodiscard]] LocalProbes local_probes_(const Instance<TSpectral>& instance) const;
 
     /// An instance's transforms in the camera's frame at its temporal samples.
     std::vector<Transform<float>> sample_instance_(const Instance<TSpectral>& instance);
+
+    /// Where Embree draws something halfway between two of its poses: its position and scale
+    /// halfway along straight lines, and its rotation halfway along the shorter arc (see
+    /// instance_transform_at()).
+    [[nodiscard]] static Transform<double> halfway_pose_(const Transform<double>& start,
+                                                         const Transform<double>& end);
 
     /// The angle between two directions (which need not be unit vectors), precise at any size.
     [[nodiscard]] static double angle_between_(const Vec3<double>& a, const Vec3<double>& b)

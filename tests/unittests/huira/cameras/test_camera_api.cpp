@@ -170,6 +170,9 @@ TEST_CASE("The camera handle reads back what was set", "[cameras][api]")
     CHECK(camera.psf_convolution_enabled());
     camera.enable_psf_convolution(false);
     CHECK_FALSE(camera.psf_convolution_enabled());
+    CHECK(camera.motion_blur_enabled());
+    camera.enable_motion_blur(false);
+    CHECK_FALSE(camera.motion_blur_enabled());
 
     // Sensor:
     camera.set_sensor_quantum_efficiency(0.7);
@@ -287,6 +290,7 @@ TEST_CASE("A camera describes its settings", "[cameras][describe]")
     CHECK(text.find("Brown-Conrady, k1 -0.05, k2 0.01") != std::string::npos);
     CHECK(text.find("Focus:      infinity") != std::string::npos);
     CHECK(text.find("Noise:      on") != std::string::npos);
+    CHECK(text.find("Motion blur: on") != std::string::npos);
 
     // It builds nothing:
     CHECK(text.find("Precomputed: no") != std::string::npos);

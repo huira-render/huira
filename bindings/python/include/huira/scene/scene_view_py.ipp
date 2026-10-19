@@ -32,7 +32,8 @@ void bind_scene_view(py::module_& m)
              "(the default), each thing in view is given as many temporal samples as its motion "
              "needs, to be drawn within motion_tolerance pixels of its path: one, a still frame, "
              "if it does not move in view. A number gives everything that many; 1 renders a "
-             "still frame.")
+             "still frame, as does turning the camera's motion blur off "
+             "(enable_motion_blur(False)), whatever the number.")
         .def("has_motion_blur",
              &SV::has_motion_blur,
              "Whether anything rays can hit moves in view during the exposure, as sampled")
