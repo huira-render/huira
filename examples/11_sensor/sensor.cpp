@@ -110,8 +110,7 @@ int main(int argc, char** argv)
     const float exposure_seconds = 4.f;
     const huira::Interval exposure =
         huira::Interval::from_centered(time, huira::units::Second(exposure_seconds));
-    huira::SceneView<TSpectral> scene_view(
-        scene, exposure, camera, huira::ObservationMode::GEOMETRIC_STATE);
+    huira::SceneView<TSpectral> scene_view(scene, exposure, camera);
     huira::Renderer<TSpectral> renderer;
 
     auto frame_buffer = camera_model.make_frame_buffer();

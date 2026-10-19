@@ -42,7 +42,7 @@ def direction(ra_deg, dec_deg):
 
 
 def render(scene, camera, camera_model, exposure, filename):
-    scene_view = SceneView(scene, exposure, camera, huira.ObservationMode.GEOMETRIC_STATE)
+    scene_view = SceneView(scene, exposure, camera)
     frame_buffer = camera_model.make_frame_buffer()
     frame_buffer.enable_sensor_response()
     Renderer().render(scene_view, frame_buffer)

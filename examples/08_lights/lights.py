@@ -34,7 +34,7 @@ from huira.units import Millisecond as ms
 
 
 def render(scene, camera, camera_model, exposure, filename, samples):
-    scene_view = SceneView(scene, exposure, camera, huira.ObservationMode.GEOMETRIC_STATE)
+    scene_view = SceneView(scene, exposure, camera)
     frame_buffer = camera_model.make_frame_buffer()
     frame_buffer.enable_sensor_response()
 

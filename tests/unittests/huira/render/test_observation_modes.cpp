@@ -1,4 +1,5 @@
 #include <cmath>
+#include <optional>
 #include <vector>
 
 #include "catch2/catch_test_macros.hpp"
@@ -14,8 +15,9 @@ enum class Source { Star, Body };
 
 /// Where a source straight ahead of the camera is drawn, in pixels (its light's centroid), as
 /// seen by a camera moving across the line of sight at 300 km/s (1e-3 of the speed of light),
-/// which aberrates it by 1e-3 rad: 100 pixels of 10 um, behind a 1 m focal length.
-Vec2<double> drawn_at(Source source, ObservationMode mode)
+/// which aberrates it by 1e-3 rad: 100 pixels of 10 um, behind a 1 m focal length. With no
+/// observation mode, the scene view is given none.
+Vec2<double> drawn_at(Source source, std::optional<ObservationMode> mode)
 {
     Scene<RGB> scene;
     if (source == Source::Star) {
@@ -35,8 +37,9 @@ Vec2<double> drawn_at(Source source, ObservationMode mode)
     auto camera = scene.root.new_instance(camera_model);
     camera.set_velocity(0_mps, units::MetersPerSecond(3e5), 0_mps);
 
-    SceneView<RGB> scene_view(
-        scene, Interval::from_centered(Time::from_et(0.0), 1_ms), camera, mode);
+    const Interval exposure = Interval::from_centered(Time::from_et(0.0), 1_ms);
+    SceneView<RGB> scene_view = mode ? SceneView<RGB>(scene, exposure, camera, *mode)
+                                     : SceneView<RGB>(scene, exposure, camera);
     auto frame_buffer = camera_model.make_frame_buffer();
     frame_buffer.enable_received_power();
     Renderer<RGB> renderer;
@@ -120,4 +123,21 @@ TEST_CASE("Stars are placed by the observation mode, as bodies are", "[render][o
         CHECK(std::abs(body.x - expected.x) < 0.05);
         CHECK(std::abs(body.y - expected.y) < 0.05);
     }
+}
+
+TEST_CASE("A scene view observes as a camera sees, unless told otherwise",
+          "[render][observation_mode]")
+{
+    // Given no observation mode, a scene view draws a star and a distant body where
+    // ABERRATED_STATE does:
+    for (Source source : {Source::Star, Source::Body}) {
+        const Vec2<double> by_default = drawn_at(source, std::nullopt);
+        const Vec2<double> aberrated = drawn_at(source, ObservationMode::ABERRATED_STATE);
+        CHECK(glm::length(by_default - aberrated) < 1e-9);
+    }
+
+    // A pose context made without one, as for trying out a position or rotation function, has
+    // it too:
+    const Time time = Time::from_et(0.0);
+    CHECK(PoseContext{time, time}.observation_mode == ObservationMode::ABERRATED_STATE);
 }

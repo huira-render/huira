@@ -94,7 +94,7 @@ def main():
         phase = math.radians(phase_angle_deg)
         sun.set_position(m(0), au(-math.sin(phase)), au(-math.cos(phase)))
 
-        scene_view = SceneView(scene, exposure, camera, huira.ObservationMode.GEOMETRIC_STATE)
+        scene_view = SceneView(scene, exposure, camera)
         frame_buffer = camera_model.make_frame_buffer()
         frame_buffer.enable_sensor_response()
         renderer.render(scene_view, frame_buffer)

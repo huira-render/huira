@@ -40,7 +40,7 @@ inline void bind_pose_context(py::module_& m)
              }),
              py::arg("time"),
              py::arg("reference") = py::none(),
-             py::arg("observation_mode") = ObservationMode::GEOMETRIC_STATE,
+             py::arg("observation_mode") = ObservationMode::ABERRATED_STATE,
              "A context, as for testing a function: its reference is its time by default.")
         .def_readonly("time",
                       &PoseContext::time,

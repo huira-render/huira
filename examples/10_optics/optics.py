@@ -85,7 +85,7 @@ def main():
         # The camera's optics are rebuilt after any change; doing it here keeps that out of the
         # render.
         camera_model.precompute()
-        scene_view = SceneView(scene, exposure, camera, huira.ObservationMode.GEOMETRIC_STATE)
+        scene_view = SceneView(scene, exposure, camera)
         frame_buffer = camera_model.make_frame_buffer()
         frame_buffer.enable_sensor_response()
         renderer.render(scene_view, frame_buffer)

@@ -132,7 +132,7 @@ def main():
     time = huira.Time("2026-01-01T00:00:00")
 
     def render(exposure, filename):
-        scene_view = SceneView(scene, exposure, camera, huira.ObservationMode.GEOMETRIC_STATE)
+        scene_view = SceneView(scene, exposure, camera)
         frame_buffer = camera_model.make_frame_buffer()
         frame_buffer.enable_sensor_response()
         renderer.render(scene_view, frame_buffer)

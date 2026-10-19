@@ -116,7 +116,7 @@ def main():
     ]
     for when, filename in renders:
         exposure = huira.Interval.from_start(when, us(25))
-        scene_view = SceneView(scene, exposure, camera, huira.ObservationMode.GEOMETRIC_STATE)
+        scene_view = SceneView(scene, exposure, camera)
         frame_buffer = camera_model.make_frame_buffer()
         frame_buffer.enable_sensor_response()
         renderer.render(scene_view, frame_buffer)

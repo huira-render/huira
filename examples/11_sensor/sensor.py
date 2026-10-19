@@ -104,7 +104,7 @@ def main():
 
     exposure_seconds = 4.0
     exposure = huira.Interval.from_centered(time, sec(exposure_seconds))
-    scene_view = SceneView(scene, exposure, camera, huira.ObservationMode.GEOMETRIC_STATE)
+    scene_view = SceneView(scene, exposure, camera)
     renderer = Renderer()
 
     frame_buffer = camera_model.make_frame_buffer()

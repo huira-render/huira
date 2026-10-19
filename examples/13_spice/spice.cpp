@@ -117,8 +117,7 @@ int main(int argc, char** argv)
     };
     for (const auto& [when, filename] : renders) {
         const huira::Interval exposure = huira::Interval::from_start(when, 25_us);
-        huira::SceneView<TSpectral> scene_view(
-            scene, exposure, camera, huira::ObservationMode::GEOMETRIC_STATE);
+        huira::SceneView<TSpectral> scene_view(scene, exposure, camera);
         auto frame_buffer = camera_model.make_frame_buffer();
         frame_buffer.enable_sensor_response();
         renderer.render(scene_view, frame_buffer);

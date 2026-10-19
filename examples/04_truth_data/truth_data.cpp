@@ -111,8 +111,7 @@ int main(int argc, char** argv)
 
     huira::Time time("2026-01-01T00:00:00");
     huira::Interval exposure = huira::Interval::from_start(time, 1_ms);
-    huira::SceneView<TSpectral> scene_view(
-        scene, exposure, camera, huira::ObservationMode::GEOMETRIC_STATE);
+    huira::SceneView<TSpectral> scene_view(scene, exposure, camera);
 
     // Besides the sensor response, a frame buffer can hold images of what each pixel sees. Each
     // is filled only if enabled, since each costs memory and time:
