@@ -1010,14 +1010,16 @@ SceneView<TSpectral>::sample_instance_(const Instance<TSpectral>& instance)
             for (const Vec3<double>& point : local_points) {
                 sample.probes.push_back(sample.local.apply_to_point(point));
             }
-            // How fast it turns as seen from the camera: its own turning and the camera's, and
-            // for a point, how fast its direction swings as it passes the camera.
+            // How fast it turns as seen from the camera: its turning relative to the camera's
+            // (both rates are about the SSB frame's axes), so that something turning with the
+            // camera is as still as it looks; and for a point, how fast its direction swings as
+            // it passes the camera.
             sample.turn_rate =
-                glm::length(observer.ssb.angular_velocity) +
+                glm::length(ssb.angular_velocity - observer.ssb.angular_velocity) +
                 (point_source ? glm::length(ssb.velocity - observer.ssb.velocity) /
                                     std::max(glm::length(ssb.position - observer.ssb.position),
                                              std::numeric_limits<double>::min())
-                              : glm::length(ssb.angular_velocity));
+                              : 0.0);
         }
         return it->second;
     };

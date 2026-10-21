@@ -142,6 +142,27 @@ TEST_CASE("What does not move in view is rendered as a still frame", "[render][m
     together.ball.set_velocity(0_mps, 8_Kmps, 0_mps);
     together.camera.set_velocity(0_mps, 8_Kmps, 0_mps);
     CHECK_FALSE(together.view().has_motion_blur());
+
+    // ...nor turning shared with the camera: the camera, the ball and the light ride one frame
+    // that turns once a second, so nothing moves in view, though the ball spins 1 rad/s about the
+    // line of sight as seen from outside.
+    Scene<RGB> scene;
+    auto frame = scene.root.new_subframe();
+    frame.set_angular_velocity(0_radps, 0_radps, 1_radps);
+    auto camera_model = scene.new_camera_model();
+    camera_model.configure_sensor_from_size({200, 200}, 36_mm);
+    camera_model.set_focal_length(50_mm);
+    auto camera = frame.new_instance(camera_model);
+    auto ball = frame.new_instance(scene.add_primitive(
+        scene.add_ellipsoid(2_m, 2_m, 2_m), scene.new_material(scene.new_bsdf_lambertian())));
+    ball.set_position(0_m, 0_m, 100_m);
+    frame.new_instance(scene.new_sun_light()).set_position(0_m, 0_m, -1_au);
+    const SceneView<RGB> turning_together(scene,
+                                          Interval::from_centered(Time::from_et(0.0), 1_s),
+                                          camera,
+                                          ObservationMode::TRUE_STATE);
+    CHECK_FALSE(turning_together.has_motion_blur());
+    CHECK(turning_together.max_temporal_samples() == 1);
 }
 
 TEST_CASE("A body moving in a straight line takes two temporal samples", "[render][motion_blur]")
