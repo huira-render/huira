@@ -60,6 +60,11 @@ void bind_core(py::module_& m)
         .value("GEOMETRIC_STATE", huira::ObservationMode::GEOMETRIC_STATE)
         .value("ABERRATED_STATE", huira::ObservationMode::ABERRATED_STATE);
 
+    // The frame a point given to look_at() is in:
+    py::enum_<huira::TargetFrame>(m, "TargetFrame")
+        .value("PARENT", huira::TargetFrame::PARENT)
+        .value("ROOT", huira::TargetFrame::ROOT);
+
     // What position and rotation functions are called with (after ObservationMode, which its
     // constructor takes by default):
     huira::bind_pose_context(m);

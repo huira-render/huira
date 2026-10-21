@@ -20,6 +20,15 @@ namespace huira {
 enum class ObservationMode { TRUE_STATE, GEOMETRIC_STATE, ABERRATED_STATE };
 
 /**
+ * @brief The frame a fixed point given to look_at() is in.
+ *
+ * - PARENT: the looking node's parent's frame, as a position set by set_position() is. The point
+ *   moves with the parent.
+ * - ROOT: the scene's root frame (the solar system barycenter, with the J2000 axes).
+ */
+enum class TargetFrame { PARENT, ROOT };
+
+/**
  * @brief What a pose is evaluated for, given to every pose callback.
  */
 struct PoseContext {

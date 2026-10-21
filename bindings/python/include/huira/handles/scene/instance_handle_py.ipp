@@ -31,9 +31,19 @@ inline void bind_instance_handle(py::module_& m)
                  "scene view's, which keeps it where the scene view renders it.")
             // Bind the overload taking a static target position
             .def("look_at",
-                 py::overload_cast<const Vec3<double>&, const Vec3<double>&>(&HandleType::look_at),
+                 py::overload_cast<const Vec3<double>&,
+                                   const Vec3<double>&,
+                                   TargetFrame,
+                                   std::optional<ObservationMode>>(&HandleType::look_at),
                  py::arg("target_position"),
-                 py::arg("up") = Vec3<double>{0.0, 0.0, 1.0})
+                 py::arg("up") = Vec3<double>{0.0, 0.0, 1.0},
+                 py::arg("frame") = TargetFrame::PARENT,
+                 py::arg("observation_mode") = ObservationMode::TRUE_STATE,
+                 "Look at a fixed point, in meters: in the parent's frame (TargetFrame.PARENT, "
+                 "the default), so that it moves with the parent, or in the scene's root frame "
+                 "(TargetFrame.ROOT). It is aimed at where it is (TRUE_STATE, the default), "
+                 "shifted by the aberration of the instance's velocity (ABERRATED_STATE), or, "
+                 "given None, as the scene view observes.")
             // Designate this instance (which must contain a Primitive or a Model)
             // as an indirect illumination source that is explicitly sampled during
             // rendering, rather than relying on it being found by chance.
