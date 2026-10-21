@@ -41,7 +41,7 @@ set(SPHINX_BUILD ${CMAKE_BINARY_DIR}/huira_docs)
 set(SPHINX_INDEX_FILE ${SPHINX_BUILD}/index.html)
 
 add_custom_command(OUTPUT ${SPHINX_INDEX_FILE}
-    COMMAND Sphinx::build -b html
+    COMMAND Sphinx::build -b html -W --keep-going
         -Dbreathe_projects.huira=${DOXYGEN_OUTPUT_DIR}/xml
         ${SPHINX_SOURCE} ${SPHINX_BUILD}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
