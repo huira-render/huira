@@ -1,4 +1,4 @@
 Core Types
 ==========
 
-.. doxygenfile:: huira/core/types.hpp
+.. doxygenfile:: types.hpp

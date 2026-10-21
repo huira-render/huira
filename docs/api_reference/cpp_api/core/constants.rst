@@ -1,5 +1,5 @@
 Constants
 =========
 
-.. doxygenfile:: huira/core/constants.hpp
+.. doxygenfile:: constants.hpp
    :sections: briefdescription detaileddescription

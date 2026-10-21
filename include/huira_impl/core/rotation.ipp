@@ -272,7 +272,7 @@ Rotation<T> Rotation<T>::from_basis_vectors(Vec3<T> x_axis, Vec3<T> y_axis, Vec3
 /**
  * @brief Convert this Rotation to another floating point type.
  * @tparam U Target floating point type
- * @return Rotation<U> Converted rotation
+ * @return `Rotation<U>` Converted rotation
  */
 template <IsFloatingPoint T>
 template <IsFloatingPoint U>

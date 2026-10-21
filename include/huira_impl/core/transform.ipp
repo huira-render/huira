@@ -8,7 +8,7 @@ namespace huira {
 /**
  * @brief Convert this Transform to another floating point type.
  * @tparam U Target floating point type
- * @return Transform<U> Converted transform
+ * @return `Transform<U>` Converted transform
  */
 template <IsFloatingPoint T>
 template <IsFloatingPoint U>

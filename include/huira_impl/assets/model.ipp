@@ -108,7 +108,7 @@ MaterialHandle<TSpectral> Model<TSpectral>::get_material_by_id(std::uint64_t mat
 /**
  * @brief Sets the given BSDF on all materials used by meshes in the model.
  *
- * @param bsdf The BSDFHandle to set on all materials.
+ * @param bsdf_handle The BSDFHandle to set on all materials.
  * @throws std::runtime_error if the model has no root node.
  */
 template <IsSpectral TSpectral>

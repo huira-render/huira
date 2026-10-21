@@ -317,6 +317,7 @@ struct RayContext : public RTCRayQueryContext {
  * @brief Intersect a ray with the scene and return the hit record.
  * @param ray The ray to intersect.
  * @param time The time for motion blur.
+ * @param mask The ray mask: only geometry whose mask shares a bit with it is hit (all, by default).
  * @return The hit record.
  */
 template <IsSpectral TSpectral>
@@ -368,7 +369,11 @@ SceneView<TSpectral>::intersect(const Ray<TSpectral>& ray, float time, unsigned 
 /**
  * @brief Evaluate transmission along a ray
  * @param ray The ray to intersect.
+ * @param t_far The distance along the ray to evaluate the transmission to.
+ * @param initial_stack The media the ray starts in.
+ * @param sampler Random numbers, for the media and for partially opaque surfaces.
  * @param time The time for motion blur.
+ * @param alpha_mode How partially opaque surfaces are passed through.
  * @return The spectral transmission
  */
 template <IsSpectral TSpectral>
@@ -1107,7 +1112,8 @@ void SceneView<TSpectral>::collect_hidden_(const std::shared_ptr<Node<TSpectral>
 /**
  * @brief Handle primitive asset pointer and add to geometry batch.
  * @param primitive Primitive pointer
- * @param xf Render transform
+ * @param instance_apparent_transforms The instance's render transforms, sampled across the
+ *        exposure (one if it does not move)
  */
 template <IsSpectral TSpectral>
 void SceneView<TSpectral>::handle_asset_ptr_(
@@ -1120,7 +1126,8 @@ void SceneView<TSpectral>::handle_asset_ptr_(
 /**
  * @brief Handle light asset pointer and add to lights vector.
  * @param light Light pointer
- * @param xf Render transform
+ * @param instance_apparent_transforms The instance's render transforms, sampled across the
+ *        exposure (one if it does not move)
  */
 template <IsSpectral TSpectral>
 void SceneView<TSpectral>::handle_asset_ptr_(
@@ -1132,7 +1139,8 @@ void SceneView<TSpectral>::handle_asset_ptr_(
 /**
  * @brief Handle camera model asset pointer (no-op).
  * @param camera CameraModel pointer
- * @param xf Render transform
+ * @param instance_apparent_transforms The instance's render transforms, sampled across the
+ *        exposure (one if it does not move)
  */
 template <IsSpectral TSpectral>
 void SceneView<TSpectral>::handle_asset_ptr_(
@@ -1146,7 +1154,8 @@ void SceneView<TSpectral>::handle_asset_ptr_(
 /**
  * @brief Handle unresolved object asset pointer and add to unresolved vector.
  * @param light UnresolvedObject pointer
- * @param xf Render transform
+ * @param instance_apparent_transforms The instance's render transforms, sampled across the
+ *        exposure (one if it does not move)
  */
 template <IsSpectral TSpectral>
 void SceneView<TSpectral>::handle_asset_ptr_(
@@ -1159,7 +1168,8 @@ void SceneView<TSpectral>::handle_asset_ptr_(
 /**
  * @brief Handle model asset pointer and traverse its scene graph.
  * @param model Model pointer
- * @param instance_apparent_transforms Render transform
+ * @param instance_apparent_transforms The instance's render transforms, sampled across the
+ *        exposure (one if it does not move)
  */
 template <IsSpectral TSpectral>
 void SceneView<TSpectral>::handle_asset_ptr_(
@@ -1185,7 +1195,8 @@ void SceneView<TSpectral>::handle_asset_ptr_(
 /**
  * @brief Add a primitive instance to the geometry batch.
  * @param primitive Primitive pointer
- * @param render_transform Render transform
+ * @param instance_apparent_transforms The instance's render transforms, sampled across the
+ *        exposure (one if it does not move)
  */
 template <IsSpectral TSpectral>
 void SceneView<TSpectral>::add_primitive_instance_(
@@ -1230,7 +1241,8 @@ void SceneView<TSpectral>::add_primitive_instance_(
 /**
  * @brief Add a light instance to the lights vector.
  * @param light Light pointer
- * @param render_transform Render transform
+ * @param instance_apparent_transforms The instance's render transforms, sampled across the
+ *        exposure (one if it does not move)
  */
 template <IsSpectral TSpectral>
 void SceneView<TSpectral>::add_light_instance_(
@@ -1248,7 +1260,8 @@ void SceneView<TSpectral>::add_light_instance_(
 /**
  * @brief Add an unresolved object instance to the unresolved vector.
  * @param unresolved_object UnresolvedObject pointer
- * @param render_transform Render transform
+ * @param instance_apparent_transforms The instance's render transforms, sampled across the
+ *        exposure (one if it does not move)
  */
 template <IsSpectral TSpectral>
 void SceneView<TSpectral>::add_unresolved_instance_(
@@ -1575,7 +1588,8 @@ void SceneView<TSpectral>::compute_indirect_source_bounds_()
 /**
  * @brief Traverse a model's scene graph and collect instances.
  * @param node Node to traverse
- * @param parent_tf Parent transform
+ * @param parent_transforms The render transforms of the node's parent, sampled across the
+ *        exposure
  */
 template <IsSpectral TSpectral>
 void SceneView<TSpectral>::traverse_model_graph_(

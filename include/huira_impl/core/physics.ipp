@@ -266,13 +266,13 @@ inline double integrate(const std::vector<double>& x, const std::vector<double>&
 /**
  * @brief Compute relativistic aberration of a direction vector for a moving observer.
  * @param direction Incoming direction (unit vector)
- * @param v_obs Observer velocity (m/s)
+ * @param obs_velocity Observer velocity (m/s)
  * @return Vec3<double> Aberrated direction, a unit vector when direction is one
  */
-inline Vec3<double> compute_aberrated_direction(Vec3<double> direction, Vec3<double> v_obs)
+inline Vec3<double> compute_aberrated_direction(Vec3<double> direction, Vec3<double> obs_velocity)
 {
     // Calculate Relativistic Beta and Gamma
-    Vec3<double> beta = v_obs / SPEED_OF_LIGHT<double>();
+    Vec3<double> beta = obs_velocity / SPEED_OF_LIGHT<double>();
 
     double beta_sq = glm::dot(beta, beta);
 

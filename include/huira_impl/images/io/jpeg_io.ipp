@@ -35,6 +35,7 @@ struct JPEGData {
  *
  * @param data Pointer to the JPEG data in memory
  * @param size Size of the data in bytes
+ * @param force_gray Whether to decode to 8-bit gray instead, one channel per pixel
  * @return Raw decoded data with resolution and pixel buffer
  * @throws std::runtime_error if the data cannot be decoded
  */
@@ -208,7 +209,7 @@ inline ImageBundle<float> read_image_jpeg_mono(const fs::path& filepath)
  * necessary directories.
  *
  * @param filepath Path where the JPEG file will be written
- * @param image An ImageBundle<RGB> with the RGB image to write
+ * @param output_image An ImageBundle<RGB> with the RGB image to write
  * @param quality JPEG compression quality (1-100, default 95)
  * @throws std::runtime_error if the file cannot be created, the image is empty,
  *         quality is invalid, or if any error occurs during writing
@@ -317,7 +318,7 @@ write_image_jpeg(const fs::path& filepath, const ImageBundle<RGB>& output_image,
  * Convenience overload that promotes a mono image to RGB before writing.
  *
  * @param filepath Path where the JPEG file will be written
- * @param image An ImageBundle<float> with the mono image to write
+ * @param output_image An ImageBundle<float> with the mono image to write
  * @param quality JPEG compression quality (1-100, default 95)
  */
 inline void

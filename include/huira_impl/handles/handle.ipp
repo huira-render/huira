@@ -21,7 +21,7 @@ bool Handle<T>::valid() const
 /**
  * @brief Gets a shared_ptr to the referenced object, optionally downcasting to a derived type.
  * @tparam U Type to cast to (default: T)
- * @return std::shared_ptr<U> Shared pointer to the object
+ * @return `std::shared_ptr<U>` Shared pointer to the object
  * @throws std::runtime_error if the handle is invalid or the cast fails
  */
 template <IsSceneObject T>

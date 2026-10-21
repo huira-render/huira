@@ -24,6 +24,8 @@ namespace huira {
  * @param file_path Path to the model file
  * @param name Name for the model (optional)
  * @param post_process_flags ASSIMP post-processing flags (optional)
+ * @param spectral_conversion Converts the model's RGB colors (vertex, base and emissive colors,
+ * and color textures) to the scene's spectral type (optional)
  * @return Shared pointer to the loaded Model
  * @throws std::runtime_error if loading fails
  */
@@ -743,7 +745,8 @@ inline Image<float> extract_blue_channel_(const Image<RGB>& rgb)
  * @param ctx Loading context with scene reference and caches
  * @param read_alpha Whether to also load the alpha channel as a separate texture (if supported by
  * format)
- * @param is_normal_map Whether the texture is a normal map
+ * @param is_color_data Whether the texture holds colors, which are converted from sRGB to linear
+ * when the file is sRGB (false for data such as normals, roughness and metalness)
  * @return TextureHandle if a texture was found and loaded, std::nullopt otherwise
  */
 template <IsSpectral TSpectral>
