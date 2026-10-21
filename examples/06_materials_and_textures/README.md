@@ -25,7 +25,7 @@ curl -fLO https://media.huira.space/data/textures/earth/8k_earth_roughness_map.t
 curl -fLO https://media.huira.space/data/textures/earth/8k_earth_normal_map.tif
 ```
 
-Licenses, and how to credit the data: [Earth textures](../../docs/getting_started/data.md#earth-textures).
+Licenses, and how to credit the data: [Earth textures](../../docs/getting_started/data.md#solar-system-textures).
 
 ## Run
 

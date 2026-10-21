@@ -22,7 +22,7 @@ curl -fLO https://naif.jpl.nasa.gov/pub/naif/generic_kernels/pck/earth_latest_hi
 curl -fLO https://media.huira.space/data/textures/earth/8k_earth_daymap.jpg
 ```
 
-Licenses, and how to credit the data: [SPICE kernels](../../docs/getting_started/data.md#spice-kernels), [Earth textures](../../docs/getting_started/data.md#earth-textures).
+Licenses, and how to credit the data: [SPICE kernels](../../docs/getting_started/data.md#spice-kernels), [Earth textures](../../docs/getting_started/data.md#solar-system-textures).
 
 ## Run
 

@@ -24,7 +24,7 @@ This is the model from [03 - Load a model](../03_load_a_model/): if you have it 
 curl -fLO https://media.huira.space/data/models/nasa/gateway.glb
 ```
 
-Licenses, and how to credit the data: [Gateway model](../../docs/getting_started/data.md#gateway-model).
+Licenses, and how to credit the data: [Gateway model](../../docs/getting_started/data.md#nasa-spacecraft-models).
 
 ## Run
 
