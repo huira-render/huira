@@ -261,7 +261,7 @@ TEST_CASE("Each position or rotation source replaces the last", "[scene][pose_so
     CHECK(node.get()->get_position_mode() == TransformMode::MANUAL_TRANSFORM);
     CHECK_NOTHROW(node.set_velocity(1_mps, 0_mps, 0_mps));
 
-    node.set_keplerian_orbit(7000_Km, 0.1, 0_rad, 0_rad, 0_rad, 0_rad, at(0.0), 398600.4418);
+    node.set_keplerian_orbit(7000_Km, 0.1, 0_rad, 0_rad, 0_rad, 0_rad, at(0.0), 398600.4418_Km3ps2);
     CHECK(std::abs(glm::length(pose_at(node, at(0.0)).position) - 6300e3) < 1e-3);
 
     node.set_rotation_function([](const PoseContext&) { return Rotation<double>{}; });
@@ -290,7 +290,7 @@ TEST_CASE("A rotation set by hand is read back whatever places the node", "[scen
     // from, not where the position does.
     Scene<RGB> scene;
     auto node = scene.root.new_subframe();
-    node.set_keplerian_orbit(7000_Km, 0.1, 0_rad, 0_rad, 0_rad, 0_rad, at(0.0), 398600.4418);
+    node.set_keplerian_orbit(7000_Km, 0.1, 0_rad, 0_rad, 0_rad, 0_rad, at(0.0), 398600.4418_Km3ps2);
     const Rotation<double> turned =
         Rotation<double>::from_local_to_parent(Vec3<double>{0.0, 0.0, 1.0}, units::Radian(0.5));
     node.set_rotation(turned);

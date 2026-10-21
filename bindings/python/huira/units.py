@@ -36,6 +36,9 @@ from ._huira import (
     # Angular Rate
     RadiansPerSecond, DegreesPerSecond,
 
+    # Gravitational Parameter
+    CubicMetersPerSecondSquared, CubicKilometersPerSecondSquared,
+
     # Frequency
     Hertz, Kilohertz, Megahertz, Gigahertz, Terahertz,
 

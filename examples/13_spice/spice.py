@@ -33,6 +33,7 @@ from huira.units import Millimeter as mm
 from huira.units import Degree as deg
 from huira.units import Hour as hr
 from huira.units import Microsecond as us
+from huira.units import CubicKilometersPerSecondSquared as km3ps2
 
 
 def main():
@@ -87,11 +88,13 @@ def main():
     # elements about its parent, here the inertial frame: no kernel is needed. The elements are
     # the semi-major axis, eccentricity, inclination, right ascension of the ascending node,
     # argument of periapsis and mean anomaly at an epoch, and the central body's gravitational
-    # parameter, in km^3/s^2. The orbit takes about 87 hours, so in six hours the satellite
-    # moves about 25 degrees along it.
+    # parameter, GM. The orbit takes about 87 hours, so in six hours the satellite moves about
+    # 25 degrees along it.
     time = huira.Time("2019-02-06T10:27:00")
     camera = eci.new_instance(camera_model)
-    camera.set_keplerian_orbit(km(100000), 0.0, deg(30), deg(0), deg(0), deg(0), time, 398600.4418)
+    camera.set_keplerian_orbit(
+        km(100000), 0.0, deg(30), deg(0), deg(0), deg(0), time, km3ps2(398600.4418)
+    )
 
     # A node can also be placed by a table of times and positions (set_position_table), as from
     # a trajectory file, or by any function of time (set_position_function), and turned the

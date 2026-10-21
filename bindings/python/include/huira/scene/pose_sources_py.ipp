@@ -281,15 +281,16 @@ error. Any other position source the node had is replaced.)")
                const py::object& arg_periapsis,
                const py::object& mean_anomaly,
                const Time& epoch,
-               double mu) {
-                self.set_keplerian_orbit(detail::unit_from_py<units::Meter>(semi_major_axis),
-                                         eccentricity,
-                                         detail::unit_from_py<units::Radian>(inclination),
-                                         detail::unit_from_py<units::Radian>(raan),
-                                         detail::unit_from_py<units::Radian>(arg_periapsis),
-                                         detail::unit_from_py<units::Radian>(mean_anomaly),
-                                         epoch,
-                                         mu);
+               const py::object& mu) {
+                self.set_keplerian_orbit(
+                    detail::unit_from_py<units::Meter>(semi_major_axis),
+                    eccentricity,
+                    detail::unit_from_py<units::Radian>(inclination),
+                    detail::unit_from_py<units::Radian>(raan),
+                    detail::unit_from_py<units::Radian>(arg_periapsis),
+                    detail::unit_from_py<units::Radian>(mean_anomaly),
+                    epoch,
+                    detail::unit_from_py<units::CubicKilometersPerSecondSquared>(mu));
             },
             py::arg("semi_major_axis"),
             py::arg("eccentricity"),
@@ -305,7 +306,9 @@ semi_major_axis: a distance, positive for an ellipse and negative for a
 hyperbola.
 inclination, raan, arg_periapsis, mean_anomaly: angles, in any angle unit.
 epoch: when the body is at mean_anomaly.
-mu: the central body's gravitational parameter, in km^3/s^2.
+mu: the central body's standard gravitational parameter, GM, as a
+CubicKilometersPerSecondSquared or CubicMetersPerSecondSquared (the Earth's
+is CubicKilometersPerSecondSquared(398600.4418)).
 Any other position source the node had is replaced.)")
         .def(
             "set_rotation_function",

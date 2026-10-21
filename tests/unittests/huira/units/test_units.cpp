@@ -522,6 +522,29 @@ TEST_CASE("Complex unit compositions", "[composite]")
         // In radians: 2pi / 60s
         REQUIRE(std::abs(angular_velocity.to_si() - (2 * PI<double>() / 60.0)) < EPSILON);
     }
+
+    SECTION("Gravitational parameter")
+    {
+        // The Earth's GM, as orbits take it: a cubic kilometer is 1e9 cubic meters.
+        const CubicKilometersPerSecondSquared earth = 398600.4418_Km3ps2;
+        REQUIRE(std::abs(earth.to_si() / 3.986004418e14 - 1.0) < EPSILON);
+        REQUIRE(std::abs(earth.as<CubicMetersPerSecondSquared>().value() / 3.986004418e14 - 1.0) <
+                EPSILON);
+        REQUIRE(std::abs(CubicMetersPerSecondSquared(3.986004418e14)
+                                 .as<CubicKilometersPerSecondSquared>()
+                                 .value() /
+                             398600.4418 -
+                         1.0) < EPSILON);
+
+        // It is the dimension of a volume over a time squared, as a length cubed over a time
+        // squared is:
+        const Meter length{2.0};
+        const Second time{4.0};
+        const auto composed = length * length * length / (time * time);
+        REQUIRE(std::is_same_v<decltype(composed)::dimension_type,
+                               CubicMetersPerSecondSquared::dimension_type>);
+        REQUIRE(std::abs(composed.to_si() - 0.5) < EPSILON);
+    }
 }
 
 TEST_CASE("Edge cases and special values", "[edge-cases]")

@@ -325,6 +325,11 @@ inline void bind_units(py::module& m)
     bind_quantity_type<huira::units::RadiansPerSecond>(m, "RadiansPerSecond");
     bind_quantity_type<huira::units::DegreesPerSecond>(m, "DegreesPerSecond");
 
+    // Gravitational Parameter Units
+    bind_quantity_type<huira::units::CubicMetersPerSecondSquared>(m, "CubicMetersPerSecondSquared");
+    bind_quantity_type<huira::units::CubicKilometersPerSecondSquared>(
+        m, "CubicKilometersPerSecondSquared");
+
     // Frequency Units
     bind_quantity_type<huira::units::Hertz>(m, "Hertz");
     bind_quantity_type<huira::units::Kilohertz>(m, "Kilohertz");
@@ -422,6 +427,10 @@ inline void bind_units(py::module& m)
                               huira::units::KilometersPerSecond,
                               huira::units::MilesPerHour,
                               huira::units::KilometersPerHour>(m);
+
+    // Gravitational Parameter -> CubicMetersPerSecondSquared
+    register_unit_conversions<huira::units::CubicMetersPerSecondSquared,
+                              huira::units::CubicKilometersPerSecondSquared>(m);
 
     // Frequency -> Hertz
     register_unit_conversions<huira::units::Hertz,

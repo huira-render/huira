@@ -47,8 +47,11 @@ Available Units
      - MetersPerSecond, KilometersPerSecond, MilesPerHour, KilometersPerHour
      - MetersPerSecond
    * - Angular Rate
+     - RadiansPerSecond, DegreesPerSecond
      - RadiansPerSecond
-     - DegreesPerSecond
+   * - Gravitational Parameter
+     - CubicMetersPerSecondSquared, CubicKilometersPerSecondSquared
+     - CubicMetersPerSecondSquared
    * - Frequency
      - Hertz, KiloHertz, MegaHertz, GigaHertz, TeraHertz
      - Hertz

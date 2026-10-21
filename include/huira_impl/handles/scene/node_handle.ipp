@@ -339,14 +339,15 @@ void NodeHandle<TSpectral, TNode>::set_position_table(const std::vector<Time>& t
  * @brief Moves the node on a Keplerian orbit about its parent: see Node::set_keplerian_orbit.
  */
 template <IsSpectral TSpectral, typename TNode>
-void NodeHandle<TSpectral, TNode>::set_keplerian_orbit(units::Meter semi_major_axis,
-                                                       double eccentricity,
-                                                       units::Radian inclination,
-                                                       units::Radian raan,
-                                                       units::Radian arg_periapsis,
-                                                       units::Radian mean_anomaly,
-                                                       Time epoch,
-                                                       double mu) const
+void NodeHandle<TSpectral, TNode>::set_keplerian_orbit(
+    units::Meter semi_major_axis,
+    double eccentricity,
+    units::Radian inclination,
+    units::Radian raan,
+    units::Radian arg_periapsis,
+    units::Radian mean_anomaly,
+    Time epoch,
+    units::CubicKilometersPerSecondSquared mu) const
 {
     this->get_()->set_keplerian_orbit(
         semi_major_axis, eccentricity, inclination, raan, arg_periapsis, mean_anomaly, epoch, mu);
