@@ -54,7 +54,7 @@ SphereLight<TSpectral>::SphereLight(const units::Meter& radius, const units::Wat
 /**
  * @brief Constructs a blackbody SphereLight from a temperature.
  * @param radius The radius of the sphere in meters.
- * @param power Temperature in Kelvin.
+ * @param temperature Temperature in Kelvin.
  */
 template <IsSpectral TSpectral>
 SphereLight<TSpectral>::SphereLight(const units::Meter& radius, const units::Kelvin& temperature)

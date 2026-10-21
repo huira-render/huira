@@ -198,7 +198,7 @@ GeometryHandle<TSpectral> Scene<TSpectral>::get_geometry(const std::string& name
 
 /**
  * @brief Deletes a geometry from the scene.
- * @param geometry_handle Handle to the geometry
+ * @param geom_handle Handle to the geometry
  */
 template <IsSpectral TSpectral>
 void Scene<TSpectral>::delete_geometry(const GeometryHandle<TSpectral>& geom_handle)

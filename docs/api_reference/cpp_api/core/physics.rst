@@ -1,5 +1,5 @@
 Physics
 =======
 
-.. doxygenfile:: huira/core/physics.hpp
+.. doxygenfile:: physics.hpp
    :sections: briefdescription detaileddescription

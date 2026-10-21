@@ -45,10 +45,8 @@ bool Frustum<TSpectral>::contains(const Vec3<float>& direction) const
  * A triangle clipped against N planes can produce a polygon with at most
  * 3 + N vertices.
  *
- * @param v0 First triangle vertex (in 3D camera-frame coordinates).
- * @param v1 Second triangle vertex.
- * @param v2 Third triangle vertex.
- * @return Vertices of the clipped convex polygon, in winding order.
+ * @param triangle The triangle to clip (in 3D camera-frame coordinates).
+ * @return The clipped convex polygon, fanned into triangles in its winding order.
  *         Empty if the triangle is entirely outside the frustum.
  */
 template <IsSpectral TSpectral>
@@ -101,8 +99,7 @@ Frustum<TSpectral>::clip_triangle(const Triangle<TSpectral>& triangle) const
  * of all per-plane intervals.
  *
  * @param arc The trajectory to clip.
- * @param scratch Working storage, reused across calls.
- * @return Reference to scratch.result, valid until the next call with the same scratch.
+ * @return The intervals of the arc's parameter, within [0, 1], where it is inside the frustum.
  */
 template <IsSpectral TSpectral>
 std::vector<std::pair<float, float>> Frustum<TSpectral>::clip_arc(const TrajectoryArc& arc) const
@@ -111,6 +108,15 @@ std::vector<std::pair<float, float>> Frustum<TSpectral>::clip_arc(const Trajecto
     return clip_arc(arc, scratch);
 }
 
+/**
+ * @brief Clip a trajectory arc against the frustum, in working storage reused across calls.
+ *
+ * As clip_arc(const TrajectoryArc&), without allocating once the storage has grown.
+ *
+ * @param arc The trajectory to clip.
+ * @param scratch Working storage, reused across calls.
+ * @return Reference to scratch.result, valid until the next call with the same scratch.
+ */
 template <IsSpectral TSpectral>
 const std::vector<std::pair<float, float>>& Frustum<TSpectral>::clip_arc(const TrajectoryArc& arc,
                                                                          ClipScratch& scratch) const

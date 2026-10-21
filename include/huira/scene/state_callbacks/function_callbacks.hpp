@@ -54,6 +54,7 @@ class PositionFunctionCallback : public PositionCallback {
   public:
     using Function = std::function<PositionSample(const PoseContext&)>;
 
+    /// @param function The function giving the position, and the velocity if it has one.
     /// @param what What the position is of, for errors (the node's name).
     PositionFunctionCallback(Function function, std::string what)
         : function_(std::move(function)), what_(std::move(what))
@@ -108,6 +109,7 @@ class RotationFunctionCallback : public RotationCallback {
   public:
     using Function = std::function<RotationSample(const PoseContext&)>;
 
+    /// @param function The function giving the rotation, and the angular velocity if it has one.
     /// @param what What the rotation is of, for errors (the node's name).
     RotationFunctionCallback(Function function, std::string what)
         : function_(std::move(function)), what_(std::move(what))
