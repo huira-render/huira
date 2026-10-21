@@ -16,7 +16,7 @@ Download it into this folder:
 curl -fLO https://media.huira.space/data/models/nasa/gateway.glb
 ```
 
-Licenses, and how to credit the data: [Gateway model](../../docs/getting_started/data.md#gateway-model).
+Licenses, and how to credit the data: [Gateway model](../../docs/getting_started/data.md#nasa-spacecraft-models).
 
 ## Run
 
