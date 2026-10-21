@@ -45,10 +45,10 @@ inline void bind_interval(py::module_& m)
         // Properties
         .def_readonly("start", &Interval::start, "Start time of the exposure interval")
         .def_readonly("end", &Interval::end, "End time of the exposure interval")
-        .def_readonly("reference",
-                      &Interval::reference,
-                      "The time that poses set by hand refer to: the start, or the center for an "
-                      "interval made with from_centered")
+        .def_readwrite("reference",
+                       &Interval::reference,
+                       "The time that poses set by hand refer to: the start, or the center for "
+                       "an interval made with from_centered. It can be set to any time.")
 
         // Computed accessors
         .def("center", &Interval::center, "Midpoint of the exposure interval")
