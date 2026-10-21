@@ -200,6 +200,86 @@ TEST_CASE("look_at aims where the scene view places the target, or in the mode i
     CHECK(std::abs(std::abs(geometric_aim.dy) - 10.0) < 1.0);
 }
 
+TEST_CASE("look_at aims at a point in the parent's frame, or the root's, as seen in a mode",
+          "[scene][look_at]")
+{
+    SECTION("The point is in the parent's frame by default, and moves with it")
+    {
+        // The camera and a ball ride a platform 10 m to the side of the root's origin, which
+        // moves 20 m during the exposure. Aimed at the ball's position in the platform's frame,
+        // the camera keeps it centered and sharp. Aimed at the same coordinates in the root's
+        // frame, it looks 10 to 30 m beside the ball, which streaks off center.
+        const auto render_ball = [](TargetFrame frame) {
+            Scene<RGB> scene;
+            auto platform = scene.root.new_subframe();
+            platform.set_position(10_m, 0_m, 0_m);
+            platform.set_velocity(20_mps, 0_mps, 0_mps);
+            auto material = scene.new_material(scene.new_bsdf_lambertian());
+            material.set_emissive(RGB{1.f});
+            auto ball = platform.new_instance(
+                scene.add_primitive(scene.add_ellipsoid(1_m, 1_m, 1_m), material));
+            ball.set_position(0_m, 0_m, 100_m);
+            auto camera_model = wide_camera(scene);
+            auto camera = platform.new_instance(camera_model);
+            camera.look_at(Vec3<double>{0.0, 0.0, 100.0}, Vec3<double>{0.0, -1.0, 0.0}, frame);
+            return measure(render(scene,
+                                  camera_model,
+                                  camera,
+                                  Interval::from_centered(Time::from_et(0.0), 1_s),
+                                  ObservationMode::TRUE_STATE,
+                                  16));
+        };
+        const Spot parent = render_ball(TargetFrame::PARENT);
+        CHECK(parent.lit_columns < 10);
+        CHECK(std::abs(parent.dx) < 0.5);
+        CHECK(std::abs(parent.dy) < 0.5);
+
+        const Spot root = render_ball(TargetFrame::ROOT);
+        CHECK(root.lit_columns > 20);
+        CHECK(std::abs(root.dx) > 20.0);
+    }
+
+    SECTION("The point is aimed at where it is, or as seen by the moving camera")
+    {
+        // A still ball a light second away, straight ahead of a camera moving at 30 km/s across
+        // the line of sight, whose aberration is 1e-4 rad: 10 pixels in a camera of 10 um pixels
+        // and a 1 m focal length. Rendered in ABERRATED_STATE, the ball is drawn 10 pixels toward
+        // the camera's motion. Aimed at where it is, the point is 10 pixels off center; aimed
+        // where the camera sees it, it is centered, as it is when look_at follows the view.
+        const auto render_ball = [](std::optional<ObservationMode> aim) {
+            Scene<RGB> scene;
+            auto ball = add_ball(scene, 30_Km);
+            ball.set_position(0_m, 0_m, units::Meter(3e8));
+            auto camera_model = scene.new_camera_model();
+            camera_model.configure_sensor_from_pitch({512, 512}, 10_um);
+            camera_model.set_focal_length(1000_mm);
+            camera_model.enable_diffraction(false);
+            camera_model.enable_depth_of_field(false);
+            auto camera = scene.root.new_instance(camera_model);
+            camera.set_velocity(0_mps, units::MetersPerSecond(3e4), 0_mps);
+            camera.look_at(
+                Vec3<double>{0.0, 0.0, 3e8}, Vec3<double>{0.0, -1.0, 0.0}, TargetFrame::ROOT, aim);
+            return measure(render(scene,
+                                  camera_model,
+                                  camera,
+                                  Interval::from_centered(Time::from_et(0.0), 1_ms),
+                                  ObservationMode::ABERRATED_STATE,
+                                  1));
+        };
+        const Spot true_aim = render_ball(ObservationMode::TRUE_STATE);
+        CHECK(std::abs(true_aim.dx) < 0.5);
+        CHECK(std::abs(std::abs(true_aim.dy) - 10.0) < 1.0);
+
+        const Spot aberrated_aim = render_ball(ObservationMode::ABERRATED_STATE);
+        CHECK(std::abs(aberrated_aim.dx) < 0.5);
+        CHECK(std::abs(aberrated_aim.dy) < 0.5);
+
+        const Spot view_aim = render_ball(std::nullopt);
+        CHECK(std::abs(view_aim.dx) < 0.5);
+        CHECK(std::abs(view_aim.dy) < 0.5);
+    }
+}
+
 TEST_CASE("look_at turns about the right axis, however slowly", "[scene][look_at]")
 {
     // A ball 1 km away drifting sideways at 5 cm/s: a camera tracking it turns at 5e-5 rad/s,

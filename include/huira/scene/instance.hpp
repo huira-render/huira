@@ -76,7 +76,10 @@ class Instance : public Node<TSpectral> {
     void look_at(const Node<TSpectral>& target,
                  const Vec3<double>& up = {0.0, 0.0, 1.0},
                  std::optional<ObservationMode> observation_mode = std::nullopt);
-    void look_at(const Vec3<double>& target_position, const Vec3<double>& up = {0.0, 0.0, 1.0});
+    void look_at(const Vec3<double>& target_position,
+                 const Vec3<double>& up = {0.0, 0.0, 1.0},
+                 TargetFrame frame = TargetFrame::PARENT,
+                 std::optional<ObservationMode> observation_mode = ObservationMode::TRUE_STATE);
 
   private:
     Instantiable<TSpectral> asset_;

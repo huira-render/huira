@@ -6,6 +6,7 @@
 
 #include "glm/glm.hpp"
 #include "huira/concepts/spectral_concepts.hpp"
+#include "huira/core/physics.hpp"
 #include "huira/core/rotation.hpp"
 #include "huira/core/time.hpp"
 #include "huira/core/transform.hpp"
@@ -69,10 +70,12 @@ class LookAtCallbackBase : public RotationCallback {
 
   protected:
     /// World-space (SSB) position to aim at, as seen by @p observer: the looking node's own SSB
-    /// state (its position and velocity) in @p context. This is the only thing that differs
-    /// between the tracked-node and fixed-point variants.
+    /// state (its position and velocity) in @p context. @p parent is the node's parent's SSB
+    /// transform (the identity if it has none). This is the only thing that differs between the
+    /// tracked-node and fixed-point variants.
     virtual Vec3<double> resolve_target_position_(const PoseContext& context,
-                                                  const Transform<double>& observer) const = 0;
+                                                  const Transform<double>& observer,
+                                                  const Transform<double>& parent) const = 0;
 
   private:
     /// Below this squared cross-product length the forward/up pair is treated as
@@ -99,8 +102,8 @@ class LookAtCallbackBase : public RotationCallback {
             self_ssb = parent_ssb * local;
         }
 
-        const Vec3<double> forward =
-            glm::normalize(resolve_target_position_(context, self_ssb) - self_ssb.position);
+        const Vec3<double> forward = glm::normalize(
+            resolve_target_position_(context, self_ssb, parent_ssb) - self_ssb.position);
 
         // Right vector, guarded against the classic look-at singularity where the
         // requested up is (near-)parallel to forward -- e.g. aiming straight along
@@ -164,7 +167,8 @@ class LookAtCallback : public LookAtCallbackBase<TSpectral> {
     /// The target is held weakly: it may be deleted from the scene while this node still looks
     /// at it, and is then reported rather than read from freed memory.
     Vec3<double> resolve_target_position_(const PoseContext& context,
-                                          const Transform<double>& observer) const override
+                                          const Transform<double>& observer,
+                                          const Transform<double>& /*parent*/) const override
     {
         const std::shared_ptr<const Node<TSpectral>> target = target_.lock();
         if (!target || !target->is_scene_owned()) {
@@ -188,31 +192,60 @@ class LookAtCallback : public LookAtCallbackBase<TSpectral> {
 };
 
 /**
- * @brief Orients a node toward a fixed world-space position.
+ * @brief Orients a node toward a fixed point.
+ *
+ * The point is in the node's parent's frame (TargetFrame::PARENT), so it moves with the parent,
+ * or in the scene's root frame (TargetFrame::ROOT). It is aimed at as seen from the node in an
+ * observation mode: where it is (TRUE_STATE, the default; GEOMETRIC_STATE is the same, a point
+ * having no light time), or shifted by the aberration of the node's velocity (ABERRATED_STATE),
+ * or, given no mode, in the scene view's.
+ *
  * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 class LookAtPositionCallback : public LookAtCallbackBase<TSpectral> {
   public:
-    LookAtPositionCallback(const Node<TSpectral>* self,
-                           const Vec3<double>& target_position,
-                           const Vec3<double>& up_vector,
-                           bool is_blender)
+    LookAtPositionCallback(
+        const Node<TSpectral>* self,
+        const Vec3<double>& target_position,
+        const Vec3<double>& up_vector,
+        bool is_blender,
+        TargetFrame frame = TargetFrame::PARENT,
+        std::optional<ObservationMode> observation_mode = ObservationMode::TRUE_STATE)
         : LookAtCallbackBase<TSpectral>(self, up_vector, is_blender),
-          target_position_(target_position)
+          target_position_(target_position), frame_(frame), observation_mode_(observation_mode)
     {
     }
 
   protected:
-    /// A fixed position is aimed at as it is given.
-    Vec3<double> resolve_target_position_(const PoseContext& /*context*/,
-                                          const Transform<double>& /*observer*/) const override
+    Vec3<double> resolve_target_position_(const PoseContext& context,
+                                          const Transform<double>& observer,
+                                          const Transform<double>& parent) const override
     {
-        return target_position_;
+        const Vec3<double> point = frame_ == TargetFrame::PARENT
+                                       ? parent.apply_to_point(target_position_)
+                                       : target_position_;
+        if (observation_mode_.value_or(context.observation_mode) !=
+            ObservationMode::ABERRATED_STATE) {
+            return point;
+        }
+        // As Node::get_apparent_transform() aberrates a body: the direction to the point, seen
+        // by the moving node, at the same distance.
+        const Vec3<double> relative = point - observer.position;
+        const double distance = glm::length(relative);
+        if (!(distance > 1e-8)) {
+            return point;
+        }
+        return observer.position +
+               compute_aberrated_direction(relative / distance, observer.velocity) * distance;
     }
 
   private:
     Vec3<double> target_position_;
+    TargetFrame frame_;
+
+    /// The observation mode to aim in, or none for the scene view's.
+    std::optional<ObservationMode> observation_mode_;
 };
 
 } // namespace huira

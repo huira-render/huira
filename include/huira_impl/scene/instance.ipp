@@ -97,13 +97,29 @@ void Instance<TSpectral>::look_at(const Node<TSpectral>& target,
 }
 
 /**
- * @brief Orient the instance to look at a target position, with an optional up vector.
- * @param target_position Target position to look at
+ * @brief Orient the instance to look at a fixed point, with an optional up vector.
+ *
+ * The point is in the instance's parent's frame by default, as a position set by set_position()
+ * is, so it moves with the parent: an instance under a frame centered on the Earth looks at the
+ * Earth with {0, 0, 0}. Given TargetFrame::ROOT, it is in the scene's root frame (the solar
+ * system barycenter, with the J2000 axes).
+ *
+ * The point is aimed at where it is (TRUE_STATE, the default; a point has no light time, so
+ * GEOMETRIC_STATE is the same), or where it is seen by the moving instance, shifted by the
+ * aberration of its velocity (ABERRATED_STATE), or, given no mode, as the scene view observes.
+ *
+ * @param target_position The point to look at, in meters
  * @param up Up vector for orientation (default: {0, 0, 1})
+ * @param frame The frame the point is in (default: the parent's)
+ * @param observation_mode The observation mode to aim in (default: TRUE_STATE), or none for the
+ *        scene view's
  * @throws std::runtime_error if the target or up is not finite.
  */
 template <IsSpectral TSpectral>
-void Instance<TSpectral>::look_at(const Vec3<double>& target_position, const Vec3<double>& up)
+void Instance<TSpectral>::look_at(const Vec3<double>& target_position,
+                                  const Vec3<double>& up,
+                                  TargetFrame frame,
+                                  std::optional<ObservationMode> observation_mode)
 {
     validate_real(target_position, this->get_info() + " target position");
     validate_real(up, this->get_info() + " up vector");
@@ -113,7 +129,7 @@ void Instance<TSpectral>::look_at(const Vec3<double>& target_position, const Vec
     }
 
     this->template set_custom_rotation_callback<LookAtPositionCallback<TSpectral>>(
-        this, target_position, up, is_blender);
+        this, target_position, up, is_blender, frame, observation_mode);
 }
 
 } // namespace huira

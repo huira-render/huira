@@ -37,9 +37,14 @@ class InstanceHandle : public NodeHandle<TSpectral, Instance<TSpectral>> {
         this->get()->look_at(*target.get(), up, observation_mode);
     }
 
-    void look_at(const Vec3<double>& target_position, const Vec3<double>& up = {0.0, 0.0, 1.0})
+    /// Look at a fixed point, in the parent's frame or the root's, as seen in an observation
+    /// mode (see Instance::look_at).
+    void look_at(const Vec3<double>& target_position,
+                 const Vec3<double>& up = {0.0, 0.0, 1.0},
+                 TargetFrame frame = TargetFrame::PARENT,
+                 std::optional<ObservationMode> observation_mode = ObservationMode::TRUE_STATE)
     {
-        this->get()->look_at(target_position, up);
+        this->get()->look_at(target_position, up, frame, observation_mode);
     }
 
     /// Designates this instance as an indirect illumination source (see
