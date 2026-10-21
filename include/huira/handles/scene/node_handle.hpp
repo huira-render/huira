@@ -89,7 +89,7 @@ class NodeHandle : public Handle<TNode> {
                              units::Radian arg_periapsis,
                              units::Radian mean_anomaly,
                              Time epoch,
-                             double mu) const;
+                             units::CubicKilometersPerSecondSquared mu) const;
     template <IsPositionCallback TCallback, typename... Args>
     void set_custom_position_callback(Args&&... args) const;
 

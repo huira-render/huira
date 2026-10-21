@@ -422,7 +422,8 @@ void Node<TSpectral>::set_position_table(const std::vector<Time>& times,
  * @param eccentricity Non-negative, and not 1: a parabola has no semi-major axis.
  * @param inclination, raan, arg_periapsis, mean_anomaly Angles, finite.
  * @param epoch When the body is at mean_anomaly.
- * @param mu The central body's gravitational parameter, in km^3/s^2 as SPICE takes it; positive.
+ * @param mu The central body's standard gravitational parameter, GM (the Earth's is
+ *        398600.4418_Km3ps2); positive.
  * @throws std::runtime_error if any element is not finite, or they do not describe an orbit
  *         whose periapsis is a positive distance away, about a body of positive mass.
  */
@@ -434,7 +435,7 @@ void Node<TSpectral>::set_keplerian_orbit(units::Meter semi_major_axis,
                                           units::Radian arg_periapsis,
                                           units::Radian mean_anomaly,
                                           Time epoch,
-                                          double mu)
+                                          units::CubicKilometersPerSecondSquared mu)
 {
     const double a = semi_major_axis.to_si();
     for (const double angle : {inclination.to_si(),
@@ -454,7 +455,7 @@ void Node<TSpectral>::set_keplerian_orbit(units::Meter semi_major_axis,
                           "a hyperbola: " +
                           std::to_string(a) + " m, eccentricity " + std::to_string(eccentricity));
     }
-    validate_strictly_positive(mu, this->get_info() + " gravitational parameter");
+    validate_strictly_positive(mu.to_si(), this->get_info() + " gravitational parameter");
     this->set_custom_position_callback<KeplerianOrbitCallback>(
         semi_major_axis, eccentricity, inclination, raan, arg_periapsis, mean_anomaly, epoch, mu);
 }

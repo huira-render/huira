@@ -89,11 +89,12 @@ int main(int argc, char** argv)
     // elements about its parent, here the inertial frame: no kernel is needed. The elements are
     // the semi-major axis, eccentricity, inclination, right ascension of the ascending node,
     // argument of periapsis and mean anomaly at an epoch, and the central body's gravitational
-    // parameter, in km^3/s^2. The orbit takes about 87 hours, so in six hours the satellite
-    // moves about 25 degrees along it.
+    // parameter, GM. The orbit takes about 87 hours, so in six hours the satellite moves about
+    // 25 degrees along it.
     const huira::Time time("2019-02-06T10:27:00");
     auto camera = eci.new_instance(camera_model);
-    camera.set_keplerian_orbit(100000_Km, 0.0, 30_deg, 0_deg, 0_deg, 0_deg, time, 398600.4418);
+    camera.set_keplerian_orbit(
+        100000_Km, 0.0, 30_deg, 0_deg, 0_deg, 0_deg, time, 398600.4418_Km3ps2);
 
     // A node can also be placed by a table of times and positions (set_position_table), as from
     // a trajectory file, or by any function of time (set_position_function), and turned the

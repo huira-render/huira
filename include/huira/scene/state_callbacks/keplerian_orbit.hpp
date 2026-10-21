@@ -16,9 +16,10 @@ struct KeplerianOrbitCallback : public PositionCallback {
                            units::Radian argp,
                            units::Radian M0,
                            const Time& epoch,
-                           double mu)
+                           units::CubicKilometersPerSecondSquared mu)
     {
-        // conics_c() takes the periapsis distance, in km, not the semi-major axis:
+        // conics_c() takes the periapsis distance, in km, not the semi-major axis, and the
+        // gravitational parameter in km^3/s^2:
         elements_[0] = a.to_si() * (1.0 - e) / 1000.0;
         elements_[1] = e;
         elements_[2] = i.to_si();
@@ -26,7 +27,7 @@ struct KeplerianOrbitCallback : public PositionCallback {
         elements_[4] = argp.to_si();
         elements_[5] = M0.to_si();
         elements_[6] = epoch.et();
-        elements_[7] = mu;
+        elements_[7] = mu.value();
     }
 
     [[nodiscard]] PositionState evaluate(const PoseContext& context,

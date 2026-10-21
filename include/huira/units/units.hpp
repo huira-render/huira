@@ -137,6 +137,13 @@ using RadiansPerSecond = Quantity<AngularVelocity, std::ratio<1, 1>>;
 using DegreesPerSecond = Quantity<AngularVelocity, DegreeTag>;
 /// @}
 
+/// @defgroup gravitational_parameter_units Gravitational Parameter Units
+/// The standard gravitational parameter of a body, GM, as orbits take it.
+/// @{
+using CubicMetersPerSecondSquared = Quantity<GravitationalParameter, std::ratio<1, 1>>;
+using CubicKilometersPerSecondSquared = Quantity<GravitationalParameter, std::giga>;
+/// @}
+
 /// @defgroup frequency_units Frequency Units
 /// @{
 using Hertz = Quantity<Frequency, std::ratio<1, 1>>;
@@ -586,6 +593,24 @@ constexpr KilometersPerHour operator""_Kmph(unsigned long long value)
 constexpr KilometersPerHour operator""_Kmph(long double value)
 {
     return KilometersPerHour(static_cast<double>(value));
+}
+
+// Gravitational parameter literals
+constexpr CubicMetersPerSecondSquared operator""_m3ps2(unsigned long long value)
+{
+    return CubicMetersPerSecondSquared(static_cast<double>(value));
+}
+constexpr CubicMetersPerSecondSquared operator""_m3ps2(long double value)
+{
+    return CubicMetersPerSecondSquared(static_cast<double>(value));
+}
+constexpr CubicKilometersPerSecondSquared operator""_Km3ps2(unsigned long long value)
+{
+    return CubicKilometersPerSecondSquared(static_cast<double>(value));
+}
+constexpr CubicKilometersPerSecondSquared operator""_Km3ps2(long double value)
+{
+    return CubicKilometersPerSecondSquared(static_cast<double>(value));
 }
 
 // Angular Velocity literals

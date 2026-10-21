@@ -126,6 +126,7 @@ using Area = decltype(Length{} * Length{});
 using Volume = decltype(Length{} * Length{} * Length{});
 using Velocity = decltype(Length{} / Time{});
 using Acceleration = decltype(Velocity{} / Time{});
+using GravitationalParameter = decltype(Volume{} / (Time{} * Time{})); // GM, m^3/s^2
 
 // Named SI Derived Unit Types:
 using ReciprocalLength = decltype(Dimensionless{} / Length{});

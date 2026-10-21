@@ -67,16 +67,22 @@ TEST_CASE("A Keplerian orbit starts at its periapsis, a (1 - e) away", "[scene][
                                  units::Radian(0.1),
                                  units::Radian(0.0),
                                  epoch,
-                                 398600.4418);
+                                 398600.4418_Km3ps2);
     const PositionState state =
         orbit.evaluate(PoseContext{epoch, epoch, ObservationMode::TRUE_STATE}, RotationState{});
     CHECK(std::abs(glm::length(state.position) / (a * (1.0 - e)) - 1.0) < 1e-9);
 
     // And the elements must describe an orbit:
     TestNode node;
-    const auto set = [&](double semi_major_axis, double eccentricity, double mu) {
-        node.set_keplerian_orbit(
-            units::Meter(semi_major_axis), eccentricity, 0_rad, 0_rad, 0_rad, 0_rad, epoch, mu);
+    const auto set = [&](double semi_major_axis, double eccentricity, double mu_Km3ps2) {
+        node.set_keplerian_orbit(units::Meter(semi_major_axis),
+                                 eccentricity,
+                                 0_rad,
+                                 0_rad,
+                                 0_rad,
+                                 0_rad,
+                                 epoch,
+                                 units::CubicKilometersPerSecondSquared(mu_Km3ps2));
     };
     CHECK_THROWS(set(-a, 0.5, 398600.0)); // an ellipse with a < 0
     CHECK_THROWS(set(a, 1.5, 398600.0));  // a hyperbola with a > 0

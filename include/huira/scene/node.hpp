@@ -111,7 +111,7 @@ class Node : public SceneObject<Node<TSpectral>> {
                              units::Radian arg_periapsis,
                              units::Radian mean_anomaly,
                              Time epoch,
-                             double mu);
+                             units::CubicKilometersPerSecondSquared mu);
 
     // Rotation sources other than SPICE and rotations set by hand. Each replaces the last.
     template <IsRotationCallback TCallback, typename... Args>
