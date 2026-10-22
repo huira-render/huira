@@ -27,3 +27,7 @@ Makefile text eol=lf
 *.exe binary
 *.a binary
 *.lib binary
+
+# Vendored third-party code and data stay byte for byte as upstream ships them, CRLF line endings
+# included: no line-ending conversion (see each directory's NOTICE)
+include/huira_impl/third_party/sgp4/** -text
