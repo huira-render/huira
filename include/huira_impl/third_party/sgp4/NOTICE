@@ -1,0 +1,46 @@
+Vallado's reference SGP4 propagator (C++)
+=========================================
+
+SGP4.h and SGP4.cpp in this directory are David Vallado's reference implementation of
+SGP4, vendored unmodified: byte for byte as distributed, CRLF line endings included
+(.gitattributes keeps Git from converting them). Do not edit them. Huira includes them
+through include/huira_impl/third_party/sgp4.ipp.
+
+Source      AIAA-2006-6753.zip, directory cpp/SGP4/SGP4/
+            https://celestrak.org/publications/AIAA/2006-6753/AIAA-2006-6753.zip
+Main page   https://celestrak.org/publications/AIAA/2006-6753/
+Revision    2023 May 09 (the main page was last updated 2023 May 10). SGP4.h in this
+            revision still defines SGP4Version as "SGP4 Version 2020-07-13".
+Copied via  python-sgp4 (https://github.com/brandon-rhodes/python-sgp4), commit fac882a
+            ("Update C++ code to Vallado revision of 2023 May 09"), which copies the
+            zip's files verbatim, into its extension/ directory.
+SHA-256     2a5ec44e059a52b3173d78d9a28bda8142b4f6497c1eb16febc2cea4b5006b0c  SGP4.h
+            2ee7ad0e8f201e8251894083fe21e33a7aace2f43c871bf04357eb44a891b06e  SGP4.cpp
+
+License
+-------
+SPDX-License-Identifier: SGP4 (the "SGP4 Permission Notice",
+https://spdx.org/licenses/SGP4.html)
+
+The code is distributed under the permission given in the answer to "Are there any
+Licenses required to use the SGP4 code?" in the paper's FAQ:
+https://celestrak.org/publications/AIAA/2006-6753/faq.php
+
+In short: no license is associated with the code, and it may be used for any purpose,
+personal or commercial. The authors ask that its source be cited in documentation and
+source code, with a link to the main page above, so that questions about the theory or
+the code reach them.
+
+Citation
+--------
+Vallado, David A., Paul Crawford, Richard Hujsak, and T.S. Kelso, "Revisiting
+Spacetrack Report #3," AIAA 2006-6753, presented at the AIAA/AAS Astrodynamics
+Specialist Conference, Keystone, CO, 2006 August 21-24.
+
+Updating
+--------
+Take updates only from AIAA-2006-6753.zip. Do not take SGP4 from
+https://github.com/CelesTrak/fundamentals-of-astrodynamics: that repository, though also
+Vallado's, is licensed under the GNU AGPL-3.0, which Huira's MIT license cannot carry.
+When updating, copy SGP4.h and SGP4.cpp from the zip unchanged, update the revision and
+SHA-256 sums above, and run test_sgp4 (tests/unittests/third_party/).
