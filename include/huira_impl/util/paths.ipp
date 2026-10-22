@@ -78,5 +78,5 @@ inline void make_path(fs::path path)
         // No extension, treat as directory
         fs::create_directories(path);
     }
-};
+}
 } // namespace huira

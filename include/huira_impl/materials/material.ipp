@@ -361,5 +361,5 @@ Material<TSpectral>::Material(std::shared_ptr<BSDF<TSpectral>> bsdf,
     emissive_image_ = default_emissive_image_;
 
     set_bsdf(bsdf);
-};
+}
 } // namespace huira
