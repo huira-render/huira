@@ -288,8 +288,8 @@ TEST_CASE("A camera describes its settings", "[cameras][describe]")
     CHECK(text.find("fx 5000, fy 5000, cx 15.5, cy 15.5 px") != std::string::npos);
     CHECK(text.find("0.3667 x 0.3667 deg") != std::string::npos); // 2 atan(16 / 5000)
     CHECK(text.find("Brown-Conrady, k1 -0.05, k2 0.01") != std::string::npos);
-    CHECK(text.find("Focus:      infinity") != std::string::npos);
-    CHECK(text.find("Noise:      on") != std::string::npos);
+    CHECK(text.find("Focus:       infinity") != std::string::npos);
+    CHECK(text.find("Noise:       on") != std::string::npos);
     CHECK(text.find("Motion blur: on") != std::string::npos);
 
     // It builds nothing:

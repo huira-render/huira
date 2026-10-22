@@ -2857,12 +2857,12 @@ std::string CameraModel<TSpectral>::describe() const
         << num(std::min(first.min_wavelength, last.min_wavelength) * 1e9) << " to "
         << num(std::max(first.max_wavelength, last.max_wavelength) * 1e9) << " nm\n";
 
-    out << "  Optics:     focal length " << num(focal_length().to_si() * 1e3) << " mm, f/"
+    out << "  Optics:      focal length " << num(focal_length().to_si() * 1e3) << " mm, f/"
         << num(fstop(), 3) << " (aperture " << num(aperture_diameter().to_si() * 1e3) << " mm)\n";
 
     const Resolution pixels = sensor_->resolution();
     const auto [pitch_x, pitch_y] = pixel_pitch();
-    out << "  Sensor:     " << pixels.width << " x " << pixels.height << " px of "
+    out << "  Sensor:      " << pixels.width << " x " << pixels.height << " px of "
         << num(pitch_x.to_si() * 1e6);
     if (pitch_x.to_si() != pitch_y.to_si()) {
         out << " x " << num(pitch_y.to_si() * 1e6);
@@ -2873,7 +2873,7 @@ std::string CameraModel<TSpectral>::describe() const
 
     // Column-major: k[column][row].
     const Mat3<float> k = intrinsic_matrix();
-    out << "  Intrinsics: fx " << num(k[0][0], 6) << ", fy " << num(k[1][1], 6) << ", cx "
+    out << "  Intrinsics:  fx " << num(k[0][0], 6) << ", fy " << num(k[1][1], 6) << ", cx "
         << num(k[2][0], 6) << ", cy " << num(k[2][1], 6);
     if (k[1][0] != 0.f) {
         out << ", skew " << num(k[1][0], 6);
@@ -2887,14 +2887,14 @@ std::string CameraModel<TSpectral>::describe() const
     const double fov_y = (std::atan(static_cast<double>(cy_) / fy_) +
                           std::atan((static_cast<double>(ry_) - cy_) / fy_)) *
                          DEG_PER_RAD;
-    out << "  Field:      " << num(fov_x) << " x " << num(fov_y)
+    out << "  Field:       " << num(fov_x) << " x " << num(fov_y)
         << " deg (pinhole, without distortion)\n";
 
-    out << "  Axes:       "
+    out << "  Axes:        "
         << (blender_convention_ ? "Blender (-z forward, y up)" : "OpenCV (z forward, y down)")
         << "\n";
 
-    out << "  Distortion: ";
+    out << "  Distortion:  ";
     if (!distortion_) {
         out << "none\n";
     } else if (const auto* brown =
@@ -2915,7 +2915,7 @@ std::string CameraModel<TSpectral>::describe() const
         out << "custom\n";
     }
 
-    out << "  Focus:      ";
+    out << "  Focus:       ";
     const double focus = focus_distance().to_si();
     if (std::isinf(focus) && focus > 0) {
         out << "infinity";
@@ -2931,7 +2931,7 @@ std::string CameraModel<TSpectral>::describe() const
     }
     out << "\n";
 
-    out << "  PSF:        ";
+    out << "  PSF:         ";
     const double pixels_per_radian =
         static_cast<double>(focal_length_) / static_cast<double>(sensor_->pixel_pitch().x);
     if (psf_ != nullptr) {
@@ -2958,7 +2958,7 @@ std::string CameraModel<TSpectral>::describe() const
         out << "none: diffraction off, a point in focus lights one pixel";
     }
     out << "\n";
-    out << "  Scatter:    ";
+    out << "  Scatter:     ";
     if (scatter_enabled_) {
         constexpr double ARCSEC_PER_RADIAN = 648000.0 / PI<double>();
         out << "Harvey-Shack, fraction " << num(scatter_fraction_) << ", slope "
@@ -2979,7 +2979,7 @@ std::string CameraModel<TSpectral>::describe() const
     {
         std::lock_guard<std::mutex> lock(optics_mutex_);
         if (render_tables_ != nullptr) {
-            out << "  Tables:     "
+            out << "  Tables:      "
                 << num(static_cast<float>(static_cast<double>(render_tables_->memory_bytes()) /
                                           (1024.0 * 1024.0)))
                 << " MiB for stars, as last built\n";
@@ -2992,10 +2992,10 @@ std::string CameraModel<TSpectral>::describe() const
         qe += static_cast<double>(sensor.quantum_efficiency()[i]);
     }
     qe /= static_cast<double>(TSpectral::size());
-    out << "  Readout:    " << sensor.bit_depth() << "-bit, gain " << num(sensor.conversion_gain())
+    out << "  Readout:     " << sensor.bit_depth() << "-bit, gain " << num(sensor.conversion_gain())
         << " e-/DN, full well " << num(sensor.full_well_capacity(), 6) << " e-, bias "
         << num(sensor.bias_level_dn()) << " DN, mean QE " << num(qe, 3) << "\n";
-    out << "  Noise:      " << on_off(sensor.noise_enabled()) << ", read noise "
+    out << "  Noise:       " << on_off(sensor.noise_enabled()) << ", read noise "
         << num(sensor.read_noise()) << " e-, dark current " << num(sensor.dark_current())
         << " e-/s, seed " << sensor.noise_seed() << "\n";
     out << "  Motion blur: " << on_off(motion_blur_) << "\n";
