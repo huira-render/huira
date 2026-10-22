@@ -6,6 +6,7 @@
 #include "huira/core/types.hpp"
 #include "huira/materials/shading_params.hpp"
 #include "huira/render/interaction.hpp"
+#include "huira/scene/scene_object.hpp"
 
 namespace huira {
 struct BSDFRequirements {
