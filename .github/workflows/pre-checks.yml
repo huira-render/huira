@@ -7,7 +7,7 @@ on:
 jobs:
   format-check:
     name: Clang-Format Check
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout Code
         uses: actions/checkout@v7
@@ -22,7 +22,7 @@ jobs:
 
   version-check:
     name: Version Check
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
     steps:
       - name: Checkout code

@@ -26,7 +26,7 @@ jobs:
 
   build-linux:
     needs: pre-checks
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     name: Build
 
     steps:
@@ -52,7 +52,7 @@ jobs:
 
   test:
     needs: build-linux
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     name: Test and Coverage
 
     steps:
@@ -61,10 +61,12 @@ jobs:
         with:
           submodules: recursive
 
+      # lcov 2 reads gcov's output with JSON::XS when it is installed, and with a pure-Perl
+      # parser, ten times slower, when it is not
       - name: Install lcov for coverage
         run: |
           sudo apt-get update
-          sudo apt-get install -y lcov
+          sudo apt-get install -y lcov libjson-xs-perl
 
       - name: Set up build environment
         uses: ./.github/actions/setup
@@ -137,7 +139,7 @@ jobs:
 
   docs:
     needs: build-linux
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     name: Documentation
     environment:
         name: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') && 'github-pages' || '' }}
@@ -188,7 +190,7 @@ jobs:
       - build-linux
       - test
       - docs
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Check all jobs passed
         run: |
