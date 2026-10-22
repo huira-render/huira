@@ -1,0 +1,79 @@
+name: Release Documentation
+
+# Attaches the documentation for a release to that release, as
+# huira-docs-<tag>.zip: a record of the docs for every release, built from its
+# tag, that opens offline from index.html.
+#
+# Runs when a release is published (pre-releases included). To build the docs
+# for a release that doesn't have them, or rebuild them, run it by hand from the
+# Actions tab with the release's tag: the zip on the release is replaced.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag of the release to attach the docs to (e.g. v0.9.11)'
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: docs-release-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  docs:
+    runs-on: ubuntu-22.04
+    name: Build and attach docs
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+
+    steps:
+      - name: Checkout the release's tag
+        uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ env.TAG }}
+          submodules: recursive
+
+      - name: Check VERSION matches the tag
+        run: |
+          version="$(tr -d '[:space:]' < VERSION)"
+          if [ "v${version}" != "$TAG" ]; then
+            echo "::warning title=VERSION mismatch::VERSION says ${version}, but the release is ${TAG}: the docs will show ${version}."
+          fi
+
+      - name: Set up build environment
+        uses: ./.github/actions/setup-docs
+        with:
+          platform: linux
+
+      - name: Configure project
+        uses: ./.github/actions/cmake-configure-docs
+        with:
+          platform: linux
+
+      - name: Build project
+        uses: ./.github/actions/build
+        with:
+          platform: linux
+
+      - name: Package the docs
+        run: |
+          name="huira-docs-${TAG}"
+          mkdir -p dist
+          cp -r build/huira_docs "dist/${name}"
+          # Sphinx's build cache: half the size, and never read by a browser
+          rm -rf "dist/${name}/.doctrees" "dist/${name}/.buildinfo"
+          (cd dist && zip -qr "${name}.zip" "${name}")
+          echo "### Docs for ${TAG}" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`${name}.zip\`: $(du -h "dist/${name}.zip" | cut -f1)" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "$TAG" "dist/huira-docs-${TAG}.zip" \
+            --repo "$GITHUB_REPOSITORY" --clobber
