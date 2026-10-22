@@ -293,7 +293,7 @@ template <IsSpectral TSpectral>
 void Node<TSpectral>::set_spice_origin(const std::string& spice_origin)
 {
     if (!position_can_be_spice_()) {
-        HUIRA_THROW_ERROR(this->get_info() + " - cannot set SPICE progom: parent node (" +
+        HUIRA_THROW_ERROR(this->get_info() + " - cannot set SPICE origin: parent node (" +
                           parent_->get_info() + ") has manually set position");
     }
     HUIRA_LOG_INFO(this->get_info() + " - set_spice_origin('" + spice_origin + "')");
@@ -328,7 +328,7 @@ template <IsSpectral TSpectral>
 void Node<TSpectral>::set_spice(const std::string& spice_origin, const std::string& spice_frame)
 {
     if (!position_can_be_spice_()) {
-        HUIRA_THROW_ERROR(this->get_info() + " - cannot set SPICE progom: parent node (" +
+        HUIRA_THROW_ERROR(this->get_info() + " - cannot set SPICE origin: parent node (" +
                           parent_->get_info() + ") has manually set position");
     }
     if (!rotation_can_be_spice_()) {
