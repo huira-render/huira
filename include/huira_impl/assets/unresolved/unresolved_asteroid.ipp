@@ -31,7 +31,7 @@ static inline double asteroid_phi1(double alpha)
     double A = 3.33;
     double B = 0.64;
     return std::exp(-A * std::pow(std::tan(alpha / 2.), B));
-};
+}
 
 /**
  * @brief Computes the second basis function for the H-G magnitude system.
@@ -48,7 +48,7 @@ static inline double asteroid_phi2(double alpha)
     double A = 1.87;
     double B = 1.22;
     return std::exp(-A * std::pow(std::tan(alpha / 2.), B));
-};
+}
 
 /**
  * @brief Throws unless the H-G phase function, (1 - G) phi1 + G phi2, is positive at every phase

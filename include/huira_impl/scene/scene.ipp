@@ -90,7 +90,7 @@ Scene<TSpectral>::Scene()
     device_ = std::make_shared<EmbreeDevice>(nullptr);
 
     set_background_radiance(TSpectral{0});
-};
+}
 
 template <IsSpectral TSpectral>
 Scene<TSpectral>::~Scene()
@@ -436,7 +436,7 @@ template <IsSpectral TSpectral>
 void Scene<TSpectral>::set_name(const LightHandle<TSpectral>& light_handle, const std::string& name)
 {
     lights_.set_name(light_handle.get(), name);
-};
+}
 
 /**
  * @brief Retrieves a light by name.
