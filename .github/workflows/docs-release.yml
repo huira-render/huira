@@ -33,7 +33,7 @@ jobs:
 
     steps:
       - name: Checkout the release's tag
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: refs/tags/${{ env.TAG }}
           submodules: recursive
