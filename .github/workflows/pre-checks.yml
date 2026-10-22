@@ -20,7 +20,8 @@ jobs:
       - name: Run Formatting Check
         run: |
           echo "Checking formatting for .cpp, .hpp, .cc, .h, and .ipp files..."
-          find examples include apps tests bindings -type f \( -name "*.cpp" -o -name "*.hpp" -o -name "*.cc" -o -name "*.h" -o -name "*.ipp" \) -exec clang-format --style=file --dry-run --Werror --verbose {} +
+          # Vendored third-party code is kept exactly as upstream ships it, so it isn't checked
+          find examples include apps tests bindings -type f \( -name "*.cpp" -o -name "*.hpp" -o -name "*.cc" -o -name "*.h" -o -name "*.ipp" \) -not -path "include/huira_impl/third_party/sgp4/*" -exec clang-format --style=file --dry-run --Werror --verbose {} +
 
   version-check:
     name: Version Check
