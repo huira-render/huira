@@ -116,8 +116,10 @@ jobs:
         with:
           package-dir: bindings/python
         env:
-          # Override build selector for quick testing via workflow_dispatch
-          CIBW_BUILD: ${{ github.event.inputs.cibw_build || '' }}
+          # A pull request builds the newest Python's wheel on each platform, which is enough to
+          # show the wheels build; main and tags build every version pyproject.toml lists, and a
+          # manual run can pass its own selector.
+          CIBW_BUILD: ${{ github.event.inputs.cibw_build || (github.event_name == 'pull_request' && 'cp313-*') || '' }}
           # Pass cache env vars into the Linux container for vcpkg binary caching
           CIBW_ENVIRONMENT_PASS_LINUX: ACTIONS_CACHE_URL ACTIONS_RUNTIME_TOKEN
           CIBW_ENVIRONMENT_LINUX: >-
