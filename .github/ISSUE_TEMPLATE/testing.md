@@ -1,6 +1,6 @@
 ---
-name: Question
-about: Ask a question about usage or functionality
+name: Tests
+about: Report missing or insufficient tests
 title: '[TESTS]: '
 labels: tests
 assignees: ''
