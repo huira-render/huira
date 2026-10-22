@@ -227,9 +227,9 @@ if(HUIRA_COVERAGE)
                 COMMAND ${LCOV_EXECUTABLE} --directory . --zerocounters
                 COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure -L unit
                         --parallel ${HUIRA_COVERAGE_JOBS} --timeout ${HUIRA_COVERAGE_TEST_TIMEOUT}
-                COMMAND ${LCOV_EXECUTABLE} --directory . --capture --output-file coverage.info
-                COMMAND ${LCOV_EXECUTABLE} --extract coverage.info 
-                    '${CMAKE_SOURCE_DIR}/src/*'
+                COMMAND ${LCOV_EXECUTABLE} --directory . --capture
+                        --include '${CMAKE_SOURCE_DIR}/include/*' --output-file coverage.info
+                COMMAND ${LCOV_EXECUTABLE} --extract coverage.info
                     '${CMAKE_SOURCE_DIR}/include/*'
                     --output-file coverage_filtered.info
                 COMMAND ${GENHTML_EXECUTABLE} coverage_filtered.info --output-directory ${COVERAGE_OUTPUT_DIR}

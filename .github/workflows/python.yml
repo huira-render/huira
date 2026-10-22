@@ -35,7 +35,7 @@ jobs:
         include:
           - platform: linux
             os_family: linux
-            os: ubuntu-22.04
+            os: ubuntu-24.04
           - platform: macos-arm64
             os_family: macos
             os: macos-15
@@ -82,7 +82,7 @@ jobs:
         include:
           - platform: linux
             os_family: linux
-            os: ubuntu-22.04
+            os: ubuntu-24.04
           - platform: macos-arm64
             os_family: macos
             os: macos-15
@@ -135,7 +135,7 @@ jobs:
     name: Publish to PyPI
     needs: build-wheels
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     environment:
       name: pypi
       url: https://pypi.org/project/huira/
@@ -163,7 +163,7 @@ jobs:
       - pre-checks
       - build-python
       - build-wheels
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Check all jobs passed
         run: |

@@ -26,7 +26,7 @@ concurrency:
 
 jobs:
   docs:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     name: Build and attach docs
     env:
       TAG: ${{ github.event.release.tag_name || inputs.tag }}
