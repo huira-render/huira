@@ -29,6 +29,10 @@ Image<RGB> render_out_of_field_ball(float focus_distance_m, bool region_culling)
     camera_model.configure_sensor_from_pitch({64, 48}, 200_um);
     camera_model.set_focal_length(20_mm);
     camera_model.set_fstop(1.0f);
+    // Culling is a question of which tiles' rays reach the ball, which the aperture's diffraction
+    // has no part in, and at f/1, 20 pixels out of focus, its tables take minutes to build in an
+    // unoptimized build.
+    camera_model.enable_diffraction(false);
     camera_model.enable_depth_of_field();
     camera_model.set_focus_distance(units::Meter(focus_distance_m));
     auto camera = scene.root.new_instance(camera_model);
