@@ -1,0 +1,21 @@
+Vallado's SGP4 verification cases and output
+============================================
+
+SGP4-VER.TLE holds the verification cases of "Revisiting Spacetrack Report #3" (AIAA
+2006-6753), and tcppver.out the output of Vallado's C++ test program for them, in AFSPC
+mode ('a') with the WGS-72 constants. test_sgp4 checks the vendored SGP4 against them.
+
+Both are unmodified: byte for byte as distributed, CRLF line endings included
+(.gitattributes keeps Git from converting them). tcppver.out ends with a truncated line
+with no line ending, which test_sgp4 skips.
+
+Source      AIAA-2006-6753.zip, directory cpp/TestSGP4/TestSGP4/
+            https://celestrak.org/publications/AIAA/2006-6753/AIAA-2006-6753.zip
+Revision    Vallado's 2015 Dec 07 release
+Copied via  https://github.com/rirze/sgp4-cpp, commit 2f2e014, a history of the zip's
+            C++ directory (both files last changed in its commit 19b4897)
+SHA-256     d246d1d9d768ace445a38a965713fa9ba52d80fd8a41a0502ff83d7acffe2881  SGP4-VER.TLE
+            60dc65d67b6713840f4abbe4203f204016d465ad2d74dde73c1aa622df8414b7  tcppver.out
+
+They come from the same zip as the code, under the same permission (SPDX: SGP4) and with
+the same citation: see include/huira_impl/third_party/sgp4/NOTICE.

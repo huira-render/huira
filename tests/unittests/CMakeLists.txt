@@ -235,6 +235,17 @@ add_unit_test(test_translation_units
     huira/translation_units_other.cpp
 )
 
+# Vallado's reference SGP4, vendored in include/huira_impl/third_party/sgp4/, against his own
+# verification cases and output (third_party/sgp4/). Two source files, like
+# test_translation_units: it doesn't link if the SGP4 wrapper leaves anything defined twice.
+add_unit_test(test_sgp4
+    third_party/test_sgp4.cpp
+    third_party/sgp4_other.cpp
+)
+target_compile_definitions(test_sgp4 PRIVATE
+    HUIRA_SGP4_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/third_party/sgp4"
+)
+
 
 #############################
 ### Coverage Target Setup ###
