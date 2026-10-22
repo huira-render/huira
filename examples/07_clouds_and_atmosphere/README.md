@@ -8,14 +8,14 @@ Clouds as a second, partly transparent shell over the Earth, and an atmosphere a
 
 | File | What it is | From |
 |---|---|---|
-| `8k_earth_daymap.jpg` | The Earth's surface by day | [media.huira.space](https://media.huira.space/data/textures/earth/) |
-| `8k_earth_clouds.jpg` | The Earth's clouds | [media.huira.space](https://media.huira.space/data/textures/earth/) |
+| `8k_earth_daymap.jpg` | The Earth's surface by day | [media.huira.space](https://media.huira.space/data/textures/solar_system/) |
+| `8k_earth_clouds.jpg` | The Earth's clouds | [media.huira.space](https://media.huira.space/data/textures/solar_system/) |
 
 Download them into this folder:
 
 ```bash
-curl -fLO https://media.huira.space/data/textures/earth/8k_earth_daymap.jpg
-curl -fLO https://media.huira.space/data/textures/earth/8k_earth_clouds.jpg
+curl -fLO https://media.huira.space/data/textures/solar_system/8k_earth_daymap.jpg
+curl -fLO https://media.huira.space/data/textures/solar_system/8k_earth_clouds.jpg
 ```
 
 Licenses, and how to credit the data: [Earth textures](../../docs/getting_started/data.md#solar-system-textures).

@@ -11,18 +11,18 @@ The Earth, textured: a color map for its albedo, a roughness map that makes the 
 
 | File | What it is | From |
 |---|---|---|
-| `8k_earth_city_emission.jpg` | The Earth's city lights | [media.huira.space](https://media.huira.space/data/textures/earth/) |
-| `8k_earth_daymap.jpg` | The Earth's surface by day | [media.huira.space](https://media.huira.space/data/textures/earth/) |
-| `8k_earth_roughness_map.tif` | The Earth's roughness: low over water | [media.huira.space](https://media.huira.space/data/textures/earth/) |
-| `8k_earth_normal_map.tif` | The Earth's relief, as a normal map | [media.huira.space](https://media.huira.space/data/textures/earth/) |
+| `8k_earth_city_emission.jpg` | The Earth's city lights | [media.huira.space](https://media.huira.space/data/textures/solar_system/) |
+| `8k_earth_daymap.jpg` | The Earth's surface by day | [media.huira.space](https://media.huira.space/data/textures/solar_system/) |
+| `8k_earth_roughness_map.tif` | The Earth's roughness: low over water | [media.huira.space](https://media.huira.space/data/textures/solar_system/) |
+| `8k_earth_normal_map.tif` | The Earth's relief, as a normal map | [media.huira.space](https://media.huira.space/data/textures/solar_system/) |
 
 Download them into this folder:
 
 ```bash
-curl -fLO https://media.huira.space/data/textures/earth/8k_earth_city_emission.jpg
-curl -fLO https://media.huira.space/data/textures/earth/8k_earth_daymap.jpg
-curl -fLO https://media.huira.space/data/textures/earth/8k_earth_roughness_map.tif
-curl -fLO https://media.huira.space/data/textures/earth/8k_earth_normal_map.tif
+curl -fLO https://media.huira.space/data/textures/solar_system/8k_earth_city_emission.jpg
+curl -fLO https://media.huira.space/data/textures/solar_system/8k_earth_daymap.jpg
+curl -fLO https://media.huira.space/data/textures/solar_system/8k_earth_roughness_map.tif
+curl -fLO https://media.huira.space/data/textures/solar_system/8k_earth_normal_map.tif
 ```
 
 Licenses, and how to credit the data: [Earth textures](../../docs/getting_started/data.md#solar-system-textures).
