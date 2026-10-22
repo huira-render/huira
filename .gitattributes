@@ -31,3 +31,4 @@ Makefile text eol=lf
 # Vendored third-party code and data stay byte for byte as upstream ships them, CRLF line endings
 # included: no line-ending conversion (see each directory's NOTICE)
 include/huira_impl/third_party/sgp4/** -text
+tests/unittests/third_party/sgp4/** -text
