@@ -54,6 +54,7 @@ jobs:
     needs: build-linux
     runs-on: ubuntu-24.04
     name: Test and Coverage
+    timeout-minutes: 120
 
     steps:
       - name: Checkout code
