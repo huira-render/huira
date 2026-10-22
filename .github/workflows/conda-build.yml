@@ -41,12 +41,12 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           submodules: recursive
 
       - name: Set up Miniconda
-        uses: conda-incubator/setup-miniconda@v3
+        uses: conda-incubator/setup-miniconda@v4
         with:
           auto-update-conda: true
           conda-solver: libmamba
@@ -68,7 +68,7 @@ jobs:
           conda build packaging/recipe/ -m "$(conda info --base)/conda_build_config.yaml" --output-folder conda-output
 
       - name: Upload conda package artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: conda-package-${{ matrix.platform }}
           path: conda-output/
@@ -93,7 +93,7 @@ jobs:
 
     steps:
       - name: Checkout code (for test files only)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           sparse-checkout: |
             tests/packaging

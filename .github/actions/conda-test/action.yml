@@ -13,13 +13,13 @@ runs:
   using: 'composite'
   steps:
     - name: Download conda package artifact
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v8
       with:
         name: ${{ inputs.artifact-name }}
         path: conda-package
 
     - name: Set up Miniconda
-      uses: conda-incubator/setup-miniconda@v3
+      uses: conda-incubator/setup-miniconda@v4
       with:
         auto-update-conda: true
         conda-solver: libmamba
