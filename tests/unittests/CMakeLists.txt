@@ -141,8 +141,9 @@ function(add_unit_test test_name source_file)
         Catch2::Catch2WithMain
     )
     
-    # Add coverage flags if enabled
+    # Add coverage flags if enabled, and run the test on one thread (see coverage_one_thread.cpp)
     if(HUIRA_COVERAGE)
+        target_sources(${test_name} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/coverage_one_thread.cpp)
         target_compile_options(${test_name} PRIVATE ${COVERAGE_FLAGS})
         
         # Only add linker flags for non-Windows Clang or GCC
@@ -213,18 +214,19 @@ if(HUIRA_COVERAGE)
         find_program(GENHTML_EXECUTABLE genhtml)
         
         if(LCOV_EXECUTABLE AND GENHTML_EXECUTABLE)
-            # Build command to run each test with XML output
-            set(RUN_TESTS_COMMAND "")
-            foreach(source_file ${UNIT_TESTS})
-                get_filename_component(test_name ${source_file} NAME_WE)
-                list(APPEND RUN_TESTS_COMMAND 
-                    COMMAND $<TARGET_FILE:${test_name}> -r junit -o ${CATCH2_OUTPUT_DIR}/${test_name}.xml
-                )
-            endforeach()
-            
+            # The tests run through CTest, each on one thread (see coverage_one_thread.cpp), as many
+            # at once as there are cores. CTest writes each one's JUnit XML as add_unit_test()
+            # registers it, prints how long each took, and stops any that runs past
+            # HUIRA_COVERAGE_TEST_TIMEOUT, naming it, rather than leaving the job to hang silently
+            # until CI's own limit ends it. USES_TERMINAL has Ninja print each line as it comes,
+            # rather than all of them once the target is done.
+            cmake_host_system_information(RESULT HUIRA_COVERAGE_JOBS QUERY NUMBER_OF_LOGICAL_CORES)
+            set(HUIRA_COVERAGE_TEST_TIMEOUT 1800 CACHE STRING
+                "Seconds any one test may run in the coverage target")
             add_custom_target(coverage
                 COMMAND ${LCOV_EXECUTABLE} --directory . --zerocounters
-                ${RUN_TESTS_COMMAND}  # Run tests individually instead of ctest
+                COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure -L unit
+                        --parallel ${HUIRA_COVERAGE_JOBS} --timeout ${HUIRA_COVERAGE_TEST_TIMEOUT}
                 COMMAND ${LCOV_EXECUTABLE} --directory . --capture --output-file coverage.info
                 COMMAND ${LCOV_EXECUTABLE} --extract coverage.info 
                     '${CMAKE_SOURCE_DIR}/src/*'
@@ -234,6 +236,7 @@ if(HUIRA_COVERAGE)
                 WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
                 COMMENT "Generating GCC code coverage report"
                 DEPENDS all_unit_tests
+                USES_TERMINAL
             )
             
             message(STATUS "GCC coverage target created. Run 'cmake --build . --target coverage'")
