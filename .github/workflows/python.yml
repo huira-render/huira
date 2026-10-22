@@ -101,16 +101,6 @@ jobs:
         with:
           submodules: recursive
 
-      # Expose GitHub Actions cache URL and token for vcpkg binary caching
-      # inside the manylinux Docker container (Linux only)
-      - name: Expose GitHub Actions cache env vars
-        if: matrix.platform == 'linux'
-        uses: actions/github-script@v9
-        with:
-          script: |
-            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
-            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
-
       - name: Build wheels
         uses: pypa/cibuildwheel@v3.3.1
         with:
@@ -120,8 +110,6 @@ jobs:
           # show the wheels build; main and tags build every version pyproject.toml lists, and a
           # manual run can pass its own selector.
           CIBW_BUILD: ${{ github.event.inputs.cibw_build || (github.event_name == 'pull_request' && 'cp313-*') || '' }}
-          # Pass cache env vars into the Linux container for vcpkg binary caching
-          CIBW_ENVIRONMENT_PASS_LINUX: ACTIONS_CACHE_URL ACTIONS_RUNTIME_TOKEN
           CIBW_ENVIRONMENT_LINUX: >-
             CMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake
             VCPKG_INSTALLED_DIR=/opt/vcpkg_installed
