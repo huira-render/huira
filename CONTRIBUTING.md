@@ -124,7 +124,7 @@ the root of the repository. Most IDEs (Visual Studio, VS Code, CLion) pick it up
 From the command line:
 
 ```bash
-pip install clang-format              # the same tool CI uses
+pip install clang-format==23.1.3      # the version CI uses
 clang-format -i path/to/your/file.cpp
 ```
 
