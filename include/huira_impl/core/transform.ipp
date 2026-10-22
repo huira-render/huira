@@ -24,31 +24,27 @@ Transform<T>::operator Transform<U>() const
 }
 
 /**
- * @brief Convert the transform to a 4x4 matrix (T * R * S).
+ * @brief Convert the transform to a 4x4 matrix (T * R * S), which places points as
+ * apply_to_point() does: M * (p, 1).
+ *
+ * Mat4 is column-major, as glm's matrices are: the first three columns are the rotation's, each
+ * scaled by the scale along it, and the fourth is the translation.
+ *
  * @return Mat4<T> Transformation matrix
  */
 template <IsFloatingPoint T>
 Mat4<T> Transform<T>::to_matrix() const
 {
-    // Create transformation matrix: T * R * S
-    Mat4<T> result{};
-
-    // Apply scale and rotation
-    Mat3<T> rot_basis = rotation.local_to_parent_matrix();
-    for (int i = 0; i < 3; ++i) {
-        for (int j = 0; j < 3; ++j) {
-            result[i][j] = rot_basis[i][j] * scale[j];
+    const Mat3<T> basis = rotation.local_to_parent_matrix();
+    Mat4<T> result{T(1)};
+    for (int column = 0; column < 3; ++column) {
+        for (int row = 0; row < 3; ++row) {
+            result[column][row] = basis[column][row] * scale[column];
         }
     }
-
-    // Apply position
-    result[0][3] = position.x;
-    result[1][3] = position.y;
-    result[2][3] = position.z;
-
-    // Set homogeneous coordinate
-    result[3][3] = T(1);
-
+    result[3][0] = position.x;
+    result[3][1] = position.y;
+    result[3][2] = position.z;
     return result;
 }
 

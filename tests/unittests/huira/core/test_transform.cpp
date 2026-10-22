@@ -1,5 +1,6 @@
 #include <array>
 #include <cmath>
+#include <cstddef>
 #include <numbers>
 
 #include "catch2/catch_test_macros.hpp"
@@ -105,6 +106,33 @@ TEST_CASE("Transform - angular velocity frame conventions", "[transform][rates]"
 
         Vec3<double> x = identity.rotation * Vec3<double>{1, 0, 0};
         CHECK_VEC3_EQUAL(x, Vec3<double>{1, 0, 0}, 1e-10);
+    }
+}
+
+TEST_CASE("Transform - as a 4x4 matrix, it places points as it does", "[transform]")
+{
+    Transform<double> transform;
+    transform.position = Vec3<double>{3.0, -2.0, 7.0};
+    transform.rotation = Rotation<double>::from_local_to_parent(
+        glm::normalize(Vec3<double>{1.0, 2.0, 3.0}), units::Radian(0.7));
+    transform.scale = Vec3<double>{2.0, 0.5, 1.5};
+
+    const Mat4<double> m = transform.to_matrix();
+    for (const Vec3<double>& point :
+         {Vec3<double>{0.0, 0.0, 0.0}, Vec3<double>{1.0, 0.0, 0.0}, Vec3<double>{-0.3, 2.0, 0.5}}) {
+        const glm::dvec4 placed = m * glm::dvec4(point, 1.0);
+        CHECK(placed.w == 1.0);
+        CHECK_VEC3_EQUAL(Vec3<double>{placed}, transform.apply_to_point(point), 1e-12);
+    }
+
+    // The same matrix as Embree's, which is tested below, with a bottom row of (0, 0, 0, 1):
+    const std::array<float, 12> embree = transform.to_embree_matrix();
+    for (int column = 0; column < 4; ++column) {
+        for (int row = 0; row < 3; ++row) {
+            const std::size_t k = static_cast<std::size_t>(3 * column + row);
+            CHECK(std::abs(m[column][row] - static_cast<double>(embree[k])) < 1e-5);
+        }
+        CHECK(m[column][3] == (column == 3 ? 1.0 : 0.0));
     }
 }
 
