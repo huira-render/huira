@@ -38,6 +38,9 @@
 #include "huira/handles/camera_handle.hpp"
 #include "huira/handles/geometry/mesh_handle.hpp"
 #include "huira/handles/handle.hpp"
+#include "huira/handles/materials/bsdf_handle.hpp"
+#include "huira/handles/materials/material_handle.hpp"
+#include "huira/handles/materials/texture_handle.hpp"
 #include "huira/handles/scene/frame_handle.hpp"
 #include "huira/handles/scene/instance_handle.hpp"
 #include "huira/handles/scene/node_handle.hpp"
@@ -45,6 +48,17 @@
 
 // images/
 #include "huira/images/image.hpp"
+
+// materials/
+#include "huira/materials/bsdfs/cook_torrance_bsdf.hpp"
+#include "huira/materials/bsdfs/hapke_bsdf.hpp"
+#include "huira/materials/bsdfs/lambertian_bsdf.hpp"
+#include "huira/materials/bsdfs/lommel_seeliger_bsdf.hpp"
+#include "huira/materials/bsdfs/mcewen_bsdf.hpp"
+#include "huira/materials/bsdfs/null_bsdf.hpp"
+#include "huira/materials/bsdfs/oren_nayar_bsdf.hpp"
+#include "huira/materials/material.hpp"
+#include "huira/materials/texture.hpp"
 
 // render/
 #include "huira/geometry/ray.hpp"
@@ -83,6 +97,7 @@ template class Ray<TestSpectral>;
 template class Rotation<TestFloat>;
 template struct Transform<TestFloat>;
 
+template class BSDFHandle<TestSpectral>;
 template class CameraModelHandle<TestSpectral>;
 template class FrameHandle<TestSpectral>;
 template class InstanceHandle<TestSpectral>;
@@ -90,8 +105,24 @@ template class MeshHandle<TestSpectral>;
 template class LightHandle<TestSpectral>;
 template class ModelHandle<TestSpectral>;
 template class PrimitiveHandle<TestSpectral>;
+template class MaterialHandle<TestSpectral>;
 template class RootFrameHandle<TestSpectral>;
 template class UnresolvedObjectHandle<TestSpectral>;
+template class TextureHandle<TestSpectral>;
+template class TextureHandle<float>;
+template class TextureHandle<Vec3<float>>;
+
+template class CookTorranceBSDF<TestSpectral>;
+template class HapkeBSDF<TestSpectral>;
+template class LambertianBSDF<TestSpectral>;
+template class LommelSeeligerBSDF<TestSpectral>;
+template class McEwenBSDF<TestSpectral>;
+template class NullBSDF<TestSpectral>;
+template class OrenNayarBSDF<TestSpectral>;
+template class Material<TestSpectral>;
+template class Texture<TestSpectral>;
+template class Texture<float>;
+template class Texture<Vec3<float>>;
 
 template class Image<std::int8_t>;
 template class Image<float>;
