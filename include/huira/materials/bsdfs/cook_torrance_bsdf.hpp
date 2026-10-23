@@ -85,6 +85,8 @@ class CookTorranceBSDF final : public BSDF<TSpectral> {
     [[nodiscard]] static float
     ggx_D(const Vec3<float>& n, const Vec3<float>& h, float alpha2) noexcept;
 
+    [[nodiscard]] static float smith_lambda(float n_dot_v, float alpha2) noexcept;
+
     [[nodiscard]] static float smith_G1(float n_dot_v, float alpha2) noexcept;
 
     [[nodiscard]] static float smith_G2(float n_dot_wo, float n_dot_wi, float alpha2) noexcept;

@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 #include "huira/core/constants.hpp"
 #include "huira/materials/sampling_utils.hpp"
@@ -183,18 +184,37 @@ float CookTorranceBSDF<TSpectral>::ggx_D(const Vec3<float>& n,
     return sampling::ggx_distribution(n_dot_h * n_dot_h, glm::dot(n_cross_h, n_cross_h), alpha2);
 }
 
+/**
+ * @brief Smith's Lambda for GGX: the fraction of the microsurface seen from direction v that
+ * other microfacets hide, relative to the part that is seen, (sqrt(1 + alpha^2 tan^2) - 1) / 2.
+ */
+template <IsSpectral TSpectral>
+float CookTorranceBSDF<TSpectral>::smith_lambda(float n_dot_v, float alpha2) noexcept
+{
+    // cos^2 is kept from 0, not from 1e-8, which would compute every direction within 1e-4 of
+    // the horizon as if it were at 1e-4, and mask far too little there:
+    const float cos2 = n_dot_v * n_dot_v;
+    const float tan2 = (1.0f - cos2) / std::max(cos2, std::numeric_limits<float>::min());
+    return 0.5f * (std::sqrt(1.0f + alpha2 * tan2) - 1.0f);
+}
+
+/// Smith's masking: the fraction of the microfacets facing v that v sees, 1 / (1 + Lambda(v)).
 template <IsSpectral TSpectral>
 float CookTorranceBSDF<TSpectral>::smith_G1(float n_dot_v, float alpha2) noexcept
 {
-    const float cos2 = n_dot_v * n_dot_v;
-    const float tan2 = (1.0f - cos2) / std::max(cos2, 1e-8f);
-    return 2.0f / (1.0f + std::sqrt(1.0f + alpha2 * tan2));
+    return 1.0f / (1.0f + smith_lambda(n_dot_v, alpha2));
 }
 
+/**
+ * @brief Smith's height-correlated masking-shadowing, 1 / (1 + Lambda(wo) + Lambda(wi)) (Heitz
+ * 2014; glTF 2.0, Appendix B). A microfacet high on the surface is likelier to be both seen and
+ * lit, so masking and shadowing are not independent: their product, G1(wo) G1(wi), shadows too
+ * much, most of all for rough surfaces at grazing angles.
+ */
 template <IsSpectral TSpectral>
 float CookTorranceBSDF<TSpectral>::smith_G2(float n_dot_wo, float n_dot_wi, float alpha2) noexcept
 {
-    return smith_G1(n_dot_wo, alpha2) * smith_G1(n_dot_wi, alpha2);
+    return 1.0f / (1.0f + smith_lambda(n_dot_wo, alpha2) + smith_lambda(n_dot_wi, alpha2));
 }
 
 template <IsSpectral TSpectral>
