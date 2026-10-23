@@ -126,6 +126,26 @@ TEST_CASE("A McEwen surface mixes Lambert's law with Lommel-Seeliger's in the pr
     }
 }
 
+TEST_CASE("A McEwen surface reflects as McEwen's lunar-Lambert function", "[materials][bsdf]")
+{
+    // Its Lommel-Seeliger part is normalized to equal Lambert's at i = e = 0, so a disk at full
+    // phase, where L = 1, has I/F = A from its center to its limb: the normal albedo.
+    const McEwenBSDF<RGB> bsdf;
+    const Interaction<RGB> isect = surface();
+    for (const Angles& a : angle_sets()) {
+        const RGB f = bsdf.eval(a.wo(isect), a.wi(isect), isect, shading(ALBEDO));
+        const double l = ref::mcewen_l(ref::phase_angle(a.i, a.e, a.azimuth));
+        INFO("i " << a.i << ", e " << a.e << ", azimuth " << a.azimuth);
+        for (std::size_t c = 0; c < RGB::size(); ++c) {
+            CHECK(close(f[c], ref::lunar_lambert(ALBEDO[c], l, a.i, a.e), 1e-4));
+        }
+    }
+    for (double i : {0.0, 0.5, 1.0, 1.4}) {
+        INFO("i = e = " << i);
+        CHECK(close(radiance_factor_at_zero_phase(bsdf, i), ALBEDO[1], 1e-3));
+    }
+}
+
 TEST_CASE("A Lommel-Seeliger or McEwen surface reflects nothing toward a viewer below it",
           "[materials][bsdf]")
 {
