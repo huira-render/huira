@@ -183,6 +183,33 @@ inline void load_default_pck()
     furnsh(get_default_pck_path());
 }
 
+/**
+ * @brief Get the path of Huira's TEME frame kernel, which defines HUIRA_EARTH_TEME.
+ * @return fs::path Path to kernels/fk/huira_teme.tf in the data directory
+ */
+inline fs::path get_teme_frame_kernel_path()
+{
+    fs::path data_directory = huira::data_dir();
+    return data_directory / "kernels" / "fk" / "huira_teme.tf";
+}
+
+/**
+ * @brief Load Huira's TEME frame kernel, unless SPICE already knows HUIRA_EARTH_TEME.
+ *
+ * It asks SPICE each time, rather than remembering that it loaded the kernel: kclear_c() unloads
+ * every kernel, this one included.
+ */
+inline void ensure_teme_frame_loaded()
+{
+    SpiceInt frame_id = 0;
+    call_spice(namfrm_c, TEME_FRAME_NAME, &frame_id);
+    if (frame_id != 0) {
+        return;
+    }
+    HUIRA_LOG_INFO("Loading the TEME frame kernel from: " + get_teme_frame_kernel_path().string());
+    furnsh(get_teme_frame_kernel_path());
+}
+
 // ============================= //
 // === SPICE time interfaces === //
 // ============================= //

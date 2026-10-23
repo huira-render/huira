@@ -51,6 +51,11 @@ inline void ensure_lsk_loaded();
 inline fs::path get_default_pck_path();
 inline void load_default_pck();
 
+/// Huira's TEME frame (True Equator, Mean Equinox of date), defined by its frame kernel.
+inline constexpr const char* TEME_FRAME_NAME = "HUIRA_EARTH_TEME";
+inline fs::path get_teme_frame_kernel_path();
+inline void ensure_teme_frame_loaded();
+
 // SPICE time interfaces
 inline double str2et(const std::string& time_string);
 
