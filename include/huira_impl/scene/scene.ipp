@@ -293,10 +293,10 @@ Scene<TSpectral>::add_primitive(const GeometryHandle<TSpectral>& geometry_handle
         HUIRA_THROW_ERROR("Cannot create Primitive: Invalid Geometry Handle.");
     }
     if (!material_handle.valid()) {
-        HUIRA_THROW_ERROR("Invalid Material Handle provided. Using default material.");
+        HUIRA_THROW_ERROR("Cannot create Primitive: Invalid Material Handle.");
     }
     if (!medium_handle.valid()) {
-        HUIRA_THROW_ERROR("Invalid Medium Handle provided. Using default medium.");
+        HUIRA_THROW_ERROR("Cannot create Primitive: Invalid Medium Handle.");
     }
 
     auto primitive_shared = std::make_shared<Primitive<TSpectral>>();
