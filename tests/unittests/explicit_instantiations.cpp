@@ -73,6 +73,7 @@
 #include "huira/scene/node.hpp"
 #include "huira/scene/scene.hpp"
 #include "huira/scene/scene_view.hpp"
+#include "huira/scene/teme_frame_node.hpp"
 
 // stars/
 #include "huira/stars/star.hpp"
@@ -142,6 +143,7 @@ template class Node<TestSpectral>;
 template class UnresolvedAsteroid<TestSpectral>;
 template class UnresolvedEmitter<TestSpectral>;
 template class UnresolvedLambertianSphere<TestSpectral>;
+template class TemeFrameNode<TestSpectral>;
 template class UnresolvedObject<TestSpectral>;
 
 } // namespace huira
