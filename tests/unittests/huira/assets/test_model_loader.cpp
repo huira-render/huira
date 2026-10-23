@@ -207,6 +207,7 @@ struct Gltf {
     std::vector<std::string> images;
     std::optional<std::string> nodes;       // the "nodes" array's contents
     std::optional<std::string> scene_nodes; // the scene's root nodes
+    bool meshes_have_materials = true;      // or none at all
 
     fs::path write(const std::string& name) const
     {
@@ -231,7 +232,11 @@ struct Gltf {
         for (std::size_t i = 0; i < materials.size(); ++i) {
             json << (i ? ", " : "") << R"({"name": "Mesh)" << i
                  << R"(", "primitives": [{"attributes": {"POSITION": 0, "TEXCOORD_0": 1}, )"
-                 << R"("indices": 2, "material": )" << i << "}]}";
+                 << R"("indices": 2)";
+            if (meshes_have_materials) {
+                json << R"(, "material": )" << i;
+            }
+            json << "}]}";
         }
         json << R"(], "materials": [)";
         for (std::size_t i = 0; i < materials.size(); ++i) {
@@ -334,9 +339,13 @@ aiTexture* raw_texture(int r, int g, int b, int a)
  * Writes, in assimp's own format, a model of one triangle attached to its root node, whose
  * material's base color, normal and metallic-roughness textures are uncompressed and embedded
  * (*0, *1 and *2). Its normals and tangents are given, and those of one vertex are made NaN when
- * asked for. Its mesh is named "Embedded", which the format does not keep.
+ * asked for. Its mesh is named "Embedded", which the format does not keep, and its material index
+ * is 0, unless it is given another, which no material has.
  */
-fs::path write_assbin(const std::string& name, bool nan_normal, bool nan_tangent)
+fs::path write_assbin(const std::string& name,
+                      bool nan_normal,
+                      bool nan_tangent,
+                      unsigned int material_index = 0)
 {
     auto scene = std::make_unique<aiScene>();
     scene->mRootNode = new aiNode("Root");
@@ -364,7 +373,7 @@ fs::path write_assbin(const std::string& name, bool nan_normal, bool nan_tangent
     mesh->mFaces = new aiFace[1];
     mesh->mFaces[0].mNumIndices = 3;
     mesh->mFaces[0].mIndices = new unsigned int[3]{0, 1, 2};
-    mesh->mMaterialIndex = 0;
+    mesh->mMaterialIndex = material_index;
     scene->mNumMeshes = 1;
     scene->mMeshes = new aiMesh*[1]{mesh};
 
@@ -633,6 +642,30 @@ TEST_CASE("A model's materials take their glTF values", "[assets][models]")
     CHECK(d.metallic == 1.f);
     CHECK(d.roughness == 1.f);
     check_bins(d.emission, RGB{0.f});
+}
+
+TEST_CASE("A model's mesh without a material is given a default one", "[assets][models]")
+{
+    // A mesh with no material in a valid model is given its format's default material by ASSIMP:
+    // glTF's is white, opaque, metallic and rough.
+    Gltf gltf;
+    gltf.meshes_have_materials = false;
+    Scene<RGB> scene;
+    scene.load_model(gltf.write("no_material.gltf"));
+    const ShadingParams<RGB> p = values_of(scene, "Mesh0");
+    check_bins(p.albedo, RGB{1.f});
+    CHECK(p.opacity == 1.f);
+    CHECK(p.metallic == 1.f);
+    CHECK(p.roughness == 1.f);
+
+    // A mesh whose material index is not one of the model's materials (which ASSIMP doesn't
+    // check) is given the scene's. Before, the loader warned that it would be, but gave it an
+    // invalid material, and the model could not be loaded.
+    Scene<RGB> bad;
+    const std::string mesh = load_assbin(bad, write_assbin("bad_material.assbin", false, false, 5));
+    const auto default_material =
+        bad.add_primitive(bad.add_ellipsoid(1_m, 1_m, 1_m)).get()->material;
+    CHECK(material_of(bad, mesh) == default_material);
 }
 
 TEST_CASE("A model's textures are multiplied by their factors", "[assets][models]")

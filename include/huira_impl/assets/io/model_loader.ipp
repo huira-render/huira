@@ -244,19 +244,20 @@ PrimitiveHandle<TSpectral> ModelLoader<TSpectral>::convert_mesh_(const aiMesh* a
         std::move(indices), std::move(vertices), std::move(tangent_buffer));
     auto geom_handle = ctx.scene->add_geometry(mesh, std::string(ai_mesh->mName.C_Str()));
 
-    // Assign material
+    // Assign material. A mesh whose material index is not one of the model's materials (which
+    // ASSIMP doesn't check) is given the scene's default material:
     unsigned int material_index = ai_mesh->mMaterialIndex;
     auto mat_it = ctx.material_map.find(material_index);
 
     MaterialHandle<TSpectral> mat_handle =
         (mat_it != ctx.material_map.end())
             ? mat_it->second
-            : MaterialHandle<TSpectral>{std::weak_ptr<Material<TSpectral>>{}};
+            : MaterialHandle<TSpectral>{ctx.scene->default_material_};
 
     if (mat_it == ctx.material_map.end()) {
         HUIRA_LOG_WARNING("ModelLoader::convert_mesh_ - No material found for mesh " +
                           std::string(ai_mesh->mName.C_Str()) + " (material index " +
-                          std::to_string(material_index) + "). Using default.");
+                          std::to_string(material_index) + "). Using the default material.");
     }
 
     return ctx.scene->add_primitive(geom_handle, mat_handle, std::string(ai_mesh->mName.C_Str()));
