@@ -313,7 +313,7 @@ const PixelT& Image<PixelT>::at(std::size_t index) const
 template <IsImagePixel PixelT>
 PixelT& Image<PixelT>::at(int x, int y)
 {
-    if (x >= resolution_.width || y >= resolution_.height) {
+    if (x < 0 || y < 0 || x >= resolution_.width || y >= resolution_.height) {
         HUIRA_THROW_ERROR("Image::at: coordinates out of bounds");
     }
     return data_[to_linear(x, y)];
@@ -330,7 +330,7 @@ PixelT& Image<PixelT>::at(int x, int y)
 template <IsImagePixel PixelT>
 const PixelT& Image<PixelT>::at(int x, int y) const
 {
-    if (x >= resolution_.width || y >= resolution_.height) {
+    if (x < 0 || y < 0 || x >= resolution_.width || y >= resolution_.height) {
         HUIRA_THROW_ERROR("Image::at: coordinates out of bounds");
     }
     return data_[to_linear(x, y)];
@@ -348,13 +348,10 @@ const PixelT& Image<PixelT>::at(int x, int y) const
 template <IsImagePixel PixelT>
 PixelT& Image<PixelT>::at(const Pixel& pixel)
 {
-    // TODO Do proper rounding/conversion
-    auto x = static_cast<int>(pixel.x);
-    auto y = static_cast<int>(pixel.y);
-    if (x >= resolution_.width || y >= resolution_.height) {
+    if (!contains_(pixel)) {
         HUIRA_THROW_ERROR("Image::at: pixel coordinates out of bounds");
     }
-    return data_[to_linear(x, y)];
+    return data_[to_linear(static_cast<int>(pixel.x), static_cast<int>(pixel.y))];
 }
 
 /**
@@ -369,13 +366,10 @@ PixelT& Image<PixelT>::at(const Pixel& pixel)
 template <IsImagePixel PixelT>
 const PixelT& Image<PixelT>::at(const Pixel& pixel) const
 {
-    // TODO Do proper rounding/conversion
-    auto x = static_cast<int>(pixel.x);
-    auto y = static_cast<int>(pixel.y);
-    if (x >= resolution_.width || y >= resolution_.height) {
+    if (!contains_(pixel)) {
         HUIRA_THROW_ERROR("Image::at: pixel coordinates out of bounds");
     }
-    return data_[to_linear(x, y)];
+    return data_[to_linear(static_cast<int>(pixel.x), static_cast<int>(pixel.y))];
 }
 
 /**
@@ -590,6 +584,16 @@ Image<float> Image<PixelT>::get_channel(std::size_t channel) const
     }
 
     return output;
+}
+
+/**
+ * @brief Whether Pixel coordinates fall in the image: in [0, width) by [0, height), and not NaN.
+ */
+template <IsImagePixel PixelT>
+bool Image<PixelT>::contains_(const Pixel& pixel) const noexcept
+{
+    return pixel.x >= 0.f && pixel.y >= 0.f && pixel.x < static_cast<float>(resolution_.width) &&
+           pixel.y < static_cast<float>(resolution_.height);
 }
 
 /**
