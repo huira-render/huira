@@ -8,6 +8,7 @@
 #include "huira/core/spice_py.ipp"
 #include "huira/core/time_py.ipp"
 #include "huira/core/types_py.ipp"
+#include "huira/ephemeris/satrec_py.ipp"
 #include "huira/handles/materials/texture_handle_py.ipp"
 #include "huira/images/fft_convolver.hpp"
 #include "huira/images/fits_metadata_py.ipp"
@@ -44,6 +45,7 @@ void bind_core(py::module_& m)
     huira::bind_logger(m);
 
     huira::spice::bind_spice(m);
+    huira::bind_satrec(m);
 
     huira::bind_distortion_coefficients(m);
     huira::bind_pixel_convention(m);
