@@ -188,6 +188,44 @@ ggx_vndf_sample(const Vec3<float>& wo, float roughness, float u1, float u2) noex
 }
 
 // =========================================================================
+//  Angles between directions
+// =========================================================================
+
+/**
+ * @brief The angle between two unit vectors, in radians, to float precision at every angle.
+ *
+ * acos(dot(a, b)) alone is not: the dot product of unit vectors rounded to float resolves cosines
+ * near 1 only to 6e-8, so angles below about 3.5e-4 rad come out as 0 or 3.5e-4 (and likewise
+ * near pi). There, half the chord between the vectors, |a - b| / 2 = sin(theta / 2), keeps its
+ * precision, since a - b is exact for nearly equal vectors. Elsewhere acos is as precise, and
+ * cheaper.
+ */
+[[nodiscard]] inline float angle_between(const Vec3<float>& a, const Vec3<float>& b) noexcept
+{
+    const float cos_angle = glm::dot(a, b);
+    if (std::abs(cos_angle) < 0.9f) {
+        return std::acos(cos_angle);
+    }
+    if (cos_angle > 0.0f) {
+        return 2.0f * std::asin(0.5f * glm::length(a - b));
+    }
+    return std::numbers::pi_v<float> - 2.0f * std::asin(0.5f * glm::length(a + b));
+}
+
+/**
+ * @brief tan(theta / 2) for the angle theta between two unit vectors, |a - b| / |a + b|, to float
+ * precision at every angle and without computing the angle: a - b is exact where the vectors are
+ * nearly the same, and a + b where they are nearly opposite. Infinite for opposite vectors.
+ */
+[[nodiscard]] inline float tan_half_angle_between(const Vec3<float>& a,
+                                                  const Vec3<float>& b) noexcept
+{
+    const Vec3<float> difference = a - b;
+    const Vec3<float> sum = a + b;
+    return std::sqrt(glm::dot(difference, difference) / glm::dot(sum, sum));
+}
+
+// =========================================================================
 //  Frame conversion utilities
 // =========================================================================
 

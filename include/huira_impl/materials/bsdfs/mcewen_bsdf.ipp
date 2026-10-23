@@ -29,9 +29,9 @@ TSpectral McEwenBSDF<TSpectral>::eval(const Vec3<float>& wo,
         return TSpectral{0};
     }
 
-    // Phase angle (angle between incoming and outgoing light directions)
-    float cos_alpha = std::clamp(glm::dot(wi, wo), -1.0f, 1.0f);
-    float alpha = std::acos(cos_alpha);
+    // Phase angle (angle between incoming and outgoing light directions), resolved near 0 (see
+    // sampling::angle_between()):
+    float alpha = sampling::angle_between(wi, wo);
 
     // McEwen's empirically derived beta factor
     // 60 degrees = PI / 3 radians, so division by (PI/3) is multiplication by (3/PI)

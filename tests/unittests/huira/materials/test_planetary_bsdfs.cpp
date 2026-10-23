@@ -19,22 +19,54 @@ namespace ref = reference::photometry;
 namespace {
 
 /// Light and viewer from overhead to 1.45 rad (83 degrees), on the same side, across and
-/// opposite. The phase angle of the float directions at zero phase is acos(0.99999994), 3e-4 rad,
-/// rather than 0, which moves a narrow opposition surge, so zero phase is left out here and
-/// checked overhead, where the directions are exact.
+/// opposite, and at zero phase.
 std::vector<Angles> angle_sets()
 {
     std::vector<Angles> all;
     for (double i : {0.0, 0.3, 0.7, 1.1, 1.45}) {
-        for (double e : {0.0, 0.4, 0.9, 1.2, 1.45}) {
+        for (double e : {0.0, 0.4, 0.7, 0.9, 1.2, 1.45}) {
             for (double azimuth : {0.0, 0.5, 1.5, 2.5, std::numbers::pi}) {
-                if (ref::phase_angle(i, e, azimuth) > 0.05) {
-                    all.push_back({i, e, azimuth});
-                }
+                all.push_back({i, e, azimuth});
             }
         }
     }
     return all;
+}
+
+/// A light 0.7 rad from the normal, and a viewer at the given phase angle from it, both
+/// rounded to float, as a renderer's directions are.
+struct NearOpposition {
+    Vec3<float> wi;
+    Vec3<float> wo;
+    double i; ///< The angles of the float directions, in double
+    double e;
+    double phase;
+};
+
+NearOpposition near_opposition(const Interaction<RGB>& isect, double phase, double azimuth)
+{
+    const Vec3<float> wi = direction(isect, 0.7, 0.0);
+    // Rotate wi by the phase angle about an axis perpendicular to it:
+    const Vec3<double> a = glm::normalize(Vec3<double>(wi));
+    Vec3<double> t1;
+    Vec3<double> t2;
+    {
+        const Vec3<double> any =
+            std::abs(a.z) < 0.9 ? Vec3<double>{0, 0, 1} : Vec3<double>{1, 0, 0};
+        t1 = glm::normalize(glm::cross(a, any));
+        t2 = glm::cross(a, t1);
+    }
+    const Vec3<double> axis = t1 * std::cos(azimuth) + t2 * std::sin(azimuth);
+    const Vec3<double> b = a * std::cos(phase) + axis * std::sin(phase);
+    const auto wo = Vec3<float>(glm::normalize(b));
+    const Vec3<double> wi_d{wi};
+    const Vec3<double> wo_d{wo};
+    const double angle = std::atan2(glm::length(glm::cross(wi_d, wo_d)), glm::dot(wi_d, wo_d));
+    return {wi,
+            wo,
+            std::acos(glm::dot(wi_d, Vec3<double>(isect.normal_s)) / glm::length(wi_d)),
+            std::acos(glm::dot(wo_d, Vec3<double>(isect.normal_s)) / glm::length(wo_d)),
+            angle};
 }
 
 ShadingParams<RGB> shading(RGB albedo)
@@ -194,6 +226,35 @@ TEST_CASE("A Hapke surface reflects as Hapke's model", "[materials][bsdf]")
                 channel.w = albedo[c];
                 const double expected = ref::hapke(channel, a.i, a.e, phase);
                 CHECK(std::abs(f[c] - expected) <= 1e-4 * expected + 1e-9);
+            }
+        }
+    }
+}
+
+TEST_CASE("Hapke's and McEwen's surfaces resolve phase angles near opposition", "[materials][bsdf]")
+{
+    // A narrow opposition surge changes over phase angles of h radians. acos of the dot product
+    // of float directions cannot tell angles below 3.5e-4 rad apart (they come out as 0 or about
+    // 3.5e-4), which put the surge 15% low at h = 0.001.
+    const Interaction<RGB> isect = surface();
+    const RGB albedo{0.9f, 0.5f, 0.1f};
+    const ShadingParams<RGB> params = shading(albedo);
+    const ref::HapkeParameters narrow{0.0, 0.001, 1.0, 0.3, 0.6};
+    const HapkeBSDF<RGB> hapke(0.001f, 1.f, 0.3f, 0.6f);
+    const McEwenBSDF<RGB> mcewen;
+    for (double phase : {0.0, 1e-6, 1e-5, 3e-5, 1e-4, 3e-4, 1e-3, 3e-3}) {
+        for (double azimuth : {0.0, 1.0, 2.5}) {
+            const NearOpposition g = near_opposition(isect, phase, azimuth);
+            INFO("phase " << phase << " rad (" << g.phase << " between the float directions), "
+                          << "azimuth " << azimuth);
+            const RGB h = hapke.eval(g.wo, g.wi, isect, params);
+            const RGB m = mcewen.eval(g.wo, g.wi, isect, params);
+            for (std::size_t c = 0; c < RGB::size(); ++c) {
+                ref::HapkeParameters channel = narrow;
+                channel.w = albedo[c];
+                CHECK(close(h[c], ref::hapke(channel, g.i, g.e, g.phase), 1e-4));
+                CHECK(close(
+                    m[c], ref::lunar_lambert(albedo[c], ref::mcewen_l(g.phase), g.i, g.e), 1e-5));
             }
         }
     }
