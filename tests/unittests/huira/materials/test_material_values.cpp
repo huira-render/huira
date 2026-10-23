@@ -189,4 +189,135 @@ TEST_CASE("A normal map's sample of no length leaves the surface's normal", "[ma
     const Vec3<float> tilted = material.get()->evaluate(flat_surface()).isect.normal_s;
     CHECK(std::abs(glm::length(tilted) - 1.f) < 1e-6f);
     CHECK(tilted.z < 0.5f);
+TEST_CASE("Every image slot takes a texture, and reset restores its default", "[materials]")
+{
+    Scene<RGB> scene;
+    auto material = scene.new_material(scene.new_bsdf_cook_torrance());
+    const Material<RGB>& m = *material.get();
+
+    material.set_albedo_image(scene.add_texture(Image<RGB>(2, 2, RGB{0.25f})));
+    material.set_alpha_image(scene.add_texture(Image<float>(2, 2, 0.5f)));
+    material.set_roughness_image(scene.add_texture(Image<float>(2, 2, 0.75f)));
+    material.set_transmission_image(scene.add_texture(Image<RGB>(2, 2, RGB{0.125f})));
+    material.set_albedo_factor(RGB{0.5f});
+    material.set_alpha_factor(0.5f);
+    material.set_roughness_factor(0.5f);
+    material.set_transmission_factor(RGB{0.5f});
+    ShadingParams<RGB> p = values(material);
+    CHECK(p.albedo == RGB{0.125f});
+    CHECK_THAT(p.opacity, WithinRel(0.25f, 1e-6f));
+    CHECK_THAT(p.roughness, WithinRel(0.375f, 1e-6f));
+    CHECK(p.transmission == RGB{0.0625f});
+
+    material.reset_albedo();
+    material.reset_alpha();
+    material.reset_roughness();
+    material.reset_transmission();
+    p = values(material);
+    CHECK(p.albedo == RGB{1.f});
+    CHECK(p.opacity == 1.f);
+    CHECK(p.roughness == 1.f);
+    CHECK(p.transmission == RGB{0.f});
+    CHECK(m.albedo_factor() == RGB{1.f});
+    CHECK(m.alpha_factor() == 1.f);
+    CHECK(m.roughness_factor() == 1.f);
+    CHECK(m.transmission_factor() == RGB{1.f});
+}
+
+TEST_CASE("A material knows whether its alpha can make it less than opaque", "[materials]")
+{
+    Scene<RGB> scene;
+    auto material = scene.new_material(scene.new_bsdf_lambertian());
+    const Material<RGB>& m = *material.get();
+    CHECK(!m.has_alpha());
+    CHECK(!m.has_alpha_texture());
+
+    material.set_alpha_factor(0.5f);
+    CHECK(m.has_alpha());
+    CHECK(!m.has_alpha_texture());
+    material.set_alpha_factor(1.f);
+    CHECK(!m.has_alpha());
+
+    material.set_alpha(0.25f);
+    CHECK(m.has_alpha());
+    material.reset_alpha();
+    CHECK(!m.has_alpha());
+
+    material.set_alpha_image(scene.add_texture(Image<float>(2, 2, 0.5f)));
+    CHECK(m.has_alpha());
+    CHECK(m.has_alpha_texture());
+    material.reset_alpha();
+    CHECK(!m.has_alpha());
+    CHECK(!m.has_alpha_texture());
+}
+
+TEST_CASE("A material refuses a null BSDF and a null or empty image", "[materials]")
+{
+    Scene<RGB> scene;
+    auto material = scene.new_material(scene.new_bsdf_lambertian());
+    Material<RGB>& m = *material.get();
+
+    CHECK_THROWS(material.set_bsdf(nullptr));
+    CHECK_THROWS(m.set_bsdf(nullptr));
+
+    // Sampling a null or empty image would read past it:
+    CHECK_THROWS(m.set_albedo_image(nullptr));
+    CHECK_THROWS(m.set_alpha_image(nullptr));
+    CHECK_THROWS(m.set_metallic_image(nullptr));
+    CHECK_THROWS(m.set_roughness_image(nullptr));
+    CHECK_THROWS(m.set_normal_image(nullptr));
+    CHECK_THROWS(m.set_transmission_image(nullptr));
+    CHECK_THROWS(m.set_emissive_image(nullptr));
+    CHECK_THROWS(m.set_albedo_image(std::make_shared<Image<RGB>>()));
+    CHECK_THROWS(m.set_roughness_image(std::make_shared<Image<float>>(0, 4)));
+    CHECK_THROWS(m.set_normal_image(std::make_shared<Image<Vec3<float>>>(4, 0)));
+    // and what was set before is kept:
+    CHECK(values(material).albedo == RGB{1.f});
+
+    const auto white = std::make_shared<Image<RGB>>(1, 1, RGB{1.f});
+    const auto one = std::make_shared<Image<float>>(1, 1, 1.f);
+    const auto flat = std::make_shared<Image<Vec3<float>>>(1, 1, Vec3<float>{0.f, 0.f, 1.f});
+    CHECK_THROWS(Material<RGB>(nullptr, white, one, one, one, flat, white, white));
+    CHECK_NOTHROW(
+        Material<RGB>(std::make_shared<NullBSDF<RGB>>(), white, one, one, one, flat, white, white));
+}
+
+TEST_CASE("A texture refuses an image without pixels, or with a pixel not finite or a negative "
+          "spectrum",
+          "[materials]")
+{
+    // Textures are sampled without checks, so one bad pixel would spread NaN over the frame.
+    CHECK_THROWS(Texture<RGB>(Image<RGB>()));
+    CHECK_THROWS(Texture<float>(Image<float>(3, 0)));
+
+    Image<float> mono(2, 2, 0.5f);
+    mono(1, 1) = NaN_F;
+    CHECK_THROWS(Texture<float>(std::move(mono)));
+    Image<RGB> spectral(2, 2, RGB{0.5f});
+    spectral(0, 1) = RGB{0.5f, -0.1f, 0.5f};
+    CHECK_THROWS(Texture<RGB>(std::move(spectral)));
+    Image<Vec3<float>> vectors(2, 2, Vec3<float>{0.f, 0.f, 1.f});
+    vectors(1, 0) = Vec3<float>{0.f, std::numeric_limits<float>::infinity(), 1.f};
+    CHECK_THROWS(Texture<Vec3<float>>(std::move(vectors)));
+
+    // A constant is a 1 x 1 image, checked the same way:
+    CHECK_THROWS(Texture<float>(NaN_F));
+    CHECK_THROWS(Texture<RGB>(RGB{-1.f}));
+    CHECK_THROWS(Texture<Vec3<float>>(Vec3<float>{NaN_F}));
+    const Texture<float> constant(0.25f);
+    CHECK(constant.resolution().width == 1);
+    CHECK(constant.resolution().height == 1);
+    CHECK((*constant.shared_image())(0, 0) == 0.25f);
+    CHECK(constant.type() == "Texture");
+
+    // Negative values are fine where they are not light: a vector's components, or a float.
+    CHECK_NOTHROW(Texture<Vec3<float>>(Vec3<float>{-1.f, 0.f, 0.f}));
+    CHECK_NOTHROW(Texture<float>(-2.f));
+
+    // Through the scene, a texture keeps its image's size:
+    Scene<RGB> scene;
+    const TextureHandle<RGB> texture = scene.add_texture(Image<RGB>(4, 3, RGB{0.5f}));
+    CHECK(texture.resolution().width == 4);
+    CHECK(texture.resolution().height == 3);
+    CHECK_THROWS(scene.add_texture(Image<float>(2, 2, NaN_F)));
 }
