@@ -201,7 +201,9 @@ template <IsSpectral TSpectral>
 TSpectral CookTorranceBSDF<TSpectral>::schlick_fresnel(float cos_theta,
                                                        const TSpectral& f0) noexcept
 {
-    const float t = 1.0f - cos_theta;
+    // cos_theta, from the dot product of a direction and a normalized half vector, can round to
+    // just over 1, which would make t^5 negative and the reflectance below f0 (below 0 for f0 = 0).
+    const float t = 1.0f - std::clamp(cos_theta, 0.0f, 1.0f);
     const float t2 = t * t;
     const float t5 = t2 * t2 * t;
     return f0 + (TSpectral{1} - f0) * t5;
