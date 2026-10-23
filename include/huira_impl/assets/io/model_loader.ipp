@@ -510,9 +510,15 @@ void ModelLoader<TSpectral>::process_materials_(LoadContext& ctx)
             material.set_normal_image(tex.value());
         }
 
-        // Assign emissive:
-        auto [emissive_tex, _] = load_material_texture_<TSpectral>(
-            ai_mat, aiTextureType_EMISSION_COLOR, ctx, false, false);
+        // Assign emissive. ASSIMP gives glTF's emissive texture as EMISSIVE, and some formats'
+        // PBR emission color as EMISSION_COLOR. Either holds colors:
+        auto [emissive_tex, _] =
+            load_material_texture_<TSpectral>(ai_mat, aiTextureType_EMISSIVE, ctx, false, true);
+        if (!emissive_tex) {
+            emissive_tex = load_material_texture_<TSpectral>(
+                               ai_mat, aiTextureType_EMISSION_COLOR, ctx, false, true)
+                               .first;
+        }
         if (emissive_tex) {
             material.set_emissive_image(emissive_tex.value());
         }
@@ -664,11 +670,29 @@ inline Image<Vec3<float>> rgb_to_vec3_(const Image<RGB>& rgb)
     return result;
 }
 
+/// Makes an image's colors linear, if they are sRGB.
+inline void make_srgb_linear_(ImageBundle<RGB>& bundle)
+{
+    if (bundle.color_space != ColorSpaceHint::sRGB) {
+        return;
+    }
+    for (std::size_t i = 0; i < bundle.image.size(); ++i) {
+        bundle.image[i][0] = srgb_to_linear(bundle.image[i][0]);
+        bundle.image[i][1] = srgb_to_linear(bundle.image[i][1]);
+        bundle.image[i][2] = srgb_to_linear(bundle.image[i][2]);
+    }
+    bundle.color_space = ColorSpaceHint::Linear;
+}
+
+/// Converts an uncompressed embedded texture. Its 8-bit texels say nothing of their encoding;
+/// colors (is_color_data) are taken to be sRGB, as 8-bit color images that don't say otherwise
+/// are, and made linear.
 template <IsSpectral TSpectral, typename TPixel>
 std::pair<Image<TPixel>, Image<float>>
 convert_embedded_raw_(const aiTexture* embedded,
                       const std::function<TSpectral(RGB)>& spectral_conversion,
-                      bool read_alpha = false)
+                      bool read_alpha = false,
+                      bool is_color_data = false)
 {
     const int w = static_cast<int>(embedded->mWidth);
     const int h = static_cast<int>(embedded->mHeight);
@@ -688,7 +712,9 @@ convert_embedded_raw_(const aiTexture* embedded,
             const float b = static_cast<float>(texel.b) * inv255;
 
             if constexpr (std::is_same_v<TPixel, TSpectral>) {
-                result(x, y) = spectral_conversion(RGB{r, g, b});
+                result(x, y) = spectral_conversion(
+                    is_color_data ? RGB{srgb_to_linear(r), srgb_to_linear(g), srgb_to_linear(b)}
+                                  : RGB{r, g, b});
             } else if constexpr (std::is_same_v<TPixel, float>) {
                 // Luminance-weighted grayscale
                 result(x, y) = 0.2126f * r + 0.7152f * g + 0.0722f * b;
@@ -746,7 +772,8 @@ inline Image<float> extract_blue_channel_(const Image<RGB>& rgb)
  * @param read_alpha Whether to also load the alpha channel as a separate texture (if supported by
  * format)
  * @param is_color_data Whether the texture holds colors, which are converted from sRGB to linear
- * when the file is sRGB (false for data such as normals, roughness and metalness)
+ * when the image is sRGB, in a file or embedded (false for data such as normals, roughness and
+ * metalness)
  * @return TextureHandle if a texture was found and loaded, std::nullopt otherwise
  */
 template <IsSpectral TSpectral>
@@ -814,6 +841,9 @@ ModelLoader<TSpectral>::load_material_texture_(const aiMaterial* ai_mat,
                 if constexpr (std::is_same_v<TPixel, TSpectral>) {
                     ImageBundle<RGB> bundle_rgb =
                         load_rgb_from_buffer_(data, size, format, read_alpha);
+                    if (is_color_data) {
+                        make_srgb_linear_(bundle_rgb);
+                    }
                     bundle.image =
                         Image<TSpectral>(bundle_rgb.image.width(), bundle_rgb.image.height());
                     for (int y = 0; y < bundle_rgb.image.height(); ++y) {
@@ -842,7 +872,7 @@ ModelLoader<TSpectral>::load_material_texture_(const aiMaterial* ai_mat,
         } else {
             try {
                 auto [raw_img, raw_alpha] = convert_embedded_raw_<TSpectral, TPixel>(
-                    embedded, ctx.spectral_conversion, read_alpha);
+                    embedded, ctx.spectral_conversion, read_alpha, is_color_data);
                 bundle.image = std::move(raw_img);
                 if (read_alpha && raw_alpha.width() > 0) {
                     bundle.alpha = std::move(raw_alpha);
@@ -871,14 +901,8 @@ ModelLoader<TSpectral>::load_material_texture_(const aiMaterial* ai_mat,
         try {
             if constexpr (std::is_same_v<TPixel, TSpectral>) {
                 ImageBundle<RGB> bundle_rgb = load_rgb_from_file_(resolved_path, read_alpha);
-
-                if (is_color_data && bundle_rgb.color_space == ColorSpaceHint::sRGB) {
-                    for (std::size_t i = 0; i < bundle_rgb.image.size(); ++i) {
-                        bundle_rgb.image[i][0] = srgb_to_linear(bundle_rgb.image[i][0]);
-                        bundle_rgb.image[i][1] = srgb_to_linear(bundle_rgb.image[i][1]);
-                        bundle_rgb.image[i][2] = srgb_to_linear(bundle_rgb.image[i][2]);
-                    }
-                    bundle_rgb.color_space = ColorSpaceHint::Linear;
+                if (is_color_data) {
+                    make_srgb_linear_(bundle_rgb);
                 }
 
                 bundle.image =
