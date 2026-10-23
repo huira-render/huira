@@ -6,6 +6,12 @@ find_package(Catch2 CONFIG REQUIRED)
 # Single source of truth for all unit tests
 # Just add the source file path - test name is derived from filename
 set(UNIT_TESTS
+    huira/assets/test_model_loader.cpp
+    huira/assets/test_sphere_light.cpp
+    huira/assets/test_unresolved_asteroid.cpp
+    huira/assets/test_unresolved_object.cpp
+    huira/assets/test_unresolved_sphere.cpp
+
     huira/cameras/test_camera_api.cpp
     huira/cameras/test_camera_focus.cpp
     huira/cameras/test_camera_geometry.cpp
