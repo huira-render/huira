@@ -10,7 +10,7 @@ The Huira C++ API is organized into the modules below. Select one to explore it.
         :link: core/index
         :link-type: doc
 
-        Types, constants, physics, time and intervals, rotations and transforms, spectral bins, units, and the concepts the templates are written against.
+        Types, constants, physics, time and intervals, rotations and transforms, spectral bins, units, the SPICE interface, and the concepts the templates are written against.
 
     .. grid-item-card:: Scene Graph
         :link: scene/index
@@ -54,12 +54,6 @@ The Huira C++ API is organized into the modules below. Select one to explore it.
 
         The Star class behind catalog rendering.
 
-    .. grid-item-card:: Ephemeris
-        :link: ephemeris/index
-        :link-type: doc
-
-        The SPICE interface: kernels, ephemerides and frames from NAIF.
-
     .. grid-item-card:: Logger
         :link: util/logger
         :link-type: doc
@@ -78,5 +72,4 @@ The Huira C++ API is organized into the modules below. Select one to explore it.
    render/index
    images/index
    stars/index
-   ephemeris/index
    util/logger
