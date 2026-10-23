@@ -183,6 +183,28 @@ TEST_CASE("A BSDF reflects no light from below its surface", "[materials][bsdf]"
     }
 }
 
+TEST_CASE("A BSDF reflects nothing toward a viewer below its surface", "[materials][bsdf]")
+{
+    // Material::evaluate() keeps the viewer above the shading normal; a BSDF used without it
+    // gives no light to a viewer below, as there is none to give.
+    const Interaction<RGB> isect = surface();
+    for (const Case& c : cases()) {
+        for (double theta : {1.6, 2.2, 3.1}) {
+            const Vec3<float> wo = direction(isect, theta, 1.0);
+            INFO(c.name << ", wo " << theta << " rad from the normal");
+            for (const Vec3<float>& wi : viewers(isect)) {
+                CHECK(c.bsdf->eval(wo, wi, isect, c.params) == RGB{0.f});
+                CHECK(c.bsdf->pdf(wo, wi, isect, c.params) == 0.f);
+            }
+            for (float u : {0.1f, 0.5f, 0.9f}) {
+                const BSDFSample<RGB> s = c.bsdf->sample(wo, isect, c.params, u, 1.f - u);
+                CHECK(!s.is_valid());
+                CHECK(s.value == RGB{0.f});
+            }
+        }
+    }
+}
+
 TEST_CASE("A BSDF's samples are directions above the surface, with the values and pdfs that "
           "eval() and pdf() give them",
           "[materials][bsdf]")

@@ -122,7 +122,6 @@ TEST_CASE("A smooth Oren-Nayar surface is Lambertian, and a rough one is brighte
 
 TEST_CASE("An Oren-Nayar surface reflects nothing toward a viewer below it", "[materials][bsdf]")
 {
-    // (Unlike LambertianBSDF, whose eval() and pdf() look only at the light's side.)
     const OrenNayarBSDF<RGB> bsdf;
     const Interaction<RGB> isect = surface();
     const ShadingParams<RGB> params = shading(ALBEDO, 0.5f);
