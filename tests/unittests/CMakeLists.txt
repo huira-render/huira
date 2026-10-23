@@ -63,11 +63,17 @@ set(UNIT_TESTS
     huira/scene/test_scene_inputs.cpp
     huira/scene/test_scene_deletion.cpp
 
+    huira/images/test_bmp_io.cpp
     huira/images/test_color_map.cpp
     huira/images/test_convolution.cpp
     huira/images/test_fits_io.cpp
+    huira/images/test_hdr_io.cpp
     huira/images/test_image.cpp
     huira/images/test_image_output.cpp
+    huira/images/test_jpeg_io.cpp
+    huira/images/test_pixel_conversion.cpp
+    huira/images/test_png_io.cpp
+    huira/images/test_tga_io.cpp
     huira/stars/test_star_catalog.cpp
 
     huira/units/test_units.cpp
