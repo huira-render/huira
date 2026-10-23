@@ -420,7 +420,8 @@ void ModelLoader<TSpectral>::process_materials_(LoadContext& ctx)
             }
         }
         aiColor4D base_color;
-        if (ai_mat->Get(AI_MATKEY_BASE_COLOR, base_color) == AI_SUCCESS) {
+        const bool has_base_color = ai_mat->Get(AI_MATKEY_BASE_COLOR, base_color) == AI_SUCCESS;
+        if (has_base_color) {
             const TSpectral albedo =
                 ctx.spectral_conversion(RGB{base_color.r, base_color.g, base_color.b});
             if (albedo_tex) {
@@ -432,6 +433,38 @@ void ModelLoader<TSpectral>::process_materials_(LoadContext& ctx)
                 material.set_alpha_factor(base_color.a);
             } else {
                 material.set_alpha(base_color.a);
+            }
+        }
+
+        // A material with no base color, from a format whose materials aren't PBR (OBJ's MTL,
+        // for one), takes its diffuse color and texture as its albedo: the texture times the
+        // color, as MTL has them. ASSIMP's own default material, which it gives a model with
+        // none (with a gray diffuse color), is left white.
+        if (!has_base_color && ai_mat->GetTextureCount(aiTextureType_BASE_COLOR) == 0 &&
+            name != AI_DEFAULT_MATERIAL_NAME) {
+            auto [diffuse_tex, unused_alpha] =
+                load_material_texture_<TSpectral>(ai_mat, aiTextureType_DIFFUSE, ctx, false, true);
+            if (diffuse_tex) {
+                material.set_albedo_image(diffuse_tex.value());
+            }
+            aiColor3D diffuse;
+            if (ai_mat->Get(AI_MATKEY_COLOR_DIFFUSE, diffuse) == AI_SUCCESS) {
+                TSpectral albedo = ctx.spectral_conversion(RGB{diffuse.r, diffuse.g, diffuse.b});
+                // An albedo is a reflectance, but MTL files don't always keep Kd within 1:
+                if (!albedo.valid_ratio()) {
+                    HUIRA_LOG_WARNING("ModelLoader::process_materials_ - The diffuse color of "
+                                      "material " +
+                                      name + " is not a reflectance, from 0 to 1: " +
+                                      albedo.to_string() + ". Each bin is clamped to that.");
+                    for (std::size_t k = 0; k < TSpectral::size(); ++k) {
+                        albedo[k] = std::clamp(albedo[k], 0.f, 1.f);
+                    }
+                }
+                if (diffuse_tex) {
+                    material.set_albedo_factor(albedo);
+                } else {
+                    material.set_albedo(albedo);
+                }
             }
         }
 

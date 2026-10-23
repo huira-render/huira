@@ -668,6 +668,37 @@ TEST_CASE("A model's mesh without a material is given a default one", "[assets][
     CHECK(material_of(bad, mesh) == default_material);
 }
 
+TEST_CASE("An OBJ model's materials take their diffuse colors and textures as albedos",
+          "[assets][models]")
+{
+    // MTL has no base color, but a diffuse color (Kd) and texture (map_Kd), which ASSIMP gives as
+    // such. Before, they were left out, and every OBJ material was white. The texture is multiplied
+    // by the color, and made linear from sRGB; a color beyond 1 is clamped to it.
+    write_file("diffuse.png", png(204, 102, 51));
+    write_file("diffuse.mtl",
+               "newmtl Colored\nKd 0.8 0.4 0.2\n"
+               "newmtl Textured\nKd 0.5 1 1\nmap_Kd diffuse.png\n"
+               "newmtl TooBright\nKd 1.5 0.5 0.25\n");
+    const fs::path path = write_file("diffuse.obj",
+                                     "mtllib diffuse.mtl\n"
+                                     "v 0 0 0\nv 1 0 0\nv 0 1 0\nvt 0 0\nvt 1 0\nvt 0 1\n"
+                                     "o Colored\nusemtl Colored\nf 1/1 2/2 3/3\n"
+                                     "o Textured\nusemtl Textured\nf 1/1 2/2 3/3\n"
+                                     "o TooBright\nusemtl TooBright\nf 1/1 2/2 3/3\n");
+    Scene<RGB> scene;
+    scene.load_model(path);
+    check_bins(values_of(scene, "Colored").albedo, RGB{0.8f, 0.4f, 0.2f});
+    check_bins(
+        values_of(scene, "Textured").albedo, linear(204, 102, 51) * RGB{0.5f, 1.f, 1.f}, 1e-5f);
+    check_bins(values_of(scene, "TooBright").albedo, RGB{1.f, 0.5f, 0.25f});
+
+    // An OBJ model with no materials is given ASSIMP's default, whose diffuse color is gray, but
+    // stays white, as a glTF model with no materials is:
+    Scene<RGB> plain;
+    plain.load_model(write_file("no_mtl.obj", "o Plain\nv 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n"));
+    check_bins(values_of(plain, "Plain").albedo, RGB{1.f});
+}
+
 TEST_CASE("A model's textures are multiplied by their factors", "[assets][models]")
 {
     // Color is stored as sRGB, and made linear; the metallic-roughness texture holds roughness in
