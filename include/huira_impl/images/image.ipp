@@ -624,6 +624,10 @@ float Image<PixelT>::wrap_coordinate(float coord, float max) const noexcept
     if constexpr (W == WrapMode::Clamp) {
         return std::clamp(coord, 0.0f, max);
     } else if constexpr (W == WrapMode::Repeat) {
+        // [0, max] is the image, both edges included: only coordinates outside it wrap around.
+        if (coord >= 0.0f && coord <= max) {
+            return coord;
+        }
         coord = std::fmod(coord, max);
         if (coord < 0.0f) {
             coord += max;

@@ -188,6 +188,7 @@ TEST_CASE("Nearest-neighbour sampling maps [0, 1] onto the pixel centres", "[ima
 
     // Repeat (the default) wraps them around:
     CHECK(image.sample_nearest_neighbor(0.5f, 0.f) == 1.f);
+    CHECK(image.sample_nearest_neighbor<WrapMode::Repeat>(2.f, 0.f) == 0.f);
     CHECK(image.sample_nearest_neighbor<WrapMode::Repeat>(1.3f, 0.f) == 1.f);
     CHECK(image.sample_nearest_neighbor<WrapMode::Repeat>(-0.1f, 0.f) == 2.f);
     CHECK(image.sample_nearest_neighbor<WrapMode::Repeat>(0.f, 1.9f) == 10.f);
@@ -200,6 +201,24 @@ TEST_CASE("Nearest-neighbour sampling maps [0, 1] onto the pixel centres", "[ima
 
     // An empty image samples as a default pixel:
     CHECK(Image<float>{}.sample_nearest_neighbor(0.5f, 0.5f) == 0.f);
+}
+
+TEST_CASE("Repeat sampling keeps u = 1 and v = 1 at the last pixel", "[images][image]")
+{
+    // [0, 1] is the image, both edges included, but Repeat wrapped 1 around to 0: (1, 1), the
+    // last pixel, sampled the first, and the renderer's background, sampled at v = 1 straight
+    // down, took its top row.
+    const Image<float> image = ramp();
+    CHECK(image.sample_nearest_neighbor(1.f, 1.f) == 12.f);
+    CHECK(image.sample_nearest_neighbor(1.f, 0.f) == 2.f);
+    CHECK(image.sample_nearest_neighbor(0.f, 1.f) == 10.f);
+    CHECK(image.sample_bilinear(1.f, 1.f) == 12.f);
+    CHECK(image.sample_bilinear(1.f, 0.5f) == 7.f);
+
+    // Only coordinates outside [0, 1] wrap:
+    CHECK(image.sample_nearest_neighbor(1.3f, 0.f) == 1.f);
+    CHECK(image.sample_nearest_neighbor(-0.1f, 0.f) == 2.f);
+    CHECK(image.sample_bilinear(1.25f, 1.f) == 10.5f);
 }
 
 TEST_CASE("Bilinear sampling interpolates between the four nearest pixels", "[images][image]")
