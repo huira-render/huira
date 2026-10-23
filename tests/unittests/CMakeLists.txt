@@ -51,6 +51,7 @@ set(UNIT_TESTS
     huira/render/test_dynamic_sampling.cpp
     huira/render/test_shading_utils.cpp
     huira/render/test_observation_modes.cpp
+    huira/render/test_opaque_shadows.cpp
     huira/render/test_non_finite_radiance.cpp
     huira/render/test_object_ids.cpp
     huira/render/test_psf_switch.cpp

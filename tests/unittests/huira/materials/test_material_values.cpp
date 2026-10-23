@@ -225,31 +225,68 @@ TEST_CASE("Every image slot takes a texture, and reset restores its default", "[
     CHECK(m.transmission_factor() == RGB{1.f});
 }
 
-TEST_CASE("A material knows whether its alpha can make it less than opaque", "[materials]")
+TEST_CASE("A material knows whether its alpha or its transmission can let light through",
+          "[materials]")
 {
+    // has_alpha() is false only where every evaluation gives an opacity of exactly 1, and
+    // has_transmission() only where it gives a transmission of exactly 0: a shadow ray stops
+    // at such a surface without evaluating it.
     Scene<RGB> scene;
     auto material = scene.new_material(scene.new_bsdf_lambertian());
     const Material<RGB>& m = *material.get();
     CHECK(!m.has_alpha());
     CHECK(!m.has_alpha_texture());
+    CHECK(!m.has_transmission());
 
-    material.set_alpha_factor(0.5f);
-    CHECK(m.has_alpha());
-    CHECK(!m.has_alpha_texture());
-    material.set_alpha_factor(1.f);
-    CHECK(!m.has_alpha());
+    SECTION("alpha")
+    {
+        material.set_alpha_factor(0.5f);
+        CHECK(m.has_alpha());
+        CHECK(!m.has_alpha_texture());
+        material.set_alpha_factor(1.f);
+        CHECK(!m.has_alpha());
 
-    material.set_alpha(0.25f);
-    CHECK(m.has_alpha());
-    material.reset_alpha();
-    CHECK(!m.has_alpha());
+        material.set_alpha(0.25f);
+        CHECK(m.has_alpha());
+        material.set_alpha(1.f); // a constant 1 is opaque, as the default is
+        CHECK(!m.has_alpha());
+        CHECK(values(material).opacity == 1.f);
+        material.reset_alpha();
+        CHECK(!m.has_alpha());
 
-    material.set_alpha_image(scene.add_texture(Image<float>(2, 2, 0.5f)));
-    CHECK(m.has_alpha());
-    CHECK(m.has_alpha_texture());
-    material.reset_alpha();
-    CHECK(!m.has_alpha());
-    CHECK(!m.has_alpha_texture());
+        material.set_alpha_image(scene.add_texture(Image<float>(1, 1, 1.f)));
+        CHECK(!m.has_alpha());
+        CHECK(m.has_alpha_texture());
+        // A larger image may interpolate to just under 1, even if all its pixels are 1:
+        material.set_alpha_image(scene.add_texture(Image<float>(2, 2, 1.f)));
+        CHECK(m.has_alpha());
+        material.set_alpha_image(scene.add_texture(Image<float>(2, 2, 0.5f)));
+        CHECK(m.has_alpha());
+        CHECK_THAT(values(material).opacity, WithinRel(0.5f, 1e-6f));
+        material.reset_alpha();
+        CHECK(!m.has_alpha());
+        CHECK(!m.has_alpha_texture());
+    }
+
+    SECTION("transmission")
+    {
+        material.set_transmission(RGB{0.2f});
+        CHECK(m.has_transmission());
+        material.set_transmission_factor(RGB{0.f}); // no light through, whatever the image
+        CHECK(!m.has_transmission());
+        CHECK(values(material).transmission == RGB{0.f});
+        material.set_transmission_factor(RGB{1.f});
+        material.set_transmission(RGB{0.f});
+        CHECK(!m.has_transmission());
+        material.set_transmission(RGB{0.f, 0.1f, 0.f});
+        CHECK(m.has_transmission());
+        // An image counts as transmitting unless it is a constant:
+        material.set_transmission_image(scene.add_texture(Image<RGB>(2, 2, RGB{0.f})));
+        CHECK(m.has_transmission());
+        CHECK(values(material).transmission == RGB{0.f});
+        material.reset_transmission();
+        CHECK(!m.has_transmission());
+    }
 }
 
 TEST_CASE("A material refuses a null BSDF and a null or empty image", "[materials]")

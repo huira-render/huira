@@ -439,11 +439,19 @@ TSpectral SceneView<TSpectral>::evaluate_transmittance(const Ray<TSpectral>& ray
             break;
         }
 
-        Interaction<TSpectral> isect = this->resolve_hit(occlusion_ray, hit);
         const auto& mapping = instance_mappings_[hit.inst_id];
         const auto& batch = primitives_[mapping.batch_index];
         const auto* material = batch.primitive->material.get();
 
+        // A surface opaque everywhere that transmits nothing blocks the light. Resolving the hit
+        // and evaluating its material would find no more (and would draw no random number):
+        // skip them.
+        if (!material->has_alpha() && !material->has_transmission()) {
+            transmittance = TSpectral{0.0f};
+            return transmittance;
+        }
+
+        Interaction<TSpectral> isect = this->resolve_hit(occlusion_ray, hit);
         auto [params, shading_isect] = material->evaluate(isect);
 
         if (alpha_mode == AlphaMode::Stochastic) {
