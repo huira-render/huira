@@ -598,3 +598,20 @@ TEST_CASE("FITS writes that can't be done are rejected", "[images][fits]")
     CHECK(read_stored(path, 2).values == std::vector<double>{0.0, 4294967295.0});
     fs::remove(path);
 }
+
+TEST_CASE("FITS images with further axes of length 1 are read", "[images][fits]")
+{
+    // The first pixel was given to CFITSIO as two coordinates, though it reads one for every
+    // axis: with NAXIS3 = 1, it read past them, and the read failed ("bad first element number").
+    const fs::path path = temp_fits("extra_axes");
+    write_foreign_fits(path, FLOAT_IMG, {2, 1, 1}, {1.0, 2.0});
+    CHECK(read_image_fits(path).first(1, 0) == 2.f);
+
+    write_foreign_fits(path, FLOAT_IMG, {2, 1, 1, 1}, {3.0, 4.0});
+    CHECK(read_image_fits(path).first(0, 0) == 3.f);
+
+    // More than one plane along any of them is a cube:
+    write_foreign_fits(path, FLOAT_IMG, {2, 1, 1, 2}, {1.0, 2.0, 3.0, 4.0});
+    CHECK_THROWS_WITH(read_image_fits(path), ContainsSubstring("NAXIS4=2"));
+    fs::remove(path);
+}

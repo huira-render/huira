@@ -506,15 +506,17 @@ inline std::pair<Image<float>, FitsMetadata> read_image_fits(const fs::path& fil
     // --- Image dimensions & type ---
     int bitpix = 0;
     int naxis = 0;
-    long naxes[3] = {0, 0, 0};
-
-    fits_get_img_param(ff.fptr, 3, &bitpix, &naxis, naxes, &status);
-    detail::fits_check(status, "get image params");
+    fits_get_img_dim(ff.fptr, &naxis, &status);
+    detail::fits_check(status, "get image dimensions");
 
     if (naxis < 2) {
         HUIRA_THROW_ERROR("FITS file has NAXIS=" + std::to_string(naxis) +
                           "; expected at least 2 for an image.");
     }
+
+    std::vector<long> naxes(static_cast<std::size_t>(naxis), 0);
+    fits_get_img_param(ff.fptr, naxis, &bitpix, &naxis, naxes.data(), &status);
+    detail::fits_check(status, "get image params");
 
     // TODO (multi-band):
     //   If naxis == 3, naxes[2] gives the number of planes.
@@ -524,9 +526,12 @@ inline std::pair<Image<float>, FitsMetadata> read_image_fits(const fs::path& fil
     //         long fpixel[3] = {1, 1, plane + 1};
     //         fits_read_pix(fptr, TFLOAT, fpixel, w*h, ...);
     //     }
-    if (naxis >= 3 && naxes[2] > 1) {
-        HUIRA_THROW_ERROR("FITS file is a data cube (NAXIS3=" + std::to_string(naxes[2]) +
-                          ").  Use read_image_fits_cube() for multi-band images.");
+    for (std::size_t axis = 2; axis < naxes.size(); ++axis) {
+        if (naxes[axis] > 1) {
+            HUIRA_THROW_ERROR("FITS file is a data cube (NAXIS" + std::to_string(axis + 1) + "=" +
+                              std::to_string(naxes[axis]) +
+                              ").  Use read_image_fits_cube() for multi-band images.");
+        }
     }
 
     const int width = static_cast<int>(naxes[0]);
@@ -541,11 +546,13 @@ inline std::pair<Image<float>, FitsMetadata> read_image_fits(const fs::path& fil
     const long npixels = static_cast<long>(width) * height;
     std::vector<double> buffer(static_cast<std::size_t>(npixels));
 
-    long fpixel[2] = {1, 1};
+    // The first pixel: a coordinate for every axis, as CFITSIO reads one for each.
+    std::vector<long> fpixel(naxes.size(), 1);
     int anynul = 0;
     double null_value = std::numeric_limits<double>::quiet_NaN();
 
-    fits_read_pix(ff.fptr, TDOUBLE, fpixel, npixels, &null_value, buffer.data(), &anynul, &status);
+    fits_read_pix(
+        ff.fptr, TDOUBLE, fpixel.data(), npixels, &null_value, buffer.data(), &anynul, &status);
     detail::fits_check(status, "read pixels");
 
     // The type the stored values represent once BZERO is applied (unsigned 16-bit for BITPIX 16
