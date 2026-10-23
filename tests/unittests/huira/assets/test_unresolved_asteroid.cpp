@@ -42,10 +42,11 @@ double hg_magnitude(double H, double G, double r_au, double delta_au, double alp
 }
 
 /// Put an instance at a position, in meters.
-void place(const InstanceHandle<RGB>& instance, const Vec3<double>& position)
+InstanceHandle<RGB> place(InstanceHandle<RGB> instance, const Vec3<double>& position)
 {
     instance.set_position(
         units::Meter(position.x), units::Meter(position.y), units::Meter(position.z));
+    return instance;
 }
 } // namespace
 
@@ -147,15 +148,15 @@ TEST_CASE("An asteroid is as bright as the H-G magnitude system says", "[assets]
         const Vec3<double> position{0.0, 0.0, g.delta_au * AU_M};
         auto sun = scene.root.new_instance(scene.new_sun_light());
         place(sun, position + g.r_au * AU_M * Vec3<double>{std::sin(alpha), 0.0, -std::cos(alpha)});
-        auto asteroid = scene.new_unresolved_asteroid(H, G, sun, albedo);
-        place(scene.root.new_instance(asteroid), position);
+        auto asteroid = place(
+            scene.root.new_instance(scene.new_unresolved_asteroid(H, G, sun, albedo)), position);
 
         const SceneView<RGB> view = view_of(scene, camera);
         const RGB expected = scene
                                  .new_unresolved_object_from_magnitude(
                                      hg_magnitude(H, G, g.r_au, g.delta_au, alpha), albedo)
-                                 .get_irradiance(Time::from_et(0.0));
-        const RGB irradiance = asteroid.get_irradiance(Time::from_et(0.5));
+                                 .get_irradiance();
+        const RGB irradiance = view.unresolved_irradiance(asteroid, Time::from_et(0.5));
         for (std::size_t i = 0; i < RGB::size(); ++i) {
             INFO("bin " << i);
             REQUIRE(expected[i] > 0.f);

@@ -1,7 +1,6 @@
 #include <algorithm>
 #include <cmath>
 #include <memory>
-#include <utility>
 #include <vector>
 
 #include "glm/glm.hpp"
@@ -166,15 +165,17 @@ UnresolvedLambertianSphere<TSpectral>::UnresolvedLambertianSphere(
  * @param times Absolute times of the temporal samples.
  * @param scene_view The fully constructed scene view (TLAS built).
  * @param sampler Random sampler for the stochastic estimate.
+ * @return The irradiance at each temporal sample.
  * @throws std::runtime_error if a light-linked sphere's light source is not found in the scene.
  */
 template <IsSpectral TSpectral>
-void UnresolvedLambertianSphere<TSpectral>::resolve_irradiance(
+std::vector<TSpectral> UnresolvedLambertianSphere<TSpectral>::resolve_irradiance(
     const std::vector<Transform<float>>& self_transforms,
     const std::vector<Time>& times,
     const SceneView<TSpectral>& scene_view,
-    RandomSampler<float>& sampler)
+    RandomSampler<float>& sampler) const
 {
+    (void)times; // Each sample is traced at its fraction of the exposure
     const std::vector<LightInstance<TSpectral>>& lights = scene_view.lights();
     const std::vector<IndirectSourceInstance<TSpectral>>& indirect_sources =
         scene_view.indirect_sources();
@@ -290,7 +291,7 @@ void UnresolvedLambertianSphere<TSpectral>::resolve_irradiance(
                           "light source in SceneView");
     }
 
-    this->set_resolved_irradiance_(std::move(irradiances), times);
+    return irradiances;
 }
 
 /**

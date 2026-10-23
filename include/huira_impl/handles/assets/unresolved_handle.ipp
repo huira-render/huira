@@ -1,5 +1,4 @@
 #include "huira/concepts/spectral_concepts.hpp"
-#include "huira/core/time.hpp"
 #include "huira/units/units.hpp"
 
 namespace huira {
@@ -32,16 +31,17 @@ void UnresolvedObjectHandle<TSpectral>::set_irradiance(
 }
 
 /**
- * @brief Returns the spectral irradiance at a given time.
+ * @brief Returns the irradiance the unresolved object was given.
  *
- * Queries the underlying unresolved object for its current spectral irradiance.
+ * This is the irradiance a plain unresolved object gives wherever it is placed. That of an
+ * instance of one whose irradiance depends on where it is (an emitter, sphere or asteroid) is
+ * resolved by a scene view: see SceneView::unresolved_irradiance().
  *
- * @param time The time at which to query irradiance.
- * @return The current spectral irradiance value.
+ * @return The spectral irradiance it was given, in W·m⁻².
  */
 template <IsSpectral TSpectral>
-TSpectral UnresolvedObjectHandle<TSpectral>::get_irradiance(Time time) const
+TSpectral UnresolvedObjectHandle<TSpectral>::get_irradiance() const
 {
-    return this->get_()->get_irradiance(time);
+    return this->get_()->get_irradiance();
 }
 } // namespace huira

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <memory>
 #include <vector>
 
@@ -36,8 +37,10 @@ struct LightInstance {
 template <IsSpectral TSpectral>
 struct UnresolvedInstance {
     std::shared_ptr<UnresolvedObject<TSpectral>> unresolved_object;
+    std::uint64_t instance_id = NO_OBJECT_ID; // The instance in the scene graph that placed it
     std::vector<Transform<float>> transforms; // Transform at N times
     std::vector<Time> times;                  // The N times, evenly spaced through the exposure
+    std::vector<TSpectral> irradiances;       // Resolved: one for each time, or one for all
 };
 
 /**

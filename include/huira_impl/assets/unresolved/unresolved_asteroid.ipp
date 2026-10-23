@@ -1,7 +1,6 @@
 #include <algorithm>
 #include <cmath>
 #include <memory>
-#include <utility>
 #include <vector>
 
 #include "glm/glm.hpp"
@@ -154,16 +153,18 @@ UnresolvedAsteroid<TSpectral>::UnresolvedAsteroid(double H,
  * @param times Absolute times of the temporal samples.
  * @param scene_view The fully constructed scene view.
  * @param sampler Random sampler (unused; the H-G model is analytic).
+ * @return The irradiance at each temporal sample.
  * @throws std::runtime_error if the asteroid's light source is not found in the scene,
  *         or if geometry is invalid (zero distances).
  */
 template <IsSpectral TSpectral>
-void UnresolvedAsteroid<TSpectral>::resolve_irradiance(
+std::vector<TSpectral> UnresolvedAsteroid<TSpectral>::resolve_irradiance(
     const std::vector<Transform<float>>& self_transforms,
     const std::vector<Time>& times,
     const SceneView<TSpectral>& scene_view,
-    RandomSampler<float>& sampler)
+    RandomSampler<float>& sampler) const
 {
+    (void)times;   // Each sample's light is placed by its fraction of the exposure
     (void)sampler; // The H-G model is analytic
 
     // Find this asteroid's light source in the view:
@@ -241,6 +242,6 @@ void UnresolvedAsteroid<TSpectral>::resolve_irradiance(
         irradiances[i] = computed_irradiance;
     }
 
-    this->set_resolved_irradiance_(std::move(irradiances), times);
+    return irradiances;
 }
 } // namespace huira

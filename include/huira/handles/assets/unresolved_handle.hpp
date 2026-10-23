@@ -2,7 +2,6 @@
 
 #include "huira/assets/unresolved/unresolved_object.hpp"
 #include "huira/concepts/spectral_concepts.hpp"
-#include "huira/core/time.hpp"
 #include "huira/handles/handle.hpp"
 #include "huira/units/units.hpp"
 
@@ -12,7 +11,9 @@ namespace huira {
  * @brief Handle for unresolved scene objects.
  *
  * Provides access and control for unresolved scene objects, allowing irradiance to be set or
- * queried. This handle is used to interact with unresolved objects in a type-safe manner.
+ * queried. This handle is used to interact with unresolved objects in a type-safe manner. The
+ * irradiance a scene view resolves for an instance of one (which, for an emitter, sphere or
+ * asteroid, depends on where it is) is the view's: see SceneView::unresolved_irradiance().
  *
  * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
@@ -25,7 +26,7 @@ class UnresolvedObjectHandle : public Handle<UnresolvedObject<TSpectral>> {
     void set_irradiance(const units::SpectralWattsPerMeterSquared<TSpectral>& irradiance) const;
     void set_irradiance(const units::WattsPerMeterSquared& irradiance) const;
 
-    TSpectral get_irradiance(Time time) const;
+    TSpectral get_irradiance() const;
 
     friend class Scene<TSpectral>;
     friend class FrameHandle<TSpectral>;

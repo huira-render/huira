@@ -26,10 +26,10 @@ class UnresolvedEmitter : public UnresolvedObject<TSpectral> {
     UnresolvedEmitter(const units::SpectralWatts<TSpectral>& spectral_power);
     UnresolvedEmitter(const units::Watt& power);
 
-    void resolve_irradiance(const std::vector<Transform<float>>& self_transforms,
-                            const std::vector<Time>& times,
-                            const SceneView<TSpectral>& scene_view,
-                            RandomSampler<float>& sampler) override;
+    std::vector<TSpectral> resolve_irradiance(const std::vector<Transform<float>>& self_transforms,
+                                              const std::vector<Time>& times,
+                                              const SceneView<TSpectral>& scene_view,
+                                              RandomSampler<float>& sampler) const override;
 
     void set_spectral_power(const units::SpectralWatts<TSpectral>& spectral_power);
     void set_spectral_power(const units::Watt& power);

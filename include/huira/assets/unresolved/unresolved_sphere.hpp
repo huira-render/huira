@@ -44,10 +44,10 @@ class UnresolvedLambertianSphere : public UnresolvedObject<TSpectral> {
                                InstanceHandle<TSpectral> light_instance,
                                float albedo);
 
-    void resolve_irradiance(const std::vector<Transform<float>>& self_transforms,
-                            const std::vector<Time>& times,
-                            const SceneView<TSpectral>& scene_view,
-                            RandomSampler<float>& sampler) override;
+    std::vector<TSpectral> resolve_irradiance(const std::vector<Transform<float>>& self_transforms,
+                                              const std::vector<Time>& times,
+                                              const SceneView<TSpectral>& scene_view,
+                                              RandomSampler<float>& sampler) const override;
 
     void set_light_samples(std::size_t samples);
 
