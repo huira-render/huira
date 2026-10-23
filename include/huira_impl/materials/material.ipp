@@ -88,9 +88,11 @@ MaterialEval<TSpectral> Material<TSpectral>::evaluate(const Interaction<TSpectra
             albedo_image_->sample_bilinear(uv.x, uv.y) * albedo_factor_ * isect.vertex_albedo;
     }
 
-    // if (has_alpha_) {
-    params.opacity = alpha_image_->sample_bilinear(uv.x, uv.y) * alpha_factor_;
-    //}
+    // (Opacity and transmission are left at 1 and 0, the values the images would give, where
+    // they are those everywhere.)
+    if (has_alpha()) {
+        params.opacity = alpha_image_->sample_bilinear(uv.x, uv.y) * alpha_factor_;
+    }
 
     if (eval_metallic_) {
         params.metallic = metallic_image_->sample_bilinear(uv.x, uv.y) * metallic_factor_;
@@ -100,7 +102,10 @@ MaterialEval<TSpectral> Material<TSpectral>::evaluate(const Interaction<TSpectra
         params.roughness = roughness_image_->sample_bilinear(uv.x, uv.y) * roughness_factor_;
     }
 
-    params.transmission = transmission_image_->sample_bilinear(uv.x, uv.y) * transmission_factor_;
+    if (has_transmission()) {
+        params.transmission =
+            transmission_image_->sample_bilinear(uv.x, uv.y) * transmission_factor_;
+    }
 
     params.emission = emissive_image_->sample_bilinear(uv.x, uv.y) * emissive_factor_;
 
@@ -224,10 +229,20 @@ void Material<TSpectral>::reset_albedo()
 
 // Alpha: an opacity from 0 to 1.
 
+/**
+ * @brief Whether the alpha can make the surface less than opaque anywhere.
+ *
+ * False only when evaluate() gives an opacity of exactly 1 everywhere: the factor is 1, and the
+ * image a 1 x 1 image of 1, which samples to its pixel exactly. A larger image may interpolate to
+ * just under 1 even where all its pixels are 1, so it counts as alpha. Computed from the material
+ * as it is, rather than kept, so it cannot fall behind its images.
+ */
 template <IsSpectral TSpectral>
-void Material<TSpectral>::update_has_alpha_()
+bool Material<TSpectral>::has_alpha() const noexcept
 {
-    has_alpha_ = alpha_image_ != default_alpha_image_ || alpha_factor_ < 1.0f;
+    const bool constant_one =
+        alpha_image_->width() == 1 && alpha_image_->height() == 1 && (*alpha_image_)[0] == 1.0f;
+    return alpha_factor_ != 1.0f || !constant_one;
 }
 
 template <IsSpectral TSpectral>
@@ -235,7 +250,6 @@ void Material<TSpectral>::set_alpha(float alpha)
 {
     validate_unit_interval(alpha, this->get_info() + " alpha");
     alpha_image_ = std::make_shared<Image<float>>(1, 1, alpha);
-    update_has_alpha_();
 }
 
 template <IsSpectral TSpectral>
@@ -243,7 +257,6 @@ void Material<TSpectral>::set_alpha_image(std::shared_ptr<Image<float>> alpha_im
 {
     check_image_(alpha_image, "alpha");
     alpha_image_ = alpha_image;
-    update_has_alpha_();
 }
 
 template <IsSpectral TSpectral>
@@ -251,7 +264,6 @@ void Material<TSpectral>::set_alpha_factor(float alpha_factor)
 {
     validate_unit_interval(alpha_factor, this->get_info() + " alpha factor");
     alpha_factor_ = alpha_factor;
-    update_has_alpha_();
 }
 
 template <IsSpectral TSpectral>
@@ -259,7 +271,6 @@ void Material<TSpectral>::reset_alpha()
 {
     alpha_image_ = default_alpha_image_;
     alpha_factor_ = 1.0f;
-    update_has_alpha_();
 }
 
 // Metallic: from 0 to 1.
@@ -347,6 +358,22 @@ void Material<TSpectral>::reset_normal()
 }
 
 // Transmission: the fraction of light that passes through, from 0 to 1.
+
+/**
+ * @brief Whether the surface can transmit light anywhere: false only when evaluate() gives a
+ * transmission of exactly 0 everywhere, the factor being 0 or the image a 1 x 1 image of 0.
+ */
+template <IsSpectral TSpectral>
+bool Material<TSpectral>::has_transmission() const noexcept
+{
+    if (transmission_factor_ == TSpectral{0.0f}) {
+        return false;
+    }
+    const bool constant_zero = transmission_image_->width() == 1 &&
+                               transmission_image_->height() == 1 &&
+                               (*transmission_image_)[0] == TSpectral{0.0f};
+    return !constant_zero;
+}
 
 template <IsSpectral TSpectral>
 void Material<TSpectral>::set_transmission(TSpectral transmission)
