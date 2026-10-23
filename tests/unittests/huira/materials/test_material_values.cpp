@@ -10,14 +10,15 @@ using Catch::Matchers::WithinRel;
 
 namespace {
 
-/// A surface facing +z, at the texture coordinate (0.5, 0.5).
+/// A surface facing +z, at the texture coordinate (0.5, 0.5), seen from overhead.
 Interaction<RGB> flat_surface()
 {
-    Interaction<RGB> isect;
+    Interaction<RGB> isect{};
     isect.normal_g = Vec3<float>{0.f, 0.f, 1.f};
     isect.normal_s = isect.normal_g;
     build_default_tangent_frame(isect.normal_s, isect.tangent, isect.bitangent);
     isect.uv = Vec2<float>{0.5f, 0.5f};
+    isect.wo = isect.normal_g;
     return isect;
 }
 

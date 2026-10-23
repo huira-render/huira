@@ -19,10 +19,8 @@ TSpectral LambertianBSDF<TSpectral>::eval(const Vec3<float>& wo,
                                           const Interaction<TSpectral>& isect,
                                           const ShadingParams<TSpectral>& params) const
 {
-    (void)wo;
-
     const float cos_theta_i = glm::dot(wi, isect.normal_s);
-    if (cos_theta_i <= 0.0f) {
+    if (cos_theta_i <= 0.0f || glm::dot(wo, isect.normal_s) <= 0.0f) {
         return TSpectral{0};
     }
     return params.albedo * INV_PI<float>();
@@ -35,14 +33,12 @@ BSDFSample<TSpectral> LambertianBSDF<TSpectral>::sample(const Vec3<float>& wo,
                                                         float u1,
                                                         float u2) const
 {
-    (void)wo;
-
     auto hs = sampling::cosine_hemisphere(u1, u2);
     const Vec3<float> wi =
         sampling::local_to_world(hs.direction, isect.tangent, isect.bitangent, isect.normal_s);
 
     const float cos_theta_i = glm::dot(wi, isect.normal_s);
-    if (cos_theta_i <= 0.0f) {
+    if (cos_theta_i <= 0.0f || glm::dot(wo, isect.normal_s) <= 0.0f) {
         BSDFSample<TSpectral> result{};
         result.wi = wi;
         result.value = TSpectral{0};
@@ -64,11 +60,10 @@ float LambertianBSDF<TSpectral>::pdf(const Vec3<float>& wo,
                                      const Interaction<TSpectral>& isect,
                                      const ShadingParams<TSpectral>& params) const
 {
-    (void)wo;
     (void)params;
 
     const float cos_theta_i = glm::dot(wi, isect.normal_s);
-    if (cos_theta_i <= 0.0f) {
+    if (cos_theta_i <= 0.0f || glm::dot(wo, isect.normal_s) <= 0.0f) {
         return 0.0f;
     }
     return cos_theta_i * INV_PI<float>();

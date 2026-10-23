@@ -11,14 +11,15 @@
 namespace huira::test {
 
 /// A surface with the given (unit) normal and its default tangent frame, at texture coordinates
-/// (0.5, 0.5).
+/// (0.5, 0.5), seen from overhead.
 inline Interaction<RGB> surface(const Vec3<float>& normal = Vec3<float>{0.f, 0.f, 1.f})
 {
-    Interaction<RGB> isect;
+    Interaction<RGB> isect{};
     isect.normal_g = normal;
     isect.normal_s = normal;
     build_default_tangent_frame(isect.normal_s, isect.tangent, isect.bitangent);
     isect.uv = Vec2<float>{0.5f, 0.5f};
+    isect.wo = normal;
     return isect;
 }
 

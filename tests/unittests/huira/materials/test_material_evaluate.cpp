@@ -1,6 +1,7 @@
 // Material::evaluate(): what it reads from its images for its BSDF, where on them, and how a
 // normal map turns the shading frame; and the bsdf_*() calls that shade with what it returns.
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <limits>
@@ -211,6 +212,91 @@ TEST_CASE("A normal map tilts the shading normal within the surface's tangent fr
         CHECK(near(eval.isect.tangent, tangent));
         material.set_normal_image(scene.add_texture(
             Image<Vec3<float>>(2, 2, Vec3<float>{std::sin(t), 0.f, std::cos(t)})));
+    }
+}
+
+namespace {
+
+/// How far above the geometric surface the mirror reflection of wo in the normal n is.
+float reflection_height(const Interaction<RGB>& isect, const Vec3<float>& n)
+{
+    return 2.f * glm::dot(n, isect.wo) * glm::dot(n, isect.normal_g) -
+           glm::dot(isect.wo, isect.normal_g);
+}
+
+} // namespace
+
+TEST_CASE("A material reduces a normal's tilt where the view would reflect into the surface",
+          "[materials]")
+{
+    // A normal map tilts the normal 0.6 rad toward the tangent. A viewer 1.3 rad from the
+    // geometric normal, on the other side, is 1.9 rad from the tilted normal: below its horizon,
+    // where every BSDF is black. One 0.8 rad from it sees the tilted normal, 1.4 rad away, but its
+    // mirror reflection in it is below the surface. Either way, the normal turns toward the
+    // geometric normal, in the plane of the two, until the reflection is 0.01 above the surface.
+    const float t = 0.6f;
+    Scene<RGB> scene;
+    auto material = scene.new_material(scene.new_bsdf_cook_torrance());
+    material.set_normal_image(
+        scene.add_texture(Image<Vec3<float>>(1, 1, Vec3<float>{std::sin(t), 0.f, std::cos(t)})));
+    const CookTorranceBSDF<RGB> cook_torrance;
+
+    for (const Vec3<float>& normal : NORMALS) {
+        Interaction<RGB> isect = surface(normal);
+        const Vec3<float> tilted = isect.tangent * std::sin(t) + isect.normal_s * std::cos(t);
+        const Vec3<float> across_plane = glm::normalize(glm::cross(tilted, isect.normal_g));
+        INFO("surface normal (" << normal.x << ", " << normal.y << ", " << normal.z << ")");
+
+        for (double theta : {1.3, 0.8}) {
+            INFO("viewer " << theta << " rad from the geometric normal");
+            isect.wo = direction(isect, theta, std::numbers::pi);
+            REQUIRE(reflection_height(isect, tilted) < 0.f);
+            const MaterialEval<RGB> eval = material.get()->evaluate(isect);
+            const Vec3<float>& n = eval.isect.normal_s;
+            CHECK_THAT(glm::length(n), WithinAbs(1.f, 1e-5f));
+            CHECK_THAT(reflection_height(isect, n), WithinAbs(0.01f, 1e-4f));
+            CHECK(glm::dot(isect.wo, n) > 0.f);
+            // turned toward the geometric normal, in the plane of the two, and not past it:
+            CHECK(std::abs(glm::dot(n, across_plane)) < 1e-5f);
+            CHECK(glm::dot(n, isect.normal_g) > glm::dot(tilted, isect.normal_g));
+            CHECK(glm::dot(n, isect.tangent) > 0.f);
+            check_frame(eval.isect);
+            CHECK(eval.isect.normal_g == isect.normal_g);
+
+            if (theta == 1.3) {
+                // The point is lit, where without the turn the BSDF was black for every light:
+                const Vec3<float> light = glm::normalize(n + isect.normal_g);
+                CHECK(material.get()->bsdf_eval(isect.wo, light, eval).max() > 0.f);
+                Interaction<RGB> unturned = eval.isect;
+                unturned.normal_s = tilted;
+                CHECK(cook_torrance.eval(isect.wo, light, unturned, eval.params) == RGB{0.f});
+            }
+        }
+
+        // A viewer whose reflection is above the surface, or no viewer, leaves the normal as the
+        // map gives it:
+        for (const Vec3<float>& wo :
+             {direction(isect, 0.5, 0.0), direction(isect, 1.3, 0.0), Vec3<float>{0.f}}) {
+            isect.wo = wo;
+            CHECK(near(material.get()->evaluate(isect).isect.normal_s, tilted));
+        }
+
+        // The normal changes continuously as the viewer moves from overhead, where the normal is
+        // left alone, to 1.5 rad on the far side, where it is turned most:
+        Vec3<float> previous = tilted;
+        int left_alone = 0;
+        float largest_step = 0.f;
+        for (int k = 0; k <= 1500; ++k) {
+            isect.wo = direction(isect, k * 1e-3, std::numbers::pi);
+            const Vec3<float> n = material.get()->evaluate(isect).isect.normal_s;
+            left_alone += near(n, tilted) ? 1 : 0;
+            largest_step = std::max(largest_step, glm::length(n - previous));
+            previous = n;
+        }
+        INFO(left_alone << " of 1501 views leave the normal alone");
+        CHECK(left_alone > 100);
+        CHECK(left_alone < 1400);
+        CHECK(largest_step < 2e-3f);
     }
 }
 

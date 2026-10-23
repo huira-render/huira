@@ -11,7 +11,7 @@ namespace {
 /// A surface facing +z, with the default tangent frame.
 Interaction<RGB> flat_surface()
 {
-    Interaction<RGB> isect;
+    Interaction<RGB> isect{};
     isect.normal_g = Vec3<float>{0.f, 0.f, 1.f};
     isect.normal_s = isect.normal_g;
     build_default_tangent_frame(isect.normal_s, isect.tangent, isect.bitangent);
