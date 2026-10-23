@@ -84,6 +84,36 @@ TEST_CASE("Integers map to and from a float range", "[images][convert_pixel]")
     }
 }
 
+TEST_CASE("float_to_integer() maps [0, 1] onto every integer type's whole range",
+          "[images][convert_pixel]")
+{
+    // A signed type's lowest value wasn't reached: rounding added 0.5 and truncated toward zero,
+    // so 0 became -127 in 8 bits. And 1 overflowed 32- and 64-bit types: 2^32 - 1 rounds up to
+    // 2^32 in a float, and converting that to 32 bits is undefined (it gave 0).
+    CHECK(int{float_to_integer<std::int8_t>(0.f)} == -128);
+    CHECK(float_to_integer<std::int16_t>(0.f) == -32768);
+    CHECK(float_to_integer<std::int16_t>(0.25f) == -16384);
+    CHECK(float_to_integer<std::int32_t>(0.f) == std::numeric_limits<std::int32_t>::min());
+    CHECK(float_to_integer<std::int32_t>(1.f) == std::numeric_limits<std::int32_t>::max());
+    CHECK(float_to_integer<std::int64_t>(0.f) == std::numeric_limits<std::int64_t>::min());
+    CHECK(float_to_integer<std::int64_t>(1.f) == std::numeric_limits<std::int64_t>::max());
+    CHECK(float_to_integer<std::uint32_t>(1.f) == std::numeric_limits<std::uint32_t>::max());
+    CHECK(float_to_integer<std::uint32_t>(0.5f) == 2147483648u);
+    CHECK(float_to_integer<std::uint64_t>(1.f) == std::numeric_limits<std::uint64_t>::max());
+    CHECK(int{convert_float_to_pixel<std::int8_t>(0.f)} == -128);
+    CHECK(convert_float_to_pixel<std::uint32_t>(1.f) == std::numeric_limits<std::uint32_t>::max());
+
+    // An empty range gives the lowest value, rather than converting NaN, which is undefined:
+    CHECK(float_to_integer<std::uint8_t>(1.f, 1.f, 1.f) == 0);
+    CHECK(int{float_to_integer<std::int8_t>(1.f, 1.f, 1.f)} == -128);
+
+    // Every signed 8-bit value round-trips:
+    for (int v = -128; v <= 127; ++v) {
+        const auto byte = static_cast<std::int8_t>(v);
+        REQUIRE(int{float_to_integer<std::int8_t>(integer_to_float<std::int8_t>(byte))} == v);
+    }
+}
+
 TEST_CASE("Values that are not finite become the lowest integer", "[images][convert_pixel]")
 {
     // Converting NaN or an infinity to an integer is undefined behaviour.
