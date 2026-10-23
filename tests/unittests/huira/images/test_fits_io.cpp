@@ -2,15 +2,19 @@
 #include <cmath>
 #include <filesystem>
 #include <string>
+#include <utility>
+#include <variant>
 #include <vector>
 
 #include <fitsio.h>
 
 #include "catch2/catch_test_macros.hpp"
+#include "catch2/matchers/catch_matchers_string.hpp"
 #include "huira/images/image.hpp"
 #include "huira/images/io/fits_io.hpp"
 
 using namespace huira;
+using Catch::Matchers::ContainsSubstring;
 namespace fs = std::filesystem;
 
 namespace {
@@ -295,4 +299,302 @@ TEST_CASE("An image with no defined pixels writes a readable file", "[images][fi
         CHECK(std::isnan(read(1, 0)));
         fs::remove(path);
     }
+}
+
+namespace {
+
+/// The custom keyword with this name, or nullptr.
+const FitsKeyword* find_keyword(const FitsMetadata& metadata, const std::string& key)
+{
+    for (const FitsKeyword& keyword : metadata.custom_keywords) {
+        if (keyword.key == key) {
+            return &keyword;
+        }
+    }
+    return nullptr;
+}
+
+bool contains(const std::vector<std::string>& lines, const std::string& text)
+{
+    for (const std::string& line : lines) {
+        if (line.find(text) != std::string::npos) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/// Writes a FITS image with CFITSIO itself, as other software would: of a CFITSIO image type,
+/// these dimensions and these physical values (BZERO and BSCALE are applied), with whatever
+/// keywords add_keywords() writes.
+template <typename AddKeywords>
+void write_foreign_fits(const fs::path& path,
+                        int image_type,
+                        std::vector<long> axes,
+                        std::vector<double> values,
+                        AddKeywords&& add_keywords)
+{
+    fitsfile* file = nullptr;
+    int status = 0;
+    const std::string name = "!" + path.string();
+    fits_create_file(&file, name.c_str(), &status);
+    fits_create_img(file, image_type, static_cast<int>(axes.size()), axes.data(), &status);
+    add_keywords(file, status);
+    std::vector<long> first(axes.size(), 1);
+    fits_write_pix(
+        file, TDOUBLE, first.data(), static_cast<LONGLONG>(values.size()), values.data(), &status);
+    fits_close_file(file, &status);
+    REQUIRE(status == 0);
+}
+
+void write_foreign_fits(const fs::path& path,
+                        int image_type,
+                        std::vector<long> axes,
+                        std::vector<double> values)
+{
+    write_foreign_fits(
+        path, image_type, std::move(axes), std::move(values), [](fitsfile*, int&) {});
+}
+
+} // namespace
+
+TEST_CASE("FITS metadata is written and read back", "[images][fits]")
+{
+    FitsMetadata metadata;
+    metadata.object = "M31";
+    metadata.telescop = "Huira";
+    metadata.instrume = "Test camera";
+    metadata.observer = "Catch2";
+    metadata.date_obs = "2026-10-23T00:00:00.000";
+    metadata.origin = "huira tests";
+    metadata.exptime = 12.5f;
+    metadata.filter = "Ha";
+    metadata.bunit = "W/m2/sr/nm";
+    metadata.saturate = 1.5; // kept for a float image that is not a sensor response
+    metadata.crpix1 = 2.5;
+    metadata.crpix2 = 1.0;
+    metadata.crval1 = 10.68;
+    metadata.crval2 = 41.27;
+    metadata.cdelt1 = -0.001;
+    metadata.cdelt2 = 0.001;
+    metadata.ctype1 = "RA---TAN";
+    metadata.ctype2 = "DEC--TAN";
+    metadata.equinox = 2015.5;
+    metadata.radesys = "FK5";
+    metadata.comments = {"First comment", "Second comment"};
+    metadata.history = {"Rendered by a test"};
+    metadata.custom_keywords = {FitsKeyword{"STRKEY", std::string("text"), "A string"},
+                                FitsKeyword{"DBLKEY", 0.125, "A double"},
+                                FitsKeyword{"INTKEY", -42, ""},
+                                FitsKeyword{"BOOLKEY", true, "A bool"},
+                                FitsKeyword{"FALSEKEY", false, ""}};
+    CHECK(metadata.has_wcs());
+
+    const fs::path path = temp_fits("metadata");
+    write_image_fits(path, row_image({0.25f, 0.5f, 0.75f, 1.f}), -32, metadata);
+    const auto [image, read] = read_image_fits(path);
+    fs::remove(path);
+
+    CHECK(image(3, 0) == 1.f);
+    CHECK(read.object == "M31");
+    CHECK(read.telescop == "Huira");
+    CHECK(read.instrume == "Test camera");
+    CHECK(read.observer == "Catch2");
+    CHECK(read.date_obs == "2026-10-23T00:00:00.000");
+    CHECK(read.origin == "huira tests");
+    CHECK(read.exptime == 12.5f);
+    CHECK(read.filter == "Ha");
+    CHECK(read.bunit == "W/m2/sr/nm");
+    CHECK(read.saturate == 1.5);
+    CHECK(read.datamin == 0.25); // from the image, not the metadata
+    CHECK(read.datamax == 1.0);
+    CHECK(read.crpix1 == 2.5);
+    CHECK(read.crpix2 == 1.0);
+    CHECK(read.crval1 == 10.68);
+    CHECK(read.crval2 == 41.27);
+    CHECK(read.cdelt1 == -0.001);
+    CHECK(read.cdelt2 == 0.001);
+    CHECK(read.ctype1 == "RA---TAN");
+    CHECK(read.ctype2 == "DEC--TAN");
+    CHECK(read.equinox == 2015.5);
+    CHECK(read.radesys == "FK5");
+    CHECK(read.has_wcs());
+    CHECK(contains(read.comments, "First comment"));
+    CHECK(contains(read.comments, "Second comment"));
+    CHECK(contains(read.history, "Rendered by a test"));
+
+    // Custom keywords keep their types and comments:
+    const FitsKeyword* text = find_keyword(read, "STRKEY");
+    REQUIRE(text != nullptr);
+    REQUIRE(std::holds_alternative<std::string>(text->value));
+    CHECK(std::get<std::string>(text->value) == "text");
+    CHECK(text->comment == "A string");
+    const FitsKeyword* real = find_keyword(read, "DBLKEY");
+    REQUIRE(real != nullptr);
+    REQUIRE(std::holds_alternative<double>(real->value));
+    CHECK(std::get<double>(real->value) == 0.125);
+    const FitsKeyword* integer = find_keyword(read, "INTKEY");
+    REQUIRE(integer != nullptr);
+    REQUIRE(std::holds_alternative<int>(integer->value));
+    CHECK(std::get<int>(integer->value) == -42);
+    const FitsKeyword* flag = find_keyword(read, "BOOLKEY");
+    REQUIRE(flag != nullptr);
+    REQUIRE(std::holds_alternative<bool>(flag->value));
+    CHECK(std::get<bool>(flag->value));
+    const FitsKeyword* unset = find_keyword(read, "FALSEKEY");
+    REQUIRE(unset != nullptr);
+    REQUIRE(std::holds_alternative<bool>(unset->value));
+    CHECK_FALSE(std::get<bool>(unset->value));
+}
+
+TEST_CASE("FITS metadata without a WCS or exposure writes none", "[images][fits]")
+{
+    const fs::path path = temp_fits("no_wcs");
+    write_image_fits(path, row_image({0.f, 1.f}));
+    CHECK(std::isnan(read_key(path, "CRPIX1")));
+    CHECK(std::isnan(read_key(path, "EQUINOX")));
+    CHECK(std::isnan(read_key(path, "EXPTIME")));
+
+    const auto [image, metadata] = read_image_fits(path);
+    CHECK_FALSE(metadata.has_wcs());
+    CHECK(metadata.exptime == 0.f);
+    CHECK(metadata.object.empty());
+    CHECK(metadata.equinox == 2000.0); // the defaults
+    CHECK(metadata.radesys == "ICRS");
+    CHECK(metadata.bunit.empty()); // a float image that is not a sensor response has no unit
+    CHECK_FALSE(metadata.saturate.has_value());
+    CHECK(metadata.history.empty());
+    fs::remove(path);
+}
+
+TEST_CASE("Unusual FITS header cards are read as custom keywords, or skipped", "[images][fits]")
+{
+    const fs::path path = temp_fits("cards");
+    write_foreign_fits(path, FLOAT_IMG, {2, 1}, {1.0, 2.0}, [](fitsfile* file, int& status) {
+        fits_write_record(file, "CPLXKEY =         (1.0, 2.0) / a complex value", &status);
+        fits_write_record(file, "NOVALUE =                      / an undefined value", &status);
+        fits_write_record(file, "HISTORY", &status); // with no text
+    });
+    const auto [image, metadata] = read_image_fits(path);
+    fs::remove(path);
+
+    CHECK(image(1, 0) == 2.f);
+    const FitsKeyword* complex = find_keyword(metadata, "CPLXKEY");
+    REQUIRE(complex != nullptr);
+    REQUIRE(std::holds_alternative<std::string>(complex->value));
+    CHECK(find_keyword(metadata, "NOVALUE") == nullptr);
+    CHECK(metadata.history.empty());
+}
+
+TEST_CASE("FITS images from other software are normalised by their type's range", "[images][fits]")
+{
+    const fs::path path = temp_fits("foreign");
+    const auto check_read = [&](int image_type, double value, double expected) {
+        write_foreign_fits(path, image_type, {2, 1}, {0.0, value});
+        const auto [image, metadata] = read_image_fits(path);
+        CHECK(image(0, 0) == 0.f);
+        CHECK(image(1, 0) == static_cast<float>(expected));
+        CHECK(image.sensor_bit_depth() == 0);
+    };
+
+    check_read(BYTE_IMG, 51.0, 51.0 / 255.0);
+    check_read(SBYTE_IMG, -127.0, -1.0);
+    check_read(SHORT_IMG, 32767.0, 1.0);
+    check_read(SHORT_IMG, -16384.0, -16384.0 / 32767.0);
+    check_read(USHORT_IMG, 65535.0, 1.0);
+    check_read(LONG_IMG, 2147483647.0, 1.0);
+    check_read(ULONG_IMG, 1073741824.0, 1073741824.0 / 4294967295.0);
+    check_read(LONGLONG_IMG, 4611686018427387904.0, 0.5);
+    check_read(FLOAT_IMG, 3.5, 3.5); // as it is
+    check_read(DOUBLE_IMG, -0.125, -0.125);
+    fs::remove(path);
+}
+
+TEST_CASE("Integer FITS images are normalised by SATURATE, which may give a bit depth",
+          "[images][fits]")
+{
+    const fs::path path = temp_fits("saturate");
+
+    // An ADC's ceiling, 2^12 - 1:
+    write_foreign_fits(path, SHORT_IMG, {2, 1}, {0.0, 2048.0}, [](fitsfile* file, int& status) {
+        double saturate = 4095.0;
+        fits_update_key(file, TDOUBLE, "SATURATE", &saturate, nullptr, &status);
+    });
+    const auto [adc, adc_metadata] = read_image_fits(path);
+    CHECK(adc.sensor_bit_depth() == 12);
+    CHECK(adc(1, 0) == static_cast<float>(2048.0 / 4095.0));
+    CHECK(adc_metadata.saturate == 4095.0);
+
+    // Any other level:
+    write_foreign_fits(path, SHORT_IMG, {2, 1}, {0.0, 500.0}, [](fitsfile* file, int& status) {
+        double saturate = 1000.0;
+        fits_update_key(file, TDOUBLE, "SATURATE", &saturate, nullptr, &status);
+    });
+    const auto [level, level_metadata] = read_image_fits(path);
+    CHECK(level.sensor_bit_depth() == 0);
+    CHECK(level(1, 0) == 0.5f);
+
+    // Scaled integers hold values that aren't integers, and are returned as they are:
+    write_foreign_fits(path, SHORT_IMG, {2, 1}, {0.0, 2.5}, [](fitsfile* file, int& status) {
+        double bscale = 0.5;
+        fits_update_key(file, TDOUBLE, "BSCALE", &bscale, nullptr, &status);
+        fits_set_bscale(file, 0.5, 0.0, &status);
+    });
+    const auto [scaled, scaled_metadata] = read_image_fits(path);
+    CHECK(scaled(1, 0) == 2.5f);
+
+    // An ADC bit depth more than a double holds is ignored:
+    write_foreign_fits(path, FLOAT_IMG, {2, 1}, {0.0, 7.0}, [](fitsfile* file, int& status) {
+        int bits = 60;
+        fits_update_key(file, TINT, "ADCBITS", &bits, nullptr, &status);
+    });
+    const auto [wide, wide_metadata] = read_image_fits(path);
+    CHECK(wide.sensor_bit_depth() == 0);
+    CHECK(wide(1, 0) == 7.f);
+    fs::remove(path);
+}
+
+TEST_CASE("64-bit float FITS images are written exactly", "[images][fits]")
+{
+    const fs::path path = temp_fits("f64");
+    write_image_fits(path, row_image({0.1f, -2.5f, 1e30f}), -64);
+    const Stored stored = read_stored(path, 3);
+    CHECK(stored.equivalent_type == DOUBLE_IMG);
+    CHECK(stored.values ==
+          std::vector<double>{static_cast<double>(0.1f), -2.5, static_cast<double>(1e30f)});
+    const auto [image, metadata] = read_image_fits(path);
+    CHECK(image(0, 0) == 0.1f);
+    CHECK(image(2, 0) == 1e30f);
+    fs::remove(path);
+}
+
+TEST_CASE("FITS files that are not single images are rejected", "[images][fits]")
+{
+    const fs::path path = temp_fits("shape");
+
+    write_foreign_fits(path, FLOAT_IMG, {3}, {1.0, 2.0, 3.0});
+    CHECK_THROWS_WITH(read_image_fits(path), ContainsSubstring("NAXIS=1"));
+
+    write_foreign_fits(path, FLOAT_IMG, {2, 1, 2}, {1.0, 2.0, 3.0, 4.0});
+    CHECK_THROWS_WITH(read_image_fits(path), ContainsSubstring("data cube"));
+
+    fs::remove(path);
+
+    CHECK_THROWS_WITH(read_image_fits(temp_fits("missing")), ContainsSubstring("FITS I/O error"));
+}
+
+TEST_CASE("FITS writes that can't be done are rejected", "[images][fits]")
+{
+    const fs::path path = temp_fits("rejected");
+    CHECK_THROWS_WITH(write_image_fits(path, Image<float>{}), ContainsSubstring("empty image"));
+    CHECK_THROWS_WITH(write_image_fits(path, row_image({0.f}), 12),
+                      ContainsSubstring("Invalid FITS bit_depth"));
+
+    Image<float> wide = row_image({0.f, 1.f});
+    wide.set_sensor_bit_depth(40);
+    CHECK_THROWS_WITH(write_image_fits(path, wide, 32), ContainsSubstring("more than the 32 bits"));
+    // which only matters for writing DN:
+    write_image_fits(path, wide, 32, {}, PixelScaling::FullRange);
+    CHECK(read_stored(path, 2).values == std::vector<double>{0.0, 4294967295.0});
+    fs::remove(path);
 }
