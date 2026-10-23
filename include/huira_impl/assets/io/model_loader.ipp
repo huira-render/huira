@@ -368,6 +368,13 @@ Transform<double> ModelLoader<TSpectral>::convert_transform_(const aiMatrix4x4& 
         col2.z /= scale_z;
     }
 
+    // A matrix that mirrors (whose determinant is negative) is a rotation and a scale with a
+    // mirror in it, which is put in the scale along x, so that what is left is a rotation:
+    if (glm::dot(glm::cross(col0, col1), col2) < 0.0) {
+        transform.scale.x = -transform.scale.x;
+        col0 = -col0;
+    }
+
     // Recall the column major ordering of GLM:
     Mat3<double> matrix{col0.x, col0.y, col0.z, col1.x, col1.y, col1.z, col2.x, col2.y, col2.z};
 
