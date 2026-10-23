@@ -74,6 +74,7 @@ set(UNIT_TESTS
     huira/images/test_pixel_conversion.cpp
     huira/images/test_png_io.cpp
     huira/images/test_tga_io.cpp
+    huira/images/test_tiff_io.cpp
     huira/stars/test_star_catalog.cpp
 
     huira/units/test_units.cpp
