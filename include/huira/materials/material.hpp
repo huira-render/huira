@@ -145,21 +145,23 @@ class Material : public SceneObject<Material<TSpectral>> {
     std::shared_ptr<Image<TSpectral>> transmission_image_;
     std::shared_ptr<Image<TSpectral>> emissive_image_;
 
-    bool has_alpha() const noexcept { return has_alpha_; }
+    /// Whether the alpha can make the surface less than opaque anywhere: false only when every
+    /// evaluate() gives an opacity of exactly 1, the alpha factor being 1 and the alpha image a
+    /// constant 1. (An image larger than 1 x 1, even of all ones, may interpolate to just under 1.)
+    [[nodiscard]] bool has_alpha() const noexcept;
     bool has_alpha_texture() const noexcept { return alpha_image_ != default_alpha_image_; }
+    /// Whether the surface can transmit light anywhere: false only when every evaluate() gives a
+    /// transmission of exactly 0, the transmission factor or a constant image being 0.
+    [[nodiscard]] bool has_transmission() const noexcept;
 
   private:
     template <typename TPixel>
     void check_image_(const std::shared_ptr<Image<TPixel>>& image, const char* what) const;
     void check_ratio_image_(const std::shared_ptr<Image<TSpectral>>& image, const char* what) const;
 
-    /// Whether anything about the alpha can make the surface less than opaque.
-    void update_has_alpha_();
-
     bool eval_albedo_ = true;
     std::shared_ptr<Image<TSpectral>> default_albedo_image_;
 
-    bool has_alpha_ = false;
     std::shared_ptr<Image<float>> default_alpha_image_;
 
     bool eval_metallic_ = true;
