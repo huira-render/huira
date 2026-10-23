@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
 #include <filesystem>
 #include <limits>
@@ -181,7 +182,9 @@ inline TIFFData read_tiff_raw_(const unsigned char* data, std::size_t size)
     TIFFSetWarningHandler(nullptr);
 
     TIFFSetErrorHandlerExt([](thandle_t, const char* module, const char* fmt, va_list ap) noexcept {
-        char tiff_msg_buffer;
+        // The message, which vsnprintf() truncates to fit:
+        constexpr std::size_t MESSAGE_SIZE = 1024;
+        char tiff_msg_buffer[MESSAGE_SIZE] = {};
 
 #if defined(__clang__)
 #pragma clang diagnostic push
@@ -193,7 +196,7 @@ inline TIFFData read_tiff_raw_(const unsigned char* data, std::size_t size)
 #pragma warning(push)
 #pragma warning(disable : 4774)
 #endif
-        std::vsnprintf(&tiff_msg_buffer, sizeof(tiff_msg_buffer), fmt, ap);
+        std::vsnprintf(tiff_msg_buffer, sizeof(tiff_msg_buffer), fmt, ap);
 #if defined(__clang__)
 #pragma clang diagnostic pop
 #elif defined(__GNUC__)

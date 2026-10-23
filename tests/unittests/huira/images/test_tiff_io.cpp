@@ -13,6 +13,7 @@
 #include "huira/core/spectral_bins.hpp"
 #include "huira/images/image.hpp"
 #include "huira/images/io/tiff_io.hpp"
+#include "huira/util/logger.hpp"
 #include "tiffio.h"
 
 using namespace huira;
@@ -547,4 +548,25 @@ TEST_CASE("TIFF data that is invalid or unsupported is rejected", "[images][tiff
                       ContainsSubstring("Failed to read palette TIFF"));
 
     CHECK_THROWS_AS(read_image_tiff_rgb(temp_path("missing.tif")), std::runtime_error);
+}
+
+TEST_CASE("libtiff's error messages are logged", "[images][tiff]")
+{
+    // Its handler formatted each message into a buffer of one char, so only the module was
+    // logged ("LIBTIFF FATAL: memory - "), not what went wrong.
+    std::vector<std::string> messages;
+    const LogLevel level = Logger::get_level();
+    Logger::set_level(LogLevel::Debug);
+    Logger::set_custom_sink([&](const LogEntry& entry) { messages.push_back(entry.message); });
+    const Bytes not_tiff{'n', 'o', 't', ' ', 'a', ' ', 'T', 'I', 'F', 'F'};
+    CHECK_THROWS(read_image_tiff_mono(not_tiff.data(), not_tiff.size()));
+    Logger::clear_custom_sink();
+    Logger::set_level(level);
+
+    bool logged = false;
+    for (const std::string& message : messages) {
+        logged = logged || (message.find("LIBTIFF FATAL") != std::string::npos &&
+                            message.find("Not a TIFF") != std::string::npos);
+    }
+    CHECK(logged);
 }
