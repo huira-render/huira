@@ -38,8 +38,9 @@ TSpectral McEwenBSDF<TSpectral>::eval(const Vec3<float>& wo,
     constexpr float inv_alpha0 = 3.0f * INV_PI<float>();
     float beta = std::exp(-alpha * inv_alpha0);
 
+    // Lommel-Seeliger's law normalized, as McEwen's is, to equal Lambert's at i = e = 0:
     float lambert = INV_PI<float>();
-    float lommel_seeliger = 1.0f / (4.0f * PI<float>() * (cos_i + cos_o));
+    float lommel_seeliger = 2.0f * INV_PI<float>() / (cos_i + cos_o);
 
     return params.albedo * ((1.0f - beta) * lambert + beta * lommel_seeliger);
 }
