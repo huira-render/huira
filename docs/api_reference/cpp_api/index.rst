@@ -54,6 +54,12 @@ The Huira C++ API is organized into the modules below. Select one to explore it.
 
         The Star class behind catalog rendering.
 
+    .. grid-item-card:: Ephemeris
+        :link: ephemeris/index
+        :link-type: doc
+
+        Satellites' element sets: TLEs, read and checked, and propagated with SGP4.
+
     .. grid-item-card:: Logger
         :link: util/logger
         :link-type: doc
@@ -72,4 +78,5 @@ The Huira C++ API is organized into the modules below. Select one to explore it.
    render/index
    images/index
    stars/index
+   ephemeris/index
    util/logger
