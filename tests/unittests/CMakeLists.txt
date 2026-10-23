@@ -77,6 +77,7 @@ set(UNIT_TESTS
     huira/scene/test_resolve_hit.cpp
     huira/scene/test_scene_inputs.cpp
     huira/scene/test_scene_deletion.cpp
+    huira/scene/test_tle_position.cpp
     huira/scene/test_teme_frame.cpp
 
     huira/images/test_bmp_io.cpp
