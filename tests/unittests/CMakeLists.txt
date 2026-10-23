@@ -30,6 +30,8 @@ set(UNIT_TESTS
     huira/core/test_time.cpp
     huira/core/test_transform.cpp
 
+    huira/ephemeris/test_satrec.cpp
+
     huira/geometry/test_mesh.cpp
 
     huira/materials/test_bsdf_contract.cpp
@@ -244,6 +246,11 @@ add_unit_test(test_sgp4
     third_party/sgp4_other.cpp
 )
 target_compile_definitions(test_sgp4 PRIVATE
+    HUIRA_SGP4_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/third_party/sgp4"
+)
+
+# SatRec, against the same verification cases
+target_compile_definitions(test_satrec PRIVATE
     HUIRA_SGP4_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/third_party/sgp4"
 )
 
