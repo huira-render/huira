@@ -585,6 +585,29 @@ TEST_CASE("A model's nodes place its meshes", "[assets][models]")
     CHECK_FALSE(pair_caster.cast(Vec3<float>{0.25f, 0.25f, 10.f}).hit());
 }
 
+TEST_CASE("A model's node that mirrors its mesh is loaded, mirrored", "[assets][models]")
+{
+    // Before, the loader took a node's matrix, less its scale, to be a rotation, and one that
+    // mirrors isn't (its determinant is -1), so the model could not be loaded. glTF allows a
+    // negative scale, and nodes take one.
+    //
+    // Scaled by -2 along x and turned 90 degrees about z, 10 m along z, the triangle is
+    // (0, 0, 10), (0, -2, 10), (-1, 0, 10); not mirrored, it would be (0, 2, 10) and not
+    // (0, -2, 10).
+    Gltf gltf;
+    gltf.nodes = R"({"name": "Mirror", "mesh": 0, "translation": [0, 0, 10],
+                     "scale": [-2, 1, 1], "rotation": [0, 0, 0.70710678, 0.70710678]})";
+    Scene<RGB> scene;
+    ModelHandle<RGB> model = scene.load_model(gltf.write("mirrored_node.gltf"));
+    scene.root.new_instance(model);
+    const RayCaster caster{scene, scene.root.new_instance(scene.new_camera_model())};
+
+    const HitRecord hit = caster.cast(Vec3<float>{-0.25f, -0.5f, 10.f});
+    REQUIRE(hit.hit());
+    CHECK_THAT(hit.t, WithinRel(glm::length(Vec3<float>{-0.25f, -0.5f, 10.f}), 1e-5f));
+    CHECK_FALSE(caster.cast(Vec3<float>{-0.25f, 0.5f, 10.f}).hit());
+}
+
 TEST_CASE("A model's materials take their glTF values", "[assets][models]")
 {
     Gltf gltf;
