@@ -34,7 +34,10 @@ namespace huira {
 // The returned FitsMetadata is populated from every recognised header
 // keyword; unrecognised keywords land in custom_keywords. Keywords that
 // describe how the data are stored (BITPIX, BZERO, BSCALE, BLANK, ADCBITS,
-// ...) are not returned as custom keywords.
+// ...) are not returned as custom keywords. A recognised keyword whose
+// value can't be read as its type (an EXPTIME that isn't a number, say) is
+// left unset, with a warning, and returned in custom_keywords as the file
+// has it; one with no value is left unset.
 // -------------------------------------------------------------------------
 std::pair<Image<float>, FitsMetadata> read_image_fits(const fs::path& filepath);
 
