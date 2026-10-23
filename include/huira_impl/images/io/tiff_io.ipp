@@ -16,6 +16,7 @@
 #include "huira/images/io/io_util.hpp"
 #include "huira/images/io/pixel_encoding.hpp"
 #include "huira/util/logger.hpp"
+#include "huira/util/paths.hpp"
 #include "tiffio.h"
 
 namespace fs = std::filesystem;
