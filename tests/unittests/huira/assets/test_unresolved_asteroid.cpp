@@ -1,15 +1,20 @@
+#include <cmath>
+#include <cstddef>
 #include <limits>
 
 #include "catch2/catch_test_macros.hpp"
+#include "catch2/matchers/catch_matchers_floating_point.hpp"
 #include "huira/huira.hpp"
 
 using namespace huira;
 using namespace huira::units::literals;
+using Catch::Matchers::WithinRel;
 
 namespace {
 constexpr double NaN = std::numeric_limits<double>::quiet_NaN();
 constexpr double INF = std::numeric_limits<double>::infinity();
 constexpr float NaN_F = std::numeric_limits<float>::quiet_NaN();
+constexpr double AU_M = 149597870700.0;
 
 /// The scene, seen over an exposure from 0 to 1 s by a camera (with its true state: nothing is
 /// displaced by light time or aberration), resolving its unresolved objects.
@@ -19,6 +24,28 @@ SceneView<RGB> view_of(const Scene<RGB>& scene, const InstanceHandle<RGB>& camer
                           Interval{Time::from_et(0.0), Time::from_et(1.0)},
                           camera,
                           ObservationMode::TRUE_STATE);
+}
+
+/**
+ * An asteroid's apparent magnitude in the IAU's H-G system (Bowell et al. 1989), at distances
+ * from its Sun and the observer in AU, and a phase angle:
+ *
+ *     V = H + 5 log10(r delta) - 2.5 log10((1 - G) phi1(alpha) + G phi2(alpha)),
+ *     phi_i(alpha) = exp(-A_i tan(alpha / 2)^B_i),  A = (3.33, 1.87),  B = (0.63, 1.22)
+ */
+double hg_magnitude(double H, double G, double r_au, double delta_au, double alpha)
+{
+    const double t = std::tan(alpha / 2.0);
+    const double phi1 = std::exp(-3.33 * std::pow(t, 0.63));
+    const double phi2 = std::exp(-1.87 * std::pow(t, 1.22));
+    return H + 5.0 * std::log10(r_au * delta_au) - 2.5 * std::log10((1.0 - G) * phi1 + G * phi2);
+}
+
+/// Put an instance at a position, in meters.
+void place(const InstanceHandle<RGB>& instance, const Vec3<double>& position)
+{
+    instance.set_position(
+        units::Meter(position.x), units::Meter(position.y), units::Meter(position.z));
 }
 } // namespace
 
@@ -91,4 +118,48 @@ TEST_CASE("An asteroid too bright for its irradiance to be held is refused", "[a
     scene.root.new_instance(scene.new_unresolved_asteroid(-400.0, 0.15, sun))
         .set_position(0_m, 0_m, 1_au);
     CHECK_THROWS(view_of(scene, camera));
+}
+
+TEST_CASE("An asteroid is as bright as the H-G magnitude system says", "[assets][unresolved]")
+{
+    // Before, its distances were multiplied by the meters in an AU, not divided by them, which
+    // made every asteroid 112 magnitudes too faint (its irradiance, in a float, 0); and phi1's
+    // exponent was 0.64, not 0.63.
+    struct Geometry {
+        double r_au;     // from its Sun
+        double delta_au; // from the camera
+        double degrees;  // the phase angle
+    };
+    const double H = 12.0;
+    const double G = 0.15;
+    const RGB albedo{0.3f, 0.2f, 0.1f};
+    for (const Geometry& g : {Geometry{1.0, 1.0, 90.0},
+                              Geometry{2.5, 1.5, 20.0},
+                              Geometry{1.2, 0.3, 60.0},
+                              Geometry{3.0, 2.0, 5.0}}) {
+        INFO("r = " << g.r_au << " AU, delta = " << g.delta_au << " AU, alpha = " << g.degrees);
+        const double alpha = g.degrees * PI<double>() / 180.0;
+
+        // The camera at the origin, the asteroid along z, and its Sun at the phase angle from
+        // the camera, in the plane of x and z:
+        Scene<RGB> scene;
+        auto camera = scene.root.new_instance(scene.new_camera_model());
+        const Vec3<double> position{0.0, 0.0, g.delta_au * AU_M};
+        auto sun = scene.root.new_instance(scene.new_sun_light());
+        place(sun, position + g.r_au * AU_M * Vec3<double>{std::sin(alpha), 0.0, -std::cos(alpha)});
+        auto asteroid = scene.new_unresolved_asteroid(H, G, sun, albedo);
+        place(scene.root.new_instance(asteroid), position);
+
+        const SceneView<RGB> view = view_of(scene, camera);
+        const RGB expected = scene
+                                 .new_unresolved_object_from_magnitude(
+                                     hg_magnitude(H, G, g.r_au, g.delta_au, alpha), albedo)
+                                 .get_irradiance(Time::from_et(0.0));
+        const RGB irradiance = asteroid.get_irradiance(Time::from_et(0.5));
+        for (std::size_t i = 0; i < RGB::size(); ++i) {
+            INFO("bin " << i);
+            REQUIRE(expected[i] > 0.f);
+            CHECK_THAT(irradiance[i], WithinRel(expected[i], 1e-4f));
+        }
+    }
 }

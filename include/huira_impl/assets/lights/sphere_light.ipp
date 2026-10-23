@@ -41,7 +41,8 @@ SphereLight<TSpectral>::SphereLight(
 /**
  * @brief Constructs a SphereLight from total scalar power.
  * @param radius The radius of the sphere in meters.
- * @param power Total power emitted in Watts.
+ * @param power Total power emitted in Watts, spread over the spectral bins by their widths (as
+ *        SpectralBins::from_total() spreads it).
  */
 template <IsSpectral TSpectral>
 SphereLight<TSpectral>::SphereLight(const units::Meter& radius, const units::Watt& power)
@@ -88,9 +89,9 @@ void SphereLight<TSpectral>::set_spectral_power(const units::Watt& power)
                           std::to_string(power_si));
     }
 
-    // L = Phi / (4 * pi^2 * r^2)
+    // L = Phi / (4 * pi^2 * r^2), the total power spread over the bins by their widths:
     float surface_area = 4.0f * PI<float>() * radius_ * radius_;
-    const TSpectral radiance{power_si / (PI<float>() * surface_area)};
+    const TSpectral radiance = TSpectral::from_total(power_si) / (PI<float>() * surface_area);
     validate_spectrum(radiance, "SphereLight radiance");
     this->radiance_ = radiance;
 }

@@ -139,6 +139,33 @@ TEST_CASE("A sphere light's total power must be finite and not negative", "[asse
     CHECK_NOTHROW(SphereLight<RGB>(1_m, units::Watt(0.0)));
 }
 
+TEST_CASE("A sphere light's total power is spread over its spectral bins", "[assets][lights]")
+{
+    // Before, the whole power was given to each bin, so that a light of 1 W emitted 3 W in RGB
+    // (and 8 W in Visible8), and gave three times the irradiance an unresolved emitter of 1 W
+    // gives.
+    const SphereLight<RGB> light{1_m, units::Watt(3.0)};
+    const SphereLight<RGB> spread{1_m, units::SpectralWatts<RGB>(RGB::from_total(3.f))};
+    check_bins(light.radiance(Vec3<float>{0.f}, Vec3<float>{0.f, 0.f, 1.f}),
+               spread.radiance(Vec3<float>{0.f}, Vec3<float>{0.f, 0.f, 1.f}));
+
+    // So that, far away, its irradiance is the inverse square law's, P / (4 pi d^2):
+    const float d = 100.f;
+    const RGB far = light.irradiance_at(Vec3<float>{0.f}, placed_at(Vec3<float>{0.f, 0.f, d}));
+    CHECK_THAT(far.total(), WithinRel(3.f / (4.f * PI<float>() * d * d), 1e-5f));
+
+    const SphereLight<Visible8> visible{1_m, units::Watt(3.0)};
+    const Visible8 visible_far =
+        visible.irradiance_at(Vec3<float>{0.f}, placed_at(Vec3<float>{0.f, 0.f, d}));
+    CHECK_THAT(visible_far.total(), WithinRel(3.f / (4.f * PI<float>() * d * d), 1e-5f));
+
+    // And as the scene makes it:
+    Scene<RGB> scene;
+    auto made = scene.new_sphere_light(1_m, units::Watt(3.0));
+    check_bins(made.get()->irradiance_at(Vec3<float>{0.f}, placed_at(Vec3<float>{0.f, 0.f, d})),
+               far);
+}
+
 TEST_CASE("A sphere light given a temperature glows as a black body", "[assets][lights]")
 {
     const SphereLight<RGB> light(1_m, units::Kelvin(5800.0));

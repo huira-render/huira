@@ -28,8 +28,9 @@ namespace huira {
  */
 static inline double asteroid_phi1(double alpha)
 {
+    // Bowell et al. (1989), as the IAU adopted it:
     double A = 3.33;
-    double B = 0.64;
+    double B = 0.63;
     return std::exp(-A * std::pow(std::tan(alpha / 2.), B));
 }
 
@@ -224,8 +225,8 @@ void UnresolvedAsteroid<TSpectral>::resolve_irradiance(
         }
         double reduced_mag = H_ - 2.5 * std::log10(phase_function);
 
-        double r_au = r_m * AU<double>();
-        double delta_au = delta_m * AU<double>();
+        double r_au = r_m / AU<double>();
+        double delta_au = delta_m / AU<double>();
         double apparent_visual_mag = reduced_mag + 5.0 * std::log10(r_au * delta_au);
 
         TSpectral computed_irradiance =
