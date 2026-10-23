@@ -21,6 +21,10 @@ namespace {
 using Bytes = std::vector<unsigned char>;
 using Rgba = std::array<std::uint8_t, 4>;
 
+constexpr std::uint32_t BI_RGB = 0;
+constexpr std::uint32_t BI_BITFIELDS = 3;
+constexpr std::uint32_t BI_ALPHABITFIELDS = 6;
+
 void put_u16(Bytes& bytes, std::size_t at, std::uint32_t value)
 {
     bytes[at] = static_cast<unsigned char>(value & 0xFFu);
@@ -63,13 +67,19 @@ Bytes bmp_file(std::int32_t width,
                std::uint32_t bits,
                std::uint32_t compression,
                const Bytes& pixels,
-               std::uint32_t dib_size = 40)
+               std::uint32_t dib_size = 40,
+               const std::vector<std::uint32_t>& masks = {})
 {
-    Bytes bytes(14 + dib_size, 0);
+    // Color masks are in a DIB header of 52 bytes or more, and otherwise follow it:
+    const bool masks_in_header = dib_size >= 52;
+    Bytes bytes(14 + dib_size + (masks_in_header ? 0 : 4 * masks.size()), 0);
+    for (std::size_t i = 0; i < masks.size(); ++i) {
+        put_u32(bytes, (masks_in_header ? 14 + 40 : 14 + dib_size) + 4 * i, masks[i]);
+    }
     bytes[0] = 'B';
     bytes[1] = 'M';
     put_u32(bytes, 2, static_cast<std::uint32_t>(bytes.size() + pixels.size()));
-    put_u32(bytes, 10, 14 + dib_size); // pixel offset
+    put_u32(bytes, 10, static_cast<std::uint32_t>(bytes.size())); // pixel offset
     put_u32(bytes, 14, dib_size);
     put_u32(bytes, 18, static_cast<std::uint32_t>(width));
     put_u32(bytes, 22, static_cast<std::uint32_t>(height));
@@ -136,8 +146,15 @@ TEST_CASE("A BMP with a negative height is read from top-down rows", "[images][b
 
 TEST_CASE("A 32-bit BMP has an alpha channel, unless it isn't asked for", "[images][bmp]")
 {
-    for (const std::uint32_t compression : {0u, 3u}) { // BI_RGB and BI_BITFIELDS
-        const Bytes file = bmp_file(3, 2, 32, compression, bmp_pixels(ROWS, 32, true));
+    // BGRA, in the order a little-endian 0xAARRGGBB stores it:
+    const std::vector<std::uint32_t> bgra{0x00FF0000u, 0x0000FF00u, 0x000000FFu, 0xFF000000u};
+    const Bytes pixels = bmp_pixels(ROWS, 32, true);
+    const std::vector<Bytes> files{
+        bmp_file(3, 2, 32, BI_RGB, pixels),                      // no masks
+        bmp_file(3, 2, 32, BI_BITFIELDS, pixels, 108, bgra),     // a BITMAPV4HEADER's masks
+        bmp_file(3, 2, 32, BI_ALPHABITFIELDS, pixels, 40, bgra), // masks after the header
+    };
+    for (const Bytes& file : files) {
 
         const ImageBundle<RGB> bundle = read_image_bmp(file.data(), file.size());
         check_rows(bundle);
@@ -152,6 +169,66 @@ TEST_CASE("A 32-bit BMP has an alpha channel, unless it isn't asked for", "[imag
         const ImageBundle<RGB> no_alpha = read_image_bmp(file.data(), file.size(), false);
         check_rows(no_alpha);
         CHECK(no_alpha.alpha.empty());
+    }
+}
+
+TEST_CASE("A 32-bit BMP without masks has alpha only if some pixel sets it", "[images][bmp]")
+{
+    // BI_RGB leaves the fourth byte unused, and many programs leave it 0 though the image is
+    // opaque. It was read as alpha anyway, so such a BMP was entirely transparent.
+    std::vector<std::vector<Rgba>> opaque = ROWS;
+    for (auto& row : opaque) {
+        for (Rgba& p : row) {
+            p[3] = 0;
+        }
+    }
+    const Bytes file = bmp_file(3, 2, 32, BI_RGB, bmp_pixels(opaque, 32, true));
+    const ImageBundle<RGB> bundle = read_image_bmp(file.data(), file.size());
+    check_rows(bundle);
+    CHECK(bundle.alpha.empty());
+    CHECK(read_image_bmp_mono(file.data(), file.size()).alpha.empty());
+}
+
+TEST_CASE("A 32-bit BMP's color masks say where each channel is", "[images][bmp]")
+{
+    // The masks were ignored, and every pixel read as B, G, R and alpha bytes.
+    SECTION("RGBA bytes")
+    {
+        Bytes pixels;
+        for (auto row = ROWS.rbegin(); row != ROWS.rend(); ++row) {
+            for (const Rgba& p : *row) {
+                pixels.insert(pixels.end(), p.begin(), p.end());
+            }
+        }
+        const std::vector<std::uint32_t> rgba{0x000000FFu, 0x0000FF00u, 0x00FF0000u, 0xFF000000u};
+        const Bytes file = bmp_file(3, 2, 32, BI_BITFIELDS, pixels, 124, rgba);
+        const ImageBundle<RGB> bundle = read_image_bmp(file.data(), file.size());
+        check_rows(bundle);
+        CHECK(bundle.alpha(1, 0) == unit(128));
+    }
+    SECTION("10 bits of each color, and 2 of alpha")
+    {
+        const std::vector<std::uint32_t> masks{0x3FF00000u, 0x000FFC00u, 0x000003FFu, 0xC0000000u};
+        Bytes pixels(4, 0);
+        put_u32(pixels, 0, (2u << 30) | (1023u << 20) | (0u << 10) | 512u);
+        const Bytes file = bmp_file(1, 1, 32, BI_BITFIELDS, pixels, 56, masks);
+        const ImageBundle<RGB> bundle = read_image_bmp(file.data(), file.size());
+        CHECK(bundle.image(0, 0) == RGB{1.f, 0.f, unit(128)}); // 512 / 1023, to 8 bits
+        CHECK(bundle.alpha(0, 0) == unit(170));                // 2 / 3
+    }
+    SECTION("no alpha mask")
+    {
+        const std::vector<std::uint32_t> rgb{0x00FF0000u, 0x0000FF00u, 0x000000FFu};
+        const Bytes file = bmp_file(3, 2, 32, BI_BITFIELDS, bmp_pixels(ROWS, 32, true), 40, rgb);
+        const ImageBundle<RGB> bundle = read_image_bmp(file.data(), file.size());
+        check_rows(bundle);
+        CHECK(bundle.alpha.empty());
+    }
+    SECTION("masks the data ends before")
+    {
+        Bytes file = bmp_file(1, 1, 32, BI_BITFIELDS, Bytes{});
+        CHECK_THROWS_WITH(read_image_bmp(file.data(), file.size()),
+                          ContainsSubstring("truncated in color masks"));
     }
 }
 

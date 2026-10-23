@@ -1,3 +1,4 @@
+#include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -26,12 +27,50 @@ struct BMPData {
     bool has_alpha = false;
 };
 
+/// BMP compression types this reader reads: none, and (for 32-bit pixels) color masks, with or
+/// without one for alpha.
+constexpr uint32_t BMP_BI_RGB = 0;
+constexpr uint32_t BMP_BI_BITFIELDS = 3;
+constexpr uint32_t BMP_BI_ALPHABITFIELDS = 6;
+
+/**
+ * @brief Where one channel is in a 32-bit BMP pixel: the mask's bits, and how far up they are.
+ */
+struct BMPChannelMask_ {
+    uint32_t mask = 0;
+    int shift = 0;
+    uint32_t max = 0; ///< The channel's largest value: mask >> shift (0 without the channel)
+
+    explicit BMPChannelMask_(uint32_t bits = 0) : mask(bits)
+    {
+        if (mask != 0) {
+            shift = std::countr_zero(mask);
+            max = mask >> shift;
+        }
+    }
+
+    /// The channel's value in a pixel, scaled to 8 bits.
+    [[nodiscard]] unsigned char value(uint32_t pixel) const
+    {
+        if (max == 0) {
+            return 0;
+        }
+        const uint64_t v = (pixel & mask) >> shift;
+        return static_cast<unsigned char>((v * 255 + max / 2) / max);
+    }
+};
+
 /**
  * @brief Decodes a BMP from an in-memory buffer into raw byte data.
  *
  * Reads the BMP file header and DIB header, validates the format, and extracts
  * pixel data. Handles bottom-up row ordering (standard for BMP) by flipping
- * rows during extraction. Supports 24-bit RGB and 32-bit RGBA uncompressed formats.
+ * rows during extraction. Supports 24-bit RGB and 32-bit pixels, uncompressed or with color
+ * masks (BI_BITFIELDS, BI_ALPHABITFIELDS).
+ *
+ * A 32-bit pixel's alpha is its alpha mask's bits, if it has one. Without masks (BI_RGB), the
+ * fourth byte is officially unused, and many programs leave it 0 though the image is opaque: it
+ * is taken for alpha only if some pixel sets it.
  *
  * @param data Pointer to the BMP data in memory
  * @param size Size of the data in bytes
@@ -80,8 +119,8 @@ inline BMPData read_bmp_raw_(const unsigned char* data, std::size_t size)
     std::memcpy(&bits_per_pixel, &dib[14], sizeof(uint16_t));
     std::memcpy(&compression, &dib[16], sizeof(uint32_t));
 
-    // We support BI_RGB (0) and BI_BITFIELDS (3) for 32-bit
-    if (compression != 0 && compression != 3) {
+    if (compression != BMP_BI_RGB && compression != BMP_BI_BITFIELDS &&
+        compression != BMP_BI_ALPHABITFIELDS) {
         HUIRA_THROW_ERROR("read_bmp_raw_ - Unsupported BMP compression type (" +
                           std::to_string(compression) + ")");
     }
@@ -96,8 +135,31 @@ inline BMPData read_bmp_raw_(const unsigned char* data, std::size_t size)
     bool flip_vertical = (raw_height > 0);
     int height = (raw_height > 0) ? static_cast<int>(raw_height) : static_cast<int>(-raw_height);
 
-    bool has_alpha = (bits_per_pixel == 32);
-    int out_channels = has_alpha ? 4 : 3;
+    // A 32-bit pixel's channels: by default, B, G, R and alpha bytes, in that order (a
+    // little-endian 0xAARRGGBB).
+    BMPChannelMask_ red(0x00FF0000u);
+    BMPChannelMask_ green(0x0000FF00u);
+    BMPChannelMask_ blue(0x000000FFu);
+    BMPChannelMask_ alpha(0xFF000000u);
+    if (bits_per_pixel == 32 && compression != BMP_BI_RGB) {
+        // The masks are in the DIB header if it is long enough to hold them (52 bytes, or 56
+        // with alpha's), and otherwise follow it:
+        const bool in_header = dib_size >= 52;
+        const std::size_t count =
+            in_header ? (dib_size >= 56 ? 4 : 3) : (compression == BMP_BI_ALPHABITFIELDS ? 4 : 3);
+        const std::size_t at = in_header ? 14 + 40 : 14 + static_cast<std::size_t>(dib_size);
+        if (size < at + 4 * count) {
+            HUIRA_THROW_ERROR("read_bmp_raw_ - Data truncated in color masks");
+        }
+        uint32_t masks[4] = {0, 0, 0, 0};
+        std::memcpy(masks, &data[at], 4 * count);
+        red = BMPChannelMask_(masks[0]);
+        green = BMPChannelMask_(masks[1]);
+        blue = BMPChannelMask_(masks[2]);
+        alpha = BMPChannelMask_(masks[3]);
+    }
+
+    bool has_alpha = (bits_per_pixel == 32 && alpha.mask != 0);
     int file_channels = bits_per_pixel / 8;
 
     // BMP rows are padded to 4-byte boundaries
@@ -113,6 +175,26 @@ inline BMPData read_bmp_raw_(const unsigned char* data, std::size_t size)
 
     const unsigned char* pixel_data = data + pixel_offset;
 
+    const auto pixel_at = [&](int x, int y) {
+        uint32_t pixel = 0;
+        std::memcpy(&pixel,
+                    pixel_data + static_cast<std::size_t>(y) * row_stride +
+                        static_cast<std::size_t>(x) * 4,
+                    sizeof(uint32_t));
+        return pixel;
+    };
+
+    // Without masks, the fourth byte is alpha only if some pixel sets it:
+    if (has_alpha && compression == BMP_BI_RGB) {
+        has_alpha = false;
+        for (int y = 0; y < height && !has_alpha; ++y) {
+            for (int x = 0; x < width && !has_alpha; ++x) {
+                has_alpha = (pixel_at(x, y) & alpha.mask) != 0;
+            }
+        }
+    }
+    const int out_channels = has_alpha ? 4 : 3;
+
     // Convert from BGR(A) bottom-up to RGB(A) top-down
     std::vector<unsigned char> raw_data(static_cast<std::size_t>(width) *
                                         static_cast<std::size_t>(height * out_channels));
@@ -127,13 +209,19 @@ inline BMPData read_bmp_raw_(const unsigned char* data, std::size_t size)
                 (static_cast<std::size_t>(y * width) + static_cast<std::size_t>(x)) *
                 static_cast<std::size_t>(out_channels);
 
-            // BMP stores BGR(A), convert to RGB(A)
-            raw_data[dst_idx + 0] = src_row[src_idx + 2]; // R
-            raw_data[dst_idx + 1] = src_row[src_idx + 1]; // G
-            raw_data[dst_idx + 2] = src_row[src_idx + 0]; // B
-
-            if (has_alpha) {
-                raw_data[dst_idx + 3] = src_row[src_idx + 3]; // A
+            if (bits_per_pixel == 32) {
+                const uint32_t pixel = pixel_at(x, src_y);
+                raw_data[dst_idx + 0] = red.value(pixel);
+                raw_data[dst_idx + 1] = green.value(pixel);
+                raw_data[dst_idx + 2] = blue.value(pixel);
+                if (has_alpha) {
+                    raw_data[dst_idx + 3] = alpha.value(pixel);
+                }
+            } else {
+                // BMP stores BGR, convert to RGB
+                raw_data[dst_idx + 0] = src_row[src_idx + 2]; // R
+                raw_data[dst_idx + 1] = src_row[src_idx + 1]; // G
+                raw_data[dst_idx + 2] = src_row[src_idx + 0]; // B
             }
         }
     }
