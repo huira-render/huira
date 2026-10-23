@@ -230,3 +230,44 @@ TEST_CASE("Cook-Torrance gives no sample for a viewer below the surface, nor a s
         CHECK(rejected > 0);
     }
 }
+
+TEST_CASE("Cook-Torrance's masking-shadowing is Smith's height-correlated form, as glTF's",
+          "[materials][bsdf]")
+{
+    // glTF 2.0 (Appendix B) writes the specular lobe as V D F, with the visibility
+    //   V = 1 / (2 (|n.wo| sqrt(a2 + (1 - a2) (n.wi)^2) + |n.wi| sqrt(a2 + (1 - a2) (n.wo)^2)))
+    // for a2 = alpha^2 = roughness^4: G / (4 |n.wo| |n.wi|) for the height-correlated G. The
+    // product of the two masking terms, G1(wo) G1(wi), shadows more: at roughness 1, with both
+    // directions 1.4 rad from the normal, it is less than half the height-correlated G.
+    const CookTorranceBSDF<RGB> bsdf;
+    const Interaction<RGB> isect = flat_surface();
+    for (float roughness : {0.3f, 0.6f, 1.f}) {
+        const ShadingParams<RGB> params = metal(roughness);
+        const double a2 = std::pow(static_cast<double>(roughness), 4.0);
+        // (and within 1e-6 and 3e-6 of the horizon, where G must still vanish as the cosine)
+        for (double theta_o : {0.2, 0.9, 1.4, std::acos(1e-6)}) {
+            for (double theta_i : {0.1, 0.8, 1.45, std::acos(3e-6)}) {
+                for (double phi : {0.5, 2.0, std::numbers::pi}) {
+                    const Vec3<float> wo = at_angle(theta_o);
+                    const Vec3<float> wi{static_cast<float>(std::sin(theta_i) * std::cos(phi)),
+                                         static_cast<float>(std::sin(theta_i) * std::sin(phi)),
+                                         static_cast<float>(std::cos(theta_i))};
+                    const Vec3<double> o{wo};
+                    const Vec3<double> i{wi};
+                    const Vec3<double> h = glm::normalize(o + i);
+                    const double d = a2 / (std::numbers::pi *
+                                           std::pow(h.x * h.x + h.y * h.y + h.z * h.z * a2, 2.0));
+                    const double v = 1.0 / (2.0 * (o.z * std::sqrt(a2 + (1.0 - a2) * i.z * i.z) +
+                                                   i.z * std::sqrt(a2 + (1.0 - a2) * o.z * o.z)));
+                    const double f = 0.8 + 0.2 * std::pow(1.0 - glm::dot(o, h), 5.0);
+                    const double expected = d * v * f;
+                    const double value = bsdf.eval(wo, wi, isect, params)[1];
+                    INFO("roughness " << roughness << ", wo at " << theta_o << " rad, wi at "
+                                      << theta_i << " rad, azimuth " << phi << ": " << value
+                                      << ", against " << expected);
+                    CHECK(std::abs(value - expected) <= 1e-4 * expected);
+                }
+            }
+        }
+    }
+}
