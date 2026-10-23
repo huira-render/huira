@@ -12,6 +12,7 @@
 #include "catch2/matchers/catch_matchers_string.hpp"
 #include "huira/images/image.hpp"
 #include "huira/images/io/fits_io.hpp"
+#include "huira/util/logger.hpp"
 
 using namespace huira;
 using Catch::Matchers::ContainsSubstring;
@@ -614,4 +615,66 @@ TEST_CASE("FITS images with further axes of length 1 are read", "[images][fits]"
     write_foreign_fits(path, FLOAT_IMG, {2, 1, 1, 2}, {1.0, 2.0, 3.0, 4.0});
     CHECK_THROWS_WITH(read_image_fits(path), ContainsSubstring("NAXIS4=2"));
     fs::remove(path);
+}
+
+TEST_CASE("A FITS file whose recognised keywords aren't of their types is still read",
+          "[images][fits]")
+{
+    // A recognised keyword whose value isn't a number (or that had no value) failed the whole
+    // read ("bad formatted string to double conversion").
+    const fs::path path = temp_fits("unreadable_keys");
+    write_foreign_fits(path, SHORT_IMG, {2, 1}, {0.0, 16383.0}, [](fitsfile* file, int& status) {
+        fits_write_record(file, "EXPTIME = 'unknown'          / not a number", &status);
+        fits_write_record(file, "DATAMIN = 'n/a'", &status);
+        fits_write_record(file, "SATURATE= 'none'", &status);
+        fits_write_record(file, "ADCBITS = 'twelve'", &status);
+        fits_write_record(file, "CRPIX1  = '2026-10-23T00:00:00'", &status);
+        fits_write_record(file, "EQUINOX =                      / no value", &status);
+        fits_write_record(file, "OBJECT  =                      / no value", &status);
+    });
+
+    std::vector<std::string> warnings;
+    Logger::set_custom_sink([&](const LogEntry& entry) {
+        if (entry.level == LogLevel::Warning) {
+            warnings.push_back(entry.message);
+        }
+    });
+    const auto [image, metadata] = read_image_fits(path);
+    Logger::clear_custom_sink();
+    fs::remove(path);
+
+    // They are left unset, so SATURATE and ADCBITS don't normalise the image:
+    CHECK(image(1, 0) == static_cast<float>(16383.0 / 32767.0));
+    CHECK(image.sensor_bit_depth() == 0);
+    CHECK(metadata.exptime == 0.f);
+    CHECK_FALSE(metadata.datamin.has_value());
+    CHECK_FALSE(metadata.saturate.has_value());
+    CHECK_FALSE(metadata.crpix1.has_value());
+    CHECK(metadata.equinox == 2000.0);
+    CHECK(metadata.object.empty());
+    CHECK(warnings.size() == 6);
+
+    // and returned as custom keywords, as the file has them, when they have a value:
+    for (const auto& [key, text] :
+         std::vector<std::pair<std::string, std::string>>{{"EXPTIME", "unknown"},
+                                                          {"DATAMIN", "n/a"},
+                                                          {"SATURATE", "none"},
+                                                          {"ADCBITS", "twelve"},
+                                                          {"CRPIX1", "2026-10-23T00:00:00"}}) {
+        INFO(key);
+        const FitsKeyword* keyword = find_keyword(metadata, key);
+        REQUIRE(keyword != nullptr);
+        REQUIRE(std::holds_alternative<std::string>(keyword->value));
+        CHECK(std::get<std::string>(keyword->value) == text);
+    }
+    CHECK(find_keyword(metadata, "EQUINOX") == nullptr);
+
+    // A number written as a string is read as the number:
+    write_foreign_fits(path, FLOAT_IMG, {2, 1}, {0.0, 1.0}, [](fitsfile* file, int& status) {
+        fits_write_record(file, "EXPTIME = '30.5'", &status);
+    });
+    const auto [quoted, quoted_metadata] = read_image_fits(path);
+    fs::remove(path);
+    CHECK(quoted_metadata.exptime == 30.5f);
+    CHECK(find_keyword(quoted_metadata, "EXPTIME") == nullptr);
 }

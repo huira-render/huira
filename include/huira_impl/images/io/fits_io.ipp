@@ -219,19 +219,53 @@ inline void write_fits_metadata(fitsfile* fptr, const FitsMetadata& m, int& stat
 
 // -------------- Read helpers -------------------------------------
 
+// Whether CFITSIO's status says a keyword's value can't be read as the type asked for (an
+// EXPTIME of 'unknown', say), or that it has no value.
+inline bool fits_value_unreadable(int status)
+{
+    switch (status) {
+    case VALUE_UNDEFINED:
+    case BAD_INTKEY:
+    case BAD_LOGICALKEY:
+    case BAD_FLOATKEY:
+    case BAD_DOUBLEKEY:
+    case BAD_C2I:
+    case BAD_C2F:
+    case BAD_C2D:
+    case NUM_OVERFLOW:
+        return true;
+    default:
+        return false;
+    }
+}
+
+// A recognised keyword whose value can't be read as its type is left unset, rather than failing
+// the read: it is noted in unreadable, so that read_fits_metadata() returns it as a custom
+// keyword, as the file has it, and a warning is logged.
+inline void note_unreadable_key(const char* key, int status, std::vector<std::string>& unreadable)
+{
+    char err_text[FLEN_STATUS] = {};
+    fits_get_errstatus(status, err_text);
+    HUIRA_LOG_WARNING("read_image_fits - The " + std::string(key) +
+                      " keyword's value can't be read, so it is left unset (" +
+                      std::string(err_text) + ")");
+    unreadable.emplace_back(key);
+}
+
 inline std::string read_string_key(fitsfile* fptr, const char* key)
 {
     char value[FLEN_VALUE] = {};
     int status = 0;
     fits_read_key_str(fptr, key, value, nullptr, &status);
-    if (status == KEY_NO_EXIST) {
+    if (status == KEY_NO_EXIST || status == VALUE_UNDEFINED) {
         return {};
     }
     fits_check(status, std::string("read key ") + key);
     return std::string(value);
 }
 
-inline std::optional<double> read_double_key(fitsfile* fptr, const char* key)
+inline std::optional<double>
+read_double_key(fitsfile* fptr, const char* key, std::vector<std::string>& unreadable)
 {
     double value = 0.0;
     int status = 0;
@@ -239,11 +273,15 @@ inline std::optional<double> read_double_key(fitsfile* fptr, const char* key)
     if (status == KEY_NO_EXIST) {
         return std::nullopt;
     }
+    if (fits_value_unreadable(status)) {
+        note_unreadable_key(key, status, unreadable);
+        return std::nullopt;
+    }
     fits_check(status, std::string("read key ") + key);
     return value;
 }
 
-inline float read_float_key(fitsfile* fptr, const char* key)
+inline float read_float_key(fitsfile* fptr, const char* key, std::vector<std::string>& unreadable)
 {
     float value = 0.f;
     int status = 0;
@@ -251,11 +289,15 @@ inline float read_float_key(fitsfile* fptr, const char* key)
     if (status == KEY_NO_EXIST) {
         return 0.f;
     }
+    if (fits_value_unreadable(status)) {
+        note_unreadable_key(key, status, unreadable);
+        return 0.f;
+    }
     fits_check(status, std::string("read key ") + key);
     return value;
 }
 
-inline int read_int_key(fitsfile* fptr, const char* key)
+inline int read_int_key(fitsfile* fptr, const char* key, std::vector<std::string>& unreadable)
 {
     long value = 0;
     int status = 0;
@@ -263,12 +305,18 @@ inline int read_int_key(fitsfile* fptr, const char* key)
     if (status == KEY_NO_EXIST) {
         return 0;
     }
+    if (fits_value_unreadable(status)) {
+        note_unreadable_key(key, status, unreadable);
+        return 0;
+    }
     fits_check(status, std::string("read key ") + key);
     return static_cast<int>(value);
 }
 
-// Populate FitsMetadata from the current HDU header.
-inline FitsMetadata read_fits_metadata(fitsfile* fptr)
+// Populate FitsMetadata from the current HDU header. Recognised keywords whose values can't be
+// read as their types, those already in unreadable and those found here, are returned as custom
+// keywords.
+inline FitsMetadata read_fits_metadata(fitsfile* fptr, std::vector<std::string> unreadable = {})
 {
     FitsMetadata m;
 
@@ -281,26 +329,26 @@ inline FitsMetadata read_fits_metadata(fitsfile* fptr)
     m.origin = read_string_key(fptr, "ORIGIN");
 
     // -- Exposure / photometric --
-    m.exptime = read_float_key(fptr, "EXPTIME");
+    m.exptime = read_float_key(fptr, "EXPTIME", unreadable);
     m.filter = read_string_key(fptr, "FILTER");
     m.bunit = read_string_key(fptr, "BUNIT");
 
     // -- Data range --
-    m.datamin = read_double_key(fptr, "DATAMIN");
-    m.datamax = read_double_key(fptr, "DATAMAX");
-    m.saturate = read_double_key(fptr, "SATURATE");
+    m.datamin = read_double_key(fptr, "DATAMIN", unreadable);
+    m.datamax = read_double_key(fptr, "DATAMAX", unreadable);
+    m.saturate = read_double_key(fptr, "SATURATE", unreadable);
 
     // -- WCS --
-    m.crpix1 = read_double_key(fptr, "CRPIX1");
-    m.crpix2 = read_double_key(fptr, "CRPIX2");
-    m.crval1 = read_double_key(fptr, "CRVAL1");
-    m.crval2 = read_double_key(fptr, "CRVAL2");
-    m.cdelt1 = read_double_key(fptr, "CDELT1");
-    m.cdelt2 = read_double_key(fptr, "CDELT2");
+    m.crpix1 = read_double_key(fptr, "CRPIX1", unreadable);
+    m.crpix2 = read_double_key(fptr, "CRPIX2", unreadable);
+    m.crval1 = read_double_key(fptr, "CRVAL1", unreadable);
+    m.crval2 = read_double_key(fptr, "CRVAL2", unreadable);
+    m.cdelt1 = read_double_key(fptr, "CDELT1", unreadable);
+    m.cdelt2 = read_double_key(fptr, "CDELT2", unreadable);
     m.ctype1 = read_string_key(fptr, "CTYPE1");
     m.ctype2 = read_string_key(fptr, "CTYPE2");
 
-    auto eq = read_double_key(fptr, "EQUINOX");
+    auto eq = read_double_key(fptr, "EQUINOX", unreadable);
     if (eq) {
         m.equinox = *eq;
     }
@@ -367,7 +415,9 @@ inline FitsMetadata read_fits_metadata(fitsfile* fptr)
                 continue;
             }
 
-            if (kn.empty() || is_known(kn.c_str())) {
+            const bool unread =
+                std::find(unreadable.begin(), unreadable.end(), kn) != unreadable.end();
+            if (kn.empty() || (is_known(kn.c_str()) && !unread)) {
                 continue;
             }
 
@@ -538,7 +588,9 @@ inline std::pair<Image<float>, FitsMetadata> read_image_fits(const fs::path& fil
     const int height = static_cast<int>(naxes[1]);
 
     // --- Read metadata ---
-    FitsMetadata metadata = detail::read_fits_metadata(ff.fptr);
+    std::vector<std::string> unreadable;
+    const int adc_bits = detail::read_int_key(ff.fptr, "ADCBITS", unreadable);
+    FitsMetadata metadata = detail::read_fits_metadata(ff.fptr, unreadable);
 
     // --- Read pixel data ---
     // CFITSIO converts any on-disk type to double, applies BZERO/BSCALE, and returns undefined
@@ -571,7 +623,6 @@ inline std::pair<Image<float>, FitsMetadata> read_image_fits(const fs::path& fil
     // Without ADCBITS, an integer image is normalised by SATURATE if present (the ADC ceiling),
     // otherwise by its type's range, and a float image is returned as it is.
     const bool is_integer_bitpix = (bitpix > 0);
-    const int adc_bits = detail::read_int_key(ff.fptr, "ADCBITS");
     int sensor_bits = 0;
     double divisor = 1.0;
 
