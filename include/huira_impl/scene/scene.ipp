@@ -109,7 +109,7 @@ Scene<TSpectral>::~Scene()
  * The TEME frame (see TemeFrameNode) is centered on the Earth, with the axes of SGP4's True
  * Equator, Mean Equinox of date. It is made on the first call, as a child of the root, and the
  * same frame is returned after that; if it has been deleted, a new one is made. Its pose is
- * fixed.
+ * fixed. Nodes placed by a TLE (see Node::set_tle_position()) are its children.
  *
  * Loads Huira's frame kernel, which defines its axes (HUIRA_EARTH_TEME), unless SPICE already
  * knows them. To render anything in it, load an SPK with the Earth's ephemeris, such as
