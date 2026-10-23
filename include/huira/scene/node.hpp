@@ -11,6 +11,7 @@
 #include "huira/concepts/spectral_concepts.hpp"
 #include "huira/core/time.hpp"
 #include "huira/core/transform.hpp"
+#include "huira/ephemeris/satrec.hpp"
 #include "huira/scene/scene_object.hpp"
 #include "huira/scene/state_callbacks/function_callbacks.hpp"
 #include "huira/scene/state_callbacks/state_callbacks.hpp"
@@ -112,6 +113,8 @@ class Node : public SceneObject<Node<TSpectral>> {
                              units::Radian mean_anomaly,
                              Time epoch,
                              units::CubicKilometersPerSecondSquared mu);
+
+    void set_tle_position(const SatRec& satrec);
 
     // Rotation sources other than SPICE and rotations set by hand. Each replaces the last.
     template <IsRotationCallback TCallback, typename... Args>

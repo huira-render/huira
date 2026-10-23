@@ -8,7 +8,8 @@ never while it renders. Each is given a :cpp:struct:`huira::PoseContext` and ret
 
 The callbacks Huira provides are a function of the pose context (``set_position_function``,
 ``set_rotation_function``), a table of times and states (``set_position_table``,
-``set_rotation_table``), a Keplerian orbit (``set_keplerian_orbit``), and ``look_at``. A class of
+``set_rotation_table``), a Keplerian orbit (``set_keplerian_orbit``), a satellite's TLE
+(``set_tle_position``, by SGP4, for a child of the scene's TEME frame), and ``look_at``. A class of
 one's own, derived from :cpp:struct:`huira::PositionCallback` or
 :cpp:struct:`huira::RotationCallback`, is set with ``set_custom_position_callback`` or
 ``set_custom_rotation_callback``.

@@ -354,6 +354,15 @@ void NodeHandle<TSpectral, TNode>::set_keplerian_orbit(
 }
 
 /**
+ * @brief Places the node by SGP4, from a satellite's TLE: see Node::set_tle_position.
+ */
+template <IsSpectral TSpectral, typename TNode>
+void NodeHandle<TSpectral, TNode>::set_tle_position(const SatRec& satrec) const
+{
+    this->get_()->set_tle_position(satrec);
+}
+
+/**
  * @brief Places the node by a position callback of a class of one's own, made from the arguments
  * given: see Node::set_custom_position_callback.
  *

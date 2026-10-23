@@ -38,6 +38,8 @@ class RootFrameHandle : public FrameHandle<TSpectral> {
     template <typename... Args>
     void set_keplerian_orbit(Args&&...) = delete;
     template <typename... Args>
+    void set_tle_position(Args&&...) = delete;
+    template <typename... Args>
     void set_custom_position_callback(Args&&...) = delete;
     template <typename... Args>
     void set_rotation_function(Args&&...) = delete;

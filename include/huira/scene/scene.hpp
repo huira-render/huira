@@ -27,6 +27,7 @@
 #include "huira/materials/material.hpp"
 #include "huira/materials/texture.hpp"
 #include "huira/scene/name_registry.hpp"
+#include "huira/scene/tle_manager.hpp"
 #include "huira/stars/io/star_data.hpp"
 #include "huira/stars/star.hpp"
 #include "huira/volumes/medium.hpp"
@@ -300,6 +301,9 @@ class Scene {
 
     NameRegistry<Node<TSpectral>> node_registry_;
     void register_node_name_(const std::shared_ptr<Node<TSpectral>>& node, const std::string& name);
+
+    /// The satellites that place nodes, by NORAD catalog number (see Node::set_tle_position())
+    TleManager<TSpectral> tle_manager_;
 
     /// Embree RTC Device
     std::shared_ptr<EmbreeDevice> device_;
