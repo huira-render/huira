@@ -133,12 +133,16 @@ surface by day and by night, its clouds, a normal map, a roughness map and a cit
 
 
 ## Kernels that ship with Huira
-Huira includes two of NAIF's generic kernels, in its `data/kernels/` folder:
+Huira includes two of NAIF's generic kernels, and a custom TEME frame kernel, in its
+`data/kernels/` folder:
 
 - `lsk/naif0012.tls`: leap seconds, which Huira loads when it first converts a time.
 - `pck/pck00011.tpc`: planetary constants (sizes and orientations), which
   `huira.spice.load_default_pck()` loads.
+- `fk/huira_teme.tf`: A custom Huira TEME frame kernel, which defines `HUIRA_EARTH_TEME`, the True
+  Equator, Mean Equinox of date frame that SGP4 gives states in. Huira loads it when a scene's
+  TEME frame (`Scene.teme_frame()`) is first asked for.
 
-Both are unmodified, and redistributed under [NAIF's rules](https://naif.jpl.nasa.gov/naif/rules.html).
+NAIF's two are unmodified, and redistributed under [NAIF's rules](https://naif.jpl.nasa.gov/naif/rules.html).
 
  > Leap seconds are to be discontinued by 2035 (CGPM resolution, 2022), so `naif0012.tls` is unlikely to change often, if ever. It stays included either way: SPICE's time system needs a leap-seconds kernel to run.
