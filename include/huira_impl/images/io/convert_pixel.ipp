@@ -98,15 +98,42 @@ float integer_to_float(T value, float min_range, float max_range)
     return min_range + normalized * (max_range - min_range);
 }
 
+namespace detail {
+/**
+ * @brief The integer a value in [min_range, max_range] maps to, over T's whole range: T's lowest
+ * value plus the value's fraction of the range of T, rounded to the nearest integer.
+ *
+ * In double, and kept within T's range: the largest values of 32- and 64-bit types round up in
+ * a float (2^32 - 1 to 2^32), past what T holds, and converting such a value to T is undefined.
+ * A range that is empty (or not finite) has no fraction to give, and gives T's lowest value.
+ */
+template <IsInteger T>
+T scale_to_integer(float value, float min_range, float max_range)
+{
+    const double fraction = std::clamp((static_cast<double>(value) - min_range) /
+                                           (static_cast<double>(max_range) - min_range),
+                                       0.0,
+                                       1.0);
+    if (std::isnan(fraction)) {
+        return std::numeric_limits<T>::min();
+    }
+    const auto lowest = static_cast<double>(std::numeric_limits<T>::min());
+    const auto highest = static_cast<double>(std::numeric_limits<T>::max());
+    const double scaled = lowest + std::round(fraction * (highest - lowest));
+    if (scaled >= highest) {
+        return std::numeric_limits<T>::max();
+    }
+    return static_cast<T>(scaled);
+}
+} // namespace detail
+
 template <IsUnsignedInteger T>
 T float_to_integer(float value, float min_range, float max_range)
 {
     if (!std::isfinite(value)) {
         return T{0}; // no integer stands for a value that is not finite
     }
-    float normalized = (value - min_range) / (max_range - min_range);
-    normalized = std::clamp(normalized, 0.0f, 1.0f);
-    return static_cast<T>(normalized * static_cast<float>(std::numeric_limits<T>::max()) + 0.5f);
+    return detail::scale_to_integer<T>(value, min_range, max_range);
 }
 
 template <IsSignedInteger T>
@@ -115,12 +142,6 @@ T float_to_integer(float value, float min_range, float max_range)
     if (!std::isfinite(value)) {
         return std::numeric_limits<T>::min(); // as min_range would be
     }
-    float type_min = static_cast<float>(std::numeric_limits<T>::min());
-    float type_max = static_cast<float>(std::numeric_limits<T>::max());
-
-    float normalized = (value - min_range) / (max_range - min_range);
-    normalized = std::clamp(normalized, 0.0f, 1.0f);
-
-    return static_cast<T>(type_min + normalized * (type_max - type_min) + 0.5f);
+    return detail::scale_to_integer<T>(value, min_range, max_range);
 }
 } // namespace huira
