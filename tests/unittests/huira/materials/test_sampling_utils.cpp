@@ -2,6 +2,7 @@
 #include <cmath>
 #include <functional>
 #include <numbers>
+#include <random>
 
 #include "catch2/catch_test_macros.hpp"
 #include "huira/huira.hpp"
@@ -278,5 +279,39 @@ TEST_CASE("The default tangent frame is orthonormal and right-handed, and the fr
         const Vec3<float> world = sampling::local_to_world(local, t, b, n);
         CHECK(std::abs(glm::dot(world, n) - local.z) < 1e-5f);
         CHECK(glm::length(sampling::world_to_local(world, t, b, n) - local) < 1e-5f);
+    }
+}
+
+TEST_CASE("The angle between two directions is resolved at every angle", "[materials][sampling]")
+{
+    // acos(dot) of float unit vectors comes out as 0 or about 3.5e-4 rad for every angle below
+    // that, and likewise near pi; angle_between() and tan_half_angle_between() keep float's
+    // precision. The reference is the angle between the same float vectors, in double.
+    std::mt19937 rng(7);
+    std::uniform_real_distribution<double> u(-1.0, 1.0);
+    for (double angle : {0.0, 1e-7, 1e-6, 1e-5, 1e-4, 3.5e-4, 1e-3, 0.1, 1.0, 2.0, 3.0, 3.14}) {
+        double worst_angle = 0.0;
+        double worst_tan_half = 0.0;
+        for (int k = 0; k < 2000; ++k) {
+            const Vec3<double> a = glm::normalize(Vec3<double>{u(rng), u(rng), u(rng)});
+            const Vec3<double> p =
+                glm::normalize(glm::cross(a, Vec3<double>{u(rng), u(rng), u(rng)}));
+            const auto fa = Vec3<float>(a);
+            const auto fb = Vec3<float>(glm::normalize(a * std::cos(angle) + p * std::sin(angle)));
+            const Vec3<double> da{fa};
+            const Vec3<double> db{fb};
+            const double exact = std::atan2(glm::length(glm::cross(da, db)), glm::dot(da, db));
+            worst_angle =
+                std::max(worst_angle, std::abs(double{sampling::angle_between(fa, fb)} - exact));
+            const double tan_half = std::tan(exact / 2.0);
+            worst_tan_half =
+                std::max(worst_tan_half,
+                         std::abs(double{sampling::tan_half_angle_between(fa, fb)} - tan_half) /
+                             std::max(1.0, tan_half));
+        }
+        INFO("angle " << angle << " rad: worst error " << worst_angle << " rad, and "
+                      << worst_tan_half << " in tan(angle / 2)");
+        CHECK(worst_angle < 3e-7);
+        CHECK(worst_tan_half < 3e-7);
     }
 }

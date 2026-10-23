@@ -302,12 +302,6 @@ TEST_CASE("A BSDF depends only on directions relative to its surface", "[materia
     for (const Case& c : cases()) {
         for (const Vec3<float>& wo : viewers(flat)) {
             for (const Vec3<float>& wi : viewers(flat)) {
-                if (wi == wo) {
-                    // At zero phase, acos(wo . wi) of the rotated directions, rounded to float,
-                    // is 3e-4 rad rather than 0, enough to move McEwen's and Hapke's sharp
-                    // opposition peaks by 0.1%.
-                    continue;
-                }
                 INFO(c.name << ", wo.z " << wo.z << ", wi.z " << wi.z);
                 const RGB f = c.bsdf->eval(wo, wi, flat, c.params);
                 const float p = c.bsdf->pdf(wo, wi, flat, c.params);
