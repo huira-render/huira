@@ -353,9 +353,7 @@ TEST_CASE("A BSDF stays finite at grazing angles and at its parameters' limits",
                         const RGB f = c.bsdf->eval(wo, wi, isect, c.params);
                         const float p = c.bsdf->pdf(wo, wi, isect, c.params);
                         CHECK(finite(f));
-                        // (Cook-Torrance's Fresnel term comes out at -1e-37 where rounding puts
-                        // cos(theta) a hair above 1, which is 0 to any purpose.)
-                        CHECK(f.min() > -1e-30f);
+                        CHECK(f.min() >= 0.f);
                         CHECK(std::isfinite(p));
                         CHECK(p >= 0.f);
                     }
