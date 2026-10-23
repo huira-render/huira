@@ -1,5 +1,6 @@
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <stdexcept>
 #include <type_traits>
 #include <utility>
@@ -149,6 +150,25 @@ TEST_CASE("at() checks its index or coordinates", "[images][image]")
     const Image<float> empty;
     CHECK_THROWS_AS(empty.at(0), std::runtime_error);
     CHECK_THROWS_AS(empty.at(0, 0), std::runtime_error);
+}
+
+TEST_CASE("at() rejects negative coordinates", "[images][image]")
+{
+    // Only the upper bounds were checked: at(-1, 1) returned pixel (2, 0), at(0, -1) read before
+    // the first pixel, and Pixel{-0.5, 0}, truncated toward zero, was taken for pixel (0, 0).
+    Image<float> image = ramp();
+    const Image<float>& view = image;
+
+    CHECK_THROWS_AS(image.at(-1, 1), std::runtime_error);
+    CHECK_THROWS_AS(view.at(-1, 1), std::runtime_error);
+    CHECK_THROWS_AS(image.at(0, -1), std::runtime_error);
+    CHECK_THROWS_AS(view.at(0, -1), std::runtime_error);
+    CHECK_THROWS_AS(image.at(Pixel{-0.5f, 0.f}), std::runtime_error);
+    CHECK_THROWS_AS(view.at(Pixel{0.f, -0.5f}), std::runtime_error);
+    CHECK_THROWS_AS(image.at(Pixel{std::numeric_limits<float>::quiet_NaN(), 0.f}),
+                    std::runtime_error);
+    CHECK(view.at(Pixel{0.f, 0.f}) == 0.f);
+    CHECK(view.at(Pixel{2.99f, 1.99f}) == 12.f);
 }
 
 TEST_CASE("Nearest-neighbour sampling maps [0, 1] onto the pixel centres", "[images][image]")

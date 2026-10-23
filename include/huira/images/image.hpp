@@ -104,7 +104,7 @@ class Image {
     [[nodiscard]] PixelT& operator()(const Pixel& pixel);
     [[nodiscard]] const PixelT& operator()(const Pixel& pixel) const;
 
-    // Checked access (throws std::out_of_range)
+    // Checked access (throws std::runtime_error)
     [[nodiscard]] PixelT& at(std::size_t index);
     [[nodiscard]] const PixelT& at(std::size_t index) const;
 
@@ -150,6 +150,7 @@ class Image {
     int sensor_bit_depth_ = 0;
 
     [[nodiscard]] std::size_t to_linear(int x, int y) const noexcept;
+    [[nodiscard]] bool contains_(const Pixel& pixel) const noexcept;
 
     template <WrapMode W>
     [[nodiscard]] float wrap_coordinate(float coord, float max) const noexcept;
