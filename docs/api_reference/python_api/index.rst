@@ -27,6 +27,12 @@ binned across the spectrum, and are imported from ``huira`` directly.
 
         The Image class for reading, writing and working with images.
 
+    .. grid-item-card:: Ephemeris API
+        :link: ephemeris/index
+        :link-type: doc
+
+        SatRec: TLEs, read and checked, and propagated with SGP4.
+
 Everything that carries light, from the scene graph and its handles to the
 renderer, frame buffer and spectral images, comes in one copy per spectral
 specialization: a submodule with the same classes and methods, differing only
@@ -61,6 +67,7 @@ example ``from huira.rgb import Scene``.
    core/index
    cameras/index
    images/index
+   ephemeris/index
 
    RGB/index
    SWIR8/index
