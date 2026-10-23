@@ -1,7 +1,7 @@
 // Vallado's reference SGP4, vendored in include/huira_impl/third_party/sgp4/ and included through
 // huira_impl/third_party/sgp4.ipp, checked against Vallado's own verification cases
-// (SGP4-VER.TLE) and his test program's output for them (tcppver.out), from the same zip as the
-// code: see third_party/sgp4/NOTICE.
+// (SGP4-VER.TLE) and his test program's output for them (tcppver.out), which
+// sgp4_verification.hpp reads.
 //
 // The test is two source files, this one and sgp4_other.cpp, that both include the wrapper: it
 // doesn't link if the wrapper leaves anything with external linkage.
@@ -9,10 +9,7 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
-#include <fstream>
-#include <ios>
 #include <numbers>
-#include <sstream>
 #include <string>
 #include <vector>
 
@@ -20,6 +17,7 @@
 
 #include "huira_impl/third_party/sgp4.ipp"
 #include "sgp4_other.hpp"
+#include "sgp4_verification.hpp"
 
 namespace {
 
@@ -28,77 +26,7 @@ using namespace huira::detail::vallado;
 // SGP4.cpp defines a macro `pi`, which the wrapper undefines. If it didn't, this wouldn't compile.
 constexpr double pi = std::numbers::pi;
 
-/// One of Vallado's verification cases: an element set, and the states his program printed for it.
-struct VerificationCase {
-    struct State {
-        double tsince = 0.0;          // Minutes from the element set's epoch
-        std::array<double, 3> r = {}; // TEME position, km
-        std::array<double, 3> v = {}; // TEME velocity, km/s
-    };
-
-    std::string line1;
-    std::string line2;
-    std::string satnum; // As tcppver.out names the case
-    std::vector<State> states;
-};
-
-/// A file's lines, without line endings. Text after the last line ending is dropped: tcppver.out
-/// ends with a truncated line, part of an earlier state, with no line ending.
-std::vector<std::string> read_lines(const std::string& path)
-{
-    std::ifstream file(path, std::ios::binary);
-    REQUIRE(file.good());
-
-    std::vector<std::string> lines;
-    std::string line;
-    while (std::getline(file, line)) {
-        if (file.eof()) {
-            break; // getline() reached the end of the file before a line ending
-        }
-        if (!line.empty() && line.back() == '\r') {
-            line.pop_back();
-        }
-        lines.push_back(line);
-    }
-    return lines;
-}
-
-/// Vallado's verification cases. In SGP4-VER.TLE, each case's second line is followed by the start,
-/// stop and step of its run, in minutes. tcppver.out has a line "<satnum> xx" for each case, in the
-/// same order, followed by one line per state: minutes from epoch, position and velocity, then
-/// (except at epoch) orbital elements and the date.
-std::vector<VerificationCase> load_cases()
-{
-    const std::string directory = HUIRA_SGP4_TEST_DATA_DIR;
-
-    std::vector<VerificationCase> cases;
-    std::string line1;
-    for (const std::string& line : read_lines(directory + "/SGP4-VER.TLE")) {
-        if (line.starts_with("1 ")) {
-            line1 = line;
-        } else if (line.starts_with("2 ")) {
-            cases.push_back({line1, line, {}, {}});
-        }
-    }
-
-    std::size_t headers = 0;
-    for (const std::string& line : read_lines(directory + "/tcppver.out")) {
-        std::istringstream fields(line);
-        if (line.find("xx") != std::string::npos) {
-            REQUIRE(headers < cases.size());
-            fields >> cases[headers].satnum;
-            ++headers;
-            continue;
-        }
-        VerificationCase::State state;
-        if (headers > 0 && fields >> state.tsince >> state.r[0] >> state.r[1] >> state.r[2] >>
-                               state.v[0] >> state.v[1] >> state.v[2]) {
-            cases[headers - 1].states.push_back(state);
-        }
-    }
-    REQUIRE(headers == cases.size());
-    return cases;
-}
+using huira::test::VerificationCase;
 
 /// The case's element set, read in verification mode.
 elsetrec read_element_set(const VerificationCase& verification_case, char opsmode)
@@ -145,7 +73,7 @@ bool fails_at_epoch(const VerificationCase& verification_case)
 TEST_CASE("Vendored SGP4: AFSPC mode reproduces Vallado's verification output", "[sgp4]")
 {
     // Vallado made tcppver.out in AFSPC mode ('a'), with the WGS-72 constants
-    const std::vector<VerificationCase> cases = load_cases();
+    const std::vector<VerificationCase> cases = huira::test::load_verification_cases();
     REQUIRE_FALSE(cases.empty());
 
     std::size_t states = 0;
@@ -180,7 +108,7 @@ TEST_CASE("Vendored SGP4: Improved mode departs from Vallado's output only for 2
     // Improved mode ('i') differs from AFSPC mode by design for deep-space orbits inclined less
     // than 11.46 degrees, such as 23599's: by about a kilometre after a few hours. Elsewhere it
     // matches tcppver.out, which was made in AFSPC mode.
-    const std::vector<VerificationCase> cases = load_cases();
+    const std::vector<VerificationCase> cases = huira::test::load_verification_cases();
 
     double largest_23599_difference = 0.0;
     for (const VerificationCase& verification_case : cases) {
