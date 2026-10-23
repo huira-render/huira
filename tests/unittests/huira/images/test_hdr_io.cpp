@@ -180,11 +180,32 @@ TEST_CASE("Radiance HDR headers are read in their common variants", "[images][hd
     }
 }
 
-TEST_CASE("Every scanline order's resolution string is read", "[images][hdr]")
+TEST_CASE("Radiance HDR scanlines are placed in the order the resolution string gives",
+          "[images][hdr]")
 {
-    for (const std::string resolution : {"+Y 2 +X 3", "-Y 2 -X 3", "+Y 2 -X 3"}) {
-        const Bytes file = hdr_file(HEADER + resolution + "\n", flat(PIXELS));
-        CHECK(read_image_hdr(file.data(), file.size()).image.resolution() == Resolution{3, 2});
+    // Every order was read as -Y +X, top to bottom and left to right: +Y (bottom to top) came
+    // out upside down, and -X (right to left) mirrored.
+    for (const bool bottom_up : {false, true}) {
+        for (const bool right_to_left : {false, true}) {
+            const std::string resolution = std::string(bottom_up ? "+Y" : "-Y") + " 2 " +
+                                           (right_to_left ? "-X" : "+X") + " 3\n";
+            INFO(resolution);
+            const Bytes file = hdr_file(HEADER + resolution, flat(PIXELS));
+            const ImageBundle<RGB> bundle = read_image_hdr(file.data(), file.size());
+            const ImageBundle<float> mono = read_image_hdr_mono(file.data(), file.size());
+            REQUIRE(bundle.image.resolution() == Resolution{3, 2});
+            for (int y = 0; y < 2; ++y) {
+                for (int x = 0; x < 3; ++x) {
+                    // The pixel's place in the file: its scanline, and its place in that:
+                    const int scanline = bottom_up ? 1 - y : y;
+                    const int place = right_to_left ? 2 - x : x;
+                    const RGB expected =
+                        value(PIXELS[static_cast<std::size_t>(scanline * 3 + place)]);
+                    CHECK(bundle.image(x, y) == expected);
+                    CHECK(mono.image(x, y) == (expected[0] + expected[1] + expected[2]) / 3.f);
+                }
+            }
+        }
     }
 }
 

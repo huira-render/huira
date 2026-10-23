@@ -101,6 +101,8 @@ inline bool read_hdr_line_(MemCursor_& cur, std::string& line)
  * Parses the Radiance header to extract resolution, then decodes the RGBE
  * pixel data. Supports both uncompressed RGBE scanlines and new-style
  * adaptive run-length encoding (RLE) where each channel is encoded separately.
+ * Scanlines are placed in the order the resolution string gives (-Y or +Y,
+ * +X or -X), so that the image is always top row first, left to right.
  *
  * @param data Pointer to the HDR data in memory
  * @param size Size of the data in bytes
@@ -149,6 +151,8 @@ inline HDRData read_hdr_raw_(const unsigned char* data, std::size_t size)
 
     int width = 0;
     int height = 0;
+    bool bottom_up = false;     // +Y: the first scanline is the bottom row
+    bool right_to_left = false; // -X: each scanline runs from the right
 
     auto parse_resolution = [&](const std::string& prefix_y, const std::string& prefix_x) -> bool {
         if (line.find(prefix_y) != 0) {
@@ -161,6 +165,8 @@ inline HDRData read_hdr_raw_(const unsigned char* data, std::size_t size)
         if ((iss >> h >> px >> w) && px == prefix_x) {
             height = h;
             width = w;
+            bottom_up = prefix_y == "+Y";
+            right_to_left = prefix_x == "-X";
             return true;
         }
         return false;
@@ -255,11 +261,13 @@ inline HDRData read_hdr_raw_(const unsigned char* data, std::size_t size)
             }
         }
 
-        // Convert RGBE scanline to float RGB
+        // Convert RGBE scanline to float RGB, placed top to bottom and left to right
+        const int row = bottom_up ? height - 1 - y : y;
         for (int x = 0; x < width; ++x) {
+            const int column = right_to_left ? width - 1 - x : x;
             std::size_t src = static_cast<std::size_t>(x) * 4;
-            std::size_t dst = (static_cast<std::size_t>(y) * static_cast<std::size_t>(width) +
-                               static_cast<std::size_t>(x)) *
+            std::size_t dst = (static_cast<std::size_t>(row) * static_cast<std::size_t>(width) +
+                               static_cast<std::size_t>(column)) *
                               3;
 
             rgbe_to_float_(&scanline[src], raw_data[dst], raw_data[dst + 1], raw_data[dst + 2]);
