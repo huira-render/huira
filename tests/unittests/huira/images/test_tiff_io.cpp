@@ -46,6 +46,7 @@ struct TiffSpec {
     std::uint16_t planar_config = PLANARCONFIG_CONTIG;
     std::vector<std::uint16_t> extra_samples;
     std::uint16_t max_sample_value = 0;   // not written if 0
+    std::uint16_t orientation = 0;        // not written if 0
     std::uint32_t tile_size = 0;          // strips if 0
     std::vector<std::uint16_t> color_map; // red, then green, then blue
 };
@@ -105,6 +106,9 @@ void write_tiff(const fs::path& path, const TiffSpec& spec, const std::vector<do
     }
     if (spec.max_sample_value != 0) {
         TIFFSetField(tif, TIFFTAG_MAXSAMPLEVALUE, spec.max_sample_value);
+    }
+    if (spec.orientation != 0) {
+        TIFFSetField(tif, TIFFTAG_ORIENTATION, spec.orientation);
     }
     if (!spec.color_map.empty()) {
         const std::size_t entries = spec.color_map.size() / 3;
@@ -475,6 +479,82 @@ TEST_CASE("TIFF samples are normalized by MaxSampleValue", "[images][tiff]")
     CHECK(other.color_space == ColorSpaceHint::sRGB);
     CHECK(other.image(0, 1) == 0.5f);
     CHECK(other.image(1, 1) == 0.25f);
+    fs::remove(path);
+}
+
+TEST_CASE("A TIFF's Orientation tag is applied, so images read top row first", "[images][tiff]")
+{
+    // It was ignored: a file whose rows run from the bottom, say, came out upside down, and one
+    // whose rows are the image's columns came out transposed, with the wrong width and height.
+    const fs::path path = temp_path("orientation.tif");
+
+    // The file stores two rows of three, a b c and d e f, in every orientation. Each image, as
+    // it should be read, top row first:
+    const double a = 10, b = 20, c = 30, d = 40, e = 50, f = 60;
+    const std::vector<std::vector<std::vector<double>>> images{
+        {{a, b, c}, {d, e, f}},   // 1: rows from the top, columns from the left
+        {{c, b, a}, {f, e, d}},   // 2: columns from the right
+        {{f, e, d}, {c, b, a}},   // 3: rows from the bottom, columns from the right
+        {{d, e, f}, {a, b, c}},   // 4: rows from the bottom
+        {{a, d}, {b, e}, {c, f}}, // 5: rows are the columns, from the left; columns from the top
+        {{d, a}, {e, b}, {f, c}}, // 6: rows are the columns, from the right
+        {{f, c}, {e, b}, {d, a}}, // 7: from the right, and columns from the bottom
+        {{c, f}, {b, e}, {a, d}}, // 8: from the left, and columns from the bottom
+    };
+
+    TiffSpec gray;
+    gray.width = 3;
+    gray.height = 2;
+    for (std::uint16_t orientation = 1; orientation <= 8; ++orientation) {
+        INFO("Orientation " << orientation);
+        gray.orientation = orientation;
+        write_tiff(path, gray, {a, b, c, d, e, f});
+        const ImageBundle<float> read = read_image_tiff_mono(path);
+        const auto& expected = images[orientation - 1u];
+        REQUIRE(read.image.height() == static_cast<int>(expected.size()));
+        REQUIRE(read.image.width() == static_cast<int>(expected[0].size()));
+        for (std::size_t y = 0; y < expected.size(); ++y) {
+            for (std::size_t x = 0; x < expected[y].size(); ++x) {
+                CHECK(read.image(static_cast<int>(x), static_cast<int>(y)) ==
+                      static_cast<float>(expected[y][x] / 255.0));
+            }
+        }
+    }
+
+    // Every channel, alpha included, is oriented:
+    TiffSpec gray_alpha = gray;
+    gray_alpha.samples_per_pixel = 2;
+    gray_alpha.extra_samples = {EXTRASAMPLE_UNASSALPHA};
+    gray_alpha.orientation = 6;
+    write_tiff(path, gray_alpha, {a, 1, b, 2, c, 3, d, 4, e, 5, f, 6});
+    const ImageBundle<RGB> with_alpha = read_image_tiff_rgb(path);
+    REQUIRE(with_alpha.image.resolution() == Resolution{2, 3});
+    CHECK(with_alpha.image(1, 0) == RGB{static_cast<float>(a / 255.0)});
+    CHECK(with_alpha.alpha(1, 0) == static_cast<float>(1.0 / 255.0));
+    CHECK(with_alpha.image(0, 2) == RGB{static_cast<float>(f / 255.0)});
+    CHECK(with_alpha.alpha(0, 2) == static_cast<float>(6.0 / 255.0));
+
+    // as are palette images, which libtiff expands:
+    TiffSpec palette = gray;
+    palette.photometric = PHOTOMETRIC_PALETTE;
+    palette.color_map.assign(3 * 256, 0);
+    for (std::size_t i = 0; i < 256; ++i) {
+        palette.color_map[i] = static_cast<std::uint16_t>(i * 257); // red = the index
+    }
+    for (const std::uint16_t orientation : std::initializer_list<std::uint16_t>{3, 4, 7}) {
+        INFO("Orientation " << orientation);
+        palette.orientation = orientation;
+        write_tiff(path, palette, {a, b, c, d, e, f});
+        const ImageBundle<RGB> read = read_image_tiff_rgb(path);
+        const auto& expected = images[orientation - 1u];
+        REQUIRE(read.image.height() == static_cast<int>(expected.size()));
+        for (std::size_t y = 0; y < expected.size(); ++y) {
+            for (std::size_t x = 0; x < expected[y].size(); ++x) {
+                CHECK(read.image(static_cast<int>(x), static_cast<int>(y))[0] ==
+                      static_cast<float>(expected[y][x]) / 255.f);
+            }
+        }
+    }
     fs::remove(path);
 }
 
