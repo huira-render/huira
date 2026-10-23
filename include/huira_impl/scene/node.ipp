@@ -10,6 +10,7 @@
 #include "huira/core/types.hpp"
 #include "huira/scene/state_callbacks/keplerian_orbit.hpp"
 #include "huira/scene/state_callbacks/nadir_point.hpp"
+#include "huira/scene/state_callbacks/tle_position.hpp"
 #include "huira/util/logger.hpp"
 #include "huira/util/validate.hpp"
 
@@ -482,6 +483,45 @@ void Node<TSpectral>::set_keplerian_orbit(units::Meter semi_major_axis,
     validate_strictly_positive(mu.to_si(), this->get_info() + " gravitational parameter");
     this->set_custom_position_callback<KeplerianOrbitCallback>(
         semi_major_axis, eccentricity, inclination, raan, arg_periapsis, mean_anomaly, epoch, mu);
+}
+
+/**
+ * @brief Place the node by SGP4, from a satellite's two-line element set (TLE).
+ *
+ * SGP4 gives states in the TEME frame, so the node must be a child of the scene's TEME frame
+ * (Scene::teme_frame()). Whatever else the node has, such as children, a camera, or a rotation
+ * source, which this leaves alone, moves with it. A satellite places one node: to place more than
+ * one thing with it, make them children of that node.
+ *
+ * The scene holds one element set for each satellite. Calling this again for the same satellite,
+ * on the same node, replaces it: with a newer TLE, for example. No other node can be placed by the
+ * satellite until this one is deleted or given another position source.
+ *
+ * SGP4 is evaluated as a scene view is built. If it can't place the satellite at a time the view
+ * needs, most often because it has decayed by then, building the view throws.
+ *
+ * @param satrec The satellite's element set (see SatRec::from_tle()).
+ * @throws std::runtime_error if the node isn't a child of its scene's TEME frame, if another node
+ *         is placed by the same satellite, or if a child of the node is placed by SPICE.
+ */
+template <IsSpectral TSpectral>
+void Node<TSpectral>::set_tle_position(const SatRec& satrec)
+{
+    this->check_pose_can_change_("be placed by a TLE");
+    const std::string satellite = "satellite " + std::to_string(satrec.catalog_number());
+    if (scene_ == nullptr || parent_ == nullptr ||
+        parent_ != scene_->teme_frame_node_.lock().get()) {
+        HUIRA_THROW_ERROR(this->get_info() + " - cannot be placed by " + satellite +
+                          "'s TLE: SGP4 places objects in the TEME frame, so the node must be a "
+                          "child of the scene's TEME frame (Scene::teme_frame())" +
+                          (parent_ != nullptr ? ", not of " + parent_->get_info() : ""));
+    }
+    HUIRA_LOG_INFO(this->get_info() + " - set_tle_position(" + satellite + ", epoch " +
+                   satrec.epoch().to_utc_string() + ")");
+
+    // A claim made here lapses by itself if the callback isn't installed (see TleManager)
+    std::shared_ptr<TleEntry> entry = scene_->tle_manager_.claim(satrec, *this);
+    this->set_custom_position_callback<TlePositionCallback>(std::move(entry), this->get_info());
 }
 
 /**

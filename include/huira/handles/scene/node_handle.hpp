@@ -7,6 +7,7 @@
 
 #include "huira/concepts/numeric_concepts.hpp"
 #include "huira/concepts/spectral_concepts.hpp"
+#include "huira/ephemeris/satrec.hpp"
 #include "huira/handles/handle.hpp"
 #include "huira/scene/node.hpp"
 
@@ -90,6 +91,7 @@ class NodeHandle : public Handle<TNode> {
                              units::Radian mean_anomaly,
                              Time epoch,
                              units::CubicKilometersPerSecondSquared mu) const;
+    void set_tle_position(const SatRec& satrec) const;
     template <IsPositionCallback TCallback, typename... Args>
     void set_custom_position_callback(Args&&... args) const;
 
