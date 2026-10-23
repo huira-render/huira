@@ -640,6 +640,23 @@ TEST_CASE("A model's textures are multiplied by their factors", "[assets][models
     CHECK(eval.isect.normal_s.z < 0.9f);
 }
 
+TEST_CASE("A glTF model's emissive texture is multiplied by its factor", "[assets][models]")
+{
+    // Before, the loader looked for the texture as ASSIMP's EMISSION_COLOR, but ASSIMP gives
+    // glTF's as EMISSIVE: it was never loaded, and the factor alone was the emission, all over
+    // the surface. It is a color, stored as sRGB, and made linear.
+    write_file("emissive.png", png(204, 102, 51));
+    Gltf gltf;
+    gltf.images = {image_file("emissive.png")};
+    gltf.materials = {R"({"emissiveTexture": {"index": 0}, "emissiveFactor": [1, 0.5, 1]})"};
+    Scene<RGB> scene;
+    scene.load_model(gltf.write("emissive.gltf"));
+
+    check_bins(
+        values_of(scene, "Mesh0").emission, linear(204, 102, 51) * RGB{1.f, 0.5f, 1.f}, 1e-5f);
+    check_bins(material_of(scene, "Mesh0")->emissive_factor(), RGB{1.f, 0.5f, 1.f});
+}
+
 TEST_CASE("Textures in each image format the loader reads are loaded", "[assets][models]")
 {
     // sRGB images (PNG, JPEG, TGA and BMP, unless a PNG says otherwise) are made linear; HDR
@@ -699,8 +716,11 @@ TEST_CASE("Textures in each image format the loader reads are loaded", "[assets]
     CHECK(values_of(embedded_scene, "Mesh2").metallic == 0.125f);
 }
 
-TEST_CASE("Textures embedded in a model are loaded", "[assets][models]")
+TEST_CASE("Textures embedded in a model are loaded as those in files are", "[assets][models]")
 {
+    // Before, only textures in files were made linear: an embedded color texture (as in every
+    // .glb) was taken as linear, and came out brighter, 0.8 rather than 0.6 for 204 / 255.
+
     // As data in a glTF file (as in a .glb), the color and data textures of the last test:
     Gltf gltf;
     gltf.images = {image_data("image/png", png(204, 102, 51, 153)),
@@ -715,8 +735,7 @@ TEST_CASE("Textures embedded in a model are loaded", "[assets][models]")
 
     const auto material = material_of(scene, "Mesh0");
     const MaterialEval<RGB> eval = material->evaluate(flat_surface());
-    CHECK(eval.params.albedo[0] > eval.params.albedo[1]);
-    CHECK(eval.params.albedo[1] > eval.params.albedo[2]);
+    check_bins(eval.params.albedo, linear(204, 102, 51), 1e-5f);
     CHECK_THAT(eval.params.opacity, WithinAbs(b8(153), 1e-6f));
     CHECK_THAT(eval.params.roughness, WithinAbs(b8(153) * 0.5f, 1e-6f));
     CHECK_THAT(eval.params.metallic, WithinAbs(b8(51), 1e-6f));
@@ -727,8 +746,7 @@ TEST_CASE("Textures embedded in a model are loaded", "[assets][models]")
     const std::string raw_mesh =
         load_assbin(raw, write_assbin("raw_textures.assbin", false, false));
     const MaterialEval<RGB> raw_eval = material_of(raw, raw_mesh)->evaluate(flat_surface());
-    CHECK(raw_eval.params.albedo[0] > raw_eval.params.albedo[1]);
-    CHECK(raw_eval.params.albedo[1] > raw_eval.params.albedo[2]);
+    check_bins(raw_eval.params.albedo, linear(204, 102, 51), 1e-5f);
     CHECK_THAT(raw_eval.params.opacity, WithinAbs(b8(153), 1e-6f));
     CHECK_THAT(raw_eval.params.roughness, WithinAbs(b8(153), 1e-6f));
     CHECK_THAT(raw_eval.params.metallic, WithinAbs(b8(51), 1e-6f));
