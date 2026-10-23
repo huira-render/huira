@@ -15,7 +15,11 @@ namespace huira {
  * surfaces like the Moon. The mixing fraction beta is calculated as exp(-alpha / alpha_0),
  * where alpha is the phase angle and alpha_0 is a 60-degree falloff constant.
  *
- * f(wo, wi) = albedo * ((1 - beta) * Lambert + beta * Lommel_Seeliger)
+ * f(wo, wi) = albedo / pi * ((1 - beta) + 2 beta / (cos_i + cos_o))
+ *
+ * which is McEwen's lunar-Lambert function, I/F = albedo (2 beta cos_i / (cos_i + cos_o) +
+ * (1 - beta) cos_i). Its Lommel-Seeliger part is normalized to equal Lambert's where the light
+ * and the viewer are both overhead, so that the albedo is the normal albedo whatever beta is.
  *
  * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
