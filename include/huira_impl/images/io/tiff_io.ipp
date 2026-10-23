@@ -151,6 +151,85 @@ inline toff_t tiff_mem_size_(thandle_t handle) noexcept
 }
 
 // =========================================================================
+// Orientation
+// =========================================================================
+
+/**
+ * @brief Puts a TIFF's decoded channels in reading order, top row first and left to right, from
+ * the order its Orientation tag gives: the file's rows may run from the bottom, its columns from
+ * the right, and its rows may be the image's columns (orientations 5 to 8, which swap the width
+ * and height).
+ *
+ * @param tiff_data The decoded channels, as the file stores them; reordered in place
+ * @param orientation The file's Orientation tag (1 to 8; anything else is taken to be 1)
+ */
+inline void orient_tiff_data_(TIFFData& tiff_data, uint16_t orientation)
+{
+    if (orientation <= ORIENTATION_TOPLEFT || orientation > ORIENTATION_LEFTBOT) {
+        return;
+    }
+
+    // The file's rows and columns:
+    const std::size_t rows = static_cast<std::size_t>(tiff_data.height);
+    const std::size_t columns = static_cast<std::size_t>(tiff_data.width);
+    const bool transposed = orientation >= ORIENTATION_LEFTTOP;
+    const std::size_t width = transposed ? rows : columns;
+
+    // Where each of the file's pixels goes in the image:
+    std::vector<std::size_t> destination(rows * columns);
+    for (std::size_t r = 0; r < rows; ++r) {
+        for (std::size_t c = 0; c < columns; ++c) {
+            std::size_t x = c;
+            std::size_t y = r;
+            switch (orientation) {
+            case ORIENTATION_TOPRIGHT: // row 0 is the top, column 0 the right
+                x = columns - 1 - c;
+                break;
+            case ORIENTATION_BOTRIGHT: // row 0 is the bottom, column 0 the right
+                x = columns - 1 - c;
+                y = rows - 1 - r;
+                break;
+            case ORIENTATION_BOTLEFT: // row 0 is the bottom, column 0 the left
+                y = rows - 1 - r;
+                break;
+            case ORIENTATION_LEFTTOP: // row 0 is the left, column 0 the top
+                x = r;
+                y = c;
+                break;
+            case ORIENTATION_RIGHTTOP: // row 0 is the right, column 0 the top
+                x = rows - 1 - r;
+                y = c;
+                break;
+            case ORIENTATION_RIGHTBOT: // row 0 is the right, column 0 the bottom
+                x = rows - 1 - r;
+                y = columns - 1 - c;
+                break;
+            case ORIENTATION_LEFTBOT: // row 0 is the left, column 0 the bottom
+                x = r;
+                y = columns - 1 - c;
+                break;
+            default:
+                break;
+            }
+            destination[r * columns + c] = y * width + x;
+        }
+    }
+
+    for (std::vector<float>& channel : tiff_data.channels) {
+        std::vector<float> oriented(channel.size());
+        for (std::size_t i = 0; i < channel.size(); ++i) {
+            oriented[destination[i]] = channel[i];
+        }
+        channel = std::move(oriented);
+    }
+
+    if (transposed) {
+        std::swap(tiff_data.width, tiff_data.height);
+        tiff_data.resolution = Resolution{tiff_data.width, tiff_data.height};
+    }
+}
+
+// =========================================================================
 // Raw TIFF decoder
 // =========================================================================
 
@@ -167,6 +246,8 @@ inline toff_t tiff_mem_size_(thandle_t handle) noexcept
  *
  * MinIsWhite images are inverted so that output is always in MinIsBlack convention.
  * Palette images are expanded to RGB(A) via TIFFReadRGBAImageOriented.
+ * The Orientation tag is applied, so that the output is always top row first, left to right
+ * (see orient_tiff_data_()).
  * Signed integer TIFFs are rejected (not supported for texture loading).
  *
  * @param data Pointer to the TIFF data in memory
@@ -248,6 +329,8 @@ inline TIFFData read_tiff_raw_(const unsigned char* data, std::size_t size)
     TIFFGetFieldDefaulted(tif.get(), TIFFTAG_SAMPLEFORMAT, &sample_format);
     TIFFGetFieldDefaulted(tif.get(), TIFFTAG_PHOTOMETRIC, &photometric);
     TIFFGetFieldDefaulted(tif.get(), TIFFTAG_PLANARCONFIG, &planar_config);
+    uint16_t orientation = ORIENTATION_TOPLEFT;
+    TIFFGetFieldDefaulted(tif.get(), TIFFTAG_ORIENTATION, &orientation);
 
     if (width == 0 || height == 0) {
         HUIRA_THROW_ERROR("read_tiff_raw_ - Invalid dimensions (" + std::to_string(width) + " x " +
@@ -282,8 +365,13 @@ inline TIFFData read_tiff_raw_(const unsigned char* data, std::size_t size)
         std::size_t num_pixels = static_cast<std::size_t>(width) * static_cast<std::size_t>(height);
         std::vector<uint32_t> rgba_data(num_pixels);
 
-        if (!TIFFReadRGBAImageOriented(
-                tif.get(), width, height, rgba_data.data(), ORIENTATION_TOPLEFT, 0)) {
+        // In the file's own order (libtiff flips rows and columns, but doesn't swap them),
+        // oriented below as any other TIFF is:
+        const int file_order =
+            (orientation >= ORIENTATION_TOPLEFT && orientation <= ORIENTATION_LEFTBOT)
+                ? orientation
+                : ORIENTATION_TOPLEFT;
+        if (!TIFFReadRGBAImageOriented(tif.get(), width, height, rgba_data.data(), file_order, 0)) {
             HUIRA_THROW_ERROR("read_tiff_raw_ - Failed to read palette TIFF via RGBA");
         }
 
@@ -309,6 +397,7 @@ inline TIFFData read_tiff_raw_(const unsigned char* data, std::size_t size)
             tiff_data.channels[3][i] = static_cast<float>(TIFFGetA(pixel)) / 255.0f;
         }
 
+        orient_tiff_data_(tiff_data, orientation);
         return tiff_data;
     }
 
@@ -514,6 +603,7 @@ inline TIFFData read_tiff_raw_(const unsigned char* data, std::size_t size)
     tiff_data.is_float = is_float;
     tiff_data.sensor_bits = sensor_bits;
 
+    orient_tiff_data_(tiff_data, orientation);
     return tiff_data;
 }
 
