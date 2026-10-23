@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <cmath>
 #include <random>
+#include <stdexcept>
 
 #include "catch2/catch_test_macros.hpp"
 #include "huira/core/spectral_bins.hpp"
@@ -266,4 +267,28 @@ TEST_CASE("FftConvolver in single precision rounds no more than rounding_error()
     const std::size_t single_bytes = single_only.memory_bytes();
     single_only.apply(frame, FftPrecision::Double);
     CHECK(single_only.memory_bytes() == 3 * single_bytes);
+}
+
+TEST_CASE("FftConvolver rejects a kernel or image it can't use", "[images][convolution]")
+{
+    FftConvolver<float> convolver;
+    CHECK_FALSE(convolver.is_ready());
+    CHECK(convolver.memory_bytes() == 0);
+
+    Image<float> image(8, 8, 1.f);
+    CHECK_THROWS_AS(convolver.apply(image), std::runtime_error);
+    CHECK_THROWS_AS(convolver.set_kernel(Image<float>{}, Resolution{8, 8}), std::runtime_error);
+    CHECK_THROWS_AS(convolver.set_kernel(Image<float>(3, 3, 1.f), Resolution{0, 8}),
+                    std::runtime_error);
+    CHECK_FALSE(convolver.is_ready());
+
+    convolver.set_kernel(Image<float>(7, 7, 1.f / 49.f), Resolution{8, 8});
+    CHECK(convolver.is_ready());
+    CHECK(convolver.image_resolution() == Resolution{8, 8});
+    Image<float> other(8, 4, 1.f);
+    CHECK_THROWS_AS(convolver.apply(other), std::runtime_error);
+
+    // A failed set_kernel() leaves it unready, rather than with the old kernel:
+    CHECK_THROWS_AS(convolver.set_kernel(Image<float>(0, 3), Resolution{8, 8}), std::runtime_error);
+    CHECK_FALSE(convolver.is_ready());
 }
