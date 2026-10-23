@@ -32,6 +32,7 @@ set(UNIT_TESTS
 
     huira/geometry/test_mesh.cpp
 
+    huira/materials/test_bsdf_contract.cpp
     huira/materials/test_cook_torrance.cpp
     huira/materials/test_material_values.cpp
     huira/materials/test_sampling_utils.cpp
@@ -82,6 +83,7 @@ set(UNIT_TESTS
     huira/units/test_units.cpp
 
     reference/test_airy_reference.cpp
+    reference/test_photometry_reference.cpp
 )
 
 ##############################
