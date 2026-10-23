@@ -73,3 +73,20 @@ TEST_CASE("rgb_to_spectral converts each pixel of an RGB image", "[images]")
     CHECK(spectral[0] == convert_rgb_to_spectral<Visible8>(colors[0]));
     CHECK(spectral[1] == convert_rgb_to_spectral<Visible8>(colors[1]));
 }
+
+TEST_CASE("depth_map shades a single depth black, not NaN", "[images]")
+{
+    // With every depth the same, it divided by a range of 0, and every pixel was NaN, which
+    // writing the image then warned of.
+    const float inf = std::numeric_limits<float>::infinity();
+    const Image<RGB> flat = depth_map(Image<float>(3, 2, 5.f));
+    for (std::size_t i = 0; i < flat.size(); ++i) {
+        CHECK(flat[i] == RGB{0.f});
+    }
+
+    Image<float> one(2, 1, inf);
+    one[0] = 2.f;
+    const Image<RGB> shades = depth_map(one);
+    CHECK(shades[0] == RGB{0.f});
+    CHECK(shades[1] == RGB{1.f});
+}
