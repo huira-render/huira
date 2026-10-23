@@ -38,6 +38,9 @@ namespace huira {
 template <IsSpectral TSpectral>
 class SceneView;
 
+template <IsSpectral TSpectral>
+class TemeFrameNode;
+
 /**
  * @brief Scene graph and asset manager for a rendered world.
  *
@@ -53,6 +56,7 @@ template <IsSpectral TSpectral>
 class Scene {
   private:
     std::shared_ptr<FrameNode<TSpectral>> root_node_;
+    std::weak_ptr<TemeFrameNode<TSpectral>> teme_frame_node_;
 
   public:
     Scene(const Scene&) = delete;            // Delete the copy constructor
@@ -62,6 +66,8 @@ class Scene {
     ~Scene();
 
     RootFrameHandle<TSpectral> root;
+
+    FrameHandle<TSpectral> teme_frame();
 
     MeshHandle<TSpectral> add_mesh(const IndexBuffer& index_buffer,
                                    const VertexBuffer<TSpectral>& vertex_buffer,

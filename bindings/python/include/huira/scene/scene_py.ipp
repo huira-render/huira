@@ -79,6 +79,14 @@ inline void bind_scene(py::module_& m)
         // Root frame access
         .def_readonly("root", &SceneType::root)
 
+        // TEME frame access
+        .def("teme_frame",
+             &SceneType::teme_frame,
+             "The scene's TEME frame, in which objects placed by their NORAD element sets go: "
+             "centered on the Earth, with the axes of SGP4's True Equator, Mean Equinox of date. "
+             "Made on first use, as a child of the root, and the same frame after that; its "
+             "pose is fixed. Rendering anything in it needs an SPK with the Earth's ephemeris.")
+
         // =============================================================
         // Geometry
         // =============================================================
