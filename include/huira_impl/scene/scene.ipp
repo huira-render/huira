@@ -24,6 +24,7 @@
 #include "huira/materials/bsdfs/mcewen_bsdf.hpp"
 #include "huira/materials/bsdfs/null_bsdf.hpp"
 #include "huira/materials/bsdfs/oren_nayar_bsdf.hpp"
+#include "huira/scene/teme_frame_node.hpp"
 #include "huira/stars/io/star_catalog.hpp"
 #include "huira/util/colorful_text.hpp"
 #include "huira/util/logger.hpp"
@@ -101,6 +102,36 @@ Scene<TSpectral>::~Scene()
 #ifdef _MSC_VER
 #pragma warning(pop)
 #endif
+
+/**
+ * @brief Get the scene's TEME frame, in which objects placed by their NORAD element sets go.
+ *
+ * The TEME frame (see TemeFrameNode) is centered on the Earth, with the axes of SGP4's True
+ * Equator, Mean Equinox of date. It is made on the first call, as a child of the root, and the
+ * same frame is returned after that; if it has been deleted, a new one is made. Its pose is
+ * fixed.
+ *
+ * Loads Huira's frame kernel, which defines its axes (HUIRA_EARTH_TEME), unless SPICE already
+ * knows them. To render anything in it, load an SPK with the Earth's ephemeris, such as
+ * de440s.bsp, as for any node that SPICE places.
+ *
+ * @return FrameHandle<TSpectral> Handle to the TEME frame
+ */
+template <IsSpectral TSpectral>
+FrameHandle<TSpectral> Scene<TSpectral>::teme_frame()
+{
+    spice::ensure_teme_frame_loaded();
+
+    std::shared_ptr<TemeFrameNode<TSpectral>> frame = teme_frame_node_.lock();
+    if (!frame || !frame->is_scene_owned()) {
+        frame = std::make_shared<TemeFrameNode<TSpectral>>(this);
+        frame->set_parent_(root_node_.get());
+        root_node_->children_.push_back(frame);
+        teme_frame_node_ = frame;
+        HUIRA_LOG_INFO(root_node_->get_info() + " - Added: " + frame->get_info());
+    }
+    return FrameHandle<TSpectral>{std::weak_ptr<FrameNode<TSpectral>>{frame}};
+}
 
 /**
  * @brief Adds a mesh to the scene.
