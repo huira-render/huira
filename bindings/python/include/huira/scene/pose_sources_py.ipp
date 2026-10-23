@@ -11,6 +11,7 @@
 #include "huira/core/time.hpp"
 #include "huira/core/types.hpp"
 #include "huira/core/types_py.ipp"
+#include "huira/ephemeris/satrec.hpp"
 #include "huira/scene/node.hpp"
 #include "huira/scene/state_callbacks/function_callbacks.hpp"
 #include "huira/scene/state_callbacks/state_callbacks.hpp"
@@ -216,7 +217,8 @@ inline std::vector<Vec3<double>> vec3_rows(const DoubleArray& array, const std::
 } // namespace detail
 
 /**
- * @brief Injects the position and rotation sources (functions, tables, and the Keplerian orbit)
+ * @brief Injects the position and rotation sources (functions, tables, the Keplerian orbit and
+ * TLEs)
  * into a node handle's binding: see bind_node_handle_methods.
  */
 template <typename TSpectral, typename TNode, typename PyClass>
@@ -310,6 +312,19 @@ mu: the central body's standard gravitational parameter, GM, as a
 CubicKilometersPerSecondSquared or CubicMetersPerSecondSquared (the Earth's
 is CubicKilometersPerSecondSquared(398600.4418)).
 Any other position source the node had is replaced.)")
+        .def(
+            "set_tle_position",
+            [](const BoundType& self, const SatRec& satrec) { self.set_tle_position(satrec); },
+            py::arg("satrec"),
+            R"(Place the node by SGP4, from a satellite's TLE (see SatRec.from_tle).
+
+The node must be a child of the scene's TEME frame (Scene.teme_frame()), the
+frame SGP4 gives states in. A satellite places one node: to place more than one
+thing with it, make them children of that node. Calling this again for the same
+satellite, on the same node, replaces its element set: with a newer TLE, for
+example. Building a SceneView raises if SGP4 can't place the satellite at a
+time the view needs, most often because it has decayed by then. Any other
+position source the node had is replaced; its rotation is left alone.)")
         .def(
             "set_rotation_function",
             [](const BoundType& self, py::function function) {

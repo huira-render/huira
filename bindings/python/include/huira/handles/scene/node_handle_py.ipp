@@ -43,8 +43,8 @@ as well as its appearance.)")
  *
  * Call this on any handle whose C++ type inherits from NodeHandle<TSpectral, TNode>.
  * It adds position, velocity, rotation, angular velocity, scale, SPICE, the other position and
- * rotation sources (functions, tables and the Keplerian orbit), and parent access methods without
- * requiring pybind11 inheritance.
+ * rotation sources (functions, tables, the Keplerian orbit and TLEs), and parent access methods
+ * without requiring pybind11 inheritance.
  */
 template <typename TSpectral, typename TNode, typename PyClass>
 inline void bind_node_handle_methods(PyClass& cls)
