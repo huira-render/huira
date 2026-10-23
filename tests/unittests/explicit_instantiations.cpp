@@ -1,8 +1,13 @@
 // assets/
 #include "huira/assets/io/model_loader.hpp"
+#include "huira/assets/lights/light.hpp"
 #include "huira/assets/lights/sphere_light.hpp"
 #include "huira/assets/model.hpp"
+#include "huira/assets/primitive.hpp"
+#include "huira/assets/unresolved/unresolved_asteroid.hpp"
+#include "huira/assets/unresolved/unresolved_emitter.hpp"
 #include "huira/assets/unresolved/unresolved_object.hpp"
+#include "huira/assets/unresolved/unresolved_sphere.hpp"
 #include "huira/geometry/mesh.hpp"
 
 // cameras/
@@ -28,6 +33,7 @@
 // handles/
 #include "huira/handles/assets/light_handle.hpp"
 #include "huira/handles/assets/model_handle.hpp"
+#include "huira/handles/assets/primitive_handle.hpp"
 #include "huira/handles/assets/unresolved_handle.hpp"
 #include "huira/handles/camera_handle.hpp"
 #include "huira/handles/geometry/mesh_handle.hpp"
@@ -82,6 +88,8 @@ template class FrameHandle<TestSpectral>;
 template class InstanceHandle<TestSpectral>;
 template class MeshHandle<TestSpectral>;
 template class LightHandle<TestSpectral>;
+template class ModelHandle<TestSpectral>;
+template class PrimitiveHandle<TestSpectral>;
 template class RootFrameHandle<TestSpectral>;
 template class UnresolvedObjectHandle<TestSpectral>;
 
@@ -90,11 +98,19 @@ template class Image<float>;
 template class Image<Vec3<float>>;
 template class Image<TestSpectral>;
 
+template class Light<TestSpectral>;
 template class SphereLight<TestSpectral>;
+
+template class Model<TestSpectral>;
+template class ModelLoader<TestSpectral>;
+template class Primitive<TestSpectral>;
 
 template class Renderer<TestSpectral>;
 
 template class Node<TestSpectral>;
+template class UnresolvedAsteroid<TestSpectral>;
+template class UnresolvedEmitter<TestSpectral>;
+template class UnresolvedLambertianSphere<TestSpectral>;
 template class UnresolvedObject<TestSpectral>;
 
 } // namespace huira
