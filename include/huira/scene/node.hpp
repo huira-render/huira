@@ -187,6 +187,14 @@ class Node : public SceneObject<Node<TSpectral>> {
   protected:
     void check_scale_(const Vec3<double>& scale) const;
 
+    /// Whether the node's pose is fixed from when it is made: true for a scene's TEME frame (see
+    /// TemeFrameNode). Every setter of a fixed node's position, rotation, scale, motion, pose
+    /// source and SPICE origin and frame throws.
+    virtual bool pose_is_fixed_() const { return false; }
+
+    /// Throws if the node's pose is fixed (see pose_is_fixed_()), saying what could not be done.
+    void check_pose_can_change_(const std::string& what) const;
+
     Transform<double> local_transform_;
 
     /// When true, local_transform_.angular_velocity was supplied via

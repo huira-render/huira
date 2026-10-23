@@ -31,6 +31,7 @@ Node<TSpectral>::Node(Scene<TSpectral>* scene) : scene_(scene)
 template <IsSpectral TSpectral>
 void Node<TSpectral>::set_position(const Vec3<double>& position)
 {
+    this->check_pose_can_change_("set its position");
     if (this->position_must_be_spice_()) {
         HUIRA_THROW_ERROR(this->get_info() +
                           " - cannot manually set position when child has a spice_origin");
@@ -51,6 +52,7 @@ void Node<TSpectral>::set_position(const Vec3<double>& position)
 template <IsSpectral TSpectral>
 void Node<TSpectral>::set_position(units::Meter x, units::Meter y, units::Meter z)
 {
+    this->check_pose_can_change_("set its position");
     if (this->position_must_be_spice_()) {
         HUIRA_THROW_ERROR(this->get_info() +
                           " - cannot manually set position when child has a spice_origin");
@@ -73,6 +75,7 @@ void Node<TSpectral>::set_position(units::Meter x, units::Meter y, units::Meter 
 template <IsSpectral TSpectral>
 void Node<TSpectral>::set_rotation(const Rotation<double>& rotation)
 {
+    this->check_pose_can_change_("set its rotation");
     if (this->rotation_must_be_spice_()) {
         HUIRA_THROW_ERROR(this->get_info() +
                           " - cannot manually set rotation when child has a spice_frame");
@@ -93,6 +96,7 @@ void Node<TSpectral>::set_rotation(const Rotation<double>& rotation)
 template <IsSpectral TSpectral>
 void Node<TSpectral>::set_scale(const Vec3<double>& scale)
 {
+    this->check_pose_can_change_("set its scale");
     HUIRA_LOG_INFO(this->get_info() + " - set_scale(" + std::to_string(scale[0]) + ", " +
                    std::to_string(scale[1]) + ", " + std::to_string(scale[2]) + ")");
 
@@ -114,6 +118,15 @@ void Node<TSpectral>::check_scale_(const Vec3<double>& scale) const
     }
 }
 
+/// Throws if the node's pose is fixed (see pose_is_fixed_()): `what` is what could not be done.
+template <IsSpectral TSpectral>
+void Node<TSpectral>::check_pose_can_change_(const std::string& what) const
+{
+    if (this->pose_is_fixed_()) {
+        HUIRA_THROW_ERROR(this->get_info() + " - cannot " + what + ": its pose is fixed");
+    }
+}
+
 /**
  * @brief Set the node's scale using individual values.
  * @param sx X scale
@@ -124,6 +137,7 @@ void Node<TSpectral>::check_scale_(const Vec3<double>& scale) const
 template <IsSpectral TSpectral>
 void Node<TSpectral>::set_scale(double sx, double sy, double sz)
 {
+    this->check_pose_can_change_("set its scale");
     HUIRA_LOG_INFO(this->get_info() + " - set_scale(" + std::to_string(sx) + ", " +
                    std::to_string(sy) + ", " + std::to_string(sz) + ")");
 
@@ -139,6 +153,7 @@ void Node<TSpectral>::set_scale(double sx, double sy, double sz)
 template <IsSpectral TSpectral>
 void Node<TSpectral>::set_velocity(const Vec3<double>& velocity)
 {
+    this->check_pose_can_change_("set its velocity");
     if (this->position_mode_ != TransformMode::MANUAL_TRANSFORM) {
         HUIRA_THROW_ERROR(this->get_info() +
                           " - cannot manually set velocity when node does not use manual position");
@@ -159,6 +174,7 @@ void Node<TSpectral>::set_velocity(units::MetersPerSecond vx,
                                    units::MetersPerSecond vy,
                                    units::MetersPerSecond vz)
 {
+    this->check_pose_can_change_("set its velocity");
     if (this->position_mode_ != TransformMode::MANUAL_TRANSFORM) {
         HUIRA_THROW_ERROR(this->get_info() +
                           " - cannot manually set velocity when node does not use manual position");
@@ -186,6 +202,7 @@ void Node<TSpectral>::set_velocity(units::MetersPerSecond vx,
 template <IsSpectral TSpectral>
 void Node<TSpectral>::set_angular_velocity(const Vec3<double>& angular_velocity)
 {
+    this->check_pose_can_change_("set its angular velocity");
     if (this->rotation_mode_ != TransformMode::MANUAL_TRANSFORM) {
         HUIRA_THROW_ERROR(
             this->get_info() +
@@ -216,6 +233,7 @@ void Node<TSpectral>::set_angular_velocity(units::RadiansPerSecond wx,
                                            units::RadiansPerSecond wy,
                                            units::RadiansPerSecond wz)
 {
+    this->check_pose_can_change_("set its angular velocity");
     if (this->rotation_mode_ != TransformMode::MANUAL_TRANSFORM) {
         HUIRA_THROW_ERROR(
             this->get_info() +
@@ -251,6 +269,7 @@ void Node<TSpectral>::set_body_angular_velocity(units::RadiansPerSecond wx,
                                                 units::RadiansPerSecond wy,
                                                 units::RadiansPerSecond wz)
 {
+    this->check_pose_can_change_("set its angular velocity");
     if (this->rotation_mode_ != TransformMode::MANUAL_TRANSFORM) {
         HUIRA_THROW_ERROR(
             this->get_info() +
@@ -269,6 +288,7 @@ void Node<TSpectral>::set_body_angular_velocity(units::RadiansPerSecond wx,
 template <IsSpectral TSpectral>
 void Node<TSpectral>::set_manual_transform(const Transform<double>& transform)
 {
+    this->check_pose_can_change_("set its transform");
     if (this->rotation_must_be_spice_() || this->position_must_be_spice_()) {
         HUIRA_THROW_ERROR(this->get_info() +
                           " - cannot manually set transformation when child has a spice_frame");
@@ -292,6 +312,7 @@ void Node<TSpectral>::set_manual_transform(const Transform<double>& transform)
 template <IsSpectral TSpectral>
 void Node<TSpectral>::set_spice_origin(const std::string& spice_origin)
 {
+    this->check_pose_can_change_("set its SPICE origin");
     if (!position_can_be_spice_()) {
         HUIRA_THROW_ERROR(this->get_info() + " - cannot set SPICE origin: parent node (" +
                           parent_->get_info() + ") has manually set position");
@@ -309,6 +330,7 @@ void Node<TSpectral>::set_spice_origin(const std::string& spice_origin)
 template <IsSpectral TSpectral>
 void Node<TSpectral>::set_spice_frame(const std::string& spice_frame)
 {
+    this->check_pose_can_change_("set its SPICE frame");
     if (!rotation_can_be_spice_()) {
         HUIRA_THROW_ERROR(this->get_info() + " - cannot set SPICE frame: parent node (" +
                           parent_->get_info() + ") has manually set rotation");
@@ -327,6 +349,7 @@ void Node<TSpectral>::set_spice_frame(const std::string& spice_frame)
 template <IsSpectral TSpectral>
 void Node<TSpectral>::set_spice(const std::string& spice_origin, const std::string& spice_frame)
 {
+    this->check_pose_can_change_("set its SPICE origin and frame");
     if (!position_can_be_spice_()) {
         HUIRA_THROW_ERROR(this->get_info() + " - cannot set SPICE origin: parent node (" +
                           parent_->get_info() + ") has manually set position");
@@ -359,6 +382,7 @@ template <IsSpectral TSpectral>
 template <IsPositionCallback TCallback, typename... Args>
 void Node<TSpectral>::set_custom_position_callback(Args&&... args)
 {
+    this->check_pose_can_change_("set a position source");
     if (this->position_must_be_spice_()) {
         HUIRA_THROW_ERROR(this->get_info() +
                           " - cannot set a position source when child has a spice_origin");
@@ -476,6 +500,7 @@ template <IsSpectral TSpectral>
 template <IsRotationCallback TCallback, typename... Args>
 void Node<TSpectral>::set_custom_rotation_callback(Args&&... args)
 {
+    this->check_pose_can_change_("set a rotation source");
     if (this->rotation_must_be_spice_()) {
         HUIRA_THROW_ERROR(this->get_info() +
                           " - cannot set a rotation source when child has a spice_frame");
@@ -548,6 +573,7 @@ template <IsSpectral TSpectral>
 template <IsTransformCallback TCallback, typename... Args>
 void Node<TSpectral>::set_custom_state_callback(Args&&... args)
 {
+    this->check_pose_can_change_("set a pose source");
     transform_callback_ = std::make_unique<TCallback>(std::forward<Args>(args)...);
     this->position_mode_ = TransformMode::TRANSFORM_CALLBACK;
     this->rotation_mode_ = TransformMode::TRANSFORM_CALLBACK;

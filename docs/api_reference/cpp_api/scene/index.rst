@@ -7,6 +7,7 @@ Scene Graph
    node
    pose_sources
    frame_node
+   teme_frame_node
    instance
    scene
    scene_view
