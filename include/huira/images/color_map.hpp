@@ -51,12 +51,14 @@ inline Image<huira::RGB> depth_map(Image<float> depth)
         }
     }
 
+    // With a single depth there is nothing to shade between: it is black, as the nearest is.
+    const float range = max_depth - min_depth;
     for (std::size_t i = 0; i < depth.size(); ++i) {
         if (std::isinf(depth[i])) {
             output[i] = huira::RGB{1, 1, 1};
             continue;
         }
-        float d = 0.8f * (depth[i] - min_depth) / (max_depth - min_depth);
+        float d = range > 0.f ? 0.8f * (depth[i] - min_depth) / range : 0.f;
         output[i] = huira::RGB{d, d, d};
     }
     return output;
