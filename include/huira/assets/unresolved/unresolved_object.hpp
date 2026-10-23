@@ -19,15 +19,15 @@ class SceneView;
 /**
  * @brief Represents an unresolved object to be rendered.
  *
- * UnresolvedObject serves as a base class for objects whose irradiance can be
- * computed or updated based on the state of the scene. Subclasses can override
- * resolve_irradiance() to implement custom irradiance computation logic. This base
- * class assumes that the object's spectral irradiance is constant and does not
- * depend on any observer or light positions.
+ * UnresolvedObject serves as a base class for objects whose irradiance at the camera is
+ * computed from the state of the scene. A scene view resolves the irradiance of each of its
+ * instances, at each of the instance's temporal samples, by resolve_irradiance(), which
+ * subclasses override. This base class gives the irradiance it is given, wherever and however
+ * often it is placed.
  *
- * Irradiance is stored per temporal sample of the exposure interval: a single
- * entry represents a constant value, while N entries are linearly interpolated
- * across the resolved time range by get_irradiance().
+ * The irradiance resolved for an instance belongs to the scene view (see
+ * SceneView::unresolved_irradiance()), not to the object: one object can be placed several
+ * times, and be seen by several views, each instance with its own.
  *
  * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
@@ -44,25 +44,20 @@ class UnresolvedObject : public SceneObject<UnresolvedObject<TSpectral>> {
     void set_irradiance(const units::SpectralWattsPerMeterSquared<TSpectral>& spectral_irradiance);
     void set_irradiance(const units::WattsPerMeterSquared& irradiance);
 
-    virtual TSpectral get_irradiance(Time time) const;
+    /// The irradiance it was given, by its constructor or set_irradiance().
+    TSpectral get_irradiance() const { return irradiance_; }
 
-    virtual void resolve_irradiance(const std::vector<Transform<float>>& self_transforms,
-                                    const std::vector<Time>& times,
-                                    const SceneView<TSpectral>& scene_view,
-                                    RandomSampler<float>& sampler);
+    virtual std::vector<TSpectral>
+    resolve_irradiance(const std::vector<Transform<float>>& self_transforms,
+                       const std::vector<Time>& times,
+                       const SceneView<TSpectral>& scene_view,
+                       RandomSampler<float>& sampler) const;
 
     virtual std::string type() const override { return "UnresolvedObject"; }
 
   protected:
-    void set_resolved_irradiance_(std::vector<TSpectral> irradiances,
-                                  const std::vector<Time>& times);
-
-    /// Spectral irradiance per temporal sample (size 1 == constant).
-    std::vector<TSpectral> irradiance_{TSpectral{0}};
-
-    /// Ephemeris-time endpoints of the resolved sample range (used for interpolation).
-    double et_start_{0.0};
-    double et_end_{0.0};
+    /// The irradiance it was given.
+    TSpectral irradiance_{0};
 };
 } // namespace huira
 

@@ -115,6 +115,9 @@ class SceneView {
 
     [[nodiscard]] ObjectIds object_ids(const HitRecord& hit) const;
 
+    [[nodiscard]] TSpectral unresolved_irradiance(const InstanceHandle<TSpectral>& instance,
+                                                  const Time& time) const;
+
     [[nodiscard]] TSpectral direct_lit_radiance(
         const Ray<TSpectral>& ray,
         const HitRecord& hit,

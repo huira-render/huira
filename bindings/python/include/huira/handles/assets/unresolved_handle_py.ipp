@@ -28,7 +28,11 @@ inline void bind_unresolved_object_handle(py::module_& m)
                                                                        py::const_),
                  py::arg("irradiance"),
                  "Set scalar irradiance")
-            .def("get_irradiance", &HandleType::get_irradiance, py::arg("time"))
+            .def("get_irradiance",
+                 &HandleType::get_irradiance,
+                 "The irradiance it was given. That of an instance of one whose irradiance "
+                 "depends on where it is is resolved by a scene view: see "
+                 "SceneView.unresolved_irradiance")
 
             // Shading sample counts. These are properties of an
             // UnresolvedLambertianSphere; get<>() raises if the underlying

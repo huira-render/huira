@@ -1734,7 +1734,8 @@ Image<TSpectral> Renderer<TSpectral>::render_unresolved_(SceneView<TSpectral>& s
             for (std::size_t i = 0; i < instance.transforms.size(); ++i) {
                 const Vec3<float>& position = instance.transforms[i].position;
                 directions[i] = glm::normalize(position);
-                irradiances[i] = instance.unresolved_object->get_irradiance(instance.times[i]);
+                irradiances[i] = (instance.irradiances.size() == 1) ? instance.irradiances.front()
+                                                                    : instance.irradiances[i];
                 ranges[i] = glm::length(position);
                 const double depth = static_cast<double>(depth_sign * position.z);
                 if (depth > 0.0) {

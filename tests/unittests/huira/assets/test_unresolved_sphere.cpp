@@ -3,6 +3,7 @@
 #include <limits>
 #include <memory>
 #include <optional>
+#include <vector>
 
 #include "catch2/catch_test_macros.hpp"
 #include "catch2/matchers/catch_matchers_floating_point.hpp"
@@ -78,11 +79,11 @@ void check_bins(const RGB& a, const RGB& b, float tolerance)
 }
 
 /// Put an instance at a position, in meters.
-template <typename THandle>
-void place(const THandle& instance, const Vec3<double>& position)
+InstanceHandle<RGB> place(InstanceHandle<RGB> instance, const Vec3<double>& position)
 {
     instance.set_position(
         units::Meter(position.x), units::Meter(position.y), units::Meter(position.z));
+    return instance;
 }
 
 /// A scene with a camera at its origin.
@@ -171,10 +172,11 @@ TEST_CASE("A sunlit unresolved sphere is as bright as Lambert's law says, at eac
         auto sphere = std::make_shared<UnresolvedLambertianSphere<RGB>>(units::Meter(R),
                                                                         static_cast<float>(a));
         sphere->set_light_samples(1024);
-        place(s.scene.root.new_instance(s.scene.add_unresolved_object(sphere)), position);
+        auto instance =
+            place(s.scene.root.new_instance(s.scene.add_unresolved_object(sphere)), position);
 
         const SceneView<RGB> view = s.view();
-        check_bins(sphere->get_irradiance(MID),
+        check_bins(view.unresolved_irradiance(instance, MID),
                    lambert_sphere(R, a, d, sun_irradiance_at_1_au(), alpha),
                    2e-3f);
     }
@@ -186,18 +188,19 @@ TEST_CASE("A sphere seen from behind its lit side is dark", "[assets][unresolved
     CameraScene s;
     const Vec3<double> position{0.0, 0.0, 1e6};
     s.sun_at_phase(position, PI<double>());
-    auto behind = s.scene.new_unresolved_sphere(1000_m, 1.f);
-    place(s.scene.root.new_instance(behind), position);
+    auto behind =
+        place(s.scene.root.new_instance(s.scene.new_unresolved_sphere(1000_m, 1.f)), position);
     // And at full phase, for comparison:
     CameraScene full;
     full.sun_at_phase(position, 0.0);
-    auto lit = full.scene.new_unresolved_sphere(1000_m, 1.f);
-    place(full.scene.root.new_instance(lit), position);
+    auto lit = place(full.scene.root.new_instance(full.scene.new_unresolved_sphere(1000_m, 1.f)),
+                     position);
 
     const SceneView<RGB> view = s.view();
     const SceneView<RGB> full_view = full.view();
-    REQUIRE(lit.get_irradiance(MID)[1] > 0.f);
-    CHECK(behind.get_irradiance(MID)[1] < 1e-6f * lit.get_irradiance(MID)[1]);
+    const RGB lit_irradiance = full_view.unresolved_irradiance(lit, MID);
+    REQUIRE(lit_irradiance[1] > 0.f);
+    CHECK(view.unresolved_irradiance(behind, MID)[1] < 1e-6f * lit_irradiance[1]);
 }
 
 TEST_CASE("An unresolved sphere's albedo scales its brightness, bin by bin", "[assets][unresolved]")
@@ -205,17 +208,18 @@ TEST_CASE("An unresolved sphere's albedo scales its brightness, bin by bin", "[a
     CameraScene s;
     const Vec3<double> position{0.0, 0.0, 1e6};
     s.sun_at_phase(position, PI<double>() / 3.0);
-    auto white = s.scene.new_unresolved_sphere(1000_m, 1.f);
-    auto colored = s.scene.new_unresolved_sphere(1000_m, RGB{0.25f, 0.5f, 1.f});
-    auto gray = s.scene.new_unresolved_sphere(1000_m, 0.5f);
-    for (const auto& sphere : {white, colored, gray}) {
-        place(s.scene.root.new_instance(sphere), position);
-    }
+    auto white =
+        place(s.scene.root.new_instance(s.scene.new_unresolved_sphere(1000_m, 1.f)), position);
+    auto colored = place(
+        s.scene.root.new_instance(s.scene.new_unresolved_sphere(1000_m, RGB{0.25f, 0.5f, 1.f})),
+        position);
+    auto gray =
+        place(s.scene.root.new_instance(s.scene.new_unresolved_sphere(1000_m, 0.5f)), position);
 
     const SceneView<RGB> view = s.view();
-    const RGB w = white.get_irradiance(MID);
-    check_bins(colored.get_irradiance(MID), w * RGB{0.25f, 0.5f, 1.f}, 2e-3f);
-    check_bins(gray.get_irradiance(MID), w * 0.5f, 2e-3f);
+    const RGB w = view.unresolved_irradiance(white, MID);
+    check_bins(view.unresolved_irradiance(colored, MID), w * RGB{0.25f, 0.5f, 1.f}, 2e-3f);
+    check_bins(view.unresolved_irradiance(gray, MID), w * 0.5f, 2e-3f);
 }
 
 TEST_CASE("An unresolved sphere is lit by every light, unless it is linked to one",
@@ -229,22 +233,21 @@ TEST_CASE("An unresolved sphere is lit by every light, unless it is linked to on
     auto both = std::make_shared<UnresolvedLambertianSphere<RGB>>(1000_m, 0.5f);
     auto first_only = std::make_shared<UnresolvedLambertianSphere<RGB>>(1000_m, first, 0.5f);
     auto second_only = std::make_shared<UnresolvedLambertianSphere<RGB>>(1000_m, second, RGB{0.5f});
+    std::vector<InstanceHandle<RGB>> instances;
     for (const auto& sphere : {both, first_only, second_only}) {
         sphere->set_light_samples(1024);
-        place(s.scene.root.new_instance(s.scene.add_unresolved_object(sphere)), position);
+        instances.push_back(
+            place(s.scene.root.new_instance(s.scene.add_unresolved_object(sphere)), position));
     }
 
     const SceneView<RGB> view = s.view();
     const RGB E = sun_irradiance_at_1_au();
-    check_bins(first_only->get_irradiance(MID),
-               lambert_sphere(1000.0, 0.5, 1e6, E, PI<double>() / 4.0),
-               2e-3f);
-    check_bins(second_only->get_irradiance(MID),
-               lambert_sphere(1000.0, 0.5, 1e6, E, PI<double>() / 2.0),
-               2e-3f);
-    check_bins(both->get_irradiance(MID),
-               first_only->get_irradiance(MID) + second_only->get_irradiance(MID),
-               2e-3f);
+    const RGB both_irradiance = view.unresolved_irradiance(instances[0], MID);
+    const RGB first_irradiance = view.unresolved_irradiance(instances[1], MID);
+    const RGB second_irradiance = view.unresolved_irradiance(instances[2], MID);
+    check_bins(first_irradiance, lambert_sphere(1000.0, 0.5, 1e6, E, PI<double>() / 4.0), 2e-3f);
+    check_bins(second_irradiance, lambert_sphere(1000.0, 0.5, 1e6, E, PI<double>() / 2.0), 2e-3f);
+    check_bins(both_irradiance, first_irradiance + second_irradiance, 2e-3f);
 }
 
 TEST_CASE("An unresolved sphere linked to a light that is not in the view cannot be resolved",
@@ -277,8 +280,8 @@ TEST_CASE("An unresolved sphere in a shadow is dark", "[assets][unresolved]")
     const Vec3<double> position{0.0, 0.0, 1e6};
     const double alpha = PI<double>() / 3.0;
     s.sun_at_phase(position, alpha);
-    auto shadowed = s.scene.new_unresolved_sphere(1000_m, 1.f);
-    place(s.scene.root.new_instance(shadowed), position);
+    auto shadowed =
+        place(s.scene.root.new_instance(s.scene.new_unresolved_sphere(1000_m, 1.f)), position);
 
     // A ball 10 km across, 100 km from the sphere toward the sun, hides all of it:
     auto ball = s.scene.add_primitive(s.scene.add_ellipsoid(10_Km, 10_Km, 10_Km),
@@ -287,7 +290,7 @@ TEST_CASE("An unresolved sphere in a shadow is dark", "[assets][unresolved]")
     place(s.scene.root.new_instance(ball), position + 1e5 * toward_sun);
 
     const SceneView<RGB> view = s.view();
-    CHECK(shadowed.get_irradiance(MID) == RGB{0.f});
+    CHECK(view.unresolved_irradiance(shadowed, MID) == RGB{0.f});
 }
 
 TEST_CASE("An unresolved sphere is lit by the sunlight an indirect source reflects onto it",
@@ -327,10 +330,11 @@ TEST_CASE("An unresolved sphere is lit by the sunlight an indirect source reflec
         auto sphere = std::make_shared<UnresolvedLambertianSphere<RGB>>(
             units::Meter(R), dark, static_cast<float>(a));
         sphere->set_indirect_source_samples(1 << 18);
-        place(s.scene.root.new_instance(s.scene.add_unresolved_object(sphere)), position);
+        auto instance =
+            place(s.scene.root.new_instance(s.scene.add_unresolved_object(sphere)), position);
 
         const SceneView<RGB> view = s.view();
-        return sphere->get_irradiance(MID);
+        return view.unresolved_irradiance(instance, MID);
     };
 
     CHECK(resolve(false) == RGB{0.f});
@@ -358,13 +362,13 @@ TEST_CASE("A moving unresolved sphere's brightness follows its distance through 
 
     const SceneView<RGB> view = s.view(3);
     const RGB E = sun_irradiance_at_1_au();
-    check_bins(sphere->get_irradiance(Time::from_et(0.0)),
+    check_bins(view.unresolved_irradiance(instance, Time::from_et(0.0)),
                lambert_sphere(1000.0, 0.5, 1e6, E, 0.0),
                2e-3f);
-    check_bins(sphere->get_irradiance(Time::from_et(0.5)),
+    check_bins(view.unresolved_irradiance(instance, Time::from_et(0.5)),
                lambert_sphere(1000.0, 0.5, 1.5e6, E, 0.0),
                2e-3f);
-    check_bins(sphere->get_irradiance(Time::from_et(1.0)),
+    check_bins(view.unresolved_irradiance(instance, Time::from_et(1.0)),
                lambert_sphere(1000.0, 0.5, 2e6, E, 0.0),
                2e-3f);
 }

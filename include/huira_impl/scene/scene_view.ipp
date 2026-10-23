@@ -287,12 +287,32 @@ SceneView<TSpectral>::SceneView(const Scene<TSpectral>& scene,
 
     // Resolve all unresolved objects now that the TLAS is built, so implementations
     // can cast occlusion/sampling rays through this view. Each object gets its own
-    // deterministically seeded sampler for reproducible results.
-    for (auto& unresolved_object : unresolved_objects_) {
-        RandomSampler<float> sampler(
-            static_cast<unsigned int>(unresolved_object.unresolved_object->id()));
-        unresolved_object.unresolved_object->resolve_irradiance(
-            unresolved_object.transforms, unresolved_object.times, *this, sampler);
+    // deterministically seeded sampler for reproducible results. What each instance
+    // resolves to is kept here, with the instance: an object placed more than once, or
+    // seen by more than one view, has an irradiance for each.
+    for (auto& unresolved : unresolved_objects_) {
+        const UnresolvedObject<TSpectral>& object = *unresolved.unresolved_object;
+        RandomSampler<float> sampler(static_cast<unsigned int>(object.id()));
+        unresolved.irradiances =
+            object.resolve_irradiance(unresolved.transforms, unresolved.times, *this, sampler);
+
+        if (unresolved.irradiances.empty()) {
+            HUIRA_THROW_ERROR("SceneView::SceneView - " + object.get_info() +
+                              " resolved no irradiance");
+        }
+        if (unresolved.irradiances.size() != 1 &&
+            unresolved.irradiances.size() != unresolved.times.size()) {
+            HUIRA_THROW_ERROR("SceneView::SceneView - " + object.get_info() + " resolved " +
+                              std::to_string(unresolved.irradiances.size()) + " irradiances for " +
+                              std::to_string(unresolved.times.size()) + " temporal samples");
+        }
+        for (const TSpectral& irradiance : unresolved.irradiances) {
+            if (!irradiance.valid()) {
+                HUIRA_THROW_ERROR(
+                    "SceneView::SceneView - " + object.get_info() +
+                    " resolved an invalid spectral irradiance: " + irradiance.to_string());
+            }
+        }
     }
 }
 
@@ -533,6 +553,53 @@ template <IsSpectral TSpectral>
         return NO_INDIRECT_SOURCE;
     }
     return instance_mappings_[hit.inst_id].indirect_index;
+}
+
+/**
+ * @brief The irradiance an instance of an unresolved object gives the camera at a time, as
+ * this view resolved it.
+ *
+ * Between the instance's temporal samples, the irradiance is interpolated linearly; before
+ * the first or after the last, it is held at that sample's.
+ *
+ * @param instance The instance of the unresolved object, in the scene graph.
+ * @param time The time at which to query irradiance.
+ * @return The spectral irradiance at the camera.
+ * @throws std::runtime_error if the instance does not place an unresolved object in this view.
+ */
+template <IsSpectral TSpectral>
+[[nodiscard]] TSpectral
+SceneView<TSpectral>::unresolved_irradiance(const InstanceHandle<TSpectral>& instance,
+                                            const Time& time) const
+{
+    const std::uint64_t id = instance.id();
+    const auto it =
+        std::find_if(unresolved_objects_.begin(),
+                     unresolved_objects_.end(),
+                     [id](const UnresolvedInstance<TSpectral>& u) { return u.instance_id == id; });
+    if (it == unresolved_objects_.end()) {
+        HUIRA_THROW_ERROR("SceneView::unresolved_irradiance - Instance " + std::to_string(id) +
+                          " does not place an unresolved object in this view");
+    }
+
+    const std::vector<TSpectral>& irradiances = it->irradiances;
+    if (irradiances.size() == 1) {
+        return irradiances.front();
+    }
+
+    const double start = it->times.front().et();
+    const double duration = it->times.back().et() - start;
+    float t = 0.0f;
+    if (duration > 0.0) {
+        t = static_cast<float>(std::clamp((time.et() - start) / duration, 0.0, 1.0));
+    }
+
+    const float scaled = t * static_cast<float>(irradiances.size() - 1);
+    std::size_t lo = static_cast<std::size_t>(std::floor(scaled));
+    lo = std::min(lo, irradiances.size() - 2);
+    const float frac = scaled - static_cast<float>(lo);
+
+    return irradiances[lo] + frac * (irradiances[lo + 1] - irradiances[lo]);
 }
 
 /**
@@ -1270,6 +1337,7 @@ void SceneView<TSpectral>::add_unresolved_instance_(
 {
     UnresolvedInstance<TSpectral> instance;
     instance.unresolved_object = unresolved_object;
+    instance.instance_id = open_ids_.instance;
     instance.transforms = instance_apparent_transforms;
     for (double fraction : uniform_fractions_(instance_apparent_transforms.size())) {
         instance.times.push_back(time_at_(fraction));

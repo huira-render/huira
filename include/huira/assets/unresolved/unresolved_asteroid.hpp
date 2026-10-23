@@ -34,10 +34,10 @@ class UnresolvedAsteroid : public UnresolvedObject<TSpectral> {
                        TSpectral albedo = TSpectral{1.f});
     UnresolvedAsteroid(double H, double G, InstanceHandle<TSpectral> light_instance, float albedo);
 
-    void resolve_irradiance(const std::vector<Transform<float>>& self_transforms,
-                            const std::vector<Time>& times,
-                            const SceneView<TSpectral>& scene_view,
-                            RandomSampler<float>& sampler) override;
+    std::vector<TSpectral> resolve_irradiance(const std::vector<Transform<float>>& self_transforms,
+                                              const std::vector<Time>& times,
+                                              const SceneView<TSpectral>& scene_view,
+                                              RandomSampler<float>& sampler) const override;
 
     std::string type() const override { return "UnresolvedAsteroid"; }
 

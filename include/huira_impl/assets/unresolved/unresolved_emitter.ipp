@@ -1,4 +1,3 @@
-#include <utility>
 #include <vector>
 
 #include "glm/glm.hpp"
@@ -56,14 +55,16 @@ UnresolvedEmitter<TSpectral>::UnresolvedEmitter(const units::Watt& power)
  * @param times Absolute times of the temporal samples.
  * @param scene_view The scene view (unused; the emitter is self-luminous).
  * @param sampler Random sampler (unused; the model is analytic).
+ * @return The irradiance at each temporal sample.
  */
 template <IsSpectral TSpectral>
-void UnresolvedEmitter<TSpectral>::resolve_irradiance(
+std::vector<TSpectral> UnresolvedEmitter<TSpectral>::resolve_irradiance(
     const std::vector<Transform<float>>& self_transforms,
     const std::vector<Time>& times,
     const SceneView<TSpectral>& scene_view,
-    RandomSampler<float>& sampler)
+    RandomSampler<float>& sampler) const
 {
+    (void)times;      // The irradiance depends on where it is, not when
     (void)scene_view; // Not needed for this implementation
     (void)sampler;    // Not needed for this implementation
 
@@ -76,7 +77,7 @@ void UnresolvedEmitter<TSpectral>::resolve_irradiance(
         irradiances[i] = spectral_power_ / (4.f * PI<float>() * distance_sq);
     }
 
-    this->set_resolved_irradiance_(std::move(irradiances), times);
+    return irradiances;
 }
 
 /**

@@ -72,6 +72,12 @@ void bind_scene_view(py::module_& m)
              py::arg("hit"),
              "The IDs of the geometry, model, instance and part a HitRecord landed on, as an "
              "ObjectIds: each NO_OBJECT_ID for a miss or a light")
+        .def("unresolved_irradiance",
+             &SV::unresolved_irradiance,
+             py::arg("instance"),
+             py::arg("time"),
+             "The irradiance an instance of an unresolved object gives the camera at a time, as "
+             "this view resolved it")
 
         // Ray tracing — batch
         .def("intersect_batch",
