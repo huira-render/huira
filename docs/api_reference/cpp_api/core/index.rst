@@ -10,6 +10,7 @@ The Core module contains the fundamental building blocks of the engine.
    physics
    rotation
    spectral_bins
+   spice
    time
    interval
    transform
