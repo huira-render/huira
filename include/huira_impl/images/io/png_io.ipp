@@ -270,6 +270,14 @@ inline PNGData read_png_raw_(const unsigned char* data, std::size_t size)
         row_pointers[y] = raw_data.data() + y * row_bytes;
     }
 
+    // libpng's errors longjmp to the last setjmp(). One here, after the buffers, brings an error
+    // reading the pixels back to where they exist, so that they are freed when it is thrown; a
+    // longjmp to the first skips their destructors.
+    if (setjmp(png_jmpbuf(png_ptr))) {
+        png_destroy_read_struct(&png_ptr, &info_ptr, nullptr);
+        HUIRA_THROW_ERROR("read_png_raw_ - Error during PNG read");
+    }
+
     png_read_image(png_ptr, row_pointers.data());
     png_read_end(png_ptr, nullptr);
     png_destroy_read_struct(&png_ptr, &info_ptr, nullptr);
