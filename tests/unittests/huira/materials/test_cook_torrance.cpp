@@ -141,3 +141,92 @@ TEST_CASE("A smooth metal reflects its albedo", "[materials][bsdf]")
         }
     }
 }
+
+TEST_CASE("A smooth dielectric reflects 4% at normal incidence, and more toward grazing",
+          "[materials][bsdf]")
+{
+    // Over its diffuse base, a dielectric's specular lobe has F0 = 0.04, glTF's for an index of
+    // refraction of 1.5. With a black base only the lobe reflects: F, by Schlick's formula.
+    const CookTorranceBSDF<RGB> bsdf;
+    const Interaction<RGB> isect = flat_surface();
+    ShadingParams<RGB> params;
+    params.albedo = RGB{0.f};
+    params.roughness = 0.02f;
+    params.metallic = 0.f;
+    for (double incidence : {0.0, std::numbers::pi / 4.0, 1.2}) {
+        const double fresnel = 0.04 + 0.96 * std::pow(1.0 - std::cos(incidence), 5.0);
+        const double light = reflected(bsdf, isect, params, incidence);
+        INFO("incidence " << incidence << " rad: reflects " << light << ", against " << fresnel);
+        CHECK(std::abs(light - fresnel) <= 0.01 * fresnel);
+    }
+}
+
+TEST_CASE("Metallic blends a diffuse base into a specular lobe", "[materials][bsdf]")
+{
+    // Far from a smooth lobe only the diffuse base reflects, (1 - metallic) albedo / pi.
+    const CookTorranceBSDF<RGB> bsdf;
+    const Interaction<RGB> isect = flat_surface();
+    const Vec3<float> wo = at_angle(0.0);
+    const Vec3<float> wi = at_angle(1.2);
+    for (float metallic : {0.f, 0.25f, 0.5f, 1.f}) {
+        ShadingParams<RGB> params;
+        params.albedo = RGB{0.9f, 0.5f, 0.1f};
+        params.roughness = 0.1f;
+        params.metallic = metallic;
+        const RGB f = bsdf.eval(wo, wi, isect, params);
+        INFO("metallic " << metallic);
+        for (std::size_t c = 0; c < RGB::size(); ++c) {
+            const double diffuse = (1.0 - metallic) * params.albedo[c] / std::numbers::pi;
+            CHECK(std::abs(f[c] - diffuse) < 1e-3);
+        }
+    }
+}
+
+TEST_CASE("Cook-Torrance gives no sample for a viewer below the surface, nor a specular one "
+          "reflected below it",
+          "[materials][bsdf]")
+{
+    const CookTorranceBSDF<RGB> bsdf;
+    const Interaction<RGB> isect = flat_surface();
+
+    SECTION("a viewer below the surface")
+    {
+        const ShadingParams<RGB> params = metal(0.5f);
+        for (double angle : {1.6, 2.5, std::numbers::pi}) {
+            const Vec3<float> below = at_angle(angle);
+            const Vec3<float> above = at_angle(0.4);
+            INFO("viewer at " << angle << " rad");
+            for (float u1 : {0.1f, 0.9f}) {
+                const BSDFSample<RGB> s = bsdf.sample(below, isect, params, u1, 0.5f);
+                CHECK(!s.is_valid());
+                CHECK(s.value == RGB{0.f});
+            }
+            CHECK(bsdf.eval(below, above, isect, params) == RGB{0.f});
+            CHECK(bsdf.pdf(below, above, isect, params) == 0.f);
+        }
+    }
+
+    SECTION("a specular sample reflected below the surface")
+    {
+        // A rough metal seen at grazing incidence: the lobe is sampled for every u1, and many of
+        // its microfacet normals reflect the viewer's direction under the horizon.
+        const ShadingParams<RGB> params = metal(1.f);
+        const Vec3<float> wo = at_angle(1.5);
+        int rejected = 0;
+        for (int i = 0; i < 32; ++i) {
+            for (int j = 0; j < 32; ++j) {
+                const float u1 = (static_cast<float>(i) + 0.5f) / 32.f;
+                const float u2 = (static_cast<float>(j) + 0.5f) / 32.f;
+                const BSDFSample<RGB> s = bsdf.sample(wo, isect, params, u1, u2);
+                if (s.is_valid()) {
+                    CHECK(s.wi.z > 0.f);
+                } else {
+                    ++rejected;
+                    CHECK(s.value == RGB{0.f});
+                }
+            }
+        }
+        INFO(rejected << " of 1024 samples rejected");
+        CHECK(rejected > 0);
+    }
+}
