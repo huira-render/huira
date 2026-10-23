@@ -405,3 +405,104 @@ TEST_CASE("TGA data that is invalid or unsupported is rejected", "[images][tga]"
         }
     }
 }
+
+TEST_CASE("A raw TGA packet longer than the pixels left is read only up to the last",
+          "[images][tga]")
+{
+    // A run-length packet was clamped to the pixels left, but a raw packet was copied whole, past
+    // the end of the image's buffer: 128 pixels into the 1 of this image.
+    TgaHeader header;
+    header.image_type = RLE_TRUE_COLOR;
+    header.width = 1;
+    header.height = 1;
+    Bytes pixels{0x7F};
+    for (int i = 0; i < 128; ++i) {
+        append_pixel(pixels, Rgba{10, 20, 30, 0}, false);
+    }
+    const Bytes file = tga_file(header, pixels);
+    CHECK(read_image_tga(file.data(), file.size()).image(0, 0) == rgb(Rgba{10, 20, 30, 0}));
+
+    // Only the pixels it needs have to be there:
+    const Bytes short_packet(file.begin(), file.begin() + 18 + 1 + 3);
+    CHECK(read_image_tga(short_packet.data(), short_packet.size()).image(0, 0) ==
+          rgb(Rgba{10, 20, 30, 0}));
+}
+
+TEST_CASE("A color-mapped TGA is rejected unless its indices are in its color map", "[images][tga]")
+{
+    // Pixels were looked up without checking, outside the color map, or in no color map at all.
+    TgaHeader header;
+    header.image_type = COLOR_MAPPED;
+    header.pixel_depth = 8;
+    header.color_map_type = 1;
+    header.color_map_length = 4;
+    header.color_map_entry_bits = 24;
+
+    SECTION("an index past the color map")
+    {
+        const Bytes file = tga_file(header, Bytes{0, 1, 4, 3}, palette(false));
+        CHECK_THROWS_WITH(read_image_tga(file.data(), file.size()),
+                          ContainsSubstring("outside the color map"));
+    }
+    SECTION("an index before its first")
+    {
+        header.color_map_first = 10;
+        const Bytes file = tga_file(header, Bytes{10, 11, 3, 12}, palette(false));
+        CHECK_THROWS_WITH(read_image_tga_mono(file.data(), file.size()),
+                          ContainsSubstring("outside the color map"));
+    }
+    SECTION("an index before its first, that wraps around into it")
+    {
+        header.pixel_depth = 16;
+        header.color_map_first = 65535;
+        Bytes pixels;
+        for (const std::uint16_t index :
+             std::initializer_list<std::uint16_t>{65535, 2, 65535, 65535}) {
+            append_u16(pixels, index);
+        }
+        const Bytes file = tga_file(header, pixels, palette(false));
+        CHECK_THROWS_WITH(read_image_tga(file.data(), file.size()),
+                          ContainsSubstring("outside the color map"));
+    }
+    SECTION("no color map")
+    {
+        header.color_map_type = 0;
+        header.color_map_length = 0;
+        const Bytes file = tga_file(header, Bytes{0, 0, 0, 0});
+        CHECK_THROWS_WITH(read_image_tga(file.data(), file.size()),
+                          ContainsSubstring("has no color map"));
+    }
+    SECTION("a color map of 16-bit colors")
+    {
+        header.color_map_entry_bits = 16;
+        const Bytes file = tga_file(header, Bytes{0, 1, 2, 3}, Bytes(8, 0));
+        CHECK_THROWS_WITH(read_image_tga(file.data(), file.size()),
+                          ContainsSubstring("Unsupported TGA color map entry size"));
+    }
+}
+
+TEST_CASE("TGA pixel depths the reader can't decode are rejected", "[images][tga]")
+{
+    // They were decoded as the depths it can: a 16-bit color as three bytes (the last pixel's
+    // past the data), and 16-bit gray (gray and alpha) as one.
+    const auto check_rejected = [](std::uint8_t type, std::uint8_t depth) {
+        TgaHeader header;
+        header.image_type = type;
+        header.pixel_depth = depth;
+        Bytes pixels(std::size_t{4} * depth / 8, 0x55);
+        Bytes color_map;
+        if (type == COLOR_MAPPED) {
+            header.color_map_type = 1;
+            header.color_map_length = 2;
+            header.color_map_entry_bits = 24;
+            color_map.assign(6, 0);
+        }
+        const Bytes file = tga_file(header, pixels, color_map);
+        CHECK_THROWS_WITH(read_image_tga(file.data(), file.size()),
+                          ContainsSubstring("Unsupported TGA"));
+    };
+    check_rejected(TRUE_COLOR, 16);
+    check_rejected(TRUE_COLOR, 15);
+    check_rejected(GRAY, 16);
+    check_rejected(COLOR_MAPPED, 24);
+}

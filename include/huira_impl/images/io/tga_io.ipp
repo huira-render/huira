@@ -1,7 +1,9 @@
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -90,6 +92,31 @@ inline TGAData read_tga_raw_(const unsigned char* data, std::size_t size)
                           std::to_string(static_cast<int>(image_type)) + ")");
     }
 
+    // The pixels this reads: 24- or 32-bit colors, 8-bit gray, or 8- or 16-bit indices into a
+    // color map of 24- or 32-bit colors. Others (16-bit colors, gray with alpha) would be read
+    // as the wrong bytes.
+    const auto unsupported = [](const std::string& what, int bits) {
+        HUIRA_THROW_ERROR("read_tga_raw_ - Unsupported TGA " + what + " (" + std::to_string(bits) +
+                          " bits)");
+    };
+    if (is_truecolor && pixel_depth != 24 && pixel_depth != 32) {
+        unsupported("true-color pixel depth", pixel_depth);
+    }
+    if (is_gray && pixel_depth != 8) {
+        unsupported("grayscale pixel depth", pixel_depth);
+    }
+    if (is_color_mapped) {
+        if (pixel_depth != 8 && pixel_depth != 16) {
+            unsupported("color map index depth", pixel_depth);
+        }
+        if (color_map_type != 1 || cm_length == 0) {
+            HUIRA_THROW_ERROR("read_tga_raw_ - Color-mapped TGA has no color map");
+        }
+        if (cm_entry_size != 24 && cm_entry_size != 32) {
+            unsupported("color map entry size", cm_entry_size);
+        }
+    }
+
     // Current read position in buffer
     std::size_t pos = 18;
 
@@ -168,15 +195,17 @@ inline TGAData read_tga_raw_(const unsigned char* data, std::size_t size)
                     ++pixels_decoded;
                 }
             } else {
-                // Raw packet: 'count' literal pixel values
-                std::size_t bytes_to_read = static_cast<std::size_t>(count) * index_bytes;
+                // Raw packet: 'count' literal pixel values, up to the last pixel
+                const std::size_t pixels =
+                    std::min(static_cast<std::size_t>(count), num_pixels - pixels_decoded);
+                const std::size_t bytes_to_read = pixels * index_bytes;
                 if (pos + bytes_to_read > size) {
                     HUIRA_THROW_ERROR("read_tga_raw_ - Unexpected end of RLE data");
                 }
                 std::memcpy(
                     &pixel_indices[pixels_decoded * index_bytes], data + pos, bytes_to_read);
                 pos += bytes_to_read;
-                pixels_decoded += static_cast<std::size_t>(count);
+                pixels_decoded += pixels;
             }
         }
     } else {
@@ -210,6 +239,9 @@ inline TGAData read_tga_raw_(const unsigned char* data, std::size_t size)
                     index = pixel_indices[src_pixel];
                 } else if (pixel_depth == 16) {
                     std::memcpy(&index, &pixel_indices[src_pixel * 2], sizeof(uint16_t));
+                }
+                if (index < cm_first_index || index - cm_first_index >= cm_length) {
+                    HUIRA_THROW_ERROR("read_tga_raw_ - A pixel's index is outside the color map");
                 }
                 index = static_cast<uint16_t>(index - cm_first_index);
                 const unsigned char* src_ptr =
