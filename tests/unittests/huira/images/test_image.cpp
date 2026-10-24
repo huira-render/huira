@@ -85,6 +85,14 @@ TEST_CASE("An image cannot have a negative width or height", "[images][image]")
     CHECK_THROWS_AS(Image<float>(Resolution{1, -3}, 1.f), std::runtime_error);
 }
 
+TEST_CASE("An image has at most INT_MAX pixels", "[images][image][validation]")
+{
+    // Pixels are indexed in int, y * width + x, which overflowed past it. This one was 2.1 GB,
+    // and is now refused before anything is allocated:
+    CHECK_THROWS_AS(Image<std::uint8_t>(46341, 46341), std::runtime_error);
+    CHECK_NOTHROW(Image<std::uint8_t>(std::numeric_limits<int>::max(), 0));
+}
+
 TEST_CASE("Pixels are stored in row-major order from the top-left corner", "[images][image]")
 {
     Image<float> image = ramp();
