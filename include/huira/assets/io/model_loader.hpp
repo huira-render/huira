@@ -70,6 +70,13 @@ class ModelLoader {
         std::unordered_map<std::string, TextureHandle<Vec3<float>>> vec3_texture_cache;
     };
 
+    static std::shared_ptr<Model<TSpectral>>
+    load_into_(Scene<TSpectral>& scene,
+               const fs::path& file_path,
+               std::string name,
+               const aiScene* ai_scene,
+               std::function<TSpectral(RGB)> spectral_conversion);
+
     static void process_meshes_(LoadContext& ctx);
 
     static PrimitiveHandle<TSpectral> convert_mesh_(const aiMesh* ai_mesh, LoadContext& ctx);

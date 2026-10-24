@@ -1,6 +1,10 @@
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <cstddef>
+#include <memory>
 #include <string>
+#include <vector>
 
 #include "assimp/Importer.hpp"
 #include "assimp/postprocess.h"
@@ -11,9 +15,24 @@
 #include "huira/handles/geometry/geometry_handle.hpp"
 #include "huira/images/io/read_image.hpp"
 #include "huira/materials/bsdfs/cook_torrance_bsdf.hpp"
+#include "huira/scene/name_registry.hpp"
 #include "huira/util/logger.hpp"
 
 namespace huira {
+namespace detail {
+/// Remove from a registry, last first, every object added after it held count of them.
+template <typename T>
+void remove_added(NameRegistry<T>& registry, std::size_t count)
+{
+    const std::vector<std::shared_ptr<T>> added(
+        registry.begin() + static_cast<std::ptrdiff_t>(std::min(count, registry.size())),
+        registry.end());
+    for (auto it = added.rbegin(); it != added.rend(); ++it) {
+        registry.remove(*it);
+    }
+}
+} // namespace detail
+
 /**
  * @brief Load a 3D model from file and add it to the scene.
  *
@@ -27,7 +46,7 @@ namespace huira {
  * @param spectral_conversion Converts the model's RGB colors (vertex, base and emissive colors,
  * and color textures) to the scene's spectral type (optional)
  * @return Shared pointer to the loaded Model
- * @throws std::runtime_error if loading fails
+ * @throws std::runtime_error if loading fails; nothing is then added to the scene.
  */
 template <IsSpectral TSpectral>
 std::shared_ptr<Model<TSpectral>>
@@ -59,6 +78,48 @@ ModelLoader<TSpectral>::load(Scene<TSpectral>& scene,
     HUIRA_LOG_INFO("  - Materials: " + std::to_string(ai_scene->mNumMaterials));
     HUIRA_LOG_INFO("  - Textures: " + std::to_string(ai_scene->mNumTextures));
 
+    // A load that fails partway leaves the scene as it was: what it added so far is taken out
+    // again. The registries a load adds to only grow while it runs, so that is all past where
+    // each one ended before it.
+    const std::array<std::size_t, 9> sizes{scene.models_.size(),
+                                           scene.node_registry_.size(),
+                                           scene.primitives_.size(),
+                                           scene.geometries_.size(),
+                                           scene.materials_.size(),
+                                           scene.bsdfs_.size(),
+                                           scene.spectral_textures_.size(),
+                                           scene.mono_textures_.size(),
+                                           scene.vec3_textures_.size()};
+    try {
+        return load_into_(
+            scene, file_path, std::move(name), ai_scene, std::move(spectral_conversion));
+    } catch (...) {
+        detail::remove_added(scene.node_registry_, sizes[1]);
+        detail::remove_added(scene.models_, sizes[0]);
+        detail::remove_added(scene.primitives_, sizes[2]);
+        detail::remove_added(scene.geometries_, sizes[3]);
+        detail::remove_added(scene.materials_, sizes[4]);
+        detail::remove_added(scene.bsdfs_, sizes[5]);
+        detail::remove_added(scene.spectral_textures_, sizes[6]);
+        detail::remove_added(scene.mono_textures_, sizes[7]);
+        detail::remove_added(scene.vec3_textures_, sizes[8]);
+        HUIRA_LOG_ERROR("ModelLoader::load - Loading " + file_path.string() +
+                        " failed, and what it had added to the scene was removed");
+        throw;
+    }
+}
+
+/**
+ * @brief Build a model read by ASSIMP into the scene: the part of load() that adds to it.
+ */
+template <IsSpectral TSpectral>
+std::shared_ptr<Model<TSpectral>>
+ModelLoader<TSpectral>::load_into_(Scene<TSpectral>& scene,
+                                   const fs::path& file_path,
+                                   std::string name,
+                                   const aiScene* ai_scene,
+                                   std::function<TSpectral(RGB)> spectral_conversion)
+{
     // Create the Model object
     auto shared_model = std::make_shared<Model<TSpectral>>();
     shared_model->source_path_ = file_path;
