@@ -361,6 +361,11 @@ void Material<TSpectral>::reset_emissive()
     emissive_factor_ = TSpectral{1.0f};
 }
 
+/**
+ * @brief Construct a material from its BSDF and default images, which reset_*() go back to.
+ * @throws std::runtime_error if the BSDF or an image is null or has no pixels, or an albedo or
+ *         transmission pixel is not from 0 to 1, as the setters require.
+ */
 template <IsSpectral TSpectral>
 Material<TSpectral>::Material(std::shared_ptr<BSDF<TSpectral>> bsdf,
                               std::shared_ptr<Image<TSpectral>> albedo_image,
@@ -375,6 +380,15 @@ Material<TSpectral>::Material(std::shared_ptr<BSDF<TSpectral>> bsdf,
       default_normal_image_{normal_image}, default_transmission_image_{transmission_image},
       default_emissive_image_{emissive_image}
 {
+    // Each is sampled without checking, as the setters' are:
+    check_ratio_image_(albedo_image, "albedo");
+    check_image_(alpha_image, "alpha");
+    check_image_(metallic_image, "metallic");
+    check_image_(roughness_image, "roughness");
+    check_image_(normal_image, "normal");
+    check_ratio_image_(transmission_image, "transmission");
+    check_image_(emissive_image, "emissive");
+
     albedo_image_ = default_albedo_image_;
     alpha_image_ = default_alpha_image_;
     metallic_image_ = default_metallic_image_;

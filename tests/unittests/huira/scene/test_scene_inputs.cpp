@@ -190,6 +190,22 @@ TEST_CASE("Scene assets are checked when made", "[scene][validation]")
     CHECK_THROWS(scene.new_constant_density_field(RGB{NaN_F}, RGB{0.f}));
     CHECK_THROWS(scene.new_constant_density_field(RGB{0.f}, RGB{INF_F}));
 
+    // A medium or material made by hand has all its parts, which a render reads without checking:
+    const auto density = std::make_shared<ConstantDensityField<RGB>>(RGB{0.f}, RGB{0.f});
+    const auto phase = std::make_shared<IsotropicPhaseFunction<RGB>>();
+    CHECK_THROWS(Medium<RGB>(nullptr, phase));
+    CHECK_THROWS(Medium<RGB>(density, nullptr));
+    CHECK_NOTHROW(Medium<RGB>(density, phase));
+    const auto bsdf = std::make_shared<LambertianBSDF<RGB>>();
+    const auto white = std::make_shared<Image<RGB>>(1, 1, RGB{1.f});
+    const auto one = std::make_shared<Image<float>>(1, 1, 1.f);
+    const auto up = std::make_shared<Image<Vec3<float>>>(1, 1, Vec3<float>{0.f, 0.f, 1.f});
+    CHECK_THROWS(Material<RGB>(bsdf, nullptr, one, one, one, up, white, white));
+    CHECK_THROWS(Material<RGB>(bsdf, white, one, one, nullptr, up, white, white));
+    CHECK_THROWS(Material<RGB>(
+        bsdf, std::make_shared<Image<RGB>>(1, 1, RGB{1.5f}), one, one, one, up, white, white));
+    CHECK_NOTHROW(Material<RGB>(bsdf, white, one, one, one, up, white, white));
+
     // Unresolved objects and stars:
     CHECK_THROWS(scene.new_unresolved_object_from_magnitude(NaN, RGB{0.3f}));
     CHECK_THROWS(visual_magnitude_to_irradiance<RGB>(-200.0));  // more than a float holds
