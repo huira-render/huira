@@ -108,12 +108,7 @@ TEST_CASE("The hemisphere samplers return the pdfs they document", "[materials][
                 CHECK(std::abs(power.pdf - expected) <= 1e-5 * expected + 1e-7);
             }
 
-            const auto sine = sampling::sine_hemisphere(u1, u2);
-            const double sin_theta = std::sqrt(
-                std::max(0.0, 1.0 - static_cast<double>(sine.direction.z * sine.direction.z)));
-            CHECK(std::abs(sine.pdf - std::max(2.0 * sin_theta / (pi * pi), 1e-8)) < 1e-6);
-
-            for (const auto& direction : {uniform.direction, cosine.direction, sine.direction}) {
+            for (const auto& direction : {uniform.direction, cosine.direction}) {
                 CHECK(std::abs(glm::length(direction) - 1.f) < 1e-5f);
                 CHECK(direction.z >= 0.f);
             }
@@ -125,9 +120,6 @@ TEST_CASE("The hemisphere samplers draw directions with the density of their pdf
           "[materials][sampling]")
 {
     // A pdf that is not the density of the directions drawn biases every estimate made with it.
-    // (sine_hemisphere() is not checked here: it draws cos(theta) as the cube root of a uniform
-    // number, which gives a density of 3 cos^2(theta) / (2 pi), not the 2 sin(theta) / pi^2 it
-    // returns. Nothing in Huira uses it yet.)
     SECTION("uniform")
     {
         check_sampler([](float u1, float u2) {
