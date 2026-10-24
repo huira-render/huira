@@ -118,6 +118,13 @@ void Mesh<TSpectral>::compute_surface_interaction(const HitRecord& hit,
 
     isect.normal_s = w * vertex_buffer_[idx0].normal + hit.u * vertex_buffer_[idx1].normal +
                      hit.v * vertex_buffer_[idx2].normal;
+    // Vertices given no normal (Vertex's default is 0), or ones that cancel when interpolated,
+    // leave no direction to normalize: the triangle is shaded flat, with its own normal, rather
+    // than NaN. (Which side it faces is settled when the hit is resolved.)
+    if (!(glm::dot(isect.normal_s, isect.normal_s) > 0.f)) {
+        isect.normal_s = glm::cross(vertex_buffer_[idx1].position - vertex_buffer_[idx0].position,
+                                    vertex_buffer_[idx2].position - vertex_buffer_[idx0].position);
+    }
 
     isect.uv = w * vertex_buffer_[idx0].uv + hit.u * vertex_buffer_[idx1].uv +
                hit.v * vertex_buffer_[idx2].uv;

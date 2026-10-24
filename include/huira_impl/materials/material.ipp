@@ -46,16 +46,23 @@ MaterialEval<TSpectral> Material<TSpectral>::evaluate(const Interaction<TSpectra
     Interaction<TSpectral> shading_isect = isect;
 
     if (eval_normal_) {
-        if (isect.tangent != Vec3<float>{0.0f}) {
-            Vec3<float> ts_normal = glm::normalize(normal_image_->sample_bilinear(uv.x, uv.y));
+        // A sample of no length encodes no direction: a pixel of 0, pixels that cancel when
+        // interpolated, or one in the tangent plane that a factor of 0 flattens. The surface's
+        // own normal is kept there, rather than normalizing 0 into NaN.
+        Vec3<float> ts_normal = normal_image_->sample_bilinear(uv.x, uv.y);
+        if (isect.tangent != Vec3<float>{0.0f} && glm::dot(ts_normal, ts_normal) > 0.f) {
+            ts_normal = glm::normalize(ts_normal);
 
             ts_normal.x *= normal_factor_;
             ts_normal.y *= normal_factor_;
-            ts_normal = glm::normalize(ts_normal);
+            if (glm::dot(ts_normal, ts_normal) > 0.f) {
+                ts_normal = glm::normalize(ts_normal);
 
-            Vec3<float> perturbed = isect.tangent * ts_normal.x + isect.bitangent * ts_normal.y +
-                                    isect.normal_s * ts_normal.z;
-            shading_isect.normal_s = glm::normalize(perturbed);
+                Vec3<float> perturbed = isect.tangent * ts_normal.x +
+                                        isect.bitangent * ts_normal.y +
+                                        isect.normal_s * ts_normal.z;
+                shading_isect.normal_s = glm::normalize(perturbed);
+            }
         }
     }
 

@@ -166,3 +166,27 @@ TEST_CASE("Material setters validate their arguments", "[materials]")
     CHECK_NOTHROW(material.set_normal_factor(2.f));
     CHECK_NOTHROW(material.set_normal_factor(0.f));
 }
+
+TEST_CASE("A normal map's sample of no length leaves the surface's normal", "[materials][nan]")
+{
+    // It encodes no direction, and was normalized into NaN, which every pixel it shaded became:
+    // a pixel of 0 (a texture made by add_texture(), not add_normal_texture(), may have one), or
+    // one in the tangent plane with a factor of 0.
+    Scene<RGB> scene;
+    auto material = scene.new_material(scene.new_bsdf_lambertian());
+    const Vec3<float> up{0.f, 0.f, 1.f};
+
+    material.set_normal_image(scene.add_texture(Image<Vec3<float>>(2, 2, Vec3<float>{0.f})));
+    CHECK(material.get()->evaluate(flat_surface()).isect.normal_s == up);
+
+    material.set_normal_image(
+        scene.add_texture(Image<Vec3<float>>(2, 2, Vec3<float>{1.f, 0.f, 0.f})));
+    material.set_normal_factor(0.f);
+    CHECK(material.get()->evaluate(flat_surface()).isect.normal_s == up);
+
+    // ...and a tilted pixel still tilts it (a guard):
+    material.set_normal_factor(1.f);
+    const Vec3<float> tilted = material.get()->evaluate(flat_surface()).isect.normal_s;
+    CHECK(std::abs(glm::length(tilted) - 1.f) < 1e-6f);
+    CHECK(tilted.z < 0.5f);
+}
