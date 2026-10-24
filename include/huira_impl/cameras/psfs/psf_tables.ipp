@@ -7,6 +7,7 @@
 #include <cstdlib>
 #include <limits>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -127,6 +128,24 @@ inline constexpr int NEAR_MARGIN = 16;
 
 /// The most memory the near table takes before its pitch is made coarser.
 inline constexpr std::size_t NEAR_TABLE_BUDGET = std::size_t{64} * 1024 * 1024;
+
+/// A number as people write it, for messages: 1e+05, 2.8, 0.004 (not 100000.000000).
+inline std::string short_number(double value)
+{
+    std::ostringstream out;
+    out.precision(4);
+    out << value;
+    return out.str();
+}
+
+/// The near table's samples per pixel are counted in an int, from at most this many: more than
+/// NEAR_TABLE_BUDGET lets through for any pixel under 30,000 times as tall as it is wide, so
+/// it changes no table but keeps the count an int, and its count down to the budget short.
+inline constexpr double MAX_NEAR_SAMPLES = 65536.0;
+
+/// The finest detail the tables hold, in periods per pixel width. Far beyond any lens and pixels:
+/// f/0.5, as fast as a lens in air can be, puts 2 x 10^4 periods in a 1 mm pixel at 100 nm.
+inline constexpr double MAX_PERIODS_PER_PIXEL = 1.0e5;
 
 } // namespace psf_tables_detail
 
@@ -286,7 +305,8 @@ PsfTables<TSpectral>::PsfTables(const std::vector<Profile>& profiles,
  * @param blur The radius of defocus's blur disc in pixel widths; below MIN_BLUR, in focus.
  * @throws std::runtime_error if the f-number or a pitch is not positive and finite, the blur is
  *         negative or not finite, or the scattered light is invalid (see
- *         detail::ScatterProfile).
+ *         detail::ScatterProfile); or if the PSF's finest detail is under 1/MAX_PERIODS_PER_PIXEL
+ *         of a pixel (see psf_tables_detail), which no lens comes near.
  */
 template <IsSpectral TSpectral>
 PsfTables<TSpectral> PsfTables<TSpectral>::airy(double fnumber,
@@ -347,6 +367,29 @@ PsfTables<TSpectral> PsfTables<TSpectral>::airy(double fnumber,
         coarsest = std::min(coarsest, red);
     }
 
+    // The tables follow the PSF's finest detail, which must be within what they hold: an
+    // f-number far below any lens's overflowed the near table's count of samples (an int).
+    using psf_tables_detail::short_number;
+    double finest_period = std::numeric_limits<double>::infinity();
+    for (const detail::OpticsProfile& profile : profiles) {
+        finest_period = std::min(finest_period, profile.finest_period());
+    }
+    if (!(1.0 / finest_period <= psf_tables_detail::MAX_PERIODS_PER_PIXEL)) {
+        const std::string limit = short_number(1.0 / psf_tables_detail::MAX_PERIODS_PER_PIXEL);
+        HUIRA_THROW_ERROR(
+            profiles.front().scatter_only()
+                ? "PsfTables::airy - The scattered light's shoulder, " +
+                      short_number(0.5 * finest_period) +
+                      " px, is narrower than the tables can follow: its finest detail must "
+                      "be at least " +
+                      limit + " px"
+                : "PsfTables::airy - The f-number, " + short_number(fnumber) +
+                      ", is too small for " + short_number(pitch_x * 1e6) +
+                      " um pixels: the diffraction pattern's finest detail, lambda N, is " +
+                      short_number(finest_period) + " px, and the tables follow it down to " +
+                      limit + " px. (A lens in air is at most f/0.5.)");
+    }
+
     // Scattered light alone, as with a PSF that was set or none, has no rings to resolve. Its
     // finest detail is its shoulder, and it needs no far field averaged over rings: the profile
     // itself holds out to the reach. Sampling it as finely as the diffraction it lacks took
@@ -368,7 +411,11 @@ PsfTables<TSpectral> PsfTables<TSpectral>::airy(double fnumber,
         samples_wanted = std::max(
             samples_wanted, NEAR_SAMPLES_PER_SHOULDER * std::max(1.0, aspect) / scatter->shoulder);
     }
-    layout.near_samples = 2 * std::max(1, static_cast<int>(std::ceil(samples_wanted / 2.0)));
+    // Very wide pixels or a narrow scattered shoulder can still ask for more than an int holds:
+    layout.near_samples =
+        2 * std::max(1,
+                     static_cast<int>(std::ceil(
+                         std::min(samples_wanted, psf_tables_detail::MAX_NEAR_SAMPLES) / 2.0)));
 
     // Very fast optics need a fine pitch over a near table that cannot shrink below
     // PROJECTION_MIN_RADIUS: past a budget, the pitch is made coarser.

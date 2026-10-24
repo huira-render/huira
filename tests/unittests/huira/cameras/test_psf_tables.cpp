@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "catch2/catch_test_macros.hpp"
+#include "catch2/matchers/catch_matchers_string.hpp"
 #include "huira/cameras/camera_model.hpp"
 #include "huira/cameras/psfs/airy_band.hpp"
 #include "huira/cameras/psfs/psf_tables.hpp"
@@ -1079,4 +1080,31 @@ TEST_CASE("Tables whose blur reaches as far as they do are built as the uniform 
             }
         }
     }
+}
+
+TEST_CASE("An f-number or a scattered shoulder finer than the tables follow is refused",
+          "[cameras][psf][validation]")
+{
+    // The near table's samples per pixel, an int, overflowed at f/1e-8 with 8.5 um pixels (a
+    // finest detail of 4.5e-10 px), which on x86 happened to give a negative count, and the build
+    // then failed elsewhere with a message about the projected integrals; at f/1e-6 it first
+    // counted down from 1.8e8, for 20 seconds. Each is refused at once, saying why:
+    using Catch::Matchers::ContainsSubstring;
+    for (const double fnumber : {1e-8, 1e-6}) {
+        INFO("f/" << fnumber);
+        CHECK_THROWS_WITH(PsfTables<RGB>::airy(fnumber, 8.5e-6, 8.5e-6, 100.0),
+                          ContainsSubstring("f-number"));
+    }
+    const PsfTables<RGB>::Scatter narrow{1.0, 2.5, 1e-9, std::nullopt};
+    CHECK_THROWS_WITH(PsfTables<RGB>::airy(2.8, 8.5e-6, 8.5e-6, 100.0, narrow),
+                      ContainsSubstring("shoulder"));
+
+    // ...and a camera with such an f-number says so when it builds them:
+    CameraModel<RGB> camera;
+    camera.configure_sensor_from_pitch(Resolution{16, 16}, units::Micrometer(8.5));
+    camera.set_fstop(1e-8f);
+    CHECK_THROWS_WITH(camera.precompute(), ContainsSubstring("f-number"));
+
+    // f/0.5, as fast as a lens in air can be, is not near the limit (a guard):
+    CHECK_NOTHROW(PsfTables<RGB>::airy(0.5, 1e-6, 1e-6, 20.0));
 }
