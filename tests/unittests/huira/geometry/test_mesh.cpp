@@ -61,6 +61,40 @@ TEST_CASE("A mesh without tangents gives every hit an orthonormal tangent frame"
     }
 }
 
+TEST_CASE("A hit where the vertex normals give no direction is shaded flat",
+          "[geometry][mesh][nan]")
+{
+    // Vertices given no normal (Vertex's default is 0), or normals that cancel where they are
+    // interpolated, were normalized into NaN, which every pixel the mesh covered became. The
+    // triangle's own normal is used there instead: here, along z.
+    const auto check_flat = [](const Mesh<RGB>& mesh, float u, float v) {
+        HitRecord hit;
+        hit.prim_id = 0;
+        hit.u = u;
+        hit.v = v;
+        Interaction<RGB> isect;
+        mesh.compute_surface_interaction(hit, isect);
+        const Vec3<float> n = glm::normalize(isect.normal_s);
+        REQUIRE(finite(n));
+        CHECK(std::abs(std::abs(n.z) - 1.f) < 1e-6f);
+        CHECK(finite(isect.tangent));
+        CHECK(finite(isect.bitangent));
+    };
+
+    VertexBuffer<RGB> unset(3);
+    unset[1].position = Vec3<float>{1.f, 0.f, 0.f};
+    unset[2].position = Vec3<float>{0.f, 1.f, 0.f};
+    check_flat(Mesh<RGB>(IndexBuffer{0, 1, 2}, unset), 0.25f, 0.25f);
+
+    const Mesh<RGB> opposed(IndexBuffer{0, 1, 2},
+                            VertexBuffer<RGB>{
+                                vertex({0.f, 0.f, 0.f}, {0.f, 0.f, 1.f}),
+                                vertex({1.f, 0.f, 0.f}, {0.f, 0.f, -1.f}),
+                                vertex({0.f, 1.f, 0.f}, {0.f, 0.f, 1.f}),
+                            });
+    check_flat(opposed, 0.5f, 0.f); // halfway between the first two
+}
+
 TEST_CASE("Interpolated tangents that cancel or lie along the normal get a frame anyway",
           "[geometry][mesh]")
 {
