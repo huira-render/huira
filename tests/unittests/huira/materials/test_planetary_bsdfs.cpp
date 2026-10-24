@@ -1,9 +1,11 @@
 // The Lommel-Seeliger, McEwen and Hapke BSDFs, against the independent reference in
 // reference/photometry.hpp. (test_bsdf_contract.cpp checks their sampling.)
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <limits>
+#include <map>
 #include <numbers>
 #include <vector>
 
@@ -83,6 +85,10 @@ bool close(double a, double b, double relative)
 
 const RGB ALBEDO{0.9f, 0.5f, 0.1f};
 
+/// Albedos at which McEwen's lunar-Lambert function never reflects more light than it receives
+/// (it reflects up to 1.84 times the albedo), so that McEwenBSDF is the function exactly.
+const RGB MCEWEN_ALBEDO{0.54f, 0.3f, 0.1f};
+
 /// The radiance factor I/F = pi f cos i of a surface's green channel, seen at zero phase with
 /// the light and the viewer at angle i from the normal.
 double radiance_factor_at_zero_phase(const BSDF<RGB>& bsdf, double i)
@@ -129,7 +135,7 @@ TEST_CASE("A McEwen surface mixes Lambert's law with Lommel-Seeliger's in the pr
     // Through two azimuths, at phase angles g1 and g2, the line gives f at any other.
     const McEwenBSDF<RGB> bsdf;
     const Interaction<RGB> isect = surface();
-    const ShadingParams<RGB> params = shading(ALBEDO);
+    const ShadingParams<RGB> params = shading(MCEWEN_ALBEDO);
     std::vector<double> at_l1; // f at L = 1, times cos i + cos e
     for (double i : {0.3, 0.8, 1.3}) {
         for (double e : {0.2, 0.9, 1.4}) {
@@ -149,7 +155,7 @@ TEST_CASE("A McEwen surface mixes Lambert's law with Lommel-Seeliger's in the pr
                 INFO("azimuth " << azimuth);
                 CHECK(close(f, f1 + (l - l1) * slope, 1e-4));
             }
-            CHECK(close(f1 - l1 * slope, ref::lambert(ALBEDO[1]), 1e-4));
+            CHECK(close(f1 - l1 * slope, ref::lambert(MCEWEN_ALBEDO[1]), 1e-4));
             at_l1.push_back((f1 + (1.0 - l1) * slope) * (std::cos(i) + std::cos(e)));
         }
     }
@@ -165,17 +171,74 @@ TEST_CASE("A McEwen surface reflects as McEwen's lunar-Lambert function", "[mate
     const McEwenBSDF<RGB> bsdf;
     const Interaction<RGB> isect = surface();
     for (const Angles& a : angle_sets()) {
-        const RGB f = bsdf.eval(a.wo(isect), a.wi(isect), isect, shading(ALBEDO));
+        const RGB f = bsdf.eval(a.wo(isect), a.wi(isect), isect, shading(MCEWEN_ALBEDO));
         const double l = ref::mcewen_l(ref::phase_angle(a.i, a.e, a.azimuth));
         INFO("i " << a.i << ", e " << a.e << ", azimuth " << a.azimuth);
         for (std::size_t c = 0; c < RGB::size(); ++c) {
-            CHECK(close(f[c], ref::lunar_lambert(ALBEDO[c], l, a.i, a.e), 1e-4));
+            CHECK(close(f[c], ref::lunar_lambert(MCEWEN_ALBEDO[c], l, a.i, a.e), 1e-4));
         }
     }
     for (double i : {0.0, 0.5, 1.0, 1.4}) {
         INFO("i = e = " << i);
         CHECK(close(radiance_factor_at_zero_phase(bsdf, i), ALBEDO[1], 1e-3));
     }
+}
+
+TEST_CASE("A bright McEwen surface reflects no more light than it receives", "[materials][bsdf]")
+{
+    // Of the light from a direction at cosine mu, the lunar-Lambert function reflects
+    // albedo * rho(mu), more than all of it at a high albedo. McEwenBSDF caps the albedo at
+    // 1 / max(rho(cos i), rho(cos e)). rho is computed here independently of the BSDF, from the
+    // reference function, by quadrature in rings about the direction.
+    const McEwenBSDF<RGB> bsdf;
+    const Interaction<RGB> isect = surface();
+    std::map<double, double> rho;
+    const auto rho_at = [&](double angle) {
+        if (!rho.contains(angle)) {
+            const Vec3<float> w = direction(isect, angle, 0.0);
+            rho[angle] = integrate_sphere(
+                [&](const Vec3<float>& wi) {
+                    const double cos_i = glm::dot(wi, isect.normal_s);
+                    if (cos_i <= 0.0) {
+                        return 0.0;
+                    }
+                    const double phase = std::acos(std::clamp<double>(glm::dot(wi, w), -1.0, 1.0));
+                    return ref::lunar_lambert(1.0, ref::mcewen_l(phase), std::acos(cos_i), angle) *
+                           cos_i;
+                },
+                w);
+        }
+        return rho[angle];
+    };
+    CHECK(std::abs(rho_at(0.0) - 1.085) < 2e-3);
+    CHECK(std::abs(rho_at(1.5707) - 1.840) < 3e-3);
+
+    // At an albedo of 1, the BSDF is the function with the albedo capped so, to the table's
+    // accuracy, and never above it:
+    const ShadingParams<RGB> white = shading(RGB{1.f});
+    for (const Angles& a : angle_sets()) {
+        const double f = bsdf.eval(a.wo(isect), a.wi(isect), isect, white)[1];
+        const double function =
+            ref::lunar_lambert(1.0, ref::mcewen_l(ref::phase_angle(a.i, a.e, a.azimuth)), a.i, a.e);
+        const double capped = function * std::min(1.0, 1.0 / std::max(rho_at(a.i), rho_at(a.e)));
+        INFO("i " << a.i << ", e " << a.e << ", azimuth " << a.azimuth << ": " << f
+                  << ", the function capped " << capped);
+        CHECK(f <= capped * (1.0 + 2e-4));
+        CHECK(f >= capped * (1.0 - 3e-3));
+    }
+
+    // It reflects no more light than it receives, from overhead to the horizon, and near the
+    // horizon, where the function reflects most, nearly all of it; overhead, where the function
+    // reflects 1.09 of it, the caps of lower directions leave 0.89.
+    for (double theta : {0.0, 0.5, 1.0, 1.4, 1.55, 1.569}) {
+        const double light = reflected(bsdf, isect, white, direction(isect, theta, 0.3));
+        INFO("light from " << theta << " rad: reflects " << light);
+        CHECK(light <= 1.0 + 1e-3);
+        if (theta >= 1.4) {
+            CHECK(light >= 0.99);
+        }
+    }
+    CHECK(std::abs(reflected(bsdf, isect, white, direction(isect, 0.0, 0.0)) - 0.889) < 0.01);
 }
 
 TEST_CASE("A Lommel-Seeliger or McEwen surface reflects nothing toward a viewer below it",
@@ -248,13 +311,14 @@ TEST_CASE("Hapke's and McEwen's surfaces resolve phase angles near opposition", 
             INFO("phase " << phase << " rad (" << g.phase << " between the float directions), "
                           << "azimuth " << azimuth);
             const RGB h = hapke.eval(g.wo, g.wi, isect, params);
-            const RGB m = mcewen.eval(g.wo, g.wi, isect, params);
+            const RGB m = mcewen.eval(g.wo, g.wi, isect, shading(MCEWEN_ALBEDO));
             for (std::size_t c = 0; c < RGB::size(); ++c) {
                 ref::HapkeParameters channel = narrow;
                 channel.w = albedo[c];
                 CHECK(close(h[c], ref::hapke(channel, g.i, g.e, g.phase), 1e-4));
-                CHECK(close(
-                    m[c], ref::lunar_lambert(albedo[c], ref::mcewen_l(g.phase), g.i, g.e), 1e-5));
+                CHECK(close(m[c],
+                            ref::lunar_lambert(MCEWEN_ALBEDO[c], ref::mcewen_l(g.phase), g.i, g.e),
+                            1e-5));
             }
         }
     }
