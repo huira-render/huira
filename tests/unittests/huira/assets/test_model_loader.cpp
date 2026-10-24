@@ -725,6 +725,31 @@ TEST_CASE("A model's materials take their glTF values", "[assets][models]")
     check_bins(d.emission, RGB{0.f});
 }
 
+TEST_CASE("A model that fails to load partway leaves nothing in the scene", "[assets][models]")
+{
+    // Its model, materials, meshes and named nodes were added as it went, and stayed when a later
+    // part threw: the half-built model was found by its name, and a good load after it was given
+    // names of its own (half_built_1, First_1). Here the second node's matrix has no inverse,
+    // which is refused after everything but that node was added.
+    Gltf gltf;
+    gltf.materials = {R"({"name": "First"})", R"({"name": "Second"})"};
+    gltf.nodes =
+        R"({"name": "Node0", "mesh": 0}, {"name": "Node1", "mesh": 1, "scale": [0, 1, 1]})";
+    Scene<RGB> scene;
+    CHECK_THROWS(scene.load_model(gltf.write("half_built.gltf")));
+    CHECK_THROWS(scene.get_model("half_built"));
+    CHECK_THROWS(scene.get_geometry("Mesh0"));
+    CHECK_THROWS(scene.get_primitive("Mesh1"));
+
+    // The same model, made valid, loads with its own names:
+    gltf.nodes.reset();
+    const ModelHandle<RGB> model = scene.load_model(gltf.write("half_built.gltf"));
+    CHECK(model.get()->name() == "half_built");
+    CHECK(scene.get_geometry("Mesh0").get()->name() == "Mesh0");
+    CHECK(material_of(scene, "Mesh0")->name() == "First");
+    CHECK(material_of(scene, "Mesh1")->name() == "Second");
+}
+
 TEST_CASE("A model's mesh without a material is given a default one", "[assets][models]")
 {
     // A mesh with no material in a valid model is given its format's default material by ASSIMP:
