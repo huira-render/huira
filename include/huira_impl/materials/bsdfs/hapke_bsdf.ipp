@@ -66,10 +66,10 @@ TSpectral HapkeBSDF<TSpectral>::eval(const Vec3<float>& wo,
 
     const TSpectral& omega = params.albedo;
 
-    // Phase angle calculations
+    // Phase angle calculations. tan(alpha / 2) comes from the cross product, which resolves the
+    // small phase angles of the opposition surge (see sampling::angle_between()):
     float cos_alpha = std::clamp(glm::dot(wi, wo), -1.0f, 1.0f);
-    float alpha = std::acos(cos_alpha);
-    float tan_half_alpha = std::tan(alpha * 0.5f);
+    float tan_half_alpha = sampling::tan_half_angle_between(wi, wo);
 
     // Single Scattering Phase Function
     float P = phase_function_dhg(cos_alpha);

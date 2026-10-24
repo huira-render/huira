@@ -32,8 +32,13 @@ set(UNIT_TESTS
 
     huira/geometry/test_mesh.cpp
 
+    huira/materials/test_bsdf_contract.cpp
     huira/materials/test_cook_torrance.cpp
+    huira/materials/test_diffuse_bsdfs.cpp
+    huira/materials/test_material_evaluate.cpp
     huira/materials/test_material_values.cpp
+    huira/materials/test_planetary_bsdfs.cpp
+    huira/materials/test_sampling_utils.cpp
 
     huira/render/test_bright_bodies.cpp
     huira/render/test_emission.cpp
@@ -46,6 +51,7 @@ set(UNIT_TESTS
     huira/render/test_dynamic_sampling.cpp
     huira/render/test_shading_utils.cpp
     huira/render/test_observation_modes.cpp
+    huira/render/test_opaque_shadows.cpp
     huira/render/test_non_finite_radiance.cpp
     huira/render/test_object_ids.cpp
     huira/render/test_psf_switch.cpp
@@ -81,6 +87,7 @@ set(UNIT_TESTS
     huira/units/test_units.cpp
 
     reference/test_airy_reference.cpp
+    reference/test_photometry_reference.cpp
 )
 
 ##############################
@@ -208,6 +215,11 @@ foreach(source_file ${UNIT_TESTS})
     # Create the test
     add_unit_test(${test_name} ${source_file})
 endforeach()
+
+# test_cook_torrance checks that the generated albedo table is as up to date as the sources it is
+# built from, which it reads from the source tree (see tools/build_cook_torrance_albedo):
+target_compile_definitions(test_cook_torrance PRIVATE HUIRA_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
+target_include_directories(test_cook_torrance PRIVATE ${PROJECT_SOURCE_DIR}/tools)
 
 # Two source files that both include all of Huira, in one test: it doesn't link if a header
 # defines anything that isn't a template, constexpr or inline (see test_translation_units.cpp).

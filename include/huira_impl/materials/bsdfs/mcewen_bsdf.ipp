@@ -29,17 +29,18 @@ TSpectral McEwenBSDF<TSpectral>::eval(const Vec3<float>& wo,
         return TSpectral{0};
     }
 
-    // Phase angle (angle between incoming and outgoing light directions)
-    float cos_alpha = std::clamp(glm::dot(wi, wo), -1.0f, 1.0f);
-    float alpha = std::acos(cos_alpha);
+    // Phase angle (angle between incoming and outgoing light directions), resolved near 0 (see
+    // sampling::angle_between()):
+    float alpha = sampling::angle_between(wi, wo);
 
     // McEwen's empirically derived beta factor
     // 60 degrees = PI / 3 radians, so division by (PI/3) is multiplication by (3/PI)
     constexpr float inv_alpha0 = 3.0f * INV_PI<float>();
     float beta = std::exp(-alpha * inv_alpha0);
 
+    // Lommel-Seeliger's law normalized, as McEwen's is, to equal Lambert's at i = e = 0:
     float lambert = INV_PI<float>();
-    float lommel_seeliger = 1.0f / (4.0f * PI<float>() * (cos_i + cos_o));
+    float lommel_seeliger = 2.0f * INV_PI<float>() / (cos_i + cos_o);
 
     return params.albedo * ((1.0f - beta) * lambert + beta * lommel_seeliger);
 }

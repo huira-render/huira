@@ -1,3 +1,5 @@
+#include <algorithm>
+#include <cmath>
 #include <memory>
 #include <string>
 
@@ -5,12 +7,71 @@
 #include "huira/util/validate.hpp"
 
 namespace huira {
+
+namespace detail {
+
+/**
+ * @brief The shading normal n, with its tilt from the geometric normal ng reduced, if need be, so
+ * that the mirror reflection of the viewer's direction wo in it is above the geometric surface.
+ *
+ * Blender's Cycles does this for every shading normal (ensure_valid_reflection() in its kernel).
+ * The reflection must be at least min(0.9 wo.ng, 0.01) above the surface: a reflection may be as
+ * shallow as the view itself. A normal that meets that is returned as it is. Otherwise, the normal
+ * is turned toward ng, in the plane of the two, until its reflection of wo is at that height; the
+ * viewer is then above the normal too. The result is continuous in n and wo.
+ *
+ * In a frame with ng as z, and n in the x-z plane, the turned normal is (sqrt(1 - z^2), 0, z) for
+ * the z at which 2 (wo_x sqrt(1 - z^2) + wo_z z) z - wo_z, the height of the reflection, is the
+ * threshold t. Squaring gives a quadratic in z^2, a z^4 - b z^2 + c / 4 = 0, with
+ * a = wo_x^2 + wo_z^2, b = a + wo_z t and c = (wo_z + t)^2. Of its two roots, the smaller solves
+ * the equation before squaring where wo_x >= 0, and the larger where wo_x < 0.
+ *
+ * @param ng The geometric normal, on the viewer's side (unit).
+ * @param wo The direction to the viewer (unit).
+ * @param n The shading normal (unit).
+ */
+[[nodiscard]] inline Vec3<float>
+valid_reflection_normal(const Vec3<float>& ng, const Vec3<float>& wo, const Vec3<float>& n) noexcept
+{
+    const float wo_z = glm::dot(wo, ng);
+    if (!(wo_z > 0.0f)) {
+        return n; // no viewer, or one the geometric normal does not face
+    }
+    const float threshold = std::min(0.9f * wo_z, 0.01f);
+    const float n_z = glm::dot(n, ng);
+    if (2.0f * glm::dot(n, wo) * n_z - wo_z >= threshold) {
+        return n;
+    }
+
+    const Vec3<float> along = n - n_z * ng;
+    const float along_length = glm::length(along);
+    if (!(along_length > 1e-6f)) {
+        return ng; // n is -ng, or nearly: any turn toward ng is as good as another
+    }
+    const Vec3<float> x = along / along_length;
+    const float wo_x = glm::dot(wo, x);
+    const float a = wo_x * wo_x + wo_z * wo_z;
+    const float b = a + wo_z * threshold;
+    const float c = (wo_z + threshold) * (wo_z + threshold);
+    const float root = std::sqrt(std::max(0.0f, b * b - a * c));
+    // (The smaller root as c / (2 (b + root)), which loses no precision when it is small.)
+    const float z2 =
+        std::clamp(wo_x < 0.0f ? (b + root) / (2.0f * a) : c / (2.0f * (b + root)), 0.0f, 1.0f);
+    return std::sqrt(1.0f - z2) * x + std::sqrt(z2) * ng;
+}
+
+} // namespace detail
+
 /**
  * @brief Evaluate all material textures at the given interaction point.
  *
  * Samples all image slots (no branching), applies scalar factors,
  * incorporates vertex albedo, and perturbs the shading normal from
  * the normal map. Returns everything the BSDF needs on the stack.
+ *
+ * Where the shading normal is tilted so far from the geometric normal that the viewer, isect.wo,
+ * is below it, or its mirror reflection is below the geometric surface, its tilt is reduced until
+ * neither is (see detail::valid_reflection_normal()), so that the point is not black.
  *
  * @param isect The surface interaction from the ray-geometry hit
  * @return MaterialEval<TSpectral> with ShadingParams and modified Interaction
@@ -27,9 +88,11 @@ MaterialEval<TSpectral> Material<TSpectral>::evaluate(const Interaction<TSpectra
             albedo_image_->sample_bilinear(uv.x, uv.y) * albedo_factor_ * isect.vertex_albedo;
     }
 
-    // if (has_alpha_) {
-    params.opacity = alpha_image_->sample_bilinear(uv.x, uv.y) * alpha_factor_;
-    //}
+    // (Opacity and transmission are left at 1 and 0, the values the images would give, where
+    // they are those everywhere.)
+    if (has_alpha()) {
+        params.opacity = alpha_image_->sample_bilinear(uv.x, uv.y) * alpha_factor_;
+    }
 
     if (eval_metallic_) {
         params.metallic = metallic_image_->sample_bilinear(uv.x, uv.y) * metallic_factor_;
@@ -39,7 +102,10 @@ MaterialEval<TSpectral> Material<TSpectral>::evaluate(const Interaction<TSpectra
         params.roughness = roughness_image_->sample_bilinear(uv.x, uv.y) * roughness_factor_;
     }
 
-    params.transmission = transmission_image_->sample_bilinear(uv.x, uv.y) * transmission_factor_;
+    if (has_transmission()) {
+        params.transmission =
+            transmission_image_->sample_bilinear(uv.x, uv.y) * transmission_factor_;
+    }
 
     params.emission = emissive_image_->sample_bilinear(uv.x, uv.y) * emissive_factor_;
 
@@ -57,6 +123,14 @@ MaterialEval<TSpectral> Material<TSpectral>::evaluate(const Interaction<TSpectra
                                     isect.normal_s * ts_normal.z;
             shading_isect.normal_s = glm::normalize(perturbed);
         }
+
+        // A normal map, or normals interpolated across a coarse mesh, can tilt the shading normal
+        // away from the viewer, who always sees the geometric surface from its front. Every BSDF
+        // reflects nothing toward a viewer below its surface, so the point would be black; and
+        // a glossy BSDF would reflect the view into the surface. Reduce the tilt until neither
+        // happens. (An interaction with no viewer, wo = 0, is left as it is.)
+        shading_isect.normal_s =
+            detail::valid_reflection_normal(isect.normal_g, isect.wo, shading_isect.normal_s);
     }
 
     // Keep the original tangent/bitangent, just orthogonalize against new normal
@@ -155,10 +229,20 @@ void Material<TSpectral>::reset_albedo()
 
 // Alpha: an opacity from 0 to 1.
 
+/**
+ * @brief Whether the alpha can make the surface less than opaque anywhere.
+ *
+ * False only when evaluate() gives an opacity of exactly 1 everywhere: the factor is 1, and the
+ * image a 1 x 1 image of 1, which samples to its pixel exactly. A larger image may interpolate to
+ * just under 1 even where all its pixels are 1, so it counts as alpha. Computed from the material
+ * as it is, rather than kept, so it cannot fall behind its images.
+ */
 template <IsSpectral TSpectral>
-void Material<TSpectral>::update_has_alpha_()
+bool Material<TSpectral>::has_alpha() const noexcept
 {
-    has_alpha_ = alpha_image_ != default_alpha_image_ || alpha_factor_ < 1.0f;
+    const bool constant_one =
+        alpha_image_->width() == 1 && alpha_image_->height() == 1 && (*alpha_image_)[0] == 1.0f;
+    return alpha_factor_ != 1.0f || !constant_one;
 }
 
 template <IsSpectral TSpectral>
@@ -166,7 +250,6 @@ void Material<TSpectral>::set_alpha(float alpha)
 {
     validate_unit_interval(alpha, this->get_info() + " alpha");
     alpha_image_ = std::make_shared<Image<float>>(1, 1, alpha);
-    update_has_alpha_();
 }
 
 template <IsSpectral TSpectral>
@@ -174,7 +257,6 @@ void Material<TSpectral>::set_alpha_image(std::shared_ptr<Image<float>> alpha_im
 {
     check_image_(alpha_image, "alpha");
     alpha_image_ = alpha_image;
-    update_has_alpha_();
 }
 
 template <IsSpectral TSpectral>
@@ -182,7 +264,6 @@ void Material<TSpectral>::set_alpha_factor(float alpha_factor)
 {
     validate_unit_interval(alpha_factor, this->get_info() + " alpha factor");
     alpha_factor_ = alpha_factor;
-    update_has_alpha_();
 }
 
 template <IsSpectral TSpectral>
@@ -190,7 +271,6 @@ void Material<TSpectral>::reset_alpha()
 {
     alpha_image_ = default_alpha_image_;
     alpha_factor_ = 1.0f;
-    update_has_alpha_();
 }
 
 // Metallic: from 0 to 1.
@@ -278,6 +358,22 @@ void Material<TSpectral>::reset_normal()
 }
 
 // Transmission: the fraction of light that passes through, from 0 to 1.
+
+/**
+ * @brief Whether the surface can transmit light anywhere: false only when evaluate() gives a
+ * transmission of exactly 0 everywhere, the factor being 0 or the image a 1 x 1 image of 0.
+ */
+template <IsSpectral TSpectral>
+bool Material<TSpectral>::has_transmission() const noexcept
+{
+    if (transmission_factor_ == TSpectral{0.0f}) {
+        return false;
+    }
+    const bool constant_zero = transmission_image_->width() == 1 &&
+                               transmission_image_->height() == 1 &&
+                               (*transmission_image_)[0] == TSpectral{0.0f};
+    return !constant_zero;
+}
 
 template <IsSpectral TSpectral>
 void Material<TSpectral>::set_transmission(TSpectral transmission)
