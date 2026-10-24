@@ -2495,24 +2495,40 @@ void CameraModel<TSpectral>::compute_intrinsics_()
     }
 }
 
+/**
+ * @brief Direction (not normalized) of the pinhole ray through a sensor position, in TFloat.
+ *
+ * The intrinsic matrix is inverted, and the distortion removed, in TFloat: in double, as the
+ * pixel tables are built, the corner directions are good to about the last bit of a double (see
+ * Distortion::undistort_precise()). Rounded to single, they would leave a fixed pattern in the
+ * pixels' solid angles of about 1e-7 times their distance from the principal point, in pixels:
+ * 3e-4 at the edge of a 4096-pixel sensor, at any focal length. Rays are found in single
+ * precision.
+ */
 template <IsSpectral TSpectral>
 template <IsFloatingPoint TFloat>
 Vec3<TFloat> CameraModel<TSpectral>::pixel_to_direction_(const Pixel& pixel) const
 {
     // Invert the intrinsic matrix
-    float ny = (pixel[1] - cy_) / fy_;
-    float nx = (pixel[0] - cx_ - skew_ * ny) / fx_;
-    Pixel normalized{nx, ny};
+    const TFloat ny =
+        (static_cast<TFloat>(pixel[1]) - static_cast<TFloat>(cy_)) / static_cast<TFloat>(fy_);
+    const TFloat nx = (static_cast<TFloat>(pixel[0]) - static_cast<TFloat>(cx_) -
+                       static_cast<TFloat>(skew_) * ny) /
+                      static_cast<TFloat>(fx_);
+    BasePixel<TFloat> normalized{nx, ny};
 
     // Undistort
     if (distortion_) {
-        normalized = distortion_->undistort(normalized);
+        if constexpr (std::is_same_v<TFloat, float>) {
+            normalized = distortion_->undistort(normalized);
+        } else {
+            normalized = distortion_->undistort_precise(normalized);
+        }
     }
 
     // Build direction in camera coordinates
-    TFloat dir_x = static_cast<TFloat>(normalized[0]);
-    TFloat dir_y = static_cast<TFloat>(normalized[1]);
-
+    const TFloat dir_x = normalized[0];
+    const TFloat dir_y = normalized[1];
     Vec3<TFloat> direction;
     if (blender_convention_) {
         direction = Vec3<TFloat>{dir_x, -dir_y, static_cast<TFloat>(-1)};
@@ -2699,35 +2715,27 @@ void CameraModel<TSpectral>::throw_no_inverse_(const std::string& caller,
         "and sensor.");
 }
 
-template <IsSpectral TSpectral>
-Vec3<double> CameraModel<TSpectral>::tangent_(const Vec3<double>& p0, const Vec3<double>& p1) const
-{
-    Vec3<double> p = p1 - p0;
-    Vec3<double> r = glm::cross(p0, p);
-    Vec3<double> t = glm::cross(r, p0);
-    return glm::normalize(t);
-}
-
+/**
+ * @brief The solid angle of the spherical triangle between three unit vectors, by the formula
+ * of Van Oosterom and Strackee (1983):
+ *
+ *     tan(omega / 2) = |c0 . (c1 x c2)| / (1 + c0 . c1 + c0 . c2 + c1 . c2)
+ *
+ * The triple product is taken over the edges, as c0 . ((c1 - c0) x (c2 - c0)), which is the
+ * same: the coordinates of a pixel's corners are close together, so their differences are
+ * nearly exact (Sterbenz's lemma), while products of the coordinates themselves would cancel.
+ * This keeps a pixel's solid angle to about 1e-12 of itself at any focal length. Girard's
+ * theorem, the sum of the triangle's angles less pi, canceled nearly all of its digits for the
+ * small triangles of long focal lengths: 24% of the solid angle at 57.6 m with 5 um pixels.
+ */
 template <IsSpectral TSpectral>
 double CameraModel<TSpectral>::triangle_solid_angle_(const Vec3<double>& c0,
                                                      const Vec3<double>& c1,
                                                      const Vec3<double>& c2) const
 {
-    // Compute interior angles using tangent vectors
-    Vec3<double> t01 = tangent_(c0, c1);
-    Vec3<double> t02 = tangent_(c0, c2);
-    double angle0 = std::acos(glm::dot(t01, t02));
-
-    Vec3<double> t10 = tangent_(c1, c0);
-    Vec3<double> t12 = tangent_(c1, c2);
-    double angle1 = std::acos(glm::dot(t10, t12));
-
-    Vec3<double> t20 = tangent_(c2, c0);
-    Vec3<double> t21 = tangent_(c2, c1);
-    double angle2 = std::acos(glm::dot(t20, t21));
-
-    // Apply Girard's theorem
-    return angle0 + angle1 + angle2 - PI<double>();
+    const double triple = std::abs(glm::dot(c0, glm::cross(c1 - c0, c2 - c0)));
+    const double denominator = 1.0 + glm::dot(c0, c1) + glm::dot(c0, c2) + glm::dot(c1, c2);
+    return 2.0 * std::atan2(triple, denominator);
 }
 
 /**

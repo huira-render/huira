@@ -866,7 +866,6 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     [[noreturn]] void throw_no_inverse_(const std::string& caller,
                                         const Pixel& sensor_position) const;
 
-    Vec3<double> tangent_(const Vec3<double>& p0, const Vec3<double>& p1) const;
     double triangle_solid_angle_(const Vec3<double>& c0,
                                  const Vec3<double>& c1,
                                  const Vec3<double>& c2) const;

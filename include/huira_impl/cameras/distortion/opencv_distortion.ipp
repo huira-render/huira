@@ -116,4 +116,19 @@ Pixel OpenCVDistortion<TSpectral>::undistort(Pixel homogeneous_coords) const
     });
 }
 
+/**
+ * @brief Removes the distortion from normalized image coordinates, in double precision, to about
+ * the last bit (see Distortion::undistort_precise()).
+ *
+ * @param homogeneous_coords The distorted point, in normalized image coordinates.
+ * @return The undistorted point, or NaN in both coordinates where the distortion has no inverse.
+ */
+template <IsSpectral TSpectral>
+Pixel_d OpenCVDistortion<TSpectral>::undistort_precise(Pixel_d homogeneous_coords) const
+{
+    return this->undistort_newton_(homogeneous_coords, [this](const Pixel_d& point) {
+        return point + compute_delta_<double>(point);
+    });
+}
+
 } // namespace huira
