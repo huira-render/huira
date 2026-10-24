@@ -544,6 +544,17 @@ void Node<TSpectral>::set_z_down_y_forward_callback()
     this->set_custom_rotation_callback<ZDownYForwardCallback>();
 }
 
+/**
+ * @brief Place and orient the node by a state callback of a class of one's own, made from the
+ * arguments given.
+ *
+ * Its evaluate() gives the node's whole pose relative to its parent for a pose context (see
+ * StateCallback). It replaces both the node's position source and its rotation source. A position
+ * source set afterwards, such as set_position(), replaces only the position, and the callback
+ * still gives the rotation; likewise the other way round.
+ *
+ * @tparam TCallback A class derived from StateCallback.
+ */
 template <IsSpectral TSpectral>
 template <IsTransformCallback TCallback, typename... Args>
 void Node<TSpectral>::set_custom_state_callback(Args&&... args)
@@ -667,17 +678,24 @@ Transform<double> Node<TSpectral>::get_ssb_transform_(const PoseContext& context
     }
     Transform<double> parent_ssb = parent_->get_ssb_transform_(context, dt);
 
-    // Full transform callback: single source defines the entire local state
-    if (position_mode_ == TransformMode::TRANSFORM_CALLBACK &&
+    // Step 1: the sources that need nothing else of the node's pose.
+    Transform<double> local{};
+
+    // A whole-state callback gives the halves of the pose it is still the source of: a position
+    // or rotation source set after it replaces only its own half.
+    if (position_mode_ == TransformMode::TRANSFORM_CALLBACK ||
         rotation_mode_ == TransformMode::TRANSFORM_CALLBACK) {
-        Transform<double> local = transform_callback_->evaluate(emit_context);
-        local.scale = this->get_static_scale();
-        Transform<double> ssb_state = parent_ssb * local;
-        return ssb_state;
+        const Transform<double> state = transform_callback_->evaluate(emit_context);
+        if (position_mode_ == TransformMode::TRANSFORM_CALLBACK) {
+            local.position = state.position;
+            local.velocity = state.velocity;
+        }
+        if (rotation_mode_ == TransformMode::TRANSFORM_CALLBACK) {
+            local.rotation = state.rotation;
+            local.angular_velocity = state.angular_velocity;
+        }
     }
 
-    // Mixed case - Step 1:
-    Transform<double> local{};
     if (position_mode_ == TransformMode::SPICE_TRANSFORM) {
         // Convert SPICE SSB result to local frame
         auto [pos, vel, _] =
@@ -702,7 +720,7 @@ Transform<double> Node<TSpectral>::get_ssb_transform_(const PoseContext& context
         local.angular_velocity = rot.angular_velocity;
     }
 
-    // Mixed case - Step 2:
+    // Step 2: the callbacks given the other half of the pose.
     if (position_mode_ == TransformMode::POSITION_CALLBACK) {
         const PositionState state =
             position_callback_->evaluate(emit_context, {local.rotation, local.angular_velocity});
