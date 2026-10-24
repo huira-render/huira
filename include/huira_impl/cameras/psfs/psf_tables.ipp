@@ -147,6 +147,12 @@ inline constexpr double MAX_NEAR_SAMPLES = 65536.0;
 /// f/0.5, as fast as a lens in air can be, puts 2 x 10^4 periods in a 1 mm pixel at 100 nm.
 inline constexpr double MAX_PERIODS_PER_PIXEL = 1.0e5;
 
+/// The largest blur radius tabulated, in periods of the PSF's finest detail. A blurred profile is
+/// tabulated across the blur at a fraction of the period, and takes time and memory in proportion
+/// to the periods across it: about 2 ms each on one core, so 3.5 minutes and 85 MiB at this limit,
+/// which is a blur of 12,500 px at f/2.8 with 8.5 um pixels (a disc wider than most frames).
+inline constexpr double MAX_BLUR_PERIODS = 1.0e5;
+
 } // namespace psf_tables_detail
 
 /**
@@ -306,7 +312,8 @@ PsfTables<TSpectral>::PsfTables(const std::vector<Profile>& profiles,
  * @throws std::runtime_error if the f-number or a pitch is not positive and finite, the blur is
  *         negative or not finite, or the scattered light is invalid (see
  *         detail::ScatterProfile); or if the PSF's finest detail is under 1/MAX_PERIODS_PER_PIXEL
- *         of a pixel (see psf_tables_detail), which no lens comes near.
+ *         of a pixel, which no lens comes near, or the blur spans more than MAX_BLUR_PERIODS of
+ *         it, as a focus or a source very near the camera does (see psf_tables_detail).
  */
 template <IsSpectral TSpectral>
 PsfTables<TSpectral> PsfTables<TSpectral>::airy(double fnumber,
@@ -388,6 +395,18 @@ PsfTables<TSpectral> PsfTables<TSpectral>::airy(double fnumber,
                       " um pixels: the diffraction pattern's finest detail, lambda N, is " +
                       short_number(finest_period) + " px, and the tables follow it down to " +
                       limit + " px. (A lens in air is at most f/0.5.)");
+    }
+    // ...and so must the blur across it: one from a focus or a source very near the camera had a
+    // table of billions of nodes allocated for it, or took hours to build.
+    if (defocused && !(blur / finest_period <= psf_tables_detail::MAX_BLUR_PERIODS)) {
+        HUIRA_THROW_ERROR("PsfTables::airy - A defocus blur of " + short_number(blur) +
+                          " px in radius is too large to tabulate: it spans " +
+                          short_number(blur / finest_period) +
+                          " periods of the PSF's finest detail, and at most " +
+                          short_number(psf_tables_detail::MAX_BLUR_PERIODS) + " are (" +
+                          short_number(psf_tables_detail::MAX_BLUR_PERIODS * finest_period) +
+                          " px with these optics). A focus very near the camera, or a source "
+                          "very near it, blurs this much.");
     }
 
     // Scattered light alone, as with a PSF that was set or none, has no rings to resolve. Its

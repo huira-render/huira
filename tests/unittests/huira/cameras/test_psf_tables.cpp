@@ -1108,3 +1108,23 @@ TEST_CASE("An f-number or a scattered shoulder finer than the tables follow is r
     // f/0.5, as fast as a lens in air can be, is not near the limit (a guard):
     CHECK_NOTHROW(PsfTables<RGB>::airy(0.5, 1e-6, 1e-6, 20.0));
 }
+
+TEST_CASE("A blur too wide to tabulate is refused, rather than built for hours",
+          "[cameras][psf][defocus][validation]")
+{
+    // A blurred profile is tabulated across the blur at a fraction of the PSF's finest period. A
+    // camera focused 1 um away blurs a star by 5e7 px, for which 3e9 nodes (72 GB) were
+    // allocated; one focused 1 mm away, 5e4 px, took hours. f/2.8 with 8.5 um pixels has 8
+    // periods to the pixel, so the limit of 1e5 periods is 12,500 px:
+    using Catch::Matchers::ContainsSubstring;
+    CHECK_THROWS_WITH(PsfTables<RGB>::airy(2.8, 8.5e-6, 8.5e-6, 100.0, std::nullopt, 2e4),
+                      ContainsSubstring("blur"));
+
+    CameraModel<RGB> camera;
+    camera.configure_sensor_from_pitch(Resolution{16, 16}, units::Micrometer(8.5));
+    for (const double distance : {1e-6, 1e-3}) {
+        INFO("focused " << distance << " m away");
+        camera.set_focus_distance(units::Meter(distance));
+        CHECK_THROWS_WITH(camera.precompute(), ContainsSubstring("blur"));
+    }
+}
