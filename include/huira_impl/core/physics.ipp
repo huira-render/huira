@@ -43,8 +43,10 @@ inline std::vector<double> plancks_law(double temp, const std::vector<double>& l
 
     for (size_t i = 0; i < lambda.size(); ++i) {
         double lam = lambda[i];
-        // Planck's Law: B(T) = (2hc^2 / lam^5) * (1 / (exp(hc/lamkT) - 1))
-        double exponential = std::exp(c2 / (lam * temp)) - 1.0;
+        // Planck's Law: B(T) = (2hc^2 / lam^5) * (1 / (exp(hc/lamkT) - 1)). exp(x) - 1 by
+        // expm1(), which keeps its precision when x is small (hot bodies), where exp(x) - 1 loses
+        // it and, below about 1e-16, gives 0:
+        double exponential = std::expm1(c2 / (lam * temp));
         radiance[i] = (c1 / std::pow(lam, 5)) / exponential;
     }
     return radiance;
@@ -79,7 +81,8 @@ std::vector<T> linspace(T min, T max, size_t N)
  * @param temperature Temperature in Kelvin: finite, and not below absolute zero.
  * @param steps Number of integration steps per bin: at least 2.
  * @return TSpectral Black-body radiance in each spectral bin
- * @throws std::runtime_error if the temperature is negative or not finite, or steps is under 2.
+ * @throws std::runtime_error if the temperature is negative or not finite, or steps is under 2,
+ *         or the radiance is too large to hold in single precision.
  */
 template <IsSpectral TSpectral>
 TSpectral black_body(double temperature, std::size_t steps)
@@ -101,6 +104,10 @@ TSpectral black_body(double temperature, std::size_t steps)
             linspace(bins[i].min_wavelength, bins[i].max_wavelength, steps);
         std::vector<double> rad = plancks_law(temperature, lambda);
         radiance[i] = static_cast<float>(integrate(lambda, rad));
+    }
+    if (!radiance.valid()) {
+        HUIRA_THROW_ERROR("black_body - The radiance at " + std::to_string(temperature) +
+                          " K is too large to hold in single precision: " + radiance.to_string());
     }
 
     return radiance;
@@ -177,7 +184,7 @@ inline double v_band_irradiance(double visual_magnitude)
  * @param albedo Optional albedo scaling (default 1): finite and non-negative.
  * @return TSpectral Spectral irradiance
  * @throws std::runtime_error if the magnitude is not finite, or the albedo is negative or not
- *         finite.
+ *         finite, or the irradiance is too large to hold in single precision.
  */
 template <IsSpectral TSpectral>
 TSpectral visual_magnitude_to_irradiance(double visual_magnitude, TSpectral albedo)
@@ -235,6 +242,11 @@ TSpectral visual_magnitude_to_irradiance(double visual_magnitude, TSpectral albe
 
     TSpectral photon_counts = solar_template * static_cast<float>(scale) * albedo;
     TSpectral irradiance = photon_counts * TSpectral::photon_energies();
+    if (!irradiance.valid()) {
+        HUIRA_THROW_ERROR("visual_magnitude_to_irradiance - The irradiance of magnitude " +
+                          std::to_string(visual_magnitude) +
+                          " is too large to hold in single precision: " + irradiance.to_string());
+    }
     return irradiance;
 }
 

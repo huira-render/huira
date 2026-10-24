@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -136,6 +137,7 @@ TEST_CASE("Scene assets are checked when made", "[scene][validation]")
     CHECK_THROWS(scene.new_sphere_light(1_m, units::SpectralWatts<RGB>(RGB{-1.f})));
     CHECK_THROWS(black_body<RGB>(-10.0, 100));
     CHECK_THROWS(black_body<RGB>(5000.0, 1));
+    CHECK_THROWS(black_body<RGB>(1e40, 100)); // more than a float holds
     CHECK_THROWS(scene.add_light(nullptr));
 
     // The sky, and textures:
@@ -177,6 +179,8 @@ TEST_CASE("Scene assets are checked when made", "[scene][validation]")
 
     // Unresolved objects and stars:
     CHECK_THROWS(scene.new_unresolved_object_from_magnitude(NaN, RGB{0.3f}));
+    CHECK_THROWS(visual_magnitude_to_irradiance<RGB>(-200.0));  // more than a float holds
+    CHECK(visual_magnitude_to_irradiance<RGB>(-26.74).valid()); // the Sun (a guard)
     auto sun = scene.root.new_instance(scene.new_sun_light());
     CHECK_THROWS(scene.new_unresolved_asteroid(15.0, 3.0, sun)); // negative beyond 139 deg
     CHECK_NOTHROW(scene.new_unresolved_asteroid(15.0, 0.15, sun));
@@ -200,6 +204,25 @@ TEST_CASE("Scene assets are checked when made", "[scene][validation]")
     CHECK_THROWS(RGB::integrate_over_data({400.0, NaN, 600.0}, {1.f, 1.f, 1.f}));
     CHECK_THROWS(RGB::integrate_over_data({-400.0, 500.0, 600.0}, {1.f, 1.f, 1.f}));
     CHECK_THROWS(RGB::integrate_over_data({400.0, 500.0, 600.0}, {1.f, NaN_F, 1.f}));
+}
+
+TEST_CASE("A hot black body's radiance is Rayleigh-Jeans', not infinite", "[scene][physics]")
+{
+    // Planck's exp(x) - 1, for x = hc / (lambda k T) under about 1e-16, was 0, and the radiance
+    // infinite. At high temperatures the spectral radiance is Rayleigh-Jeans', 2 c k T / lambda^4,
+    // whose integral over a bin is 2 c k T / 3 (1 / min^3 - 1 / max^3):
+    const double temperature = 1e30;
+    const RGB radiance = black_body<RGB>(temperature, 1000);
+    const auto bins = RGB::get_all_bins();
+    for (std::size_t i = 0; i < RGB::size(); ++i) {
+        INFO("bin " << i);
+        const double min = bins[i].min_wavelength;
+        const double max = bins[i].max_wavelength;
+        const double rayleigh_jeans = 2.0 * SPEED_OF_LIGHT<double>() * K_BOLTZ<double>() *
+                                      temperature / 3.0 *
+                                      (1.0 / (min * min * min) - 1.0 / (max * max * max));
+        CHECK(std::abs(static_cast<double>(radiance[i]) / rayleigh_jeans - 1.0) < 1e-5);
+    }
 }
 
 TEST_CASE("An instance cannot look at itself or at a point that is not finite",
