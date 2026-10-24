@@ -131,7 +131,7 @@ clang-format -i path/to/your/file.cpp
 To run the same check as CI, from the root of the repository:
 
 ```bash
-find examples include apps tests bindings -type f \
+find examples include apps tests bindings tools -type f \
     \( -name "*.cpp" -o -name "*.hpp" -o -name "*.cc" -o -name "*.h" -o -name "*.ipp" \) \
     -exec clang-format --style=file --dry-run --Werror {} +
 ```
