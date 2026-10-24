@@ -840,6 +840,13 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                         if (cos_theta <= 0.0f || f.max() <= 0.0f) {
                             continue;
                         }
+                        // A surface that transmits nothing receives no light from below itself,
+                        // though a shading normal tilted from the geometric one faces directions
+                        // there. Light sampling refuses them too (sample_light_contribution_()).
+                        if (params.transmission.max() <= 0.0f &&
+                            glm::dot(cs.wi, isect.normal_g) <= 0.0f) {
+                            continue;
+                        }
 
                         // Trace toward the source's bounding proxy:
                         Vec3<float> probe_normal = (glm::dot(cs.wi, isect.normal_g) < 0.0f)
@@ -883,6 +890,16 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                         material->bsdf_sample(isect.wo, {params, shading_isect}, u1, u2);
 
                     if (!bs.is_valid()) {
+                        break;
+                    }
+
+                    // Nor does it reflect light below itself. A BSDF samples directions around
+                    // the shading normal, and where a normal map, or normals interpolated across
+                    // a mesh, tilt that from the geometric normal, some are below the geometric
+                    // surface: following one would trace the path on the far side of an opaque
+                    // surface, through it if it is thin. The path ends there instead.
+                    if (params.transmission.max() <= 0.0f &&
+                        glm::dot(bs.wi, isect.normal_g) <= 0.0f) {
                         break;
                     }
 
