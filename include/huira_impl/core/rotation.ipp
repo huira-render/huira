@@ -1,6 +1,8 @@
 #include <array>
+#include <cmath>
 #include <limits>
 #include <ostream>
+#include <sstream>
 #include <string>
 
 #include "glm/glm.hpp"
@@ -15,8 +17,13 @@
 namespace huira {
 /**
  * @brief Construct a Rotation from a local-to-parent rotation matrix.
+ *
+ * A matrix within 1e-2 of a rotation, as one written to 3 decimals is, is made exactly one (with
+ * a warning beyond 1e-3); see detail::to_rotation_matrix().
+ *
  * @param matrix 3x3 rotation matrix
  * @return Rotation<T> Rotation object
+ * @throws std::runtime_error if the matrix is not finite, or is not a rotation within 1e-2
  */
 template <IsFloatingPoint T>
 Rotation<T> Rotation<T>::from_local_to_parent(Mat3<T> matrix)
@@ -254,7 +261,7 @@ Rotation<T> Rotation<T>::intrinsic_euler_angles(units::Radian angle1,
  * @param z_axis Z axis vector
  * @return Rotation<T> Rotation object
  * @throws std::runtime_error unless they are finite, of unit length and at right angles, and
- *         right-handed, within 1e-3 (see set_matrix_()).
+ *         right-handed, within 1e-2 (see detail::to_rotation_matrix()).
  */
 template <IsFloatingPoint T>
 Rotation<T> Rotation<T>::from_basis_vectors(Vec3<T> x_axis, Vec3<T> y_axis, Vec3<T> z_axis)
@@ -577,43 +584,13 @@ Mat3<T> Rotation<T>::parent_to_local_z(units::Radian angle)
 }
 
 /**
- * @brief Set the internal rotation matrix, checking for orthonormality.
+ * @brief Set the internal rotation matrix, taken as a rotation (see detail::to_rotation_matrix()).
  * @param matrix 3x3 rotation matrix
  */
 template <IsFloatingPoint T>
 void Rotation<T>::set_matrix_(Mat3<T> matrix)
 {
-    // Within this, a matrix is a rotation that rounding has nudged, and is made exactly one;
-    // beyond it, it is something else. Each test is written to pass only when it holds, since
-    // NaN fails every comparison:
-    constexpr T loose_epsilon = static_cast<T>(1e-3);
-    for (int col = 0; col < 3; ++col) {
-        for (int row = 0; row < 3; ++row) {
-            if (!std::isfinite(matrix[col][row])) {
-                HUIRA_THROW_ERROR("Rotation matrix must be finite: " + glm::to_string(matrix));
-            }
-        }
-    }
-    T det = glm::determinant(matrix);
-    if (!(std::fabs(det - static_cast<T>(1)) <= loose_epsilon)) {
-        HUIRA_THROW_ERROR(
-            "Rotation matrix must have a determinant close to 1. Given matrix has determinant: " +
-            std::to_string(det));
-    }
-    // A shear can have a determinant of 1 too; a rotation's columns are of unit length and at
-    // right angles:
-    const Mat3<T> gram = glm::transpose(matrix) * matrix;
-    for (int col = 0; col < 3; ++col) {
-        for (int row = 0; row < 3; ++row) {
-            const T identity = col == row ? static_cast<T>(1) : static_cast<T>(0);
-            if (!(std::fabs(gram[col][row] - identity) <= loose_epsilon)) {
-                HUIRA_THROW_ERROR("Rotation matrix must be orthonormal, its columns of unit length "
-                                  "and at right angles: " +
-                                  glm::to_string(matrix));
-            }
-        }
-    }
-    this->matrix_ = orthonormalize_(matrix);
+    this->matrix_ = detail::to_rotation_matrix(matrix, "Rotation matrix");
 }
 
 /// Throws unless a quaternion is finite and of unit length, within 1e-3: a zero quaternion
@@ -630,31 +607,80 @@ void Rotation<T>::check_quaternion_(const Quaternion<T>& quaternion)
     }
 }
 
+namespace detail {
 /**
- * @brief Orthonormalize a 3x3 matrix using Gram-Schmidt.
- * @param matrix Input matrix
- * @return Mat3<T> Orthonormalized matrix
+ * @brief Take a matrix as a rotation, made exactly one, or refuse it.
+ *
+ * A rotation's columns are of unit length and at right angles, and its determinant is 1 (a shear
+ * can have a determinant of 1 too, and a mirror has orthonormal columns). How far a matrix is from
+ * one is the most that its Gram matrix (its transpose times it) differs from the identity in an
+ * entry, or its determinant from 1:
+ * - Within 1e-3, as a rotation computed in floating point is, it is taken quietly.
+ * - Within 1e-2, it is taken with a warning. Rounding leaves a rotation written to 3 decimals, as
+ *   hand-written and exported files often are, within 2.6e-3 (1.7e-3 in its Gram matrix).
+ * - Beyond that it is something else, such as a shear, a scale or a mirror, and is refused, since
+ *   making it a rotation would hide that.
+ *
+ * What is taken is made exactly orthonormal, by Gram-Schmidt: the first column keeps its
+ * direction.
+ *
+ * @param matrix The matrix
+ * @param what What the matrix is, to begin each message with (such as "Rotation matrix")
+ * @return Mat3<T> The rotation, exactly orthonormal
+ * @throws std::runtime_error if the matrix is not finite, or is not a rotation within 1e-2
  */
 template <IsFloatingPoint T>
-Mat3<T> Rotation<T>::orthonormalize_(const Mat3<T>& matrix) const
+Mat3<T> to_rotation_matrix(const Mat3<T>& matrix, const std::string& what)
 {
-    // Extract columns (basis vectors)
-    Vec3<T> x = matrix[0];
-    Vec3<T> y = matrix[1];
-    Vec3<T> z = matrix[2];
+    constexpr T QUIET_TOLERANCE = static_cast<T>(1e-3);
+    constexpr T ROUNDING_TOLERANCE = static_cast<T>(1e-2);
+    const auto format = [](T value) {
+        std::ostringstream out;
+        out << value;
+        return out.str();
+    };
 
-    // Gram-Schmidt orthonormalization
-    x = glm::normalize(x);
-    y = y - glm::dot(y, x) * x;
-    y = glm::normalize(y);
-    z = glm::cross(x, y);
+    for (int col = 0; col < 3; ++col) {
+        for (int row = 0; row < 3; ++row) {
+            if (!std::isfinite(matrix[col][row])) {
+                HUIRA_THROW_ERROR(what + " must be finite: " + glm::to_string(matrix));
+            }
+        }
+    }
 
-    // Construct orthonormal matrix
-    Mat3<T> result;
-    result[0] = x;
-    result[1] = y;
-    result[2] = z;
+    // Entries whose products overflow make these NaN, which fails every comparison, so NaN is
+    // kept as the worst and each test is written to pass only when it holds:
+    T off = 0;
+    const auto consider = [&off](T value) {
+        if (std::isnan(value) || value > off) {
+            off = value;
+        }
+    };
+    const T determinant = glm::determinant(matrix);
+    consider(std::fabs(determinant - static_cast<T>(1)));
+    const Mat3<T> gram = glm::transpose(matrix) * matrix;
+    for (int col = 0; col < 3; ++col) {
+        for (int row = 0; row < 3; ++row) {
+            const T identity = col == row ? static_cast<T>(1) : static_cast<T>(0);
+            consider(std::fabs(gram[col][row] - identity));
+        }
+    }
 
-    return result;
+    if (!(off <= ROUNDING_TOLERANCE)) {
+        HUIRA_THROW_ERROR(what + " must be a rotation, its columns of unit length and at right " +
+                          "angles and its determinant 1, within " + format(ROUNDING_TOLERANCE) +
+                          ", but is off by " + format(off) + ", with determinant " +
+                          format(determinant) + ": " + glm::to_string(matrix));
+    }
+    if (off > QUIET_TOLERANCE) {
+        HUIRA_LOG_WARNING(what + " is a rotation only within " + format(off) + ", not " +
+                          format(QUIET_TOLERANCE) + " (as one written to 3 decimals can be), " +
+                          "and is made exactly one: " + glm::to_string(matrix));
+    }
+
+    const Vec3<T> x = glm::normalize(matrix[0]);
+    const Vec3<T> y = glm::normalize(matrix[1] - glm::dot(matrix[1], x) * x);
+    return Mat3<T>{x, y, glm::cross(x, y)};
 }
+} // namespace detail
 } // namespace huira

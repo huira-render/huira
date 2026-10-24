@@ -6,6 +6,7 @@
 #include "catch2/catch_template_test_macros.hpp"
 #include "catch2/catch_test_macros.hpp"
 #include "catch2/matchers/catch_matchers_floating_point.hpp"
+#include "catch2/matchers/catch_matchers_string.hpp"
 #include "huira/core/rotation.hpp"
 
 using namespace huira;
@@ -292,6 +293,136 @@ TEMPLATE_TEST_CASE("Rotation - Inputs that are not rotations are refused",
         Vec3Type{0, 0, 1}, units::Radian(std::numeric_limits<double>::infinity())));
     // No axis and no angle is no rotation (a guard):
     CHECK_NOTHROW(RotationType::from_local_to_parent(Vec3Type{0, 0, 0}, units::Radian(0.0)));
+}
+
+namespace {
+/// Counts the warnings logged while it exists, without printing them.
+struct WarningCount {
+    int count = 0;
+    LogLevel level = Logger::get_level();
+    bool console = Logger::is_console_warning_enabled();
+
+    WarningCount()
+    {
+        Logger::set_level(LogLevel::Warning);
+        Logger::enable_console_warning(false);
+        Logger::set_custom_sink(
+            [this](const LogEntry& entry) { count += entry.level == LogLevel::Warning ? 1 : 0; });
+    }
+    ~WarningCount()
+    {
+        Logger::clear_custom_sink();
+        Logger::enable_console_warning(console);
+        Logger::set_level(level);
+    }
+
+    WarningCount(const WarningCount&) = delete;
+    WarningCount& operator=(const WarningCount&) = delete;
+};
+
+/// Each entry of a matrix rounded to 3 decimals, as a file might give it.
+template <typename T>
+Mat3<T> to_3_decimals(Mat3<T> matrix)
+{
+    for (int col = 0; col < 3; ++col) {
+        for (int row = 0; row < 3; ++row) {
+            matrix[col][row] = std::round(matrix[col][row] * T(1000)) / T(1000);
+        }
+    }
+    return matrix;
+}
+} // namespace
+
+TEMPLATE_TEST_CASE("Rotation - A matrix written to 3 decimals is taken as the rotation it rounds",
+                   "[rotation][validation]",
+                   float,
+                   double)
+{
+    // Rounding to 3 decimals, as a model's node matrices often are, leaves a rotation's columns
+    // off unit length and right angles by up to 1.7e-3, and its determinant off 1 by up to
+    // 2.6e-3, but they were refused beyond 1e-3: about 1 in 7 of these, and nearly 1 in 4 random
+    // rotations. They are taken, with a warning, and made exactly orthonormal.
+    using RotationType = Rotation<TestType>;
+    const WarningCount warnings;
+    double worst = 0;
+    for (int a = 0; a < 360; a += 15) {
+        for (int b = -90; b <= 90; b += 15) {
+            for (int c = 0; c < 360; c += 15) {
+                const RotationType exact = RotationType::extrinsic_euler_angles(
+                    units::Degree(a), units::Degree(b), units::Degree(c), "XYZ");
+                const Mat3<TestType> written = to_3_decimals(exact.local_to_parent_matrix());
+                INFO("Euler angles " << a << ", " << b << ", " << c);
+                RotationType rotation;
+                REQUIRE_NOTHROW(rotation = RotationType::from_local_to_parent(written));
+                const Mat3<TestType> taken = rotation.local_to_parent_matrix();
+                const Mat3<TestType> gram = glm::transpose(taken) * taken;
+                for (int col = 0; col < 3; ++col) {
+                    for (int row = 0; row < 3; ++row) {
+                        const double identity = col == row ? 1.0 : 0.0;
+                        REQUIRE(std::fabs(gram[col][row] - identity) < 1e-5);
+                        worst = std::max(
+                            worst,
+                            static_cast<double>(std::fabs(
+                                taken[col][row] - exact.local_to_parent_matrix()[col][row])));
+                    }
+                }
+            }
+        }
+    }
+    // The rotation it was rounded from, within the rounding:
+    CHECK(worst < 2e-3);
+    CHECK(warnings.count > 0);
+
+    // One that was refused, taken with a warning: its first and last columns are 1.4e-3 from right
+    // angles, and its middle one 1.2e-3 from unit length.
+    const Mat3<TestType> refused{TestType(-0.41),
+                                 TestType(0.709),
+                                 TestType(-0.574),
+                                 TestType(-0.681),
+                                 TestType(0.18),
+                                 TestType(0.709),
+                                 TestType(0.607),
+                                 TestType(0.681),
+                                 TestType(0.41)};
+    const int before = warnings.count;
+    CHECK_NOTHROW(RotationType::from_local_to_parent(refused));
+    CHECK_NOTHROW(RotationType::from_parent_to_local(refused));
+    CHECK(warnings.count == before + 2);
+
+    // A rotation as precise as its type is taken quietly, as it was:
+    CHECK_NOTHROW(RotationType::extrinsic_euler_angles(
+        units::Degree(60), units::Degree(35), units::Degree(120), "XYZ"));
+    CHECK(warnings.count == before + 2);
+}
+
+TEMPLATE_TEST_CASE("Rotation - A matrix further from a rotation than rounding leaves is refused",
+                   "[rotation][validation]",
+                   float,
+                   double)
+{
+    // Rounding to 3 decimals leaves a rotation within 2.6e-3 of one; a matrix 1e-2 or more from
+    // one is something else, a shear or a scale, and turning it into some rotation would hide that.
+    using RotationType = Rotation<TestType>;
+    using Mat3Type = Mat3<TestType>;
+    const WarningCount warnings;
+
+    Mat3Type shear{1};
+    shear[1][0] = TestType(0.02); // columns 0.02 from right angles
+    CHECK_THROWS_WITH(RotationType::from_local_to_parent(shear),
+                      Catch::Matchers::ContainsSubstring("0.02"));
+    shear[1][0] = TestType(0.005); // within 1e-2: taken, with a warning
+    CHECK_NOTHROW(RotationType::from_local_to_parent(shear));
+    CHECK(warnings.count == 1);
+
+    CHECK_THROWS(RotationType::from_local_to_parent(Mat3Type{TestType(1.02)}));
+    CHECK_THROWS(RotationType::from_local_to_parent(Mat3Type{TestType(0.98)}));
+    CHECK_NOTHROW(RotationType::from_local_to_parent(Mat3Type{TestType(1.002)}));
+
+    // A mirror's columns are orthonormal, but its determinant is -1:
+    Mat3Type mirror{1};
+    mirror[0][0] = -1;
+    CHECK_THROWS_WITH(RotationType::from_local_to_parent(mirror),
+                      Catch::Matchers::ContainsSubstring("with determinant -1"));
 }
 
 TEMPLATE_TEST_CASE("Rotation - A quaternion within 1e-3 of unit length is taken as its direction",
