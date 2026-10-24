@@ -1,8 +1,10 @@
 #pragma once
 
+#include <algorithm>
 #include <cmath>
 #include <memory>
 #include <optional>
+#include <vector>
 
 #include "glm/glm.hpp"
 #include "huira/concepts/spectral_concepts.hpp"
@@ -40,6 +42,7 @@ class LookAtCallbackBase : public RotationCallback {
     [[nodiscard]] RotationState evaluate(const PoseContext& context,
                                          const PositionState& state) const override
     {
+        const CycleGuard_ guard(this);
         const Vec3<double>& local_pos = state.position;
         const Vec3<double>& local_vel = state.velocity;
         RotationState result;
@@ -78,6 +81,39 @@ class LookAtCallbackBase : public RotationCallback {
                                                   const Transform<double>& parent) const = 0;
 
   private:
+    /**
+     * @brief Marks a look-at callback as being evaluated on this thread, and throws if it already
+     * is: its target's position then depends on its own node's orientation, as when two nodes look
+     * at each other, directly or through others, and evaluating it would recurse until the stack
+     * overflowed. Poses are evaluated on one thread each, so the mark is the thread's own.
+     */
+    class CycleGuard_ {
+      public:
+        explicit CycleGuard_(const LookAtCallbackBase* callback)
+        {
+            std::vector<const LookAtCallbackBase*>& active = active_();
+            if (std::find(active.begin(), active.end(), callback) != active.end()) {
+                HUIRA_THROW_ERROR(
+                    callback->self_->get_info() +
+                    " - look_at: where its target is depends on how this node is turned, so it "
+                    "cannot be aimed at it. Its targets lead back to it: nodes look at each "
+                    "other, directly or through others.");
+            }
+            active.push_back(callback);
+        }
+        ~CycleGuard_() { active_().pop_back(); }
+
+        CycleGuard_(const CycleGuard_&) = delete;
+        CycleGuard_& operator=(const CycleGuard_&) = delete;
+
+      private:
+        static std::vector<const LookAtCallbackBase*>& active_()
+        {
+            thread_local std::vector<const LookAtCallbackBase*> active;
+            return active;
+        }
+    };
+
     /// Below this squared cross-product length the forward/up pair is treated as
     /// parallel. forward is unit, so this is ~ (|up| * sin(theta))^2; with a unit
     /// up it corresponds to theta < ~1e-6 rad.

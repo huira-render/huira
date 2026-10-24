@@ -237,6 +237,39 @@ TEST_CASE("An instance cannot look at itself or at a point that is not finite",
     CHECK_NOTHROW(camera.look_at(Vec3<double>{0.0, 0.0, 1.0}));
 }
 
+TEST_CASE("Instances that look at each other are reported, not recursed into",
+          "[scene][validation]")
+{
+    // Each one's orientation needed the other's, which needed its own: the stack overflowed when
+    // a pose was evaluated. The cycle can only be seen then, when the poses are.
+    Scene<RGB> scene;
+    auto a = scene.root.new_instance(scene.new_camera_model());
+    auto b = scene.root.new_instance(scene.new_camera_model());
+    auto c = scene.root.new_instance(scene.new_camera_model());
+    a.set_position(1_m, 0_m, 0_m);
+    b.set_position(0_m, 1_m, 0_m);
+    c.set_position(0_m, 0_m, 1_m);
+    const Time time = Time::from_et(0.0);
+    const auto pose = [&](const auto& instance) {
+        return instance.get()->get_apparent_transform(
+            ObservationMode::TRUE_STATE, time, time, Transform<double>{});
+    };
+
+    a.look_at(b);
+    b.look_at(a);
+    CHECK_THROWS(pose(a));
+    CHECK_THROWS(pose(b));
+
+    // Through a third:
+    b.look_at(c);
+    c.look_at(a);
+    CHECK_THROWS(pose(a));
+
+    // A chain is fine, and is evaluated again after a cycle was found:
+    c.look_at(Vec3<double>{0.0, 0.0, 0.0});
+    CHECK(std::isfinite(pose(a).rotation.z_axis().x));
+}
+
 TEST_CASE("A scene view needs a temporal sample and an exposure that runs forwards",
           "[scene][validation]")
 {
