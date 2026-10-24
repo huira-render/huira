@@ -494,6 +494,24 @@ const PixelT* Image<PixelT>::data() const noexcept
     return data_.data();
 }
 
+/**
+ * @brief Set the bit depth of the sensor whose response this is, or 0 for any other image.
+ *
+ * @param bits From 0 to 63, so that the sensor's largest DN, 2^bits - 1, fits in the 64-bit
+ *        integers the image writers count in.
+ * @throws std::runtime_error if it is outside that range.
+ */
+template <IsImagePixel PixelT>
+void Image<PixelT>::set_sensor_bit_depth(int bits)
+{
+    if (bits < 0 || bits > MAX_SENSOR_BIT_DEPTH_) {
+        HUIRA_THROW_ERROR("Image::set_sensor_bit_depth - The bit depth must be from 0 (for an "
+                          "image that is not a sensor response) to " +
+                          std::to_string(MAX_SENSOR_BIT_DEPTH_) + ": " + std::to_string(bits));
+    }
+    sensor_bit_depth_ = bits;
+}
+
 template <IsImagePixel PixelT>
 void Image<PixelT>::convolve(const Image<PixelT>& kernel)
     requires(!IsInteger<PixelT>)

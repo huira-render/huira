@@ -297,6 +297,19 @@ TEST_CASE("Copies of an image are independent and keep its sensor bit depth", "[
     CHECK(move_assigned.sensor_bit_depth() == 12);
 }
 
+TEST_CASE("A sensor bit depth is from 0 to 63", "[images][image][validation]")
+{
+    // 2^64 - 1, the largest DN of 64 bits, is a shift by 64 of a 64-bit integer, which the image
+    // writers count in: undefined.
+    Image<float> image = ramp();
+    image.set_sensor_bit_depth(12);
+    CHECK_THROWS(image.set_sensor_bit_depth(64));
+    CHECK_THROWS(image.set_sensor_bit_depth(-1));
+    CHECK(image.sensor_bit_depth() == 12);
+    CHECK_NOTHROW(image.set_sensor_bit_depth(63));
+    CHECK_NOTHROW(image.set_sensor_bit_depth(0));
+}
+
 TEST_CASE("clear(), fill() and reset() change an image's pixels", "[images][image]")
 {
     Image<float> image = ramp();
