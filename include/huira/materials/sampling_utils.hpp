@@ -57,24 +57,6 @@ struct HemisphereSample {
             .pdf = (n + 1.0f) / (2.0f * std::numbers::pi_v<float>)*std::pow(z, n)};
 }
 
-/**
- * @brief Sine-weighted hemisphere sampling.
- * Biases samples toward the horizon. Useful for crater interior rendering
- * where zenith contributions are occluded and the primary contributing
- * directions are near-horizontal.
- */
-[[nodiscard]] inline HemisphereSample sine_hemisphere(float u1, float u2) noexcept
-{
-    const float cos_theta = std::cbrt(1.0f - u1);
-    const float sin_theta = std::sqrt(std::max(0.0f, 1.0f - cos_theta * cos_theta));
-    const float phi = 2.0f * std::numbers::pi_v<float> * u2;
-
-    const float pdf = 2.0f * sin_theta / (std::numbers::pi_v<float> * std::numbers::pi_v<float>);
-
-    return {.direction = {sin_theta * std::cos(phi), sin_theta * std::sin(phi), cos_theta},
-            .pdf = std::max(pdf, 1e-8f)};
-}
-
 // =========================================================================
 //  GGX / Microfacet sampling
 // =========================================================================
