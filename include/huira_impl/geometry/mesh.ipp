@@ -56,11 +56,14 @@ void Mesh<TSpectral>::check_buffers_() const
     };
     for (std::size_t k = 0; k < vertex_buffer_.size(); ++k) {
         const auto& vertex = vertex_buffer_[k];
+        // The albedo is a reflectance, which the material's own multiplies (Hapke takes the
+        // square root of 1 minus it):
         if (!finite(vertex.position) || !finite(vertex.normal) || !finite(vertex.uv) ||
-            !vertex.albedo.valid()) {
+            !vertex.albedo.valid_ratio()) {
             HUIRA_THROW_ERROR("Mesh::Mesh - Vertex " + std::to_string(k) +
-                              " must have a finite position, normal and uv, and a finite, "
-                              "non-negative albedo");
+                              " must have a finite position, normal and uv, and an albedo "
+                              "from 0 to 1: " +
+                              vertex.albedo.to_string());
         }
     }
     for (std::size_t k = 0; k < tangent_buffer_.size(); ++k) {

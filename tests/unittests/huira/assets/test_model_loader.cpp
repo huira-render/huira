@@ -529,6 +529,16 @@ TEST_CASE("A model's vertex colors are its vertices' albedos, in the scene's spe
     const auto& swapped = mesh_of(converted, "Tri")->vertex_buffer();
     CHECK(swapped[0].albedo == RGB{0.f, 0.f, 1.f});
     CHECK(swapped[2].albedo == RGB{0.25f, 0.f, 0.f});
+
+    // A color beyond 1 is not a reflectance, which the mesh requires, so it is clamped, with a
+    // warning, as an MTL file's diffuse color is:
+    const fs::path bright = write_file("bright_triangle.obj",
+                                       "o Bright\n"
+                                       "v 0 0 0 1.5 0.5 0\nv 1 0 0 0 0 0\nv 0 1 0 0 0 0\n"
+                                       "f 1 2 3\n");
+    Scene<RGB> clamped;
+    REQUIRE_NOTHROW(clamped.load_model(bright));
+    CHECK(mesh_of(clamped, "Bright")->vertex_buffer()[0].albedo == RGB{1.f, 0.5f, 0.f});
 }
 
 TEST_CASE("A model's normals and tangents that are not finite are replaced or dropped",

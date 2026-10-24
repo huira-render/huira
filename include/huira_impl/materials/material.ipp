@@ -107,6 +107,22 @@ void Material<TSpectral>::check_image_(const std::shared_ptr<Image<TPixel>>& ima
     }
 }
 
+/// As check_image_(), and throws unless every pixel is a ratio, from 0 to 1, as the constant and
+/// factor are: a texture's pixels need only be finite and non-negative, as an emissive one's are.
+template <IsSpectral TSpectral>
+void Material<TSpectral>::check_ratio_image_(const std::shared_ptr<Image<TSpectral>>& image,
+                                             const char* what) const
+{
+    check_image_(image, what);
+    for (std::size_t i = 0; i < image->size(); ++i) {
+        if (!(*image)[i].valid_ratio()) {
+            HUIRA_THROW_ERROR(this->get_info() + " - The " + what +
+                              " image's pixels must be from 0 to 1, but pixel " +
+                              std::to_string(i) + " is " + (*image)[i].to_string());
+        }
+    }
+}
+
 template <IsSpectral TSpectral>
 void Material<TSpectral>::set_bsdf(std::shared_ptr<BSDF<TSpectral>> bsdf)
 {
@@ -135,7 +151,7 @@ void Material<TSpectral>::set_albedo(TSpectral albedo)
 template <IsSpectral TSpectral>
 void Material<TSpectral>::set_albedo_image(std::shared_ptr<Image<TSpectral>> albedo_image)
 {
-    check_image_(albedo_image, "albedo");
+    check_ratio_image_(albedo_image, "albedo");
     albedo_image_ = albedo_image;
 }
 
@@ -290,7 +306,7 @@ template <IsSpectral TSpectral>
 void Material<TSpectral>::set_transmission_image(
     std::shared_ptr<Image<TSpectral>> transmission_image)
 {
-    check_image_(transmission_image, "transmission");
+    check_ratio_image_(transmission_image, "transmission");
     transmission_image_ = transmission_image;
 }
 

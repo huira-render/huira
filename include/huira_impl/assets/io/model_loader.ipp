@@ -176,6 +176,7 @@ PrimitiveHandle<TSpectral> ModelLoader<TSpectral>::convert_mesh_(const aiMesh* a
     // ASSIMP gives degenerate triangles, which have no area, normals and tangents that are NaN.
     // The mesh refuses those, so they are replaced, and counted:
     std::size_t bad_normals = 0;
+    std::size_t bright_colors = 0;
     bool bad_tangents = false;
     const auto finite = [](const Vec3<float>& v) {
         return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z);
@@ -213,6 +214,14 @@ PrimitiveHandle<TSpectral> ModelLoader<TSpectral>::convert_mesh_(const aiMesh* a
             // NOTE: Vertex alpha is ignored
             RGB rgb{color.r, color.g, color.b};
             vertex.albedo = ctx.spectral_conversion(rgb);
+            // An albedo is a reflectance, which the mesh requires, but a model's vertex colors
+            // need not keep within 1 (PLY's floats, say), so each bin is clamped to it:
+            if (!vertex.albedo.valid_ratio()) {
+                for (std::size_t k = 0; k < TSpectral::size(); ++k) {
+                    vertex.albedo[k] = std::clamp(vertex.albedo[k], 0.f, 1.f);
+                }
+                ++bright_colors;
+            }
         }
 
         // Tangent and bitangent (needed for normal mapping)
@@ -232,6 +241,11 @@ PrimitiveHandle<TSpectral> ModelLoader<TSpectral>::convert_mesh_(const aiMesh* a
         HUIRA_LOG_WARNING("ModelLoader::convert_mesh_ - " + std::to_string(bad_normals) +
                           " normals of mesh " + std::string(ai_mesh->mName.C_Str()) +
                           " were not finite, as on degenerate triangles, and were set to +y");
+    }
+    if (bright_colors > 0) {
+        HUIRA_LOG_WARNING("ModelLoader::convert_mesh_ - " + std::to_string(bright_colors) +
+                          " vertex colors of mesh " + std::string(ai_mesh->mName.C_Str()) +
+                          " are not reflectances, from 0 to 1, and each bin was clamped to that");
     }
     if (bad_tangents) {
         // Without tangents the mesh is drawn as it is without a normal map's detail:
