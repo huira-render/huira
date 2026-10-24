@@ -216,6 +216,19 @@ TEST_CASE("Invalid settings throw and leave the camera as it was", "[cameras][va
     CHECK_THROWS(offset_camera.set_intrinsics(
         1000.f, 1000.f, 3.5f, 3.5f, Resolution{8, 8}, units::Millimeter(10.0)));
     CHECK(snapshot(offset_camera) == offset_before);
+    // ...or one whose f/2.8 aperture, the default, is too large or too small to hold:
+    CameraModel<RGB> default_aperture;
+    const Snapshot default_before = snapshot(default_aperture);
+    for (double f : {1e23, 1e-30}) {
+        CHECK_THROWS(default_aperture.set_focal_length(units::Millimeter(f)));
+        CHECK_THROWS(default_aperture.set_intrinsics(static_cast<float>(f * 1e3),
+                                                     static_cast<float>(f * 1e3),
+                                                     3.5f,
+                                                     3.5f,
+                                                     Resolution{8, 8},
+                                                     units::Millimeter(f)));
+    }
+    CHECK(snapshot(default_aperture) == default_before);
 
     // Aperture:
     for (float fstop : {0.f, -2.f, NaN_F, INF_F}) {

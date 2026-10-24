@@ -111,6 +111,7 @@ void CameraModel<TSpectral>::set_focal_length(units::Millimeter focal_length)
 {
     const float f = focal_length.to_si_f();
     check_focal_length_(f, "CameraModel::set_focal_length");
+    resize_default_aperture_(f);
 
     is_explicit_matrix_ = false;
     focal_length_ = f;
@@ -516,6 +517,7 @@ void CameraModel<TSpectral>::set_intrinsics(float fx,
     const units::Meter pitch_x(static_cast<double>(f) / static_cast<double>(fx));
     const units::Meter pitch_y(static_cast<double>(f) / static_cast<double>(fy));
     SensorModel<TSpectral>::check_pixel_pitch(pitch_x, pitch_y, caller);
+    resize_default_aperture_(f); // changes nothing if it throws, and nothing after it does
 
     is_explicit_matrix_ = true;
     fx_ = fx;
@@ -2374,6 +2376,22 @@ void CameraModel<TSpectral>::set_aperture_area_(units::Meter diameter)
     aperture_->set_area(area);
     if (aperture_->get_area().to_si() != previous_area) {
         optics_changed_(OpticsInput::Aperture);
+    }
+}
+
+/**
+ * @brief Resize the default aperture, which keeps the camera at f/2.8, for a focal length about to
+ * be stored. A focal length whose aperture can't be held (its area overflows or underflows single
+ * precision) is then refused before anything changes, since set_aperture_area_() changes nothing
+ * when it throws. The setters call this last of all that can throw.
+ *
+ * @param focal_length The new focal length, in meters.
+ */
+template <IsSpectral TSpectral>
+void CameraModel<TSpectral>::resize_default_aperture_(float focal_length)
+{
+    if (aperture_source_ == ApertureSource::Default) {
+        set_aperture_area_(units::Meter(focal_length / DEFAULT_FSTOP_));
     }
 }
 
