@@ -45,6 +45,31 @@ Time at(double et)
     return Time::from_et(et);
 }
 
+/// A whole pose, the same at every time: at (1, 2, 3) m and turned 0.5 rad about z, with the rates
+/// given as they are.
+struct FixedState : StateCallback {
+    Transform<double> evaluate(const PoseContext&) const override
+    {
+        Transform<double> state;
+        state.position = Vec3<double>{1.0, 2.0, 3.0};
+        state.velocity = Vec3<double>{4.0, 5.0, 6.0};
+        state.rotation =
+            Rotation<double>::from_local_to_parent(Vec3<double>{0.0, 0.0, 1.0}, units::Radian(0.5));
+        state.angular_velocity = Vec3<double>{0.0, 0.0, 0.1};
+        return state;
+    }
+};
+
+/// Turns the node about z by as many radians as it is meters along x.
+struct TurnByX : RotationCallback {
+    RotationState evaluate(const PoseContext&, const PositionState& position) const override
+    {
+        return RotationState{Rotation<double>::from_local_to_parent(
+                                 Vec3<double>{0.0, 0.0, 1.0}, units::Radian(position.position.x)),
+                             Vec3<double>{0.0}};
+    }
+};
+
 } // namespace
 
 TEST_CASE("A position table is followed between its entries", "[scene][pose_sources]")
@@ -282,6 +307,44 @@ TEST_CASE("Each position or rotation source replaces the last", "[scene][pose_so
     CHECK_THROWS(earth.set_rotation_table(times, {Rotation<double>{}, Rotation<double>{}}));
     CHECK(earth.get()->get_position_mode() == TransformMode::SPICE_TRANSFORM);
     CHECK(earth.get()->get_rotation_mode() == TransformMode::SPICE_TRANSFORM);
+}
+
+TEST_CASE("A state callback still gives the half of the pose not replaced since",
+          "[scene][pose_sources]")
+{
+    Scene<RGB> scene;
+    const Time time = at(0.0);
+    const Transform<double> state =
+        FixedState{}.evaluate(PoseContext{time, time, ObservationMode::TRUE_STATE});
+
+    // Placed by hand afterwards, the node is still oriented by the callback:
+    auto placed = scene.root.new_subframe();
+    placed.get()->set_custom_state_callback<FixedState>();
+    placed.set_position(10_m, 0_m, 0_m);
+    CHECK(placed.get()->get_position_mode() == TransformMode::MANUAL_TRANSFORM);
+    CHECK(placed.get()->get_rotation_mode() == TransformMode::TRANSFORM_CALLBACK);
+    Transform<double> pose = pose_at(placed, time);
+    CHECK(glm::length(pose.position - Vec3<double>{10.0, 0.0, 0.0}) < 1e-12);
+    CHECK(glm::length(pose.velocity) < 1e-12);
+    CHECK(rotation_difference(pose.rotation, state.rotation) < 1e-12);
+    CHECK(glm::length(pose.angular_velocity - state.angular_velocity) < 1e-12);
+
+    // Oriented by hand afterwards, it is still placed by the callback:
+    auto oriented = scene.root.new_subframe();
+    oriented.get()->set_custom_state_callback<FixedState>();
+    oriented.set_rotation(Rotation<double>{});
+    pose = pose_at(oriented, time);
+    CHECK(glm::length(pose.position - state.position) < 1e-12);
+    CHECK(glm::length(pose.velocity - state.velocity) < 1e-12);
+    CHECK(rotation_difference(pose.rotation, Rotation<double>{}) < 1e-12);
+    CHECK(glm::length(pose.angular_velocity) < 1e-12);
+
+    // And a rotation callback set afterwards is given the callback's position:
+    oriented.get()->set_custom_rotation_callback<TurnByX>();
+    CHECK(rotation_difference(pose_at(oriented, time).rotation,
+                              Rotation<double>::from_local_to_parent(
+                                  Vec3<double>{0.0, 0.0, 1.0}, units::Radian(state.position.x))) <
+          1e-12);
 }
 
 TEST_CASE("A rotation set by hand is read back whatever places the node", "[scene][pose_sources]")

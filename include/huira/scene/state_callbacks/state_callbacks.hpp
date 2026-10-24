@@ -78,7 +78,7 @@ struct PositionCallback {
      * @brief The node's position and velocity in its parent's frame.
      * @param context The time it is wanted at, and how the scene is observed.
      * @param rotation The node's rotation at that time, from its own source: identity if that is
-     *        a callback too, which is evaluated after this one, and given this position.
+     *        a rotation callback, which is evaluated after this one, and given this position.
      */
     [[nodiscard]] virtual PositionState evaluate(const PoseContext& context,
                                                  const RotationState& rotation) const = 0;
