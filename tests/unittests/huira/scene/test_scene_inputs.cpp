@@ -127,6 +127,11 @@ TEST_CASE("Scene assets are checked when made", "[scene][validation]")
     vertices[2].position = Vec3<float>{0.f, 1.f, 0.f};
     CHECK_NOTHROW(scene.add_mesh(IndexBuffer{0, 1, 2}, vertices));
     CHECK_THROWS(scene.add_mesh(IndexBuffer{0, 1, 2, 0}, vertices));
+    // An albedo is a reflectance, at most 1, as the material's own is (Hapke took the square root
+    // of 1 minus it, NaN):
+    vertices[1].albedo = RGB{1.5f};
+    CHECK_THROWS(scene.add_mesh(IndexBuffer{0, 1, 2}, vertices));
+    vertices[1].albedo = RGB{1.f};
     vertices[1].normal = Vec3<float>{NaN_F, 0.f, 0.f};
     CHECK_THROWS(scene.add_mesh(IndexBuffer{0, 1, 2}, vertices));
 
@@ -169,6 +174,14 @@ TEST_CASE("Scene assets are checked when made", "[scene][validation]")
     CHECK_THROWS(material.set_albedo(RGB{-0.1f}));
     CHECK_THROWS(material.set_transmission_factor(RGB{2.f}));
     CHECK_THROWS(material.set_transmission(RGB{INF_F}));
+    // ...and so are their images' pixels, which a texture allows above 1, as an emissive one is:
+    auto bright = scene.add_texture(Image<RGB>(2, 2, RGB{1.5f}));
+    CHECK_THROWS(material.set_albedo_image(bright));
+    CHECK_THROWS(material.set_transmission_image(bright));
+    CHECK_NOTHROW(material.set_emissive_image(bright));
+    auto gray = scene.add_texture(Image<RGB>(2, 2, RGB{0.5f}));
+    CHECK_NOTHROW(material.set_albedo_image(gray));
+    CHECK_NOTHROW(material.set_transmission_image(gray));
     CHECK_THROWS(material.set_emissive_factor(RGB{-1.f}));
     CHECK_THROWS(material.set_emissive(RGB{NaN_F}));
     CHECK_NOTHROW(material.set_emissive(RGB{1000.f})); // a radiance, with no upper bound

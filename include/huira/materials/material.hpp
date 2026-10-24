@@ -151,6 +151,7 @@ class Material : public SceneObject<Material<TSpectral>> {
   private:
     template <typename TPixel>
     void check_image_(const std::shared_ptr<Image<TPixel>>& image, const char* what) const;
+    void check_ratio_image_(const std::shared_ptr<Image<TSpectral>>& image, const char* what) const;
 
     /// Whether anything about the alpha can make the surface less than opaque.
     void update_has_alpha_();
