@@ -85,6 +85,12 @@ void append_png_data(png_structp png, png_bytep data, png_size_t length)
 
 void flush_png_data(png_structp /*png*/) {}
 
+// libpng takes C callbacks (and setjmp's longjmp), which MSVC warns may throw (C5039):
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 5039)
+#endif
+
 /// Encodes the PNG spec describes into out, with libpng; false if libpng fails.
 bool encode_png(const PngSpec& spec, Bytes& out)
 {
@@ -136,6 +142,10 @@ bool encode_png(const PngSpec& spec, Bytes& out)
     png_destroy_write_struct(&png, &info);
     return true;
 }
+
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
 Bytes encode_png(const PngSpec& spec)
 {

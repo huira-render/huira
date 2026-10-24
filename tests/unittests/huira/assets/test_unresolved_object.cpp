@@ -26,6 +26,11 @@ using SpectralIrradiance = units::SpectralWattsPerMeterSquared<RGB>;
 /// own.
 class ResolvesTo : public UnresolvedObject<RGB> {
   public:
+    ResolvesTo(const ResolvesTo&) = delete;
+    ResolvesTo& operator=(const ResolvesTo&) = delete;
+    ResolvesTo(ResolvesTo&&) = delete;
+    ResolvesTo& operator=(ResolvesTo&&) = delete;
+
     explicit ResolvesTo(std::vector<RGB> irradiances) : irradiances_(std::move(irradiances)) {}
 
     std::vector<RGB> resolve_irradiance(const std::vector<Transform<float>>& /*self_transforms*/,

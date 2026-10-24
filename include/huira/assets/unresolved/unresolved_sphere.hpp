@@ -30,6 +30,11 @@ namespace huira {
 template <IsSpectral TSpectral>
 class UnresolvedLambertianSphere : public UnresolvedObject<TSpectral> {
   public:
+    UnresolvedLambertianSphere(const UnresolvedLambertianSphere&) = delete;
+    UnresolvedLambertianSphere& operator=(const UnresolvedLambertianSphere&) = delete;
+    UnresolvedLambertianSphere(UnresolvedLambertianSphere&&) = delete;
+    UnresolvedLambertianSphere& operator=(UnresolvedLambertianSphere&&) = delete;
+
     /// Constructs a sphere illuminated by all lights in the scene view.
     UnresolvedLambertianSphere(units::Meter radius, TSpectral albedo = TSpectral{1.f});
     /// Constructs a sphere illuminated by all lights in the scene view.

@@ -242,7 +242,14 @@ TEST_CASE("A hot black body's radiance is Rayleigh-Jeans', not infinite", "[scen
     // whose integral over a bin is 2 c k T / 3 (1 / min^3 - 1 / max^3):
     const double temperature = 1e30;
     const RGB radiance = black_body<RGB>(temperature, 1000);
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4686) // possible change in behavior in UDT return calling convention
+#endif
     const auto bins = RGB::get_all_bins();
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
     for (std::size_t i = 0; i < RGB::size(); ++i) {
         INFO("bin " << i);
         const double min = bins[i].min_wavelength;

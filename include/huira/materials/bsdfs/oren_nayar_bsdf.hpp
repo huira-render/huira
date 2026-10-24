@@ -22,6 +22,11 @@ namespace huira {
 template <IsSpectral TSpectral>
 class OrenNayarBSDF final : public BSDF<TSpectral> {
   public:
+    OrenNayarBSDF(const OrenNayarBSDF&) = delete;
+    OrenNayarBSDF& operator=(const OrenNayarBSDF&) = delete;
+    OrenNayarBSDF(OrenNayarBSDF&&) = delete;
+    OrenNayarBSDF& operator=(OrenNayarBSDF&&) = delete;
+
     OrenNayarBSDF() noexcept = default;
 
     [[nodiscard]] BSDFRequirements requirements() const override;

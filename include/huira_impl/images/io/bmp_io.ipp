@@ -145,8 +145,8 @@ inline BMPData read_bmp_raw_(const unsigned char* data, std::size_t size)
         // The masks are in the DIB header if it is long enough to hold them (52 bytes, or 56
         // with alpha's), and otherwise follow it:
         const bool in_header = dib_size >= 52;
-        const std::size_t count =
-            in_header ? (dib_size >= 56 ? 4 : 3) : (compression == BMP_BI_ALPHABITFIELDS ? 4 : 3);
+        const std::size_t count = in_header ? (dib_size >= 56 ? 4u : 3u)
+                                            : (compression == BMP_BI_ALPHABITFIELDS ? 4u : 3u);
         const std::size_t at = in_header ? 14 + 40 : 14 + static_cast<std::size_t>(dib_size);
         if (size < at + 4 * count) {
             HUIRA_THROW_ERROR("read_bmp_raw_ - Data truncated in color masks");

@@ -11,6 +11,7 @@
 #include <optional>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "assimp/Exporter.hpp"
@@ -417,6 +418,15 @@ std::string load_assbin(Scene<RGB>& scene, const fs::path& path)
 struct RayCaster {
     const Scene<RGB>& scene;
     InstanceHandle<RGB> camera;
+
+    RayCaster(const Scene<RGB>& scene_, InstanceHandle<RGB> camera_)
+        : scene(scene_), camera(std::move(camera_))
+    {
+    }
+    RayCaster(const RayCaster&) = delete;
+    RayCaster(RayCaster&&) = delete;
+    RayCaster& operator=(const RayCaster&) = delete;
+    RayCaster& operator=(RayCaster&&) = delete;
 
     HitRecord cast(const Vec3<float>& toward) const
     {

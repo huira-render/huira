@@ -23,6 +23,11 @@ namespace huira {
 template <IsSpectral TSpectral>
 class UnresolvedEmitter : public UnresolvedObject<TSpectral> {
   public:
+    UnresolvedEmitter(const UnresolvedEmitter&) = delete;
+    UnresolvedEmitter& operator=(const UnresolvedEmitter&) = delete;
+    UnresolvedEmitter(UnresolvedEmitter&&) = delete;
+    UnresolvedEmitter& operator=(UnresolvedEmitter&&) = delete;
+
     UnresolvedEmitter(const units::SpectralWatts<TSpectral>& spectral_power);
     UnresolvedEmitter(const units::Watt& power);
 

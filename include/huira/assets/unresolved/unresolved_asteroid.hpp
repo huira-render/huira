@@ -28,6 +28,11 @@ namespace huira {
 template <IsSpectral TSpectral>
 class UnresolvedAsteroid : public UnresolvedObject<TSpectral> {
   public:
+    UnresolvedAsteroid(const UnresolvedAsteroid&) = delete;
+    UnresolvedAsteroid& operator=(const UnresolvedAsteroid&) = delete;
+    UnresolvedAsteroid(UnresolvedAsteroid&&) = delete;
+    UnresolvedAsteroid& operator=(UnresolvedAsteroid&&) = delete;
+
     UnresolvedAsteroid(double H,
                        double G,
                        InstanceHandle<TSpectral> light_instance,

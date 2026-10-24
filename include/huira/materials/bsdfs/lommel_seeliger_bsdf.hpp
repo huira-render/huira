@@ -22,6 +22,11 @@ namespace huira {
 template <IsSpectral TSpectral>
 class LommelSeeligerBSDF final : public BSDF<TSpectral> {
   public:
+    LommelSeeligerBSDF(const LommelSeeligerBSDF&) = delete;
+    LommelSeeligerBSDF& operator=(const LommelSeeligerBSDF&) = delete;
+    LommelSeeligerBSDF(LommelSeeligerBSDF&&) = delete;
+    LommelSeeligerBSDF& operator=(LommelSeeligerBSDF&&) = delete;
+
     LommelSeeligerBSDF() noexcept = default;
 
     [[nodiscard]] BSDFRequirements requirements() const override;

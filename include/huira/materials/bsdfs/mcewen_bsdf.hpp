@@ -36,6 +36,11 @@ namespace huira {
 template <IsSpectral TSpectral>
 class McEwenBSDF final : public BSDF<TSpectral> {
   public:
+    McEwenBSDF(const McEwenBSDF&) = delete;
+    McEwenBSDF& operator=(const McEwenBSDF&) = delete;
+    McEwenBSDF(McEwenBSDF&&) = delete;
+    McEwenBSDF& operator=(McEwenBSDF&&) = delete;
+
     McEwenBSDF() noexcept;
 
     [[nodiscard]] BSDFRequirements requirements() const override;

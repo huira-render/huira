@@ -18,6 +18,11 @@ namespace huira {
 template <IsSpectral TSpectral>
 class LambertianBSDF : public BSDF<TSpectral> {
   public:
+    LambertianBSDF(const LambertianBSDF&) = delete;
+    LambertianBSDF& operator=(const LambertianBSDF&) = delete;
+    LambertianBSDF(LambertianBSDF&&) = delete;
+    LambertianBSDF& operator=(LambertianBSDF&&) = delete;
+
     LambertianBSDF() noexcept = default;
     ~LambertianBSDF() override = default;
 
