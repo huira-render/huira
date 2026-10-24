@@ -185,11 +185,14 @@ TEST_CASE("A normal map's sample of no length leaves the surface's normal", "[ma
     material.set_normal_factor(0.f);
     CHECK(material.get()->evaluate(flat_surface()).isect.normal_s == up);
 
-    // ...and a tilted pixel still tilts it (a guard):
+    // ...and a tilted pixel still tilts it (a guard; with the viewer overhead, Material::evaluate()
+    // keeps it from tilting past about 45 degrees, where the view would reflect into the surface):
     material.set_normal_factor(1.f);
     const Vec3<float> tilted = material.get()->evaluate(flat_surface()).isect.normal_s;
     CHECK(std::abs(glm::length(tilted) - 1.f) < 1e-6f);
-    CHECK(tilted.z < 0.5f);
+    CHECK(tilted.z < 0.9f);
+}
+
 TEST_CASE("Every image slot takes a texture, and reset restores its default", "[materials]")
 {
     Scene<RGB> scene;

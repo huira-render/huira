@@ -48,6 +48,12 @@ void check_bins(const RGB& a, const RGB& b, float tolerance = 1e-6f)
 /// A light of another kind, which does not name its type.
 class TestLight : public Light<RGB> {
   public:
+    TestLight() = default;
+    TestLight(const TestLight&) = delete;
+    TestLight& operator=(const TestLight&) = delete;
+    TestLight(TestLight&&) = delete;
+    TestLight& operator=(TestLight&&) = delete;
+
     std::optional<LightSample<RGB>> sample_li(const Interaction<RGB>& /*ref*/,
                                               const Transform<float>& /*light_to_world*/,
                                               Sampler<float>& /*sampler*/) const override

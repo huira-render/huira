@@ -21,6 +21,11 @@ namespace huira {
 template <IsSpectral TSpectral>
 class NullBSDF final : public BSDF<TSpectral> {
   public:
+    NullBSDF(const NullBSDF&) = delete;
+    NullBSDF& operator=(const NullBSDF&) = delete;
+    NullBSDF(NullBSDF&&) = delete;
+    NullBSDF& operator=(NullBSDF&&) = delete;
+
     NullBSDF() noexcept = default;
 
     [[nodiscard]] BSDFRequirements requirements() const override;

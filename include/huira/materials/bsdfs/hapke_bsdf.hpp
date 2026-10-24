@@ -30,6 +30,11 @@ namespace huira {
 template <IsSpectral TSpectral>
 class HapkeBSDF final : public BSDF<TSpectral> {
   public:
+    HapkeBSDF(const HapkeBSDF&) = delete;
+    HapkeBSDF& operator=(const HapkeBSDF&) = delete;
+    HapkeBSDF(HapkeBSDF&&) = delete;
+    HapkeBSDF& operator=(HapkeBSDF&&) = delete;
+
     /// @throws std::runtime_error unless h and B0 are finite and non-negative (h = 0 has no
     /// opposition effect), b is within (-1, 1), where the Henyey-Greenstein lobes are finite, and
     /// c is from 0 to 1.
