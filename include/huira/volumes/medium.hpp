@@ -9,6 +9,7 @@
 #include "huira/geometry/ray.hpp"
 #include "huira/sampling/sampler.hpp"
 #include "huira/scene/scene_object.hpp"
+#include "huira/util/logger.hpp"
 #include "huira/volumes/density/density_field.hpp"
 #include "huira/volumes/medium_interaction.hpp"
 #include "huira/volumes/medium_properties.hpp"
@@ -23,10 +24,14 @@ template <IsSpectral TSpectral>
 class Medium : public SceneObject<Medium<TSpectral>> {
   public:
     // Explicit constructor enforcing composition
+    /// @throws std::runtime_error if either is null, which a ray entering the medium would read.
     Medium(std::shared_ptr<DensityField<TSpectral>> density_field,
            std::shared_ptr<PhaseFunction<TSpectral>> phase_function)
         : density_field_(std::move(density_field)), phase_function_(std::move(phase_function))
     {
+        if (density_field_ == nullptr || phase_function_ == nullptr) {
+            HUIRA_THROW_ERROR("Medium - The density field and phase function must not be null");
+        }
     }
 
     virtual ~Medium() override = default;
