@@ -78,6 +78,7 @@ ModelLoader<TSpectral>::load(Scene<TSpectral>& scene,
     ctx.model = shared_model.get();
     ctx.scene = &scene;
     ctx.spectral_conversion = std::move(spectral_conversion);
+    ctx.file_path = file_path;
     ctx.base_directory = file_path.parent_path();
 
     // Process all materials:
@@ -88,7 +89,7 @@ ModelLoader<TSpectral>::load(Scene<TSpectral>& scene,
 
     // Process the node hierarchy (creates FrameNodes and Instances)
     // The root ASSIMP node's transform is applied to our root node
-    Transform<double> root_transform = convert_transform_(ai_scene->mRootNode->mTransformation);
+    Transform<double> root_transform = convert_transform_(ai_scene->mRootNode, ctx);
     shared_model->root_node_->set_position(root_transform.position);
     shared_model->root_node_->set_rotation(root_transform.rotation);
     shared_model->root_node_->set_scale(root_transform.scale);
@@ -286,7 +287,7 @@ void ModelLoader<TSpectral>::process_node_(const aiNode* ai_node,
     }
 
     // Apply the node's transformation
-    Transform<double> transform = convert_transform_(ai_node->mTransformation);
+    Transform<double> transform = convert_transform_(ai_node, ctx);
     child->set_position(transform.position);
     child->set_rotation(transform.rotation);
     child->set_scale(transform.scale);
@@ -319,16 +320,22 @@ void ModelLoader<TSpectral>::process_node_(const aiNode* ai_node,
 }
 
 /**
- * @brief Convert ASSIMP's 4x4 matrix to huira Transform.
+ * @brief Convert an ASSIMP node's 4x4 matrix to huira Transform.
  *
- * Decomposes the ASSIMP matrix into position, rotation, and scale components.
+ * Decomposes the node's matrix into position, rotation, and scale components. What is left of it
+ * as its rotation is taken as one within rounding (see detail::to_rotation_matrix()), and
+ * messages about it name the node and the file.
  *
- * @param m ASSIMP 4x4 matrix
+ * @param ai_node ASSIMP node
+ * @param ctx Loading context
  * @return Transform object
+ * @throws std::runtime_error if the matrix is not a translation, rotation and scale
  */
 template <IsSpectral TSpectral>
-Transform<double> ModelLoader<TSpectral>::convert_transform_(const aiMatrix4x4& m)
+Transform<double> ModelLoader<TSpectral>::convert_transform_(const aiNode* ai_node,
+                                                             const LoadContext& ctx)
 {
+    const aiMatrix4x4& m = ai_node->mTransformation;
     Transform<double> transform;
 
     // ASSIMP matrices are row-major, so m[row][col]
@@ -379,7 +386,13 @@ Transform<double> ModelLoader<TSpectral>::convert_transform_(const aiMatrix4x4& 
     // Recall the column major ordering of GLM:
     Mat3<double> matrix{col0.x, col0.y, col0.z, col1.x, col1.y, col1.z, col2.x, col2.y, col2.z};
 
-    transform.rotation = Rotation<double>::from_local_to_parent(matrix);
+    // Taken here, rather than by Rotation, so that a warning or an error says where the matrix is
+    // (what it prints is less its scale, and not as the file has it):
+    const Mat3<double> rotation = detail::to_rotation_matrix(
+        matrix,
+        "ModelLoader::load - The matrix of node '" + std::string(ai_node->mName.C_Str()) + "' in " +
+            ctx.file_path.string() + ", less its scale,");
+    transform.rotation = Rotation<double>::from_local_to_parent(rotation);
 
     return transform;
 }

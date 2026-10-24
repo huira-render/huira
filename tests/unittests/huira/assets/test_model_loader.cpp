@@ -617,6 +617,77 @@ TEST_CASE("A model's node that mirrors its mesh is loaded, mirrored", "[assets][
     CHECK_FALSE(caster.cast(Vec3<float>{-0.25f, 0.5f, 10.f}).hit());
 }
 
+namespace {
+/// A Collada model of one triangle, (0, 0, 0), (1, 0, 0), (0, 1, 0), placed by one node of the
+/// given name and matrix (its 16 numbers, row by row, as Collada writes them).
+fs::path write_collada(const std::string& file, const std::string& node, const std::string& matrix)
+{
+    std::ostringstream dae;
+    dae << R"(<?xml version="1.0" encoding="utf-8"?>
+<COLLADA xmlns="http://www.collada.org/2005/11/COLLADASchema" version="1.4.1">
+  <asset><unit name="meter" meter="1"/><up_axis>Y_UP</up_axis></asset>
+  <library_geometries><geometry id="Tri" name="Tri"><mesh>
+    <source id="Tri-positions">
+      <float_array id="Tri-positions-array" count="9">0 0 0 1 0 0 0 1 0</float_array>
+      <technique_common><accessor source="#Tri-positions-array" count="3" stride="3">
+        <param name="X" type="float"/>
+        <param name="Y" type="float"/>
+        <param name="Z" type="float"/>
+      </accessor></technique_common>
+    </source>
+    <vertices id="Tri-vertices"><input semantic="POSITION" source="#Tri-positions"/></vertices>
+    <triangles count="1">
+      <input semantic="VERTEX" source="#Tri-vertices" offset="0"/><p>0 1 2</p>
+    </triangles>
+  </mesh></geometry></library_geometries>
+  <library_visual_scenes><visual_scene id="Scene" name="Scene">
+)";
+    dae << "    <node id=\"" << node << "\" name=\"" << node << "\">\n"
+        << "      <matrix>" << matrix << "</matrix>\n"
+        << R"(      <instance_geometry url="#Tri"/>
+    </node>
+  </visual_scene></library_visual_scenes>
+  <scene><instance_visual_scene url="#Scene"/></scene>
+</COLLADA>
+)";
+    return write_file(file, dae.str());
+}
+} // namespace
+
+TEST_CASE("A model's node matrix written to 3 decimals is loaded, and one that isn't a rotation "
+          "is refused, naming its node",
+          "[assets][models]")
+{
+    // A node's matrix, less its scale, was refused unless its columns were within 1e-3 of right
+    // angles, which rounding to 3 decimals often leaves them beyond, so models that had loaded no
+    // longer did. The error didn't say which file or node.
+    //
+    // This one turns by Euler angles of 60, 35 and 120 degrees (extrinsic, XYZ), and moves 10 m
+    // along z. Written to 3 decimals, its first and last columns are 1.4e-3 from right angles.
+    const fs::path path = write_collada("rounded_node.dae",
+                                        "Rounded",
+                                        "-0.41 -0.681 0.607 0  0.709 0.18 0.681 0  "
+                                        "-0.574 0.709 0.41 10  0 0 0 1");
+    Scene<RGB> scene;
+    scene.root.new_instance(scene.load_model(path));
+    const RayCaster caster{scene, scene.root.new_instance(scene.new_camera_model())};
+
+    const Rotation<double> exact = Rotation<double>::extrinsic_euler_angles(
+        units::Degree(60), units::Degree(35), units::Degree(120), "XYZ");
+    const Vec3<double> centroid =
+        exact * Vec3<double>{0.25, 0.25, 0.0} + Vec3<double>{0.0, 0.0, 10.0};
+    const HitRecord hit = caster.cast(Vec3<float>(centroid));
+    REQUIRE(hit.hit());
+    CHECK_THAT(hit.t, WithinRel(static_cast<float>(glm::length(centroid)), 1e-3f));
+
+    // One that shears its mesh is not a rotation and a scale, and the error says where it is:
+    const fs::path sheared =
+        write_collada("sheared_node.dae", "Sheared", "1 0.2 0 0  0 1 0 0  0 0 1 10  0 0 0 1");
+    Scene<RGB> refused;
+    CHECK_THROWS_WITH(refused.load_model(sheared),
+                      ContainsSubstring("Sheared") && ContainsSubstring("sheared_node.dae"));
+}
+
 TEST_CASE("A model's materials take their glTF values", "[assets][models]")
 {
     Gltf gltf;

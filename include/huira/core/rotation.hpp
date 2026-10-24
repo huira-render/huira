@@ -85,13 +85,20 @@ class Rotation {
 
     Rotation(Mat3<T> matrix) { set_matrix_(matrix); }
 
-    Mat3<T> orthonormalize_(const Mat3<T>& matrix) const;
     static void check_quaternion_(const Quaternion<T>& quaternion);
 };
 
 // Helpful typedefs:
 typedef Rotation<float> Rotation_f;
 typedef Rotation<double> Rotation_d;
+
+namespace detail {
+// Takes a matrix as a rotation, within rounding, or refuses it, naming it as `what`. Rotation's
+// own matrices are taken by this, and code that knows where a matrix came from (a model's node)
+// uses it to say so.
+template <IsFloatingPoint T>
+Mat3<T> to_rotation_matrix(const Mat3<T>& matrix, const std::string& what);
+} // namespace detail
 } // namespace huira
 
 #include "huira_impl/core/rotation.ipp"

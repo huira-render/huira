@@ -51,6 +51,7 @@ class ModelLoader {
         const aiScene* ai_scene;
         Model<TSpectral>* model;
 
+        fs::path file_path;
         fs::path base_directory;
 
         Scene<TSpectral>* scene;
@@ -76,7 +77,7 @@ class ModelLoader {
     static void
     process_node_(const aiNode* ai_node, FrameNode<TSpectral>* parent_frame, LoadContext& ctx);
 
-    static Transform<double> convert_transform_(const aiMatrix4x4& ai_matrix);
+    static Transform<double> convert_transform_(const aiNode* ai_node, const LoadContext& ctx);
 
     static Vec3<float> convert_vec3_(const aiVector3D& ai_vec);
 
