@@ -20,16 +20,19 @@ namespace huira {
  */
 template <IsSpectral TSpectral>
 struct Interaction {
-    Vec3<float> position; ///< Intersection point in world space
-    Vec3<float> normal_g; ///< Geometric normal at the intersection
-    Vec3<float> normal_s; ///< Shading normal at the intersection
+    // Every member starts at zero (glm's vectors otherwise start uninitialized), so that an
+    // interaction made by hand reads no indeterminate value: a zero wo means "no viewer", which
+    // Material::evaluate() leaves the shading normal alone for.
+    Vec3<float> position{}; ///< Intersection point in world space
+    Vec3<float> normal_g{}; ///< Geometric normal at the intersection
+    Vec3<float> normal_s{}; ///< Shading normal at the intersection
 
-    Vec3<float> tangent;   ///< Tangent vector (for normal mapping / anisotropic BSDFs)
-    Vec3<float> bitangent; ///< Bitangent vector (cross(normal_s, tangent))
+    Vec3<float> tangent{};   ///< Tangent vector (for normal mapping / anisotropic BSDFs)
+    Vec3<float> bitangent{}; ///< Bitangent vector (cross(normal_s, tangent))
 
-    Vec2<float> uv; ///< Texture coordinates (u, v)
+    Vec2<float> uv{}; ///< Texture coordinates (u, v)
 
-    Vec3<float> wo; ///< Outgoing direction (towards camera), world space
+    Vec3<float> wo{}; ///< Outgoing direction (towards camera), world space
 
     TSpectral vertex_albedo{1}; ///< Interpolated vertex color (default: white / unity)
 
