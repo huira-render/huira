@@ -1,6 +1,7 @@
 #pragma once
 
 #include "huira/materials/bsdfs/bsdf.hpp"
+#include "huira/materials/bsdfs/cook_torrance_lobe.hpp"
 
 namespace huira {
 
@@ -14,6 +15,7 @@ namespace huira {
  * The full model at a surface point is:
  *
  *   f(wo, wi) = (1 - metallic) * albedo / pi
+ *                 * (1 - E(cos_i)) * (1 - E(cos_o)) / (1 - E_avg)
  *             + D(h) * F(wo, h) * G(wo, wi) / (4 * |cos_o| * |cos_i|)
  *
  * The individual components are:
@@ -30,6 +32,20 @@ namespace huira {
  *   - **G** (Geometry / Masking-Shadowing): Smith height-correlated.
  *     Models self-shadowing and masking between microfacets, matched to
  *     the GGX normal distribution for physical consistency.
+ *
+ *   - **E** (Directional albedo of the dielectric's specular lobe): the light
+ *     the lobe, with F0 = 0.04, reflects of a unit irradiance from a direction
+ *     at that cosine to the normal, and **E_avg** its cosine-weighted average.
+ *     The diffuse lobe gets only the light the specular lobe does not
+ *     reflect (Kelemen and Szirmay-Kalos 2001): of the light toward wo, the
+ *     specular lobe reflects E(cos_o) and the diffuse lobe albedo * (1 -
+ *     E(cos_o)), so a white dielectric reflects all the light it receives and
+ *     never more, and the BSDF stays reciprocal. E has no closed form; it is
+ *     tabulated, never below its true value, by tools/build_cook_torrance_albedo,
+ *     from the parts of the lobe in cook_torrance_lobe.hpp. Change those, and
+ *     test_cook_torrance fails until the table is rebuilt.
+ *     (glTF's sample implementation weights the diffuse lobe by 1 - F(wo.h)
+ *     instead, which at grazing angles reflects up to 1.8 times the light.)
  *
  * The metallic parameter controls the blend: at metallic = 0, the surface
  * is a dielectric with a diffuse base and a weak specular highlight. At
@@ -80,18 +96,10 @@ class CookTorranceBSDF final : public BSDF<TSpectral> {
 
   private:
     /// Minimum roughness to prevent numerical singularity at perfect specularity.
-    static constexpr float min_roughness_ = 0.01f;
+    static constexpr float min_roughness_ = detail::cook_torrance::MIN_ROUGHNESS;
 
     [[nodiscard]] static float
     ggx_D(const Vec3<float>& n, const Vec3<float>& h, float alpha2) noexcept;
-
-    [[nodiscard]] static float smith_lambda(float n_dot_v, float alpha2) noexcept;
-
-    [[nodiscard]] static float smith_G1(float n_dot_v, float alpha2) noexcept;
-
-    [[nodiscard]] static float smith_G2(float n_dot_wo, float n_dot_wi, float alpha2) noexcept;
-
-    [[nodiscard]] static TSpectral schlick_fresnel(float cos_theta, const TSpectral& f0) noexcept;
 };
 
 } // namespace huira

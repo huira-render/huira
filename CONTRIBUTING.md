@@ -195,6 +195,20 @@ On Windows with Visual Studio, run the tests with `ctest -C Release --output-on-
 the Linux tests in a `Debug` build, which enables extra checks, so if a test passes for you but
 fails in CI, try a `Debug` build.
 
+A few tables in the source are built by developer tools in `tools/`, and must be rebuilt when
+the sources they are built from change. Today that is one: Cook-Torrance's albedo table,
+`include/huira_impl/materials/bsdfs/cook_torrance_albedo.ipp`. If `test_cook_torrance` reports
+that its sources have changed, rebuild it from the repository's root and commit the result:
+
+```bash
+g++ -std=c++20 -O2 -pthread -Iinclude tools/build_cook_torrance_albedo/main.cpp -o build_cook_torrance_albedo
+./build_cook_torrance_albedo   # about 4 minutes on two cores
+```
+
+(or configure with `-DHUIRA_BUILD_TOOLS=ON` and run the `build_cook_torrance_albedo` it builds).
+CI's Generated Tables workflow rebuilds the table on `ubuntu-24.04` and fails if it differs from
+the committed one.
+
 To build and install the Python bindings from source, run `pip install bindings/python/` (see
 [Python Bindings](docs/getting_started/build_instructions/python-bindings.md)). Other CMake options
 are described in [Build Options](docs/getting_started/build_instructions/options.md).
