@@ -1,0 +1,54 @@
+name: Generated Tables
+
+# Tables in huira's source that a developer tool builds, rebuilt here whenever the sources they are
+# built from, the tool, or the table change, and compared with the committed table: a table that
+# is stale, or edited by hand, fails. (The unit tests catch a stale table too, from the
+# fingerprint it records, on every platform; this checks the table is exactly what the tool
+# builds.) The tools need only a C++20 compiler, and give the same table every time on this
+# runner.
+
+on:
+  push:
+    paths:
+      - 'include/huira/materials/bsdfs/cook_torrance_lobe.hpp'
+      - 'include/huira_impl/materials/bsdfs/cook_torrance_albedo.ipp'
+      - 'include/huira_impl/materials/bsdfs/cook_torrance_albedo_lookup.ipp'
+      - 'tools/build_cook_torrance_albedo/**'
+      - '.github/workflows/generated-tables.yml'
+  pull_request:
+    paths:
+      - 'include/huira/materials/bsdfs/cook_torrance_lobe.hpp'
+      - 'include/huira_impl/materials/bsdfs/cook_torrance_albedo.ipp'
+      - 'include/huira_impl/materials/bsdfs/cook_torrance_albedo_lookup.ipp'
+      - 'tools/build_cook_torrance_albedo/**'
+      - '.github/workflows/generated-tables.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cook-torrance-albedo:
+    name: Cook-Torrance Albedo Table
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+
+      - name: Build the tool
+        run: |
+          g++ --version
+          g++ -std=c++20 -O2 -pthread -Iinclude tools/build_cook_torrance_albedo/main.cpp \
+              -o build_cook_torrance_albedo
+
+      - name: Rebuild the table
+        run: ./build_cook_torrance_albedo
+
+      - name: Compare with the committed table
+        run: |
+          table=include/huira_impl/materials/bsdfs/cook_torrance_albedo.ipp
+          if ! git diff --exit-code -- "$table"; then
+            echo "::error file=$table::The committed table is not what tools/build_cook_torrance_albedo builds from the current sources. Rebuild it (see that tool) and commit the result."
+            exit 1
+          fi

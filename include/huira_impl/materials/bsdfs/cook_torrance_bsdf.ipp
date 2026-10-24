@@ -1,11 +1,13 @@
 #include <algorithm>
 #include <cmath>
-#include <limits>
 
 #include "huira/core/constants.hpp"
+#include "huira/materials/bsdfs/cook_torrance_lobe.hpp"
 #include "huira/materials/sampling_utils.hpp"
+#include "huira_impl/materials/bsdfs/cook_torrance_albedo_lookup.ipp"
 
 namespace huira {
+
 template <IsSpectral TSpectral>
 BSDFRequirements CookTorranceBSDF<TSpectral>::requirements() const
 {
@@ -36,18 +38,30 @@ TSpectral CookTorranceBSDF<TSpectral>::eval(const Vec3<float>& wo,
     const float alpha = roughness * roughness;
     const float alpha2 = alpha * alpha;
 
-    const TSpectral f0 = params.albedo * metallic + TSpectral{0.04f} * (1.0f - metallic);
+    const TSpectral f0 = params.albedo * metallic +
+                         TSpectral{detail::cook_torrance::DIELECTRIC_F0} * (1.0f - metallic);
 
-    // Diffuse (Lambertian, scaled by 1 - metallic)
-    const TSpectral diffuse = params.albedo * ((1.0f - metallic) * INV_PI<float>());
+    // Diffuse (Lambertian, scaled by 1 - metallic), of only the light the dielectric's specular
+    // lobe does not reflect: 1 - E(cos_i) of the light from wi, weighted by 1 - E(cos_o) toward
+    // wo, which keeps it reciprocal, and divided by 1 - E_avg, which makes it reflect albedo * (1
+    // - E(cos_o)) of the light toward wo, all that the lobe leaves (see the class).
+    static_assert(min_roughness_ == detail::DIELECTRIC_ALBEDO_MIN_ROUGHNESS,
+                  "The albedo table must start at the BSDF's minimum roughness: rebuild it with "
+                  "tools/build_cook_torrance_albedo");
+    const detail::DielectricSpecularAlbedo specular_albedo(roughness);
+    const float diffuse_weight = (1.0f - specular_albedo(n_dot_wi)) *
+                                 (1.0f - specular_albedo(n_dot_wo)) /
+                                 (1.0f - specular_albedo.average());
+    const TSpectral diffuse =
+        params.albedo * ((1.0f - metallic) * diffuse_weight * INV_PI<float>());
 
     // Specular (Cook-Torrance microfacet with GGX NDF)
     Vec3<float> h = glm::normalize(wo + wi);
     const float wo_dot_h = std::max(glm::dot(wo, h), 0.0f);
 
     const float D = ggx_D(n, h, alpha2);
-    const float G = smith_G2(n_dot_wo, n_dot_wi, alpha2);
-    const TSpectral F = schlick_fresnel(wo_dot_h, f0);
+    const float G = detail::cook_torrance::smith_G2(n_dot_wo, n_dot_wi, alpha2);
+    const TSpectral F = f0 + (TSpectral{1} - f0) * detail::cook_torrance::schlick_weight(wo_dot_h);
 
     const TSpectral specular = F * (D * G / (4.0f * n_dot_wo * n_dot_wi));
 
@@ -155,7 +169,7 @@ float CookTorranceBSDF<TSpectral>::pdf(const Vec3<float>& wo,
 
     // Specular PDF: GGX VNDF
     const float D = ggx_D(n, h, alpha2);
-    const float G1 = smith_G1(n_dot_wo, alpha2);
+    const float G1 = detail::cook_torrance::smith_G1(n_dot_wo, alpha2);
     const float spec_pdf = D * G1 / (4.0f * n_dot_wo);
 
     // Diffuse PDF: cosine-weighted hemisphere
@@ -184,48 +198,4 @@ float CookTorranceBSDF<TSpectral>::ggx_D(const Vec3<float>& n,
     return sampling::ggx_distribution(n_dot_h * n_dot_h, glm::dot(n_cross_h, n_cross_h), alpha2);
 }
 
-/**
- * @brief Smith's Lambda for GGX: the fraction of the microsurface seen from direction v that
- * other microfacets hide, relative to the part that is seen, (sqrt(1 + alpha^2 tan^2) - 1) / 2.
- */
-template <IsSpectral TSpectral>
-float CookTorranceBSDF<TSpectral>::smith_lambda(float n_dot_v, float alpha2) noexcept
-{
-    // cos^2 is kept from 0, not from 1e-8, which would compute every direction within 1e-4 of
-    // the horizon as if it were at 1e-4, and mask far too little there:
-    const float cos2 = n_dot_v * n_dot_v;
-    const float tan2 = (1.0f - cos2) / std::max(cos2, std::numeric_limits<float>::min());
-    return 0.5f * (std::sqrt(1.0f + alpha2 * tan2) - 1.0f);
-}
-
-/// Smith's masking: the fraction of the microfacets facing v that v sees, 1 / (1 + Lambda(v)).
-template <IsSpectral TSpectral>
-float CookTorranceBSDF<TSpectral>::smith_G1(float n_dot_v, float alpha2) noexcept
-{
-    return 1.0f / (1.0f + smith_lambda(n_dot_v, alpha2));
-}
-
-/**
- * @brief Smith's height-correlated masking-shadowing, 1 / (1 + Lambda(wo) + Lambda(wi)) (Heitz
- * 2014; glTF 2.0, Appendix B). A microfacet high on the surface is likelier to be both seen and
- * lit, so masking and shadowing are not independent: their product, G1(wo) G1(wi), shadows too
- * much, most of all for rough surfaces at grazing angles.
- */
-template <IsSpectral TSpectral>
-float CookTorranceBSDF<TSpectral>::smith_G2(float n_dot_wo, float n_dot_wi, float alpha2) noexcept
-{
-    return 1.0f / (1.0f + smith_lambda(n_dot_wo, alpha2) + smith_lambda(n_dot_wi, alpha2));
-}
-
-template <IsSpectral TSpectral>
-TSpectral CookTorranceBSDF<TSpectral>::schlick_fresnel(float cos_theta,
-                                                       const TSpectral& f0) noexcept
-{
-    // cos_theta, from the dot product of a direction and a normalized half vector, can round to
-    // just over 1, which would make t^5 negative and the reflectance below f0 (below 0 for f0 = 0).
-    const float t = 1.0f - std::clamp(cos_theta, 0.0f, 1.0f);
-    const float t2 = t * t;
-    const float t5 = t2 * t2 * t;
-    return f0 + (TSpectral{1} - f0) * t5;
-}
 } // namespace huira

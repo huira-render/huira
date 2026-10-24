@@ -69,14 +69,10 @@ std::vector<Case> cases()
         // phase, and its approximate H function overestimates multiple scattering. With a single
         // scattering albedo of 1 it reflects up to 10% more light than it receives here.
         {"Hapke", hapke, shading(albedo, 0.5f, 0.f), {true, true, false, false}, false},
-        // The dielectric adds its specular lobe to a diffuse base of the full albedo (see
-        // CookTorranceBSDF), so at an albedo of 1 it reflects 4% more light than it receives
-        // overhead, and 17% more at grazing incidence.
         {"Cook-Torrance, dielectric",
          cook_torrance,
          shading(albedo, 0.5f, 0.f),
-         {true, true, true, true},
-         false},
+         {true, true, true, true}},
         {"Cook-Torrance, metal",
          cook_torrance,
          shading(albedo, 0.3f, 1.f),

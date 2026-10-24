@@ -216,6 +216,11 @@ foreach(source_file ${UNIT_TESTS})
     add_unit_test(${test_name} ${source_file})
 endforeach()
 
+# test_cook_torrance checks that the generated albedo table is as up to date as the sources it is
+# built from, which it reads from the source tree (see tools/build_cook_torrance_albedo):
+target_compile_definitions(test_cook_torrance PRIVATE HUIRA_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
+target_include_directories(test_cook_torrance PRIVATE ${PROJECT_SOURCE_DIR}/tools)
+
 # Two source files that both include all of Huira, in one test: it doesn't link if a header
 # defines anything that isn't a template, constexpr or inline (see test_translation_units.cpp).
 add_unit_test(test_translation_units
