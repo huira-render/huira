@@ -4,6 +4,7 @@
 #include <cassert>
 #include <cmath>
 #include <cstring>
+#include <limits>
 #include <stdexcept>
 #include <string>
 
@@ -30,7 +31,10 @@ Image<PixelT>::Image() : data_{}, resolution_{0, 0}
  * @brief The pixels an image width by height holds, in a size_t, which their product in int
  * could overflow.
  *
- * @throws std::runtime_error if either is negative.
+ * At most INT_MAX: pixels are indexed in int (y * width + x), here and in the image readers and
+ * writers, which would overflow past it.
+ *
+ * @throws std::runtime_error if either is negative, or there would be more pixels than that.
  */
 template <IsImagePixel PixelT>
 std::size_t Image<PixelT>::pixel_count_(int width, int height)
@@ -39,7 +43,13 @@ std::size_t Image<PixelT>::pixel_count_(int width, int height)
         HUIRA_THROW_ERROR("Image - The width and height must not be negative: " +
                           std::to_string(width) + " x " + std::to_string(height));
     }
-    return static_cast<std::size_t>(width) * static_cast<std::size_t>(height);
+    const std::size_t count = static_cast<std::size_t>(width) * static_cast<std::size_t>(height);
+    if (count > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
+        HUIRA_THROW_ERROR("Image - An image can have at most " +
+                          std::to_string(std::numeric_limits<int>::max()) +
+                          " pixels: " + std::to_string(width) + " x " + std::to_string(height));
+    }
+    return count;
 }
 
 /**

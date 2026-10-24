@@ -1,5 +1,6 @@
 
 #include <cmath>
+#include <limits>
 #include <string>
 
 #include "huira/core/types.hpp"
@@ -34,7 +35,8 @@ SensorModel<TSpectral>::SensorModel(SensorConfig<TSpectral> config)
 }
 
 /**
- * @brief Checks that a resolution has at least one pixel in each direction.
+ * @brief Checks that a resolution has at least one pixel in each direction, and no more pixels
+ * than an image can hold (INT_MAX, since pixels are indexed in int).
  *
  * @param resolution The resolution to check.
  * @param caller Name for the error message.
@@ -46,6 +48,12 @@ void SensorModel<TSpectral>::check_resolution(const Resolution& resolution,
 {
     if (resolution.x < 1 || resolution.y < 1) {
         HUIRA_THROW_ERROR(caller + " - Resolution must be at least 1x1: " +
+                          std::to_string(resolution.x) + "x" + std::to_string(resolution.y));
+    }
+    if (static_cast<long long>(resolution.x) * static_cast<long long>(resolution.y) >
+        std::numeric_limits<int>::max()) {
+        HUIRA_THROW_ERROR(caller + " - Resolution must have at most " +
+                          std::to_string(std::numeric_limits<int>::max()) + " pixels: " +
                           std::to_string(resolution.x) + "x" + std::to_string(resolution.y));
     }
 }

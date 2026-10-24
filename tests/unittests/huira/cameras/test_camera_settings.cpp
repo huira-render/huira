@@ -250,6 +250,9 @@ TEST_CASE("Invalid settings throw and leave the camera as it was", "[cameras][va
         Resolution{40, 30}, units::Micrometer(5.0), std::nullopt, NaN_F, 2.f));
     CHECK_THROWS(camera.configure_sensor_from_size(Resolution{40, 30}, units::Millimeter(0.0)));
     CHECK_THROWS(camera.configure_sensor_from_size(Resolution{0, 30}, units::Millimeter(6.0)));
+    // ...or with more pixels than an image holds, INT_MAX:
+    CHECK_THROWS(
+        camera.configure_sensor_from_pitch(Resolution{46341, 46341}, units::Micrometer(10.0)));
     CHECK_THROWS(camera.configure_sensor_from_size(
         Resolution{40, 30}, units::Millimeter(6.0), units::Millimeter(INF)));
 
