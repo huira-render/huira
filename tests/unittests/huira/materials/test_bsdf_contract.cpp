@@ -58,13 +58,13 @@ std::vector<Case> cases()
          std::make_shared<LommelSeeligerBSDF<RGB>>(),
          shading(albedo, 0.5f, 0.f),
          {true, true, false, false}},
-        // McEwen's lunar-Lambert function is a fit of I/F, not a physical model: at an albedo
-        // of 1 it reflects 9% more light than it receives overhead, and 64% more at 1.5 rad.
+        // McEwen's lunar-Lambert function is a fit of I/F, not a physical model, which at an
+        // albedo of 1 reflects up to 84% more light than it receives; McEwenBSDF caps the albedo
+        // where it would (see the class).
         {"McEwen",
          std::make_shared<McEwenBSDF<RGB>>(),
          shading(albedo, 0.5f, 0.f),
-         {true, true, false, false},
-         false},
+         {true, true, false, false}},
         // Hapke's model does not conserve energy: its opposition surge adds light near zero
         // phase, and its approximate H function overestimates multiple scattering. With a single
         // scattering albedo of 1 it reflects up to 10% more light than it receives here.

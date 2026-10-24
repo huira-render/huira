@@ -21,12 +21,22 @@ namespace huira {
  * (1 - beta) cos_i). Its Lommel-Seeliger part is normalized to equal Lambert's where the light
  * and the viewer are both overhead, so that the albedo is the normal albedo whatever beta is.
  *
+ * The lunar-Lambert function is a fit of I/F, not a physical model, and does not conserve
+ * energy: of the light from a direction at cosine mu to the normal, it reflects albedo * rho(mu),
+ * where rho rises from 1.09 overhead to 1.84 at the horizon. So that the BSDF never reflects
+ * more light than it receives, the albedo is capped, for each pair of directions, at
+ * 1 / max(rho(cos_i), rho(cos_o)). At an albedo up to 1 / 1.84 = 0.54 the cap is never reached,
+ * and the BSDF is the lunar-Lambert function exactly; above it, the cap applies only where one
+ * of the directions is low enough. The BSDF stays reciprocal and continuous. (At an albedo of 1,
+ * it reflects 0.89 of the light from overhead, where the function reflects 1.09, and all of the
+ * light from near the horizon, where the function reflects up to 1.84.)
+ *
  * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
 class McEwenBSDF final : public BSDF<TSpectral> {
   public:
-    McEwenBSDF() noexcept = default;
+    McEwenBSDF() noexcept;
 
     [[nodiscard]] BSDFRequirements requirements() const override;
 
