@@ -128,7 +128,7 @@ class Image {
     /// response holds DN / (2^bits - 1); the image writers use this to write DN (see
     /// PixelScaling).
     [[nodiscard]] int sensor_bit_depth() const noexcept { return sensor_bit_depth_; }
-    void set_sensor_bit_depth(int bits) noexcept { sensor_bit_depth_ = bits; }
+    void set_sensor_bit_depth(int bits);
 
     void convolve(const Image& kernel)
         requires(!IsInteger<PixelT>);
@@ -148,6 +148,9 @@ class Image {
     Resolution resolution_;
 
     int sensor_bit_depth_ = 0;
+
+    /// The largest sensor bit depth: one more would shift a 64-bit integer by 64.
+    static constexpr int MAX_SENSOR_BIT_DEPTH_ = 63;
 
     [[nodiscard]] std::size_t to_linear(int x, int y) const noexcept;
     [[nodiscard]] bool contains_(const Pixel& pixel) const noexcept;
