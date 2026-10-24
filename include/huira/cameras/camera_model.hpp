@@ -775,6 +775,7 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     bool fstop_change_warned_ = false;
 
     void set_aperture_area_(units::Meter diameter);
+    void resize_default_aperture_(float focal_length);
     void focal_length_changed_(float previous_focal_length);
 
     /// Resolve the intrinsics (fx, fy, cx, cy, skew) from the geometry settings, and mark the
