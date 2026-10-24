@@ -62,6 +62,17 @@ namespace huira {
  * sampling (Heitz 2018) for the specular lobe, combined with cosine-weighted
  * hemisphere sampling for the diffuse lobe via one-sample MIS.
  *
+ * **Precision at grazing angles.** On a very smooth surface, where both wo
+ * and wi are close to the horizon, the specular lobe's value is decided by
+ * float rounding rather than by the model. The half vector is then the small
+ * remainder of wo + wi, whose direction float resolves only to about
+ * 3e-8 / cos rad (cos being the cosine of the directions to the normal),
+ * while the GGX lobe is only alpha = roughness^2 wide. Where alpha * cos is
+ * below about 3e-7, the rounding is a tenth of the lobe's width or more:
+ * within about 0.17 degrees of the horizon at the least roughness, 0.01, and
+ * 0.02 degrees at roughness 0.03. Directions in float can do no better, and
+ * test_cook_torrance leaves that region out.
+ *
  * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
