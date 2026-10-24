@@ -1,3 +1,4 @@
+#include <array>
 #include <cmath>
 #include <limits>
 #include <optional>
@@ -401,6 +402,188 @@ TEST_CASE("A pixel's radiance-to-power factor uses the direction to its center",
                                   camera.cast_ray(x, y).direction()));
             INFO("pixel (" << x << ", " << y << "), table built: " << built);
             CHECK(close(camera.pixel_radiance_to_power(x, y), expected, 1e-4));
+        }
+    }
+}
+
+TEST_CASE("Pixel solid angles are precise at any focal length and across the sensor",
+          "[cameras][radiometry]")
+{
+    // Every pixel's radiance-to-power factor, against the pinhole's: the pixel's solid angle,
+    // integrated over it by two-point Gauss-Legendre quadrature in each direction (exact to
+    // double precision for pixels this small), times the aperture foreshortened along the mean of
+    // its corners' directions. Girard's theorem lost 24% of the solid angle at 57.6 m, and corner
+    // directions rounded to single precision left a fixed pattern of 3e-4 at the ends of a
+    // 4096-pixel row (issue #91). The factors are single precision, good to about 1e-7.
+    struct Case {
+        Resolution resolution;
+        double pitch_um;
+        double focal_length_mm;
+    };
+    const std::array<Case, 7> cases{
+        Case{Resolution{64, 64}, 5.0, 50.0},
+        Case{Resolution{64, 64}, 5.0, 1000.0},
+        Case{Resolution{64, 64}, 5.0, 10000.0},
+        Case{Resolution{64, 64}, 5.0, 57600.0},
+        Case{Resolution{4096, 4}, 5.0, 50.0},
+        Case{Resolution{4096, 4}, 5.0, 57600.0},
+        Case{Resolution{64, 64}, 100.0, 5.0}, // a wide field: 33 degrees to the edge
+    };
+    const double offset = 0.5 / std::sqrt(3.0);
+    const std::array<double, 2> nodes{0.5 - offset, 0.5 + offset};
+
+    for (const Case& c : cases) {
+        CameraModel<RGB> camera;
+        camera.configure_sensor_from_pitch(c.resolution, units::Micrometer(c.pitch_um));
+        camera.set_focal_length(units::Millimeter(c.focal_length_mm));
+        const Mat3<float> k = camera.intrinsic_matrix();
+        const double fx = static_cast<double>(k[0][0]);
+        const double fy = static_cast<double>(k[1][1]);
+        const double area =
+            static_cast<double>(camera.projected_aperture_area(Vec3<float>{0.f, 0.f, 1.f}));
+        auto corner = [](double x, double y) { return glm::normalize(Vec3<double>{x, y, 1.0}); };
+
+        for (bool built : {false, true}) {
+            if (built) {
+                camera.precompute(); // the table, which gives the same values
+            }
+            double worst = 0.0;
+            int worst_x = 0;
+            int worst_y = 0;
+            for (int y = 0; y < c.resolution.height; ++y) {
+                for (int x = 0; x < c.resolution.width; ++x) {
+                    // The pixel spans [x0, x1] x [y0, y1] in normalized image coordinates, with
+                    // the principal point at the center of the sensor:
+                    const double x0 = (x - 0.5 * c.resolution.width) / fx;
+                    const double x1 = (x + 1 - 0.5 * c.resolution.width) / fx;
+                    const double y0 = (y - 0.5 * c.resolution.height) / fy;
+                    const double y1 = (y + 1 - 0.5 * c.resolution.height) / fy;
+                    double solid_angle = 0.0;
+                    for (double u : nodes) {
+                        for (double v : nodes) {
+                            const double px = x0 + (x1 - x0) * u;
+                            const double py = y0 + (y1 - y0) * v;
+                            solid_angle += 0.25 / std::pow(1.0 + px * px + py * py, 1.5);
+                        }
+                    }
+                    solid_angle *= (x1 - x0) * (y1 - y0);
+                    const Vec3<double> center = glm::normalize(corner(x0, y0) + corner(x1, y0) +
+                                                               corner(x1, y1) + corner(x0, y1));
+                    const double expected = solid_angle * center.z * area;
+
+                    const double error =
+                        std::abs(static_cast<double>(camera.pixel_radiance_to_power(x, y)) -
+                                 expected) /
+                        expected;
+                    if (error > worst) {
+                        worst = error;
+                        worst_x = x;
+                        worst_y = y;
+                    }
+                }
+            }
+            INFO(c.resolution.width << " x " << c.resolution.height << " pixels of " << c.pitch_um
+                                    << " um, focal length " << c.focal_length_mm
+                                    << " mm, table built: " << built << "; worst at pixel ("
+                                    << worst_x << ", " << worst_y << ")");
+            CHECK(worst < 1e-6);
+        }
+    }
+}
+
+TEST_CASE("Distorted pixel solid angles are precise at any focal length and across the sensor",
+          "[cameras][radiometry][distortion]")
+{
+    // With radial distortion, each pixel is the two spherical triangles between its corners'
+    // directions. Against the same, from corners undistorted independently, to the last bit: the
+    // radial distortion r (1 + k1 r^2) inverted by Newton's method in one dimension. Corners
+    // undistorted to single precision left the same pattern as without distortion (see above),
+    // 2.5e-4 at the ends of a 4096-pixel row, and corners undistorted only to the tolerance, 1e-9
+    // in normalized image coordinates, leave one of 1e-5 at 50 mm.
+    const double k1 = -0.05;
+    struct Case {
+        Resolution resolution;
+        double pitch_um;
+        double focal_length_mm;
+    };
+    const std::array<Case, 4> cases{
+        Case{Resolution{64, 64}, 5.0, 50.0},
+        Case{Resolution{64, 64}, 5.0, 57600.0},
+        Case{Resolution{4096, 4}, 5.0, 50.0},
+        Case{Resolution{64, 64}, 100.0, 5.0}, // a wide field, distorted by up to 3%
+    };
+
+    auto corner = [k1](double xd, double yd) {
+        const double rd = std::sqrt(xd * xd + yd * yd);
+        double r = rd;
+        for (int i = 0; i < 100; ++i) {
+            const double next = r - (r + k1 * r * r * r - rd) / (1.0 + 3.0 * k1 * r * r);
+            if (next == r) {
+                break;
+            }
+            r = next;
+        }
+        const double scale = rd > 0.0 ? r / rd : 1.0;
+        return glm::normalize(Vec3<double>{xd * scale, yd * scale, 1.0});
+    };
+    // The solid angle of the spherical triangle between three unit vectors (Van Oosterom and
+    // Strackee), its triple product taken over its edges:
+    auto triangle = [](const Vec3<double>& a, const Vec3<double>& b, const Vec3<double>& c) {
+        const double numerator = std::abs(glm::dot(a, glm::cross(b - a, c - a)));
+        const double denominator = 1.0 + glm::dot(a, b) + glm::dot(b, c) + glm::dot(c, a);
+        return 2.0 * std::atan2(numerator, denominator);
+    };
+
+    for (const Case& c : cases) {
+        CameraModel<RGB> camera;
+        camera.configure_sensor_from_pitch(c.resolution, units::Micrometer(c.pitch_um));
+        camera.set_focal_length(units::Millimeter(c.focal_length_mm));
+        camera.set_brown_conrady_distortion(BrownCoefficients(k1, 0.0, 0.0, 0.0, 0.0));
+        const Mat3<float> k = camera.intrinsic_matrix();
+        const double fx = static_cast<double>(k[0][0]);
+        const double fy = static_cast<double>(k[1][1]);
+        const double area =
+            static_cast<double>(camera.projected_aperture_area(Vec3<float>{0.f, 0.f, 1.f}));
+
+        for (bool built : {false, true}) {
+            if (built) {
+                camera.precompute(); // the table, which gives the same values
+            }
+            double worst = 0.0;
+            int worst_x = 0;
+            int worst_y = 0;
+            for (int y = 0; y < c.resolution.height; ++y) {
+                for (int x = 0; x < c.resolution.width; ++x) {
+                    // The pixel's corners, in distorted normalized image coordinates, with the
+                    // principal point at the center of the sensor:
+                    const double x0 = (x - 0.5 * c.resolution.width) / fx;
+                    const double x1 = (x + 1 - 0.5 * c.resolution.width) / fx;
+                    const double y0 = (y - 0.5 * c.resolution.height) / fy;
+                    const double y1 = (y + 1 - 0.5 * c.resolution.height) / fy;
+                    const Vec3<double> c00 = corner(x0, y0);
+                    const Vec3<double> c10 = corner(x1, y0);
+                    const Vec3<double> c11 = corner(x1, y1);
+                    const Vec3<double> c01 = corner(x0, y1);
+                    const double solid_angle = triangle(c00, c10, c11) + triangle(c00, c11, c01);
+                    const Vec3<double> center = glm::normalize(c00 + c10 + c11 + c01);
+                    const double expected = solid_angle * center.z * area;
+
+                    const double error =
+                        std::abs(static_cast<double>(camera.pixel_radiance_to_power(x, y)) -
+                                 expected) /
+                        expected;
+                    if (error > worst) {
+                        worst = error;
+                        worst_x = x;
+                        worst_y = y;
+                    }
+                }
+            }
+            INFO(c.resolution.width << " x " << c.resolution.height << " pixels of " << c.pitch_um
+                                    << " um, focal length " << c.focal_length_mm
+                                    << " mm, table built: " << built << "; worst at pixel ("
+                                    << worst_x << ", " << worst_y << ")");
+            CHECK(worst < 1e-6);
         }
     }
 }

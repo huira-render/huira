@@ -46,6 +46,7 @@ class OwenDistortion : public Distortion<TSpectral> {
 
     [[nodiscard]] Pixel distort(Pixel homogeneous_coords) const override;
     [[nodiscard]] Pixel undistort(Pixel homogeneous_coords) const override;
+    [[nodiscard]] Pixel_d undistort_precise(Pixel_d homogeneous_coords) const override;
 
     [[nodiscard]] std::string get_type_name() const override { return "Owen"; }
     DistortionCoefficients* get_coefficients() override { return &coefficients_; }

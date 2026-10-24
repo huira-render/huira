@@ -120,6 +120,24 @@ and sensor, are reported by ``precompute()`` or the render.
 Renders on several threads may share a camera: the first to find it out of date builds the
 tables while the others wait. Changing a camera while it is rendering is not supported.
 
+Changes in v0.9.11
+------------------
+
+Each pixel's solid angle is computed by the formula of Van Oosterom and Strackee, from corner
+directions found in double precision, with or without distortion. It was computed by Girard's
+theorem, which cancels nearly all its digits for the small pixels of long focal lengths (off by
+up to 24% at 57.6 m with 5 um pixels), from corner directions rounded to single precision, which
+left a fixed pattern of about :math:`10^{-7}` times each pixel's distance from the principal point,
+in pixels, at any focal length. With distortion, the corners were also undistorted only to the
+tolerance (``Distortion::set_tolerance()``), which left a pattern of about :math:`10^{-5}` at 50 mm.
+Each pixel's radiance-to-power factor is now good to its single precision, about :math:`10^{-7}`.
+
+The distortion models gain ``undistort_precise()``, which the pixel tables use: ``undistort()`` in
+double precision, to about the last bit. A model of your own that does not override it gives its
+``undistort()``, in single precision, as before. Rays are still found in single precision; with
+distortion, those the renderer interpolates from the corner directions change by about the last
+bit of a single-precision value.
+
 Changes in v0.9.10
 ------------------
 

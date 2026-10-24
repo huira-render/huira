@@ -11,6 +11,7 @@
 #include <type_traits>
 #include <variant>
 
+#include "huira/concepts/numeric_concepts.hpp"
 #include "huira/concepts/spectral_concepts.hpp"
 #include "huira/core/types.hpp"
 #include "huira/util/logger.hpp"
@@ -51,6 +52,30 @@ class Distortion {
 
     [[nodiscard]] virtual Pixel distort(Pixel homogeneous_coords) const = 0;
     [[nodiscard]] virtual Pixel undistort(Pixel homogeneous_coords) const = 0;
+
+    /**
+     * @brief undistort() in double precision, as the camera builds its pixel tables.
+     *
+     * A pixel's solid angle is found from the directions of its corners, which differ by a
+     * pixel's width: at long focal lengths, a small fraction of the corners' coordinates. In
+     * single precision, or only to the tolerance (see set_tolerance()), the corners would be off
+     * by enough to leave a fixed pattern in the pixels' radiometry. So the models here invert
+     * their distortion in double precision, as undistort() does, and then take Newton's steps
+     * beyond the tolerance for as long as they bring the point closer, which leaves it good to
+     * about the last bit of a double.
+     *
+     * A model that does not override this gives its undistort(), in single precision.
+     *
+     * @param homogeneous_coords The distorted point, in normalized image coordinates.
+     * @return The undistorted point, or NaN in both coordinates where the distortion has no
+     *         inverse.
+     */
+    [[nodiscard]] virtual Pixel_d undistort_precise(Pixel_d homogeneous_coords) const
+    {
+        const Pixel point = undistort(Pixel{static_cast<float>(homogeneous_coords.x),
+                                            static_cast<float>(homogeneous_coords.y)});
+        return Pixel_d{static_cast<double>(point.x), static_cast<double>(point.y)};
+    }
 
     virtual DistortionCoefficients* get_coefficients() = 0;
     [[nodiscard]] virtual const DistortionCoefficients* get_coefficients() const = 0;
@@ -110,6 +135,12 @@ class Distortion {
      * point with an inverse. Its fallback, stepping by the residual where the Jacobian was
      * folded, could also cross the fold and converge on the wrong sheet without any sign.
      *
+     * The iteration is in double precision either way. In single precision (for undistort()),
+     * it stops within the tolerance. In double (for undistort_precise()), it then takes further
+     * steps, with the last Jacobian, for as long as they bring the point closer: Newton's method
+     * converges quadratically, so a step or two takes it from the tolerance to about the last
+     * bit of a double.
+     *
      * @param target The distorted point, in normalized image coordinates.
      * @param distort The distortion in double precision: a callable taking and returning
      *        Pixel_d. It may return NaN where the model has no image, e.g. past a pole.
@@ -117,11 +148,12 @@ class Distortion {
      *         gets closer to the target without leaving the region, or the iteration did not
      *         converge to within the tolerance in max_iterations_ steps.
      */
-    template <typename TDistort>
-    [[nodiscard]] Pixel undistort_newton_(Pixel target, const TDistort& distort) const
+    template <IsFloatingPoint TFloat, typename TDistort>
+    [[nodiscard]] BasePixel<TFloat> undistort_newton_(BasePixel<TFloat> target,
+                                                      const TDistort& distort) const
     {
-        const Pixel no_inverse{std::numeric_limits<float>::quiet_NaN(),
-                               std::numeric_limits<float>::quiet_NaN()};
+        const BasePixel<TFloat> no_inverse{std::numeric_limits<TFloat>::quiet_NaN(),
+                                           std::numeric_limits<TFloat>::quiet_NaN()};
         const Pixel_d goal{static_cast<double>(target.x), static_cast<double>(target.y)};
         if (!std::isfinite(goal.x) || !std::isfinite(goal.y)) {
             return no_inverse;
@@ -157,17 +189,38 @@ class Distortion {
             return no_inverse;
         }
 
+        // The Newton step, by Cramer's rule:
+        auto newton_step = [](const Jacobian& j, const Pixel_d& r) {
+            return Pixel_d{-(j.d_dy.y * r.x - j.d_dy.x * r.y) / j.det,
+                           -(j.d_dx.x * r.y - j.d_dx.y * r.x) / j.det};
+        };
+
         for (std::size_t iteration = 0;; ++iteration) {
             if (residual_sq <= tol_sq_) {
+                if constexpr (std::is_same_v<TFloat, double>) {
+                    // Within the tolerance, a full step moves the point by about as little as
+                    // the residual, where the Jacobian found last still holds:
+                    for (int polish = 0; polish < 4 && residual_sq > 0.0; ++polish) {
+                        const Pixel_d candidate = point + newton_step(jac, residual);
+                        const Pixel_d candidate_residual = distort(candidate) - goal;
+                        const double candidate_sq = squared(candidate_residual);
+                        if (!(candidate_sq < residual_sq)) {
+                            break;
+                        }
+                        point = candidate;
+                        residual = candidate_residual;
+                        residual_sq = candidate_sq;
+                    }
+                }
                 // Every point the iteration reaches is in the region the lens images:
-                return Pixel{static_cast<float>(point.x), static_cast<float>(point.y)};
+                return BasePixel<TFloat>{static_cast<TFloat>(point.x),
+                                         static_cast<TFloat>(point.y)};
             }
             if (iteration == max_iterations_) {
                 return no_inverse;
             }
 
-            const Pixel_d step{-(jac.d_dy.y * residual.x - jac.d_dy.x * residual.y) / jac.det,
-                               -(jac.d_dx.x * residual.y - jac.d_dx.y * residual.x) / jac.det};
+            const Pixel_d step = newton_step(jac, residual);
 
             // Halve the step until it stays in the region and does what the linearized
             // distortion predicts:
