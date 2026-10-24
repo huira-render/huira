@@ -446,3 +446,54 @@ TEST_CASE("A body placed by a table or a function is rendered where it is", "[sc
     CHECK(function_samples > 2);
     CHECK(std::abs(centroid_x(by_function) - 99.5) < 0.5);
 }
+
+TEST_CASE("Zenith and nadir pointing are exact, and turn with the orbit", "[scene][pose_sources]")
+{
+    // On a circular orbit 7000 km in radius, and an eccentric, inclined one, both frames turn with
+    // the direction of the position, about the orbit's normal.
+    Scene<RGB> scene;
+    auto circular = scene.root.new_subframe();
+    circular.set_keplerian_orbit(
+        7000_Km, 0.0, 0_rad, 0_rad, 0_rad, 0_rad, at(0.0), 398600.4418_Km3ps2);
+    auto eccentric = scene.root.new_subframe();
+    eccentric.set_keplerian_orbit(
+        9000_Km, 0.3, 0.7_rad, 1.2_rad, -0.4_rad, 2.0_rad, at(0.0), 398600.4418_Km3ps2);
+
+    const double et = 100.0;
+    for (const bool nadir : {false, true}) {
+        INFO((nadir ? "nadir" : "zenith"));
+        for (auto* node : {&circular, &eccentric}) {
+            if (nadir) {
+                node->get()->set_z_down_y_forward_callback();
+            } else {
+                node->get()->set_z_up_y_forward_callback();
+            }
+            const Transform<double> pose = pose_at(*node, at(et));
+            const Vec3<double>& r = pose.position;
+            const Vec3<double>& v = pose.velocity;
+
+            // z is along or against the position, and y the velocity's part at right angles to
+            // it, to double precision:
+            const Vec3<double> radial = glm::normalize(r);
+            CHECK(glm::length(pose.rotation.z_axis() - (nadir ? -radial : radial)) < 1e-14);
+            CHECK(glm::length(pose.rotation.y_axis() -
+                              glm::normalize(v - radial * glm::dot(v, radial))) < 1e-14);
+
+            // The angular velocity is the position's turning rate:
+            const Vec3<double> rate = glm::cross(r, v) / glm::dot(r, r);
+            CHECK(glm::length(pose.angular_velocity - rate) < 1e-12 * glm::length(rate));
+
+            // And the rate at which the rotation turns:
+            constexpr double step = 1e-3;
+            const Rotation<double> turned = pose_at(*node, at(et + step)).rotation *
+                                            pose_at(*node, at(et - step)).rotation.inverse();
+            CHECK(glm::length(rotation_vector(turned) / (2.0 * step) - pose.angular_velocity) <
+                  1e-8 * glm::length(rate));
+        }
+
+        // On the circular orbit, once per orbit, about the z axis:
+        const double mean_motion = std::sqrt(398600.4418e9 / std::pow(7.0e6, 3));
+        CHECK(glm::length(pose_at(circular, at(et)).angular_velocity -
+                          Vec3<double>{0.0, 0.0, mean_motion}) < 1e-12 * mean_motion);
+    }
+}
