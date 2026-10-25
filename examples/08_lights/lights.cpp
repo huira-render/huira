@@ -113,23 +113,59 @@ static void colored_lights()
         scene, camera, camera_model, huira::Interval::from_start(time, 5_ms), "08_lights.png", 256);
 }
 
+constexpr double EQUATORIAL_RADIUS_KM = 6378.137;
+constexpr double POLAR_RADIUS_KM = 6356.752;
+
+static huira::EllipsoidHandle<TSpectral> earth_shell(huira::Scene<TSpectral>& scene,
+                                                     double altitude_km)
+{
+    const huira::units::Kilometer a(EQUATORIAL_RADIUS_KM + altitude_km);
+    const huira::units::Kilometer b(POLAR_RADIUS_KM + altitude_km);
+    return scene.add_ellipsoid(a, a, b);
+}
+
 static void planetshine()
 {
     huira::Scene<TSpectral> scene;
     auto lambertian = scene.new_bsdf_lambertian();
 
-    // A planet 6000 km in radius, and a satellite 1 m in radius, 500 km above its north pole:
-    auto planet_material = scene.new_material(lambertian);
-    planet_material.set_albedo_factor(TSpectral{0.3f});
-    auto planet_shape = scene.add_ellipsoid(6000_Km, 6000_Km, 6000_Km);
-    auto planet = scene.root.new_instance(scene.add_primitive(planet_shape, planet_material));
+    fs::path daymap_path = "C:/Users/chris/huira_data/models/earth/8k_earth_daymap.jpg";
+    fs::path cloud_map_path = "C:/Users/chris/huira_data/models/earth/8k_earth_clouds.jpg";
+
+    // The surface: the daymap, on a Lambertian BSDF. (Example 06 builds the full material.)
+    auto surface = scene.new_material(scene.new_bsdf_lambertian());
+    auto daymap_srgb = huira::read_image(daymap_path);
+    auto daymap = huira::srgb_to_linear(daymap_srgb); // JPEG textures are in sRGB color space
+    surface.set_albedo_image(scene.add_texture(huira::rgb_to_spectral<TSpectral>(daymap.image)));
+    auto earth = scene.root.new_instance(scene.add_primitive(earth_shell(scene, 0.0), surface));
+
+    // The clouds are a second shell, 6 km up, with a white Lambertian material. Its alpha image
+    // (the cloud map, read as one channel) says how opaque each point is: where it is 0, light
+    // passes through to the surface below.
+    auto cloud_material = scene.new_material(scene.new_bsdf_lambertian());
+    auto cloud_map = huira::read_image_mono(cloud_map_path);
+    cloud_material.set_alpha_image(scene.add_texture(std::move(cloud_map.image)));
+    scene.root.new_instance(scene.add_primitive(earth_shell(scene, 6.0), cloud_material));
+
+    // The atmosphere is a medium: a volume that absorbs and scatters light along the paths
+    // through it. A medium is a density field (how much it absorbs and scatters, per meter, in
+    // each spectral bin) with a phase function (which way scattered light goes). This one is
+    // uniform, scattering blue more than red, and scatters equally in all directions.
+    const TSpectral absorption{0.f};                       // per meter
+    const TSpectral scattering{0.5e-6f, 1.0e-6f, 2.0e-6f}; // per meter (red, green, blue)
+    auto density = scene.new_constant_density_field(absorption, scattering);
+    auto phase_function = scene.new_isotropic_phase_function();
+    auto air = scene.new_medium(density, phase_function);
+
+    auto boundary = scene.new_material(scene.new_bsdf_null());
+    boundary.set_transmission(TSpectral{1.f});
+    scene.root.new_instance(scene.add_primitive(earth_shell(scene, 20.0), boundary, air));
 
     auto satellite_material = scene.new_material(lambertian);
     satellite_material.set_albedo_factor(TSpectral{0.8f});
-    auto satellite_shape = scene.add_ellipsoid(1_m, 1_m, 1_m);
-    auto satellite =
-        scene.root.new_instance(scene.add_primitive(satellite_shape, satellite_material));
-    satellite.set_position(0_m, 0_m, 6500_Km);
+    auto satellite_shape = scene.add_ellipsoid(1737_Km, 1737_Km, 1737_Km);
+    auto moon = scene.root.new_instance(scene.add_primitive(satellite_shape, satellite_material));
+    moon.set_position(-380000_Km, 50000_Km, 10000_Km);
 
     // The Sun lights the planet's +x half, and the satellite's +x side.
     auto sun = scene.root.new_instance(scene.new_sun_light());
@@ -139,7 +175,7 @@ static void planetshine()
     // planet as an indirect source makes the renderer sample it like a light (it emits nothing
     // itself), as it does the Sun. That matters most when the reflector is small in the sky,
     // such as the Moon seen from the Earth, where paths would rarely find it by chance.
-    planet.set_indirect_source(true);
+    moon.set_indirect_source(true);
 
     // The camera looks up at the satellite from below its night side:
     auto camera_model = scene.new_camera_model();
@@ -149,20 +185,20 @@ static void planetshine()
     camera_model.set_fstop(16);
 
     auto camera = scene.root.new_instance(camera_model);
-    camera.set_position(-4_m, -4_m, huira::units::Meter(6500e3 - 3.0));
-    camera.look_at(satellite, huira::Vec3<double>{0.0, 0.0, 1.0});
+    camera.set_position(-50000_Km, 0_m, 0_m);
+    camera.look_at(earth, huira::Vec3<double>{0.0, 0.0, 1.0});
 
     const huira::Time time("2026-01-01T00:00:00");
     render(scene,
            camera,
            camera_model,
-           huira::Interval::from_start(time, 1_ms),
+           huira::Interval::from_start(time, 2_s),
            "08_lights_planetshine.png",
            256);
 }
 
 int main()
 {
-    colored_lights();
+    // colored_lights();
     planetshine();
 }
