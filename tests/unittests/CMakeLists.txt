@@ -50,6 +50,7 @@ set(UNIT_TESTS
     huira/render/test_look_at.cpp
     huira/render/test_motion_poses.cpp
     huira/render/test_temporal_samples.cpp
+    huira/render/test_transmission.cpp
     huira/render/test_dynamic_sampling.cpp
     huira/render/test_shading_utils.cpp
     huira/render/test_observation_modes.cpp

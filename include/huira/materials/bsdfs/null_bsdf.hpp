@@ -13,6 +13,10 @@ namespace huira {
 /**
  * @brief Null BSDF (does nothing).
  *
+ * It reflects no light. A path passes a surface with it by the surface's transmission alone,
+ * without scattering there: one with a transmission of 1 lets all light through unchanged, as
+ * the boundary of a medium does; one with a transmission of 0 is black and opaque.
+ *
  * This BSDF is stateless and a single instance can be shared across all
  * materials in the scene that use it.
  *
@@ -45,6 +49,8 @@ class NullBSDF final : public BSDF<TSpectral> {
                             const Vec3<float>& wi,
                             const Interaction<TSpectral>& isect,
                             const ShadingParams<TSpectral>& params) const override;
+
+    [[nodiscard]] bool reflects() const override { return false; }
 
     std::string type() const override { return "NullBSDF"; }
 };

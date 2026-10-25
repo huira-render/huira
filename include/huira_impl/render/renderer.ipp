@@ -786,6 +786,44 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                         }
                     }
 
+                    // The surface's own emission along the ray, from either
+                    // side. An emissive surface is not a light: nothing samples
+                    // it (lights, nor reflector NEE, whose
+                    // direct_lit_radiance() leaves emission out), so it is
+                    // only ever reached here, and counted in full, whichever
+                    // way the path goes on.
+                    const TSpectral Le = throughput * params.emission;
+                    if (bounce == 0) {
+                        direct_radiance += Le;
+                    } else {
+                        indirect_radiance += Le;
+                    }
+
+                    // What the surface transmits passes straight through it, as shadow rays and
+                    // rays toward indirect sources take it to. The path either passes through
+                    // or scatters here by the BSDF: it always passes a surface whose BSDF
+                    // reflects nothing (the null BSDF), and passes another with a probability
+                    // in proportion to its transmission against the most a BSDF can reflect, 1.
+                    // Its throughput is divided by the probability of the way it takes, so that
+                    // it carries the light of both on average. Passing through, as past alpha,
+                    // is not a bounce, and leaves the previous vertex as it was: what the path
+                    // finds beyond is weighted against that vertex's samples of lights and
+                    // indirect sources, which reach it through this surface too.
+                    const float transmission = params.transmission.max();
+                    if (transmission > 0.0f) {
+                        const float pass_probability =
+                            material->bsdf_reflects() ? transmission / (transmission + 1.0f) : 1.0f;
+                        if (pass_probability >= 1.0f || sampler.get_1d() < pass_probability) {
+                            throughput = throughput * params.transmission / pass_probability;
+                            ray =
+                                Ray<TSpectral>(ray.origin(), ray.direction(), advance_ray_t(hit.t));
+                            medium_stack.toggle(batch.primitive.get());
+                            bounce--;
+                            continue;
+                        }
+                        throughput = throughput / (1.0f - pass_probability);
+                    }
+
                     // Path regulatization
                     if (bounce > 0) {
                         params.roughness = std::max(params.roughness, prev_roughness);
@@ -804,18 +842,6 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                         if (has_albedo) {
                             frame_buffer.albedo()(x, y) += params.albedo;
                         }
-                    }
-
-                    // The surface's own emission along the ray, from either
-                    // side. An emissive surface is not a light: nothing samples
-                    // it (lights, nor reflector NEE, whose
-                    // direct_lit_radiance() leaves emission out), so it is
-                    // only ever reached here, and counted in full.
-                    const TSpectral Le = throughput * params.emission;
-                    if (bounce == 0) {
-                        direct_radiance += Le;
-                    } else {
-                        indirect_radiance += Le;
                     }
 
                     float reflector_nee_weight = 1.0f;

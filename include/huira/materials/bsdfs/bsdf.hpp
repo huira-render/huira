@@ -118,6 +118,11 @@ class BSDF : public SceneObject<BSDF<TSpectral>> {
                                     const Interaction<TSpectral>& isect,
                                     const ShadingParams<TSpectral>& params) const = 0;
 
+    /// Whether the BSDF reflects any light: false only for one that reflects none, for any
+    /// directions and parameters, as the null BSDF. A path passes a surface whose BSDF reflects
+    /// nothing by its transmission alone, without scattering there.
+    [[nodiscard]] virtual bool reflects() const { return true; }
+
     virtual std::string type() const override = 0;
 };
 
