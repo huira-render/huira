@@ -126,6 +126,13 @@ class SceneView {
                         const MediumStack<TSpectral>& medium_stack = MediumStack<TSpectral>{},
                         bool bsdf_ray_follows = false) const;
 
+    [[nodiscard]] TSpectral indirect_source_radiance(const Ray<TSpectral>& ray,
+                                                     std::size_t source,
+                                                     const MediumStack<TSpectral>& medium_stack,
+                                                     RandomSampler<float>& sampler,
+                                                     float time = 0.5f,
+                                                     bool bsdf_ray_follows = false) const;
+
     /// True when the TLAS contains nothing that a ray could ever hit.
     [[nodiscard]] bool tlas_is_empty() const noexcept { return tlas_empty_; }
 
@@ -248,6 +255,16 @@ class SceneView {
     {
         return std::atan2(glm::length(glm::cross(a, b)), glm::dot(a, b));
     }
+
+    template <typename TAtSurface>
+    TSpectral march_(const Ray<TSpectral>& ray,
+                     float t_far,
+                     MediumStack<TSpectral>& stack,
+                     RandomSampler<float>& sampler,
+                     float time,
+                     AlphaMode alpha_mode,
+                     unsigned int mask,
+                     TAtSurface&& at_surface) const;
 
     template <typename TMaterial, typename TParams>
     TSpectral sample_light_contribution_(const LightInstance<TSpectral>& light_instance,

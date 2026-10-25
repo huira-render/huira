@@ -43,6 +43,7 @@ set(UNIT_TESTS
     huira/render/test_bounce_limit.cpp
     huira/render/test_bright_bodies.cpp
     huira/render/test_emission.cpp
+    huira/render/test_indirect_sources.cpp
     huira/render/test_measured_defocus.cpp
     huira/render/test_measured_unresolved.cpp
     huira/render/test_motion_blur.cpp
