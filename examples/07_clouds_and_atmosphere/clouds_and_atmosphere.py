@@ -58,7 +58,7 @@ def main():
     # The surface: the daymap, on a Lambertian BSDF. (Example 06 builds the full material.)
     surface = scene.new_material(scene.new_bsdf_lambertian())
     daymap_srgb = huira.read_image(daymap_path)
-    daymap = huira.srgb_to_linear(daymap_srgb)  # JPEG textures are in sRGB color space
+    daymap = huira.srgb_to_linear(daymap_srgb.image)  # JPEG textures are in sRGB color space
     surface.set_albedo_image(scene.add_texture(rgb_to_spectral(daymap.image)))
     scene.root.new_instance(scene.add_primitive(earth_shell(scene, 0), surface))
 
