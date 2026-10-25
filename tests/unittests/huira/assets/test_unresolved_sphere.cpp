@@ -347,6 +347,52 @@ TEST_CASE("An unresolved sphere is lit by the sunlight an indirect source reflec
     check_bins(resolve(true), lambert_sphere(R, a, d, Ep, PI<double>() / 2.0), 0.02f);
 }
 
+TEST_CASE("An unresolved sphere is lit by an indirect source through what lets light through",
+          "[assets][unresolved]")
+{
+    // The sphere and the planet of the case above, inside a shell 10 km in radius around the
+    // sphere, which lets all of the planet's light through (an alpha of 0), or half of it (black,
+    // with an alpha of 0.5); or no shell, for a shell_alpha of 1.
+    const auto resolve = [](float shell_alpha) {
+        CameraScene s;
+        auto dark = s.scene.root.new_instance(s.scene.new_sphere_light(1_m, Radiance(RGB{0.f})));
+        dark.set_position(0_m, 0_m, -1_au);
+
+        const Vec3<double> position{0.0, 0.0, 1e7};
+        const Vec3<double> planet_position = position + Vec3<double>{0.0, 1e8, 0.0};
+        auto planet = s.scene.root.new_instance(
+            s.scene.add_primitive(s.scene.add_ellipsoid(1000_Km, 1000_Km, 1000_Km),
+                                  s.scene.new_material(s.scene.new_bsdf_lambertian())));
+        place(planet, planet_position);
+        planet.set_indirect_source(true);
+        place(s.scene.root.new_instance(s.scene.new_sun_light()),
+              planet_position + Vec3<double>{0.0, -AU_M, 0.0});
+
+        if (shell_alpha < 1.f) {
+            auto surface = s.scene.new_material(s.scene.new_bsdf_lambertian());
+            surface.set_alpha(shell_alpha);
+            surface.set_albedo(RGB{0.f});
+            place(s.scene.root.new_instance(
+                      s.scene.add_primitive(s.scene.add_ellipsoid(10_Km, 10_Km, 10_Km), surface)),
+                  position);
+        }
+
+        auto sphere = std::make_shared<UnresolvedLambertianSphere<RGB>>(1000_m, dark, 0.5f);
+        sphere->set_indirect_source_samples(1 << 18);
+        auto instance =
+            place(s.scene.root.new_instance(s.scene.add_unresolved_object(sphere)), position);
+
+        const SceneView<RGB> view = s.view();
+        return view.unresolved_irradiance(instance, MID);
+    };
+
+    // Before, the rays toward the planet stopped at the shell, and the sphere was dark.
+    const RGB open = resolve(1.f);
+    REQUIRE(open[1] > 0.f);
+    check_bins(resolve(0.f), open, 0.01f);
+    check_bins(resolve(0.5f), open * 0.5f, 0.02f);
+}
+
 TEST_CASE("A moving unresolved sphere's brightness follows its distance through the exposure",
           "[assets][unresolved]")
 {

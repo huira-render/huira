@@ -249,18 +249,14 @@ std::vector<TSpectral> UnresolvedLambertianSphere<TSpectral>::resolve_irradiance
                 // The source's bound at this sample's time (it has samples of its own):
                 SphereConeSample sample = source.sample_toward(self_position, trace_time, sampler);
 
+                // The source's light along the ray, through whatever lies between that lets
+                // light through: misses are known zeros of the bounding-cone estimator, and
+                // anything that lets no light through hides the source (other sources are
+                // accounted for by their own sampling rounds). As for the lights, the object is
+                // assumed to be in vacuum.
                 Ray<TSpectral> ray(self_position, sample.wi);
-                HitRecord hit = scene_view.intersect(ray, trace_time);
-
-                // Contributions are counted only when the ray lands on the
-                // intended source: misses are known zeros of the bounding-cone
-                // estimator, and hits on anything else are occlusions (other
-                // sources are accounted for by their own sampling rounds).
-                if (scene_view.indirect_source_index(hit) != src_idx) {
-                    continue;
-                }
-
-                TSpectral radiance = scene_view.direct_lit_radiance(ray, hit, sampler, trace_time);
+                TSpectral radiance = scene_view.indirect_source_radiance(
+                    ray, src_idx, MediumStack<TSpectral>{}, sampler, trace_time);
                 if (radiance.max() <= 0.0f) {
                     continue;
                 }
