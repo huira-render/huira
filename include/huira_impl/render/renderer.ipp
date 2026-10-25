@@ -806,6 +806,11 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                             power_heuristic(prev_bsdf_pdf, prev_reflector_pdf[hit_source]);
                     }
 
+                    // A ray sampled from the BSDF here is traced only below the bounce limit.
+                    // Light it could find is weighted between it and the samples of lights and
+                    // indirect sources taken here; at the limit those samples are all there is.
+                    const bool bsdf_ray_follows = bounce + 1 < max_bounces_;
+
                     // Direct lighting (next event estimation):
                     for (const auto& light_instance : lights) {
                         TSpectral Ld = throughput * reflector_nee_weight *
@@ -816,7 +821,8 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                                                                              shading_isect,
                                                                              medium_stack,
                                                                              sampler,
-                                                                             time);
+                                                                             time,
+                                                                             bsdf_ray_follows);
                         if (bounce == 0) {
                             direct_radiance += Ld;
                         } else {
@@ -861,9 +867,19 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                             continue;
                         }
 
-                        // Radiance leaving the reflector toward this vertex:
-                        TSpectral Lr = scene_view.direct_lit_radiance(
-                            probe_ray, probe_hit, sampler, time, medium_stack);
+                        // Radiance leaving the reflector toward this vertex, by the direct light
+                        // it reflects. A path that samples this direction from the BSDF instead
+                        // reaches the reflector at the next bounce and shades it as any surface:
+                        // its samples of the lights there are weighted against this sample
+                        // (below), and the light its own BSDF ray finds is counted by that path
+                        // alone. That share is left out here, unless the reflector's BSDF ray
+                        // would be past the bounce limit, two bounces on, where nothing finds it.
+                        TSpectral Lr = scene_view.direct_lit_radiance(probe_ray,
+                                                                      probe_hit,
+                                                                      sampler,
+                                                                      time,
+                                                                      medium_stack,
+                                                                      bounce + 2 < max_bounces_);
                         if (Lr.max() <= 0.0f) {
                             continue;
                         }
@@ -871,8 +887,7 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                         // MIS against BSDF sampling
                         float bsdf_pdf =
                             material->bsdf_pdf(isect.wo, cs.wi, {params, shading_isect});
-                        const bool partner_truncated = (bounce + 1 >= max_bounces_);
-                        float w = partner_truncated ? 1.0f : power_heuristic(cs.pdf, bsdf_pdf);
+                        float w = bsdf_ray_follows ? power_heuristic(cs.pdf, bsdf_pdf) : 1.0f;
 
                         TSpectral Lr_contrib = throughput * f * cos_theta * (Lr / cs.pdf) * w;
                         if (bounce == 0) {

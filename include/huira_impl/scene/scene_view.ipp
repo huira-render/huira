@@ -1917,12 +1917,15 @@ void SceneView<TSpectral>::build_tlas_()
 }
 
 /**
- * @brief Evaluates one light's MIS-weighted NEE contribution at a shading point.
+ * @brief Evaluates one light's NEE contribution at a shading point.
  *
- * Samples the light, performs the shadow/transmittance test, evaluates the BSDF,
- * and applies the power heuristic against the BSDF sampling PDF. Returns the
- * contribution WITHOUT any path throughput applied (the caller owns throughput).
- * Returns zero for occluded, back-facing (opaque), or unsampleable configurations.
+ * Samples the light, performs the shadow/transmittance test and evaluates the BSDF.
+ * When a ray sampled from the BSDF at this point will be traced too, it may find the
+ * light as well, and the contribution is weighted against it by the power heuristic;
+ * otherwise this sample is the light's only estimate here, and is counted in full.
+ * Returns the contribution WITHOUT any path throughput applied (the caller owns
+ * throughput). Returns zero for occluded, back-facing (opaque), or unsampleable
+ * configurations.
  *
  * Templated on the material and its evaluated-parameter types so this header does
  * not need to name them; the Renderer and direct_lit_radiance() instantiate it
@@ -1938,7 +1941,8 @@ SceneView<TSpectral>::sample_light_contribution_(const LightInstance<TSpectral>&
                                                  const Interaction<TSpectral>& shading_isect,
                                                  const MediumStack<TSpectral>& medium_stack,
                                                  RandomSampler<float>& sampler,
-                                                 float time) const
+                                                 float time,
+                                                 bool bsdf_ray_follows) const
 {
     Transform<float> current_transform = instance_transform_at(light_instance.transforms, time);
 
@@ -1972,8 +1976,11 @@ SceneView<TSpectral>::sample_light_contribution_(const LightInstance<TSpectral>&
     TSpectral f = material->bsdf_eval(isect.wo, ls.wi, {params, shading_isect});
     float cos_theta = std::max(0.0f, glm::dot(shading_isect.normal_s, ls.wi));
 
-    float bsdf_pdf = material->bsdf_pdf(isect.wo, ls.wi, {params, shading_isect});
-    float mis_weight = power_heuristic(ls.pdf, bsdf_pdf);
+    float mis_weight = 1.0f;
+    if (bsdf_ray_follows) {
+        float bsdf_pdf = material->bsdf_pdf(isect.wo, ls.wi, {params, shading_isect});
+        mis_weight = power_heuristic(ls.pdf, bsdf_pdf);
+    }
 
     // Multiply the final direct lighting by the transmittance
     return (ls.Li / ls.pdf) * f * cos_theta * mis_weight * transmittance;
@@ -1982,26 +1989,33 @@ SceneView<TSpectral>::sample_light_contribution_(const LightInstance<TSpectral>&
 /**
  * @brief Evaluates the direct (next-event-estimated) radiance leaving a hit point.
  *
- * Resolves the hit, evaluates its material, and accumulates the MIS-weighted
- * contribution of every light in the view toward the hit point, returning the
- * outgoing radiance along -ray.direction(). Only primitive (non-light) geometry
- * is shaded; hits on light geometry return zero, as emission is the caller's
- * responsibility. Partial opacity at the hit point is not resampled here.
+ * Resolves the hit, evaluates its material, and accumulates the contribution of
+ * every light in the view toward the hit point, returning the outgoing radiance
+ * along -ray.direction(). Only primitive (non-light) geometry is shaded; hits on
+ * light geometry return zero, as emission is the caller's responsibility. Partial
+ * opacity at the hit point is not resampled here.
+ *
+ * By default this is all of the direct light the point reflects. A renderer whose
+ * path also samples the point's BSDF there, with a ray it will trace, finds part
+ * of the light that way: it passes bsdf_ray_follows, and gets the rest, the
+ * lights' samples weighted against that ray by the power heuristic.
  *
  * @param ray The ray that produced the hit.
  * @param hit The hit record (must reference primitive geometry to shade).
  * @param sampler Random sampler for light sampling and transmittance estimation.
  * @param time Normalized time in [0, 1] for motion blur.
  * @param medium_stack The medium stack at the hit point (defaults to empty).
+ * @param bsdf_ray_follows Whether the caller traces a ray sampled from the BSDF at
+ *        the hit point, whose share of the lights' light is then left out.
  * @return The direct-lit outgoing spectral radiance at the hit.
  */
 template <IsSpectral TSpectral>
-TSpectral
-SceneView<TSpectral>::direct_lit_radiance(const Ray<TSpectral>& ray,
-                                          const HitRecord& hit,
-                                          RandomSampler<float>& sampler,
-                                          float time,
-                                          const MediumStack<TSpectral>& medium_stack) const
+TSpectral SceneView<TSpectral>::direct_lit_radiance(const Ray<TSpectral>& ray,
+                                                    const HitRecord& hit,
+                                                    RandomSampler<float>& sampler,
+                                                    float time,
+                                                    const MediumStack<TSpectral>& medium_stack,
+                                                    bool bsdf_ray_follows) const
 {
     if (!hit.hit()) {
         return TSpectral{0};
@@ -2023,8 +2037,15 @@ SceneView<TSpectral>::direct_lit_radiance(const Ray<TSpectral>& ray,
 
     TSpectral radiance{0};
     for (const auto& light_instance : lights_) {
-        radiance += this->sample_light_contribution_(
-            light_instance, isect, material, params, shading_isect, medium_stack, sampler, time);
+        radiance += this->sample_light_contribution_(light_instance,
+                                                     isect,
+                                                     material,
+                                                     params,
+                                                     shading_isect,
+                                                     medium_stack,
+                                                     sampler,
+                                                     time,
+                                                     bsdf_ray_follows);
     }
     return radiance;
 }
