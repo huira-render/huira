@@ -586,6 +586,9 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
 
             float prev_bsdf_pdf = 1.0f;
             Interaction<TSpectral> prev_isect;
+            // prev_reflector_pdf, like these, is this path's: the tile keeps the vector only so
+            // as not to allocate one for every sample.
+            std::fill(prev_reflector_pdf.begin(), prev_reflector_pdf.end(), 0.0f);
 
             MediumStack<TSpectral> medium_stack;
 
@@ -624,6 +627,11 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                         vol_isect.normal_g = Vec3<float>{0.f};
                         vol_isect.normal_s = Vec3<float>{0.f};
 
+                        // As at a surface (see bsdf_ray_follows there), a ray sampled from the
+                        // phase function here can find the lights too, and is traced only below
+                        // the bounce limit.
+                        const bool phase_ray_follows = bounce + 1 < max_bounces_;
+
                         for (const auto& light_instance : lights) {
                             Transform<float> current_transform =
                                 instance_transform_at(light_instance.transforms, time);
@@ -645,9 +653,14 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                                 continue;
                             }
                             float phase_val = opt_mi->phase_function->evaluate(opt_mi->wo, ls.wi);
+                            const float mis_weight =
+                                phase_ray_follows
+                                    ? power_heuristic(
+                                          ls.pdf, opt_mi->phase_function->pdf(opt_mi->wo, ls.wi))
+                                    : 1.0f;
 
-                            TSpectral Ld =
-                                throughput * (ls.Li / ls.pdf) * phase_val * shadow_transmittance;
+                            TSpectral Ld = throughput * (ls.Li / ls.pdf) * phase_val *
+                                           shadow_transmittance * mis_weight;
 
                             if (bounce == 0) {
                                 direct_radiance += Ld;
@@ -662,7 +675,13 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                         throughput = throughput * (phase_eval / ps.p);
 
                         ray = Ray<TSpectral>(opt_mi->p, ps.wi);
+
+                        // A light this ray finds is weighted against the lights' samples taken
+                        // here, from this point. Indirect sources are not sampled in a medium:
+                        // one this ray finds is counted in full.
                         prev_bsdf_pdf = ps.p;
+                        prev_isect = vol_isect;
+                        std::fill(prev_reflector_pdf.begin(), prev_reflector_pdf.end(), 0.0f);
                         continue;
 
                     } else if (std::isinf(t_seg)) {

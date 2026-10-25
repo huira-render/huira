@@ -31,6 +31,14 @@ class PhaseFunction : public SceneObject<PhaseFunction<TSpectral>> {
     [[nodiscard]] virtual PhaseSample sample(const Vec3<float>& wo,
                                              RandomSampler<float>& sampler) const = 0;
 
+    /// The density, per steradian, with which sample() draws wi given wo: by default the phase
+    /// function itself, which a phase function that draws its directions in proportion to it
+    /// (as most do) need not override.
+    [[nodiscard]] virtual float pdf(const Vec3<float>& wo, const Vec3<float>& wi) const
+    {
+        return evaluate(wo, wi);
+    }
+
     virtual std::string type() const override = 0;
 };
 
