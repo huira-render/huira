@@ -40,6 +40,7 @@ set(UNIT_TESTS
     huira/materials/test_planetary_bsdfs.cpp
     huira/materials/test_sampling_utils.cpp
 
+    huira/render/test_bounce_limit.cpp
     huira/render/test_bright_bodies.cpp
     huira/render/test_emission.cpp
     huira/render/test_measured_defocus.cpp
@@ -65,6 +66,7 @@ set(UNIT_TESTS
     huira/render/test_unresolved_position.cpp
     huira/render/test_unresolved_tables.cpp
 
+    huira/scene/test_direct_lit_radiance.cpp
     huira/scene/test_node_rates.cpp
     huira/scene/test_pose_sources.cpp
     huira/scene/test_scene_inputs.cpp

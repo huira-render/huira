@@ -118,12 +118,13 @@ class SceneView {
     [[nodiscard]] TSpectral unresolved_irradiance(const InstanceHandle<TSpectral>& instance,
                                                   const Time& time) const;
 
-    [[nodiscard]] TSpectral direct_lit_radiance(
-        const Ray<TSpectral>& ray,
-        const HitRecord& hit,
-        RandomSampler<float>& sampler,
-        float time = 0.5f,
-        const MediumStack<TSpectral>& medium_stack = MediumStack<TSpectral>{}) const;
+    [[nodiscard]] TSpectral
+    direct_lit_radiance(const Ray<TSpectral>& ray,
+                        const HitRecord& hit,
+                        RandomSampler<float>& sampler,
+                        float time = 0.5f,
+                        const MediumStack<TSpectral>& medium_stack = MediumStack<TSpectral>{},
+                        bool bsdf_ray_follows = false) const;
 
     /// True when the TLAS contains nothing that a ray could ever hit.
     [[nodiscard]] bool tlas_is_empty() const noexcept { return tlas_empty_; }
@@ -256,7 +257,8 @@ class SceneView {
                                          const Interaction<TSpectral>& shading_isect,
                                          const MediumStack<TSpectral>& medium_stack,
                                          RandomSampler<float>& sampler,
-                                         float time) const;
+                                         float time,
+                                         bool bsdf_ray_follows) const;
 
     void traverse_and_collect_(const std::shared_ptr<Node<TSpectral>>& node);
 
