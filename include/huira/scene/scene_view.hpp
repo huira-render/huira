@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <functional>
@@ -411,8 +412,58 @@ class SceneView {
         /// Index into indirect_sources_ if this instance is a designated
         /// indirect source; NO_INDIRECT_SOURCE otherwise.
         std::size_t indirect_index = NO_INDIRECT_SOURCE;
+
+        /// The instance's geometry in tlas_, which holds it: Embree gives the transform it draws
+        /// the instance with at a time in the exposure (see DrawnTransform).
+        RTCGeometry geometry = nullptr;
     };
     std::vector<InstanceMapping> instance_mappings_;
+
+    /**
+     * @brief An instance's transform as Embree drew it at a time in the exposure.
+     *
+     * A still instance is drawn with the transform it was given. A moving one is drawn, between
+     * two temporal samples, with Embree's interpolation of its poses, which only Embree can give
+     * exactly: its slerp approximates the trigonometry, and falls back to normalized linear
+     * interpolation over small turns, where instance_transform_at() does neither. At a planet's
+     * radius, the two turn a point tens of meters apart.
+     */
+    class DrawnTransform {
+      public:
+        /// A still instance, drawn with the transform it was given.
+        explicit DrawnTransform(const Transform<float>& still) : still_(&still) {}
+
+        /// A moving instance, drawn as Embree interpolates its poses at @p time, from 0 to 1.
+        DrawnTransform(RTCGeometry moving, float time)
+        {
+            std::array<float, 12> matrix{};
+            rtcGetGeometryTransform(moving, time, RTC_FORMAT_FLOAT3X4_COLUMN_MAJOR, matrix.data());
+            // Column by column, with the translation last, as Transform::to_embree_matrix()
+            // gives one:
+            for (int column = 0; column < 3; ++column) {
+                for (int row = 0; row < 3; ++row) {
+                    linear_[column][row] = matrix[static_cast<std::size_t>(3 * column + row)];
+                }
+            }
+            translation_ = {matrix[9], matrix[10], matrix[11]};
+        }
+
+        [[nodiscard]] Vec3<float> apply_to_point(const Vec3<float>& point) const
+        {
+            return still_ != nullptr ? still_->apply_to_point(point)
+                                     : linear_ * point + translation_;
+        }
+
+        [[nodiscard]] Vec3<float> apply_to_direction(const Vec3<float>& direction) const
+        {
+            return still_ != nullptr ? still_->apply_to_direction(direction) : linear_ * direction;
+        }
+
+      private:
+        const Transform<float>* still_ = nullptr;
+        Mat3<float> linear_{};
+        Vec3<float> translation_{};
+    };
 
     friend class Renderer<TSpectral>;
 };

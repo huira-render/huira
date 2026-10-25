@@ -630,10 +630,11 @@ Interaction<TSpectral> SceneView<TSpectral>::resolve_hit(const Ray<TSpectral>& r
     // Get the hit:
     batch.primitive->geometry->compute_surface_interaction(hit, isect);
     isect.wo = -ray.direction();
-    // The instance as Embree placed it when the ray hit it, at the ray's time in the exposure:
-    // with motion blur, it moves and turns between temporal samples.
-    const Transform<float> xf =
-        instance_transform_at(batch.instances[mapping.instance_index], hit.time);
+    // The instance as Embree drew it when the ray hit it, at the ray's time in the exposure: with
+    // motion blur, it moves and turns between temporal samples as Embree interpolates its poses.
+    const std::vector<Transform<float>>& poses = batch.instances[mapping.instance_index];
+    const DrawnTransform xf = poses.size() > 1 ? DrawnTransform(mapping.geometry, hit.time)
+                                               : DrawnTransform(poses.front());
 
     // Position error accumulates in the primitive's LOCAL frame (surface
     // reconstruction / barycentric interpolation, rotation) and in the WORLD
@@ -1153,7 +1154,7 @@ SceneView<TSpectral>::local_probes_(const Instance<TSpectral>& instance) const
  * @brief Where Embree draws something halfway between two of its poses.
  *
  * Its position and scale halfway along straight lines, and its rotation halfway along the
- * shorter arc between the two, as instance_transform_at() emulates for shading.
+ * shorter arc between the two, as instance_transform_at() emulates.
  */
 template <IsSpectral TSpectral>
 Transform<double> SceneView<TSpectral>::halfway_pose_(const Transform<double>& start,
@@ -1957,6 +1958,7 @@ void SceneView<TSpectral>::build_tlas_()
             mapping.instance_index = inst_idx;
             mapping.light_index = 0;
             mapping.indirect_index = indirect_lookup[batch_idx][inst_idx];
+            mapping.geometry = inst_geom;
             instance_mappings_[geom_id] = mapping;
         }
     }
@@ -2029,6 +2031,7 @@ void SceneView<TSpectral>::build_tlas_()
         mapping.batch_index = 0;
         mapping.instance_index = 0;
         mapping.light_index = l_idx;
+        mapping.geometry = inst_geom;
         instance_mappings_[geom_id] = mapping;
     }
 
