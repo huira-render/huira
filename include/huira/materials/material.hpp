@@ -58,6 +58,14 @@ struct MaterialEval {
  * spectral bin: the emissive image times the emissive factor. It is added where a ray meets
  * the surface, on top of the light it reflects.
  *
+ * The alpha is the surface's coverage: where it is less than 1, light passes that fraction of
+ * the surface as if it were not there. The transmission is the fraction of the light meeting
+ * the surface that passes straight through it, in each spectral bin, on top of the light the
+ * BSDF reflects. A path through the scene passes the surface by its transmission or scatters
+ * there by its BSDF, at random (always the former with the null BSDF, which reflects nothing),
+ * and counts each way's light in proportion; a shadow ray, or a ray toward an indirect source,
+ * is attenuated by it.
+ *
  * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
 template <IsSpectral TSpectral>
@@ -89,6 +97,8 @@ class Material : public SceneObject<Material<TSpectral>> {
     [[nodiscard]] float bsdf_pdf(const Vec3<float>& wo,
                                  const Vec3<float>& wi,
                                  const MaterialEval<TSpectral>& eval) const;
+
+    [[nodiscard]] bool bsdf_reflects() const;
 
     void set_bsdf(std::shared_ptr<BSDF<TSpectral>> bsdf);
 

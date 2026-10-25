@@ -176,6 +176,16 @@ float Material<TSpectral>::bsdf_pdf(const Vec3<float>& wo,
     return bsdf_->pdf(wo, wi, eval.isect, eval.params);
 }
 
+/**
+ * @brief Whether the material's BSDF reflects any light (see BSDF::reflects()): false for the
+ * null BSDF, which a path passes by the surface's transmission alone.
+ */
+template <IsSpectral TSpectral>
+bool Material<TSpectral>::bsdf_reflects() const
+{
+    return bsdf_->reflects();
+}
+
 /// Throws if an image set on the material is null or has no pixels, which sampling it would read
 /// past. Its pixels were checked when it was made a texture (see Texture).
 template <IsSpectral TSpectral>

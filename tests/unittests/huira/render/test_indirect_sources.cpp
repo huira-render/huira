@@ -15,15 +15,15 @@ using Catch::Matchers::WithinRel;
 namespace {
 
 /// What surrounds the receiver, a white sphere 1 m in radius at the origin: nothing, or a sphere
-/// 2 m in radius that lets all light through (a Lambertian surface with an alpha of 0), or one
-/// that lets half of it through (a black one with an alpha of 0.5).
-enum class Shell { None, Clear, HalfOpaque };
+/// 2 m in radius that lets all light through (a Lambertian surface with an alpha of 0, or a null
+/// BSDF with a transmission of 1), or one that lets half of it through (a black one with an alpha
+/// of 0.5).
+enum class Shell { None, Clear, Null, HalfOpaque };
 
-/// A white sphere 1 m in radius at the origin, the receiver, which the camera sees from 10 m
-/// along -z, filling its 10 degree field of view, and the Sun lights from far along +z, from
-/// behind. Its side toward the camera is lit
-/// only by a white sphere along -z, behind the camera, the reflector. `fog`, if not 0, fills the
-/// shell with a medium that absorbs that much per meter.
+/// The receiver, which the camera sees from 10 m along -z, filling its 10 degree field of view,
+/// and the Sun lights from far along +z, from behind. Its side toward the camera is lit only by a
+/// white sphere along -z, behind the camera, the reflector. `fog`, if not 0, fills the shell with
+/// a medium that absorbs that much per meter.
 struct Setup {
     Shell shell = Shell::None;
     double reflector_radius = 1.0e6;   // The Moon's, 1000 km ...
@@ -49,9 +49,12 @@ double received_power(const Setup& setup)
         scene.add_primitive(scene.add_ellipsoid(1_m, 1_m, 1_m), scene.new_material(lambertian)));
 
     if (setup.shell != Shell::None) {
-        auto surface = scene.new_material(lambertian);
+        auto surface =
+            scene.new_material(setup.shell == Shell::Null ? scene.new_bsdf_null() : lambertian);
         if (setup.shell == Shell::Clear) {
             surface.set_alpha(0.f);
+        } else if (setup.shell == Shell::Null) {
+            surface.set_transmission(RGB{1.f});
         } else {
             surface.set_alpha(0.5f);
             surface.set_albedo(RGB{0.f});
@@ -101,6 +104,25 @@ TEST_CASE("An indirect source lights what is behind a clear surface", "[render]"
     const double reference = received_power({});
     REQUIRE(reference > 0.0);
     CHECK_THAT(received_power({.shell = Shell::Clear}), WithinRel(reference, 0.03));
+    CHECK_THAT(received_power({.shell = Shell::Null}), WithinRel(reference, 0.03));
+}
+
+TEST_CASE("An indirect source lights what is behind a null-BSDF surface", "[render]")
+{
+    // A reflector 50 m in radius, 80 m away, 39 degrees in radius from the receiver: large enough
+    // that a path finds it by sampling the BSDF often, which with a plain reflector, not an
+    // indirect source, is the only way, and gives the reference. Before, a path that crossed the
+    // null-BSDF shell weighted a source it then found at 0, so that only the share of the
+    // source's samples was counted, an eighth here; and its crossings counted as bounces, which
+    // with the default limit of three left the plain reflector out of its reach.
+    Setup setup{.shell = Shell::Null,
+                .reflector_radius = 50.0,
+                .reflector_distance = 80.0,
+                .indirect_source = false};
+    const double reference = received_power(setup);
+    REQUIRE(reference > 0.0);
+    setup.indirect_source = true;
+    CHECK_THAT(received_power(setup), WithinRel(reference, 0.04));
 }
 
 TEST_CASE("An indirect source's light is attenuated by a partly opaque surface", "[render]")
