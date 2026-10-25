@@ -53,9 +53,9 @@ def direction(ra_deg, dec_deg):
 
 
 def normalized(image):
-    """An image scaled so its brightest value is 1."""
-    array = image.to_numpy()
-    return Image((array / array.max()).astype(np.float32))
+    """An image scaled so its brightest value is 1 (np.asarray gives its array, top row first)."""
+    array = np.asarray(image)
+    return Image((array / array.max()).astype(np.float32), origin=huira.PixelOrigin.TopLeft)
 
 
 def gaussian_psf(samples_per_pixel, sigma_pixels, radius_pixels):
@@ -65,7 +65,10 @@ def gaussian_psf(samples_per_pixel, sigma_pixels, radius_pixels):
     xx, yy = np.meshgrid(offsets, offsets)
     psf = np.exp(-(xx**2 + yy**2) / (2 * sigma_pixels**2))
     psf /= psf.sum()
-    return Image(np.repeat(psf[:, :, None], 3, axis=2).astype(np.float32))
+    # The array's first row is the PSF's top row, as the image has it:
+    return Image(
+        np.repeat(psf[:, :, None], 3, axis=2).astype(np.float32), origin=huira.PixelOrigin.TopLeft
+    )
 
 
 def main():

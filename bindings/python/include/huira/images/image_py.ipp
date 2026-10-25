@@ -1,10 +1,13 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <sstream>
 #include <string>
+#include <vector>
 
+#include "huira/cameras/pixel_convention.hpp"
 #include "huira/images/color_map.hpp"
 #include "huira/images/image.hpp"
 #include "huira/images/io/color_space.hpp"
@@ -33,7 +36,24 @@ void bind_image(py::module_& m, const char* class_name)
     using Scalar = typename Traits::Scalar;
     constexpr auto C = Traits::channels;
 
-    py::class_<Img>(m, class_name, py::buffer_protocol())
+    py::class_<Img>(
+        m,
+        class_name,
+        "An image, stored with its top row first: pixel (x, y) is in column x and row y, counted "
+        "down from the top.\n\n"
+        "Arrays: Image(array, origin=...) copies a numpy array in, and to_numpy(origin=...) copies "
+        "one out, of shape (height, width) for one channel and (height, width, channels) for "
+        "more. origin says which row of the array is the top of the image: PixelOrigin.TopLeft "
+        "if its first row is the top, as most image libraries and matplotlib have it, or "
+        "PixelOrigin.BottomLeft if its first row is the bottom, as in FITS files (and the arrays "
+        "astropy reads from them). An array doesn't record which, so origin must be given.\n\n"
+        "For convenience, an image is also an array in its own layout, top row first: "
+        "np.asarray(image) is a view of it, without copying (writing to the view changes the "
+        "image), and numpy and matplotlib take it directly (plt.imshow(image) draws it the right "
+        "way up). Nothing checks that layout against where the array goes next: to write an image "
+        "with astropy, whose FITS files have their first row at the bottom, use "
+        "to_numpy(origin=PixelOrigin.BottomLeft), or huira's write_fits(), which flips it.",
+        py::buffer_protocol())
 
         // -----------------------------------------------------------------
         // Constructors
@@ -46,7 +66,8 @@ void bind_image(py::module_& m, const char* class_name)
              py::arg("fill_value"))
 
         // Construct from a numpy array ------------------------------------
-        .def(py::init([](py::array_t<Scalar, py::array::c_style | py::array::forcecast> arr) {
+        .def(py::init([](py::array_t<Scalar, py::array::c_style | py::array::forcecast> arr,
+                         PixelOrigin origin) {
                  auto buf = arr.request();
                  int h, w;
 
@@ -78,20 +99,22 @@ void bind_image(py::module_& m, const char* class_name)
                  // PixelT must be tightly packed scalars for memcpy to work.
                  static_assert(sizeof(PixelT) == sizeof(Scalar) * C,
                                "PixelT layout is not contiguous scalars");
-                 PixelT* dst = img.data();
-                 const std::size_t num_pixels =
-                     static_cast<std::size_t>(w) * static_cast<std::size_t>(h);
-                 for (std::size_t i = 0; i < num_pixels; ++i) {
-                     if constexpr (C == 1) {
-                         dst[i] = src[i];
-                     } else {
-                         if constexpr (IsNonSpectralPixel<PixelT>) {
+                 const auto width = static_cast<std::size_t>(w);
+                 for (int row = 0; row < h; ++row) {
+                     // The array's row, as a row of the image, which is stored top row first:
+                     const int y = origin == PixelOrigin::TopLeft ? row : h - 1 - row;
+                     const Scalar* src_row = src + static_cast<std::size_t>(row) * width * C;
+                     PixelT* dst_row = img.data() + static_cast<std::size_t>(y) * width;
+                     for (std::size_t i = 0; i < width; ++i) {
+                         if constexpr (C == 1) {
+                             dst_row[i] = src_row[i];
+                         } else if constexpr (IsNonSpectralPixel<PixelT>) {
                              for (std::size_t c = 0; c < C; ++c) {
-                                 dst[i][static_cast<int>(c)] = src[i * C + c];
+                                 dst_row[i][static_cast<int>(c)] = src_row[i * C + c];
                              }
                          } else {
                              for (std::size_t c = 0; c < C; ++c) {
-                                 dst[i][c] = src[i * C + c];
+                                 dst_row[i][c] = src_row[i * C + c];
                              }
                          }
                      }
@@ -99,11 +122,17 @@ void bind_image(py::module_& m, const char* class_name)
                  return img;
              }),
              py::arg("array"),
-             "Construct from a numpy array. "
-             "Single-channel: (H, W). Multi-channel: (H, W, C).")
+             py::kw_only(),
+             py::arg("origin"),
+             "Copy a numpy array into a new image: (height, width) for one channel, "
+             "(height, width, channels) for more. origin says which row of the array is the top "
+             "of the image: PixelOrigin.TopLeft if its first row is, PixelOrigin.BottomLeft if "
+             "its first row is the bottom (as in FITS files, and the arrays astropy reads from "
+             "them).")
 
         // -----------------------------------------------------------------
-        // Buffer protocol  --  np.asarray(img) gives a zero-copy view
+        // Buffer protocol  --  np.asarray(img) gives a zero-copy view, in the image's own
+        // layout: top row first. See the class docstring.
         // -----------------------------------------------------------------
         .def_buffer([](Img& img) -> py::buffer_info {
             if constexpr (C == 1) {
@@ -136,33 +165,36 @@ void bind_image(py::module_& m, const char* class_name)
         })
 
         // -----------------------------------------------------------------
-        // to_numpy()  --  always returns an owning copy
+        // to_numpy()  --  always returns an owning copy, in the row order asked for
         // -----------------------------------------------------------------
         .def(
             "to_numpy",
-            [](const Img& img) {
-                if constexpr (C == 1) {
-                    py::array_t<Scalar> arr(
-                        std::vector<py::ssize_t>{static_cast<py::ssize_t>(img.height()),
-                                                 static_cast<py::ssize_t>(img.width())});
-                    std::memcpy(arr.mutable_data(),
-                                img.data(),
-                                static_cast<std::size_t>(img.width()) *
-                                    static_cast<std::size_t>(img.height()) * sizeof(Scalar));
-                    return arr;
-                } else {
-                    py::array_t<Scalar> arr(
-                        std::vector<py::ssize_t>{static_cast<py::ssize_t>(img.height()),
-                                                 static_cast<py::ssize_t>(img.width()),
-                                                 static_cast<py::ssize_t>(C)});
-                    std::memcpy(arr.mutable_data(),
-                                img.data(),
-                                static_cast<std::size_t>(img.width()) *
-                                    static_cast<std::size_t>(img.height()) * C * sizeof(Scalar));
-                    return arr;
+            [](const Img& img, PixelOrigin origin) {
+                std::vector<py::ssize_t> shape{static_cast<py::ssize_t>(img.height()),
+                                               static_cast<py::ssize_t>(img.width())};
+                if constexpr (C != 1) {
+                    shape.push_back(static_cast<py::ssize_t>(C));
                 }
+                py::array_t<Scalar> arr(shape);
+                const auto width = static_cast<std::size_t>(img.width());
+                const std::size_t row_values = width * C;
+                Scalar* dst = arr.mutable_data();
+                for (int y = 0; y < img.height(); ++y) {
+                    // The image's row, as a row of the array:
+                    const int row = origin == PixelOrigin::TopLeft ? y : img.height() - 1 - y;
+                    std::memcpy(dst + static_cast<std::size_t>(row) * row_values,
+                                img.data() + static_cast<std::size_t>(y) * width,
+                                row_values * sizeof(Scalar));
+                }
+                return arr;
             },
-            "Return image data as a numpy array (always copies).")
+            py::kw_only(),
+            py::arg("origin"),
+            "Copy the image into a new numpy array: (height, width) for one channel, "
+            "(height, width, channels) for more. origin says which row of the array is to be the "
+            "top of the image: PixelOrigin.TopLeft for the first row, as np.asarray(image) has "
+            "it, or PixelOrigin.BottomLeft for the last, as FITS files have it (and astropy "
+            "writes them).")
 
         // -----------------------------------------------------------------
         // Properties and methods

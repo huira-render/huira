@@ -149,8 +149,9 @@ def main():
     # read_fits gives back the image (as DN / (2^bits - 1) again) and its header:
     image, header = huira.read_fits(output_dir / "11_sensor.fits")
     full_scale = 2**image.sensor_bit_depth - 1
+    brightest = image.to_numpy(origin=huira.PixelOrigin.TopLeft).max() * full_scale
     print(f"Read back {header.object}, {header.exptime} s: "
-          f"brightest pixel {image.to_numpy().max() * full_scale:.0f} DN of {full_scale}")
+          f"brightest pixel {brightest:.0f} DN of {full_scale}")
 
     # The same frame without shot and read noise. The dark current and bias are still added: they
     # are not noise.

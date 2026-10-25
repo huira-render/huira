@@ -5,6 +5,7 @@ Demonstrates:
     - The frame buffer's other images: depth, camera and world normals, albedo, geometry IDs,
       and the power each pixel receives (in total, and directly and indirectly)
     - Viewing them: depth_map and normal_map, and normalizing with numpy
+    - Images as numpy arrays, top row first, and back (Image(array, origin=...))
     - Saving float data losslessly as FITS
     - Ray queries: casting a camera ray through a pixel, intersecting it with the scene, and
       resolving the hit into the surface's position and normal
@@ -42,21 +43,27 @@ from huira.units import Millisecond as ms
 
 
 def normalized(image):
-    """An image scaled so its brightest value is 1, as numpy can do with any buffer."""
-    array = image.to_numpy()
+    """An image scaled so its brightest value is 1.
+
+    np.asarray(image) is the image as an array, without copying, top row first. Image(array,
+    origin=...) copies an array back, and needs to be told which row of it is the top: here the
+    first, as np.asarray gave it.
+    """
+    array = np.asarray(image)
     peak = np.nanmax(array)
-    return Image((array / peak if peak > 0 else array).astype(np.float32))
+    scaled = (array / peak if peak > 0 else array).astype(np.float32)
+    return Image(scaled, origin=huira.PixelOrigin.TopLeft)
 
 
 def id_colors(geometry_ids):
     """A color for each geometry ID, and black where a pixel saw nothing."""
-    ids = geometry_ids.to_numpy()
+    ids = np.asarray(geometry_ids)
     missed = ids == np.iinfo(np.uint64).max
     rng = np.random.default_rng(0)
     palette = rng.uniform(0.2, 1.0, size=(256, 3)).astype(np.float32)
     colors = palette[(ids % 256).astype(np.int64)]
     colors[missed] = 0.0
-    return Image(colors)
+    return Image(colors, origin=huira.PixelOrigin.TopLeft)
 
 
 def main():
@@ -124,7 +131,7 @@ def main():
         output_dir / "04_truth_data_normals.png", huira.normal_map(frame_buffer.camera_normals)
     )
 
-    # The other images are arrays like any other (to_numpy()), to scale or color as needed:
+    # The other images are arrays like any other (np.asarray), to scale or color as needed:
     huira.write_png(
         output_dir / "04_truth_data_albedo.png", huira.linear_to_srgb(frame_buffer.albedo)
     )
@@ -136,8 +143,8 @@ def main():
 
     # Ray queries ask the scene what is along a ray, without rendering. Take the pixel nearest the
     # image's center that sees something (its depth is finite; where a pixel sees nothing, the
-    # depth is infinite):
-    depth = frame_buffer.depth.to_numpy()
+    # depth is infinite). Its rows run down from the top, as pixel y does:
+    depth = np.asarray(frame_buffer.depth)
     rows, cols = np.nonzero(np.isfinite(depth))
     if rows.size == 0:
         print("The camera sees nothing")
