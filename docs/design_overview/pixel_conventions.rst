@@ -100,15 +100,33 @@ change. If a principal point is given, the convention decides where on the senso
 is the point.
 
 The image layout. Images are always stored with their top row first, indexed ``image(x, y)``
-with :math:`y` down, and arrive in NumPy as ``(height, width, channels)`` arrays with row 0 at
-the top. File formats whose rows run bottom up (FITS, BMP, TGA) are flipped as they are read and
-written, so a FITS file written by Huira has its first row at the bottom, as FITS viewers
-expect. That is why the ``fits()`` convention counts :math:`y` up from the bottom row.
+with :math:`y` down. In Python, ``np.asarray(image)`` is a view of that layout, a
+``(height, width, channels)`` array with row 0 at the top, and numpy and matplotlib take images
+in it directly. Copying an image to or from a numpy array takes the array's row order as
+``origin``, which has no default: ``Image_f32(array, origin=...)`` and
+``image.to_numpy(origin=...)``, with ``PixelOrigin.TopLeft`` for an array whose first row is the
+top of the image and ``PixelOrigin.BottomLeft`` for one whose first row is the bottom, as in FITS
+files and the arrays astropy reads from them. File formats whose rows run bottom up (FITS, BMP,
+TGA) are flipped as they are read and written, so a FITS file written by Huira has its first
+row at the bottom, as FITS viewers expect. That is why the ``fits()`` convention counts
+:math:`y` up from the bottom row.
 
 Internally, Huira works in *sensor coordinates*: :math:`x` right and :math:`y` down from the
 sensor's top-left corner, with pixel :math:`i` covering :math:`[i, i+1)`. The renderer, the
 star stamps and the ray tracer all use them, and the convention converts only at the three
 places above. ``PixelConvention::to_sensor()`` and ``from_sensor()`` do the conversion.
+
+Changes in v0.9.11
+------------------
+
+In Python, an image made from a numpy array, and an array made from an image with
+``to_numpy()``, take the array's row order as ``origin``, which has no default:
+``Image_f32(array, origin=PixelOrigin.BottomLeft)`` or
+``image.to_numpy(origin=PixelOrigin.TopLeft)``. Both assumed before that the array's first row
+was the top of the image, so an array read from a FITS file with astropy, whose first row is the
+bottom, made an image upside down, without any sign. Code that made images from arrays, or
+called ``to_numpy()``, keeps what it did with ``origin=PixelOrigin.TopLeft``.
+``np.asarray(image)`` is unchanged: a view of the image, top row first.
 
 Changes in v0.9.10
 ------------------
