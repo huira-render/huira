@@ -35,8 +35,8 @@ struct Setup {
 };
 
 /// The power received from a camera 10 m along -z, looking along +z through a 10 degree field
-/// of view.
-double camera_power(Scene<RGB>& scene, int samples_per_pixel)
+/// of view, with the renderer's bounce limit or another.
+double camera_power(Scene<RGB>& scene, int samples_per_pixel, int max_bounces = 0)
 {
     auto model = scene.new_camera_model();
     model.configure_sensor_from_size({32, 32}, 36_mm);
@@ -50,6 +50,9 @@ double camera_power(Scene<RGB>& scene, int samples_per_pixel)
     frame_buffer.enable_received_power();
     Renderer<RGB> renderer;
     renderer.set_samples_per_pixel(samples_per_pixel);
+    if (max_bounces > 0) {
+        renderer.set_max_bounces(max_bounces);
+    }
     SceneView<RGB> scene_view(scene,
                               Interval{Time::from_et(0.0), Time::from_et(1e-3)},
                               camera,
@@ -176,6 +179,36 @@ double fog_under_moon(bool light)
     return camera_power(scene, 256);
 }
 
+/// A ball of fog 1 m in radius at the origin, which scatters 0.5 per meter, inside a surface with
+/// an alpha of 0, lit by a white sphere 50 m in radius, 80 m along -z, behind the camera: 39
+/// degrees in radius from the fog, large enough that a path finds it by sampling the phase
+/// function often. The Sun, from far along +x, lights the sphere, and a black ball 3 m in radius,
+/// 20 m along +x, keeps the sunlight off the fog. The sphere is an indirect source, or a plain
+/// reflector, which only phase sampling finds, and whose light that counts in full. Sampled, a
+/// source's light counts as direct light, as a light's does, while a path must go one bounce
+/// further to find a plain reflector's: the bounce limit is high enough that neither is cut short.
+double fog_under_reflector(bool indirect_source)
+{
+    Scene<RGB> scene;
+    scene.root.new_instance(scene.new_sun_light()).set_position(1_au, 0_m, 0_m);
+    auto black = scene.new_material(scene.new_bsdf_lambertian());
+    black.set_albedo(RGB{0.f});
+    scene.root.new_instance(scene.add_primitive(scene.add_ellipsoid(3_m, 3_m, 3_m), black))
+        .set_position(20_m, 0_m, 0_m);
+
+    auto reflector = scene.root.new_instance(scene.add_primitive(
+        scene.add_ellipsoid(50_m, 50_m, 50_m), scene.new_material(scene.new_bsdf_lambertian())));
+    reflector.set_position(0_m, 0_m, -80_m);
+    reflector.set_indirect_source(indirect_source);
+
+    auto boundary = scene.new_material(scene.new_bsdf_lambertian());
+    boundary.set_alpha(0.f);
+    auto fog = scene.new_medium(scene.new_constant_density_field(RGB{0.f}, RGB{0.5f}),
+                                scene.new_isotropic_phase_function());
+    scene.root.new_instance(scene.add_primitive(scene.add_ellipsoid(1_m, 1_m, 1_m), boundary, fog));
+    return camera_power(scene, 256, 32);
+}
+
 } // namespace
 
 TEST_CASE("An indirect source lights what is behind a clear surface", "[render]")
@@ -240,4 +273,15 @@ TEST_CASE("An indirect source lights a medium", "[render]")
     const double reference = fog_under_moon(true);
     REQUIRE(reference > 0.0);
     CHECK_THAT(fog_under_moon(false), WithinRel(reference, 0.05));
+}
+
+TEST_CASE("An indirect source's light in a medium is counted in full", "[render]")
+{
+    // A path that finds the source by sampling the phase function, where it scattered, weights
+    // it against the source's samples there. Before, there were none, but the weight came from
+    // the source's densities as the last surface the path met had set them, or as the tile's last
+    // path had (huira-render/huira#133).
+    const double reference = fog_under_reflector(false);
+    REQUIRE(reference > 0.0);
+    CHECK_THAT(fog_under_reflector(true), WithinRel(reference, 0.03));
 }
