@@ -669,6 +669,45 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                             }
                         }
 
+                        // The indirect sources, sampled as at a surface (see there), through
+                        // what lets light through, and weighted against phase sampling as the
+                        // lights are.
+                        const auto& sources = scene_view.indirect_sources();
+                        for (std::size_t k = 0; k < sources.size(); ++k) {
+                            SphereConeSample cs =
+                                sources[k].sample_toward(opt_mi->p, time, sampler);
+                            if (cs.pdf <= 0.0f) {
+                                continue;
+                            }
+
+                            Ray<TSpectral> probe_ray(opt_mi->p, cs.wi);
+                            TSpectral Lr =
+                                scene_view.indirect_source_radiance(probe_ray,
+                                                                    k,
+                                                                    medium_stack,
+                                                                    sampler,
+                                                                    time,
+                                                                    bounce + 2 < max_bounces_);
+                            if (Lr.max() <= 0.0f) {
+                                continue;
+                            }
+
+                            const float phase_val =
+                                opt_mi->phase_function->evaluate(opt_mi->wo, cs.wi);
+                            const float w =
+                                phase_ray_follows
+                                    ? power_heuristic(
+                                          cs.pdf, opt_mi->phase_function->pdf(opt_mi->wo, cs.wi))
+                                    : 1.0f;
+
+                            TSpectral Lr_contrib = throughput * phase_val * (Lr / cs.pdf) * w;
+                            if (bounce == 0) {
+                                direct_radiance += Lr_contrib;
+                            } else {
+                                indirect_radiance += Lr_contrib;
+                            }
+                        }
+
                         PhaseSample ps = opt_mi->phase_function->sample(opt_mi->wo, sampler);
 
                         float phase_eval = opt_mi->phase_function->evaluate(opt_mi->wo, ps.wi);
@@ -676,12 +715,13 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
 
                         ray = Ray<TSpectral>(opt_mi->p, ps.wi);
 
-                        // A light this ray finds is weighted against the lights' samples taken
-                        // here, from this point. Indirect sources are not sampled in a medium:
-                        // one this ray finds is counted in full.
+                        // A light or an indirect source this ray finds is weighted against their
+                        // samples taken here, from this point.
                         prev_bsdf_pdf = ps.p;
                         prev_isect = vol_isect;
-                        std::fill(prev_reflector_pdf.begin(), prev_reflector_pdf.end(), 0.0f);
+                        for (std::size_t k = 0; k < prev_reflector_pdf.size(); ++k) {
+                            prev_reflector_pdf[k] = sources[k].pdf_toward(opt_mi->p, time, ps.wi);
+                        }
                         continue;
 
                     } else if (std::isinf(t_seg)) {
