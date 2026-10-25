@@ -880,25 +880,18 @@ Image<TSpectral> Renderer<TSpectral>::path_trace_(SceneView<TSpectral>& scene_vi
                         Vec3<float> probe_origin =
                             offset_spawn_point(isect.position, probe_normal, isect.p_err);
                         Ray<TSpectral> probe_ray(probe_origin, cs.wi);
-                        HitRecord probe_hit = scene_view.intersect(probe_ray, time);
 
-                        if (scene_view.indirect_source_index(probe_hit) != k) {
-                            continue;
-                        }
-
-                        // Radiance leaving the reflector toward this vertex, by the direct light
-                        // it reflects. A path that samples this direction from the BSDF instead
-                        // reaches the reflector at the next bounce and shades it as any surface:
-                        // its samples of the lights there are weighted against this sample
-                        // (below), and the light its own BSDF ray finds is counted by that path
-                        // alone. That share is left out here, unless the reflector's BSDF ray
-                        // would be past the bounce limit, two bounces on, where nothing finds it.
-                        TSpectral Lr = scene_view.direct_lit_radiance(probe_ray,
-                                                                      probe_hit,
-                                                                      sampler,
-                                                                      time,
-                                                                      medium_stack,
-                                                                      bounce + 2 < max_bounces_);
+                        // Radiance reaching this vertex from the reflector, through whatever
+                        // lies between that lets light through, by the direct light it reflects.
+                        // A path that samples this direction from the BSDF instead reaches the
+                        // reflector at the next bounce (passing what it passes) and shades it as
+                        // any surface: its samples of the lights there are weighted against this
+                        // sample (below), and the light its own BSDF ray finds is counted by that
+                        // path alone. That share is left out here, unless the reflector's BSDF
+                        // ray would be past the bounce limit, two bounces on, where nothing finds
+                        // it.
+                        TSpectral Lr = scene_view.indirect_source_radiance(
+                            probe_ray, k, medium_stack, sampler, time, bounce + 2 < max_bounces_);
                         if (Lr.max() <= 0.0f) {
                             continue;
                         }

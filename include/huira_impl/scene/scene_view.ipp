@@ -404,8 +404,104 @@ TSpectral SceneView<TSpectral>::evaluate_transmittance(const Ray<TSpectral>& ray
                                                        float time,
                                                        AlphaMode alpha_mode) const
 {
-    TSpectral transmittance{1.0f};
     MediumStack<TSpectral> stack = initial_stack;
+    return this->march_(ray,
+                        t_far,
+                        stack,
+                        sampler,
+                        time,
+                        alpha_mode,
+                        MASK_GEOMETRY_,
+                        [](const Ray<TSpectral>&,
+                           const HitRecord&,
+                           const TSpectral&,
+                           const MediumStack<TSpectral>&) {});
+}
+
+/**
+ * @brief The radiance arriving along a ray from an indirect source, by the direct light the
+ * source reflects.
+ *
+ * The ray is followed through whatever lets light through, as a shadow ray is (see
+ * evaluate_transmittance()): past surfaces by their alpha, through them by their transmission,
+ * and through the media between them. The direct light that each of the source's surfaces it
+ * meets reflects back along it (see direct_lit_radiance()) is added up, attenuated by what lies
+ * in front. The ray stops at the first surface that lets no light through, which hides anything
+ * beyond it, and at a light, whose sphere does too.
+ *
+ * @param ray The ray, from the point that receives the light.
+ * @param source The source's index in indirect_sources().
+ * @param medium_stack The media the ray starts in.
+ * @param sampler Random numbers, for sampling the lights, the media and partially opaque
+ *        surfaces.
+ * @param time The time for motion blur, from 0 to 1 over the exposure.
+ * @param bsdf_ray_follows Whether the caller traces a ray sampled from the BSDF at each of the
+ *        source's surfaces it reaches, as for direct_lit_radiance().
+ * @return The spectral radiance.
+ */
+template <IsSpectral TSpectral>
+TSpectral SceneView<TSpectral>::indirect_source_radiance(const Ray<TSpectral>& ray,
+                                                         std::size_t source,
+                                                         const MediumStack<TSpectral>& medium_stack,
+                                                         RandomSampler<float>& sampler,
+                                                         float time,
+                                                         bool bsdf_ray_follows) const
+{
+    TSpectral radiance{0.0f};
+    MediumStack<TSpectral> stack = medium_stack;
+    (void)this->march_(ray,
+                       std::numeric_limits<float>::infinity(),
+                       stack,
+                       sampler,
+                       time,
+                       AlphaMode::Stochastic,
+                       MASK_GEOMETRY_ | MASK_LIGHT_,
+                       [&](const Ray<TSpectral>& at,
+                           const HitRecord& hit,
+                           const TSpectral& light,
+                           const MediumStack<TSpectral>& media) {
+                           if (instance_mappings_[hit.inst_id].indirect_index == source) {
+                               radiance +=
+                                   light * this->direct_lit_radiance(
+                                               at, hit, sampler, time, media, bsdf_ray_follows);
+                           }
+                       });
+    return radiance;
+}
+
+/**
+ * @brief Marches a ray through the surfaces and media that let light through.
+ *
+ * The ray passes a surface by its alpha, stochastically or by the expected value, as alpha_mode
+ * says, and through a surface it meets by the surface's transmission; media attenuate it between
+ * them. Before crossing a surface it meets, it calls at_surface(ray, hit, light, media): the ray
+ * (continued to the surface), the hit, the fraction of the light along the ray that meets the
+ * surface (in AlphaMode::Expected, times its opacity), and the media on the ray's side of it. It
+ * stops at the first surface that lets no light through, and at a light's sphere, unless mask
+ * leaves lights out.
+ *
+ * @param ray The ray.
+ * @param t_far How far to march along the ray; infinity for as far as it goes.
+ * @param stack The media the ray starts in; on return, those it ends in.
+ * @param sampler Random numbers, for the media and for partially opaque surfaces.
+ * @param time The time for motion blur, from 0 to 1 over the exposure.
+ * @param alpha_mode How partially opaque surfaces are passed.
+ * @param mask What the ray can meet (see intersect()).
+ * @param at_surface Called for each surface the ray meets, before it crosses it.
+ * @return The transmittance along the ray to t_far: 0 if it stopped.
+ */
+template <IsSpectral TSpectral>
+template <typename TAtSurface>
+TSpectral SceneView<TSpectral>::march_(const Ray<TSpectral>& ray,
+                                       float t_far,
+                                       MediumStack<TSpectral>& stack,
+                                       RandomSampler<float>& sampler,
+                                       float time,
+                                       AlphaMode alpha_mode,
+                                       unsigned int mask,
+                                       TAtSurface&& at_surface) const
+{
+    TSpectral transmittance{1.0f};
 
     // March a SINGLE ray with an advancing tnear ("same-ray continuation")
     // instead of re-spawning at each crossed surface. The origin, direction,
@@ -418,11 +514,27 @@ TSpectral SceneView<TSpectral>::evaluate_transmittance(const Ray<TSpectral>& ray
     float t_start = ray.tnear();
 
     while (t_start < t_far) {
-        HitRecord hit = this->intersect(occlusion_ray, time, MASK_GEOMETRY_);
+        HitRecord hit = this->intersect(occlusion_ray, time, mask);
 
         const bool surface_in_range = hit.hit() && hit.t < t_far;
         const float segment_end = surface_in_range ? hit.t : t_far;
         const float segment_length = segment_end - t_start;
+
+        // A ray that marches without end leaves the scene through the media it is in. Over an
+        // infinite path, a medium lets all light through in a vacuum and none otherwise; computed
+        // as below, the vacuum's would be exp(-0 * inf): NaN.
+        if (std::isinf(segment_end)) {
+            if (const Medium<TSpectral>* active = stack.top(); active != nullptr) {
+                const TSpectral extinction =
+                    active->get_properties(occlusion_ray.at(t_start)).extinction();
+                for (std::size_t c = 0; c < TSpectral::size(); ++c) {
+                    if (extinction[c] > 0.0f) {
+                        transmittance[c] = 0.0f;
+                    }
+                }
+            }
+            break;
+        }
 
         if (const Medium<TSpectral>* active = stack.top(); active != nullptr) {
             // Media only need an approximate segment start point; exactness
@@ -440,6 +552,10 @@ TSpectral SceneView<TSpectral>::evaluate_transmittance(const Ray<TSpectral>& ray
         }
 
         const auto& mapping = instance_mappings_[hit.inst_id];
+        if (mapping.type == GeometryType::Light) {
+            transmittance = TSpectral{0.0f};
+            return transmittance;
+        }
         const auto& batch = primitives_[mapping.batch_index];
         const auto* material = batch.primitive->material.get();
 
@@ -447,6 +563,7 @@ TSpectral SceneView<TSpectral>::evaluate_transmittance(const Ray<TSpectral>& ray
         // and evaluating its material would find no more (and would draw no random number):
         // skip them.
         if (!material->has_alpha() && !material->has_transmission()) {
+            at_surface(occlusion_ray, hit, transmittance, stack);
             transmittance = TSpectral{0.0f};
             return transmittance;
         }
@@ -459,6 +576,7 @@ TSpectral SceneView<TSpectral>::evaluate_transmittance(const Ray<TSpectral>& ray
                 (params.opacity < 1.0f) && (sampler.get_1d() > params.opacity);
 
             if (!stochastic_pass_through) {
+                at_surface(occlusion_ray, hit, transmittance, stack);
                 TSpectral surface_transmission = params.transmission;
                 if (surface_transmission.max() <= 0.0f) {
                     transmittance = TSpectral{0.0f};
@@ -473,6 +591,7 @@ TSpectral SceneView<TSpectral>::evaluate_transmittance(const Ray<TSpectral>& ray
             // Identical in the alpha == 1 and alpha == 0 limits, and noise-free in
             // between. Draws no random numbers, so the RNG stream is untouched.
             const float alpha = std::clamp(params.opacity, 0.0f, 1.0f);
+            at_surface(occlusion_ray, hit, transmittance * alpha, stack);
             TSpectral surface_factor = TSpectral{1.0f - alpha} + params.transmission * alpha;
             if (surface_factor.max() <= 0.0f) {
                 transmittance = TSpectral{0.0f};
