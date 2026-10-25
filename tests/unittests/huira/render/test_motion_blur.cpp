@@ -364,6 +364,56 @@ TEST_CASE("A hit on a moving object is placed where the ray found it", "[render]
     }
 }
 
+TEST_CASE("A hit on a turning planet is placed within its error bound of where the ray found it",
+          "[render][motion_blur]")
+{
+    // A body the size of the Earth, three of its radii in front of the camera, that turns 0.1 rad
+    // during a 1 s exposure. Between two temporal samples, Embree interpolates its pose with
+    // arithmetic of its own, which turns it a little differently from glm::slerp(): with 2
+    // temporal samples, a hit placed with glm::slerp()'s pose was up to 56 m off the ray, about
+    // twice p_err, the bound that spawn points are offset by. The hit must be within that bound
+    // of the ray at any time, with any number of temporal samples, from the middle of the disk
+    // out to its limb.
+    Scene<RGB> scene;
+    auto material = scene.new_material(scene.new_bsdf_lambertian());
+    auto planet = scene.root.new_instance(
+        scene.add_primitive(scene.add_ellipsoid(6371_Km, 6371_Km, 6371_Km), material));
+    planet.set_position(0_Km, 0_Km, 19113_Km);
+    planet.set_angular_velocity(
+        units::RadiansPerSecond(0.0), units::RadiansPerSecond(0.1), units::RadiansPerSecond(0.0));
+    auto camera = scene.root.new_instance(scene.new_camera_model());
+
+    // The disk's angular radius:
+    const float disk = std::asin(1.f / 3.f);
+    // 2 to 129 temporal samples, with twice as many intervals between them each time:
+    for (std::size_t samples = 2; samples <= 129; samples = 2 * samples - 1) {
+        SceneView<RGB> scene_view(scene,
+                                  Interval{Time::from_et(0.0), Time::from_et(1.0)},
+                                  camera,
+                                  ObservationMode::TRUE_STATE,
+                                  samples);
+        for (int step = 0; step < 10; ++step) {
+            const float time = 0.05f + 0.1f * static_cast<float>(step);
+            for (float out : {0.f, 0.5f, 0.9f, 0.99f}) {
+                for (float sideways : {0.f, 0.5f * PI<float>(), PI<float>()}) {
+                    INFO(samples << " temporal samples, time " << time << ", " << out
+                                 << " of the way to the limb, " << sideways << " rad around");
+                    const float off_axis = out * disk;
+                    const Vec3<float> direction{std::sin(off_axis) * std::cos(sideways),
+                                                std::sin(off_axis) * std::sin(sideways),
+                                                std::cos(off_axis)};
+                    const Ray<RGB> ray(Vec3<float>{0.f}, direction);
+                    const HitRecord hit = scene_view.intersect(ray, time);
+                    REQUIRE(hit.hit());
+                    const Interaction<RGB> isect = scene_view.resolve_hit(ray, hit);
+                    INFO("p_err " << isect.p_err << " m");
+                    CHECK(glm::length(isect.position - ray.at(hit.t)) <= isect.p_err);
+                }
+            }
+        }
+    }
+}
+
 TEST_CASE("A turning camera sees a still body shaded as when it holds still",
           "[render][motion_blur]")
 {
