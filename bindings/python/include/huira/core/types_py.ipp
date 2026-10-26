@@ -2,6 +2,7 @@
 
 #include <sstream>
 #include <string>
+#include <utility>
 
 #include "huira/core/types.hpp"
 #include "pybind11/numpy.h"
@@ -108,6 +109,124 @@ void accept_array_likes()
     py::implicitly_convertible<py::tuple, T>();
     py::implicitly_convertible<py::array, T>();
 }
+
+/// Whether a Python object is a Vec3 or a Mat3, the types numpy's arithmetic works on through
+/// their __array_ufunc__ (see bind_numpy_arithmetic()).
+inline bool is_vec3_or_mat3(const py::handle& obj)
+{
+    return py::isinstance<Vec3<double>>(obj) || py::isinstance<Mat3<double>>(obj);
+}
+
+/// A numpy ufunc's result, with each array of three numbers made a Vec3 and each 3x3 one a Mat3.
+/// Anything else is left as numpy gave it: arrays of other shapes, booleans (as comparisons
+/// give), and scalars.
+inline py::object wrap_ufunc_result(const py::object& result)
+{
+    if (py::isinstance<py::tuple>(result)) {
+        py::list wrapped;
+        for (const py::handle item : result) {
+            wrapped.append(wrap_ufunc_result(py::reinterpret_borrow<py::object>(item)));
+        }
+        return py::tuple(wrapped);
+    }
+    if (!py::isinstance<py::array>(result)) {
+        return result;
+    }
+    const auto array = py::reinterpret_borrow<py::array>(result);
+    const char kind = array.dtype().kind();
+    if (kind != 'f' && kind != 'i' && kind != 'u') {
+        return result;
+    }
+    if (array.ndim() == 1 && array.shape(0) == 3) {
+        return py::type::of<Vec3<double>>()(array);
+    }
+    if (array.ndim() == 2 && array.shape(0) == 3 && array.shape(1) == 3) {
+        return py::type::of<Mat3<double>>()(array);
+    }
+    return result;
+}
+
+/**
+ * @brief Arithmetic and comparisons for a Vec3 or Mat3, as numpy has them for the array its
+ * to_numpy() gives.
+ *
+ * Each operator calls numpy's ufunc, as an array's does, and the type's __array_ufunc__ (which
+ * numpy calls whenever one is an operand, whichever side it is on) has numpy do the work on its
+ * array and gives back a Vec3 or Mat3 where the result is a vector or 3x3 matrix of numbers. So
+ * the rules are numpy's: +, -, *, / and the rest are element by element, broadcasting with
+ * scalars and arrays (a Mat3 * Mat3 too); @ is the matrix product; comparisons give arrays of
+ * booleans; and results of other shapes are numpy arrays.
+ */
+template <typename PyClass>
+void bind_numpy_arithmetic(PyClass& cls)
+{
+    cls.def("__array_ufunc__",
+            [](const py::object& /*self*/,
+               const py::object& ufunc,
+               const std::string& method,
+               const py::args& inputs,
+               const py::kwargs& kwargs) -> py::object {
+                // A Vec3 or Mat3 can't be written into in place:
+                if (kwargs.contains("out")) {
+                    for (const py::handle out : kwargs["out"]) {
+                        if (is_vec3_or_mat3(out)) {
+                            return py::reinterpret_borrow<py::object>(Py_NotImplemented);
+                        }
+                    }
+                }
+                py::list arrays;
+                for (const py::handle input : inputs) {
+                    arrays.append(is_vec3_or_mat3(input)
+                                      ? input.attr("__array__")()
+                                      : py::reinterpret_borrow<py::object>(input));
+                }
+                return wrap_ufunc_result(ufunc.attr(method.c_str())(*arrays, **kwargs));
+            });
+
+    struct Operator {
+        const char* name;
+        const char* ufunc;
+        bool reflected;
+    };
+    for (const Operator op : {Operator{"__add__", "add", false},
+                              Operator{"__radd__", "add", true},
+                              Operator{"__sub__", "subtract", false},
+                              Operator{"__rsub__", "subtract", true},
+                              Operator{"__mul__", "multiply", false},
+                              Operator{"__rmul__", "multiply", true},
+                              Operator{"__truediv__", "divide", false},
+                              Operator{"__rtruediv__", "divide", true},
+                              Operator{"__floordiv__", "floor_divide", false},
+                              Operator{"__rfloordiv__", "floor_divide", true},
+                              Operator{"__mod__", "remainder", false},
+                              Operator{"__rmod__", "remainder", true},
+                              Operator{"__pow__", "power", false},
+                              Operator{"__rpow__", "power", true},
+                              Operator{"__matmul__", "matmul", false},
+                              Operator{"__rmatmul__", "matmul", true},
+                              Operator{"__eq__", "equal", false},
+                              Operator{"__ne__", "not_equal", false},
+                              Operator{"__lt__", "less", false},
+                              Operator{"__le__", "less_equal", false},
+                              Operator{"__gt__", "greater", false},
+                              Operator{"__ge__", "greater_equal", false}}) {
+        cls.def(
+            op.name,
+            [ufunc = op.ufunc, reflected = op.reflected](const py::object& self,
+                                                         const py::object& other) {
+                const py::object function = py::module_::import("numpy").attr(ufunc);
+                return reflected ? function(other, self) : function(self, other);
+            },
+            py::is_operator());
+    }
+    for (const auto& [name, ufunc] : {std::pair{"__neg__", "negative"},
+                                      std::pair{"__pos__", "positive"},
+                                      std::pair{"__abs__", "absolute"}}) {
+        cls.def(name, [ufunc = ufunc](const py::object& self) {
+            return py::module_::import("numpy").attr(ufunc)(self);
+        });
+    }
+}
 } // namespace detail
 
 /**
@@ -130,7 +249,9 @@ inline void bind_types(py::module_& m)
         "Vec3",
         "A 3-component vector, in double precision. Functions that take a Vec3 also take any "
         "list, tuple or numpy array of three numbers. It works with numpy as the array "
-        "[x, y, z]: np.asarray(v), numpy functions, v[0], len(v) and iteration.");
+        "[x, y, z]: np.asarray(v), numpy functions, v[0], len(v) and iteration, and its "
+        "arithmetic is numpy's, element by element (+, -, *, /, with scalars, vectors and "
+        "arrays), giving a Vec3 where the result is three numbers.");
     vec3.def(py::init<>())
         .def(py::init<double, double, double>(), py::arg("x"), py::arg("y"), py::arg("z"))
         .def(py::init([](DoubleArray arr) {
@@ -177,7 +298,9 @@ inline void bind_types(py::module_& m)
         "Mat3",
         "A 3x3 matrix, in double precision. Functions that take a Mat3 also take any 3x3 numpy "
         "array or nested list, row by row. It works with numpy as that 3x3 array: "
-        "np.asarray(m), numpy functions, m[0, 2], len(m) and iteration over its rows.");
+        "np.asarray(m), numpy functions, m[0, 2], len(m) and iteration over its rows, and its "
+        "arithmetic is numpy's: element by element with +, -, *, / (m * m too), and the matrix "
+        "product with @ (m @ v gives a Vec3, m @ m a Mat3).");
     mat3.def(py::init<>())
         .def(py::init<double>(),
              py::arg("diagonal"),
@@ -334,6 +457,10 @@ inline void bind_types(py::module_& m)
     // quaternions: see the Quaternion docstring):
     detail::accept_array_likes<Vec3<double>>();
     detail::accept_array_likes<Mat3<double>>();
+
+    // Arithmetic as numpy has it, once both are bound (a result can be either):
+    detail::bind_numpy_arithmetic(vec3);
+    detail::bind_numpy_arithmetic(mat3);
 
     // -----------------------------------------------------------------
     // Free-function conversions

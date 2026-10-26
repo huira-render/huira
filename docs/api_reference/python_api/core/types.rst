@@ -28,6 +28,29 @@ have a ``len()`` and iterate:
 
 Spectral values (``SpectralBins``) work the same way, with one value per bin.
 
+Arithmetic
+----------
+
+A ``Vec3`` and a ``Mat3`` do arithmetic as numpy does on the arrays they stand for, and give
+back a ``Vec3`` or ``Mat3`` wherever the result is three numbers or a 3x3 matrix:
+
+.. code-block:: python
+
+    offset = target.get_static_position() - camera.get_static_position()   # a Vec3
+    midpoint = (a + b) / 2                       # with Vec3s, lists or arrays alike
+    rotated = R @ v                              # a Mat3 @ a Vec3: a Vec3
+    product = R @ S                              # the matrix product: a Mat3
+
+The rules are numpy's: ``+``, ``-``, ``*``, ``/``, ``//``, ``%`` and ``**`` work element by
+element, with scalars, vectors and arrays, on either side and broadcast as numpy broadcasts, and
+``@`` is the matrix product. So ``M * N`` multiplies two ``Mat3`` element by element, as two
+arrays would; use ``M @ N`` for their product. Comparisons (``v == w``, ``v < w``) give arrays of
+booleans, as numpy's do, so ``(v == w).all()`` asks whether two vectors are equal, and a ``Vec3``
+can't be a dictionary key. numpy's element-by-element functions keep the type too
+(``np.sqrt(v)`` is a ``Vec3``); its others give what they give for arrays (``np.cross(v, w)`` is
+an array, ``np.dot(v, w)`` a number). A ``Rotation`` still applies to a vector with ``*``:
+``rotation * v``.
+
 Quaternions are the exception: a function that takes one takes only a ``Quaternion`` (Hamilton,
 ``w, x, y, z``) or a ``ShusterQuaternion`` (``x, y, z, w``), never four bare numbers, which don't
 say which order they are in. Both still work with numpy, in their own order.
@@ -46,6 +69,8 @@ Changes in v0.9.11
 - ``Vec3``, ``Mat3``, ``Quaternion``, ``ShusterQuaternion`` and ``SpectralBins`` work with numpy
   directly, and ``SpectralBins`` gains ``to_numpy()``.
 - A ``Mat3`` prints row by row. It printed column by column, which reads as its transpose.
+- ``Vec3`` and ``Mat3`` do arithmetic, as numpy does (see Arithmetic). Their ``==`` compares
+  element by element: it compared identity, so two equal vectors were never ``==``.
 
 .. autoclass:: huira.Vec3
    :members:
