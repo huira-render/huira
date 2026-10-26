@@ -95,7 +95,11 @@ class CameraModelHandle : public Handle<CameraModel<TSpectral>> {
     void enable_sensor_noise(bool noise = true) const;
     void set_sensor_read_noise(float read_noise) const;
     void set_sensor_dark_current(float dark_current) const;
+    void set_sensor_dark_current_map(Image<float> electrons_per_second) const;
+    void clear_sensor_dark_current_map() const;
     void set_sensor_bias_level(float bias_level) const;
+    void set_sensor_bias_map(Image<float> dn, BiasMapKind kind = BiasMapKind::Absolute) const;
+    void clear_sensor_bias_map() const;
     void set_sensor_bit_depth(int bit_depth) const;
     void set_sensor_conversion_gain(float gain) const;
     void set_sensor_gain_db(float gain_db) const;
@@ -111,7 +115,12 @@ class CameraModelHandle : public Handle<CameraModel<TSpectral>> {
     bool sensor_noise_enabled() const;
     float sensor_read_noise() const;
     float sensor_dark_current() const;
+    bool has_sensor_dark_current_map() const;
+    Image<float> sensor_dark_current_map() const;
     float sensor_bias_level() const;
+    bool has_sensor_bias_map() const;
+    BiasMapKind sensor_bias_map_kind() const;
+    Image<float> sensor_bias_map() const;
     int sensor_bit_depth() const;
     float sensor_conversion_gain() const;
     float sensor_gain_db() const;

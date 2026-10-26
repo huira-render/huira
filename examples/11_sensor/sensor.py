@@ -11,6 +11,8 @@ Demonstrates:
     - Saving the raw DN: 16-bit FITS with header metadata and a world coordinate system (WCS),
       and 16-bit TIFF; reading the FITS back
     - The same frame without noise, for comparison
+    - Calibration maps: each pixel's own dark current, from a master dark and a master bias,
+      and its own bias
 
 Builds on: 10 Optics
 Data: tycho2.hrsc, the Tycho-2 star catalog (see README.md)
@@ -23,11 +25,14 @@ Writes:
     output/11_sensor.fits            ...as DN, with a header
     output/11_sensor.tif             ...as DN
     output/11_sensor_noiseless.png   the same frame without shot or read noise
+    output/11_sensor_calibrated.png  the frame with each pixel's own dark current and bias
 """
 
 import math
 import sys
 from pathlib import Path
+
+import numpy as np
 
 import huira
 from huira.visible8 import Scene, SceneView, Renderer
@@ -161,6 +166,46 @@ def main():
     renderer.render(scene_view, frame_buffer)
     huira.write_png(
         output_dir / "11_sensor_noiseless.png", huira.linear_to_srgb(frame_buffer.sensor_response)
+    )
+
+    # Calibration maps. A real sensor's pixels differ: each has its own dark current, some far
+    # above the rest (hot pixels), and the bias has fixed patterns. Calibration frames measure
+    # them: a master bias is the mean of many frames taken with no exposure, so each pixel reads
+    # its bias, and a master dark the mean of many taken with the shutter closed, so each pixel
+    # reads its bias and its dark current's charge. Here they are made up with numpy, in DN,
+    # standing in for a real camera's, which huira.read_fits() would read.
+    rng = np.random.default_rng(7)
+    rows, columns = np.mgrid[0:height, 0:width]
+    gain = camera_model.sensor_conversion_gain()
+    bias_dn = 100 + np.tile(rng.normal(0, 1.5, width), (height, 1))  # a pattern by column
+    rates = 5 + 60 * np.exp(-np.hypot(width - columns, height - rows) / 150)  # glow in a corner
+    rates[rng.integers(0, height, 300), rng.integers(0, width, 300)] = 300  # hot pixels
+    dark_exposure = 30.0
+    dark_dn = bias_dn + rates * dark_exposure / gain
+
+    # An array doesn't record which of its rows is the top of the image, so origin says: here,
+    # the first. Each pixel's dark current is (dark - bias) * gain / exposure, with the gain of
+    # the camera that took the frames:
+    top_left = huira.PixelOrigin.TopLeft
+    master_bias = huira.Image_f32(bias_dn, origin=top_left)
+    master_dark = huira.Image_f32(dark_dn, origin=top_left)
+    dark_map = huira.dark_current_from_master_dark(
+        master_dark, master_bias, gain, sec(dark_exposure)
+    )
+    print(f"Dark current: {np.mean(dark_map):.1f} e-/s on average, {np.max(dark_map):.0f} at most")
+    camera_model.set_sensor_dark_current_map(dark_map)
+
+    # The master bias is each pixel's bias, in place of the bias level (BiasMapKind.Absolute, the
+    # default); a pattern of offsets from the bias level would be BiasMapKind.Relative. Like the
+    # single values, the maps are not noise, and apply with noise off too.
+    camera_model.set_sensor_bias_map(master_bias)
+
+    camera_model.enable_sensor_noise(True)
+    frame_buffer = camera_model.make_frame_buffer()
+    frame_buffer.enable_sensor_response()
+    renderer.render(scene_view, frame_buffer)
+    huira.write_png(
+        output_dir / "11_sensor_calibrated.png", huira.linear_to_srgb(frame_buffer.sensor_response)
     )
 
 

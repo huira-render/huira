@@ -2,6 +2,7 @@
 #include "huira/cameras/distortion_coeffs_py.ipp"
 #include "huira/cameras/pixel_convention_py.ipp"
 #include "huira/cameras/psfs/measured_psf.hpp"
+#include "huira/cameras/sensor_calibration_py.ipp"
 #include "huira/core/interval_py.ipp"
 #include "huira/core/rotation_py.ipp"
 #include "huira/core/spectral_bin_py.ipp"
@@ -50,6 +51,10 @@ void bind_core(py::module_& m)
 
     huira::bind_fits_metadata(m);
     huira::bind_common_images(m);
+
+    // After the images and units it takes; before the spectral submodules, whose camera handles
+    // take a BiasMapKind with a default:
+    huira::bind_sensor_calibration(m);
 
     huira::bind_texture_handle<float>(m, "TextureHandle_float");
     huira::bind_texture_handle<huira::Vec3<float>>(m, "TextureHandle_vec3");

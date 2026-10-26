@@ -10,6 +10,8 @@
 //   - Saving the raw DN: 16-bit FITS with header metadata and a world coordinate system (WCS),
 //     and 16-bit TIFF; reading the FITS back
 //   - The same frame without noise, for comparison
+//   - Calibration maps: each pixel's own dark current, from a master dark and a master bias,
+//     and its own bias
 //
 // Builds on: 10 Optics
 // Data: tycho2.hrsc, the Tycho-2 star catalog (see README.md)
@@ -22,11 +24,14 @@
 //   output/11_sensor.fits            ...as DN, with a header
 //   output/11_sensor.tif             ...as DN
 //   output/11_sensor_noiseless.png   the same frame without shot or read noise
+//   output/11_sensor_calibrated.png  the frame with each pixel's own dark current and bias
 
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
 #include <iostream>
+#include <random>
+#include <vector>
 
 #include "huira/huira.hpp"
 
@@ -171,4 +176,60 @@ int main(int argc, char** argv)
     renderer.render(scene_view, noiseless_buffer);
     huira::write_image_png("output/11_sensor_noiseless.png",
                            huira::linear_to_srgb(noiseless_buffer.sensor_response()));
+
+    // Calibration maps. A real sensor's pixels differ: each has its own dark current, some far
+    // above the rest (hot pixels), and the bias has fixed patterns. Calibration frames measure
+    // them: a master bias is the mean of many frames taken with no exposure, so each pixel reads
+    // its bias, and a master dark the mean of many taken with the shutter closed, so each pixel
+    // reads its bias and its dark current's charge. Here they are made up, in DN, standing in
+    // for a real camera's, which huira::read_image_fits() would read.
+    const float gain = camera_model.sensor_conversion_gain();
+    const double dark_exposure = 30.0;
+    std::mt19937 random(7);
+    std::normal_distribution<float> column_offset(0.f, 1.5f);
+    std::uniform_int_distribution<int> random_x(0, width - 1);
+    std::uniform_int_distribution<int> random_y(0, height - 1);
+
+    std::vector<float> column_bias(static_cast<std::size_t>(width)); // a pattern by column
+    for (float& bias : column_bias) {
+        bias = 100.f + column_offset(random);
+    }
+    huira::Image<float> rates(width, height);
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            const double corner = std::hypot(width - x, height - y); // glow in a corner
+            rates(x, y) = static_cast<float>(5.0 + 60.0 * std::exp(-corner / 150.0));
+        }
+    }
+    for (int i = 0; i < 300; ++i) {
+        rates(random_x(random), random_y(random)) = 300.f; // hot pixels
+    }
+    huira::Image<float> master_bias(width, height);
+    huira::Image<float> master_dark(width, height);
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            const float bias = column_bias[static_cast<std::size_t>(x)];
+            master_bias(x, y) = bias;
+            master_dark(x, y) =
+                bias + static_cast<float>(rates(x, y) * dark_exposure / static_cast<double>(gain));
+        }
+    }
+
+    // Each pixel's dark current is (dark - bias) * gain / exposure, with the gain of the camera
+    // that took the frames:
+    const huira::Image<float> dark_map = huira::dark_current_from_master_dark(
+        master_dark, master_bias, gain, huira::units::Second(dark_exposure));
+    camera_model.set_sensor_dark_current_map(dark_map);
+
+    // The master bias is each pixel's bias, in place of the bias level (BiasMapKind::Absolute,
+    // the default); a pattern of offsets from the bias level would be BiasMapKind::Relative.
+    // Like the single values, the maps are not noise, and apply with noise off too.
+    camera_model.set_sensor_bias_map(master_bias);
+
+    camera_model.enable_sensor_noise(true);
+    auto calibrated_buffer = camera_model.make_frame_buffer();
+    calibrated_buffer.enable_sensor_response();
+    renderer.render(scene_view, calibrated_buffer);
+    huira::write_image_png("output/11_sensor_calibrated.png",
+                           huira::linear_to_srgb(calibrated_buffer.sensor_response()));
 }

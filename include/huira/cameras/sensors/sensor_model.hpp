@@ -6,10 +6,13 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <numbers>
 #include <string>
 
+#include "huira/cameras/sensors/sensor_calibration.hpp"
 #include "huira/concepts/spectral_concepts.hpp"
+#include "huira/images/image.hpp"
 #include "huira/render/frame_buffer.hpp"
 #include "huira/units/units.hpp"
 #include "huira/util/macros.hpp"
@@ -207,14 +210,22 @@ class SensorModel {
     SensorModel() = default;
     SensorModel(SensorConfig<TSpectral> config);
 
-    /// A copy has the same settings, but noise of its own: a new default noise seed (see
-    /// set_noise_seed()), and no readouts yet. Two sensors with the same seed would give
-    /// identical noise, which is rarely wanted; set the same seed on both for that.
-    SensorModel(const SensorModel& other) : config_(other.config_) {}
+    /// A copy has the same settings and maps (which it shares, as they are not changed), but
+    /// noise of its own: a new default noise seed (see set_noise_seed()), and no readouts yet.
+    /// Two sensors with the same seed would give identical noise, which is rarely wanted; set the
+    /// same seed on both for that.
+    SensorModel(const SensorModel& other)
+        : config_(other.config_), dark_current_map_(other.dark_current_map_),
+          bias_map_(other.bias_map_), bias_map_kind_(other.bias_map_kind_)
+    {
+    }
     SensorModel& operator=(const SensorModel& other)
     {
         if (this != &other) {
             config_ = other.config_;
+            dark_current_map_ = other.dark_current_map_;
+            bias_map_ = other.bias_map_;
+            bias_map_kind_ = other.bias_map_kind_;
             noise_seed_ = detail::next_default_noise_seed();
             readout_count_.store(0, std::memory_order_relaxed);
         }
@@ -223,13 +234,18 @@ class SensorModel {
 
     /// Moving keeps the noise: the same sensor, somewhere else.
     SensorModel(SensorModel&& other) noexcept
-        : config_(std::move(other.config_)), noise_seed_(other.noise_seed_),
+        : config_(std::move(other.config_)), dark_current_map_(std::move(other.dark_current_map_)),
+          bias_map_(std::move(other.bias_map_)), bias_map_kind_(other.bias_map_kind_),
+          noise_seed_(other.noise_seed_),
           readout_count_(other.readout_count_.load(std::memory_order_relaxed))
     {
     }
     SensorModel& operator=(SensorModel&& other) noexcept
     {
         config_ = std::move(other.config_);
+        dark_current_map_ = std::move(other.dark_current_map_);
+        bias_map_ = std::move(other.bias_map_);
+        bias_map_kind_ = other.bias_map_kind_;
         noise_seed_ = other.noise_seed_;
         readout_count_.store(other.readout_count_.load(std::memory_order_relaxed),
                              std::memory_order_relaxed);
@@ -267,8 +283,28 @@ class SensorModel {
     void set_dark_current(float dark_current);
     float dark_current() const { return config_.dark_current; }
 
+    void set_dark_current_map(Image<float> electrons_per_second);
+    void clear_dark_current_map();
+
+    /// Whether a dark current map is set. See set_dark_current_map().
+    bool has_dark_current_map() const { return dark_current_map_ != nullptr; }
+
+    Image<float> dark_current_map() const;
+
     void set_bias_level_dn(float bias_level_dn);
     float bias_level_dn() const { return config_.bias_level_dn; }
+
+    void set_bias_map(Image<float> dn, BiasMapKind kind = BiasMapKind::Absolute);
+    void clear_bias_map();
+
+    /// Whether a bias map is set. See set_bias_map().
+    bool has_bias_map() const { return bias_map_ != nullptr; }
+
+    /// What the values of the bias map set are (BiasMapKind::Absolute if none is). See
+    /// set_bias_map().
+    BiasMapKind bias_map_kind() const { return bias_map_kind_; }
+
+    Image<float> bias_map() const;
 
     void set_bit_depth(int bit_depth);
     int bit_depth() const { return config_.bit_depth; }
@@ -340,7 +376,27 @@ class SensorModel {
   protected:
     SensorConfig<TSpectral> config_;
 
+    /// Each pixel's dark current, in e-/s, in place of config_.dark_current; null if none is set.
+    /// Shared by copies of the sensor, so never changed: a new map replaces it.
+    std::shared_ptr<const Image<float>> dark_current_map_;
+
+    /// Each pixel's bias, in DN, or its offset from config_.bias_level_dn (bias_map_kind_); null
+    /// if none is set. Shared by copies of the sensor, as dark_current_map_ is.
+    std::shared_ptr<const Image<float>> bias_map_;
+    BiasMapKind bias_map_kind_ = BiasMapKind::Absolute;
+
     static void check_bias_(float bias_level_dn, int bit_depth, const char* caller);
+
+    /// Throws unless every pixel's bias, from the map, is in [0, 2^bit_depth - 1).
+    static void check_bias_map_(const Image<float>& map,
+                                BiasMapKind kind,
+                                float bias_level_dn,
+                                int bit_depth,
+                                const char* caller);
+
+    /// Throws unless the maps set are of the given resolution: a readout's. For the sensor
+    /// models' readout().
+    void check_map_resolutions_(const Resolution& resolution, const char* caller) const;
 
     /// The noise seed, and how many readouts have been made since it was set. Together with
     /// the row they key each row's random numbers (see detail::SensorRandom).

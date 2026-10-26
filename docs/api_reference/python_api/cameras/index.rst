@@ -8,4 +8,5 @@ Camera API
    pixel_convention
    psf_sampling
    psf_focus
+   sensor_calibration
    fft_plan_effort
