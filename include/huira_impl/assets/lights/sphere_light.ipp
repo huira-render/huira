@@ -109,6 +109,16 @@ void SphereLight<TSpectral>::set_spectral_power(
     this->radiance_ = radiance;
 }
 
+/**
+ * @brief The sphere's radius where it is placed: its own, grown by the even scale it is placed
+ * with (a scene view refuses any other: see SceneView::check_light_scales_()).
+ */
+template <IsSpectral TSpectral>
+float SphereLight<TSpectral>::placed_radius_(const Transform<float>& light_to_world) const
+{
+    return radius_ * std::abs(light_to_world.scale.x);
+}
+
 template <IsSpectral TSpectral>
 std::optional<LightSample<TSpectral>>
 SphereLight<TSpectral>::sample_li(const Interaction<TSpectral>& isect,
@@ -117,7 +127,8 @@ SphereLight<TSpectral>::sample_li(const Interaction<TSpectral>& isect,
 {
     // Uniformly sample the cone subtended by the sphere (shared with
     // indirect-source sampling; see huira/sampling/cone_sampling.hpp).
-    auto cone = sample_sphere_cone(isect.position, transform.position, radius_, sampler);
+    auto cone =
+        sample_sphere_cone(isect.position, transform.position, placed_radius_(transform), sampler);
 
     // If the shading point is inside the light sphere, it receives no direct lighting
     if (!cone) {
@@ -138,7 +149,7 @@ float SphereLight<TSpectral>::pdf_li(const Interaction<TSpectral>& isect,
                                      const Transform<float>& transform,
                                      const Vec3<float>& wi) const
 {
-    return pdf_sphere_cone(isect.position, transform.position, radius_, wi);
+    return pdf_sphere_cone(isect.position, transform.position, placed_radius_(transform), wi);
 }
 
 template <IsSpectral TSpectral>
@@ -156,7 +167,8 @@ TSpectral SphereLight<TSpectral>::irradiance_at(const Vec3<float>& position,
 {
     Vec3<float> wc = light_to_world.position - position;
     float d2 = glm::dot(wc, wc);
-    float r2 = radius_ * radius_;
+    const float radius = placed_radius_(light_to_world);
+    float r2 = radius * radius;
 
     if (d2 <= r2) {
         return TSpectral{0};

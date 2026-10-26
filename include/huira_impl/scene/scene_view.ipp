@@ -279,6 +279,8 @@ SceneView<TSpectral>::SceneView(const Scene<TSpectral>& scene,
                           });
     }
 
+    check_light_scales_();
+
     compute_indirect_source_bounds_();
 
     build_tlas_();
@@ -1455,6 +1457,36 @@ void SceneView<TSpectral>::add_light_instance_(
 }
 
 /**
+ * @brief Refuse a sphere light scaled unevenly where it is placed.
+ *
+ * An even scale grows a sphere light. Any other would make it an ellipsoid, as Embree would draw
+ * it, which a sphere light is not sampled as: an uneven scale, its own or its frames', or the
+ * shear of being turned within a frame scaled unevenly.
+ *
+ * @throws std::runtime_error if a sphere light is scaled unevenly at any temporal sample.
+ */
+template <IsSpectral TSpectral>
+void SceneView<TSpectral>::check_light_scales_() const
+{
+    for (const LightInstance<TSpectral>& light_instance : lights_) {
+        if (!std::dynamic_pointer_cast<SphereLight<TSpectral>>(light_instance.light)) {
+            continue;
+        }
+        for (const Transform<float>& transform : light_instance.transforms) {
+            if (transform.has_shear() || transform.scale.x != transform.scale.y ||
+                transform.scale.x != transform.scale.z) {
+                HUIRA_THROW_ERROR("SceneView - " + light_instance.light->get_info() +
+                                  " is scaled unevenly where it is placed (scale " +
+                                  vec_to_string(transform.scale) + ", shear " +
+                                  vec_to_string(transform.shear) +
+                                  "): a sphere light can only be scaled evenly, or it would be "
+                                  "an ellipsoid.");
+            }
+        }
+    }
+}
+
+/**
  * @brief Add an unresolved object instance to the unresolved vector.
  * @param unresolved_object UnresolvedObject pointer
  * @param instance_apparent_transforms The instance's render transforms, sampled across the
@@ -1648,12 +1680,12 @@ void SceneView<TSpectral>::compute_occupancy_bounds_()
             occupancy_bounds_complete_ = false;
             return;
         }
-        const float radius = sphere_light->radius().to_si_f();
         std::vector<SampleBound> sample_bounds;
         for (const Transform<float>& xf : light_inst.transforms) {
-            // The sphere is placed at the instance origin and is not scaled by the
-            // TLAS instancing, matching how build_tlas_() attaches it. Its center is the
-            // instance's origin, so a rotation does not move it.
+            // The sphere is placed at the instance origin, and grown by the instance's scale,
+            // which is even (see check_light_scales_()), as build_tlas_() attaches it. Its
+            // center is the instance's origin, so a rotation does not move it.
+            const float radius = sphere_light->radius().to_si_f() * std::abs(xf.scale.x);
             sample_bounds.push_back(
                 {xf.position, radius, 0.f, xf.rotation.local_to_parent_quaternion()});
         }

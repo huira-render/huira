@@ -300,3 +300,89 @@ TEST_CASE("A sphere light is a light of type Sphere", "[assets][lights]")
     STATIC_REQUIRE_FALSE(std::is_copy_constructible_v<SphereLight<RGB>>);
     STATIC_REQUIRE_FALSE(std::is_move_constructible_v<SphereLight<RGB>>);
 }
+
+TEST_CASE("An even scale grows a sphere light, at its radiance", "[assets][lights]")
+{
+    // A light 1 m in radius, 100 m in front of the camera, scaled evenly by its instance or by a
+    // frame it is in (which also turns it), still or moving sideways at 10 m/s. Rays find it at
+    // its radius times the scale, and it lights a point as a light that size of its radiance
+    // does: with the irradiance times the scale squared.
+    for (const double scale : {2.0, 0.5}) {
+        for (const bool in_frame : {false, true}) {
+            for (const double speed : {0.0, 10.0}) {
+                INFO("scale " << scale << (in_frame ? ", by its frame" : ", by its instance")
+                              << ", speed " << speed << " m/s");
+                Scene<RGB> scene;
+                auto frame = scene.root.new_subframe();
+                auto light = frame.new_instance(scene.new_sphere_light(1_m, units::Watt(100.0)));
+                if (in_frame) {
+                    frame.set_scale(scale);
+                    light.set_position(0_m, 0_m, units::Meter(100.0 / scale));
+                    light.set_rotation_local_to_parent(Vec3<double>{1.0, 2.0, 3.0},
+                                                       units::Degree(40.0));
+                    light.set_velocity(units::MetersPerSecond(speed / scale), 0_mps, 0_mps);
+                } else {
+                    light.set_scale(scale);
+                    light.set_position(0_m, 0_m, 100_m);
+                    light.set_velocity(units::MetersPerSecond(speed), 0_mps, 0_mps);
+                }
+                auto camera = scene.root.new_instance(scene.new_camera_model());
+                SceneView<RGB> scene_view(scene,
+                                          Interval{Time::from_et(0.0), Time::from_et(1.0)},
+                                          camera,
+                                          ObservationMode::TRUE_STATE);
+
+                const float radius = static_cast<float>(scale);
+                for (float time : {0.f, 0.5f, 1.f}) {
+                    const Vec3<float> center{static_cast<float>(speed) * time, 0.f, 100.f};
+                    for (const Vec3<float>& side :
+                         {Vec3<float>{1.f, 0.f, 0.f}, Vec3<float>{0.f, -1.f, 0.f}}) {
+                        INFO("time " << time << ", toward " << side.x << ", " << side.y);
+                        const Ray<RGB> inside(Vec3<float>{0.f},
+                                              glm::normalize(center + 0.9f * radius * side));
+                        const Ray<RGB> outside(Vec3<float>{0.f},
+                                               glm::normalize(center + 1.1f * radius * side));
+                        CHECK(scene_view.intersect(inside, time).hit());
+                        CHECK_FALSE(scene_view.intersect(outside, time).hit());
+                    }
+                }
+
+                const LightInstance<RGB>& instance = scene_view.lights().front();
+                Transform<float> unscaled = instance.transforms.front();
+                unscaled.scale = Vec3<float>{1.f};
+                const Vec3<float> origin{0.f};
+                const float lit =
+                    instance.light->irradiance_at(origin, instance.transforms.front())[0];
+                const float lit_unscaled = instance.light->irradiance_at(origin, unscaled)[0];
+                CHECK_THAT(lit / lit_unscaled, WithinRel(scale * scale, 1e-5));
+            }
+        }
+    }
+}
+
+TEST_CASE("A sphere light scaled unevenly is refused", "[assets][lights]")
+{
+    // It would be an ellipsoid, which it is not sampled as: scaled unevenly itself, placed in a
+    // frame scaled unevenly, or turned within one (slanted by its scale).
+    for (int placement = 0; placement < 3; ++placement) {
+        INFO("placement " << placement);
+        Scene<RGB> scene;
+        auto frame = scene.root.new_subframe();
+        auto light = frame.new_instance(scene.new_sphere_light(1_m, units::Watt(100.0)));
+        light.set_position(0_m, 0_m, 100_m);
+        if (placement == 0) {
+            light.set_scale(3.0, 0.5, 2.0);
+        } else {
+            frame.set_scale(2.0, 1.0, 1.0);
+            if (placement == 2) {
+                light.set_rotation_local_to_parent(Vec3<double>{0.0, 0.0, 1.0},
+                                                   units::Degree(45.0));
+            }
+        }
+        auto camera = scene.root.new_instance(scene.new_camera_model());
+        CHECK_THROWS(SceneView<RGB>(scene,
+                                    Interval{Time::from_et(0.0), Time::from_et(1.0)},
+                                    camera,
+                                    ObservationMode::TRUE_STATE));
+    }
+}

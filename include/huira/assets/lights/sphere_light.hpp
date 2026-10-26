@@ -11,6 +11,15 @@
 #include "huira/sampling/sampler.hpp"
 
 namespace huira {
+/**
+ * @brief A sphere that glows evenly over its surface, in every direction.
+ *
+ * Its radius is its own, grown by an even scale it is placed with: a scaled sphere light keeps
+ * its radiance, so its power grows with its area. It cannot be scaled unevenly (see
+ * NodeHandle::set_scale()).
+ *
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
+ */
 template <IsSpectral TSpectral>
 class SphereLight : public Light<TSpectral> {
   public:
@@ -50,6 +59,7 @@ class SphereLight : public Light<TSpectral> {
 
     float radius_;
     static float checked_radius_(const units::Meter& radius);
+    [[nodiscard]] float placed_radius_(const Transform<float>& light_to_world) const;
     TSpectral radiance_;
 };
 } // namespace huira

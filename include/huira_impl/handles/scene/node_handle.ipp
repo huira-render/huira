@@ -217,6 +217,10 @@ Vec3<double> NodeHandle<TSpectral, TNode>::get_static_angular_velocity() const
 /**
  * @brief Sets the scale using individual components.
  *
+ * The scale sizes what the node holds, and places and sizes its children. A sphere light can
+ * only be scaled evenly, which grows it at the same radiance: a scene view refuses one scaled
+ * unevenly, by its own scale or its frames', which would make it an ellipsoid.
+ *
  * @param sx The x-component of the scale
  * @param sy The y-component of the scale
  * @param sz The z-component of the scale
@@ -229,6 +233,10 @@ void NodeHandle<TSpectral, TNode>::set_scale(double sx, double sy, double sz) co
 
 /**
  * @brief Sets the scale using a single scale factor.
+ *
+ * The scale sizes what the node holds, and places and sizes its children. A sphere light can
+ * only be scaled evenly, which grows it at the same radiance: a scene view refuses one scaled
+ * unevenly, by its own scale or its frames', which would make it an ellipsoid.
  *
  * @param s The 3D scale factor to set
  */

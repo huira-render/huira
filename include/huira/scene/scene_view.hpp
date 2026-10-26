@@ -295,6 +295,7 @@ class SceneView {
                                  const std::vector<Transform<float>>& instance_apparent_transforms);
     void add_light_instance_(std::shared_ptr<Light<TSpectral>> light,
                              const std::vector<Transform<float>>& instance_apparent_transforms);
+    void check_light_scales_() const;
     void
     add_unresolved_instance_(std::shared_ptr<UnresolvedObject<TSpectral>> unresolved_object,
                              const std::vector<Transform<float>>& instance_apparent_transforms);
