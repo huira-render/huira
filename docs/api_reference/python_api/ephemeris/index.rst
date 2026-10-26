@@ -7,3 +7,4 @@ Satellites' element sets, propagated with SGP4.
    :maxdepth: 1
 
    satrec
+   element_set_catalog
