@@ -619,12 +619,19 @@ void Node<TSpectral>::set_z_down_y_forward_callback()
  * still gives the rotation; likewise the other way round.
  *
  * @tparam TCallback A class derived from StateCallback.
+ * @throws std::runtime_error if a child of the node is placed or oriented by SPICE, which places
+ *         and orients its children only under nodes it places and orients.
  */
 template <IsSpectral TSpectral>
 template <IsTransformCallback TCallback, typename... Args>
 void Node<TSpectral>::set_custom_state_callback(Args&&... args)
 {
     this->check_pose_can_change_("set a pose source");
+    if (this->position_must_be_spice_() || this->rotation_must_be_spice_()) {
+        HUIRA_THROW_ERROR(this->get_info() +
+                          " - cannot set a state callback when child has a spice_origin or "
+                          "spice_frame");
+    }
     transform_callback_ = std::make_unique<TCallback>(std::forward<Args>(args)...);
     this->position_mode_ = TransformMode::TRANSFORM_CALLBACK;
     this->rotation_mode_ = TransformMode::TRANSFORM_CALLBACK;
