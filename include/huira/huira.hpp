@@ -18,6 +18,7 @@
 
 // Ephemeris interfaces:
 #include "huira/core/spice.hpp"
+#include "huira/ephemeris/element_set_catalog.hpp"
 #include "huira/ephemeris/satrec.hpp"
 
 // Handles for various scene elements

@@ -13,6 +13,9 @@
 #include "huira_impl/third_party/sgp4.ipp"
 
 namespace huira {
+namespace detail {
+struct ElementSetReader;
+} // namespace detail
 
 /**
  * @brief Which of its two behaviors Vallado's SGP4 propagates an element set with.
@@ -150,6 +153,9 @@ class SatRec {
     // bytes, which are copied into a local elsetrec to propagate it.
     alignas(detail::vallado::elsetrec)
         std::array<std::byte, sizeof(detail::vallado::elsetrec)> record_{};
+
+    // Reads catalogs of element sets with the factories above, which don't log their errors
+    friend struct detail::ElementSetReader;
 };
 
 } // namespace huira
