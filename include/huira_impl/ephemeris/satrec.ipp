@@ -1,11 +1,17 @@
 #include <array>
+#include <charconv>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <ios>
+#include <locale>
 #include <numbers>
+#include <optional>
+#include <sstream>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <type_traits>
 #include <utility>
 
@@ -189,6 +195,32 @@ inline int decode_catalog_number(std::string_view field)
     return number;
 }
 
+/// A catalog number as five characters, as SGP4 keeps it: digits, with zeros before them, below
+/// 100000; the Alpha-5 form (see decode_catalog_number()) to 339999; and empty after that, where
+/// five characters can't hold it.
+inline std::string encode_catalog_number(int number)
+{
+    if (number < 0 || number > 339999) {
+        return {};
+    }
+    std::string encoded(5, '0');
+    int rest = number;
+    for (std::size_t i = 5; i-- > 1;) {
+        encoded[i] = static_cast<char>('0' + rest % 10);
+        rest /= 10;
+    }
+    if (rest < 10) {
+        encoded[0] = static_cast<char>('0' + rest);
+    } else {
+        // 10 is A, skipping I and O
+        int letter = rest - 10;
+        letter += (letter >= 'I' - 'A' ? 1 : 0);
+        letter += (letter >= 'O' - 'A' ? 1 : 0);
+        encoded[0] = static_cast<char>('A' + letter);
+    }
+    return encoded;
+}
+
 /// The value of a run of columns that hold digits and spaces, with each space read as 0.
 inline int whole_number(std::string_view columns)
 {
@@ -267,6 +299,209 @@ inline std::string sgp4_error_message(int code)
 
 } // namespace detail::tle
 
+namespace detail::omm {
+
+/// A real number as an OMM writes it, such as "15.72125391", "-0.11606E-04" or "1.1606e-05",
+/// read as strtod() would, to the bit, but whatever the C locale; or nothing if it isn't one, or
+/// isn't finite.
+inline std::optional<double> real(std::string_view text)
+{
+    text = tle::trim(text);
+    if (!text.empty() && text.front() == '+') {
+        text.remove_prefix(1);
+    }
+    // Only decimal digits, signs, a point and an exponent: not "inf", "nan" or hexadecimal, which
+    // strtod() would read too
+    if (text.empty() || text.find_first_not_of("0123456789.+-eE") != std::string_view::npos) {
+        return std::nullopt;
+    }
+    double value = 0.0;
+#if defined(__cpp_lib_to_chars) && __cpp_lib_to_chars >= 201611L
+    const auto [end, error] = std::from_chars(text.data(), text.data() + text.size(), value);
+    if (error != std::errc{} || end != text.data() + text.size()) {
+        return std::nullopt;
+    }
+#else
+    // Standard libraries without floating-point from_chars(): a stream in the classic locale
+    // reads numbers as strtod() does in the C locale
+    std::istringstream stream{std::string(text)};
+    stream.imbue(std::locale::classic());
+    stream >> value;
+    if (stream.fail() || stream.peek() != std::istringstream::traits_type::eof()) {
+        return std::nullopt;
+    }
+#endif
+    if (!std::isfinite(value)) {
+        return std::nullopt;
+    }
+    return value;
+}
+
+/// A non-negative whole number of at most nine digits, or nothing if the text isn't one.
+inline std::optional<int> whole_number(std::string_view text)
+{
+    text = tle::trim(text);
+    if (!text.empty() && text.front() == '+') {
+        text.remove_prefix(1);
+    }
+    if (text.empty() || text.size() > 9 || text.find_first_not_of("0123456789") != text.npos) {
+        return std::nullopt;
+    }
+    return tle::whole_number(text);
+}
+
+/// A UTC time as an OMM gives its epoch, to the second and its fraction.
+struct Epoch {
+    int year = 0;
+    int month = 0;
+    int day = 0;
+    int day_of_year = 0;
+    int hour = 0;
+    int minute = 0;
+    double second = 0.0;
+};
+
+inline bool is_leap_year(int year)
+{
+    return (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
+}
+
+/**
+ * The epoch in an OMM's EPOCH field: YYYY-MM-DDThh:mm:ss or YYYY-DDDThh:mm:ss, the forms the OMM
+ * standard (CCSDS 502.0) gives, each with any fraction of a second, and a Z for UTC or not.
+ *
+ * @param text The field.
+ * @param error Set to why, if it isn't an epoch.
+ * @return The epoch, or nothing if the text isn't one from 1900 to 2100, the years SGP4's Julian
+ *         dates are good for.
+ */
+inline std::optional<Epoch> epoch(std::string_view text, std::string& error)
+{
+    text = tle::trim(text);
+    if (!text.empty() && (text.back() == 'Z' || text.back() == 'z')) {
+        text.remove_suffix(1);
+    }
+    const std::size_t t = text.find('T');
+    if (t == std::string_view::npos) {
+        error = "it has no T between the date and the time";
+        return std::nullopt;
+    }
+    const std::string_view date = text.substr(0, t);
+    const std::string_view clock = text.substr(t + 1);
+
+    // A run of digits, as a number, or -1
+    const auto digits = [](std::string_view field) {
+        if (field.empty() || field.find_first_not_of("0123456789") != field.npos) {
+            return -1;
+        }
+        return tle::whole_number(field);
+    };
+
+    constexpr std::array<int, 12> days_in_month = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+    Epoch epoch;
+    epoch.year = digits(date.substr(0, 4));
+    if (date.size() < 5 || date[4] != '-' || epoch.year < 1900 || epoch.year > 2100) {
+        error = "its date should start with a year from 1900 to 2100, then '-'";
+        return std::nullopt;
+    }
+    const int february = is_leap_year(epoch.year) ? 29 : 28;
+    if (date.size() == 10 && date[7] == '-') {
+        epoch.month = digits(date.substr(5, 2));
+        epoch.day = digits(date.substr(8, 2));
+        if (epoch.month < 1 || epoch.month > 12 || epoch.day < 1 ||
+            epoch.day > (epoch.month == 2
+                             ? february
+                             : days_in_month[static_cast<std::size_t>(epoch.month - 1)])) {
+            error = "its date isn't a day of the year";
+            return std::nullopt;
+        }
+        epoch.day_of_year = epoch.day;
+        for (int m = 1; m < epoch.month; ++m) {
+            epoch.day_of_year += m == 2 ? february : days_in_month[static_cast<std::size_t>(m - 1)];
+        }
+    } else if (date.size() == 8) {
+        epoch.day_of_year = digits(date.substr(5, 3));
+        if (epoch.day_of_year < 1 || epoch.day_of_year > 337 + february) {
+            error = "its day of the year isn't one";
+            return std::nullopt;
+        }
+        int rest = epoch.day_of_year;
+        epoch.month = 1;
+        for (int length = 31; rest > length;
+             length = epoch.month == 2 ? february
+                                       : days_in_month[static_cast<std::size_t>(epoch.month - 1)]) {
+            rest -= length;
+            ++epoch.month;
+        }
+        epoch.day = rest;
+    } else {
+        error = "its date should be YYYY-MM-DD or YYYY-DDD";
+        return std::nullopt;
+    }
+
+    if (clock.size() < 8 || clock[2] != ':' || clock[5] != ':') {
+        error = "its time should be hh:mm:ss, with any fraction of a second";
+        return std::nullopt;
+    }
+    epoch.hour = digits(clock.substr(0, 2));
+    epoch.minute = digits(clock.substr(3, 2));
+    const int whole_seconds = digits(clock.substr(6, 2));
+    const std::string_view fraction = clock.substr(8);
+    if (epoch.hour < 0 || epoch.hour > 23 || epoch.minute < 0 || epoch.minute > 59 ||
+        whole_seconds < 0) {
+        error = "its time should be hh:mm:ss, with any fraction of a second";
+        return std::nullopt;
+    }
+    if (whole_seconds > 59) {
+        error = "it is during a leap second, or isn't a time";
+        return std::nullopt;
+    }
+    if (!fraction.empty() &&
+        (fraction[0] != '.' || fraction.size() > 13 || digits(fraction.substr(1)) < 0)) {
+        error = "its fraction of a second should be a '.', then up to 12 digits";
+        return std::nullopt;
+    }
+    epoch.second = tle::decimal(clock.substr(6));
+    return epoch;
+}
+
+/// The international designator a TLE writes, such as "98067A", from an OMM's OBJECT_ID, such as
+/// "1998-067A"; or empty if it has none in that form, as for "UNKNOWN", which the standard allows.
+inline std::string designator(std::string_view object_id)
+{
+    object_id = tle::trim(object_id);
+    const auto all = [](std::string_view text, auto predicate) {
+        for (const char c : text) {
+            if (!predicate(c)) {
+                return false;
+            }
+        }
+        return true;
+    };
+    if (object_id.size() < 9 || object_id.size() > 11 || object_id[4] != '-' ||
+        !all(object_id.substr(0, 4), tle::is_digit) ||
+        !all(object_id.substr(5, 3), tle::is_digit) ||
+        !all(object_id.substr(8), [](char c) { return c >= 'A' && c <= 'Z'; })) {
+        return {};
+    }
+    return std::string(object_id.substr(2, 2)) + std::string(object_id.substr(5, 3)) +
+           std::string(object_id.substr(8));
+}
+
+/// Text in upper case, for comparing values the standard's examples write in it.
+inline std::string upper(std::string_view text)
+{
+    std::string result(tle::trim(text));
+    for (char& c : result) {
+        if (c >= 'a' && c <= 'z') {
+            c = static_cast<char>(c - 'a' + 'A');
+        }
+    }
+    return result;
+}
+
+} // namespace detail::omm
+
 /**
  * @brief Reads a two-line element set.
  *
@@ -310,6 +545,195 @@ inline SatRec SatRec::from_tle(std::string_view name,
         name = detail::tle::trim(name.substr(2));
     }
     return from_lines_(std::string(name), line1, line2, mode);
+}
+
+/**
+ * @brief Reads an Orbit Mean-Elements Message (OMM): the CCSDS form of a satellite's mean elements,
+ * which CelesTrak and Space-Track publish alongside TLEs, in KVN, XML, JSON and CSV.
+ *
+ * Every OMM format comes to its keywords and their values, as text. Of those, SGP4 needs:
+ *
+ * | Keyword | Value |
+ * |---|---|
+ * | NORAD_CAT_ID | The catalog number, of up to nine digits |
+ * | EPOCH | UTC, as YYYY-MM-DDThh:mm:ss.ssssss or YYYY-DDDThh:mm:ss.ssssss |
+ * | MEAN_MOTION | Revolutions a day |
+ * | ECCENTRICITY | From 0 to below 1 |
+ * | INCLINATION | Degrees, from 0 to 180 |
+ * | RA_OF_ASC_NODE, ARG_OF_PERICENTER, MEAN_ANOMALY | Degrees |
+ * | BSTAR | Per Earth radius |
+ * | MEAN_MOTION_DOT | Revolutions a day squared, as a TLE writes it: half the rate |
+ * | MEAN_MOTION_DDOT | Revolutions a day cubed, as a TLE writes it: a sixth of the second rate |
+ *
+ * OBJECT_NAME and OBJECT_ID give the name and international designator. These, if given, are
+ * checked: MEAN_ELEMENT_THEORY must be SGP4 (or SGP/SGP4), REF_FRAME TEME, CENTER_NAME EARTH,
+ * TIME_SYSTEM UTC, and EPHEMERIS_TYPE not 4. Any other keyword is ignored, so the extra fields
+ * Space-Track adds can be passed in as they are.
+ *
+ * Numbers are read as C++ reads them in the classic locale, so "1.1606E-05" and "0.000011606" are
+ * both fine. An element set read from an OMM made from a TLE propagates as that TLE does: for
+ * each of Vallado's verification cases, to the bit.
+ *
+ * @param fields The OMM's keywords and values.
+ * @param mode The mode to propagate it in. Leave it AFSPC unless you have a reason not to: see
+ *             Sgp4Mode.
+ * @return The element set, initialized for SGP4.
+ * @throws std::runtime_error if a keyword SGP4 needs is missing, a value isn't the number, whole
+ *         number or time it should be, the metadata is for something other than SGP4 in TEME
+ *         about the Earth, the element set is for SGP4-XP, an element is out of range, or SGP4
+ *         can't propagate it at its epoch.
+ */
+inline SatRec SatRec::from_omm(const OmmFields& fields, Sgp4Mode mode)
+{
+    namespace omm = detail::omm;
+    namespace tle = detail::tle;
+    namespace vallado = detail::vallado;
+
+    const auto find = [&fields](std::string_view keyword) -> std::optional<std::string_view> {
+        const auto found = fields.find(keyword);
+        if (found == fields.end() || tle::trim(found->second).empty()) {
+            return std::nullopt;
+        }
+        return tle::trim(found->second);
+    };
+
+    // Errors name the satellite as far as it is known
+    std::string name(find("OBJECT_NAME").value_or(""));
+    const std::string quoted_name = name.empty() ? std::string() : "\"" + name + "\"";
+    std::string context = "SatRec::from_omm - " + (name.empty() ? "" : quoted_name + ": ");
+
+    const auto required = [&](std::string_view keyword) {
+        const std::optional<std::string_view> value = find(keyword);
+        if (!value.has_value()) {
+            HUIRA_THROW_ERROR(context + "The OMM has no " + std::string(keyword) +
+                              ", which SGP4 needs");
+        }
+        return *value;
+    };
+
+    const std::string_view catalog_text = required("NORAD_CAT_ID");
+    const std::optional<int> catalog_number = omm::whole_number(catalog_text);
+    if (!catalog_number.has_value() || *catalog_number < 1) {
+        HUIRA_THROW_ERROR(context + "NORAD_CAT_ID is \"" + std::string(catalog_text) +
+                          "\", where a catalog number is a positive whole number of up to nine "
+                          "digits");
+    }
+    context = "SatRec::from_omm - Satellite " + std::to_string(*catalog_number) +
+              (name.empty() ? "" : ", " + quoted_name) + ": ";
+
+    // The metadata, where it's given: these elements are SGP4's, in TEME, about the Earth, in UTC
+    const auto expect = [&](std::string_view keyword,
+                            std::initializer_list<std::string_view> allowed,
+                            const std::string& meaning) {
+        const std::optional<std::string_view> value = find(keyword);
+        if (!value.has_value()) {
+            return;
+        }
+        const std::string given = omm::upper(*value);
+        for (const std::string_view ok : allowed) {
+            if (given == ok) {
+                return;
+            }
+        }
+        HUIRA_THROW_ERROR(context + std::string(keyword) + " is \"" + std::string(*value) +
+                          "\": " + meaning);
+    };
+    const std::optional<std::string_view> theory = find("MEAN_ELEMENT_THEORY");
+    if (theory.has_value() && omm::upper(*theory) == "SGP4-XP") {
+        HUIRA_THROW_ERROR(context + "The element set is for SGP4-XP (MEAN_ELEMENT_THEORY), which "
+                                    "SGP4 can't propagate");
+    }
+    expect("MEAN_ELEMENT_THEORY", {"SGP4", "SGP/SGP4"}, "SatRec reads SGP4's mean elements");
+    expect("REF_FRAME", {"TEME"}, "SGP4's elements are in TEME");
+    expect("CENTER_NAME", {"EARTH"}, "SGP4 propagates orbits about the Earth");
+    expect("TIME_SYSTEM", {"UTC"}, "SGP4's epochs are UTC");
+    if (const std::optional<std::string_view> type = find("EPHEMERIS_TYPE")) {
+        const std::optional<int> value = omm::whole_number(*type);
+        if (!value.has_value()) {
+            HUIRA_THROW_ERROR(context + "EPHEMERIS_TYPE is \"" + std::string(*type) +
+                              "\", where it should be a whole number");
+        }
+        if (*value == 4) {
+            HUIRA_THROW_ERROR(context + "The element set is for SGP4-XP (EPHEMERIS_TYPE 4), which "
+                                        "SGP4 can't propagate");
+        }
+    }
+
+    const auto number = [&](std::string_view keyword) {
+        const std::string_view text = required(keyword);
+        const std::optional<double> value = omm::real(text);
+        if (!value.has_value()) {
+            HUIRA_THROW_ERROR(context + std::string(keyword) + " is \"" + std::string(text) +
+                              "\", which isn't a finite number");
+        }
+        return *value;
+    };
+    const double mean_motion = number("MEAN_MOTION");
+    const double eccentricity = number("ECCENTRICITY");
+    const double inclination = number("INCLINATION");
+    const double raan = number("RA_OF_ASC_NODE");
+    const double arg_of_pericenter = number("ARG_OF_PERICENTER");
+    const double mean_anomaly = number("MEAN_ANOMALY");
+    const double bstar = number("BSTAR");
+    const double mean_motion_dot = number("MEAN_MOTION_DOT");
+    const double mean_motion_ddot = number("MEAN_MOTION_DDOT");
+
+    // The checks the TLE format makes by its columns
+    if (!(mean_motion > 0.0)) {
+        HUIRA_THROW_ERROR(context + "The mean motion is " + std::string(required("MEAN_MOTION")) +
+                          " revolutions a day, where it should be positive");
+    }
+    if (!(eccentricity >= 0.0 && eccentricity < 1.0)) {
+        HUIRA_THROW_ERROR(context + "The eccentricity is " + std::string(required("ECCENTRICITY")) +
+                          ", where it should be from 0 to below 1");
+    }
+    if (!(inclination >= 0.0 && inclination <= 180.0)) {
+        HUIRA_THROW_ERROR(context + "The inclination is " + std::string(required("INCLINATION")) +
+                          " degrees, where it should be from 0 to 180");
+    }
+
+    std::string epoch_error;
+    const std::string_view epoch_text = required("EPOCH");
+    const std::optional<omm::Epoch> epoch = omm::epoch(epoch_text, epoch_error);
+    if (!epoch.has_value()) {
+        HUIRA_THROW_ERROR(context + "EPOCH is \"" + std::string(epoch_text) +
+                          "\", which isn't a UTC "
+                          "time as YYYY-MM-DDThh:mm:ss.ssssss or YYYY-DDDThh:mm:ss.ssssss: " +
+                          epoch_error);
+    }
+
+    // Converted as from a TLE (see from_lines_())
+    constexpr double radians_per_degree = std::numbers::pi / 180.0;
+    constexpr double revolutions_per_day = 1440.0 / (2.0 * std::numbers::pi); // In 1 rad/min
+
+    vallado::elsetrec record{};
+    record.epochyr = epoch->year % 100;
+    record.epochdays = epoch->day_of_year +
+                       (epoch->hour * 3600.0 + epoch->minute * 60.0 + epoch->second) / 86400.0;
+    record.ndot = mean_motion_dot / (revolutions_per_day * 1440.0);
+    record.nddot = mean_motion_ddot / (revolutions_per_day * 1440.0 * 1440.0);
+    record.bstar = bstar;
+    record.inclo = inclination * radians_per_degree;
+    record.nodeo = raan * radians_per_degree;
+    record.ecco = eccentricity;
+    record.argpo = arg_of_pericenter * radians_per_degree;
+    record.mo = mean_anomaly * radians_per_degree;
+    record.no_kozai = mean_motion / revolutions_per_day;
+    vallado::SGP4Funcs::jday_SGP4(epoch->year,
+                                  epoch->month,
+                                  epoch->day,
+                                  epoch->hour,
+                                  epoch->minute,
+                                  epoch->second,
+                                  record.jdsatepoch,
+                                  record.jdsatepochF);
+
+    return from_record_(record,
+                        *catalog_number,
+                        std::move(name),
+                        omm::designator(find("OBJECT_ID").value_or("")),
+                        mode,
+                        context);
 }
 
 inline SatRec
@@ -400,17 +824,31 @@ SatRec::from_lines_(std::string name, std::string_view line1, std::string_view l
     vallado::SGP4Funcs::jday_SGP4(
         year, month, day, hour, minute, second, record.jdsatepoch, record.jdsatepochF);
 
-    // sgp4init() keeps the catalog number as SGP4 reads it, as a word: spaces before it become
-    // zeros, as an up-to-date TLE has. It initializes the element set and propagates it to its
-    // epoch, which sets record.error if it can't. Its epoch is in days from 1950 January 0.
-    char catalog[6] = {};
-    line1.copy(catalog, 5, 2);
-    for (std::size_t i = 0; i < 5 && catalog[i] == ' '; ++i) {
-        catalog[i] = '0';
-    }
+    return from_record_(record,
+                        catalog_number,
+                        std::move(name),
+                        std::string(tle::trim(line1.substr(9, 8))),
+                        mode,
+                        context);
+}
+
+inline SatRec SatRec::from_record_(detail::vallado::elsetrec& record,
+                                   int catalog_number,
+                                   std::string name,
+                                   std::string international_designator,
+                                   Sgp4Mode mode,
+                                   const std::string& context)
+{
+    namespace vallado = detail::vallado;
+
+    // sgp4init() keeps the catalog number as SGP4 reads it from a TLE, as five characters: the
+    // Alpha-5 form, with zeros before a shorter number, or nothing for a larger one. It
+    // initializes the element set and propagates it to its epoch, which sets record.error if it
+    // can't. Its epoch is in days from 1950 January 0.
+    const std::string catalog = detail::tle::encode_catalog_number(catalog_number);
     vallado::SGP4Funcs::sgp4init(vallado::wgs72,
                                  mode == Sgp4Mode::IMPROVED ? 'i' : 'a',
-                                 catalog,
+                                 catalog.c_str(),
                                  (record.jdsatepoch + record.jdsatepochF) - 2433281.5,
                                  record.bstar,
                                  record.ndot,
@@ -424,19 +862,19 @@ SatRec::from_lines_(std::string name, std::string_view line1, std::string_view l
                                  record);
     if (record.error != 0) {
         HUIRA_THROW_ERROR(context + "SGP4 can't propagate the element set at its epoch: " +
-                          tle::sgp4_error_message(record.error));
+                          detail::tle::sgp4_error_message(record.error));
     }
 
     SatRec satrec;
     satrec.catalog_number_ = catalog_number;
     satrec.name_ = std::move(name);
-    satrec.international_designator_ = std::string(tle::trim(line1.substr(9, 8)));
+    satrec.international_designator_ = std::move(international_designator);
     satrec.mode_ = mode;
     std::memcpy(satrec.record_.data(), &record, sizeof(record));
 
-    // The epoch is UTC. twoline2rv() gives it as a Julian date in two parts, the day and its
-    // fraction, which are added here only once J2000 is taken from the day: as one Julian date it
-    // would be good to about 40 microseconds, 30 cm along a low orbit.
+    // The epoch is UTC, as a Julian date in two parts, the day and its fraction, which are added
+    // here only once J2000 is taken from the day: as one Julian date it would be good to about 40
+    // microseconds, 30 cm along a low orbit.
     const double utc_seconds =
         ((record.jdsatepoch - Time::J2000_JD) + record.jdsatepochF) * SECONDS_PER_DAY;
     satrec.epoch_ = Time::from_et(utc_seconds + spice::deltet(utc_seconds, "UTC"));
@@ -446,7 +884,7 @@ SatRec::from_lines_(std::string name, std::string_view line1, std::string_view l
     const int error = satrec.propagate_(satrec.epoch_, r, v);
     if (error != 0) {
         HUIRA_THROW_ERROR(context + "SGP4 can't propagate the element set at its epoch: " +
-                          tle::sgp4_error_message(error));
+                          detail::tle::sgp4_error_message(error));
     }
     return satrec;
 }
