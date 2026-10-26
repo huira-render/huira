@@ -36,6 +36,8 @@ else()
     set(TURBOJPEG_TARGET libjpeg-turbo::turbojpeg-static)
 endif()
 
+find_dependency(nlohmann_json CONFIG)
+
 find_dependency(PNG)
 
 find_dependency(TBB CONFIG)
