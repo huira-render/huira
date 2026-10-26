@@ -35,7 +35,7 @@ inline float power_heuristic(float f_pdf, float g_pdf)
 /**
  * @brief The transform Embree gives an instance at a normalized time in the exposure.
  *
- * Between two temporal samples, Embree interpolates an instance's translation and scale
+ * Between two temporal samples, Embree interpolates an instance's translation, scale and shear
  * linearly, and its rotation along the shorter arc between the two (slerp). This does the same,
  * so that a light is sampled where rays find it. The rotation is not quite Embree's, which
  * approximates the slerp's trigonometry and falls back to normalized linear interpolation over
@@ -67,6 +67,7 @@ inline Transform<float> instance_transform_at(const std::vector<Transform<float>
     Transform<float> result;
     result.position = a.position * (1.0f - frac) + b.position * frac;
     result.scale = a.scale * (1.0f - frac) + b.scale * frac;
+    result.shear = a.shear * (1.0f - frac) + b.shear * frac;
     // glm::slerp takes the shorter arc, as Embree does:
     result.rotation = Rotation<float>::from_local_to_parent(glm::slerp(
         a.rotation.local_to_parent_quaternion(), b.rotation.local_to_parent_quaternion(), frac));

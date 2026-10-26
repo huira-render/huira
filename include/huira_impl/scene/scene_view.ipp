@@ -1154,7 +1154,7 @@ SceneView<TSpectral>::local_probes_(const Instance<TSpectral>& instance) const
 /**
  * @brief Where Embree draws something halfway between two of its poses.
  *
- * Its position and scale halfway along straight lines, and its rotation halfway along the
+ * Its position, scale and shear halfway along straight lines, and its rotation halfway along the
  * shorter arc between the two, as instance_transform_at() emulates.
  */
 template <IsSpectral TSpectral>
@@ -1164,6 +1164,7 @@ Transform<double> SceneView<TSpectral>::halfway_pose_(const Transform<double>& s
     Transform<double> pose;
     pose.position = 0.5 * (start.position + end.position);
     pose.scale = 0.5 * (start.scale + end.scale);
+    pose.shear = 0.5 * (start.shear + end.shear);
     // glm::slerp takes the shorter arc, as Embree does:
     pose.rotation = Rotation<double>::from_local_to_parent(
         glm::slerp(start.rotation.local_to_parent_quaternion(),
@@ -1826,10 +1827,10 @@ void SceneView<TSpectral>::traverse_model_graph_(
  * Embree draws an instance between two poses by one of two interpolations, chosen by how the
  * poses are given: as quaternion decompositions, it moves the instance's origin in a straight
  * line and turns it rigidly (slerp), and as matrices, it interpolates the matrices, moving each
- * point of the instance in a straight line. For an instance whose rotation and scale are exactly
- * the same at every sample, the two are the same rigid motion, and matrices are given: Embree
- * builds their BVH an order of magnitude faster, since it bounds motion by matrices in closed
- * form, and quaternion motion with a root solver. Any other instance turns, and is given
+ * point of the instance in a straight line. For an instance whose rotation, scale and shear are
+ * exactly the same at every sample, the two are the same rigid motion, and matrices are given:
+ * Embree builds their BVH an order of magnitude faster, since it bounds motion by matrices in
+ * closed form, and quaternion motion with a root solver. Any other instance turns, and is given
  * quaternion decompositions, so that it turns rigidly. An instance with one pose has no motion,
  * and is given it as a quaternion decomposition, as before.
  *
@@ -1855,7 +1856,8 @@ void SceneView<TSpectral>::set_instance_poses_(RTCGeometry geometry,
     bool quaternions = n_poses == 1;
     for (const Transform<float>& transform : transforms) {
         quaternions = quaternions || transform.rotation.local_to_parent_quaternion() != rotation ||
-                      transform.scale != transforms.front().scale;
+                      transform.scale != transforms.front().scale ||
+                      transform.shear != transforms.front().shear;
     }
 
     for (std::size_t i = 0; i < n_poses; ++i) {
