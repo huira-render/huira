@@ -305,8 +305,16 @@ TEST_CASE("Each position or rotation source replaces the last", "[scene][pose_so
     CHECK_THROWS(earth.set_position_table(times, {Vec3<double>{0.0}, Vec3<double>{0.0}}));
     CHECK_THROWS(earth.set_position_function([](const PoseContext&) { return Vec3<double>{0.0}; }));
     CHECK_THROWS(earth.set_rotation_table(times, {Rotation<double>{}, Rotation<double>{}}));
+    CHECK_THROWS(earth.get()->set_custom_state_callback<FixedState>());
     CHECK(earth.get()->get_position_mode() == TransformMode::SPICE_TRANSFORM);
     CHECK(earth.get()->get_rotation_mode() == TransformMode::SPICE_TRANSFORM);
+
+    // So is one whose child is only oriented by SPICE, as a state callback replaces both halves
+    auto oriented = scene.root.new_subframe();
+    oriented.set_spice_frame("IAU_EARTH");
+    oriented.new_subframe().set_spice_frame("IAU_EARTH");
+    CHECK_THROWS(oriented.get()->set_custom_state_callback<FixedState>());
+    CHECK(oriented.get()->get_rotation_mode() == TransformMode::SPICE_TRANSFORM);
 }
 
 TEST_CASE("A state callback still gives the half of the pose not replaced since",
