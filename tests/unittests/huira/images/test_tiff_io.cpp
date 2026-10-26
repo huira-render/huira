@@ -456,7 +456,7 @@ TEST_CASE("Tiled and planar TIFFs are read", "[images][tiff]")
     fs::remove(path);
 }
 
-TEST_CASE("TIFF samples are normalized by MaxSampleValue", "[images][tiff]")
+TEST_CASE("TIFF samples are normalized by a MaxSampleValue that is a sensor's", "[images][tiff]")
 {
     const fs::path path = temp_path("max_sample.tif");
     TiffSpec spec;
@@ -471,14 +471,61 @@ TEST_CASE("TIFF samples are normalized by MaxSampleValue", "[images][tiff]")
     CHECK(sensor.image(1, 0) == 1.f);
     CHECK(sensor.image(0, 1) == static_cast<float>(512.0 / 1023.0));
 
-    // Any other maximum only normalizes:
+    // Any other maximum is only the largest value the samples take, as TIFF defines it, and
+    // doesn't normalize: the counts couldn't be recovered from values divided by it. It did:
     spec.max_sample_value = 1000;
     write_tiff(path, spec, {0, 1000, 500, 250});
     const ImageBundle<float> other = read_image_tiff_mono(path);
-    CHECK(other.image.sensor_bit_depth() == 0);
+    CHECK(other.image.sensor_bit_depth() == 16);
     CHECK(other.color_space == ColorSpaceHint::sRGB);
-    CHECK(other.image(0, 1) == 0.5f);
-    CHECK(other.image(1, 1) == 0.25f);
+    CHECK(other.image(0, 1) == static_cast<float>(500.0 / 65535.0));
+    CHECK(other.image(1, 1) == static_cast<float>(250.0 / 65535.0));
+    fs::remove(path);
+}
+
+TEST_CASE("16- and 32-bit integer TIFFs record their counts' bits", "[images][tiff]")
+{
+    // So that the counts are recovered from the image exactly, as a calibration frame's DN
+    // must be. 8-bit TIFFs are pictures, and float ones are returned as they are.
+    const fs::path path = temp_path("counts.tif");
+    const std::vector<double> counts{0.0, 1.0, 4095.0, 65535.0};
+
+    TiffSpec words;
+    words.bits_per_sample = 16;
+    write_tiff(path, words, counts);
+    const ImageBundle<float> sixteen = read_image_tiff_mono(path);
+    CHECK(sixteen.image.sensor_bit_depth() == 16);
+    CHECK(sixteen.color_space == ColorSpaceHint::sRGB); // still labelled as a picture
+    for (std::size_t i = 0; i < counts.size(); ++i) {
+        CHECK(std::round(static_cast<double>(sixteen.image[i]) * 65535.0) == counts[i]);
+    }
+    CHECK(read_image_tiff_rgb(path).image.sensor_bit_depth() == 16);
+
+    // Written back to 16 bits, as the same counts:
+    ImageBundle<float> again(sixteen.image);
+    again.bit_depth = 16;
+    write_image_tiff(path, again);
+    const ImageBundle<float> reread = read_image_tiff_mono(path);
+    for (std::size_t i = 0; i < counts.size(); ++i) {
+        CHECK(std::round(static_cast<double>(reread.image[i]) * 65535.0) == counts[i]);
+    }
+
+    TiffSpec longs;
+    longs.bits_per_sample = 32;
+    write_tiff(path, longs, {0.0, 1.0, 65536.0, 4294967295.0});
+    CHECK(read_image_tiff_mono(path).image.sensor_bit_depth() == 32);
+
+    TiffSpec bytes;
+    write_tiff(path, bytes, {0.0, 1.0, 128.0, 255.0});
+    CHECK(read_image_tiff_mono(path).image.sensor_bit_depth() == 0);
+
+    TiffSpec floats;
+    floats.sample_format = SAMPLEFORMAT_IEEEFP;
+    floats.bits_per_sample = 32;
+    write_tiff(path, floats, {0.0, 1.0, 300.5, 4095.0});
+    const ImageBundle<float> read_floats = read_image_tiff_mono(path);
+    CHECK(read_floats.image.sensor_bit_depth() == 0);
+    CHECK(read_floats.image[2] == 300.5f);
     fs::remove(path);
 }
 

@@ -21,12 +21,19 @@ namespace huira {
 //     the sensor response held them, and the returned Image has its
 //     sensor_bit_depth set to ADCBITS.
 //
-//   • Otherwise, integer BITPIX (8, 16, 32): divided by the SATURATE
-//     keyword (if present) or the maximum value for that BITPIX type. If
-//     SATURATE is 2^bits - 1, the Image's sensor_bit_depth is set to bits.
+//   • Otherwise, integer BITPIX (8, 16, 32), whose values are counts: divided
+//     by the SATURATE keyword if it is an ADC's ceiling, 2^bits - 1, and
+//     otherwise by the type's range, 2^bits - 1 too (255, 32767, 65535, ...),
+//     and the Image's sensor_bit_depth is set to those bits. So the counts
+//     are recovered exactly, as value * (2^bits - 1), whatever wrote the
+//     file. (Any other SATURATE, such as a level where the response stops
+//     being linear, is kept in the metadata but doesn't normalise.) A 64-bit
+//     integer image is divided by its type's range without a bit depth: a
+//     float can't hold its counts.
 //
-//   • Otherwise, float BITPIX (−32, −64): returned as they are (physical /
-//     flux units; consult metadata.bunit for the unit).
+//   • Otherwise, float BITPIX (−32, −64), or integers scaled by a BSCALE that
+//     isn't a whole number: returned as they are (physical / flux units;
+//     consult metadata.bunit for the unit).
 //
 //   Undefined pixels (BLANK in an integer image, NaN in a float one) are
 //   returned as NaN.

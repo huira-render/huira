@@ -18,7 +18,9 @@ software expects: a 12-bit sensor's pixels are 0 to 4095.
 
 Any other image (received power, a depth map, a picture made with ``linear_to_srgb()``) has no
 sensor bit depth, and is saved as before: its values as they are, in a float format, or
-stretched over an integer format's range (0 to 1 becomes 0 to 255, or 0 to 65535).
+stretched over an integer format's range (0 to 1 becomes 0 to 255, or 0 to 65535). Images read
+from integer FITS files and 16- or 32-bit integer TIFFs have one too, since they hold counts:
+see Reading other software's files.
 
 To save a sensor response stretched over the format's range instead, for viewing, set
 ``ImageBundle::scaling`` (or ``write_image_fits()``'s ``scaling``) to ``PixelScaling::FullRange``.
@@ -61,6 +63,31 @@ has fewer, the lowest bits are dropped, as by a camera whose output is narrower 
 Huira's readers undo each of these: ``read_image_fits()``, ``read_image_png()`` and
 ``read_image_tiff_rgb()`` (and the mono versions) return the sensor response as it was, with its
 sensor bit depth, so it reads back exactly.
+
+Reading other software's files
+------------------------------
+
+Files from cameras and calibration software hold counts too, and Huira's readers keep them
+recoverable. An integer FITS file holds counts as the standard defines them (each stored value
+times ``BSCALE``, plus ``BZERO``). ``read_image_fits()`` divides them by ``SATURATE`` when it is an
+ADC's ceiling, :math:`2^{\text{bits}} - 1`, and otherwise by the type's range, which is
+:math:`2^{\text{bits}} - 1` too (255, 32767, 65535, ...), and records those bits as the image's
+sensor bit depth, so :math:`\text{value} \times (2^{\text{bits}} - 1)` gives back the counts
+exactly. A ``SATURATE`` that is not a ceiling, such as a level where a sensor stops being linear,
+is kept in the metadata, but doesn't normalize. 16- and 32-bit integer TIFFs are read the same
+way, by their range, or by a ``MaxSampleValue`` of :math:`2^{\text{bits}} - 1`. (Counts above
+:math:`2^{24}`, which only 32-bit files hold, are kept to a float's precision.)
+
+Some files hold no counts that can be recovered, and are read without a bit depth: 8-bit TIFFs,
+PNGs without an ``sBIT`` chunk, JPEG, BMP and TGA are pictures, normalized by their range; 64-bit
+integer FITS files are too wide to write back as counts; and float FITS and TIFF files are returned
+as they are, in whatever units the software that wrote them used (counts, or counts divided by
+65535 from Siril or PixInsight, say). See :doc:`sensor_modeling` for calibration frames.
+
+An image read with a bit depth is written as counts, like a sensor response: unchanged in a file
+of as many bits, with the lowest bits dropped in a narrower one, and as counts in a float FITS
+file. Set ``scaling`` to ``PixelScaling::FullRange`` to stretch it over the format's range
+instead.
 
 FITS keywords
 -------------
@@ -105,8 +132,9 @@ with it (a PNG's ``gAMA`` or ``sRGB`` chunk). It is ``Linear`` by default.
 For a picture to view, convert explicitly: ``linear_to_srgb()`` returns the sRGB values, labelled
 sRGB. Its result is no longer a sensor's DN, so it has no sensor bit depth, and is stretched over
 the format's range when saved. Readers label what they read: sRGB for JPEG, BMP and TGA, and for
-TIFFs of integers that are not a sensor's DN; linear for float TIFFs, Radiance HDR and sensor
-data; and as tagged for PNG.
+integer TIFFs, unless their ``MaxSampleValue`` gives a sensor's bit depth (a 16-bit TIFF's counts'
+bit depth is recorded either way, but it is labelled as the picture it most often is); linear
+for float TIFFs, Radiance HDR and sensor data; and as tagged for PNG.
 
 Usage
 -----
@@ -140,6 +168,17 @@ Python:
     huira.write_png("frame.png", huira.linear_to_srgb(response))
 
     image, metadata = huira.read_fits("frame_red.fits")  # the sensor response, as it was
+
+Changes in v0.9.11
+------------------
+
+- Integer FITS files and 16- and 32-bit integer TIFFs from other software are read with the bit
+  depth of their counts, so the counts are recovered exactly, and are written back as counts.
+  Before, they had no bit depth: the counts couldn't be recovered from the image, and it was
+  written stretched over the format's range.
+- A FITS ``SATURATE``, or TIFF ``MaxSampleValue``, that is not :math:`2^{\text{bits}} - 1` no
+  longer normalizes the image, which is normalized by its type's range instead. Before, the image
+  was divided by it, and its counts couldn't be recovered.
 
 Changes in v0.9.10
 ------------------

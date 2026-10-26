@@ -347,7 +347,10 @@ inline void bind_image_io(py::module_& m)
         [](const fs::path& path, bool read_alpha) { return read_image_tiff_rgb(path, read_alpha); },
         py::arg("filepath"),
         py::arg("read_alpha") = true,
-        "Read a TIFF into an RGB Bundle");
+        "Read a TIFF into an RGB Bundle. Integer samples are normalized by their range (or a "
+        "MaxSampleValue of 2^bits - 1); 16- and 32-bit ones record its bits as the image's "
+        "sensor_bit_depth, so value * (2^bits - 1) gives back the counts exactly. Float samples "
+        "are returned as they are.");
 
     m.def(
         "read_tiff_mono",
@@ -356,7 +359,10 @@ inline void bind_image_io(py::module_& m)
         },
         py::arg("filepath"),
         py::arg("read_alpha") = true,
-        "Read a TIFF into a Float Bundle");
+        "Read a TIFF into a Float Bundle (averaging three channels). Integer samples are "
+        "normalized by their range (or a MaxSampleValue of 2^bits - 1); 16- and 32-bit ones "
+        "record its bits as the image's sensor_bit_depth, so value * (2^bits - 1) gives back the "
+        "counts exactly. Float samples are returned as they are.");
 
     m.def(
         "write_tiff",
@@ -396,8 +402,10 @@ inline void bind_image_io(py::module_& m)
         py::arg("filepath"),
         "Read a single-plane FITS image: returns (Image_f32, FitsMetadata). A sensor response "
         "written by write_fits (with ADCBITS) comes back as it was, DN / (2^bits - 1), with its "
-        "sensor_bit_depth; other integer images are normalized by SATURATE or their type's range; "
-        "other float images are returned as they are. Undefined pixels are NaN.");
+        "sensor_bit_depth. Other integer images hold counts too, and are normalized by SATURATE "
+        "if it is an ADC's ceiling (2^bits - 1), otherwise by their type's range, with that "
+        "sensor_bit_depth, so value * (2^bits - 1) gives back the counts exactly. Other float "
+        "images are returned as they are. Undefined pixels are NaN.");
 
     m.def(
         "write_fits",

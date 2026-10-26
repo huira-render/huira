@@ -489,29 +489,58 @@ TEST_CASE("Unusual FITS header cards are read as custom keywords, or skipped", "
 
 TEST_CASE("FITS images from other software are normalised by their type's range", "[images][fits]")
 {
+    // Integers are counts, and the type's range is 2^bits - 1, so the image records the bits,
+    // from which the counts are recovered. They had no bit depth, so the counts couldn't be.
     const fs::path path = temp_fits("foreign");
-    const auto check_read = [&](int image_type, double value, double expected) {
+    const auto check_read = [&](int image_type, double value, double expected, int bits) {
+        INFO("type " << image_type << ", value " << value);
         write_foreign_fits(path, image_type, {2, 1}, {0.0, value});
         const auto [image, metadata] = read_image_fits(path);
         CHECK(image(0, 0) == 0.f);
         CHECK(image(1, 0) == static_cast<float>(expected));
-        CHECK(image.sensor_bit_depth() == 0);
+        CHECK(image.sensor_bit_depth() == bits);
     };
 
-    check_read(BYTE_IMG, 51.0, 51.0 / 255.0);
-    check_read(SBYTE_IMG, -127.0, -1.0);
-    check_read(SHORT_IMG, 32767.0, 1.0);
-    check_read(SHORT_IMG, -16384.0, -16384.0 / 32767.0);
-    check_read(USHORT_IMG, 65535.0, 1.0);
-    check_read(LONG_IMG, 2147483647.0, 1.0);
-    check_read(ULONG_IMG, 1073741824.0, 1073741824.0 / 4294967295.0);
-    check_read(LONGLONG_IMG, 4611686018427387904.0, 0.5);
-    check_read(FLOAT_IMG, 3.5, 3.5); // as it is
-    check_read(DOUBLE_IMG, -0.125, -0.125);
+    check_read(BYTE_IMG, 51.0, 51.0 / 255.0, 8);
+    check_read(SBYTE_IMG, -127.0, -1.0, 7);
+    check_read(SHORT_IMG, 32767.0, 1.0, 15);
+    check_read(SHORT_IMG, -16384.0, -16384.0 / 32767.0, 15);
+    check_read(USHORT_IMG, 65535.0, 1.0, 16);
+    check_read(LONG_IMG, 2147483647.0, 1.0, 31);
+    check_read(ULONG_IMG, 1073741824.0, 1073741824.0 / 4294967295.0, 32);
+    check_read(LONGLONG_IMG, 4611686018427387904.0, 0.5, 0); // more bits than a float holds
+    check_read(FLOAT_IMG, 3.5, 3.5, 0);                      // as it is
+    check_read(DOUBLE_IMG, -0.125, -0.125, 0);
     fs::remove(path);
 }
 
-TEST_CASE("Integer FITS images are normalised by SATURATE, which may give a bit depth",
+TEST_CASE("A 16-bit FITS file's counts are recovered exactly, and written back as they were",
+          "[images][fits]")
+{
+    // As a camera or calibration software writes them: unsigned 16 bits, with no ADCBITS or
+    // SATURATE.
+    const fs::path path = temp_fits("counts");
+    const std::vector<double> counts{0.0, 1.0, 511.0, 4095.0, 40000.0, 65535.0};
+    write_foreign_fits(path, USHORT_IMG, {3, 2}, counts);
+    const auto [image, metadata] = read_image_fits(path);
+    REQUIRE(image.sensor_bit_depth() == 16);
+    for (int y = 0; y < 2; ++y) {
+        for (int x = 0; x < 3; ++x) {
+            // FITS files have their bottom row first:
+            const double count = counts[static_cast<std::size_t>((1 - y) * 3 + x)];
+            CHECK(std::round(static_cast<double>(image(x, y)) * 65535.0) == count);
+        }
+    }
+
+    // Written back, to 16 bits, as the same counts:
+    const fs::path again = temp_fits("counts_again");
+    write_image_fits(again, image, 16);
+    CHECK(read_stored(again, counts.size()).values == counts);
+    fs::remove(path);
+    fs::remove(again);
+}
+
+TEST_CASE("Integer FITS images are normalised by a SATURATE that is an ADC's ceiling",
           "[images][fits]")
 {
     const fs::path path = temp_fits("saturate");
@@ -526,14 +555,16 @@ TEST_CASE("Integer FITS images are normalised by SATURATE, which may give a bit 
     CHECK(adc(1, 0) == static_cast<float>(2048.0 / 4095.0));
     CHECK(adc_metadata.saturate == 4095.0);
 
-    // Any other level:
+    // Any other level, such as where the response stops being linear, doesn't normalise: the
+    // counts couldn't be recovered from values divided by it. It was divided by:
     write_foreign_fits(path, SHORT_IMG, {2, 1}, {0.0, 500.0}, [](fitsfile* file, int& status) {
         double saturate = 1000.0;
         fits_update_key(file, TDOUBLE, "SATURATE", &saturate, nullptr, &status);
     });
     const auto [level, level_metadata] = read_image_fits(path);
-    CHECK(level.sensor_bit_depth() == 0);
-    CHECK(level(1, 0) == 0.5f);
+    CHECK(level.sensor_bit_depth() == 15);
+    CHECK(level(1, 0) == static_cast<float>(500.0 / 32767.0));
+    CHECK(level_metadata.saturate == 1000.0);
 
     // Scaled integers hold values that aren't integers, and are returned as they are:
     write_foreign_fits(path, SHORT_IMG, {2, 1}, {0.0, 2.5}, [](fitsfile* file, int& status) {
@@ -643,9 +674,10 @@ TEST_CASE("A FITS file whose recognised keywords aren't of their types is still 
     Logger::clear_custom_sink();
     fs::remove(path);
 
-    // They are left unset, so SATURATE and ADCBITS don't normalise the image:
+    // They are left unset, so SATURATE and ADCBITS don't normalise the image, which its type's
+    // range does:
     CHECK(image(1, 0) == static_cast<float>(16383.0 / 32767.0));
-    CHECK(image.sensor_bit_depth() == 0);
+    CHECK(image.sensor_bit_depth() == 15);
     CHECK(metadata.exptime == 0.f);
     CHECK_FALSE(metadata.datamin.has_value());
     CHECK_FALSE(metadata.saturate.has_value());
