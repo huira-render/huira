@@ -650,11 +650,12 @@ Interaction<TSpectral> SceneView<TSpectral>::resolve_hit(const Ray<TSpectral>& r
     const float world_mag = std::max(
         {std::abs(isect.position.x), std::abs(isect.position.y), std::abs(isect.position.z)});
     isect.p_err = SPAWN_POINT_ERROR_SCALE * std::max(local_mag, world_mag);
-    isect.normal_g = glm::normalize(xf.apply_to_direction(hit.Ng));
+    // Normals turn by the inverse transpose of what turns the tangents (the same, unless the scale
+    // is uneven), so that they stay at right angles to the surface:
+    isect.normal_g = glm::normalize(xf.apply_to_normal(hit.Ng));
     isect.normal_g =
         glm::dot(ray.direction(), isect.normal_g) < 0.0f ? isect.normal_g : -isect.normal_g;
-    isect.normal_s = glm::normalize(
-        xf.apply_to_direction(isect.normal_s)); // TODO Do we need to invert this as well?
+    isect.normal_s = glm::normalize(xf.apply_to_normal(isect.normal_s));
     if (glm::dot(isect.normal_s, isect.normal_g) < 0.0f) {
         isect.normal_s = -isect.normal_s;
     }
