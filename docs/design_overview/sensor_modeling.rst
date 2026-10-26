@@ -146,16 +146,32 @@ refused. A map that is no longer at the sensor's resolution, after the camera's 
 configured again, stays set, with a warning, and a readout throws until it is replaced or
 cleared.
 
-Calibration frames are in DN. A sensor response, and a frame read from a FITS file that records
-the bit depth it was taken at (the ``ADCBITS`` keyword, or ``SATURATE`` at an ADC's ceiling, such
-as 4095), hold :math:`DN / \text{MaxDN}` instead, with a sensor bit depth
-(``Image::sensor_bit_depth()``; ``sensor_bit_depth`` in Python), and are turned into DN: these
-can be given to ``dark_current_from_master_dark()`` and as an absolute bias map as they are. Any
-other image's values are taken as DN. An integer FITS file without those keywords is read
-normalized by its type's range (65535 for 16 bits), without a bit depth; a warning points out an
-image whose values are all at most 1 DN, which looks normalized, and multiplying it by the range
-gives back its DN. A relative bias map is offsets in DN, so one with a sensor bit depth is
-refused.
+Calibration frames are in DN, and how a file holds them depends on what wrote it. Huira's
+readers return values normalized to about [0, 1], and record the bit depth they were normalized
+by where it is known (``Image::sensor_bit_depth()``; ``sensor_bit_depth`` in Python): the values
+are then :math:`DN / (2^{\text{bits}} - 1)`, and are turned back into DN exactly. So:
+
+- **Integer FITS files**, from any software, just work: FITS integers are counts, and the reader
+  records their bit depth (see :doc:`image_output`). So do Huira's own sensor responses, and
+  frames it saved.
+- **16- and 32-bit integer TIFFs** just work too, for the same reason. An 8-bit TIFF is a
+  picture, and too coarse to be a calibration frame.
+- **Float FITS and TIFF files** are read as they are, so their values must be DN. Many hold DN
+  (astropy, MaxIm DL and professional pipelines). Siril and PixInsight save normalized floats
+  instead, :math:`DN / 65535`: multiply them by 65535 (``np.asarray(image) * 65535`` into a new
+  ``Image_f32``).
+- **PNG, JPEG and other pictures** hold no DN at all: they are display images, often
+  sRGB-encoded.
+- **Cameras that scale their DN to fill 16 bits** (many 12- and 14-bit cameras' software
+  multiplies by 16 or 4) give files whose DN are the scaled ones: give
+  ``dark_current_from_master_dark()`` the conversion gain per file DN, not per ADC DN.
+
+``dark_current_from_master_dark()`` and an absolute bias map refuse an image without a bit depth
+whose values are all at most 1 DN: no real master dark or bias in DN is, as the bias alone is
+many DN, so it is normalized, and taking it as DN would give a dark current and bias of about 0.
+An image of zeros is accepted. A relative bias map is offsets in DN, so one with a sensor bit
+depth is refused. Nothing can tell a float file in DN from one in some other unit: that, and the
+conversion gain's DN, are for the user to know.
 
 From C++, the maps are on the sensor (``SensorModel::set_dark_current_map()``,
 ``set_bias_map()``), and through the camera's handle as above. In Python::
@@ -169,6 +185,10 @@ From C++, the maps are on the sensor (``SensorModel::set_dark_current_map()``,
         master_dark, master_bias, conversion_gain=1.5, exposure_time=huira.units.Second(30))
     camera_model.set_sensor_dark_current_map(rates)
     camera_model.set_sensor_bias_map(master_bias)
+
+    # A float master from Siril or PixInsight holds DN / 65535. np.asarray() is top row first:
+    siril_bias, _ = huira.read_fits("master_bias_siril.fits")
+    siril_bias = huira.Image_f32(np.asarray(siril_bias) * 65535, origin=huira.PixelOrigin.TopLeft)
 
     # Or a bias pattern made in numpy, as offsets from the bias level:
     columns = np.tile(np.random.default_rng(1).normal(0, 2, 1024), (1024, 1))
@@ -208,7 +228,9 @@ Changes in v0.9.11
 
 - Each pixel can have its own dark current and bias, from maps (see Calibration maps), and
   ``dark_current_from_master_dark()`` makes the dark current's from a master dark and a master
-  bias. Without maps, frames are as before.
+  bias. Without maps, frames are as before. Integer FITS and TIFF calibration frames from other
+  software are turned into DN as they are read (see :doc:`image_output`), and normalized ones
+  are refused.
 
 
 Changes in v0.9.10

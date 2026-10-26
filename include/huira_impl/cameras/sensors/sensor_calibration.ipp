@@ -16,7 +16,7 @@ inline double dn_per_value(const Image<float>& image)
     return bits > 0 ? std::ldexp(1.0, bits) - 1.0 : 1.0;
 }
 
-inline void warn_if_normalized(const Image<float>& image, const char* what, const char* caller)
+inline void check_not_normalized(const Image<float>& image, const char* what, const char* caller)
 {
     if (image.sensor_bit_depth() > 0 || image.empty()) {
         return;
@@ -26,11 +26,14 @@ inline void warn_if_normalized(const Image<float>& image, const char* what, cons
         largest = std::max(largest, image[i]);
     }
     if (largest > 0.f && largest <= 1.f) {
-        HUIRA_LOG_WARNING(std::string(caller) + " - Every value of the " + what +
-                          " is at most 1 DN. If they are normalized, as DN / (2^bits - 1) (as a "
-                          "sensor response holds them, or an integer FITS file read without the "
-                          "ADCBITS or SATURATE keys that give its bit depth), multiply them by "
-                          "2^bits - 1 first.");
+        HUIRA_THROW_ERROR(
+            std::string(caller) + " - Every value of the " + what +
+            " is at most 1 DN, which a real one in DN never is: the bias alone is many DN. It "
+            "looks normalized, without a bit depth to give back its DN. A 32-bit float master "
+            "from Siril or PixInsight holds DN / 65535: multiply it by 65535 (or by the range "
+            "the software that saved it uses). A picture (PNG, JPEG, or an 8-bit TIFF) holds no "
+            "DN at all. Integer FITS files, 16- and 32-bit integer TIFFs, and sensor responses "
+            "have their bit depth, and are turned into DN as they are.");
     }
 }
 
@@ -58,7 +61,7 @@ Image<float> dark_current_from_master_dark_(const Image<float>& master_dark,
     if (master_dark.empty()) {
         HUIRA_THROW_ERROR(std::string(caller) + " - The master dark is empty.");
     }
-    warn_if_normalized(master_dark, "master dark", caller);
+    check_not_normalized(master_dark, "master dark", caller);
 
     const double dark_scale = dn_per_value(master_dark);
     const double electrons_per_dn_second = static_cast<double>(conversion_gain) / t;
@@ -105,9 +108,11 @@ Image<float> dark_current_from_master_dark_(const Image<float>& master_dark,
  * them out. Their difference is the dark current's charge over the exposure, in DN.
  *
  * The values of an image with a sensor bit depth (Image::sensor_bit_depth(): a sensor response,
- * or a frame read from a file that records its bit depth) are DN / (2^bits - 1), and are turned
- * into DN; any other image's values are DN. A warning points out an image without a sensor bit
- * depth whose values are all at most 1 DN, which looks normalized.
+ * or a frame read from an integer FITS or a 16- or 32-bit integer TIFF file) are DN /
+ * (2^bits - 1), and are turned into DN; any other image's values are DN. An image without a
+ * sensor bit depth whose values are all at most 1 DN is refused: no real master dark or bias in
+ * DN is, as the bias alone is many DN, so it is normalized, and its DN can't be recovered (a
+ * 32-bit float master from Siril or PixInsight holds DN / 65535, say; multiply it by 65535).
  *
  * The result is for SensorModel::set_dark_current_map() (CameraModelHandle::
  * set_sensor_dark_current_map()), and is in the master dark's layout. A pixel below the master
@@ -119,8 +124,9 @@ Image<float> dark_current_from_master_dark_(const Image<float>& master_dark,
  * @param conversion_gain The conversion gain, in e-/DN, of the camera that took them.
  * @param exposure_time The master dark's exposure time.
  * @return The dark current of each pixel, in e-/s.
- * @throws std::runtime_error if the images differ in size, a pixel of either is not finite, or
- *         the gain or the exposure time is not positive and finite.
+ * @throws std::runtime_error if the images differ in size, a pixel of either is not finite,
+ *         either is normalized (see above), or the gain or the exposure time is not positive and
+ *         finite.
  */
 inline Image<float> dark_current_from_master_dark(const Image<float>& master_dark,
                                                   const Image<float>& master_bias,
@@ -135,7 +141,7 @@ inline Image<float> dark_current_from_master_dark(const Image<float>& master_dar
             ", not " + std::to_string(master_dark.width()) + "x" +
             std::to_string(master_dark.height()));
     }
-    detail::warn_if_normalized(master_bias, "master bias", "dark_current_from_master_dark");
+    detail::check_not_normalized(master_bias, "master bias", "dark_current_from_master_dark");
     const double bias_scale = detail::dn_per_value(master_bias);
     auto bias_dn = [&](int x, int y) {
         return static_cast<double>(master_bias(x, y)) * bias_scale;
@@ -155,8 +161,9 @@ inline Image<float> dark_current_from_master_dark(const Image<float>& master_dar
  * @param conversion_gain The conversion gain, in e-/DN, of the camera that took the master dark.
  * @param exposure_time The master dark's exposure time.
  * @return The dark current of each pixel, in e-/s.
- * @throws std::runtime_error if a pixel of the master dark or the bias is not finite, or the gain
- *         or the exposure time is not positive and finite.
+ * @throws std::runtime_error if a pixel of the master dark or the bias is not finite, the master
+ *         dark is normalized (see the overload that takes a master bias), or the gain or the
+ *         exposure time is not positive and finite.
  */
 inline Image<float> dark_current_from_master_dark(const Image<float>& master_dark,
                                                   float master_bias_dn,

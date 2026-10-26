@@ -391,10 +391,12 @@ void SensorModel<TSpectral>::set_bias_level_dn(float bias_level_dn)
  *   half a DN from 0.
  *
  * The values are DN. An image with a sensor bit depth (Image::sensor_bit_depth(): a sensor
- * response, or a frame read from a file that records its bit depth) holds DN / (2^bits - 1), and
- * an absolute map is turned into DN from it; a relative map of one is refused, as offsets are not
- * stored that way. A warning points out an absolute map without a sensor bit depth whose values
- * are all at most 1 DN, which looks normalized.
+ * response, or a frame read from an integer FITS or a 16- or 32-bit integer TIFF file) holds
+ * DN / (2^bits - 1), and an absolute map is turned into DN from it; a relative map of one is
+ * refused, as offsets are not stored that way. An absolute map without a sensor bit depth whose
+ * values are all at most 1 DN is refused: no real bias in DN is, so it is normalized, and its DN
+ * can't be recovered (a 32-bit float master from Siril or PixInsight holds DN / 65535, say;
+ * multiply it by 65535).
  *
  * The map is in the image's layout (top row first; see Image), as the sensor response is. The
  * bias, like the dark current, is not noise: it is applied with noise off too. The sensor keeps
@@ -404,8 +406,8 @@ void SensorModel<TSpectral>::set_bias_level_dn(float bias_level_dn)
  *        resolution.
  * @param kind What the values are: see above.
  * @throws std::runtime_error if the map is not at the sensor's resolution, a value is not
- *         finite, a pixel's bias would be outside [0, 2^bit_depth - 1), or the map is relative
- *         and has a sensor bit depth.
+ *         finite, a pixel's bias would be outside [0, 2^bit_depth - 1), the map is absolute and
+ *         normalized, or the map is relative and has a sensor bit depth.
  */
 template <IsSpectral TSpectral>
 void SensorModel<TSpectral>::set_bias_map(Image<float> dn, BiasMapKind kind)
@@ -424,7 +426,7 @@ void SensorModel<TSpectral>::set_bias_map(Image<float> dn, BiasMapKind kind)
                           "BiasMapKind::Absolute, or subtract its mean in DN first.");
     }
     if (kind == BiasMapKind::Absolute) {
-        detail::warn_if_normalized(dn, "bias map", caller);
+        detail::check_not_normalized(dn, "bias map", caller);
         const double scale = detail::dn_per_value(dn);
         if (scale != 1.0) {
             for (std::size_t i = 0; i < dn.size(); ++i) {
