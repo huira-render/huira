@@ -38,11 +38,13 @@ requirements:
     - libtiff
     - libpng
     - libjpeg-turbo
+    - nlohmann_json
     - tbb-devel
   run:
     - python
     - {{ pin_compatible('cspice', max_pin='x') }}
     - glm
+    - nlohmann_json
     - tbb-devel
 
 test:

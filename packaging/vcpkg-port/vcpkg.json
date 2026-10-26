@@ -31,6 +31,7 @@
     "glm",
     "libjpeg-turbo",
     "libpng",
+    "nlohmann-json",
     "tbb",
     "tiff",
     {
