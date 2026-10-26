@@ -37,10 +37,10 @@ inline float power_heuristic(float f_pdf, float g_pdf)
  *
  * Between two temporal samples, Embree interpolates an instance's translation, scale and shear
  * linearly, and its rotation along the shorter arc between the two (slerp). This does the same,
- * so that a light is sampled where rays find it. The rotation is not quite Embree's, which
- * approximates the slerp's trigonometry and falls back to normalized linear interpolation over
- * small turns: what a ray hits is placed with the transform Embree drew it with instead (see
- * SceneView::resolve_hit()).
+ * for what Embree does not draw. The rotation is not quite Embree's, which approximates the
+ * slerp's trigonometry and falls back to normalized linear interpolation over small turns: what
+ * Embree draws is placed with the transform it draws it with instead (see
+ * embree_transform_at()).
  *
  * @param transforms The instance's transforms at uniformly spaced temporal samples.
  * @param t Normalized time in [0, 1] across the sequence.

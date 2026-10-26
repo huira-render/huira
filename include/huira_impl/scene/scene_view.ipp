@@ -2068,6 +2068,7 @@ void SceneView<TSpectral>::build_tlas_()
         mapping.light_index = l_idx;
         mapping.geometry = inst_geom;
         instance_mappings_[geom_id] = mapping;
+        lights_[l_idx].geometry = inst_geom;
     }
 
     rtcCommitScene(tlas_);
@@ -2101,7 +2102,7 @@ SceneView<TSpectral>::sample_light_contribution_(const LightInstance<TSpectral>&
                                                  float time,
                                                  bool bsdf_ray_follows) const
 {
-    Transform<float> current_transform = instance_transform_at(light_instance.transforms, time);
+    Transform<float> current_transform = light_instance.transform_at(time);
 
     auto sample = light_instance.light->sample_li(isect, current_transform, sampler);
 
