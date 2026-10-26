@@ -170,39 +170,10 @@ inline void bind_camera_model_handle(py::module_& m)
             py::arg("intrinsic_matrix"),
             py::arg("resolution"),
             py::arg("anchor_focal_length"),
-            "Set the intrinsics from a huira.Mat3 camera matrix [[fx, s, cx], [0, fy, cy], "
-            "[0, 0, 1]] (up to scale), with a resolution tuple and physical focal length "
-            "anchor. The principal point is in the camera's pixel convention (see "
-            "set_pixel_convention).")
-        .def(
-            "set_intrinsic_matrix",
-            [](HandleType& self,
-               py::array_t<double, py::array::c_style | py::array::forcecast> matrix,
-               std::pair<int, int> res,
-               const py::object& anchor_fl) {
-                const auto buf = matrix.request();
-                if (buf.ndim != 2 || buf.shape[0] != 3 || buf.shape[1] != 3) {
-                    throw std::runtime_error("set_intrinsic_matrix - Expected a 3x3 matrix");
-                }
-                // NumPy is row-major, and GLM column-major: K[row][col] -> k[col][row].
-                const auto* values = static_cast<const double*>(buf.ptr);
-                Mat3<float> k;
-                for (int row = 0; row < 3; ++row) {
-                    for (int col = 0; col < 3; ++col) {
-                        k[col][row] = static_cast<float>(values[row * 3 + col]);
-                    }
-                }
-                self.set_intrinsic_matrix(k,
-                                          Resolution{res.first, res.second},
-                                          detail::unit_from_py<units::Millimeter>(anchor_fl));
-            },
-            py::arg("intrinsic_matrix"),
-            py::arg("resolution"),
-            py::arg("anchor_focal_length"),
-            "Set the intrinsics from a 3x3 camera matrix, as a NumPy array or nested list "
-            "written row by row: [[fx, s, cx], [0, fy, cy], [0, 0, 1]] (up to scale), where s "
-            "is the skew. The principal point is in the camera's pixel convention (see "
-            "set_pixel_convention).")
+            "Set the intrinsics from a 3x3 camera matrix, a huira.Mat3 or a numpy array or nested "
+            "list written row by row: [[fx, s, cx], [0, fy, cy], [0, 0, 1]] (up to scale), where "
+            "s is the skew; with a resolution tuple and physical focal length anchor. The "
+            "principal point is in the camera's pixel convention (see set_pixel_convention).")
 
         .def(
             "set_intrinsics",
@@ -236,22 +207,11 @@ inline void bind_camera_model_handle(py::module_& m)
 
         .def(
             "intrinsic_matrix",
-            [](const HandleType& self) {
-                // GLM is column-major, K[col][row]; NumPy is row-major.
-                const Mat3<float> k = self.intrinsic_matrix();
-                py::array_t<double> matrix({3, 3});
-                auto values = matrix.mutable_unchecked<2>();
-                for (py::ssize_t row = 0; row < 3; ++row) {
-                    for (py::ssize_t col = 0; col < 3; ++col) {
-                        values(row, col) =
-                            static_cast<double>(k[static_cast<int>(col)][static_cast<int>(row)]);
-                    }
-                }
-                return matrix;
-            },
-            "The camera matrix [[fx, s, cx], [0, fy, cy], [0, 0, 1]] as a 3x3 NumPy array, "
-            "row by row, as set_intrinsic_matrix() takes it: in pixels, with the principal "
-            "point in the camera's pixel convention (see set_pixel_convention).")
+            [](const HandleType& self) { return Mat3<double>(self.intrinsic_matrix()); },
+            "The camera matrix [[fx, s, cx], [0, fy, cy], [0, 0, 1]] as a huira.Mat3, as "
+            "set_intrinsic_matrix() takes it: in pixels, with the principal point in the "
+            "camera's pixel convention (see set_pixel_convention). It works with numpy as the "
+            "3x3 array, row by row: np.asarray(K), K[0, 2].")
         .def(
             "resolution",
             [](const HandleType& self) {

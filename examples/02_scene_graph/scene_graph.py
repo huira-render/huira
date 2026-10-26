@@ -7,6 +7,7 @@ Demonstrates:
     - Reusing one primitive in several instances, each with its own position and scale
     - Frames (new_subframe): moving or rotating a frame moves everything in it
     - Rotations: from an axis and angle (Rotation), from Euler angles, and non-uniform scale
+    - Vectors as tuples, lists or numpy arrays (or huira.Vec3), wherever a function takes one
     - Pointing a camera with look_at, which tracks its target as it moves
     - Blender's camera convention (use_blender_convention), next to the default OpenCV one
     - Naming assets, hiding an instance (set_visible), and printing the scene graph
@@ -61,8 +62,10 @@ def main():
     planet = planet_frame.new_instance(gray_ball)
     planet.set_scale(2.0)
 
+    # Wherever a function takes a vector, such as this axis, it takes a tuple, a list, a numpy
+    # array or a huira.Vec3 alike:
     moon_orbit = planet_frame.new_subframe()
-    moon_orbit.set_rotation(huira.Rotation.from_local_to_parent(huira.Vec3(0, 0, 1), deg(40)))
+    moon_orbit.set_rotation(huira.Rotation.from_local_to_parent((0, 0, 1), deg(40)))
 
     # The moon reuses the gray primitive at half the size, 5 m out along the orbit frame's x axis:
     moon = moon_orbit.new_instance(gray_ball)
@@ -90,7 +93,7 @@ def main():
         normal /= np.linalg.norm(normal)
         for corner in (a, b, c):
             indices.append(len(vertices))
-            vertices.append(Vertex(position=huira.Vec3(*corner), normal=huira.Vec3(*normal)))
+            vertices.append(Vertex(position=corner, normal=normal))
     tetrahedron_mesh = scene.add_mesh(indices, vertices, "tetrahedron")
 
     tetrahedron = planet_frame.new_instance(scene.add_primitive(tetrahedron_mesh, rust))
@@ -118,7 +121,7 @@ def main():
     # image. Given another instance, it keeps facing it as it moves.
     camera = scene.root.new_instance(camera_model)
     camera.set_position(m(4), m(-16), m(7))
-    camera.look_at(planet, huira.Vec3(0, 0, 1))
+    camera.look_at(planet, (0, 0, 1))
 
     # Names make assets easy to find later, and to read in the printouts:
     assert scene.get_camera_model("navcam").valid()
