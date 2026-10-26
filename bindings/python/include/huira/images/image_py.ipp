@@ -5,6 +5,7 @@
 #include <cstring>
 #include <sstream>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "huira/cameras/pixel_convention.hpp"
@@ -35,6 +36,8 @@ void bind_image(py::module_& m, const char* class_name)
     using Traits = ImagePixelTraits<PixelT>;
     using Scalar = typename Traits::Scalar;
     constexpr auto C = Traits::channels;
+    // A pixel value from Python: Python's vector is a huira.Vec3, in double precision.
+    using ValueT = std::conditional_t<std::is_same_v<PixelT, Vec3<float>>, Vec3<double>, PixelT>;
 
     py::class_<Img>(
         m,
@@ -60,7 +63,9 @@ void bind_image(py::module_& m, const char* class_name)
         // -----------------------------------------------------------------
         .def(py::init<>())
         .def(py::init<int, int>(), py::arg("width"), py::arg("height"))
-        .def(py::init<int, int, const PixelT&>(),
+        .def(py::init([](int width, int height, const ValueT& fill_value) {
+                 return Img(width, height, PixelT(fill_value));
+             }),
              py::arg("width"),
              py::arg("height"),
              py::arg("fill_value"))
@@ -220,7 +225,10 @@ void bind_image(py::module_& m, const char* class_name)
 
         .def_property("sensor_bit_depth", &Img::sensor_bit_depth, &Img::set_sensor_bit_depth)
 
-        .def("fill", &Img::fill, py::arg("value"))
+        .def(
+            "fill",
+            [](Img& img, const ValueT& value) { img.fill(PixelT(value)); },
+            py::arg("value"))
         .def("clear", &Img::clear)
 
         .def("get_channel",
@@ -609,11 +617,8 @@ inline void bind_common_images(py::module_& m)
 
     bind_image_bundle<Vec3<float>>(m, "ImageBundle_Vec3f");
 
-    // IO functions
-    bind_image_io(m);
-
-    // Utility functions
-    bind_image_utils(m);
+    // The functions that read, write and convert images are bound by bind_image_io() and
+    // bind_image_utils(), after the spectral submodules, whose RGB images they take and return.
 }
 
 } // namespace huira

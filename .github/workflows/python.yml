@@ -74,6 +74,10 @@ jobs:
           python -c "import huira; print(f'huira version: {huira.__version__}')"
           echo "Import verification passed!"
 
+      - name: Check signatures name Python classes
+        shell: bash -el {0}
+        run: python tools/check_python_signatures.py
+
   build-wheels:
     needs: pre-checks
     strategy:

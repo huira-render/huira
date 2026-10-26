@@ -54,7 +54,13 @@ inline void bind_hit_record(py::module_& m)
         .def_readwrite("inst_id", &HitRecord::inst_id, "Instance ID in TLAS")
         .def_readwrite("geom_id", &HitRecord::geom_id, "Geometry ID in BLAS")
         .def_readwrite("prim_id", &HitRecord::prim_id, "Triangle index")
-        .def_readwrite("Ng", &HitRecord::Ng, "Geometric face normal (unnormalized)")
+        // Single precision in C++, which Python has no vector class for: a huira.Vec3, as
+        // everywhere (and set from one, or any sequence or array of three numbers).
+        .def_property(
+            "Ng",
+            [](const HitRecord& h) { return Vec3<double>(h.Ng); },
+            [](HitRecord& h, const Vec3<double>& normal) { h.Ng = Vec3<float>(normal); },
+            "Geometric face normal (unnormalized)")
         .def_readwrite("time",
                        &HitRecord::time,
                        "When in the exposure the ray was traced, from 0 to 1 (motion blur)")

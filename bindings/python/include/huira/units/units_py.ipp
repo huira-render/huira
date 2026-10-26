@@ -485,5 +485,9 @@ void bind_spectral_units_for_type(py::module& m)
     // Irradiance Units (spectral)
     bind_spectral_quantity_type<huira::units::SpectralWattsPerMeterSquared<TSpectral>>(
         m, "SpectralWattsPerMeterSquared");
+
+    // Radiance Units (spectral), which Scene.new_sphere_light() takes
+    bind_spectral_quantity_type<huira::units::SpectralWattsPerMeterSquaredSteradian<TSpectral>>(
+        m, "SpectralWattsPerMeterSquaredSteradian");
 }
 } // namespace huira

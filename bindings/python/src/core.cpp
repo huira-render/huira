@@ -29,16 +29,16 @@ namespace huira::python {
 
 void bind_core(py::module_& m)
 {
-    // Bind core types and utilities:
+    // Bind core types and utilities, the math types first, which much else takes and returns:
+    huira::bind_types(m);
+    huira::bind_rotation(m);
+
     huira::bind_units(m);
     huira::bind_time(m);
     huira::bind_interval(m);
     huira::bind_bin(m);
     huira::bind_hit_record(m);
     huira::bind_object_ids(m);
-
-    huira::bind_types(m);
-    huira::bind_rotation(m);
 
     huira::bind_paths(m);
     huira::bind_logger(m);
@@ -124,6 +124,14 @@ void bind_core(py::module_& m)
                huira::FftPlanEffort::Measure,
                "Times candidate transforms to find the fastest: a few seconds the first time a "
                "size is used, for transforms about 15% faster.");
+}
+
+void bind_core_functions(py::module_& m)
+{
+    // Reading and writing images, and converting their color: these take and return RGB images
+    // (huira.rgb.Image), so they are bound after huira.rgb.
+    huira::bind_image_io(m);
+    huira::bind_image_utils(m);
 }
 
 } // namespace huira::python

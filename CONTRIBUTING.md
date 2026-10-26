@@ -66,7 +66,9 @@ and the README's feature list are updated by the maintainer when a release is cu
   are registered in one of the parts of a spectral submodule (`bind_spectral_assets()` and the
   others, in `bindings/python/src/bind_spectral_*.hpp`, which include the `*_py.ipp` files they
   use) if they are templated on the spectral type, and in `bind_core()`
-  (`bindings/python/src/core.cpp`) if not.
+  (`bindings/python/src/core.cpp`) if not. Bind a class before any function that takes or returns
+  it, or `help()` and the API docs name it by its C++ type: run
+  `python tools/check_python_signatures.py` to list any such signature.
 - **Documentation.** Public APIs need Doxygen comments (see
   [Documentation comments](#documentation-comments)). A new public class also needs a page under
   `docs/api_reference/cpp_api/`, and under `docs/api_reference/python_api/` if it is exposed to

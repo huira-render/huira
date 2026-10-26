@@ -14,7 +14,6 @@
 // clang-format on
 
 #include "huira/concepts/spectral_concepts.hpp"
-#include "huira/core/spectral_bins_py.ipp"
 #include "huira/geometry/vertex_py.ipp"
 #include "huira/handles/assets/light_handle_py.ipp"
 #include "huira/handles/assets/model_handle_py.ipp"
@@ -24,26 +23,37 @@
 #include "huira/handles/geometry/ellipsoid_handle_py.ipp"
 #include "huira/handles/geometry/geometry_handle_py.ipp"
 #include "huira/handles/geometry/mesh_handle_py.ipp"
-#include "huira/units/units_py.ipp"
+#include "huira/handles/materials/bsdf_handle_py.ipp"
+#include "huira/handles/materials/material_handle_py.ipp"
+#include "huira/handles/volumes/density_field_handle_py.ipp"
+#include "huira/handles/volumes/medium_handle_py.ipp"
+#include "huira/handles/volumes/phase_function_handle_py.ipp"
 
 namespace huira::python {
 
-/// The first part of a spectral submodule (see bindings.hpp): its units and spectral
-/// bins, the vertex, and the geometry and asset handles.
+/// The second part of a spectral submodule (see bindings.hpp): the vertex, and the geometry,
+/// material, volume and asset handles.
 template <IsSpectral TSpectral>
 void bind_spectral_assets(pybind11::module_& m)
 {
-    huira::bind_spectral_units_for_type<TSpectral>(m);
-    huira::bind_spectral_bins<TSpectral>(m);
-
     // --- Geometry ---
-    // The vertices Scene.add_mesh() takes. After the spectral bins, which a vertex's albedo is.
+    // The vertices Scene.add_mesh() takes.
     huira::bind_vertex<TSpectral>(m);
 
     // --- Geometry handles ---
     huira::bind_geometry_handle<TSpectral>(m);
     huira::bind_mesh_handle<TSpectral>(m);
     huira::bind_ellipsoid_handle<TSpectral>(m);
+
+    // --- Material handles ---
+    // Before the model handle, which takes and returns them.
+    huira::bind_bsdf_handle<TSpectral>(m);
+    huira::bind_material_handle<TSpectral>(m);
+
+    // --- Volume handles ---
+    huira::bind_density_field_handle<TSpectral>(m);
+    huira::bind_phase_function_handle<TSpectral>(m);
+    huira::bind_medium_handle<TSpectral>(m);
 
     // --- Asset handles ---
     huira::bind_primitive_handle<TSpectral>(m);

@@ -14,17 +14,25 @@
 // clang-format on
 
 #include "huira/concepts/spectral_concepts.hpp"
+#include "huira/core/spectral_bins_py.ipp"
 #include "huira/handles/materials/texture_handle_py.ipp"
 #include "huira/images/image_py.ipp"
 #include "huira/render/frame_buffer_py.ipp"
+#include "huira/render/ray_py.ipp"
+#include "huira/units/units_py.ipp"
 
 namespace huira::python {
 
-/// The third part of a spectral submodule (see bindings.hpp): its images, the
-/// texture handle and the frame buffer.
+/// The first part of a spectral submodule (see bindings.hpp): the values the later parts take and
+/// return, so that their signatures name them: the spectral bins and spectral units, images, the
+/// texture handle, the frame buffer and rays.
 template <IsSpectral TSpectral>
-void bind_spectral_images(pybind11::module_& m)
+void bind_spectral_values(pybind11::module_& m)
 {
+    // The spectral bins first: the spectral units, and everything after, take them.
+    huira::bind_spectral_bins<TSpectral>(m);
+    huira::bind_spectral_units_for_type<TSpectral>(m);
+
     // --- Images ---
     // Each spectral submodule has its own: huira.rgb.Image, huira.visible8.Image and so on.
     huira::bind_image<TSpectral>(m, "Image");
@@ -36,6 +44,7 @@ void bind_spectral_images(pybind11::module_& m)
 
     // --- Rendering ---
     huira::bind_frame_buffer<TSpectral>(m);
+    huira::bind_ray<TSpectral>(m);
 }
 
 } // namespace huira::python
