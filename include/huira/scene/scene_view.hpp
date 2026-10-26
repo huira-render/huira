@@ -1,6 +1,5 @@
 #pragma once
 
-#include <array>
 #include <cmath>
 #include <cstddef>
 #include <functional>
@@ -22,6 +21,7 @@
 #include "huira/geometry/ray.hpp"
 #include "huira/handles/camera_handle.hpp"
 #include "huira/render/interaction.hpp"
+#include "huira/render/shading_utils.hpp"
 #include "huira/scene/indirect_source_instance.hpp"
 #include "huira/scene/object_ids.hpp"
 #include "huira/scene/scene.hpp"
@@ -434,35 +434,25 @@ class SceneView {
         explicit DrawnTransform(const Transform<float>& still) : still_(&still) {}
 
         /// A moving instance, drawn as Embree interpolates its poses at @p time, from 0 to 1.
-        DrawnTransform(RTCGeometry moving, float time)
+        DrawnTransform(RTCGeometry moving, float time) : moving_(embree_transform_at(moving, time))
         {
-            std::array<float, 12> matrix{};
-            rtcGetGeometryTransform(moving, time, RTC_FORMAT_FLOAT3X4_COLUMN_MAJOR, matrix.data());
-            // Column by column, with the translation last, as Transform::to_embree_matrix()
-            // gives one:
-            for (int column = 0; column < 3; ++column) {
-                for (int row = 0; row < 3; ++row) {
-                    linear_[column][row] = matrix[static_cast<std::size_t>(3 * column + row)];
-                }
-            }
-            translation_ = {matrix[9], matrix[10], matrix[11]};
         }
 
         [[nodiscard]] Vec3<float> apply_to_point(const Vec3<float>& point) const
         {
             return still_ != nullptr ? still_->apply_to_point(point)
-                                     : linear_ * point + translation_;
+                                     : moving_.linear * point + moving_.translation;
         }
 
         [[nodiscard]] Vec3<float> apply_to_direction(const Vec3<float>& direction) const
         {
-            return still_ != nullptr ? still_->apply_to_direction(direction) : linear_ * direction;
+            return still_ != nullptr ? still_->apply_to_direction(direction)
+                                     : moving_.linear * direction;
         }
 
       private:
         const Transform<float>* still_ = nullptr;
-        Mat3<float> linear_{};
-        Vec3<float> translation_{};
+        EmbreeTransform moving_{};
     };
 
     friend class Renderer<TSpectral>;

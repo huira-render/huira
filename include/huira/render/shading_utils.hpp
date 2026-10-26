@@ -1,11 +1,14 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <vector>
 
+#include "embree4/rtcore.h"
 #include "huira/core/transform.hpp"
+#include "huira/core/types.hpp"
 
 namespace huira {
 
@@ -68,5 +71,36 @@ inline Transform<float> instance_transform_at(const std::vector<Transform<float>
     result.rotation = Rotation<float>::from_local_to_parent(glm::slerp(
         a.rotation.local_to_parent_quaternion(), b.rotation.local_to_parent_quaternion(), frac));
     return result;
+}
+
+/// An affine transform as Embree holds one: a linear part (rotation and scale) and a translation.
+struct EmbreeTransform {
+    Mat3<float> linear{};
+    Vec3<float> translation{};
+};
+
+/**
+ * @brief The transform Embree draws an instance with at a normalized time in the exposure.
+ *
+ * Between two temporal samples, this is Embree's own interpolation of the instance's poses,
+ * which instance_transform_at() only approximates.
+ *
+ * @param instance The instance's geometry, attached to a committed scene.
+ * @param time Normalized time in [0, 1] across the exposure.
+ * @return The transform, local to world.
+ */
+inline EmbreeTransform embree_transform_at(RTCGeometry instance, float time)
+{
+    std::array<float, 12> matrix{};
+    rtcGetGeometryTransform(instance, time, RTC_FORMAT_FLOAT3X4_COLUMN_MAJOR, matrix.data());
+    // Column by column, with the translation last, as Transform::to_embree_matrix() gives one:
+    EmbreeTransform transform;
+    for (int column = 0; column < 3; ++column) {
+        for (int row = 0; row < 3; ++row) {
+            transform.linear[column][row] = matrix[static_cast<std::size_t>(3 * column + row)];
+        }
+    }
+    transform.translation = {matrix[9], matrix[10], matrix[11]};
+    return transform;
 }
 } // namespace huira
