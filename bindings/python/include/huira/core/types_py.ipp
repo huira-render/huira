@@ -250,8 +250,8 @@ inline void bind_types(py::module_& m)
         "A 3-component vector, in double precision. Functions that take a Vec3 also take any "
         "list, tuple or numpy array of three numbers. It works with numpy as the array "
         "[x, y, z]: np.asarray(v), numpy functions, v[0], len(v) and iteration, and its "
-        "arithmetic is numpy's, element by element (+, -, *, /, with scalars, vectors and "
-        "arrays), giving a Vec3 where the result is three numbers.");
+        "arithmetic is numpy's, element by element with scalars, vectors and arrays (v + w, "
+        "v * 2, v / w), giving a Vec3 where the result is three numbers.");
     vec3.def(py::init<>())
         .def(py::init<double, double, double>(), py::arg("x"), py::arg("y"), py::arg("z"))
         .def(py::init([](DoubleArray arr) {
@@ -299,7 +299,7 @@ inline void bind_types(py::module_& m)
         "A 3x3 matrix, in double precision. Functions that take a Mat3 also take any 3x3 numpy "
         "array or nested list, row by row. It works with numpy as that 3x3 array: "
         "np.asarray(m), numpy functions, m[0, 2], len(m) and iteration over its rows, and its "
-        "arithmetic is numpy's: element by element with +, -, *, / (m * m too), and the matrix "
+        "arithmetic is numpy's: element by element (m + n, m * n, m / 2), and the matrix "
         "product with @ (m @ v gives a Vec3, m @ m a Mat3).");
     mat3.def(py::init<>())
         .def(py::init<double>(),

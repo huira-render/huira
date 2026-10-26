@@ -112,3 +112,22 @@ html_theme_options = {
     "dark_logo": "logo/full/white_on_transparent.svg",
 }
 
+
+
+# pybind11 lists an overloaded function's signatures in its docstring, and writes a keyword-only
+# argument's marker as a bare * (Image_f32(array, *, origin)), which reStructuredText reads as the
+# start of emphasis that never ends. Escape it in those lines.
+import re  # noqa: E402
+
+_OVERLOAD_SIGNATURE = re.compile(r"^\s*\d+\. \w+\(")
+_KEYWORD_ONLY_MARKER = re.compile(r"(?<=[(,] )\*(?=,)|(?<=\()\*(?=,)")
+
+
+def _escape_keyword_only_markers(app, what, name, obj, options, lines):
+    for i, line in enumerate(lines):
+        if _OVERLOAD_SIGNATURE.match(line):
+            lines[i] = _KEYWORD_ONLY_MARKER.sub(r"\\*", line)
+
+
+def setup(app):
+    app.connect("autodoc-process-docstring", _escape_keyword_only_markers)
