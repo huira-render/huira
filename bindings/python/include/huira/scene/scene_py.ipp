@@ -1,12 +1,16 @@
 #pragma once
 
+#include <cstddef>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
+#include "huira/geometry/vertex.hpp"
 #include "huira/handles/camera_handle.hpp"
 #include "huira/scene/pose_sources_py.ipp"
 #include "huira/scene/scene.hpp"
+#include "pybind11/numpy.h"
 #include "pybind11/pybind11.h"
 #include "pybind11/stl.h"
 #include "pybind11/stl/filesystem.h"
@@ -93,17 +97,38 @@ inline void bind_scene(py::module_& m)
              py::arg("name") = "",
              "Add a mesh from index and vertex buffers")
 
-        // add_mesh — with tangents
-        .def("add_mesh",
-             static_cast<MeshHandle<TSpectral> (SceneType::*)(const IndexBuffer&,
-                                                              const VertexBuffer<TSpectral>&,
-                                                              const TangentBuffer&,
-                                                              std::string)>(&SceneType::add_mesh),
-             py::arg("index_buffer"),
-             py::arg("vertex_buffer"),
-             py::arg("tangent_buffer"),
-             py::arg("name") = "",
-             "Add a mesh from index, vertex, and tangent buffers")
+        // add_mesh — with tangents, each vertex's tangent and bitangent, as an array of shape
+        // (vertices, 2, 3) (Python has no class for C++'s Tangent)
+        .def(
+            "add_mesh",
+            [](SceneType& self,
+               const IndexBuffer& index_buffer,
+               const VertexBuffer<TSpectral>& vertex_buffer,
+               const py::array_t<double, py::array::c_style | py::array::forcecast>& tangents,
+               std::string name) {
+                if (tangents.ndim() != 3 || tangents.shape(1) != 2 || tangents.shape(2) != 3) {
+                    throw py::value_error(
+                        "add_mesh: tangent_buffer must have shape (vertices, 2, 3): each "
+                        "vertex's tangent and bitangent");
+                }
+                const auto t = tangents.unchecked<3>();
+                TangentBuffer tangent_buffer(static_cast<std::size_t>(tangents.shape(0)));
+                for (py::ssize_t i = 0; i < tangents.shape(0); ++i) {
+                    auto& tangent = tangent_buffer[static_cast<std::size_t>(i)];
+                    for (py::ssize_t c = 0; c < 3; ++c) {
+                        const auto k = static_cast<glm::length_t>(c);
+                        tangent.tangent[k] = static_cast<float>(t(i, 0, c));
+                        tangent.bitangent[k] = static_cast<float>(t(i, 1, c));
+                    }
+                }
+                return self.add_mesh(index_buffer, vertex_buffer, tangent_buffer, std::move(name));
+            },
+            py::arg("index_buffer"),
+            py::arg("vertex_buffer"),
+            py::arg("tangent_buffer"),
+            py::arg("name") = "",
+            "Add a mesh from index and vertex buffers, and a tangent buffer: each vertex's tangent "
+            "and bitangent, as an array (or nested lists) of shape (vertices, 2, 3).")
 
         // add_ellipsoid
         .def(
@@ -124,11 +149,6 @@ inline void bind_scene(py::module_& m)
             py::arg("name") = "",
             "Add an ellipsoid geometry (accepts any distance unit)")
 
-        .def("add_geometry",
-             &SceneType::add_geometry,
-             py::arg("geom"),
-             py::arg("name") = "",
-             "Add a geometry from a shared pointer")
         .def("get_geometry",
              &SceneType::get_geometry,
              py::arg("name"),

@@ -152,6 +152,9 @@ class Node : public SceneObject<Node<TSpectral>> {
 
     NodeHandle<TSpectral, Node<TSpectral>> get_parent() const;
 
+    /// Whether the node has a parent: every node but the scene's root frame does.
+    [[nodiscard]] bool has_parent() const { return parent_ != nullptr; }
+
     template <typename TParentNode>
     NodeHandle<TSpectral, TParentNode> get_parent_as() const;
 

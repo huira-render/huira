@@ -64,8 +64,8 @@ inline void bind_root_frame_handle(py::module_& m)
                    .def("get_spice_origin", &HandleType::get_spice_origin)
                    .def("get_spice_frame", &HandleType::get_spice_frame)
 
-                   // Parent access
-                   .def("get_parent", &HandleType::get_parent)
+                   // Parent access: the root frame has none, and this raises
+                   .def("get_parent", &detail::parent_frame_handle<TSpectral, HandleType>)
 
                    .def("__bool__", &HandleType::valid)
                    .def("__repr__", [](const HandleType&) { return "<RootFrameHandle>"; });
