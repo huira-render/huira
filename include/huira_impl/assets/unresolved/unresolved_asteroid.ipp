@@ -9,7 +9,6 @@
 #include "huira/core/constants.hpp"
 #include "huira/core/physics.hpp"
 #include "huira/core/types.hpp"
-#include "huira/render/shading_utils.hpp"
 #include "huira/scene/scene_view.hpp"
 #include "huira/scene/scene_view_types.hpp"
 #include "huira/util/logger.hpp"
@@ -190,8 +189,7 @@ std::vector<TSpectral> UnresolvedAsteroid<TSpectral>::resolve_irradiance(
             (self_transforms.size() > 1)
                 ? static_cast<float>(i) / static_cast<float>(self_transforms.size() - 1)
                 : 0.5f;
-        const Transform<float> light_transform =
-            instance_transform_at(found_light->transforms, fraction);
+        const Transform<float> light_transform = found_light->transform_at(fraction);
 
         Vec3<double> to_obs = -self_transform.position;
         Vec3<double> to_light = light_transform.position - self_transform.position;

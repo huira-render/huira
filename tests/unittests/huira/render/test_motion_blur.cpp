@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <vector>
@@ -471,4 +472,52 @@ TEST_CASE("A turning camera sees a still body shaded as when it holds still",
     const double lit_shift = centroid_column(lit_turning) - centroid_column(lit_still);
     const double glowing_shift = centroid_column(glowing_turning) - centroid_column(glowing_still);
     CHECK(std::abs(lit_shift - glowing_shift) < 0.25);
+}
+
+TEST_CASE("A turning light is posed as Embree draws it", "[render][motion_blur]")
+{
+    // A light, scaled twice, that turns 0.1 rad during a 1 s exposure, with 2 temporal samples.
+    // Between them, Embree turns it with its own interpolation, which differs from
+    // glm::slerp()'s by up to 9e-6 rad. Rays find the light as Embree draws it, so the light must
+    // be posed for sampling as Embree draws it too: a sphere looks the same however it is turned,
+    // but a light of another shape would not.
+    Scene<RGB> scene;
+    auto light = scene.root.new_instance(scene.new_sphere_light(1_m, units::Watt(100.0)));
+    light.set_position(0_m, 0_m, 100_m);
+    light.set_scale(2.0);
+    light.set_angular_velocity(
+        units::RadiansPerSecond(0.0), units::RadiansPerSecond(0.1), units::RadiansPerSecond(0.0));
+    auto camera = scene.root.new_instance(scene.new_camera_model());
+    SceneView<RGB> scene_view(scene,
+                              Interval{Time::from_et(0.0), Time::from_et(1.0)},
+                              camera,
+                              ObservationMode::TRUE_STATE,
+                              2);
+    REQUIRE(scene_view.lights().size() == 1);
+    const LightInstance<RGB>& instance = scene_view.lights().front();
+    REQUIRE(instance.geometry != nullptr);
+
+    for (int step = 0; step <= 10; ++step) {
+        const float time = 0.1f * static_cast<float>(step);
+        INFO("time " << time);
+        std::array<float, 12> drawn{};
+        rtcGetGeometryTransform(
+            instance.geometry, time, RTC_FORMAT_FLOAT3X4_COLUMN_MAJOR, drawn.data());
+        const Transform<float> posed = instance.transform_at(time);
+        CHECK(posed.position == Vec3<float>{drawn[9], drawn[10], drawn[11]});
+        CHECK(std::abs(posed.scale.x - 2.f) < 1e-6f);
+        const Mat3<float> linear =
+            posed.rotation.local_to_parent_matrix() * posed.scale_shear_matrix();
+        float largest = 0.f;
+        for (int column = 0; column < 3; ++column) {
+            for (int row = 0; row < 3; ++row) {
+                largest = std::max(largest,
+                                   std::abs(linear[column][row] -
+                                            drawn[static_cast<std::size_t>(3 * column + row)]));
+            }
+        }
+        // Within a few rounding errors of Embree's (a Rotation is made exactly orthonormal), where
+        // glm::slerp() turns it up to 9e-6 rad away, 1.8e-5 at its scale:
+        CHECK(largest < 2e-6f);
+    }
 }

@@ -8,7 +8,6 @@
 #include "huira/concepts/spectral_concepts.hpp"
 #include "huira/geometry/ray.hpp"
 #include "huira/render/interaction.hpp"
-#include "huira/render/shading_utils.hpp"
 #include "huira/scene/scene_view.hpp"
 #include "huira/scene/scene_view_types.hpp"
 #include "huira/util/logger.hpp"
@@ -209,8 +208,7 @@ std::vector<TSpectral> UnresolvedLambertianSphere<TSpectral>::resolve_irradiance
             filter_light_found = true;
 
             // The light where it is at this sample's time (the light has samples of its own):
-            const Transform<float> light_transform =
-                instance_transform_at(light_inst.transforms, trace_time);
+            const Transform<float> light_transform = light_inst.transform_at(trace_time);
 
             TSpectral light_sum{0};
             for (std::size_t s = 0; s < light_samples_; ++s) {
