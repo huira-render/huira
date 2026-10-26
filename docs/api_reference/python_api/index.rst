@@ -31,7 +31,7 @@ binned across the spectrum, and are imported from ``huira`` directly.
         :link: ephemeris/index
         :link-type: doc
 
-        SatRec: TLEs, read and checked, and propagated with SGP4.
+        SatRec: TLEs and OMMs, read and checked, and propagated with SGP4.
 
 Everything that carries light, from the scene graph and its handles to the
 renderer, frame buffer and spectral images, comes in one copy per spectral

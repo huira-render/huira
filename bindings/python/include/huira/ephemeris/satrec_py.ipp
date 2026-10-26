@@ -35,8 +35,9 @@ inline void bind_satrec(py::module_& m)
 
     py::class_<SatRec>(m,
                        "SatRec",
-                       "A satellite's element set, read from a two-line element set (TLE), "
-                       "checked, and ready to be propagated with SGP4. Make one with from_tle().")
+                       "A satellite's element set, read from a two-line element set (TLE) or an "
+                       "Orbit Mean-Elements Message (OMM), checked, and ready to be propagated "
+                       "with SGP4. Make one with from_tle() or from_omm().")
         .def_static(
             "from_tle",
             py::overload_cast<std::string_view, std::string_view, Sgp4Mode>(&SatRec::from_tle),
@@ -57,14 +58,42 @@ inline void bind_satrec(py::module_& m)
             py::arg("mode") = Sgp4Mode::AFSPC,
             "Read a three-line element set: a name line, which may start with '0 ', then a TLE's "
             "two lines.")
+        .def_static(
+            "from_omm",
+            [](const py::dict& fields, Sgp4Mode mode) {
+                // Values as Python writes them, so the numbers json.load() gives come back as
+                // the text they were read from
+                OmmFields text;
+                for (const auto& [keyword, value] : fields) {
+                    if (!value.is_none()) {
+                        text[py::str(keyword)] = py::str(value);
+                    }
+                }
+                return SatRec::from_omm(text, mode);
+            },
+            py::arg("fields"),
+            py::arg("mode") = Sgp4Mode::AFSPC,
+            R"(Read an Orbit Mean-Elements Message (OMM), as a dict of its keywords and values.
+
+The values may be text or numbers, so a record from json.load() of CelesTrak's
+or Space-Track's JSON, or a row from csv.DictReader, can be passed as it is.
+None is taken as a missing value. SGP4 needs NORAD_CAT_ID, EPOCH (UTC, as
+YYYY-MM-DDThh:mm:ss.ssssss), MEAN_MOTION, ECCENTRICITY, INCLINATION,
+RA_OF_ASC_NODE, ARG_OF_PERICENTER, MEAN_ANOMALY, BSTAR, MEAN_MOTION_DOT and
+MEAN_MOTION_DDOT. OBJECT_NAME and OBJECT_ID give the name and designator.
+MEAN_ELEMENT_THEORY, REF_FRAME, CENTER_NAME, TIME_SYSTEM and EPHEMERIS_TYPE, if
+given, are checked; any other keyword is ignored. Raises RuntimeError if the
+OMM can't be propagated by SGP4.)")
 
         .def("catalog_number",
              &SatRec::catalog_number,
              "The NORAD catalog number, decoded from the Alpha-5 form if it is in it")
-        .def("name", &SatRec::name, "The name from the name line, or '' for a two-line TLE")
+        .def("name",
+             &SatRec::name,
+             "The name, from a TLE's name line or an OMM's OBJECT_NAME, or '' if it has none")
         .def("international_designator",
              &SatRec::international_designator,
-             "The international designator (COSPAR ID), such as '98067A', or '' if blank")
+             "The international designator (COSPAR ID) as a TLE writes it, such as '98067A', or ''")
         .def("epoch", &SatRec::epoch, "The time the element set describes the orbit at")
         .def("mode", &SatRec::mode, "The mode SGP4 propagates the element set with")
 
