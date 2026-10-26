@@ -919,7 +919,24 @@ std::vector<double> SceneView<TSpectral>::uniform_fractions_(std::size_t count)
  *   halfway between two samples, the samples are doubled: the halfway points, already
  *   evaluated, become samples. So choosing costs about two evaluations per sample chosen (the
  *   last halfway points checked are not kept). Something that only spins about its origin is
- *   drawn exactly, and takes only the samples that keep its turns under 45 degrees.
+ *   drawn exactly by an exact slerp (but see below), and takes only the samples that keep its
+ *   turns under 45 degrees.
+ *
+ * Not checked: Embree's interpolation is not quite the exact one drawn_halfway models (see
+ * halfway_pose_()). Between two samples more than about 3.6 degrees apart in turn, where Embree
+ * turns a thing by its slerp rather than by normalized linear interpolation, it turns it at a
+ * slightly wrong rate. The error grows steadily from none at one sample to its most just before
+ * the next, where it snaps back to the sample; at the end of the exposure, with no next sample,
+ * it stays. Measured with Embree 4.3 and 4.4, at its most: 6.4e-6 rad for 0.07 rad between
+ * samples, 8.6e-6 for 0.1, 4.0e-6 for 0.2, about 1e-6 from 0.5 to 2, and under 1e-6 below 3.6
+ * degrees. Halfway it is half that, and drawn_halfway sees none of it, so something that only
+ * spins can be given 2 samples and drawn off by that angle times its size: 0.1 mm on a 10 m
+ * spacecraft, but 55 m on the Earth, a pixel of 1e-4 rad from low orbit. Nothing drawn now is
+ * turned that much in view during one exposure while that large and near, but a push broom
+ * camera (such as LROC NAC) made by drawing each line at its own time within one exposure would
+ * be. It would need to ask Embree where it draws each thing (rtcGetGeometryTransform() on a
+ * scratch instance, see embree_transform_at()) at the middle and end of each interval, or keep
+ * each interval's turn under 3.6 degrees.
  *
  * A light is also followed in its distance, within distance_tolerance relative to it, since
  * its light falls off with it: a straight line between two samples passes nearer the camera than
@@ -1157,7 +1174,8 @@ SceneView<TSpectral>::local_probes_(const Instance<TSpectral>& instance) const
  * @brief Where Embree draws something halfway between two of its poses.
  *
  * Its position, scale and shear halfway along straight lines, and its rotation halfway along the
- * shorter arc between the two, as instance_transform_at() emulates.
+ * shorter arc between the two, as instance_transform_at() emulates. This is the exact slerp, which
+ * Embree's only approximates: see choose_fractions_() for how far apart they are.
  */
 template <IsSpectral TSpectral>
 Transform<double> SceneView<TSpectral>::halfway_pose_(const Transform<double>& start,
