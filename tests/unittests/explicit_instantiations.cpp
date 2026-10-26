@@ -71,6 +71,7 @@
 #include "huira/scene/frame_node.hpp"
 #include "huira/scene/instance.hpp"
 #include "huira/scene/node.hpp"
+#include "huira/scene/root_frame_node.hpp"
 #include "huira/scene/scene.hpp"
 #include "huira/scene/scene_view.hpp"
 #include "huira/scene/teme_frame_node.hpp"
@@ -143,6 +144,7 @@ template class Node<TestSpectral>;
 template class UnresolvedAsteroid<TestSpectral>;
 template class UnresolvedEmitter<TestSpectral>;
 template class UnresolvedLambertianSphere<TestSpectral>;
+template class RootFrameNode<TestSpectral>;
 template class TemeFrameNode<TestSpectral>;
 template class UnresolvedObject<TestSpectral>;
 

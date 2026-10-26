@@ -24,6 +24,7 @@
 #include "huira/materials/bsdfs/mcewen_bsdf.hpp"
 #include "huira/materials/bsdfs/null_bsdf.hpp"
 #include "huira/materials/bsdfs/oren_nayar_bsdf.hpp"
+#include "huira/scene/root_frame_node.hpp"
 #include "huira/scene/teme_frame_node.hpp"
 #include "huira/stars/io/star_catalog.hpp"
 #include "huira/util/colorful_text.hpp"
@@ -47,10 +48,9 @@ namespace huira {
  */
 template <IsSpectral TSpectral>
 Scene<TSpectral>::Scene()
-    : root_node_(std::make_shared<FrameNode<TSpectral>>(this)), root(root_node_)
+    : root_node_(std::make_shared<RootFrameNode<TSpectral>>(this)), root(root_node_)
 {
     HUIRA_TRACE_SCOPE("Scene::Scene");
-    root_node_->set_spice("SOLAR SYSTEM BARYCENTER", "J2000");
 
     // Initialize default textures, each holding the value a material starts with (see
     // Material): factors default to 1, so these are the values themselves.
