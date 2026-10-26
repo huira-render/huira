@@ -124,6 +124,8 @@ class SatRec {
     static SatRec
     from_lines_(std::string name, std::string_view line1, std::string_view line2, Sgp4Mode mode);
 
+    static SatRec from_omm_(const OmmFields& fields, Sgp4Mode mode);
+
     /// Initializes an element set whose elements have been read into the record, and checks it.
     static SatRec from_record_(detail::vallado::elsetrec& record,
                                int catalog_number,

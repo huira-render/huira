@@ -9,6 +9,7 @@
 #include <numbers>
 #include <optional>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -23,6 +24,19 @@ namespace detail::tle {
 
 static_assert(std::is_trivially_copyable_v<vallado::elsetrec>,
               "SatRec keeps SGP4's elsetrec as its bytes");
+
+/**
+ * An element set SGP4 can't propagate, or text that isn't one, and why. SatRec's own functions
+ * throw it, and its public factories turn it into the std::runtime_error that HUIRA_THROW_ERROR
+ * logs and throws. A catalog reader catches it instead, to skip a bad entry without logging an
+ * error for each.
+ */
+struct InvalidElementSet : std::runtime_error {
+    using std::runtime_error::runtime_error;
+};
+
+/// A name line's name: without whitespace around it, or the "0 " Space-Track starts it with.
+inline std::string_view name_from_line(std::string_view line);
 
 /// The columns in a TLE line, the last of them its checksum.
 inline constexpr std::size_t LINE_LENGTH = 69;
@@ -113,8 +127,8 @@ check_line(std::string_view line, std::string_view columns, int number, const st
     const std::string which = "Line " + std::to_string(number);
     const std::string quoted = ": \"" + std::string(line) + "\"";
     if (line.size() != LINE_LENGTH) {
-        HUIRA_THROW_ERROR(context + which + " has " + std::to_string(line.size()) +
-                          " characters, where a TLE line has 69" + quoted);
+        throw InvalidElementSet(context + which + " has " + std::to_string(line.size()) +
+                                " characters, where a TLE line has 69" + quoted);
     }
     for (std::size_t i = 0; i < LINE_LENGTH; ++i) {
         const char c = line[i];
@@ -150,16 +164,16 @@ check_line(std::string_view line, std::string_view columns, int number, const st
             break;
         }
         if (!ok) {
-            HUIRA_THROW_ERROR(context + which + ", column " + std::to_string(i + 1) +
-                              ", should be " + describe_column(kind) + ", not '" + c + "'" +
-                              quoted);
+            throw InvalidElementSet(context + which + ", column " + std::to_string(i + 1) +
+                                    ", should be " + describe_column(kind) + ", not '" + c + "'" +
+                                    quoted);
         }
     }
     const int expected = checksum(line);
     if (line[LINE_LENGTH - 1] - '0' != expected) {
-        HUIRA_THROW_ERROR(context + which + "'s checksum is " + line[LINE_LENGTH - 1] +
-                          ", but its other columns give " + std::to_string(expected) +
-                          ": a column is wrong, or the line is incomplete" + quoted);
+        throw InvalidElementSet(context + which + "'s checksum is " + line[LINE_LENGTH - 1] +
+                                ", but its other columns give " + std::to_string(expected) +
+                                ": a column is wrong, or the line is incomplete" + quoted);
     }
 }
 
@@ -502,6 +516,31 @@ inline std::string upper(std::string_view text)
 
 } // namespace detail::omm
 
+namespace detail::tle {
+
+inline std::string_view name_from_line(std::string_view line)
+{
+    line = trim(line);
+    if (line.starts_with("0 ")) {
+        line = trim(line.substr(2));
+    }
+    return line;
+}
+
+/// What a factory makes, with an InvalidElementSet it throws logged and thrown by
+/// HUIRA_THROW_ERROR, as an error from the function named.
+template <typename TFactory>
+SatRec logging_errors(const char* function, TFactory&& factory)
+{
+    try {
+        return std::forward<TFactory>(factory)();
+    } catch (const InvalidElementSet& error) {
+        HUIRA_THROW_ERROR(std::string(function) + " - " + error.what());
+    }
+}
+
+} // namespace detail::tle
+
 /**
  * @brief Reads a two-line element set.
  *
@@ -518,7 +557,8 @@ inline std::string upper(std::string_view text)
  */
 inline SatRec SatRec::from_tle(std::string_view line1, std::string_view line2, Sgp4Mode mode)
 {
-    return from_lines_({}, line1, line2, mode);
+    return detail::tle::logging_errors("SatRec::from_tle",
+                                       [&] { return from_lines_({}, line1, line2, mode); });
 }
 
 /**
@@ -540,11 +580,9 @@ inline SatRec SatRec::from_tle(std::string_view name,
                                std::string_view line2,
                                Sgp4Mode mode)
 {
-    name = detail::tle::trim(name);
-    if (name.starts_with("0 ")) {
-        name = detail::tle::trim(name.substr(2));
-    }
-    return from_lines_(std::string(name), line1, line2, mode);
+    return detail::tle::logging_errors("SatRec::from_tle", [&] {
+        return from_lines_(std::string(detail::tle::name_from_line(name)), line1, line2, mode);
+    });
 }
 
 /**
@@ -585,6 +623,11 @@ inline SatRec SatRec::from_tle(std::string_view name,
  */
 inline SatRec SatRec::from_omm(const OmmFields& fields, Sgp4Mode mode)
 {
+    return detail::tle::logging_errors("SatRec::from_omm", [&] { return from_omm_(fields, mode); });
+}
+
+inline SatRec SatRec::from_omm_(const OmmFields& fields, Sgp4Mode mode)
+{
     namespace omm = detail::omm;
     namespace tle = detail::tle;
     namespace vallado = detail::vallado;
@@ -600,13 +643,13 @@ inline SatRec SatRec::from_omm(const OmmFields& fields, Sgp4Mode mode)
     // Errors name the satellite as far as it is known
     std::string name(find("OBJECT_NAME").value_or(""));
     const std::string quoted_name = name.empty() ? std::string() : "\"" + name + "\"";
-    std::string context = "SatRec::from_omm - " + (name.empty() ? "" : quoted_name + ": ");
+    std::string context = name.empty() ? std::string() : quoted_name + ": ";
 
     const auto required = [&](std::string_view keyword) {
         const std::optional<std::string_view> value = find(keyword);
         if (!value.has_value()) {
-            HUIRA_THROW_ERROR(context + "The OMM has no " + std::string(keyword) +
-                              ", which SGP4 needs");
+            throw detail::tle::InvalidElementSet(context + "The OMM has no " +
+                                                 std::string(keyword) + ", which SGP4 needs");
         }
         return *value;
     };
@@ -614,11 +657,12 @@ inline SatRec SatRec::from_omm(const OmmFields& fields, Sgp4Mode mode)
     const std::string_view catalog_text = required("NORAD_CAT_ID");
     const std::optional<int> catalog_number = omm::whole_number(catalog_text);
     if (!catalog_number.has_value() || *catalog_number < 1) {
-        HUIRA_THROW_ERROR(context + "NORAD_CAT_ID is \"" + std::string(catalog_text) +
-                          "\", where a catalog number is a positive whole number of up to nine "
-                          "digits");
+        throw detail::tle::InvalidElementSet(
+            context + "NORAD_CAT_ID is \"" + std::string(catalog_text) +
+            "\", where a catalog number is a positive whole number of up to nine "
+            "digits");
     }
-    context = "SatRec::from_omm - Satellite " + std::to_string(*catalog_number) +
+    context = "Satellite " + std::to_string(*catalog_number) +
               (name.empty() ? "" : ", " + quoted_name) + ": ";
 
     // The metadata, where it's given: these elements are SGP4's, in TEME, about the Earth, in UTC
@@ -635,13 +679,14 @@ inline SatRec SatRec::from_omm(const OmmFields& fields, Sgp4Mode mode)
                 return;
             }
         }
-        HUIRA_THROW_ERROR(context + std::string(keyword) + " is \"" + std::string(*value) +
-                          "\": " + meaning);
+        throw detail::tle::InvalidElementSet(context + std::string(keyword) + " is \"" +
+                                             std::string(*value) + "\": " + meaning);
     };
     const std::optional<std::string_view> theory = find("MEAN_ELEMENT_THEORY");
     if (theory.has_value() && omm::upper(*theory) == "SGP4-XP") {
-        HUIRA_THROW_ERROR(context + "The element set is for SGP4-XP (MEAN_ELEMENT_THEORY), which "
-                                    "SGP4 can't propagate");
+        throw detail::tle::InvalidElementSet(
+            context + "The element set is for SGP4-XP (MEAN_ELEMENT_THEORY), which "
+                      "SGP4 can't propagate");
     }
     expect("MEAN_ELEMENT_THEORY", {"SGP4", "SGP/SGP4"}, "SatRec reads SGP4's mean elements");
     expect("REF_FRAME", {"TEME"}, "SGP4's elements are in TEME");
@@ -650,12 +695,14 @@ inline SatRec SatRec::from_omm(const OmmFields& fields, Sgp4Mode mode)
     if (const std::optional<std::string_view> type = find("EPHEMERIS_TYPE")) {
         const std::optional<int> value = omm::whole_number(*type);
         if (!value.has_value()) {
-            HUIRA_THROW_ERROR(context + "EPHEMERIS_TYPE is \"" + std::string(*type) +
-                              "\", where it should be a whole number");
+            throw detail::tle::InvalidElementSet(context + "EPHEMERIS_TYPE is \"" +
+                                                 std::string(*type) +
+                                                 "\", where it should be a whole number");
         }
         if (*value == 4) {
-            HUIRA_THROW_ERROR(context + "The element set is for SGP4-XP (EPHEMERIS_TYPE 4), which "
-                                        "SGP4 can't propagate");
+            throw detail::tle::InvalidElementSet(
+                context + "The element set is for SGP4-XP (EPHEMERIS_TYPE 4), which "
+                          "SGP4 can't propagate");
         }
     }
 
@@ -663,8 +710,9 @@ inline SatRec SatRec::from_omm(const OmmFields& fields, Sgp4Mode mode)
         const std::string_view text = required(keyword);
         const std::optional<double> value = omm::real(text);
         if (!value.has_value()) {
-            HUIRA_THROW_ERROR(context + std::string(keyword) + " is \"" + std::string(text) +
-                              "\", which isn't a finite number");
+            throw detail::tle::InvalidElementSet(context + std::string(keyword) + " is \"" +
+                                                 std::string(text) +
+                                                 "\", which isn't a finite number");
         }
         return *value;
     };
@@ -680,26 +728,30 @@ inline SatRec SatRec::from_omm(const OmmFields& fields, Sgp4Mode mode)
 
     // The checks the TLE format makes by its columns
     if (!(mean_motion > 0.0)) {
-        HUIRA_THROW_ERROR(context + "The mean motion is " + std::string(required("MEAN_MOTION")) +
-                          " revolutions a day, where it should be positive");
+        throw detail::tle::InvalidElementSet(context + "The mean motion is " +
+                                             std::string(required("MEAN_MOTION")) +
+                                             " revolutions a day, where it should be positive");
     }
     if (!(eccentricity >= 0.0 && eccentricity < 1.0)) {
-        HUIRA_THROW_ERROR(context + "The eccentricity is " + std::string(required("ECCENTRICITY")) +
-                          ", where it should be from 0 to below 1");
+        throw detail::tle::InvalidElementSet(context + "The eccentricity is " +
+                                             std::string(required("ECCENTRICITY")) +
+                                             ", where it should be from 0 to below 1");
     }
     if (!(inclination >= 0.0 && inclination <= 180.0)) {
-        HUIRA_THROW_ERROR(context + "The inclination is " + std::string(required("INCLINATION")) +
-                          " degrees, where it should be from 0 to 180");
+        throw detail::tle::InvalidElementSet(context + "The inclination is " +
+                                             std::string(required("INCLINATION")) +
+                                             " degrees, where it should be from 0 to 180");
     }
 
     std::string epoch_error;
     const std::string_view epoch_text = required("EPOCH");
     const std::optional<omm::Epoch> epoch = omm::epoch(epoch_text, epoch_error);
     if (!epoch.has_value()) {
-        HUIRA_THROW_ERROR(context + "EPOCH is \"" + std::string(epoch_text) +
-                          "\", which isn't a UTC "
-                          "time as YYYY-MM-DDThh:mm:ss.ssssss or YYYY-DDDThh:mm:ss.ssssss: " +
-                          epoch_error);
+        throw detail::tle::InvalidElementSet(
+            context + "EPOCH is \"" + std::string(epoch_text) +
+            "\", which isn't a UTC "
+            "time as YYYY-MM-DDThh:mm:ss.ssssss or YYYY-DDDThh:mm:ss.ssssss: " +
+            epoch_error);
     }
 
     // Converted as from a TLE (see from_lines_())
@@ -744,7 +796,7 @@ SatRec::from_lines_(std::string name, std::string_view line1, std::string_view l
 
     // Errors name the satellite as far as it is known
     const std::string quoted_name = name.empty() ? std::string() : "\"" + name + "\"";
-    std::string context = "SatRec::from_tle - " + (name.empty() ? "" : quoted_name + ": ");
+    std::string context = name.empty() ? std::string() : quoted_name + ": ";
 
     line1 = tle::trim(line1);
     line2 = tle::trim(line2);
@@ -753,39 +805,42 @@ SatRec::from_lines_(std::string name, std::string_view line1, std::string_view l
 
     const int catalog_number = tle::decode_catalog_number(line1.substr(2, 5));
     if (catalog_number < 0) {
-        HUIRA_THROW_ERROR(context + "The catalog number, \"" + std::string(line1.substr(2, 5)) +
-                          "\" in columns 3-7 of line 1, is neither digits nor in the Alpha-5 form "
-                          "(a letter other than I or O, then four digits)");
+        throw detail::tle::InvalidElementSet(
+            context + "The catalog number, \"" + std::string(line1.substr(2, 5)) +
+            "\" in columns 3-7 of line 1, is neither digits nor in the Alpha-5 form "
+            "(a letter other than I or O, then four digits)");
     }
     if (tle::decode_catalog_number(line2.substr(2, 5)) != catalog_number) {
-        HUIRA_THROW_ERROR(context + "The lines are for different satellites: line 1 is for " +
-                          std::string(line1.substr(2, 5)) + ", and line 2 for " +
-                          std::string(line2.substr(2, 5)));
+        throw detail::tle::InvalidElementSet(
+            context + "The lines are for different satellites: line 1 is for " +
+            std::string(line1.substr(2, 5)) + ", and line 2 for " +
+            std::string(line2.substr(2, 5)));
     }
-    context = "SatRec::from_tle - Satellite " + std::to_string(catalog_number) +
+    context = "Satellite " + std::to_string(catalog_number) +
               (name.empty() ? "" : ", " + quoted_name) + ": ";
 
     // Checks SGP4 doesn't make. Without them it would propagate garbage: an SGP4-XP element set
     // holds other terms where SGP4 reads B* and the mean motion's second derivative, and a mean
     // motion of 0 gives an infinite semi-major axis.
     if (line1[62] == '4') {
-        HUIRA_THROW_ERROR(context +
-                          "The element set is for SGP4-XP (ephemeris type 4, in column 63 "
-                          "of line 1), which SGP4 can't propagate");
+        throw detail::tle::InvalidElementSet(
+            context + "The element set is for SGP4-XP (ephemeris type 4, in column 63 "
+                      "of line 1), which SGP4 can't propagate");
     }
     const int epoch_day = tle::whole_number(line1.substr(20, 3));
     if (epoch_day < 1 || epoch_day > 366) {
-        HUIRA_THROW_ERROR(context + "The epoch is on day " + std::to_string(epoch_day) +
-                          " of its year, where days run from 1 to 366");
+        throw detail::tle::InvalidElementSet(context + "The epoch is on day " +
+                                             std::to_string(epoch_day) +
+                                             " of its year, where days run from 1 to 366");
     }
     if (tle::whole_number(line2.substr(8, 3)) * 10000 + tle::whole_number(line2.substr(12, 4)) >
         180 * 10000) {
-        HUIRA_THROW_ERROR(context + "The inclination, " +
-                          std::string(tle::trim(line2.substr(8, 8))) +
-                          " degrees, is more than 180");
+        throw detail::tle::InvalidElementSet(context + "The inclination, " +
+                                             std::string(tle::trim(line2.substr(8, 8))) +
+                                             " degrees, is more than 180");
     }
     if (line2.substr(52, 11).find_first_of("123456789") == std::string_view::npos) {
-        HUIRA_THROW_ERROR(context + "The mean motion is 0");
+        throw detail::tle::InvalidElementSet(context + "The mean motion is 0");
     }
 
     // The elements, read and converted as Vallado's twoline2rv() reads and converts them, to the
@@ -861,8 +916,9 @@ inline SatRec SatRec::from_record_(detail::vallado::elsetrec& record,
                                  record.nodeo,
                                  record);
     if (record.error != 0) {
-        HUIRA_THROW_ERROR(context + "SGP4 can't propagate the element set at its epoch: " +
-                          detail::tle::sgp4_error_message(record.error));
+        throw detail::tle::InvalidElementSet(context +
+                                             "SGP4 can't propagate the element set at its epoch: " +
+                                             detail::tle::sgp4_error_message(record.error));
     }
 
     SatRec satrec;
@@ -883,8 +939,9 @@ inline SatRec SatRec::from_record_(detail::vallado::elsetrec& record,
     double v[3] = {};
     const int error = satrec.propagate_(satrec.epoch_, r, v);
     if (error != 0) {
-        HUIRA_THROW_ERROR(context + "SGP4 can't propagate the element set at its epoch: " +
-                          detail::tle::sgp4_error_message(error));
+        throw detail::tle::InvalidElementSet(context +
+                                             "SGP4 can't propagate the element set at its epoch: " +
+                                             detail::tle::sgp4_error_message(error));
     }
     return satrec;
 }
