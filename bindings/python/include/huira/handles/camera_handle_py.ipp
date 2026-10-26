@@ -300,10 +300,12 @@ inline void bind_camera_model_handle(py::module_& m)
              "sensor response's layout (Image_f32(array, origin=...) makes one from a numpy "
              "array). With kind BiasMapKind.Absolute (the default), it is each pixel's bias, as "
              "a master bias frame gives it, and the bias level is not used while it is set; an "
-             "image with a sensor_bit_depth (a sensor response, or a frame huira.read_fits() "
-             "read from a file that records its bit depth) holds DN / (2^bits - 1), and is "
-             "turned into DN. With BiasMapKind.Relative, it is each pixel's offset from the bias "
-             "level, averaging about 0, and the bias level still applies. Each pixel's bias "
+             "image with a sensor_bit_depth (a sensor response, or a frame read from an integer "
+             "FITS or a 16- or 32-bit integer TIFF file) holds DN / (2^bits - 1), and is turned "
+             "into DN, and one without whose values are all at most 1 DN is refused, as "
+             "normalized: multiply a 32-bit float master from Siril or PixInsight by 65535. With "
+             "BiasMapKind.Relative, it is each pixel's offset from the bias level, averaging "
+             "about 0, and the bias level still applies. Each pixel's bias "
              "must be in [0, 2^bit_depth - 1). Like the bias level, it applies with noise off "
              "too. The camera keeps it until it is cleared or replaced.")
         .def("clear_sensor_bias_map",

@@ -34,9 +34,11 @@ namespace detail {
 /// records its bit depth), and 1 for any other image, whose values are DN.
 double dn_per_value(const Image<float>& image);
 
-/// Warns when an image without a sensor bit depth looks normalized, as DN / (2^bits - 1): its
-/// largest value is above 0 but at most 1 DN.
-void warn_if_normalized(const Image<float>& image, const char* what, const char* caller);
+/// Throws when an image that should hold DN, without a sensor bit depth, looks normalized: its
+/// largest value is above 0 but at most 1 DN, which a real master bias or dark never is, since
+/// the bias alone is many DN. Its DN can't be recovered from it, and taking it as it is would
+/// give a bias and dark current of about 0.
+void check_not_normalized(const Image<float>& image, const char* what, const char* caller);
 } // namespace detail
 
 } // namespace huira

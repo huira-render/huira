@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "catch2/catch_test_macros.hpp"
+#include "catch2/matchers/catch_matchers_string.hpp"
 #include "huira/cameras/camera_model.hpp"
 #include "huira/cameras/sensors/sensor_calibration.hpp"
 #include "huira/core/spectral_bins.hpp"
@@ -606,11 +607,25 @@ TEST_CASE("An absolute bias map with a sensor bit depth is turned into DN",
     // Offsets aren't stored normalized:
     CHECK_THROWS(camera.sensor_->set_bias_map(frame, BiasMapKind::Relative));
 
-    // A map without a bit depth whose values are all at most 1 DN looks normalized:
-    WarningCapture capture;
+    // A map without a bit depth whose values are all at most 1 DN is normalized, as no real
+    // bias in DN is, and its DN can't be recovered: it is refused. It was taken as a bias of
+    // about 0, with a warning.
     frame.set_sensor_bit_depth(0);
-    camera.sensor_->set_bias_map(frame);
-    CHECK(capture.any("at most 1 DN"));
+    camera.sensor_->clear_bias_map();
+    CHECK_THROWS_WITH(camera.sensor_->set_bias_map(frame),
+                      Catch::Matchers::ContainsSubstring("at most 1 DN"));
+    CHECK_FALSE(camera.sensor_->has_bias_map());
+
+    // Multiplied back into DN, it is taken; and a map of zeros, which a bias of 0 gives, is too:
+    for (std::size_t i = 0; i < frame.size(); ++i) {
+        frame[i] *= 4095.f;
+    }
+    CHECK_NOTHROW(camera.sensor_->set_bias_map(frame));
+    CHECK_NOTHROW(camera.sensor_->set_bias_map(Image<float>(64, 64, 0.f)));
+
+    // A relative map's offsets may well be small:
+    CHECK_NOTHROW(camera.sensor_->set_bias_level_dn(10.f));
+    CHECK_NOTHROW(camera.sensor_->set_bias_map(Image<float>(64, 64, 0.25f), BiasMapKind::Relative));
 }
 
 TEST_CASE("Maps are checked when set, and when the bias or bit depth changes",
@@ -784,12 +799,18 @@ TEST_CASE("dark_current_from_master_dark gives (dark - bias) * gain / exposure",
         CHECK(capture.any("2 pixel(s) of the master dark are below the master bias"));
     }
 
-    // A master dark that looks normalized:
-    {
-        WarningCapture capture;
-        (void)dark_current_from_master_dark(Image<float>(4, 3, 0.5f), 0.f, 2.f, units::Second(4.0));
-        CHECK(capture.any("master dark is at most 1 DN"));
-    }
+    // A master dark or bias that is normalized, without a bit depth to give back its DN, is
+    // refused, as no real one in DN is all at most 1 DN. It gave a dark current of about 0, with
+    // a warning.
+    CHECK_THROWS_WITH(
+        dark_current_from_master_dark(Image<float>(4, 3, 0.5f), 0.f, 2.f, units::Second(4.0)),
+        Catch::Matchers::ContainsSubstring("master dark is at most 1 DN"));
+    CHECK_THROWS_WITH(
+        dark_current_from_master_dark(dark, Image<float>(4, 3, 0.01f), 2.f, units::Second(4.0)),
+        Catch::Matchers::ContainsSubstring("master bias is at most 1 DN"));
+    // Unless it has a bit depth (normalized_dark, above), or is all zeros:
+    CHECK_NOTHROW(
+        dark_current_from_master_dark(dark, Image<float>(4, 3, 0.f), 2.f, units::Second(4.0)));
 
     // What can't be used:
     Image<float> missing = dark;
