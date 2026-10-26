@@ -3018,12 +3018,38 @@ std::string CameraModel<TSpectral>::describe() const
         qe += static_cast<double>(sensor.quantum_efficiency()[i]);
     }
     qe /= static_cast<double>(TSpectral::size());
+
+    // A map's mean and range, as "mean M, from A to B":
+    auto map_summary = [&](const Image<float>& map) {
+        double sum = 0.0;
+        float lowest = map.empty() ? 0.f : map[0];
+        float highest = lowest;
+        for (std::size_t i = 0; i < map.size(); ++i) {
+            sum += static_cast<double>(map[i]);
+            lowest = std::min(lowest, map[i]);
+            highest = std::max(highest, map[i]);
+        }
+        const double mean = map.empty() ? 0.0 : sum / static_cast<double>(map.size());
+        return "mean " + num(mean) + ", from " + num(lowest) + " to " + num(highest);
+    };
+    std::string bias = num(sensor.bias_level_dn()) + " DN";
+    if (sensor.has_bias_map()) {
+        if (sensor.bias_map_kind() == BiasMapKind::Absolute) {
+            bias = "map (" + map_summary(*sensor.bias_map_) + " DN)";
+        } else {
+            bias += " + map (offsets " + map_summary(*sensor.bias_map_) + " DN)";
+        }
+    }
+    std::string dark = num(sensor.dark_current()) + " e-/s";
+    if (sensor.has_dark_current_map()) {
+        dark = "map (" + map_summary(*sensor.dark_current_map_) + " e-/s)";
+    }
     out << "  Readout:     " << sensor.bit_depth() << "-bit, gain " << num(sensor.conversion_gain())
-        << " e-/DN, full well " << num(sensor.full_well_capacity(), 6) << " e-, bias "
-        << num(sensor.bias_level_dn()) << " DN, mean QE " << num(qe, 3) << "\n";
+        << " e-/DN, full well " << num(sensor.full_well_capacity(), 6) << " e-, bias " << bias
+        << ", mean QE " << num(qe, 3) << "\n";
     out << "  Noise:       " << on_off(sensor.noise_enabled()) << ", read noise "
-        << num(sensor.read_noise()) << " e-, dark current " << num(sensor.dark_current())
-        << " e-/s, seed " << sensor.noise_seed() << "\n";
+        << num(sensor.read_noise()) << " e-, dark current " << dark << ", seed "
+        << sensor.noise_seed() << "\n";
     out << "  Motion blur: " << on_off(motion_blur_) << "\n";
 
     out << "  Precomputed: " << (is_precomputed() ? "yes" : "no")

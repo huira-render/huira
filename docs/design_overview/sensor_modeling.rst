@@ -39,6 +39,8 @@ Due to thermal energy, the sensor generates electrons even in the absence of lig
 
     N_{electrons\_dark} = \text{DarkRate}(T) \times t_{exposure}
 
+The dark rate is the same for every pixel, or each pixel's own, from a dark current map (see
+Calibration maps, below).
 
 
 4. Shot Noise (The randomness of light/matter):
@@ -85,7 +87,7 @@ An Analog-to-Digital Converter (ADC) converts the number of electrons to Digital
 
     DN = \text{clamp}\left( \text{round}\left( \frac{N_{electrons\_read}}{\text{Gain}} + \text{Bias} \right), 0, \text{MaxDN} \right)
 
-An ideal ADC rounds to the nearest DN, as here. Many real ADCs round down instead, which differs only by a constant half a DN that bias calibration absorbs.
+An ideal ADC rounds to the nearest DN, as here. Many real ADCs round down instead, which differs only by a constant half a DN that bias calibration absorbs. The bias is the same for every pixel, or each pixel's own, from a bias map (see Calibration maps, below).
 
 The sensor response (``FrameBuffer::sensor_response()``) holds :math:`DN / \text{MaxDN}`, a value in [0, 1], and records the bit depth (``Image::sensor_bit_depth()``), so the image writers can write the DN themselves: see :doc:`image_output`. Every DN is recovered exactly from the stored value, as :math:`\text{round}(\text{value} \times \text{MaxDN})`, for bit depths up to 24, the most a sensor accepts (``SensorModel::MAX_BIT_DEPTH``). This is a limit of how the response is stored, as a single-precision float; it is far beyond real ADCs, which reach 16 to 18 bits.
 
@@ -96,10 +98,88 @@ Saturation
 A pixel saturates at whichever limit it reaches first: the full well, at :math:`\text{WellCapacity} / \text{Gain} + \text{Bias}` DN, or the ADC, at MaxDN. Both happen in real cameras. The default gain is matched to the full well: :math:`\text{WellCapacity} / (\text{MaxDN} - \text{Bias})` = 20000 / (4095 - 10) = 4.896 e⁻/DN would make a full well reach exactly the ADC's largest DN. As in many cameras, it is set slightly lower, at 4.88 e⁻/DN, so that the ADC saturates just before the well is full (at 19935 e⁻): nearly the whole well is used, saturated pixels read exactly MaxDN, and the response near full well, which is not quite linear in a real sensor, is cut off. The conversion gain in e⁻/DN is the inverse of the "overall system gain" *K*, in DN/e⁻, of the EMVA 1288 standard.
 
 
+Calibration maps
+----------------
+
+A real sensor's pixels differ: each has its own dark current, and the bias varies across the
+sensor in fixed patterns (columns, gradients, the corners near an amplifier). Calibration frames
+measure this. A *master bias* is the mean, or median, of many frames taken with no exposure, so
+each pixel reads its bias; a *master dark* is the same for frames taken with the shutter closed,
+so each pixel reads its bias and its dark current's charge. A simulated sensor can be given both,
+as maps:
+
+- ``set_sensor_dark_current_map()`` sets each pixel's dark current, in e⁻/s, in place of the one
+  for all (``set_sensor_dark_current()``). ``dark_current_from_master_dark()`` makes the map from a
+  master dark and a master bias (an image, or one value for every pixel):
+
+  .. math::
+
+      \text{DarkRate}(x, y) = \frac{(\text{Dark}(x, y) - \text{Bias}(x, y)) \cdot \text{Gain}}{t_{exposure}}
+
+  with the conversion gain and the master dark's exposure time of the camera that took them. A
+  pixel below the master bias, which noise in either does near zero dark current, has a dark
+  current of 0; a warning gives the number of them.
+- ``set_sensor_bias_map()`` sets each pixel's bias, in DN, in one of two forms
+  (``BiasMapKind``):
+
+  - ``Absolute`` (the default): each pixel's bias, as a master bias gives it. It replaces the bias
+    level (``set_sensor_bias_level()``), which is not used while the map is set.
+  - ``Relative``: each pixel's offset from the bias level, the bias's structure alone, averaging
+    about 0. The bias level still applies, and changing it moves the whole map. A warning points
+    out offsets that average more than half a DN from 0, which look like a map of the bias
+    itself.
+
+Each map is at the sensor's resolution, in the sensor response's layout: top row first, as every
+image is stored (from numpy, ``huira.Image_f32(array, origin=...)`` says which row of the array is
+the top; see :doc:`pixel_conventions`). A pixel's dark current is added to its signal electrons
+before shot noise, which draws the two together, and its bias is added by the ADC, as for the
+single values. For RGB, each channel of a pixel gathers its dark current and has its bias. The
+maps are not noise, so they apply with noise off too. The camera keeps them until they are
+cleared (``clear_sensor_dark_current_map()``, ``clear_sensor_bias_map()``) or replaced, and a
+copy of a sensor shares them. ``sensor_dark_current_map()`` and ``sensor_bias_map()`` give each
+pixel's value, from the map or the single value; the camera's ``describe()`` summarizes them.
+
+Values are checked when set: a dark current must be non-negative and finite, and each pixel's
+bias (a relative map's added to the bias level) finite and in :math:`[0, \text{MaxDN})`, as for
+the bias level; a later bias level or bit depth that would take a pixel out of that range is
+refused. A map that is no longer at the sensor's resolution, after the camera's sensor is
+configured again, stays set, with a warning, and a readout throws until it is replaced or
+cleared.
+
+Calibration frames are in DN. A sensor response, and a frame read from a FITS file that records
+the bit depth it was taken at (the ``ADCBITS`` keyword, or ``SATURATE`` at an ADC's ceiling, such
+as 4095), hold :math:`DN / \text{MaxDN}` instead, with a sensor bit depth
+(``Image::sensor_bit_depth()``; ``sensor_bit_depth`` in Python), and are turned into DN: these
+can be given to ``dark_current_from_master_dark()`` and as an absolute bias map as they are. Any
+other image's values are taken as DN. An integer FITS file without those keywords is read
+normalized by its type's range (65535 for 16 bits), without a bit depth; a warning points out an
+image whose values are all at most 1 DN, which looks normalized, and multiplying it by the range
+gives back its DN. A relative bias map is offsets in DN, so one with a sensor bit depth is
+refused.
+
+From C++, the maps are on the sensor (``SensorModel::set_dark_current_map()``,
+``set_bias_map()``), and through the camera's handle as above. In Python::
+
+    import numpy as np
+    import huira
+
+    master_dark, _ = huira.read_fits("master_dark.fits")  # 30 s exposures
+    master_bias, _ = huira.read_fits("master_bias.fits")
+    rates = huira.dark_current_from_master_dark(
+        master_dark, master_bias, conversion_gain=1.5, exposure_time=huira.units.Second(30))
+    camera_model.set_sensor_dark_current_map(rates)
+    camera_model.set_sensor_bias_map(master_bias)
+
+    # Or a bias pattern made in numpy, as offsets from the bias level:
+    columns = np.tile(np.random.default_rng(1).normal(0, 2, 1024), (1024, 1))
+    camera_model.set_sensor_bias_map(
+        huira.Image_f32(columns, origin=huira.PixelOrigin.TopLeft), huira.BiasMapKind.Relative)
+
+
 Noise off
 ---------
 
-``enable_sensor_noise(false)`` on the camera (``enable_noise(false)`` on a ``SensorModel``; ``enable_sensor_noise(False)`` in Python) removes what is random: shot noise and read noise. Each pixel then collects the expected number of electrons, signal and dark current together. The dark current's electrons and the bias are still added, since they are not noise, and the result is still quantized.
+``enable_sensor_noise(false)`` on the camera (``enable_noise(false)`` on a ``SensorModel``; ``enable_sensor_noise(False)`` in Python) removes what is random: shot noise and read noise. Each pixel then collects the expected number of electrons, signal and dark current together. The dark current's electrons and the bias, and their maps, are still added, since they are not noise, and the result is still quantized.
 
 
 Missing data
@@ -121,6 +201,14 @@ the same sequence of frames. The random integers are the same with every standar
 normal and Poisson draws made from them use ``std::log``, ``std::exp`` and the like, which can
 differ in their last bit between platforms, so frames repeat exactly on one platform and
 toolchain.
+
+
+Changes in v0.9.11
+------------------
+
+- Each pixel can have its own dark current and bias, from maps (see Calibration maps), and
+  ``dark_current_from_master_dark()`` makes the dark current's from a master dark and a master
+  bias. Without maps, frames are as before.
 
 
 Changes in v0.9.10

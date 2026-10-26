@@ -1,3 +1,5 @@
+#include <utility>
+
 #include "huira/concepts/spectral_concepts.hpp"
 #include "huira/units/units.hpp"
 
@@ -285,8 +287,9 @@ void CameraModelHandle<TSpectral>::set_sensor_read_noise(float read_noise) const
 }
 
 /**
- * @brief Set the sensor dark current.
- * @param dark_current Dark current value
+ * @brief Set the sensor dark current, the same for every pixel. A dark current map, while one is
+ * set, takes its place. See SensorModel::set_dark_current().
+ * @param dark_current Dark current, in e-/s
  */
 template <IsSpectral TSpectral>
 void CameraModelHandle<TSpectral>::set_sensor_dark_current(float dark_current) const
@@ -295,13 +298,58 @@ void CameraModelHandle<TSpectral>::set_sensor_dark_current(float dark_current) c
 }
 
 /**
- * @brief Set the sensor bias level.
- * @param bias_level Bias level value
+ * @brief Set the dark current of each pixel, in place of the one dark current for all.
+ *
+ * dark_current_from_master_dark() gives the map from a master dark and a master bias. See
+ * SensorModel::set_dark_current_map().
+ *
+ * @param electrons_per_second The dark current of each pixel, in e-/s, at the sensor's
+ *        resolution.
+ */
+template <IsSpectral TSpectral>
+void CameraModelHandle<TSpectral>::set_sensor_dark_current_map(
+    Image<float> electrons_per_second) const
+{
+    this->get_()->sensor_->set_dark_current_map(std::move(electrons_per_second));
+}
+
+/// Clear the sensor's dark current map, so that every pixel has the dark current again.
+template <IsSpectral TSpectral>
+void CameraModelHandle<TSpectral>::clear_sensor_dark_current_map() const
+{
+    this->get_()->sensor_->clear_dark_current_map();
+}
+
+/**
+ * @brief Set the sensor bias level, the same for every pixel. An absolute bias map, while one is
+ * set, takes its place; a relative one is added to it. See SensorModel::set_bias_level_dn().
+ * @param bias_level Bias level, in DN
  */
 template <IsSpectral TSpectral>
 void CameraModelHandle<TSpectral>::set_sensor_bias_level(float bias_level) const
 {
     this->get_()->sensor_->set_bias_level_dn(bias_level);
+}
+
+/**
+ * @brief Set the bias of each pixel (BiasMapKind::Absolute, the default: a master bias), or its
+ * offset from the bias level (BiasMapKind::Relative). See SensorModel::set_bias_map().
+ *
+ * @param dn The bias, or the offsets from the bias level, of each pixel, in DN, at the sensor's
+ *        resolution.
+ * @param kind What the values are.
+ */
+template <IsSpectral TSpectral>
+void CameraModelHandle<TSpectral>::set_sensor_bias_map(Image<float> dn, BiasMapKind kind) const
+{
+    this->get_()->sensor_->set_bias_map(std::move(dn), kind);
+}
+
+/// Clear the sensor's bias map, so that every pixel has the bias level again.
+template <IsSpectral TSpectral>
+void CameraModelHandle<TSpectral>::clear_sensor_bias_map() const
+{
+    this->get_()->sensor_->clear_bias_map();
 }
 
 /**
@@ -447,11 +495,48 @@ float CameraModelHandle<TSpectral>::sensor_dark_current() const
     return this->get_()->sensor_->dark_current();
 }
 
+/// Whether the sensor has a dark current map. See set_sensor_dark_current_map().
+template <IsSpectral TSpectral>
+bool CameraModelHandle<TSpectral>::has_sensor_dark_current_map() const
+{
+    return this->get_()->sensor_->has_dark_current_map();
+}
+
+/// Get the dark current of each pixel, in e-/s: the dark current map, or the dark current
+/// everywhere if none is set.
+template <IsSpectral TSpectral>
+Image<float> CameraModelHandle<TSpectral>::sensor_dark_current_map() const
+{
+    return this->get_()->sensor_->dark_current_map();
+}
+
 /// Get the sensor's bias level, in digital numbers.
 template <IsSpectral TSpectral>
 float CameraModelHandle<TSpectral>::sensor_bias_level() const
 {
     return this->get_()->sensor_->bias_level_dn();
+}
+
+/// Whether the sensor has a bias map. See set_sensor_bias_map().
+template <IsSpectral TSpectral>
+bool CameraModelHandle<TSpectral>::has_sensor_bias_map() const
+{
+    return this->get_()->sensor_->has_bias_map();
+}
+
+/// What the values of the sensor's bias map are (BiasMapKind::Absolute if none is set).
+template <IsSpectral TSpectral>
+BiasMapKind CameraModelHandle<TSpectral>::sensor_bias_map_kind() const
+{
+    return this->get_()->sensor_->bias_map_kind();
+}
+
+/// Get the bias of each pixel, in DN: an absolute bias map, a relative one added to the bias
+/// level, or the bias level everywhere if none is set.
+template <IsSpectral TSpectral>
+Image<float> CameraModelHandle<TSpectral>::sensor_bias_map() const
+{
+    return this->get_()->sensor_->bias_map();
 }
 
 /// Get the sensor's bit depth.

@@ -6,3 +6,4 @@ Sensors
 
    sensor_model
    simple_sensor
+   sensor_calibration

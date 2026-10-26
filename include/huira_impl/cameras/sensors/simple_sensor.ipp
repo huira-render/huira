@@ -21,17 +21,18 @@ namespace huira {
  * @brief Simulates the sensor readout, from the received power to digital numbers (DN).
  *
  * For each pixel (each channel, for RGB): the received energy becomes photons and, through the
- * quantum efficiency, signal electrons, to which the dark current's electrons are added. With
- * noise simulated, the electrons collected are drawn from a Poisson distribution of that mean
- * (shot noise); without, they are the mean. They are clamped to the full well, and the read
- * noise is added (with noise simulated). The ADC divides by the gain, adds the bias, rounds to a
- * whole number of DN and clamps to its range, [0, 2^bit_depth - 1]. The response holds
- * DN / (2^bit_depth - 1), so its values are exact fractions of whole DN, and the image records
- * the bit depth (Image::sensor_bit_depth()) for the image writers. See
+ * quantum efficiency, signal electrons, to which the dark current's electrons are added (the
+ * pixel's own, from the dark current map, if one is set). With noise simulated, the electrons
+ * collected are drawn from a Poisson distribution of that mean (shot noise); without, they are
+ * the mean. They are clamped to the full well, and the read noise is added (with noise
+ * simulated). The ADC divides by the gain, adds the bias (the pixel's own, from the bias map, if
+ * one is set), rounds to a whole number of DN and clamps to its range, [0, 2^bit_depth - 1]. The
+ * response holds DN / (2^bit_depth - 1), so its values are exact fractions of whole DN, and the
+ * image records the bit depth (Image::sensor_bit_depth()) for the image writers. See
  * docs/design_overview/sensor_modeling.rst.
  *
  * Turning noise off removes only what is random: shot noise and read noise. The dark current's
- * electrons and the bias are not noise, and are applied either way.
+ * electrons and the bias, and their maps, are not noise, and are applied either way.
  *
  * A pixel whose received power is not finite (NaN or infinite) has no meaningful response: it
  * reads out as NaN, which the image writers record as missing data, and a warning gives the
@@ -42,11 +43,14 @@ namespace huira {
  * @param fb The frame buffer containing received power and where the sensor response will be
  * written.
  * @param exposure_time The exposure time in seconds.
+ * @throws std::runtime_error if a dark current or bias map is set at another resolution than the
+ *         frame buffer's.
  */
 template <IsSpectral TSpectral>
 void SimpleSensor<TSpectral>::readout(FrameBuffer<TSpectral>& fb, units::Second exposure_time) const
 {
     const Image<TSpectral>& received_power = fb.received_power();
+    this->check_map_resolutions_(received_power.resolution(), "SimpleSensor::readout");
     auto& output = fb.sensor_response();
     output.set_sensor_bit_depth(this->config_.bit_depth);
 
@@ -62,10 +66,15 @@ void SimpleSensor<TSpectral>::readout(FrameBuffer<TSpectral>& fb, units::Second 
     const double full_well = static_cast<double>(config.full_well_capacity);
     const double gain = static_cast<double>(config.gain);
 
+    // Each pixel's dark current and bias, where maps give them:
+    const Image<float>* dark_map = this->dark_current_map_.get();
+    const Image<float>* bias_map = this->bias_map_.get();
+    const double bias_map_base = this->bias_map_kind_ == BiasMapKind::Relative ? bias : 0.0;
+
     std::atomic<std::size_t> non_finite{0};
 
-    // Expected electrons to the normalized response:
-    auto respond = [&](double expected_e, detail::SensorRandom& random) {
+    // Expected electrons to the normalized response, with the pixel's bias:
+    auto respond = [&](double expected_e, double pixel_bias, detail::SensorRandom& random) {
         if (!std::isfinite(expected_e)) {
             non_finite.fetch_add(1, std::memory_order_relaxed);
             return std::numeric_limits<float>::quiet_NaN();
@@ -76,7 +85,7 @@ void SimpleSensor<TSpectral>::readout(FrameBuffer<TSpectral>& fb, units::Second 
             electrons += read_noise * random.normal();
         }
         // The ADC: to whole DN, within its range.
-        const double dn = std::clamp(std::round(electrons / gain + bias), 0.0, max_dn);
+        const double dn = std::clamp(std::round(electrons / gain + pixel_bias), 0.0, max_dn);
         return static_cast<float>(dn / max_dn);
     };
 
@@ -93,15 +102,27 @@ void SimpleSensor<TSpectral>::readout(FrameBuffer<TSpectral>& fb, units::Second 
                     const TSpectral photons = received_power(x, y) * dt / photon_energy;
                     const TSpectral electrons = photons * config.quantum_efficiency;
 
+                    const double pixel_dark_e =
+                        dark_map != nullptr
+                            ? static_cast<double>((*dark_map)(x, y)) * static_cast<double>(dt)
+                            : dark_e;
+                    const double pixel_bias =
+                        bias_map != nullptr ? bias_map_base + static_cast<double>((*bias_map)(x, y))
+                                            : bias;
+
                     if constexpr (std::is_same_v<TSpectral, RGB>) {
                         RGB value;
                         for (std::size_t c = 0; c < 3; ++c) {
-                            value[c] = respond(static_cast<double>(electrons[c]) + dark_e, random);
+                            value[c] = respond(static_cast<double>(electrons[c]) + pixel_dark_e,
+                                               pixel_bias,
+                                               random);
                         }
                         output(x, y) = value;
                     } else {
                         output(x, y) =
-                            respond(static_cast<double>(electrons.total()) + dark_e, random);
+                            respond(static_cast<double>(electrons.total()) + pixel_dark_e,
+                                    pixel_bias,
+                                    random);
                     }
                 }
             }

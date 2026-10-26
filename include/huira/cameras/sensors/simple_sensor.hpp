@@ -23,7 +23,8 @@ struct SimpleSensorConfig : public SensorConfig<TSpectral> {};
 /**
  * @brief Simple sensor model with basic noise and ADC simulation.
  *
- * Implements a basic sensor readout model, including shot noise, read noise, and quantization.
+ * Implements a basic sensor readout model, including dark current and bias (each pixel's own,
+ * with a dark current or bias map), shot noise, read noise, and quantization.
  *
  * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */

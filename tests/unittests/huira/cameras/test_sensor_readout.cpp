@@ -1,13 +1,16 @@
 #include <cmath>
 #include <cstddef>
 #include <limits>
+#include <string>
 #include <thread>
 #include <vector>
 
 #include "catch2/catch_test_macros.hpp"
 #include "huira/cameras/camera_model.hpp"
+#include "huira/cameras/sensors/sensor_calibration.hpp"
 #include "huira/core/spectral_bins.hpp"
 #include "huira/units/units.hpp"
+#include "huira/util/logger.hpp"
 
 using namespace huira;
 
@@ -95,10 +98,11 @@ void electron_counter(SensorProbe& camera)
     camera.sensor_->set_bit_depth(20);
 }
 
-/// The response, in DN.
-std::vector<double> read_dn(SensorProbe& camera, FrameBuffer<RGB>& frame_buffer)
+/// The response, in DN, after an exposure of the given length.
+std::vector<double>
+read_dn(SensorProbe& camera, FrameBuffer<RGB>& frame_buffer, double seconds = 1.0)
 {
-    camera.readout(frame_buffer, units::Second(1.0));
+    camera.readout(frame_buffer, units::Second(seconds));
     const double max_dn = std::pow(2.0, camera.sensor_->bit_depth()) - 1.0;
     std::vector<double> dn;
     const Image<RGB>& response = frame_buffer.sensor_response();
@@ -397,4 +401,479 @@ TEST_CASE("A copied sensor has the same settings and noise of its own", "[camera
     camera.sensor_->set_noise_seed(5);
     other.sensor_->set_noise_seed(5);
     CHECK(read(camera) == read(other)); // the same seed gives the same noise
+}
+
+namespace {
+
+/// Collects the warnings logged while it lives.
+struct WarningCapture {
+    std::vector<std::string> warnings;
+
+    WarningCapture()
+    {
+        set_log_sink([this](const LogEntry& entry) {
+            if (entry.level == LogLevel::Warning) {
+                warnings.push_back(entry.message);
+            }
+        });
+    }
+    ~WarningCapture() { Logger::instance().clear_custom_sink(); }
+
+    WarningCapture(const WarningCapture&) = delete;
+    WarningCapture(WarningCapture&&) = delete;
+    WarningCapture& operator=(const WarningCapture&) = delete;
+    WarningCapture& operator=(WarningCapture&&) = delete;
+
+    /// Whether a warning was logged that contains the text.
+    bool any(const std::string& text) const
+    {
+        for (const std::string& warning : warnings) {
+            if (warning.find(text) != std::string::npos) {
+                return true;
+            }
+        }
+        return false;
+    }
+};
+
+/// An image whose pixel (x, y) is value(x, y).
+template <typename F>
+Image<float> map_of(int width, int height, F value)
+{
+    Image<float> map(width, height);
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            map(x, y) = static_cast<float>(value(x, y));
+        }
+    }
+    return map;
+}
+
+/// A Visible8 camera whose sensor the tests can configure directly.
+class Visible8Probe : public CameraModel<Visible8> {
+  public:
+    using CameraModel<Visible8>::sensor_;
+
+    Visible8Probe() = default;
+
+    Visible8Probe(const Visible8Probe&) = delete;
+    Visible8Probe(Visible8Probe&&) = delete;
+    Visible8Probe& operator=(const Visible8Probe&) = delete;
+    Visible8Probe& operator=(Visible8Probe&&) = delete;
+};
+
+} // namespace
+
+TEST_CASE("A dark current map gives each pixel its own dark current", "[cameras][sensor][maps]")
+{
+    SensorProbe camera;
+    electron_counter(camera); // 64x64, 1 e-/DN
+    camera.sensor_->set_bias_level_dn(10.f);
+    auto frame_buffer = camera.make_frame_buffer();
+    frame_buffer.enable_sensor_response();
+
+    // Without noise, each pixel reads its own dark current times the exposure, on top of the
+    // signal and the bias, in every channel:
+    const Image<float> rates = map_of(64, 64, [](int x, int y) { return 0.5 * (x + 100 * y); });
+    camera.sensor_->set_dark_current_map(rates);
+    REQUIRE(camera.sensor_->has_dark_current_map());
+    camera.sensor_->enable_noise(false);
+    expect_electrons(camera, frame_buffer, 20.0); // 20 e- per second
+    const std::vector<double> dn = read_dn(camera, frame_buffer, 2.0);
+    for (std::size_t i = 0; i < dn.size(); ++i) {
+        const auto pixel = static_cast<int>(i / 3);
+        const int x = pixel % 64;
+        const int y = pixel / 64;
+        REQUIRE(std::abs(dn[i] - (10.0 + 40.0 + x + 100.0 * y)) < 1e-3);
+    }
+
+    // With noise, the dark current's electrons are drawn with the signal's: Poisson, with the
+    // map's mean.
+    camera.sensor_->set_dark_current_map(Image<float>(64, 64, 50.f));
+    camera.sensor_->enable_noise(true);
+    frame_buffer.received_power().fill(RGB{0.f});
+    const std::vector<double> noisy = read_dn(camera, frame_buffer);
+    CHECK(std::abs(mean_of(noisy) - 60.0) < 0.25);
+    CHECK(std::abs(variance_of(noisy) / 50.0 - 1.0) < 0.06);
+
+    // Cleared, every pixel has the dark current again (here 0):
+    camera.sensor_->clear_dark_current_map();
+    CHECK_FALSE(camera.sensor_->has_dark_current_map());
+    camera.sensor_->enable_noise(false);
+    for (double v : read_dn(camera, frame_buffer)) {
+        REQUIRE(std::abs(v - 10.0) < 1e-3);
+    }
+}
+
+TEST_CASE("A dark current map applies once to a spectral pixel", "[cameras][sensor][maps]")
+{
+    // A pixel of a spectral type adds up its bins' electrons, then gathers its dark current.
+    Visible8Probe camera;
+    camera.configure_sensor_from_pitch(Resolution{8, 4}, units::Micrometer(5.0));
+    camera.sensor_->set_conversion_gain(1.f);
+    camera.sensor_->set_bias_level_dn(0.f);
+    camera.sensor_->set_bit_depth(16);
+    camera.sensor_->enable_noise(false);
+    camera.sensor_->set_dark_current_map(map_of(8, 4, [](int x, int y) { return x + 10 * y; }));
+    auto frame_buffer = camera.make_frame_buffer();
+    frame_buffer.enable_sensor_response();
+    frame_buffer.received_power().fill(Visible8{0.f});
+
+    camera.readout(frame_buffer, units::Second(1.0));
+    const Image<float>& response = frame_buffer.sensor_response();
+    const double max_dn = std::pow(2.0, 16) - 1.0;
+    for (int y = 0; y < 4; ++y) {
+        for (int x = 0; x < 8; ++x) {
+            REQUIRE(std::abs(static_cast<double>(response(x, y)) * max_dn - (x + 10.0 * y)) < 1e-3);
+        }
+    }
+}
+
+TEST_CASE("A bias map gives each pixel its own bias, as it is or added to the bias level",
+          "[cameras][sensor][maps]")
+{
+    SensorProbe camera;
+    electron_counter(camera);
+    camera.sensor_->enable_noise(false);
+    auto frame_buffer = camera.make_frame_buffer();
+    frame_buffer.enable_sensor_response();
+    frame_buffer.received_power().fill(RGB{0.f});
+
+    auto check_bias = [&](auto expected) {
+        const std::vector<double> dn = read_dn(camera, frame_buffer);
+        for (std::size_t i = 0; i < dn.size(); ++i) {
+            const auto pixel = static_cast<int>(i / 3);
+            REQUIRE(std::abs(dn[i] - expected(pixel % 64, pixel / 64)) < 1e-3);
+        }
+    };
+
+    // Absolute: each pixel's bias, in place of the bias level.
+    const Image<float> master_bias = map_of(64, 64, [](int x, int y) { return 100 + x + 64 * y; });
+    camera.sensor_->set_bias_map(master_bias);
+    CHECK(camera.sensor_->bias_map_kind() == BiasMapKind::Absolute);
+    check_bias([](int x, int y) { return 100.0 + x + 64.0 * y; });
+    {
+        WarningCapture capture;
+        camera.sensor_->set_bias_level_dn(500.f); // not used while the map is set
+        CHECK(capture.any("absolute bias map is set"));
+    }
+    check_bias([](int x, int y) { return 100.0 + x + 64.0 * y; });
+
+    // Relative: offsets from the bias level, which still applies.
+    const Image<float> offsets = map_of(64, 64, [](int x, int) { return x % 5 - 2; });
+    {
+        WarningCapture capture;
+        camera.sensor_->set_bias_map(offsets, BiasMapKind::Relative);
+        CHECK(capture.warnings.empty()); // the offsets average about 0
+    }
+    CHECK(camera.sensor_->bias_map_kind() == BiasMapKind::Relative);
+    check_bias([](int x, int) { return 500.0 + x % 5 - 2.0; });
+    camera.sensor_->set_bias_level_dn(1000.f); // moves the whole map
+    check_bias([](int x, int) { return 1000.0 + x % 5 - 2.0; });
+    const Image<float> effective = camera.sensor_->bias_map();
+    CHECK(effective(3, 7) == 1001.f);
+    CHECK(effective(0, 0) == 998.f);
+
+    // Offsets that average far from 0 are probably a map of the bias itself:
+    {
+        WarningCapture capture;
+        camera.sensor_->set_bias_map(master_bias, BiasMapKind::Relative);
+        CHECK(capture.any("offsets average"));
+    }
+
+    // Cleared, every pixel has the bias level again:
+    camera.sensor_->clear_bias_map();
+    CHECK_FALSE(camera.sensor_->has_bias_map());
+    CHECK(camera.sensor_->bias_map_kind() == BiasMapKind::Absolute);
+    check_bias([](int, int) { return 1000.0; });
+}
+
+TEST_CASE("An absolute bias map with a sensor bit depth is turned into DN",
+          "[cameras][sensor][maps]")
+{
+    // A sensor response, or a frame read from a file that records its bit depth, holds
+    // DN / (2^bits - 1).
+    SensorProbe camera;
+    electron_counter(camera);
+    Image<float> frame = map_of(64, 64, [](int x, int) { return (100.0 + x) / 4095.0; });
+    frame.set_sensor_bit_depth(12);
+    camera.sensor_->set_bias_map(frame);
+    const Image<float> bias = camera.sensor_->bias_map();
+    CHECK(bias.sensor_bit_depth() == 0);
+    CHECK(std::abs(bias(0, 5) - 100.f) < 1e-3f);
+    CHECK(std::abs(bias(63, 5) - 163.f) < 1e-3f);
+
+    // Offsets aren't stored normalized:
+    CHECK_THROWS(camera.sensor_->set_bias_map(frame, BiasMapKind::Relative));
+
+    // A map without a bit depth whose values are all at most 1 DN looks normalized:
+    WarningCapture capture;
+    frame.set_sensor_bit_depth(0);
+    camera.sensor_->set_bias_map(frame);
+    CHECK(capture.any("at most 1 DN"));
+}
+
+TEST_CASE("Maps are checked when set, and when the bias or bit depth changes",
+          "[cameras][sensor][maps]")
+{
+    SensorProbe camera;
+    electron_counter(camera); // 20 bits: DN up to 1048575
+    camera.sensor_->set_bias_level_dn(10.f);
+    const float nan = std::numeric_limits<float>::quiet_NaN();
+    const float inf = std::numeric_limits<float>::infinity();
+
+    auto with = [](Image<float> map, int x, int y, float value) {
+        map(x, y) = value;
+        return map;
+    };
+    const Image<float> ones(64, 64, 1.f);
+
+    // The sensor's resolution:
+    CHECK_THROWS(camera.sensor_->set_dark_current_map(Image<float>(32, 64, 1.f)));
+    CHECK_THROWS(camera.sensor_->set_bias_map(Image<float>(64, 32, 100.f)));
+
+    // Dark currents are non-negative and finite:
+    CHECK_THROWS(camera.sensor_->set_dark_current_map(with(ones, 3, 4, -1.f)));
+    CHECK_THROWS(camera.sensor_->set_dark_current_map(with(ones, 3, 4, nan)));
+    CHECK_THROWS(camera.sensor_->set_dark_current_map(with(ones, 3, 4, inf)));
+    CHECK_FALSE(camera.sensor_->has_dark_current_map()); // a map that fails is not set
+    CHECK_NOTHROW(camera.sensor_->set_dark_current_map(with(ones, 3, 4, 0.f)));
+
+    // Each pixel's bias is finite and in [0, 2^bits - 1):
+    const Image<float> hundreds(64, 64, 100.f);
+    CHECK_THROWS(camera.sensor_->set_bias_map(with(hundreds, 1, 2, -1.f)));
+    CHECK_THROWS(camera.sensor_->set_bias_map(with(hundreds, 1, 2, nan)));
+    CHECK_THROWS(camera.sensor_->set_bias_map(with(hundreds, 1, 2, 1048575.f)));
+    CHECK_FALSE(camera.sensor_->has_bias_map());
+    CHECK_NOTHROW(camera.sensor_->set_bias_map(with(hundreds, 1, 2, 1048574.f)));
+
+    // A relative map, from the bias level:
+    const Image<float> zeros(64, 64, 0.f);
+    CHECK_THROWS(camera.sensor_->set_bias_map(with(zeros, 1, 2, -11.f), BiasMapKind::Relative));
+    CHECK_NOTHROW(camera.sensor_->set_bias_map(with(zeros, 1, 2, -10.f), BiasMapKind::Relative));
+    CHECK_THROWS(camera.sensor_->set_bias_level_dn(9.f)); // that pixel would be at -1 DN
+    CHECK(camera.sensor_->bias_level_dn() == 10.f);
+    CHECK_NOTHROW(camera.sensor_->set_bias_level_dn(20.f));
+
+    // A lower bit depth must still hold every pixel's bias:
+    camera.sensor_->set_bias_map(with(hundreds, 1, 2, 300.f));
+    CHECK_THROWS(camera.sensor_->set_bit_depth(8));
+    CHECK(camera.sensor_->bit_depth() == 20);
+    CHECK_NOTHROW(camera.sensor_->set_bit_depth(9));
+}
+
+TEST_CASE("A map of another size than the frame makes the readout throw", "[cameras][sensor][maps]")
+{
+    SensorProbe camera;
+    electron_counter(camera);
+    camera.sensor_->set_dark_current_map(Image<float>(64, 64, 1.f));
+    camera.sensor_->set_bias_map(Image<float>(64, 64, 100.f));
+
+    {
+        WarningCapture capture;
+        camera.configure_sensor_from_pitch(Resolution{32, 32}, units::Micrometer(5.0));
+        CHECK(capture.any("dark current map is 64x64, and the sensor is now 32x32"));
+        CHECK(capture.any("bias map is 64x64, and the sensor is now 32x32"));
+    }
+    auto frame_buffer = camera.make_frame_buffer();
+    frame_buffer.enable_sensor_response();
+    CHECK_THROWS(camera.readout(frame_buffer, units::Second(1.0)));
+
+    camera.sensor_->clear_dark_current_map();
+    CHECK_THROWS(camera.readout(frame_buffer, units::Second(1.0)));
+    camera.sensor_->clear_bias_map();
+    CHECK_NOTHROW(camera.readout(frame_buffer, units::Second(1.0)));
+}
+
+TEST_CASE("Without maps, the map getters give the single values everywhere",
+          "[cameras][sensor][maps]")
+{
+    SensorProbe camera;
+    camera.configure_sensor_from_pitch(Resolution{6, 4}, units::Micrometer(5.0));
+    camera.sensor_->set_dark_current(3.f);
+    camera.sensor_->set_bias_level_dn(42.f);
+
+    const Image<float> dark = camera.sensor_->dark_current_map();
+    const Image<float> bias = camera.sensor_->bias_map();
+    REQUIRE(dark.width() == 6);
+    REQUIRE(dark.height() == 4);
+    REQUIRE(bias.width() == 6);
+    REQUIRE(bias.height() == 4);
+    for (std::size_t i = 0; i < dark.size(); ++i) {
+        REQUIRE(dark[i] == 3.f);
+        REQUIRE(bias[i] == 42.f);
+    }
+
+    // With maps, they give them:
+    const Image<float> rates = map_of(6, 4, [](int x, int y) { return x * y; });
+    camera.sensor_->set_dark_current_map(rates);
+    {
+        WarningCapture capture;
+        camera.sensor_->set_dark_current(5.f); // not used while the map is set
+        CHECK(capture.any("dark current map is set"));
+    }
+    CHECK(camera.sensor_->dark_current_map()(5, 3) == 15.f);
+    CHECK(camera.sensor_->dark_current() == 5.f);
+}
+
+TEST_CASE("A copied sensor shares the maps", "[cameras][sensor][maps]")
+{
+    SensorProbe camera;
+    electron_counter(camera);
+    camera.sensor_->set_bias_level_dn(10.f);
+    camera.sensor_->set_dark_current_map(Image<float>(64, 64, 7.f));
+    camera.sensor_->set_bias_map(map_of(64, 64, [](int x, int) { return x % 2 == 0 ? 2 : -2; }),
+                                 BiasMapKind::Relative);
+
+    SensorProbe other;
+    other.set_sensor<SimpleSensor<RGB>>(
+        *dynamic_cast<const SimpleSensor<RGB>*>(camera.sensor_.get()));
+    REQUIRE(other.sensor_->has_dark_current_map());
+    REQUIRE(other.sensor_->has_bias_map());
+    CHECK(other.sensor_->bias_map_kind() == BiasMapKind::Relative);
+    CHECK(other.sensor_->dark_current_map()(10, 10) == 7.f);
+
+    // Each sensor's maps are its own to replace or clear:
+    camera.sensor_->clear_dark_current_map();
+    camera.sensor_->clear_bias_map();
+    CHECK(other.sensor_->has_dark_current_map());
+    CHECK(other.sensor_->has_bias_map());
+}
+
+TEST_CASE("dark_current_from_master_dark gives (dark - bias) * gain / exposure",
+          "[cameras][sensor][maps]")
+{
+    const Image<float> dark = map_of(4, 3, [](int x, int y) { return 110 + 10 * x + y; });
+    const Image<float> bias = map_of(4, 3, [](int x, int) { return 100 + x; });
+
+    // e- / s = (dark - bias) DN * 2 e-/DN / 4 s:
+    const Image<float> rates = dark_current_from_master_dark(dark, bias, 2.f, units::Second(4.0));
+    REQUIRE(rates.width() == 4);
+    REQUIRE(rates.height() == 3);
+    for (int y = 0; y < 3; ++y) {
+        for (int x = 0; x < 4; ++x) {
+            REQUIRE(std::abs(rates(x, y) - (10.0 + 9.0 * x + y) * 0.5) < 1e-5);
+        }
+    }
+
+    // One bias for every pixel, and the exposure in any unit:
+    const Image<float> flat_bias =
+        dark_current_from_master_dark(dark, 100.f, 2.f, units::Millisecond(4000.0));
+    CHECK(std::abs(flat_bias(3, 2) - (142.0 - 100.0) * 0.5) < 1e-5);
+
+    // Images with a sensor bit depth are turned into DN:
+    Image<float> normalized_dark = dark;
+    for (std::size_t i = 0; i < normalized_dark.size(); ++i) {
+        normalized_dark[i] = static_cast<float>(normalized_dark[i] / 4095.0);
+    }
+    normalized_dark.set_sensor_bit_depth(12);
+    const Image<float> from_normalized =
+        dark_current_from_master_dark(normalized_dark, bias, 2.f, units::Second(4.0));
+    CHECK(std::abs(from_normalized(2, 1) - rates(2, 1)) < 1e-3);
+
+    // A pixel below the bias, as noise near zero dark current gives, has no dark current:
+    {
+        WarningCapture capture;
+        Image<float> low = dark;
+        low(1, 1) = 50.f;
+        low(2, 2) = 80.f;
+        const Image<float> clamped =
+            dark_current_from_master_dark(low, bias, 2.f, units::Second(4.0));
+        CHECK(clamped(1, 1) == 0.f);
+        CHECK(clamped(2, 2) == 0.f);
+        CHECK(capture.any("2 pixel(s) of the master dark are below the master bias"));
+    }
+
+    // A master dark that looks normalized:
+    {
+        WarningCapture capture;
+        (void)dark_current_from_master_dark(Image<float>(4, 3, 0.5f), 0.f, 2.f, units::Second(4.0));
+        CHECK(capture.any("master dark is at most 1 DN"));
+    }
+
+    // What can't be used:
+    Image<float> missing = dark;
+    missing(0, 0) = std::numeric_limits<float>::quiet_NaN();
+    CHECK_THROWS(dark_current_from_master_dark(missing, bias, 2.f, units::Second(4.0)));
+    CHECK_THROWS(
+        dark_current_from_master_dark(dark, Image<float>(3, 4, 100.f), 2.f, units::Second(4.0)));
+    CHECK_THROWS(dark_current_from_master_dark(dark, bias, 0.f, units::Second(4.0)));
+    CHECK_THROWS(dark_current_from_master_dark(dark, bias, 2.f, units::Second(0.0)));
+    CHECK_THROWS(dark_current_from_master_dark(dark, bias, 2.f, units::Second(-1.0)));
+    CHECK_THROWS(dark_current_from_master_dark(
+        dark, bias, 2.f, units::Second(std::numeric_limits<double>::infinity())));
+    CHECK_THROWS(dark_current_from_master_dark(Image<float>(), 0.f, 2.f, units::Second(4.0)));
+}
+
+TEST_CASE("A dark current map is recovered from the sensor's own calibration frames",
+          "[cameras][sensor][maps]")
+{
+    // Master darks and biases averaged from the simulated sensor's frames, as from a real
+    // camera's, give back the dark current it was given.
+    SensorProbe camera;
+    electron_counter(camera);
+    camera.sensor_->set_conversion_gain(2.f);
+    camera.sensor_->set_read_noise(5.f);
+    camera.sensor_->set_bias_map(map_of(64, 64, [](int x, int) { return 200 + 3 * (x % 8); }));
+    Image<float> rates = map_of(64, 64, [](int x, int) { return x < 32 ? 20.0 : 80.0; });
+    rates(10, 10) = 5000.f; // a hot pixel
+    camera.sensor_->set_dark_current_map(rates);
+    camera.sensor_->set_noise_seed(11);
+
+    auto frame_buffer = camera.make_frame_buffer();
+    frame_buffer.enable_sensor_response();
+    frame_buffer.received_power().fill(RGB{0.f});
+
+    // The mean of 16 frames, and of each pixel's three channels:
+    auto master = [&](double seconds) {
+        Image<float> sum(64, 64, 0.f);
+        constexpr int FRAMES = 16;
+        for (int frame = 0; frame < FRAMES; ++frame) {
+            camera.readout(frame_buffer, units::Second(seconds));
+            const Image<RGB>& response = frame_buffer.sensor_response();
+            for (std::size_t i = 0; i < sum.size(); ++i) {
+                sum[i] += (response[i][0] + response[i][1] + response[i][2]) / (3.f * FRAMES);
+            }
+        }
+        sum.set_sensor_bit_depth(20); // the sensor response's
+        return sum;
+    };
+    const Image<float> master_bias = master(0.0);
+    const Image<float> master_dark = master(10.0);
+
+    const Image<float> recovered =
+        dark_current_from_master_dark(master_dark, master_bias, 2.f, units::Second(10.0));
+    double left = 0.0;
+    double right = 0.0;
+    for (int y = 0; y < 64; ++y) {
+        for (int x = 0; x < 64; ++x) {
+            if (x == 10 && y == 10) {
+                continue;
+            }
+            (x < 32 ? left : right) += static_cast<double>(recovered(x, y));
+        }
+    }
+    CHECK(std::abs(left / (32.0 * 64.0 - 1.0) - 20.0) < 0.2);
+    CHECK(std::abs(right / (32.0 * 64.0) - 80.0) < 0.4);
+    CHECK(std::abs(recovered(10, 10) - 5000.f) < 25.f);
+}
+
+TEST_CASE("The camera's description includes the maps", "[cameras][sensor][maps]")
+{
+    SensorProbe camera;
+    camera.configure_sensor_from_pitch(Resolution{4, 4}, units::Micrometer(5.0));
+    CHECK(camera.describe().find("bias 10 DN, mean QE") != std::string::npos);
+    CHECK(camera.describe().find("dark current 1 e-/s") != std::string::npos);
+
+    camera.sensor_->set_bias_map(map_of(4, 4, [](int x, int) { return 20 + x; }));
+    camera.sensor_->set_dark_current_map(Image<float>(4, 4, 2.f));
+    std::string text = camera.describe();
+    INFO(text);
+    CHECK(text.find("bias map (mean 21.5, from 20 to 23 DN)") != std::string::npos);
+    CHECK(text.find("dark current map (mean 2, from 2 to 2 e-/s)") != std::string::npos);
+
+    camera.sensor_->set_bias_map(map_of(4, 4, [](int x, int) { return x - 1.5; }),
+                                 BiasMapKind::Relative);
+    text = camera.describe();
+    CHECK(text.find("bias 10 DN + map (offsets mean 0, from -1.5 to 1.5 DN)") != std::string::npos);
 }

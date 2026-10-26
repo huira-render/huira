@@ -269,8 +269,46 @@ inline void bind_camera_model_handle(py::module_& m)
         .def("set_sensor_read_noise", &HandleType::set_sensor_read_noise, py::arg("read_noise"))
         .def("set_sensor_dark_current",
              &HandleType::set_sensor_dark_current,
-             py::arg("dark_current"))
-        .def("set_sensor_bias_level", &HandleType::set_sensor_bias_level, py::arg("bias_level"))
+             py::arg("dark_current"),
+             "Set the sensor's dark current, in e-/s, the same for every pixel. A dark current "
+             "map, while one is set, takes its place.")
+        .def("set_sensor_dark_current_map",
+             &HandleType::set_sensor_dark_current_map,
+             py::arg("electrons_per_second"),
+             "Set the dark current of each pixel, in e-/s, in place of the one dark current for "
+             "all: an Image_f32 at the sensor's resolution, in the sensor response's layout "
+             "(Image_f32(array, origin=...) makes one from a numpy array). Each pixel's dark "
+             "current, times the exposure time, is the mean number of electrons it gathers in "
+             "the dark, added to its signal before shot noise; for RGB, each channel gathers "
+             "that many. Like the dark current, it applies with noise off too. "
+             "huira.dark_current_from_master_dark() makes one from a master dark and a master "
+             "bias. The camera keeps it until it is cleared or replaced.")
+        .def("clear_sensor_dark_current_map",
+             &HandleType::clear_sensor_dark_current_map,
+             "Clear the sensor's dark current map, so that every pixel has the dark current "
+             "again.")
+        .def("set_sensor_bias_level",
+             &HandleType::set_sensor_bias_level,
+             py::arg("bias_level"),
+             "Set the sensor's bias level, in DN, the same for every pixel. An absolute bias map, "
+             "while one is set, takes its place; a relative one is added to it.")
+        .def("set_sensor_bias_map",
+             &HandleType::set_sensor_bias_map,
+             py::arg("dn"),
+             py::arg("kind") = BiasMapKind::Absolute,
+             "Set the bias of each pixel, in DN: an Image_f32 at the sensor's resolution, in the "
+             "sensor response's layout (Image_f32(array, origin=...) makes one from a numpy "
+             "array). With kind BiasMapKind.Absolute (the default), it is each pixel's bias, as "
+             "a master bias frame gives it, and the bias level is not used while it is set; an "
+             "image with a sensor_bit_depth (a sensor response, or a frame huira.read_fits() "
+             "read from a file that records its bit depth) holds DN / (2^bits - 1), and is "
+             "turned into DN. With BiasMapKind.Relative, it is each pixel's offset from the bias "
+             "level, averaging about 0, and the bias level still applies. Each pixel's bias "
+             "must be in [0, 2^bit_depth - 1). Like the bias level, it applies with noise off "
+             "too. The camera keeps it until it is cleared or replaced.")
+        .def("clear_sensor_bias_map",
+             &HandleType::clear_sensor_bias_map,
+             "Clear the sensor's bias map, so that every pixel has the bias level again.")
         .def("set_sensor_bit_depth", &HandleType::set_sensor_bit_depth, py::arg("bit_depth"))
         .def("set_sensor_conversion_gain", &HandleType::set_sensor_conversion_gain, py::arg("gain"))
         .def("set_sensor_gain_db", &HandleType::set_sensor_gain_db, py::arg("gain_db"))
@@ -299,9 +337,27 @@ inline void bind_camera_model_handle(py::module_& m)
         .def("sensor_dark_current",
              &HandleType::sensor_dark_current,
              "The sensor's dark current, in electrons per second.")
+        .def("has_sensor_dark_current_map",
+             &HandleType::has_sensor_dark_current_map,
+             "Whether the sensor has a dark current map. See set_sensor_dark_current_map().")
+        .def("sensor_dark_current_map",
+             &HandleType::sensor_dark_current_map,
+             "The dark current of each pixel, in e-/s, as an Image_f32: the dark current map, or "
+             "the dark current everywhere if none is set.")
         .def("sensor_bias_level",
              &HandleType::sensor_bias_level,
              "The sensor's bias level, in digital numbers.")
+        .def("has_sensor_bias_map",
+             &HandleType::has_sensor_bias_map,
+             "Whether the sensor has a bias map. See set_sensor_bias_map().")
+        .def("sensor_bias_map_kind",
+             &HandleType::sensor_bias_map_kind,
+             "What the values of the sensor's bias map are (BiasMapKind.Absolute if none is "
+             "set).")
+        .def("sensor_bias_map",
+             &HandleType::sensor_bias_map,
+             "The bias of each pixel, in DN, as an Image_f32: an absolute bias map, a relative "
+             "one added to the bias level, or the bias level everywhere if none is set.")
         .def("sensor_bit_depth", &HandleType::sensor_bit_depth, "The sensor's bit depth.")
         .def("sensor_conversion_gain",
              &HandleType::sensor_conversion_gain,
