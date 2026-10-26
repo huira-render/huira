@@ -1,6 +1,9 @@
 #pragma once
 
+#include <string>
+
 #include "huira/core/rotation.hpp"
+#include "huira/core/types_py.ipp"
 #include "huira/units/units_py.ipp"
 #include "pybind11/numpy.h"
 #include "pybind11/operators.h"
@@ -11,24 +14,21 @@ namespace py = pybind11;
 
 namespace huira {
 
-/// A numpy array of doubles, made contiguous if it is not, which the bindings read through a
-/// pointer.
-using DoubleArray = py::array_t<double, py::array::c_style | py::array::forcecast>;
-
 /**
  * @brief Bind Rotation<double> to Python.
  *
- * Provides all factory methods (matrix, quaternion, axis-angle, Euler, basis vectors)
- * with numpy array overloads so users can pass raw arrays directly.
+ * Its factory methods (matrix, quaternion, axis-angle, Euler, basis vectors) take a Mat3 or Vec3,
+ * or, as everywhere (see bind_types()), any list, tuple or numpy array of that shape.
  */
 inline void bind_rotation(py::module_& m)
 {
     using Rot = Rotation<double>;
 
-    py::class_<Rot>(m,
-                    "Rotation",
-                    "3D rotation (double precision). "
-                    "Internally stored as a 3x3 orthonormal matrix.")
+    auto cls = py::class_<Rot>(m,
+                               "Rotation",
+                               "3D rotation (double precision). "
+                               "Internally stored as a 3x3 orthonormal matrix.");
+    cls
 
         // ---- Default constructor (identity) ----
         .def(py::init<>(), "Construct an identity rotation")
@@ -39,7 +39,8 @@ inline void bind_rotation(py::module_& m)
         .def_static("from_local_to_parent",
                     py::overload_cast<Mat3<double>>(&Rot::from_local_to_parent),
                     py::arg("matrix"),
-                    "Create from a local-to-parent rotation matrix (Mat3)")
+                    "Create from a local-to-parent rotation matrix: a Mat3, or a 3x3 array or "
+                    "nested list, row by row")
         .def_static("from_local_to_parent",
                     py::overload_cast<Quaternion<double>>(&Rot::from_local_to_parent),
                     py::arg("quaternion"),
@@ -55,41 +56,8 @@ inline void bind_rotation(py::module_& m)
             },
             py::arg("axis"),
             py::arg("angle"),
-            "Create from axis + angle (local-to-parent)")
-
-        // NumPy overloads for from_local_to_parent:
-        .def_static(
-            "from_local_to_parent_matrix",
-            [](DoubleArray arr) {
-                auto buf = arr.request();
-                if (buf.ndim != 2 || buf.shape[0] != 3 || buf.shape[1] != 3) {
-                    throw std::runtime_error("Expected a 3x3 numpy array");
-                }
-                auto* ptr = static_cast<double*>(buf.ptr);
-                Mat3<double> mat;
-                for (int row = 0; row < 3; ++row) {
-                    for (int col = 0; col < 3; ++col) {
-                        mat[col][row] = ptr[row * 3 + col];
-                    }
-                }
-                return Rot::from_local_to_parent(mat);
-            },
-            py::arg("matrix"),
-            "Create from a 3x3 numpy array (row-major, local-to-parent)")
-        .def_static(
-            "from_local_to_parent_axis_angle",
-            [](DoubleArray axis_arr, const py::object& angle) {
-                auto buf = axis_arr.request();
-                if (buf.ndim != 1 || buf.shape[0] != 3) {
-                    throw std::runtime_error("Axis must be a 1-D array of length 3");
-                }
-                auto* ptr = static_cast<double*>(buf.ptr);
-                Vec3<double> axis(ptr[0], ptr[1], ptr[2]);
-                return Rot::from_local_to_parent(axis, detail::unit_from_py<units::Radian>(angle));
-            },
-            py::arg("axis"),
-            py::arg("angle"),
-            "Create from a numpy axis [3] + angle (local-to-parent)")
+            "Create from an axis (a Vec3, or any sequence or array of three numbers) and an angle "
+            "(local-to-parent)")
 
         // ==============================================================
         // from_parent_to_local factories
@@ -97,7 +65,8 @@ inline void bind_rotation(py::module_& m)
         .def_static("from_parent_to_local",
                     py::overload_cast<Mat3<double>>(&Rot::from_parent_to_local),
                     py::arg("matrix"),
-                    "Create from a parent-to-local rotation matrix (Mat3)")
+                    "Create from a parent-to-local rotation matrix: a Mat3, or a 3x3 array or "
+                    "nested list, row by row")
         .def_static("from_parent_to_local",
                     py::overload_cast<Quaternion<double>>(&Rot::from_parent_to_local),
                     py::arg("quaternion"),
@@ -113,41 +82,8 @@ inline void bind_rotation(py::module_& m)
             },
             py::arg("axis"),
             py::arg("angle"),
-            "Create from axis + angle (parent-to-local)")
-
-        // NumPy overloads for from_parent_to_local:
-        .def_static(
-            "from_parent_to_local_matrix",
-            [](DoubleArray arr) {
-                auto buf = arr.request();
-                if (buf.ndim != 2 || buf.shape[0] != 3 || buf.shape[1] != 3) {
-                    throw std::runtime_error("Expected a 3x3 numpy array");
-                }
-                auto* ptr = static_cast<double*>(buf.ptr);
-                Mat3<double> mat;
-                for (int row = 0; row < 3; ++row) {
-                    for (int col = 0; col < 3; ++col) {
-                        mat[col][row] = ptr[row * 3 + col];
-                    }
-                }
-                return Rot::from_parent_to_local(mat);
-            },
-            py::arg("matrix"),
-            "Create from a 3x3 numpy array (row-major, parent-to-local)")
-        .def_static(
-            "from_parent_to_local_axis_angle",
-            [](DoubleArray axis_arr, const py::object& angle) {
-                auto buf = axis_arr.request();
-                if (buf.ndim != 1 || buf.shape[0] != 3) {
-                    throw std::runtime_error("Axis must be a 1-D array of length 3");
-                }
-                auto* ptr = static_cast<double*>(buf.ptr);
-                Vec3<double> axis(ptr[0], ptr[1], ptr[2]);
-                return Rot::from_parent_to_local(axis, detail::unit_from_py<units::Radian>(angle));
-            },
-            py::arg("axis"),
-            py::arg("angle"),
-            "Create from a numpy axis [3] + angle (parent-to-local)")
+            "Create from an axis (a Vec3, or any sequence or array of three numbers) and an angle "
+            "(parent-to-local)")
 
         // ==============================================================
         // Euler angle factories
@@ -193,26 +129,8 @@ inline void bind_rotation(py::module_& m)
                     py::arg("x_axis"),
                     py::arg("y_axis"),
                     py::arg("z_axis"),
-                    "Create from three orthonormal basis vectors (Vec3)")
-        .def_static(
-            "from_basis_vectors",
-            [](DoubleArray x_arr, DoubleArray y_arr, DoubleArray z_arr) {
-                auto parse = [](DoubleArray& a, const char* name) {
-                    auto buf = a.request();
-                    if (buf.ndim != 1 || buf.shape[0] != 3) {
-                        throw std::runtime_error(std::string(name) +
-                                                 " must be a 1-D array of length 3");
-                    }
-                    auto* p = static_cast<double*>(buf.ptr);
-                    return Vec3<double>(p[0], p[1], p[2]);
-                };
-                return Rot::from_basis_vectors(
-                    parse(x_arr, "x_axis"), parse(y_arr, "y_axis"), parse(z_arr, "z_axis"));
-            },
-            py::arg("x_axis"),
-            py::arg("y_axis"),
-            py::arg("z_axis"),
-            "Create from three numpy basis-vector arrays of length 3")
+                    "Create from three orthonormal basis vectors, each a Vec3 or any sequence or "
+                    "array of three numbers")
 
         // ==============================================================
         // Conversion / query methods
@@ -228,31 +146,11 @@ inline void bind_rotation(py::module_& m)
         // NumPy convenience for matrices:
         .def(
             "local_to_parent_numpy",
-            [](const Rot& r) {
-                Mat3<double> mat = r.local_to_parent_matrix();
-                py::array_t<double> arr({3, 3});
-                auto buf = arr.mutable_unchecked<2>();
-                for (int row = 0; row < 3; ++row) {
-                    for (int col = 0; col < 3; ++col) {
-                        buf(row, col) = mat[col][row];
-                    }
-                }
-                return arr;
-            },
+            [](const Rot& r) { return detail::mat3_to_numpy(r.local_to_parent_matrix()); },
             "Return the local-to-parent matrix as a 3x3 numpy array")
         .def(
             "parent_to_local_numpy",
-            [](const Rot& r) {
-                Mat3<double> mat = r.parent_to_local_matrix();
-                py::array_t<double> arr({3, 3});
-                auto buf = arr.mutable_unchecked<2>();
-                for (int row = 0; row < 3; ++row) {
-                    for (int col = 0; col < 3; ++col) {
-                        buf(row, col) = mat[col][row];
-                    }
-                }
-                return arr;
-            },
+            [](const Rot& r) { return detail::mat3_to_numpy(r.parent_to_local_matrix()); },
             "Return the parent-to-local matrix as a 3x3 numpy array")
 
         // Axis accessors
@@ -275,28 +173,32 @@ inline void bind_rotation(py::module_& m)
         .def(
             "__mul__", [](const Rot& r, const Vec3<double>& v) { return r * v; }, py::is_operator())
 
-        // Apply rotation to a numpy vector:
+        // Apply the rotation to a vector, as rotation * vector does:
         .def(
             "apply",
-            [](const Rot& r, DoubleArray arr) {
-                auto buf = arr.request();
-                if (buf.ndim != 1 || buf.shape[0] != 3) {
-                    throw std::runtime_error("Expected a 1-D array of length 3");
-                }
-                auto* ptr = static_cast<double*>(buf.ptr);
-                Vec3<double> v(ptr[0], ptr[1], ptr[2]);
-                Vec3<double> result = r * v;
-                py::array_t<double> out(3);
-                auto obuf = out.mutable_unchecked<1>();
-                obuf(0) = result.x;
-                obuf(1) = result.y;
-                obuf(2) = result.z;
-                return out;
-            },
+            [](const Rot& r, const Vec3<double>& v) { return r * v; },
             py::arg("vector"),
-            "Apply this rotation to a numpy vector [3], returns numpy array")
+            "Apply this rotation to a vector (a Vec3, or any sequence or array of three "
+            "numbers), giving a Vec3")
 
         .def("__repr__", &Rot::to_string);
+
+    // Removed in v0.9.11: what these did, from_local_to_parent() and from_parent_to_local() now
+    // do, taking any form of matrix or axis. Calling one says what to use instead.
+    const auto removed = [&cls](const char* name, const char* instead) {
+        const std::string message = std::string("API BREAKING CHANGE: Rotation.") + name +
+                                    " was removed in v0.9.11. Use " + instead + " instead.";
+        cls.def_static(
+            name,
+            [message](const py::args&, const py::kwargs&) -> Rot {
+                throw py::attribute_error(message);
+            },
+            ("Removed in v0.9.11: use " + std::string(instead) + ".").c_str());
+    };
+    removed("from_local_to_parent_matrix", "Rotation.from_local_to_parent(matrix)");
+    removed("from_local_to_parent_axis_angle", "Rotation.from_local_to_parent(axis, angle)");
+    removed("from_parent_to_local_matrix", "Rotation.from_parent_to_local(matrix)");
+    removed("from_parent_to_local_axis_angle", "Rotation.from_parent_to_local(axis, angle)");
 }
 
 } // namespace huira

@@ -4,6 +4,8 @@
 #include <vector>
 
 #include "huira/core/spectral_bins.hpp"
+#include "huira/core/types_py.ipp"
+#include "pybind11/numpy.h"
 #include "pybind11/operators.h"
 #include "pybind11/pybind11.h"
 #include "pybind11/stl.h"
@@ -11,13 +13,32 @@
 namespace py = pybind11;
 
 namespace huira {
+namespace detail {
+/// SpectralBins as a numpy array, one value per bin, in single precision as they are kept.
+template <typename TSpectral>
+py::array_t<float> spectral_to_numpy(const TSpectral& bins)
+{
+    py::array_t<float> out(static_cast<py::ssize_t>(TSpectral::size()));
+    auto values = out.mutable_unchecked<1>();
+    for (std::size_t i = 0; i < TSpectral::size(); ++i) {
+        values(static_cast<py::ssize_t>(i)) = bins[i];
+    }
+    return out;
+}
+} // namespace detail
 
 template <typename TSpectral>
 inline void bind_spectral_bins(py::module_& m)
 {
     constexpr std::size_t N = TSpectral::size();
 
-    py::class_<TSpectral>(m, "SpectralBins")
+    auto cls = py::class_<TSpectral>(
+        m,
+        "SpectralBins",
+        "A value in each spectral bin. Functions that take one also take any list, tuple or "
+        "numpy array of one value per bin. It works with numpy as that array: np.asarray(s), "
+        "numpy functions, s[0], len(s) and iteration.");
+    cls
         // Default constructor (all zeros)
         .def(py::init<>())
 
@@ -167,6 +188,9 @@ inline void bind_spectral_bins(py::module_& m)
             "Get the Bin definition at the given index")
 
         // Conversion
+        .def("to_numpy",
+             &detail::spectral_to_numpy<TSpectral>,
+             "Return a numpy array of the values, one per bin (float32)")
         .def(
             "to_list",
             [](const TSpectral& self) {
@@ -181,6 +205,9 @@ inline void bind_spectral_bins(py::module_& m)
         .def("__repr__",
              [](const TSpectral& self) { return "SpectralBins(" + self.to_string() + ")"; })
         .def("__str__", &TSpectral::to_string);
+
+    detail::bind_array_protocol<TSpectral>(cls, &detail::spectral_to_numpy<TSpectral>);
+    detail::accept_array_likes<TSpectral>();
 }
 
 } // namespace huira
