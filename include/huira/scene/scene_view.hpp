@@ -450,6 +450,14 @@ class SceneView {
                                      : moving_.linear * direction;
         }
 
+        /// Turns a surface's normal by the inverse transpose of what turns its tangents, which
+        /// keeps it at right angles to them when the scale is uneven. (Unnormalized.)
+        [[nodiscard]] Vec3<float> apply_to_normal(const Vec3<float>& normal) const
+        {
+            return still_ != nullptr ? still_->rotation * (normal / still_->scale)
+                                     : glm::transpose(glm::inverse(moving_.linear)) * normal;
+        }
+
       private:
         const Transform<float>* still_ = nullptr;
         EmbreeTransform moving_{};
