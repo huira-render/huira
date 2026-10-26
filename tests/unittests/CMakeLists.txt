@@ -74,6 +74,7 @@ set(UNIT_TESTS
     huira/scene/test_direct_lit_radiance.cpp
     huira/scene/test_node_rates.cpp
     huira/scene/test_pose_sources.cpp
+    huira/scene/test_root_frame.cpp
     huira/scene/test_resolve_hit.cpp
     huira/scene/test_scene_inputs.cpp
     huira/scene/test_scene_deletion.cpp

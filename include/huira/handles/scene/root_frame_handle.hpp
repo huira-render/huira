@@ -10,8 +10,10 @@ namespace huira {
  * @brief Handle for referencing the root frame node in the scene graph.
  *
  * RootFrameHandle is a specialized FrameHandle that represents the root of the scene graph.
- * It disables all transform modification methods to ensure the root frame remains fixed.
- * Copy and assignment are also disabled to enforce unique ownership semantics.
+ * It disables all transform modification methods to ensure the root frame remains fixed. The root
+ * node refuses them too (see RootFrameNode), so another handle to it, such as a child's
+ * get_parent(), can't change it either. Copy and assignment are also disabled to enforce unique
+ * ownership semantics.
  *
  * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
  */
