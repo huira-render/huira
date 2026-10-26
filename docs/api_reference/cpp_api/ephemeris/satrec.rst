@@ -6,3 +6,5 @@ SatRec
    :undoc-members:
 
 .. doxygenenum:: huira::Sgp4Mode
+
+.. doxygentypedef:: huira::OmmFields

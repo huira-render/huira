@@ -58,7 +58,7 @@ The Huira C++ API is organized into the modules below. Select one to explore it.
         :link: ephemeris/index
         :link-type: doc
 
-        Satellites' element sets: TLEs, read and checked, and propagated with SGP4.
+        Satellites' element sets: TLEs and OMMs, read and checked, and propagated with SGP4.
 
     .. grid-item-card:: Logger
         :link: util/logger

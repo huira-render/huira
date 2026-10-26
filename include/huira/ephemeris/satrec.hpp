@@ -2,6 +2,8 @@
 
 #include <array>
 #include <cstddef>
+#include <functional>
+#include <map>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -42,13 +44,24 @@ enum class Sgp4Mode {
 };
 
 /**
- * @brief A satellite's element set, read from a two-line element set (TLE) and ready to be
- * propagated with SGP4.
+ * @brief An Orbit Mean-Elements Message's keywords and their values, as text: "EPOCH",
+ * "MEAN_MOTION", "BSTAR", and so on (see SatRec::from_omm()).
  *
- * A SatRec is made from a TLE's two lines, or from three with a name line before them, and checks
- * them as it is made: each line's length, the layout of its columns and its checksum; that both
- * lines are for the same satellite; and that SGP4 can propagate the elements at their epoch. Any
- * other TLE throws, so a SatRec that exists is good at its epoch.
+ * Every OMM format (KVN, XML, JSON or CSV) comes to this: each keyword and its value.
+ */
+using OmmFields = std::map<std::string, std::string, std::less<>>;
+
+/**
+ * @brief A satellite's element set, read from a two-line element set (TLE) or an Orbit
+ * Mean-Elements Message (OMM), and ready to be propagated with SGP4.
+ *
+ * A SatRec is made from a TLE's two lines, or from three with a name line before them, or from an
+ * OMM's fields, and checks them as it is made. For a TLE: each line's length, the layout of its
+ * columns and its checksum, and that both lines are for the same satellite. For an OMM: that it
+ * has the fields SGP4 needs, each a number, an integer or a time as it should be, and that its
+ * metadata, if given, is for SGP4 in TEME about the Earth. For both: that the elements are in
+ * range, and that SGP4 can propagate them at their epoch. Anything else throws, so a SatRec that
+ * exists is good at its epoch.
  *
  * evaluate() gives the satellite's position and velocity at a time, in the TEME frame (true
  * equator, mean equinox) that SGP4 works in, which Huira defines as the SPICE frame
@@ -79,14 +92,17 @@ class SatRec {
                            std::string_view line2,
                            Sgp4Mode mode = Sgp4Mode::AFSPC);
 
+    static SatRec from_omm(const OmmFields& fields, Sgp4Mode mode = Sgp4Mode::AFSPC);
+
     /// The satellite's NORAD catalog number, decoded from the Alpha-5 form if it is in it.
     [[nodiscard]] int catalog_number() const { return catalog_number_; }
 
-    /// The satellite's name from the TLE's name line, or empty if it was made from two lines.
+    /// The satellite's name: from a TLE's name line, or an OMM's OBJECT_NAME, or empty if it has
+    /// none.
     [[nodiscard]] const std::string& name() const { return name_; }
 
-    /// The satellite's international designator (COSPAR ID), such as "98067A", or empty if the
-    /// TLE leaves it blank.
+    /// The satellite's international designator (COSPAR ID) as a TLE writes it, such as "98067A"
+    /// (an OMM's OBJECT_ID "1998-067A"), or empty if the element set leaves it blank.
     [[nodiscard]] const std::string& international_designator() const
     {
         return international_designator_;
@@ -107,6 +123,14 @@ class SatRec {
 
     static SatRec
     from_lines_(std::string name, std::string_view line1, std::string_view line2, Sgp4Mode mode);
+
+    /// Initializes an element set whose elements have been read into the record, and checks it.
+    static SatRec from_record_(detail::vallado::elsetrec& record,
+                               int catalog_number,
+                               std::string name,
+                               std::string international_designator,
+                               Sgp4Mode mode,
+                               const std::string& context);
 
     /// SGP4's state at a time, in kilometers and kilometers per second: 0 if it has one, or else
     /// its error code (see error_message_at()), or -1 if the state it gave is not finite.
