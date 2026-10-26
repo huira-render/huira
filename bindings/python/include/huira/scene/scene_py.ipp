@@ -1,7 +1,11 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
+#include <initializer_list>
+#include <limits>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -18,6 +22,112 @@
 namespace py = pybind11;
 
 namespace huira {
+namespace detail {
+/// A numpy array of doubles, made contiguous if it is not.
+using MeshArray = py::array_t<double, py::array::c_style | py::array::forcecast>;
+
+/// Throws unless an array has the shape given (-1 for any length).
+inline void check_mesh_array_(const MeshArray& array,
+                              std::initializer_list<py::ssize_t> shape,
+                              const std::string& name,
+                              const std::string& expected)
+{
+    bool ok = array.ndim() == static_cast<py::ssize_t>(shape.size());
+    py::ssize_t axis = 0;
+    for (const py::ssize_t length : shape) {
+        ok = ok && (length < 0 || array.shape(axis) == length);
+        ++axis;
+    }
+    if (!ok) {
+        throw py::value_error("add_mesh: " + name + " must have shape " + expected);
+    }
+}
+
+/// The tangent buffer from an array of shape (vertices, 2, 3): each vertex's tangent and
+/// bitangent (Python has no class for C++'s Tangent).
+inline TangentBuffer tangent_buffer_from_py(const MeshArray& tangents)
+{
+    check_mesh_array_(tangents,
+                      {-1, 2, 3},
+                      "tangent_buffer",
+                      "(vertices, 2, 3): each vertex's "
+                      "tangent and bitangent");
+    const auto t = tangents.unchecked<3>();
+    TangentBuffer tangent_buffer(static_cast<std::size_t>(tangents.shape(0)));
+    for (py::ssize_t i = 0; i < tangents.shape(0); ++i) {
+        auto& tangent = tangent_buffer[static_cast<std::size_t>(i)];
+        for (py::ssize_t c = 0; c < 3; ++c) {
+            const auto k = static_cast<glm::length_t>(c);
+            tangent.tangent[k] = static_cast<float>(t(i, 0, c));
+            tangent.bitangent[k] = static_cast<float>(t(i, 1, c));
+        }
+    }
+    return tangent_buffer;
+}
+
+/// A mesh's vertices and indices from arrays: the indices, three per triangle, of shape
+/// (triangles, 3) or flat; each vertex's position and normal, (vertices, 3); and optionally its
+/// texture coordinates, (vertices, 2), and albedo, (vertices, bins), 1 if not given.
+template <IsSpectral TSpectral>
+std::pair<IndexBuffer, VertexBuffer<TSpectral>> mesh_from_arrays(
+    const py::array_t<std::int64_t, py::array::c_style | py::array::forcecast>& indices,
+    const MeshArray& positions,
+    const MeshArray& normals,
+    const std::optional<MeshArray>& uvs,
+    const std::optional<MeshArray>& albedo)
+{
+    check_mesh_array_(positions, {-1, 3}, "positions", "(vertices, 3)");
+    const py::ssize_t n = positions.shape(0);
+    check_mesh_array_(normals, {n, 3}, "normals", "(vertices, 3), as positions");
+    if (uvs) {
+        check_mesh_array_(*uvs, {n, 2}, "uvs", "(vertices, 2), with positions' vertices");
+    }
+    const auto bins = static_cast<py::ssize_t>(TSpectral::size());
+    if (albedo) {
+        check_mesh_array_(*albedo,
+                          {n, bins},
+                          "albedo",
+                          "(vertices, " + std::to_string(bins) +
+                              "): a value in each spectral bin for each of positions' vertices");
+    }
+    if (!(indices.ndim() == 1 || (indices.ndim() == 2 && indices.shape(1) == 3))) {
+        throw py::value_error(
+            "add_mesh: index_buffer must have shape (triangles, 3), or be flat, three per "
+            "triangle");
+    }
+
+    IndexBuffer index_buffer(static_cast<std::size_t>(indices.size()));
+    const std::int64_t* index = indices.data();
+    for (std::size_t k = 0; k < index_buffer.size(); ++k) {
+        if (index[k] < 0 || index[k] > std::numeric_limits<std::uint32_t>::max()) {
+            throw py::value_error("add_mesh: index " + std::to_string(index[k]) +
+                                  " is not a vertex: indices are from 0");
+        }
+        index_buffer[k] = static_cast<std::uint32_t>(index[k]);
+    }
+
+    VertexBuffer<TSpectral> vertex_buffer(static_cast<std::size_t>(n));
+    const auto p = positions.unchecked<2>();
+    const auto nn = normals.unchecked<2>();
+    for (py::ssize_t i = 0; i < n; ++i) {
+        auto& vertex = vertex_buffer[static_cast<std::size_t>(i)];
+        vertex.position = Vec3<float>(p(i, 0), p(i, 1), p(i, 2));
+        vertex.normal = Vec3<float>(nn(i, 0), nn(i, 1), nn(i, 2));
+        if (uvs) {
+            const auto uv = uvs->unchecked<2>();
+            vertex.uv = Vec2<float>(uv(i, 0), uv(i, 1));
+        }
+        if (albedo) {
+            const auto a = albedo->unchecked<2>();
+            for (py::ssize_t b = 0; b < bins; ++b) {
+                vertex.albedo[static_cast<std::size_t>(b)] = static_cast<float>(a(i, b));
+            }
+        }
+    }
+    return {std::move(index_buffer), std::move(vertex_buffer)};
+}
+} // namespace detail
+
 namespace detail {
 
 /// The scene a Python Scene object holds, or null before it is made.
@@ -87,7 +197,7 @@ inline void bind_scene(py::module_& m)
         // Geometry
         // =============================================================
 
-        // add_mesh — without tangents
+        // add_mesh — from a list of Vertex, without tangents
         .def("add_mesh",
              static_cast<MeshHandle<TSpectral> (SceneType::*)(
                  const IndexBuffer&, const VertexBuffer<TSpectral>&, std::string)>(
@@ -95,40 +205,65 @@ inline void bind_scene(py::module_& m)
              py::arg("index_buffer"),
              py::arg("vertex_buffer"),
              py::arg("name") = "",
-             "Add a mesh from index and vertex buffers")
+             "Add a mesh from a list of indices, three per triangle, and a list of Vertex")
 
-        // add_mesh — with tangents, each vertex's tangent and bitangent, as an array of shape
-        // (vertices, 2, 3) (Python has no class for C++'s Tangent)
+        // add_mesh — from a list of Vertex, with tangents
         .def(
             "add_mesh",
             [](SceneType& self,
                const IndexBuffer& index_buffer,
                const VertexBuffer<TSpectral>& vertex_buffer,
-               const py::array_t<double, py::array::c_style | py::array::forcecast>& tangents,
+               const detail::MeshArray& tangent_buffer,
                std::string name) {
-                if (tangents.ndim() != 3 || tangents.shape(1) != 2 || tangents.shape(2) != 3) {
-                    throw py::value_error(
-                        "add_mesh: tangent_buffer must have shape (vertices, 2, 3): each "
-                        "vertex's tangent and bitangent");
-                }
-                const auto t = tangents.unchecked<3>();
-                TangentBuffer tangent_buffer(static_cast<std::size_t>(tangents.shape(0)));
-                for (py::ssize_t i = 0; i < tangents.shape(0); ++i) {
-                    auto& tangent = tangent_buffer[static_cast<std::size_t>(i)];
-                    for (py::ssize_t c = 0; c < 3; ++c) {
-                        const auto k = static_cast<glm::length_t>(c);
-                        tangent.tangent[k] = static_cast<float>(t(i, 0, c));
-                        tangent.bitangent[k] = static_cast<float>(t(i, 1, c));
-                    }
-                }
-                return self.add_mesh(index_buffer, vertex_buffer, tangent_buffer, std::move(name));
+                return self.add_mesh(index_buffer,
+                                     vertex_buffer,
+                                     detail::tangent_buffer_from_py(tangent_buffer),
+                                     std::move(name));
             },
             py::arg("index_buffer"),
             py::arg("vertex_buffer"),
             py::arg("tangent_buffer"),
             py::arg("name") = "",
-            "Add a mesh from index and vertex buffers, and a tangent buffer: each vertex's tangent "
-            "and bitangent, as an array (or nested lists) of shape (vertices, 2, 3).")
+            "Add a mesh from a list of indices, a list of Vertex, and a tangent buffer: each "
+            "vertex's tangent and bitangent, as an array (or nested lists) of shape "
+            "(vertices, 2, 3).")
+
+        // add_mesh — from arrays
+        .def(
+            "add_mesh",
+            [](SceneType& self,
+               const py::array_t<std::int64_t, py::array::c_style | py::array::forcecast>&
+                   index_buffer,
+               const detail::MeshArray& positions,
+               const detail::MeshArray& normals,
+               const std::optional<detail::MeshArray>& uvs,
+               const std::optional<detail::MeshArray>& albedo,
+               const std::optional<detail::MeshArray>& tangent_buffer,
+               std::string name) {
+                auto [indices, vertices] = detail::mesh_from_arrays<TSpectral>(
+                    index_buffer, positions, normals, uvs, albedo);
+                if (tangent_buffer) {
+                    return self.add_mesh(indices,
+                                         vertices,
+                                         detail::tangent_buffer_from_py(*tangent_buffer),
+                                         std::move(name));
+                }
+                return self.add_mesh(indices, vertices, std::move(name));
+            },
+            py::arg("index_buffer"),
+            py::arg("positions"),
+            py::arg("normals"),
+            py::kw_only(),
+            py::arg("uvs") = py::none(),
+            py::arg("albedo") = py::none(),
+            py::arg("tangent_buffer") = py::none(),
+            py::arg("name") = "",
+            "Add a mesh from arrays (numpy arrays, or nested lists): index_buffer, three indices "
+            "per triangle, of shape (triangles, 3) or flat; and each vertex's position and normal, "
+            "of shape (vertices, 3), in the mesh's frame. Optionally, each vertex's texture "
+            "coordinates, uvs (vertices, 2), 0 if not given; its albedo, (vertices, bins), "
+            "which scales the material's, 1 if not given; and its tangent and bitangent, "
+            "tangent_buffer (vertices, 2, 3).")
 
         // add_ellipsoid
         .def(

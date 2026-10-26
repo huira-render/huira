@@ -3,7 +3,8 @@
 
 Demonstrates:
     - The asset chain: one geometry, used by two primitives with different materials
-    - Building a geometry in code: a mesh from a list of vertices and a list of indices
+    - Building a geometry in code: a mesh from numpy arrays of vertex positions and normals,
+      and indices into them
     - Reusing one primitive in several instances, each with its own position and scale
     - Frames (new_subframe): moving or rotating a frame moves everything in it
     - Rotations: from an axis and angle (Rotation), from Euler angles, and non-uniform scale
@@ -27,7 +28,7 @@ from pathlib import Path
 import numpy as np
 
 import huira
-from huira.rgb import Scene, SceneView, Renderer, SpectralBins, Vertex
+from huira.rgb import Scene, SceneView, Renderer, SpectralBins
 
 from huira.units import Meter as m
 from huira.units import Millimeter as mm
@@ -79,22 +80,19 @@ def main():
     rock.set_scale(0.9, 0.5, 0.3)
     rock.set_euler_angles(deg(20), deg(0), deg(35), "XYZ")
 
-    # Geometry can also be built in code, as a mesh: a list of vertices, each with a position and
-    # a normal (and optionally texture coordinates and a color), and a list of indices into it,
-    # three for each triangle. Here, a tetrahedron with flat faces: each face has its own three
-    # vertices, which all take the face's normal.
+    # Geometry can also be built in code, as a mesh: arrays of each vertex's position and normal
+    # (and optionally its texture coordinates, albedo and tangents), and indices into them, three
+    # for each triangle. (A list of Vertex works too.) Here, a tetrahedron with flat faces: each
+    # face has its own three vertices, which all take the face's normal.
     corners = np.array([(1, 1, 1), (1, -1, -1), (-1, 1, -1), (-1, -1, 1)], dtype=float)
-    faces = [(0, 1, 2), (0, 3, 1), (0, 2, 3), (1, 3, 2)]
-    vertices = []
-    indices = []
-    for face in faces:
-        a, b, c = corners[list(face)]
-        normal = np.cross(b - a, c - a)
-        normal /= np.linalg.norm(normal)
-        for corner in (a, b, c):
-            indices.append(len(vertices))
-            vertices.append(Vertex(position=corner, normal=normal))
-    tetrahedron_mesh = scene.add_mesh(indices, vertices, "tetrahedron")
+    faces = np.array([(0, 1, 2), (0, 3, 1), (0, 2, 3), (1, 3, 2)])
+    triangles = corners[faces]  # (faces, 3 corners, xyz)
+    normals = np.cross(triangles[:, 1] - triangles[:, 0], triangles[:, 2] - triangles[:, 0])
+    normals /= np.linalg.norm(normals, axis=1, keepdims=True)
+    positions = triangles.reshape(-1, 3)
+    normals = np.repeat(normals, 3, axis=0)  # each face's normal, at its three vertices
+    indices = np.arange(len(positions)).reshape(-1, 3)
+    tetrahedron_mesh = scene.add_mesh(indices, positions, normals, name="tetrahedron")
 
     tetrahedron = planet_frame.new_instance(scene.add_primitive(tetrahedron_mesh, rust))
     tetrahedron.set_position(m(3), m(-3), m(1.5))
