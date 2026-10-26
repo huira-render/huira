@@ -52,8 +52,15 @@ struct TIFFData {
     bool is_float = false;
 
     /// A sensor's bit depth, from a MaxSampleValue tag of 2^bits - 1 below the type's maximum
-    /// (as write_image_tiff() writes for a sensor's digital numbers); 0 otherwise.
+    /// (as write_image_tiff() writes for a sensor's digital numbers); 0 otherwise. Such samples
+    /// are a sensor's DN, so linear.
     int sensor_bits = 0;
+
+    /// The bits of the counts the samples were normalized from, which the image records
+    /// (Image::sensor_bit_depth()), so that they are recovered exactly: sensor_bits, or, for 16-
+    /// and 32-bit integer samples, the type's bits. 0 for 8-bit samples, which are pictures, and
+    /// float ones, which are returned as they are.
+    int count_bits = 0;
 };
 
 /// Set a TIFF reader's bundle's encoding and bit depths from what the file held.
@@ -65,7 +72,7 @@ void set_tiff_bundle_info_(const TIFFData& tiff_data, ImageBundle<PixelT>& bundl
     bundle.color_space = (tiff_data.is_float || tiff_data.sensor_bits > 0) ? ColorSpaceHint::Linear
                                                                            : ColorSpaceHint::sRGB;
     bundle.bit_depth = (tiff_data.bits_per_sample == 8) ? 8 : 16;
-    bundle.image.set_sensor_bit_depth(tiff_data.sensor_bits);
+    bundle.image.set_sensor_bit_depth(tiff_data.count_bits);
 }
 
 // =========================================================================
@@ -417,9 +424,11 @@ inline TIFFData read_tiff_raw_(const unsigned char* data, std::size_t size)
         }
     }
 
-    // MaxSampleValue: the largest value the samples take, for samples that do not use their
-    // type's whole range, such as a 12-bit sensor's DN in 16 bits (0 to 4095). They are then
-    // normalized by it, and if it is 2^bits - 1 it gives the sensor's bit depth.
+    // Integer samples are normalized by their type's range, 2^bits - 1. A MaxSampleValue of
+    // 2^bits - 1 below it, as for a 12-bit sensor's DN in 16 bits (0 to 4095), is a sensor's
+    // bit depth, and they are normalized by it instead. Any other MaxSampleValue is only the
+    // largest value the samples take, as TIFF defines it, and doesn't normalize: the counts
+    // couldn't be recovered from values divided by it.
     double sample_max = 0.0;
     int sensor_bits = 0;
     if (!is_float) {
@@ -429,15 +438,20 @@ inline TIFFData read_tiff_raw_(const unsigned char* data, std::size_t size)
         uint16_t max_sample_value = 0;
         if (TIFFGetField(tif.get(), TIFFTAG_MAXSAMPLEVALUE, &max_sample_value) == 1 &&
             max_sample_value > 0 && static_cast<double>(max_sample_value) < sample_max) {
-            sample_max = static_cast<double>(max_sample_value);
             const unsigned int next = static_cast<unsigned int>(max_sample_value) + 1u;
             if ((next & (next - 1u)) == 0u) {
+                sample_max = static_cast<double>(max_sample_value);
                 while ((1u << sensor_bits) < next) {
                     ++sensor_bits;
                 }
             }
         }
     }
+    // The counts the samples were normalized from, recorded so that they are recovered exactly.
+    // 8-bit samples are pictures (sRGB, by convention), and too coarse for a sensor's DN, so are
+    // left without unless MaxSampleValue gives a sensor's bit depth:
+    const int count_bits =
+        sensor_bits > 0 ? sensor_bits : (!is_float && bits_per_sample >= 16 ? bits_per_sample : 0);
 
     // Prepare output channels
     std::size_t num_channels = static_cast<std::size_t>(samples_per_pixel);
@@ -602,6 +616,7 @@ inline TIFFData read_tiff_raw_(const unsigned char* data, std::size_t size)
     tiff_data.bits_per_sample = static_cast<int>(bits_per_sample);
     tiff_data.is_float = is_float;
     tiff_data.sensor_bits = sensor_bits;
+    tiff_data.count_bits = count_bits;
 
     orient_tiff_data_(tiff_data, orientation);
     return tiff_data;

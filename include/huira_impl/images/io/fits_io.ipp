@@ -504,6 +504,30 @@ inline int fits_image_type(int bit_depth)
 // Largest value of an integer image of the given type: a CFITSIO image type, as
 // fits_image_type() and fits_get_img_equivtype() give, so that unsigned types stored with BZERO
 // are told apart from signed ones.
+/// The bits of an integer image type whose range, 0 (or its negative) to 2^bits - 1, its values
+/// are normalised by when read, for recording as the image's bit depth: up to the 32 bits that
+/// counts are written with. 0 for a 64-bit integer type, which a float can't hold anyway, and for
+/// any other type.
+inline int fits_type_bits(int image_type)
+{
+    switch (image_type) {
+    case BYTE_IMG:
+        return 8;
+    case SBYTE_IMG:
+        return 7;
+    case SHORT_IMG:
+        return 15;
+    case USHORT_IMG:
+        return 16;
+    case LONG_IMG:
+        return 31;
+    case ULONG_IMG:
+        return 32;
+    default:
+        return 0;
+    }
+}
+
 inline double fits_type_max(int image_type)
 {
     switch (image_type) {
@@ -620,8 +644,14 @@ inline std::pair<Image<float>, FitsMetadata> read_image_fits(const fs::path& fil
     // sensor, in a 16-bit or a float file). They are normalised as the sensor response held
     // them, by the sensor's largest DN, 2^ADCBITS - 1, whatever the BITPIX.
     //
-    // Without ADCBITS, an integer image is normalised by SATURATE if present (the ADC ceiling),
-    // otherwise by its type's range, and a float image is returned as it is.
+    // Without ADCBITS, an integer image's values are counts too, as FITS has them. They are
+    // normalised by SATURATE if it is an ADC's ceiling, 2^bits - 1, and otherwise by their
+    // type's range, which is 2^bits - 1 too (65535 for unsigned 16 bits); either way the image
+    // records the bits, so the counts are recovered from it exactly. (A SATURATE that is not a
+    // ceiling, such as a level where the response stops being linear, is kept in the metadata;
+    // the counts couldn't be recovered from values divided by it.) Integers scaled by a BSCALE
+    // that is not a whole number (a float equivalent type) and a float image are returned as
+    // they are.
     const bool is_integer_bitpix = (bitpix > 0);
     int sensor_bits = 0;
     double divisor = 1.0;
@@ -630,15 +660,20 @@ inline std::pair<Image<float>, FitsMetadata> read_image_fits(const fs::path& fil
         sensor_bits = adc_bits;
         divisor = std::ldexp(1.0, adc_bits) - 1.0;
     } else if (is_integer_bitpix) {
+        // The bit depth, if SATURATE is an ADC's ceiling (e.g. 4095: 12 bits):
+        int saturate_bits = 0;
         if (metadata.saturate && *metadata.saturate > 0.0) {
-            divisor = *metadata.saturate;
-            // The bit depth, if SATURATE is an ADC's ceiling (e.g. 4095: 12 bits):
-            const double bits = std::round(std::log2(divisor + 1.0));
+            const double bits = std::round(std::log2(*metadata.saturate + 1.0));
             if (bits >= 1.0 && bits <= 53.0 &&
-                std::ldexp(1.0, static_cast<int>(bits)) - 1.0 == divisor) {
-                sensor_bits = static_cast<int>(bits);
+                std::ldexp(1.0, static_cast<int>(bits)) - 1.0 == *metadata.saturate) {
+                saturate_bits = static_cast<int>(bits);
             }
+        }
+        if (saturate_bits > 0) {
+            sensor_bits = saturate_bits;
+            divisor = *metadata.saturate;
         } else {
+            sensor_bits = detail::fits_type_bits(equivalent_type);
             divisor = detail::fits_type_max(equivalent_type);
         }
     }
