@@ -79,3 +79,77 @@ TEST_CASE("A hit on an unevenly scaled instance has the scaled surface's normals
         }
     }
 }
+
+TEST_CASE("A body turned within an unevenly scaled frame is drawn slanted by it",
+          "[scene][resolve_hit]")
+{
+    // An ellipsoid 1 by 0.5 by 0.5 m, turned 45 degrees about the line of sight within a frame
+    // 100 m in front of the camera that is scaled twice along its x axis: the frame's scale
+    // stretches the turned ellipsoid along x, slanting it. Still, or turning 1 rad during the
+    // exposure (checked at its 3 temporal samples, where it is drawn as it is). Composed as a
+    // rotation and a scale, without the shear, it was stretched along its own axis instead.
+    const Vec3<float> radii{1.f, 0.5f, 0.5f};
+    const Vec3<float> frame_scale{2.f, 1.f, 1.f};
+    for (const bool turning : {false, true}) {
+        INFO((turning ? "turning" : "still"));
+        Scene<RGB> scene;
+        auto material = scene.new_material(scene.new_bsdf_lambertian());
+        auto frame = scene.root.new_subframe();
+        frame.set_position(0_m, 0_m, 100_m);
+        frame.set_scale(2.0, 1.0, 1.0);
+        auto body = frame.new_instance(
+            scene.add_primitive(scene.add_ellipsoid(1_m, 0.5_m, 0.5_m), material));
+        body.set_rotation_local_to_parent(Vec3<double>{0.0, 0.0, 1.0}, units::Degree(45.0));
+        if (turning) {
+            body.set_angular_velocity(units::RadiansPerSecond(0.0),
+                                      units::RadiansPerSecond(0.0),
+                                      units::RadiansPerSecond(1.0));
+        }
+        auto camera = scene.root.new_instance(scene.new_camera_model());
+        SceneView<RGB> scene_view(scene,
+                                  Interval{Time::from_et(0.0), Time::from_et(1.0)},
+                                  camera,
+                                  ObservationMode::TRUE_STATE,
+                                  turning ? 3 : 1);
+
+        for (float time : {0.f, 0.5f, 1.f}) {
+            const float angle = PI<float>() / 4.f + (turning ? time : 0.f);
+            const float c = std::cos(angle);
+            const float s = std::sin(angle);
+            std::size_t hits = 0;
+            for (float x = -1.5f; x <= 1.5f; x += 0.5f) {
+                for (float y = -0.6f; y <= 0.6f; y += 0.3f) {
+                    INFO("time " << time << ", aimed at " << x << ", " << y);
+                    const Ray<RGB> ray(Vec3<float>{0.f}, glm::normalize(Vec3<float>{x, y, 100.f}));
+                    const HitRecord hit = scene_view.intersect(ray, time);
+                    if (!hit.hit()) {
+                        continue;
+                    }
+                    ++hits;
+                    const Interaction<RGB> isect = scene_view.resolve_hit(ray, hit);
+
+                    // Back through the frame's scale, the body's turn and its radii, onto the
+                    // unit sphere:
+                    const Vec3<float> in_frame =
+                        (isect.position - Vec3<float>{0.f, 0.f, 100.f}) / frame_scale;
+                    const Vec3<float> in_body{c * in_frame.x + s * in_frame.y,
+                                              -s * in_frame.x + c * in_frame.y,
+                                              in_frame.z};
+                    const Vec3<float> on_sphere = in_body / radii;
+                    CHECK(std::abs(glm::length(on_sphere) - 1.f) < 1e-4f);
+
+                    // Its normal there, the inverse transpose of the same:
+                    const Vec3<float> local = on_sphere / radii;
+                    Vec3<float> normal = glm::normalize(
+                        Vec3<float>{c * local.x - s * local.y, s * local.x + c * local.y, local.z} /
+                        frame_scale);
+                    if (glm::dot(normal, ray.direction()) > 0.f) {
+                        normal = -normal;
+                    }
+                    CHECK(glm::dot(isect.normal_g, normal) > 0.99999f);
+                }
+            }
+            CHECK(hits >= 10);
+        }
+    }
+}

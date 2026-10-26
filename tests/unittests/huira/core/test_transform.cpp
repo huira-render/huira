@@ -2,9 +2,12 @@
 #include <cmath>
 #include <cstddef>
 #include <numbers>
+#include <utility>
+#include <vector>
 
 #include "catch2/catch_test_macros.hpp"
 #include "catch2/matchers/catch_matchers_floating_point.hpp"
+#include "embree4/rtcore.h"
 #include "huira/core/rotation.hpp"
 #include "huira/core/transform.hpp"
 #include "huira/units/units.hpp"
@@ -152,5 +155,167 @@ TEST_CASE("Transform - as Embree's matrix, it places points as it does", "[trans
                                   m[1] * point.x + m[4] * point.y + m[7] * point.z + m[10],
                                   m[2] * point.x + m[5] * point.y + m[8] * point.z + m[11]};
         CHECK_VEC3_EQUAL(placed, transform.apply_to_point(point), 1e-5);
+    }
+}
+
+namespace {
+/// A parent scaled unevenly, children turned within it in several ways and scaled themselves,
+/// and a grandchild: frames that combine with shear, and some that don't.
+std::vector<Transform<double>> test_frames()
+{
+    std::vector<Transform<double>> frames;
+    for (const Vec3<double>& scale : {Vec3<double>{1.0}, Vec3<double>{3.0, 0.5, 1.5}}) {
+        for (const auto& [axis, angle] : {std::pair{Vec3<double>{0, 0, 1}, kPi / 2},
+                                          std::pair{Vec3<double>{0, 0, 1}, kPi / 4},
+                                          std::pair{Vec3<double>{1, 2, 3}, 0.7}}) {
+            Transform<double> frame;
+            frame.position = Vec3<double>{0.5, -1.0, 2.0};
+            frame.rotation =
+                Rotation<double>::from_local_to_parent(glm::normalize(axis), units::Radian{angle});
+            frame.scale = scale;
+            frames.push_back(frame);
+        }
+    }
+    return frames;
+}
+
+Transform<double> uneven_parent()
+{
+    Transform<double> parent;
+    parent.position = Vec3<double>{1.0, 2.0, 3.0};
+    parent.rotation = Rotation<double>::from_local_to_parent(
+        glm::normalize(Vec3<double>{-1.0, 0.5, 2.0}), units::Radian{0.3});
+    parent.scale = Vec3<double>{2.0, 1.0, 0.5};
+    return parent;
+}
+
+const std::array<Vec3<double>, 4> POINTS{Vec3<double>{0.0, 0.0, 0.0},
+                                         Vec3<double>{1.0, 0.0, 0.0},
+                                         Vec3<double>{0.0, 1.0, 0.0},
+                                         Vec3<double>{-0.3, 2.0, 0.5}};
+} // namespace
+
+TEST_CASE("Transform - composing places points as applying one, then the other, does",
+          "[transform]")
+{
+    // A child turned within a parent scaled unevenly is slanted by it, which a rotation and a
+    // scale alone cannot describe: composed without shear, a child turned 45 degrees within a
+    // parent scaled 2, 1 and 0.5 times placed (0, 1, 0) 0.71 from where it belongs, and one
+    // turned 90 degrees, 1.0.
+    const Transform<double> parent = uneven_parent();
+    Transform<double> grandchild;
+    grandchild.position = Vec3<double>{-2.0, 0.0, 1.0};
+    grandchild.rotation = Rotation<double>::from_local_to_parent(
+        glm::normalize(Vec3<double>{0.0, 1.0, 1.0}), units::Radian{1.1});
+    grandchild.scale = Vec3<double>{1.2, 0.8, 2.0};
+
+    for (const Transform<double>& child : test_frames()) {
+        INFO("child " << child.to_string());
+        const Transform<double> composed = parent * child;
+        const Transform<double> deeper = composed * grandchild;
+        const Transform<double> regrouped = parent * (child * grandchild);
+        for (const Vec3<double>& point : POINTS) {
+            CHECK_VEC3_EQUAL(composed.apply_to_point(point),
+                             parent.apply_to_point(child.apply_to_point(point)));
+            CHECK_VEC3_EQUAL(composed.apply_to_direction(point),
+                             parent.apply_to_direction(child.apply_to_direction(point)));
+            const Vec3<double> nested =
+                parent.apply_to_point(child.apply_to_point(grandchild.apply_to_point(point)));
+            CHECK_VEC3_EQUAL(deeper.apply_to_point(point), nested);
+            CHECK_VEC3_EQUAL(regrouped.apply_to_point(point), nested);
+        }
+        // A normal turns with the surface it is normal to:
+        const Vec3<double> normal = glm::normalize(Vec3<double>{0.2, -0.7, 1.0});
+        CHECK_VEC3_EQUAL(glm::normalize(composed.apply_to_normal(normal)),
+                         glm::normalize(parent.apply_to_normal(child.apply_to_normal(normal))));
+    }
+}
+
+TEST_CASE("Transform - a combination that needs no shear composes rotation and scale as before",
+          "[transform]")
+{
+    // Within an even scale, a child may turn any way; within an uneven one, about the axis whose
+    // neighbors are scaled alike. Either way the rotations compose and the scales multiply.
+    Transform<double> even;
+    even.rotation =
+        Rotation<double>::from_local_to_parent(Vec3<double>{0, 1, 0}, units::Radian{1.0});
+    even.scale = Vec3<double>{2.0};
+    Transform<double> uneven;
+    uneven.scale = Vec3<double>{3.0, 1.0, 1.0};
+
+    Transform<double> child;
+    child.scale = Vec3<double>{0.5, 2.0, 4.0};
+    for (const auto& [parent, axis] :
+         {std::pair{even, Vec3<double>{1, 2, 3}}, std::pair{uneven, Vec3<double>{1, 0, 0}}}) {
+        child.rotation =
+            Rotation<double>::from_local_to_parent(glm::normalize(axis), units::Radian{0.8});
+        const Transform<double> composed = parent * child;
+        CHECK_FALSE(composed.has_shear());
+        CHECK(composed.scale == parent.scale * child.scale);
+        CHECK(composed.rotation.local_to_parent_matrix() ==
+              (parent.rotation * child.rotation).local_to_parent_matrix());
+    }
+}
+
+TEST_CASE("Transform - the inverse undoes the transform, whatever its scale", "[transform]")
+{
+    // Inverted as a rotation and a scale along the axes, a frame turned 45 degrees and scaled 2,
+    // 1 and 1 times brought (1, 0, 0) back to (1.5, 0.5, 0).
+    const Transform<double> parent = uneven_parent();
+    for (const Transform<double>& child : test_frames()) {
+        INFO("child " << child.to_string());
+        for (const Transform<double>& transform : {child, parent * child}) {
+            const Transform<double> inverse = transform.inverse();
+            for (const Vec3<double>& point : POINTS) {
+                CHECK_VEC3_EQUAL(inverse.apply_to_point(transform.apply_to_point(point)), point);
+                CHECK_VEC3_EQUAL(transform.apply_to_point(inverse.apply_to_point(point)), point);
+                CHECK_VEC3_EQUAL((transform * inverse).apply_to_point(point), point);
+            }
+        }
+    }
+}
+
+TEST_CASE("Transform - a normal stays at right angles to the tangents", "[transform]")
+{
+    const Transform<double> parent = uneven_parent();
+    for (const Transform<double>& child : test_frames()) {
+        const Transform<double> transform = parent * child;
+        const Vec3<double> normal = glm::normalize(Vec3<double>{0.3, 0.4, -1.0});
+        for (const Vec3<double>& tangent : {glm::cross(normal, Vec3<double>{1, 0, 0}),
+                                            glm::cross(normal, Vec3<double>{0, 1, 0})}) {
+            CHECK(std::abs(glm::dot(glm::normalize(transform.apply_to_normal(normal)),
+                                    glm::normalize(transform.apply_to_direction(tangent)))) <
+                  1e-12);
+        }
+    }
+}
+
+TEST_CASE("Transform - Embree draws a sheared transform where it places points", "[transform]")
+{
+    // A child turned 45 degrees within a parent scaled unevenly: given to Embree as its
+    // quaternion decomposition, with the shear in Embree's skew, and as a matrix.
+    Transform<double> child;
+    child.rotation =
+        Rotation<double>::from_local_to_parent(Vec3<double>{0, 0, 1}, units::Radian{kPi / 4});
+    const Transform<double> transform = uneven_parent() * child;
+    REQUIRE(transform.has_shear());
+
+    RTCDevice device = rtcNewDevice(nullptr);
+    RTCGeometry geometry = rtcNewGeometry(device, RTC_GEOMETRY_TYPE_INSTANCE);
+    const RTCQuaternionDecomposition decomposition = transform.to_embree();
+    rtcSetGeometryTransformQuaternion(geometry, 0, &decomposition);
+    std::array<float, 12> drawn{};
+    rtcGetGeometryTransform(geometry, 0.f, RTC_FORMAT_FLOAT3X4_COLUMN_MAJOR, drawn.data());
+    rtcReleaseGeometry(geometry);
+    rtcReleaseDevice(device);
+
+    const std::array<float, 12> matrix = transform.to_embree_matrix();
+    for (const Vec3<double>& point : POINTS) {
+        for (const std::array<float, 12>& m : {drawn, matrix}) {
+            const Vec3<double> placed{m[0] * point.x + m[3] * point.y + m[6] * point.z + m[9],
+                                      m[1] * point.x + m[4] * point.y + m[7] * point.z + m[10],
+                                      m[2] * point.x + m[5] * point.y + m[8] * point.z + m[11]};
+            CHECK_VEC3_EQUAL(placed, transform.apply_to_point(point), 1e-5);
+        }
     }
 }

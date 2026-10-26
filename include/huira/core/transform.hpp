@@ -10,11 +10,23 @@
 
 namespace huira {
 /**
- * @brief Rigid body transform with position, rotation, scale, and kinematic quantities.
+ * @brief Transform with position, rotation, scale and shear, and kinematic quantities.
  *
- * Represents a 3D transformation including translation, rotation, scale, velocity, and angular
- * velocity. Provides methods for conversion to matrix, inversion, composition, and application to
- * points, directions, and velocities.
+ * Represents a 3D transformation including translation, rotation, scale, shear, velocity, and
+ * angular velocity. Provides methods for conversion to matrix, inversion, composition, and
+ * application to points, directions, normals, and velocities.
+ *
+ * A point is placed at position + rotation * S * point, where S is the upper triangular
+ * scale-and-shear matrix
+ *
+ *     | scale.x  shear.x  shear.y |
+ *     | 0        scale.y  shear.z |
+ *     | 0        0        scale.z |
+ *
+ * the form Embree's quaternion decomposition takes. A node is given no shear, but combining
+ * frames can need one: a child turned within a parent scaled unevenly is slanted by it, which no
+ * rotation and scale can describe. Every combination is exactly a rotation times such an S, so
+ * composing and inverting keep it.
  *
  * @tparam T Floating point type (float or double)
  */
@@ -36,8 +48,19 @@ struct Transform {
     /// before being stored here.
     Vec3<T> angular_velocity{0, 0, 0};
 
+    /// The scale-and-shear matrix's entries above its diagonal (see Transform): x is its xy
+    /// entry (how far a point moves along x with its y), y its xz entry, and z its yz entry.
+    /// Zero, but where combining frames slants something.
+    Vec3<T> shear{0, 0, 0};
+
     template <IsFloatingPoint U>
     explicit operator Transform<U>() const;
+
+    /// Whether the transform has any shear.
+    [[nodiscard]] bool has_shear() const { return shear != Vec3<T>{0, 0, 0}; }
+
+    /// The upper triangular scale-and-shear matrix S (see Transform).
+    Mat3<T> scale_shear_matrix() const;
 
     Mat4<T> to_matrix() const;
 
@@ -55,6 +78,8 @@ struct Transform {
     Vec3<T> apply_to_point(const Vec3<T>& point) const;
 
     Vec3<T> apply_to_direction(const Vec3<T>& dir) const;
+
+    Vec3<T> apply_to_normal(const Vec3<T>& normal) const;
 
     Vec3<T> apply_to_velocity(const Vec3<T>& vel) const;
 
