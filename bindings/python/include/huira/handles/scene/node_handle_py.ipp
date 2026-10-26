@@ -1,5 +1,6 @@
 #pragma once
 
+#include "huira/handles/scene/frame_handle.hpp"
 #include "huira/handles/scene/node_handle.hpp"
 #include "huira/scene/pose_sources_py.ipp"
 #include "huira/units/units_py.ipp"
@@ -9,6 +10,24 @@
 namespace py = pybind11;
 
 namespace huira {
+namespace detail {
+/**
+ * @brief A node's parent, as a FrameHandle.
+ *
+ * In C++, get_parent() returns NodeHandle<TSpectral, Node<TSpectral>>, which isn't bound to
+ * Python: as a return value, pybind11 couldn't convert it. A parent is always a frame, as only
+ * frames have children, so it is returned as the handle bound for frames.
+ */
+template <typename TSpectral, typename THandle>
+FrameHandle<TSpectral> get_parent_frame(const THandle& self)
+{
+    return FrameHandle<TSpectral>{self.template get_parent_as<FrameNode<TSpectral>>().get()};
+}
+
+inline constexpr const char* GET_PARENT_DOC =
+    "The frame this node is a child of. Raises RuntimeError for the root, which has none.";
+} // namespace detail
+
 /**
  * @brief Injects the visibility methods into an existing py::class_ binding.
  *
@@ -199,7 +218,7 @@ inline void bind_node_handle_methods(PyClass& cls)
         .def("get_spice_frame", &HandleType::get_spice_frame)
 
         // Parent access
-        .def("get_parent", &HandleType::get_parent);
+        .def("get_parent", &detail::get_parent_frame<TSpectral, BoundType>, detail::GET_PARENT_DOC);
 
     bind_pose_source_methods<TSpectral, TNode>(cls);
     bind_visibility_methods<TSpectral, TNode>(cls);
