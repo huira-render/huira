@@ -259,9 +259,6 @@ void bind_rgb_to_spectral(py::module_& m)
 // ---------------------------------------------------------------------------
 // bind_image_io  --  free-standing read / write functions
 // ---------------------------------------------------------------------------
-// ---------------------------------------------------------------------------
-// bind_image_io  --  free-standing read / write functions
-// ---------------------------------------------------------------------------
 inline void bind_image_io(py::module_& m)
 {
     // =============== //
@@ -509,6 +506,30 @@ inline void bind_image_io(py::module_& m)
         },
         py::arg("image"),
         "Convert a raw sRGB float image reference directly to a linear bundle");
+
+    // The same for bundles, as in C++ (read_image() and the other readers return bundles). The
+    // bundle's alpha and its other settings are kept.
+    m.def(
+        "linear_to_srgb",
+        [](const ImageBundle<RGB>& bundle) { return linear_to_srgb(bundle); },
+        py::arg("bundle"),
+        "Convert a linear RGB bundle to an sRGB one, keeping its alpha");
+    m.def(
+        "linear_to_srgb",
+        [](const ImageBundle<float>& bundle) { return linear_to_srgb(bundle); },
+        py::arg("bundle"),
+        "Convert a linear float bundle to an sRGB one, keeping its alpha");
+    m.def(
+        "srgb_to_linear",
+        [](const ImageBundle<RGB>& bundle) { return srgb_to_linear(bundle); },
+        py::arg("bundle"),
+        "Convert an sRGB RGB bundle, as read_image() returns for a JPEG or PNG, to a linear one, "
+        "keeping its alpha");
+    m.def(
+        "srgb_to_linear",
+        [](const ImageBundle<float>& bundle) { return srgb_to_linear(bundle); },
+        py::arg("bundle"),
+        "Convert an sRGB float bundle to a linear one, keeping its alpha");
 }
 
 // ---------------------------------------------------------------------------

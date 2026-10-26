@@ -17,9 +17,13 @@ inline void bind_texture_handle(py::module_& m, const char* name = "TextureHandl
     using HandleType = TextureHandle<TPixel>;
 
     auto cls = py::class_<HandleType>(m, name)
-                   .def("resolution",
-                        &HandleType::resolution,
-                        "Return the resolution of the underlying texture")
+                   .def(
+                       "resolution",
+                       [](const HandleType& self) {
+                           const Resolution resolution = self.resolution();
+                           return py::make_tuple(resolution.width, resolution.height);
+                       },
+                       "The texture's resolution, as (width, height).")
                    .def("__bool__", &HandleType::valid)
                    .def("__repr__", [](const HandleType&) { return "<TextureHandle>"; });
 

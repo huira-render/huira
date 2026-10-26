@@ -1,8 +1,13 @@
 #pragma once
 
+#include <cstdint>
+#include <optional>
+
 #include "huira/core/interval.hpp"
+#include "huira/sampling/sampler.hpp"
 #include "huira/scene/scene_view.hpp"
 #include "huira/scene/scene_view_types.hpp"
+#include "huira/volumes/medium_stack.hpp"
 #include "pybind11/pybind11.h"
 #include "pybind11/stl.h"
 
@@ -53,15 +58,30 @@ void bind_scene_view(py::module_& m)
              py::arg("time") = 0.5f,
              py::arg("mask") = 0xFFFFFFFF,
              "Trace a ray against the scene and return a HitRecord")
-        .def("evaluate_transmittance",
-             &SV::evaluate_transmittance,
-             py::arg("shadow_ray"),
-             py::arg("t_far"),
-             py::arg("initial_stack"),
-             py::arg("sampler"),
-             py::arg("time") = 0.5f,
-             py::arg("alpha_mode") = AlphaMode::Stochastic,
-             "Evaluate transmittance along a shadow ray through participating media")
+        // The medium stack and sampler of the C++ function have no Python classes: the ray starts
+        // outside any medium, and the sampler is made here, from a seed if one is given.
+        .def(
+            "evaluate_transmittance",
+            [](const SV& self,
+               const Ray<TSpectral>& shadow_ray,
+               float t_far,
+               float time,
+               AlphaMode alpha_mode,
+               std::optional<std::uint32_t> seed) {
+                RandomSampler<float> sampler =
+                    seed ? RandomSampler<float>(*seed) : RandomSampler<float>();
+                return self.evaluate_transmittance(
+                    shadow_ray, t_far, MediumStack<TSpectral>{}, sampler, time, alpha_mode);
+            },
+            py::arg("shadow_ray"),
+            py::arg("t_far"),
+            py::arg("time") = 0.5f,
+            py::arg("alpha_mode") = AlphaMode::Stochastic,
+            py::arg("seed") = py::none(),
+            "The transmittance along a shadow ray, out to t_far, through participating media and "
+            "partly transparent surfaces. The ray starts outside any medium. With "
+            "AlphaMode.STOCHASTIC, partly transparent surfaces are sampled at random: give a seed "
+            "to repeat the result.")
         .def("resolve_hit",
              &SV::resolve_hit,
              py::arg("ray"),
