@@ -30,6 +30,7 @@ set(UNIT_TESTS
     huira/core/test_time.cpp
     huira/core/test_transform.cpp
 
+    huira/ephemeris/test_element_set_catalog.cpp
     huira/ephemeris/test_satrec.cpp
     huira/ephemeris/test_satrec_omm.cpp
 
@@ -252,8 +253,9 @@ target_compile_definitions(test_sgp4 PRIVATE
     HUIRA_SGP4_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/third_party/sgp4"
 )
 
-# SatRec, against the same verification cases, read from TLEs and from OMMs made from them
-foreach(test_name test_satrec test_satrec_omm)
+# SatRec, against the same verification cases, read from TLEs, from OMMs made from them, and as a
+# catalog
+foreach(test_name test_satrec test_satrec_omm test_element_set_catalog)
     target_compile_definitions(${test_name} PRIVATE
         HUIRA_SGP4_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/third_party/sgp4"
     )
