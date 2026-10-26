@@ -15,18 +15,16 @@
 
 #include "huira/concepts/spectral_concepts.hpp"
 #include "huira/render/interaction_py.ipp"
-#include "huira/render/ray_py.ipp"
 #include "huira/render/renderer_py.ipp"
 #include "huira/scene/scene_view_py.ipp"
 
 namespace huira::python {
 
-/// The last part of a spectral submodule (see bindings.hpp): rays and interactions, the scene
-/// view and the renderer.
+/// The last part of a spectral submodule (see bindings.hpp): interactions, the scene view and
+/// the renderer.
 template <IsSpectral TSpectral>
 void bind_spectral_render(pybind11::module_& m)
 {
-    huira::bind_ray<TSpectral>(m);
     huira::bind_interaction<TSpectral>(m);
     huira::bind_scene_view<TSpectral>(m);
     huira::bind_renderer<TSpectral>(m);

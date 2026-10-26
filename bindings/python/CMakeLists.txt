@@ -8,7 +8,7 @@ include(FetchPybind)
 # file of its own, made from src/bind_spectral_part.cpp.in. A submodule is listed by its name and
 # its spectral type.
 set(HUIRA_PYTHON_SPECTRAL_SUBMODULES rgb:RGB visible8:Visible8 swir8:SWIR8)
-set(HUIRA_PYTHON_SPECTRAL_PARTS assets nodes images scene render)
+set(HUIRA_PYTHON_SPECTRAL_PARTS values assets nodes scene render)
 
 set(_huira_spectral_sources)
 set(HUIRA_SPECTRAL_SUBMODULES "")

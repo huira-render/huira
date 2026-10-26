@@ -488,11 +488,6 @@ inline void bind_scene(py::module_& m)
              &SceneType::new_bsdf_oren_nayar,
              py::arg("name") = "",
              "Create an Oren-Nayar BSDF")
-        .def("add_bsdf",
-             &SceneType::add_bsdf,
-             py::arg("bsdf"),
-             py::arg("name") = "",
-             "Add a BSDF from a shared pointer")
 
         // =============================================================
         // Materials
@@ -502,11 +497,6 @@ inline void bind_scene(py::module_& m)
              py::arg("bsdf"),
              py::arg("name") = "",
              "Create a new material with the specified BSDF")
-        .def("add_material",
-             &SceneType::add_material,
-             py::arg("material"),
-             py::arg("name") = "",
-             "Add a material from a shared pointer")
 
         // =============================================================
         // Volumes
@@ -518,21 +508,11 @@ inline void bind_scene(py::module_& m)
             py::arg("scattering"),
             py::arg("name") = "",
             "Create a constant density field with the given absorption and scattering coefficients")
-        .def("add_density_field",
-             &SceneType::add_density_field,
-             py::arg("density_field"),
-             py::arg("name") = "",
-             "Add a density field from a shared pointer")
 
         .def("new_isotropic_phase_function",
              &SceneType::new_isotropic_phase_function,
              py::arg("name") = "",
              "Create an isotropic phase function")
-        .def("add_phase_function",
-             &SceneType::add_phase_function,
-             py::arg("phase_function"),
-             py::arg("name") = "",
-             "Add a phase function from a shared pointer")
 
         .def("new_medium",
              &SceneType::new_medium,
@@ -540,11 +520,6 @@ inline void bind_scene(py::module_& m)
              py::arg("phase_function_handle"),
              py::arg("name") = "",
              "Create a new medium from a density field and phase function")
-        .def("add_medium",
-             &SceneType::add_medium,
-             py::arg("medium"),
-             py::arg("name") = "",
-             "Add a medium from a shared pointer")
 
         // =============================================================
         // Background

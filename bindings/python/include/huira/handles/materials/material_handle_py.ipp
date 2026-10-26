@@ -1,6 +1,7 @@
 #pragma once
 
 #include "huira/handles/handle_py.ipp"
+#include "huira/handles/materials/bsdf_handle.hpp"
 #include "huira/handles/materials/material_handle.hpp"
 #include "pybind11/numpy.h"
 #include "pybind11/pybind11.h"
@@ -18,10 +19,16 @@ inline void bind_material_handle(py::module_& m)
         py::class_<HandleType>(m, "MaterialHandle")
 
             // --- BSDF ---
-            .def("set_bsdf",
-                 &HandleType::set_bsdf,
-                 py::arg("bsdf"),
-                 "Assign a new BSDF to this material")
+            // Python has BSDF handles (Scene.new_bsdf_lambertian() and the others), not the
+            // C++ BSDF objects set_bsdf() takes:
+            .def(
+                "set_bsdf",
+                [](HandleType& self, const BSDFHandle<TSpectral>& bsdf) {
+                    self.set_bsdf(bsdf.get());
+                },
+                py::arg("bsdf"),
+                "Assign a new BSDF to this material: a BSDF handle, as Scene.new_bsdf_lambertian() "
+                "and the others return")
 
             // --- Albedo ---
             .def("set_albedo",

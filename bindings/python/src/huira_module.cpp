@@ -23,4 +23,8 @@ PYBIND11_MODULE(_huira, m)
 
     auto swir8 = m.def_submodule("swir8", "Short-wave infrared (8-bin) spectral specialization");
     huira::python::bind_swir8(swir8);
+
+    // Last, the functions shared by every spectral type that take or return the submodules'
+    // classes (see bindings.hpp):
+    huira::python::bind_core_functions(m);
 }
