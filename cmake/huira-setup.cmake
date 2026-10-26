@@ -55,6 +55,8 @@ else()
     set(TURBOJPEG_TARGET libjpeg-turbo::turbojpeg-static)
 endif()
 
+find_package(nlohmann_json CONFIG REQUIRED)
+
 find_package(PNG REQUIRED)
 
 find_package(TBB CONFIG REQUIRED)
@@ -70,6 +72,7 @@ target_link_libraries(huira INTERFACE
     FFTW3::fftw3f
     glm::glm
     ${TURBOJPEG_TARGET}
+    nlohmann_json::nlohmann_json
     PNG::PNG
     TBB::tbb
     TBB::tbbmalloc

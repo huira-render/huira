@@ -14,4 +14,5 @@ dependencies:
   - libtiff        # TIFF I/O
   - libpng         # PNG I/O
   - libjpeg-turbo  # JPEG I/O
+  - nlohmann_json  # JSON (OMM element sets)
   - tbb-devel      # Intel TBB
