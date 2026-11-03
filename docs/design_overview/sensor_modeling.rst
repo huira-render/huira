@@ -27,6 +27,14 @@ A sensor will have a *Quantum Efficiency* curve that describes the probability o
 
     N_{electrons\_signal} = \sum_{\lambda} (N_{photons}(\lambda) \times QE(\lambda))
 
+Through a filter, the photons are also multiplied by the filter's transmission in each bin,
+:math:`T(\lambda)`, and, if the filter has a flat, by the pixel's value in it, :math:`V(x, y)`
+(see Filters and flats, below):
+
+.. math::
+
+    N_{electrons\_signal}(x, y) = V(x, y) \sum_{\lambda} (N_{photons}(\lambda) \times QE(\lambda) \times T(\lambda))
+
 
 
 3. Dark Current (Thermal Noise):
@@ -224,6 +232,58 @@ From C++, the maps are on the sensor (``SensorModel::set_dark_current_map()``,
         huira.Image_f32(columns, origin=huira.PixelOrigin.TopLeft), huira.BiasMapKind.Relative)
 
 
+Filters and flats
+-----------------
+
+A camera has a filter wheel (``add_filter()``, ``select_filter()``, by index or by name;
+``clear_filters()``), empty by default, which is a clear filter. Each filter has a transmission,
+the fraction of the light it passes in each bin, and may have a *flat*: each pixel's response
+through it relative to the principal point's. The selected filter's transmission multiplies the
+quantum efficiency, and its flat each pixel's signal electrons, before shot noise (see Quantum
+Efficiency, above); the dark current and bias are not affected, as they are not light. A frame
+is read out through the filter selected when it is rendered. The camera's ``describe()`` lists
+the wheel.
+
+**What a flat is.** A flat field is a frame of a uniformly lit scene (a dome, a twilight sky, a
+lamp through a diffuser), with the bias and dark subtracted. Every pixel receives the same light,
+so each pixel's value is its response, times the scene's brightness and the exposure, which are
+the same for every pixel: the frame's scale means nothing, and only the pixels' ratios do. The
+response at any pixel is a product: the lens's vignetting, the filter's unevenness, dust shadows,
+and the pixel's own sensitivity (PRNU).
+
+**What Huira divides out.** The renderer already gives each pixel the falloff of its geometry:
+its solid angle, and the cosine of its angle from the axis (``pixel_radiance_to_power()``). A
+flat that still held that falloff would apply it twice. ``flat_from_measured()`` divides it out,
+so the flat keeps only what the renderer does not model.
+
+**Normalization.** ``flat_from_measured()`` then divides the result by the median of the pixels
+in a square around the principal point, 5% of the shorter side of the sensor on each edge (at
+least 8 pixels; ``central_fraction`` sets it). So:
+
+- The flat is 1 at the principal point, and the quantum efficiency and the filter's transmission
+  are the response *there*. Pixels that respond more than the principal point's, by their PRNU,
+  are above 1, and that is as it should be: a flat has no scale of its own to lose, and the
+  camera's efficiency is the QE and transmission. The one physical bound is that a pixel can't
+  make more electrons than it receives photons, :math:`QE \times T \times V \le 1`, which the
+  sensor warns of when a filter is added or selected or the QE is set.
+- The median is used so that a speck of dust or a hot pixel in the square doesn't set the scale,
+  and a square rather than the one pixel at the principal point for the same reason.
+- The flat is an ordinary image: to normalize it another way, do so in numpy and give the
+  result to ``add_filter()``.
+
+The camera's focal length, distortion and principal point must be as they were when the flat
+field was taken, since the falloff divided out depends on them. In Python::
+
+    flat_field, _ = huira.read_fits("flat_V.fits")  # bias and dark subtracted
+    flat = camera_model.flat_from_measured(flat_field)
+    camera_model.add_filter("V", 0.85, flat)
+    camera_model.add_filter("R", huira.visible8.SpectralBins([0, 0, 0, 0.1, 0.8, 0.9, 0.9, 0.7]))
+    camera_model.select_filter("R")
+
+Per-bin flats (a different flat for each spectral bin of one filter) are not supported: a flat
+is one image, applied to the pixel's electrons from every bin.
+
+
 Noise off
 ---------
 
@@ -263,6 +323,9 @@ Changes in v0.9.11
   are refused.
 - Row noise and column noise, temporal banding along rows and columns, can be set (see Read
   Noise). Both are 0 by default, so frames are as before.
+- A camera has a filter wheel, whose filters have a transmission per bin and may have a flat
+  (see Filters and flats), and ``flat_from_measured()`` makes a flat from a flat field. The wheel
+  is empty by default, a clear filter, so frames are as before.
 
 
 Changes in v0.9.10

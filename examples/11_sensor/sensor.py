@@ -14,6 +14,7 @@ Demonstrates:
     - The same frame without noise, for comparison
     - Calibration maps: each pixel's own dark current, from a master dark and a master bias,
       and its own bias
+    - A filter wheel: a filter's transmission per spectral bin, and its flat from a flat field
 
 Builds on: 10 Optics
 Data: tycho2.hrsc, the Tycho-2 star catalog (see README.md)
@@ -27,6 +28,7 @@ Writes:
     output/11_sensor.tif             ...as DN
     output/11_sensor_noiseless.png   the same frame without noise
     output/11_sensor_calibrated.png  the frame with each pixel's own dark current and bias
+    output/11_sensor_red.png         the frame through a red filter, with its flat
 """
 
 import math
@@ -211,6 +213,34 @@ def main():
     renderer.render(scene_view, frame_buffer)
     huira.write_png(
         output_dir / "11_sensor_calibrated.png", huira.linear_to_srgb(frame_buffer.sensor_response)
+    )
+
+    # A filter wheel. A filter passes a fraction of the light in each spectral bin (visible8's
+    # eight bins run from blue to red), and may have a flat: each pixel's response through it,
+    # relative to the principal point's, from a flat field (a frame of a uniformly lit scene,
+    # bias and dark subtracted). Here the flat field is made up: the falloff Huira renders
+    # itself, times extra vignetting toward the corners and a dust shadow. flat_from_measured
+    # divides the rendered falloff out, so the flat keeps only the rest, and normalizes it to the
+    # median of a central patch, so the quantum efficiency is the response at the principal
+    # point and pixels that respond more are above 1. An empty wheel is a clear filter.
+    rendered_falloff = np.array(
+        [[camera_model.pixel_radiance_to_power(x, y) for x in range(width)] for y in range(height)]
+    )
+    vignetting = 1 - 0.4 * ((columns - cx) ** 2 + (rows - cy) ** 2) / (cx**2 + cy**2)
+    dust = 1 - 0.3 * np.exp(-np.hypot(columns - 300, rows - 200) / 12)
+    flat_field = huira.Image_f32(rendered_falloff * vignetting * dust, origin=top_left)
+    red_flat = camera_model.flat_from_measured(flat_field)
+    camera_model.add_filter("clear", 1.0)
+    camera_model.add_filter("red", [0, 0, 0, 0, 0.2, 0.8, 0.9, 0.8], red_flat)
+    camera_model.select_filter("red")
+    print(f"Filter {camera_model.selected_filter_name()!r} of {camera_model.filter_count()}: "
+          f"flat from {np.min(red_flat):.2f} to {np.max(red_flat):.2f}")
+
+    frame_buffer = camera_model.make_frame_buffer()
+    frame_buffer.enable_sensor_response()
+    renderer.render(scene_view, frame_buffer)
+    huira.write_png(
+        output_dir / "11_sensor_red.png", huira.linear_to_srgb(frame_buffer.sensor_response)
     )
 
 

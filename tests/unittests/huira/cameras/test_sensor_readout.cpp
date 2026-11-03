@@ -1084,3 +1084,270 @@ TEST_CASE("Row and column noise are off with the other noise, and checked when s
 
     CHECK(camera.describe().find("row noise 50 e-, column noise 50 e-") != std::string::npos);
 }
+
+TEST_CASE("A filter wheel's filters are selected by index or name, and the first by default",
+          "[cameras][sensor][filters]")
+{
+    SensorProbe camera;
+    electron_counter(camera); // 64x64, 1 e-/DN, no dark current, bias or read noise
+    camera.sensor_->enable_noise(false);
+    CHECK(camera.filter_count() == 0);
+    CHECK_FALSE(camera.selected_filter().has_value());
+    CHECK_FALSE(camera.selected_filter_name().has_value());
+    CHECK_THROWS(camera.select_filter(0));
+    CHECK_THROWS(camera.select_filter("R"));
+    CHECK_THROWS(camera.filter(0));
+    CHECK_THROWS(camera.filter_index("R"));
+
+    CHECK(camera.add_filter("R", RGB{0.9f, 0.1f, 0.f}) == 0);
+    CHECK(camera.selected_filter() == 0); // the first is selected
+    CHECK(camera.add_filter("G", RGB{0.1f, 0.8f, 0.1f}) == 1);
+    CHECK(camera.add_filter("B", RGB{0.f, 0.1f, 0.7f}) == 2);
+    CHECK(camera.filter_count() == 3);
+    CHECK(camera.selected_filter() == 0); // still
+    CHECK(camera.selected_filter_name() == "R");
+
+    camera.select_filter("B");
+    CHECK(camera.selected_filter() == 2);
+    camera.select_filter(1);
+    CHECK(camera.selected_filter_name() == "G");
+    CHECK(camera.filter_index("B") == 2);
+    CHECK(camera.filter(2).name == "B");
+    CHECK(camera.filter("G").transmission[1] == 0.8f);
+    CHECK(camera.filter("G").flat == nullptr);
+
+    // Names are unique, non-empty; transmissions are ratios:
+    CHECK_THROWS(camera.add_filter("G", RGB{0.5f}));
+    CHECK_THROWS(camera.add_filter("", RGB{0.5f}));
+    CHECK_THROWS(camera.add_filter("bad", RGB{1.5f, 0.5f, 0.5f}));
+    CHECK_THROWS(camera.add_filter("bad", RGB{-0.1f, 0.5f, 0.5f}));
+    CHECK(camera.filter_count() == 3);
+    CHECK_THROWS(camera.select_filter(3));
+    CHECK_THROWS(camera.select_filter("U"));
+    CHECK(camera.selected_filter() == 1); // unchanged by what failed
+
+    // Each channel's signal is scaled by the selected filter's transmission in its bin:
+    auto frame_buffer = camera.make_frame_buffer();
+    frame_buffer.enable_sensor_response();
+    expect_electrons(camera, frame_buffer, 1000.0);
+    std::vector<double> dn = read_dn(camera, frame_buffer);
+    CHECK(std::abs(dn[0] - 100.0) < 1e-3); // R through G: 0.1
+    CHECK(std::abs(dn[1] - 800.0) < 1e-3);
+    CHECK(std::abs(dn[2] - 100.0) < 1e-3);
+    camera.select_filter("R");
+    dn = read_dn(camera, frame_buffer);
+    CHECK(std::abs(dn[0] - 900.0) < 1e-3);
+    CHECK(std::abs(dn[2] - 0.0) < 1e-3);
+
+    // Emptied, the camera has a clear filter again:
+    camera.clear_filters();
+    CHECK(camera.filter_count() == 0);
+    CHECK_FALSE(camera.selected_filter().has_value());
+    dn = read_dn(camera, frame_buffer);
+    CHECK(std::abs(dn[0] - 1000.0) < 1e-3);
+    CHECK(std::abs(dn[2] - 1000.0) < 1e-3);
+    CHECK(camera.add_filter("clear", RGB{1.f}) == 0); // indices start over
+}
+
+TEST_CASE("A filter's flat scales each pixel's signal before shot noise",
+          "[cameras][sensor][filters]")
+{
+    SensorProbe camera;
+    electron_counter(camera);
+    const Image<float> flat =
+        map_of(64, 64, [](int x, int y) { return 0.5 + 0.5 * x / 63.0 - 0.2 * y / 63.0; });
+    camera.add_filter("V", RGB{1.f}, flat);
+    REQUIRE(camera.filter("V").flat != nullptr);
+    CHECK(camera.sensor_->has_flat());
+    CHECK(camera.sensor_->flat()(63, 0) == 1.f);
+
+    // Without noise, exactly the flat times the signal, per channel:
+    camera.sensor_->enable_noise(false);
+    auto frame_buffer = camera.make_frame_buffer();
+    frame_buffer.enable_sensor_response();
+    expect_electrons(camera, frame_buffer, 1000.0);
+    const std::vector<double> dn = read_dn(camera, frame_buffer);
+    for (std::size_t i = 0; i < dn.size(); ++i) {
+        const auto pixel = static_cast<int>(i / 3);
+        const double expected =
+            std::round(1000.0 * static_cast<double>(flat(pixel % 64, pixel / 64)));
+        REQUIRE(std::abs(dn[i] - expected) < 1e-3);
+    }
+
+    // With noise, it is the mean the shot noise is drawn around: Poisson with the scaled mean.
+    camera.sensor_->enable_noise(true);
+    camera.add_filter("dim", RGB{1.f}, Image<float>(64, 64, 0.1f));
+    camera.select_filter("dim");
+    expect_electrons(camera, frame_buffer, 400.0);
+    const std::vector<double> noisy = read_dn(camera, frame_buffer);
+    CHECK(std::abs(mean_of(noisy) - 40.0) < 0.3);
+    CHECK(std::abs(variance_of(noisy) / 40.0 - 1.0) < 0.1);
+
+    // The dark current is the pixel's own, not through the flat:
+    camera.sensor_->enable_noise(false);
+    camera.sensor_->set_dark_current(50.f);
+    frame_buffer.received_power().fill(RGB{0.f});
+    for (double v : read_dn(camera, frame_buffer)) {
+        REQUIRE(std::abs(v - 50.0) < 1e-3);
+    }
+
+    // A flat is checked: the sensor's resolution, finite, non-negative:
+    CHECK_THROWS(camera.add_filter("small", RGB{1.f}, Image<float>(32, 32, 1.f)));
+    Image<float> bad(64, 64, 1.f);
+    bad(3, 3) = -0.1f;
+    CHECK_THROWS(camera.add_filter("negative", RGB{1.f}, bad));
+    bad(3, 3) = std::numeric_limits<float>::quiet_NaN();
+    CHECK_THROWS(camera.add_filter("nan", RGB{1.f}, bad));
+    CHECK(camera.filter_count() == 2);
+    bad(3, 3) = 0.f; // a dead pixel is fine
+    CHECK_NOTHROW(camera.add_filter("dead", RGB{1.f}, bad));
+}
+
+TEST_CASE("The response is warned of above 1 electron per photon", "[cameras][sensor][filters]")
+{
+    SensorProbe camera;
+    camera.configure_sensor_from_pitch(Resolution{8, 8}, units::Micrometer(5.0));
+    camera.sensor_->set_quantum_efficiency(RGB{0.9f});
+    {
+        WarningCapture capture;
+        camera.add_filter("fine", RGB{1.f}, Image<float>(8, 8, 1.1f)); // 0.99
+        CHECK_FALSE(capture.any("more electrons"));
+        camera.add_filter("too much", RGB{1.f}, Image<float>(8, 8, 1.2f)); // 1.08, not selected
+        CHECK_FALSE(capture.any("more electrons"));
+        camera.select_filter("too much");
+        CHECK(capture.any("more electrons"));
+    }
+    {
+        WarningCapture capture;
+        camera.select_filter("fine");
+        camera.sensor_->set_quantum_efficiency(RGB{0.95f}); // 1.045 through 'fine'
+        CHECK(capture.any("more electrons"));
+    }
+}
+
+TEST_CASE("The selected filter follows the camera to a new sensor, and its flat must fit",
+          "[cameras][sensor][filters]")
+{
+    SensorProbe camera;
+    electron_counter(camera);
+    camera.add_filter("R", RGB{0.5f, 0.f, 0.f}, Image<float>(64, 64, 0.5f));
+
+    // A new sensor is behind the same wheel:
+    camera.set_sensor<SimpleSensor<RGB>>(
+        *dynamic_cast<const SimpleSensor<RGB>*>(camera.sensor_.get()));
+    CHECK(camera.sensor_->filter_transmission()[0] == 0.5f);
+    CHECK(camera.sensor_->has_flat());
+    CHECK(camera.selected_filter_name() == "R");
+
+    // A copy of the sensor carries the filter it was behind; given to another camera, it is
+    // behind that camera's wheel instead, here an empty one:
+    const SimpleSensor<RGB> copy(*dynamic_cast<const SimpleSensor<RGB>*>(camera.sensor_.get()));
+    CHECK(copy.has_flat());
+    CHECK(copy.filter_transmission()[0] == 0.5f);
+    SensorProbe other;
+    other.set_sensor<SimpleSensor<RGB>>(copy);
+    CHECK(other.filter_count() == 0);
+    CHECK_FALSE(other.sensor_->has_flat());
+    CHECK(other.sensor_->filter_transmission()[0] == 1.f);
+
+    // The sensor reconfigured to another size: the flat no longer fits, and a readout throws
+    // until the filter is replaced or the wheel cleared.
+    {
+        WarningCapture capture;
+        camera.configure_sensor_from_pitch(Resolution{32, 32}, units::Micrometer(5.0));
+        CHECK(capture.any("filter's flat is 64x64, and the sensor is now 32x32"));
+    }
+    auto frame_buffer = camera.make_frame_buffer();
+    frame_buffer.enable_sensor_response();
+    CHECK_THROWS(camera.readout(frame_buffer, units::Second(1.0)));
+    camera.clear_filters();
+    CHECK_NOTHROW(camera.readout(frame_buffer, units::Second(1.0)));
+}
+
+TEST_CASE("flat_from_measured divides out the rendered falloff and normalizes to the center",
+          "[cameras][sensor][filters]")
+{
+    // A wide lens, where the natural falloff is large: 50 x 40 px of 100 um at 2 mm.
+    SensorProbe camera;
+    camera.configure_sensor_from_pitch(Resolution{50, 40}, units::Micrometer(100.0));
+    camera.set_focal_length(units::Millimeter(2.0));
+
+    // A flat field with only the falloff the renderer gives: the flat is 1 everywhere (to the
+    // precision of the geometry), whatever its scale.
+    Image<float> natural(50, 40);
+    for (int y = 0; y < 40; ++y) {
+        for (int x = 0; x < 50; ++x) {
+            natural(x, y) = 12345.f * camera.pixel_radiance_to_power(x, y);
+        }
+    }
+    const Image<float> unity = camera.flat_from_measured(natural);
+    CHECK(camera.pixel_radiance_to_power(0, 0) < 0.5f * camera.pixel_radiance_to_power(25, 20));
+    for (std::size_t i = 0; i < unity.size(); ++i) {
+        REQUIRE(std::abs(unity[i] - 1.f) < 1e-4f);
+    }
+
+    // More vignetting than that, and PRNU, is kept, relative to the center:
+    Image<float> measured = natural;
+    for (int y = 0; y < 40; ++y) {
+        for (int x = 0; x < 50; ++x) {
+            const double dx = (x + 0.5 - 25.0) / 25.0;
+            const double dy = (y + 0.5 - 20.0) / 20.0;
+            measured(x, y) *= static_cast<float>((1.0 - 0.3 * (dx * dx + dy * dy)) *
+                                                 (1.0 + 0.01 * ((x * 7 + y * 3) % 5 - 2)));
+        }
+    }
+    const Image<float> flat = camera.flat_from_measured(measured);
+    CHECK(std::abs(flat(25, 20) - 1.f) < 0.03f); // the center, to within its PRNU
+    CHECK(std::abs(flat(0, 0) - 0.4f) < 0.03f);  // 1 - 0.3 * 2
+    CHECK(flat(49, 39) < flat(25, 20));
+    CHECK(flat.sensor_bit_depth() == 0);
+
+    // The central patch's median sets the scale: a dust mote there does not, beyond moving the
+    // median a rank or two through the PRNU (here steps of 1%).
+    Image<float> dusty = measured;
+    dusty(25, 20) *= 0.1f;
+    dusty(24, 20) *= 0.1f;
+    const Image<float> flat_dusty = camera.flat_from_measured(dusty);
+    CHECK(std::abs(flat_dusty(10, 10) - flat(10, 10)) < 0.01f);
+    CHECK(flat_dusty(25, 20) < 0.15f);
+
+    // A larger patch:
+    const Image<float> wide = camera.flat_from_measured(measured, 0.5f);
+    CHECK(wide(25, 20) > flat(25, 20)); // normalized to a dimmer, wider median
+
+    // What can't be used:
+    CHECK_THROWS(camera.flat_from_measured(Image<float>(40, 50, 1.f)));
+    CHECK_THROWS(camera.flat_from_measured(measured, 0.f));
+    CHECK_THROWS(camera.flat_from_measured(measured, 1.5f));
+    CHECK_THROWS(camera.flat_from_measured(Image<float>(50, 40, 0.f))); // no signal at the center
+    Image<float> missing = measured;
+    missing(5, 5) = std::numeric_limits<float>::quiet_NaN();
+    CHECK_THROWS(camera.flat_from_measured(missing));
+
+    // The flat is for the wheel, and gives back the measured response in a render of a uniform
+    // scene: the rendered falloff times the flat is the measured falloff.
+    camera.add_filter("V", RGB{1.f}, flat);
+    for (int x : {0, 12, 25, 40, 49}) {
+        const double rendered = camera.pixel_radiance_to_power(x, 20) * flat(x, 20);
+        const double reference = camera.pixel_radiance_to_power(25, 20) * flat(25, 20);
+        CHECK(std::abs(rendered / reference - measured(x, 20) / measured(25, 20)) < 1e-3);
+    }
+}
+
+TEST_CASE("The camera's description lists the filter wheel", "[cameras][sensor][filters]")
+{
+    SensorProbe camera;
+    camera.configure_sensor_from_pitch(Resolution{4, 4}, units::Micrometer(5.0));
+    CHECK(camera.describe().find("Filters:     none (clear)") != std::string::npos);
+    camera.add_filter("R", RGB{0.6f, 0.3f, 0.f});
+    camera.add_filter("G", RGB{0.3f}, Image<float>(4, 4, 0.9f));
+    std::string text = camera.describe();
+    INFO(text);
+    CHECK(text.find("2 in the wheel, selected 'R' (0): transmission mean 0.3, flat none") !=
+          std::string::npos);
+    camera.select_filter("G");
+    text = camera.describe();
+    CHECK(text.find(
+              "selected 'G' (1): transmission mean 0.3, flat map (mean 0.9, from 0.9 to 0.9)") !=
+          std::string::npos);
+}

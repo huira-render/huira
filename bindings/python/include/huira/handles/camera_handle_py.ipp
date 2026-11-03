@@ -248,6 +248,92 @@ inline void bind_camera_model_handle(py::module_& m)
         .def("set_owen_distortion", &HandleType::set_owen_distortion, py::arg("coeffs"))
         .def("delete_distortion", &HandleType::delete_distortion)
 
+        // Filter wheel
+        .def(
+            "add_filter",
+            [](const HandleType& self,
+               const std::string& name,
+               const py::object& transmission,
+               std::optional<Image<float>> flat) {
+                if (py::isinstance<py::float_>(transmission) ||
+                    py::isinstance<py::int_>(transmission)) {
+                    return self.add_filter(name, transmission.cast<double>(), std::move(flat));
+                }
+                return self.add_filter(name, transmission.cast<TSpectral>(), std::move(flat));
+            },
+            py::arg("name"),
+            py::arg("transmission"),
+            py::arg("flat") = std::nullopt,
+            "Add a filter to the camera's filter wheel, and select it if it is the first; "
+            "returns its index. transmission is the fraction of the light it passes, from 0 to "
+            "1: one number for every bin, or a SpectralBins with one per bin. flat is the "
+            "filter's flat, an Image_f32 of each pixel's response through it relative to the "
+            "principal point's (flat_from_measured() makes one from a flat field), or None. "
+            "The selected filter's transmission multiplies the sensor's quantum efficiency, and "
+            "its flat each pixel's signal electrons, before shot noise. A camera whose wheel is "
+            "empty has a clear filter, with no flat. The name must be unused by the wheel's "
+            "other filters.")
+        .def("select_filter",
+             py::overload_cast<std::size_t>(&HandleType::select_filter, py::const_),
+             py::arg("index"),
+             "Select a filter of the filter wheel by index, in the order added. A frame buffer "
+             "is read out through the filter selected when it is rendered.")
+        .def("select_filter",
+             py::overload_cast<const std::string&>(&HandleType::select_filter, py::const_),
+             py::arg("name"),
+             "Select a filter of the filter wheel by name.")
+        .def("clear_filters",
+             &HandleType::clear_filters,
+             "Empty the filter wheel: the camera then has a clear filter, with no flat.")
+        .def("filter_count",
+             &HandleType::filter_count,
+             "The number of filters in the filter wheel; 0 without one.")
+        .def("selected_filter",
+             &HandleType::selected_filter,
+             "The index of the selected filter, or None if the wheel is empty.")
+        .def("selected_filter_name",
+             &HandleType::selected_filter_name,
+             "The name of the selected filter, or None if the wheel is empty.")
+        .def("filter_name",
+             &HandleType::filter_name,
+             py::arg("index"),
+             "The name of the filter at an index.")
+        .def("filter_index",
+             &HandleType::filter_index,
+             py::arg("name"),
+             "The index of the filter with a name.")
+        .def("filter_transmission",
+             py::overload_cast<std::size_t>(&HandleType::filter_transmission, py::const_),
+             py::arg("index"),
+             "The transmission, per bin, of the filter at an index.")
+        .def("filter_transmission",
+             py::overload_cast<const std::string&>(&HandleType::filter_transmission, py::const_),
+             py::arg("name"),
+             "The transmission, per bin, of the filter with a name.")
+        .def("filter_flat",
+             py::overload_cast<std::size_t>(&HandleType::filter_flat, py::const_),
+             py::arg("index"),
+             "The flat of the filter at an index, as an Image_f32, or None if it has none.")
+        .def("filter_flat",
+             py::overload_cast<const std::string&>(&HandleType::filter_flat, py::const_),
+             py::arg("name"),
+             "The flat of the filter with a name, as an Image_f32, or None if it has none.")
+        .def("flat_from_measured",
+             &HandleType::flat_from_measured,
+             py::arg("measured_flat"),
+             py::arg("central_fraction") = 0.05f,
+             "A filter's flat from a flat field taken through it (an Image_f32 at the sensor's "
+             "resolution, bias and dark subtracted, in any scale): each pixel's response "
+             "relative to the principal point's, with the falloff Huira renders itself (each "
+             "pixel's solid angle and cosine) divided out, so that it keeps only what the "
+             "renderer doesn't model: further vignetting, the filter's unevenness, dust and "
+             "PRNU. It is normalized to the median of a square around the principal point, "
+             "central_fraction of the shorter side on each edge (5% by default, at least 8 "
+             "pixels), so a speck of dust there doesn't set the scale: the quantum efficiency "
+             "and transmission are then the response at the principal point, and pixels that "
+             "respond more are above 1. The camera's focal length, distortion and principal "
+             "point must be as when the flat field was taken.")
+
         // Sensor properties
         .def("set_sensor_quantum_efficiency",
              py::overload_cast<double>(&HandleType::set_sensor_quantum_efficiency, py::const_),
@@ -720,6 +806,14 @@ inline void bind_camera_model_handle(py::module_& m)
 
         // Make the FrameBuffer
         .def("make_frame_buffer", &HandleType::make_frame_buffer)
+        .def("pixel_radiance_to_power",
+             &HandleType::pixel_radiance_to_power,
+             py::arg("x"),
+             py::arg("y"),
+             "The power pixel (x, y) (column, row from the top) receives per unit of radiance, "
+             "in m^2 sr: its solid angle times the aperture area projected along the direction "
+             "to its center. This is the falloff the renderer gives each pixel, which "
+             "flat_from_measured() divides out of a flat field.")
 
         // Blender convention
         .def("use_blender_convention",

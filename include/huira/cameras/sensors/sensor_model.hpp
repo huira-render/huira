@@ -239,7 +239,8 @@ class SensorModel {
     /// same seed on both for that.
     SensorModel(const SensorModel& other)
         : config_(other.config_), dark_current_map_(other.dark_current_map_),
-          bias_map_(other.bias_map_), bias_map_kind_(other.bias_map_kind_)
+          bias_map_(other.bias_map_), bias_map_kind_(other.bias_map_kind_),
+          filter_transmission_(other.filter_transmission_), flat_(other.flat_)
     {
     }
     SensorModel& operator=(const SensorModel& other)
@@ -249,6 +250,8 @@ class SensorModel {
             dark_current_map_ = other.dark_current_map_;
             bias_map_ = other.bias_map_;
             bias_map_kind_ = other.bias_map_kind_;
+            filter_transmission_ = other.filter_transmission_;
+            flat_ = other.flat_;
             noise_seed_ = detail::next_default_noise_seed();
             readout_count_.store(0, std::memory_order_relaxed);
         }
@@ -259,6 +262,7 @@ class SensorModel {
     SensorModel(SensorModel&& other) noexcept
         : config_(std::move(other.config_)), dark_current_map_(std::move(other.dark_current_map_)),
           bias_map_(std::move(other.bias_map_)), bias_map_kind_(other.bias_map_kind_),
+          filter_transmission_(other.filter_transmission_), flat_(std::move(other.flat_)),
           noise_seed_(other.noise_seed_),
           readout_count_(other.readout_count_.load(std::memory_order_relaxed))
     {
@@ -269,6 +273,8 @@ class SensorModel {
         dark_current_map_ = std::move(other.dark_current_map_);
         bias_map_ = std::move(other.bias_map_);
         bias_map_kind_ = other.bias_map_kind_;
+        filter_transmission_ = other.filter_transmission_;
+        flat_ = std::move(other.flat_);
         noise_seed_ = other.noise_seed_;
         readout_count_.store(other.readout_count_.load(std::memory_order_relaxed),
                              std::memory_order_relaxed);
@@ -288,6 +294,15 @@ class SensorModel {
 
     void set_quantum_efficiency(const TSpectral& qe);
     TSpectral quantum_efficiency() const { return config_.quantum_efficiency; }
+
+    /// The transmission of the filter in front of the sensor, per bin: what the camera's
+    /// selected filter sets (CameraModel::select_filter()), or 1 everywhere without one.
+    TSpectral filter_transmission() const { return filter_transmission_; }
+
+    /// Whether the filter in front of the sensor has a flat. See flat().
+    bool has_flat() const { return flat_ != nullptr; }
+
+    Image<float> flat() const;
 
     void set_full_well_capacity(float fwc);
     float full_well_capacity() const { return config_.full_well_capacity; }
@@ -419,6 +434,25 @@ class SensorModel {
     std::shared_ptr<const Image<float>> bias_map_;
     BiasMapKind bias_map_kind_ = BiasMapKind::Absolute;
 
+    /// The filter in front of the sensor, as the camera's filter wheel sets it
+    /// (set_filter_response_()): its transmission per bin, 1 without one, and its flat, each
+    /// pixel's response relative to the principal point's, null without one. The flat is shared
+    /// by the wheel and copies of the sensor, so never changed.
+    TSpectral filter_transmission_{1.f};
+    std::shared_ptr<const Image<float>> flat_;
+
+    /// Sets the filter in front of the sensor: what the camera's filter wheel does when a filter
+    /// is selected (CameraModel::select_filter()), with a clear filter and no flat when the wheel
+    /// is empty or cleared. The transmission is a ratio per bin and the flat, if any, is at the
+    /// sensor's resolution, finite and non-negative, as CameraModel::add_filter() checks. Warns
+    /// if the response, QE x transmission x flat, is above 1 anywhere: more electrons than
+    /// photons.
+    void set_filter_response_(const TSpectral& transmission,
+                              std::shared_ptr<const Image<float>> flat);
+
+    /// Warns if the response, QE x transmission x flat, is above 1 anywhere.
+    void check_response_() const;
+
     static void check_bias_(float bias_level_dn, int bit_depth, const char* caller);
 
     /// Throws unless every pixel's bias, from the map, is in [0, 2^bit_depth - 1).
@@ -428,8 +462,8 @@ class SensorModel {
                                 int bit_depth,
                                 const char* caller);
 
-    /// Throws unless the maps set are of the given resolution: a readout's. For the sensor
-    /// models' readout().
+    /// Throws unless the maps set, and the filter's flat, are of the given resolution: a
+    /// readout's. For the sensor models' readout().
     void check_map_resolutions_(const Resolution& resolution, const char* caller) const;
 
     /// The noise seed, and how many readouts have been made since it was set. Together with

@@ -233,6 +233,143 @@ std::pair<units::Micrometer, units::Micrometer> CameraModelHandle<TSpectral>::pi
 }
 
 /**
+ * @brief Add a filter to the camera's filter wheel, and select it if it is the first. See
+ * CameraModel::add_filter().
+ * @param name The filter's name, unused by the wheel's other filters.
+ * @param transmission The fraction of the light the filter passes, per bin, from 0 to 1.
+ * @param flat The filter's flat (see flat_from_measured()), or none.
+ * @return The filter's index, in the order added.
+ */
+template <IsSpectral TSpectral>
+std::size_t CameraModelHandle<TSpectral>::add_filter(const std::string& name,
+                                                     const TSpectral& transmission,
+                                                     std::optional<Image<float>> flat) const
+{
+    return this->get_()->add_filter(name, transmission, std::move(flat));
+}
+
+/**
+ * @brief Add a filter that passes the same fraction of the light in every bin. See
+ * CameraModel::add_filter().
+ * @param name The filter's name, unused by the wheel's other filters.
+ * @param transmission The fraction of the light the filter passes, from 0 to 1.
+ * @param flat The filter's flat (see flat_from_measured()), or none.
+ * @return The filter's index, in the order added.
+ */
+template <IsSpectral TSpectral>
+std::size_t CameraModelHandle<TSpectral>::add_filter(const std::string& name,
+                                                     double transmission,
+                                                     std::optional<Image<float>> flat) const
+{
+    return this->get_()->add_filter(
+        name, TSpectral(static_cast<float>(transmission)), std::move(flat));
+}
+
+/// Select a filter of the filter wheel by index, in the order added. See
+/// CameraModel::select_filter().
+template <IsSpectral TSpectral>
+void CameraModelHandle<TSpectral>::select_filter(std::size_t index) const
+{
+    this->get_()->select_filter(index);
+}
+
+/// Select a filter of the filter wheel by name. See CameraModel::select_filter().
+template <IsSpectral TSpectral>
+void CameraModelHandle<TSpectral>::select_filter(const std::string& name) const
+{
+    this->get_()->select_filter(name);
+}
+
+/// Empty the filter wheel: the camera then has a clear filter, with no flat.
+template <IsSpectral TSpectral>
+void CameraModelHandle<TSpectral>::clear_filters() const
+{
+    this->get_()->clear_filters();
+}
+
+/// The number of filters in the filter wheel; 0 without one.
+template <IsSpectral TSpectral>
+std::size_t CameraModelHandle<TSpectral>::filter_count() const
+{
+    return this->get_()->filter_count();
+}
+
+/// The index of the selected filter, or none if the wheel is empty.
+template <IsSpectral TSpectral>
+std::optional<std::size_t> CameraModelHandle<TSpectral>::selected_filter() const
+{
+    return this->get_()->selected_filter();
+}
+
+/// The name of the selected filter, or none if the wheel is empty.
+template <IsSpectral TSpectral>
+std::optional<std::string> CameraModelHandle<TSpectral>::selected_filter_name() const
+{
+    return this->get_()->selected_filter_name();
+}
+
+/// The name of the filter at an index.
+template <IsSpectral TSpectral>
+std::string CameraModelHandle<TSpectral>::filter_name(std::size_t index) const
+{
+    return this->get_()->filter(index).name;
+}
+
+/// The index of the filter with a name.
+template <IsSpectral TSpectral>
+std::size_t CameraModelHandle<TSpectral>::filter_index(const std::string& name) const
+{
+    return this->get_()->filter_index(name);
+}
+
+/// The transmission, per bin, of the filter at an index.
+template <IsSpectral TSpectral>
+TSpectral CameraModelHandle<TSpectral>::filter_transmission(std::size_t index) const
+{
+    return this->get_()->filter(index).transmission;
+}
+
+/// The transmission, per bin, of the filter with a name.
+template <IsSpectral TSpectral>
+TSpectral CameraModelHandle<TSpectral>::filter_transmission(const std::string& name) const
+{
+    return this->get_()->filter(name).transmission;
+}
+
+/// The flat of the filter at an index, or none if it has none.
+template <IsSpectral TSpectral>
+std::optional<Image<float>> CameraModelHandle<TSpectral>::filter_flat(std::size_t index) const
+{
+    const auto& flat = this->get_()->filter(index).flat;
+    return flat ? std::optional<Image<float>>(*flat) : std::nullopt;
+}
+
+/// The flat of the filter with a name, or none if it has none.
+template <IsSpectral TSpectral>
+std::optional<Image<float>> CameraModelHandle<TSpectral>::filter_flat(const std::string& name) const
+{
+    const auto& flat = this->get_()->filter(name).flat;
+    return flat ? std::optional<Image<float>>(*flat) : std::nullopt;
+}
+
+/**
+ * @brief A filter's flat from a flat field taken through it: each pixel's response relative to
+ * the principal point's, with the falloff Huira renders itself divided out, normalized to the
+ * median of a central square. See CameraModel::flat_from_measured().
+ * @param measured_flat The flat field, bias and dark subtracted, at the sensor's resolution, in
+ *        any scale.
+ * @param central_fraction The side of the square the result is normalized to, as a fraction of
+ *        the shorter side of the sensor (5% by default).
+ * @return The flat, for add_filter().
+ */
+template <IsSpectral TSpectral>
+Image<float> CameraModelHandle<TSpectral>::flat_from_measured(const Image<float>& measured_flat,
+                                                              float central_fraction) const
+{
+    return this->get_()->flat_from_measured(measured_flat, central_fraction);
+}
+
+/**
  * @brief Set the sensor quantum efficiency.
  * @param qe Quantum efficiency value
  */
@@ -1033,6 +1170,20 @@ std::optional<Ray<TSpectral>> CameraModelHandle<TSpectral>::try_cast_ray(const P
  * @brief Create a new frame buffer with the camera's resolution.
  * @return FrameBuffer<TSpectral> Frame buffer
  */
+/**
+ * @brief The power a pixel receives per unit of radiance, in m^2 sr: its solid angle times the
+ * aperture area projected along the direction to its center. This is the falloff the renderer
+ * gives each pixel, which flat_from_measured() divides out of a flat field. See
+ * CameraModel::pixel_radiance_to_power().
+ * @param x Pixel column.
+ * @param y Pixel row, from the top.
+ */
+template <IsSpectral TSpectral>
+float CameraModelHandle<TSpectral>::pixel_radiance_to_power(int x, int y) const
+{
+    return this->get_()->pixel_radiance_to_power(x, y);
+}
+
 template <IsSpectral TSpectral>
 FrameBuffer<TSpectral> CameraModelHandle<TSpectral>::make_frame_buffer() const
 {

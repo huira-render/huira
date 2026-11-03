@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstddef>
 #include <iomanip>
 #include <limits>
 #include <memory>
@@ -323,6 +324,7 @@ void CameraModel<TSpectral>::set_sensor(Args&&... args)
     }
 
     sensor_ = std::move(sensor);
+    apply_filter_(); // the new sensor is behind the same filter wheel
     compute_intrinsics_();
 }
 
@@ -530,6 +532,292 @@ void CameraModel<TSpectral>::set_intrinsics(float fx,
     focal_length_ = f;
 
     compute_intrinsics_();
+}
+
+/**
+ * @brief Adds a filter to the camera's filter wheel, and selects it if it is the first.
+ *
+ * A filter passes a fraction of the light, per bin (its transmission), and may have a flat: each
+ * pixel's response through it relative to the principal point's, from flat_from_measured(). The
+ * selected filter's transmission multiplies the sensor's quantum efficiency, and its flat each
+ * pixel's signal electrons, before shot noise (see SimpleSensor::readout()); a camera whose wheel
+ * is empty has a clear filter, with no flat. Filters are selected by index, in the order added,
+ * or by name (select_filter()).
+ *
+ * @param name The filter's name, unused by the wheel's other filters.
+ * @param transmission The fraction of the light the filter passes, per bin, from 0 to 1.
+ * @param flat The filter's flat, at the sensor's resolution, finite and non-negative (0 is a
+ *        dead pixel); none for a response of 1 everywhere.
+ * @return The filter's index.
+ * @throws std::runtime_error if the name is empty or already used, the transmission is not a
+ *         ratio in every bin, or the flat is not at the sensor's resolution or holds a value that
+ *         is negative or not finite.
+ */
+template <IsSpectral TSpectral>
+std::size_t CameraModel<TSpectral>::add_filter(const std::string& name,
+                                               const TSpectral& transmission,
+                                               std::optional<Image<float>> flat)
+{
+    const char* caller = "CameraModel::add_filter";
+    if (name.empty()) {
+        HUIRA_THROW_ERROR(std::string(caller) + " - A filter needs a name.");
+    }
+    if (filter_indices_.contains(name)) {
+        HUIRA_THROW_ERROR(std::string(caller) + " - The filter wheel already has a filter named '" +
+                          name + "' (index " + std::to_string(filter_indices_.at(name)) + ").");
+    }
+    if (!transmission.valid_ratio()) {
+        HUIRA_THROW_ERROR(
+            std::string(caller) + " - Filter '" + name +
+            "': the transmission must be from 0 to 1 in every bin: " + transmission.to_string());
+    }
+    Filter<TSpectral> filter{name, transmission, nullptr};
+    if (flat) {
+        const Resolution resolution = sensor_->resolution();
+        if (!(flat->resolution() == resolution)) {
+            HUIRA_THROW_ERROR(std::string(caller) + " - Filter '" + name +
+                              "': the flat must be at the sensor's resolution, " +
+                              std::to_string(resolution.x) + "x" + std::to_string(resolution.y) +
+                              ": it is " + std::to_string(flat->width()) + "x" +
+                              std::to_string(flat->height()));
+        }
+        for (std::size_t i = 0; i < flat->size(); ++i) {
+            const float v = (*flat)[i];
+            if (!(v >= 0.f) || !std::isfinite(v)) {
+                HUIRA_THROW_ERROR(
+                    std::string(caller) + " - Filter '" + name +
+                    "': each pixel's flat must be non-negative and finite: " + std::to_string(v) +
+                    " at pixel (" + std::to_string(i % static_cast<std::size_t>(resolution.x)) +
+                    ", " + std::to_string(i / static_cast<std::size_t>(resolution.x)) + ")");
+            }
+        }
+        flat->set_sensor_bit_depth(0); // a ratio, whatever the image was
+        filter.flat = std::make_shared<const Image<float>>(std::move(*flat));
+    }
+    filters_.push_back(std::move(filter));
+    const std::size_t index = filters_.size() - 1;
+    filter_indices_.emplace(name, index);
+    if (!selected_filter_) {
+        selected_filter_ = index;
+        apply_filter_();
+    }
+    return index;
+}
+
+/**
+ * @brief Selects a filter of the filter wheel by index, in the order added.
+ *
+ * The sensor then responds through it: see add_filter(). A frame buffer is read out through the
+ * filter selected when it is rendered (or read out again).
+ *
+ * @param index The filter's index.
+ * @throws std::runtime_error if there is no filter at that index.
+ */
+template <IsSpectral TSpectral>
+void CameraModel<TSpectral>::select_filter(std::size_t index)
+{
+    if (index >= filters_.size()) {
+        HUIRA_THROW_ERROR("CameraModel::select_filter - There is no filter " +
+                          std::to_string(index) + ": the filter wheel has " +
+                          std::to_string(filters_.size()) + " filter(s).");
+    }
+    selected_filter_ = index;
+    apply_filter_();
+}
+
+/**
+ * @brief Selects a filter of the filter wheel by name.
+ *
+ * @param name The filter's name, as given to add_filter().
+ * @throws std::runtime_error if no filter has that name.
+ */
+template <IsSpectral TSpectral>
+void CameraModel<TSpectral>::select_filter(const std::string& name)
+{
+    select_filter(filter_index(name));
+}
+
+/**
+ * @brief Empties the filter wheel. The camera then has a clear filter again, with no flat.
+ */
+template <IsSpectral TSpectral>
+void CameraModel<TSpectral>::clear_filters()
+{
+    filters_.clear();
+    filter_indices_.clear();
+    selected_filter_.reset();
+    apply_filter_();
+}
+
+/// The name of the selected filter, or none if the wheel is empty.
+template <IsSpectral TSpectral>
+std::optional<std::string> CameraModel<TSpectral>::selected_filter_name() const
+{
+    if (!selected_filter_) {
+        return std::nullopt;
+    }
+    return filters_[*selected_filter_].name;
+}
+
+/**
+ * @brief A filter of the filter wheel, by index.
+ * @throws std::runtime_error if there is no filter at that index.
+ */
+template <IsSpectral TSpectral>
+const Filter<TSpectral>& CameraModel<TSpectral>::filter(std::size_t index) const
+{
+    if (index >= filters_.size()) {
+        HUIRA_THROW_ERROR("CameraModel::filter - There is no filter " + std::to_string(index) +
+                          ": the filter wheel has " + std::to_string(filters_.size()) +
+                          " filter(s).");
+    }
+    return filters_[index];
+}
+
+/**
+ * @brief A filter of the filter wheel, by name.
+ * @throws std::runtime_error if no filter has that name.
+ */
+template <IsSpectral TSpectral>
+const Filter<TSpectral>& CameraModel<TSpectral>::filter(const std::string& name) const
+{
+    return filters_[filter_index(name)];
+}
+
+/**
+ * @brief The index of the filter with a name.
+ * @throws std::runtime_error if no filter has that name.
+ */
+template <IsSpectral TSpectral>
+std::size_t CameraModel<TSpectral>::filter_index(const std::string& name) const
+{
+    const auto found = filter_indices_.find(name);
+    if (found == filter_indices_.end()) {
+        std::string names;
+        for (const Filter<TSpectral>& f : filters_) {
+            names += (names.empty() ? "'" : ", '") + f.name + "'";
+        }
+        HUIRA_THROW_ERROR("CameraModel::filter_index - The filter wheel has no filter named '" +
+                          name + "'" +
+                          (names.empty() ? ": it is empty." : ": it has " + names + "."));
+    }
+    return found->second;
+}
+
+/// Gives the sensor the selected filter's transmission and flat, or a clear filter and no flat
+/// when the wheel is empty.
+template <IsSpectral TSpectral>
+void CameraModel<TSpectral>::apply_filter_() const
+{
+    if (selected_filter_) {
+        const Filter<TSpectral>& selected = filters_[*selected_filter_];
+        sensor_->set_filter_response_(selected.transmission, selected.flat);
+    } else {
+        sensor_->set_filter_response_(TSpectral{1.f}, nullptr);
+    }
+}
+
+/**
+ * @brief A filter's flat from a flat field taken through it: each pixel's response relative to
+ * the principal point's, with the falloff Huira renders itself divided out.
+ *
+ * A flat field is the frame of a uniformly lit scene (a dome, a twilight sky, or a lamp through
+ * a diffuser), with the bias and dark subtracted: each pixel's value is its response, times the
+ * scene's brightness and the exposure, which are the same for every pixel. Its scale therefore
+ * means nothing, and only the pixels' ratios do. The renderer already gives each pixel the
+ * falloff of its geometry, its solid angle and the cosine of its angle from the axis
+ * (pixel_radiance_to_power()), so that part is divided out, and the flat keeps only what the
+ * renderer does not model: the lens's further vignetting, the filter's unevenness, dust, and
+ * the pixels' own differences (PRNU).
+ *
+ * The result is normalized to 1 at the principal point: the median of the pixels in a square
+ * around it, central_fraction of the shorter side on each edge (at least 8 pixels), so that a
+ * speck of dust or a hot pixel there doesn't set the scale. So the sensor's quantum efficiency
+ * and the filter's transmission are the response at the principal point, and the flat is
+ * relative to it; pixels that respond more than the principal point's (by PRNU, say) are above
+ * 1, which is as it should be. The response at any pixel must still be at most 1 electron per
+ * photon, which the sensor warns of if it is not.
+ *
+ * The camera's focal length, distortion and principal point must be as they were when the flat
+ * field was taken, since the falloff divided out depends on them.
+ *
+ * @param measured_flat The flat field, at the sensor's resolution, in any scale.
+ * @param central_fraction The side of the square the result is normalized to, as a fraction of
+ *        the shorter side of the sensor (0.05 by default: 5%).
+ * @return The flat, for add_filter().
+ * @throws std::runtime_error if the flat field is not at the sensor's resolution, holds a value
+ *         that is negative or not finite, the central patch's median is not positive, or the
+ *         fraction is not in (0, 1].
+ */
+template <IsSpectral TSpectral>
+Image<float> CameraModel<TSpectral>::flat_from_measured(const Image<float>& measured_flat,
+                                                        float central_fraction) const
+{
+    const char* caller = "CameraModel::flat_from_measured";
+    const Resolution resolution = sensor_->resolution();
+    if (!(measured_flat.resolution() == resolution)) {
+        HUIRA_THROW_ERROR(std::string(caller) +
+                          " - The flat field must be at the sensor's "
+                          "resolution, " +
+                          std::to_string(resolution.x) + "x" + std::to_string(resolution.y) +
+                          ": it is " + std::to_string(measured_flat.width()) + "x" +
+                          std::to_string(measured_flat.height()));
+    }
+    if (!(central_fraction > 0.f) || !(central_fraction <= 1.f)) {
+        HUIRA_THROW_ERROR(std::string(caller) + " - The central fraction must be in (0, 1]: " +
+                          std::to_string(central_fraction));
+    }
+
+    // The flat field over the falloff the renderer gives each pixel:
+    Image<float> flat(resolution);
+    for (int y = 0; y < resolution.y; ++y) {
+        for (int x = 0; x < resolution.x; ++x) {
+            const float measured = measured_flat(x, y);
+            if (!(measured >= 0.f) || !std::isfinite(measured)) {
+                HUIRA_THROW_ERROR(std::string(caller) +
+                                  " - Each pixel of the flat field must be "
+                                  "non-negative and finite: " +
+                                  std::to_string(measured) + " at pixel (" + std::to_string(x) +
+                                  ", " + std::to_string(y) + "). Replace missing pixels first.");
+            }
+            flat(x, y) = static_cast<float>(static_cast<double>(measured) /
+                                            static_cast<double>(pixel_radiance_to_power(x, y)));
+        }
+    }
+
+    // Normalized to the median of the square around the principal point (cx_, cy_, in sensor
+    // coordinates, where pixel (x, y) covers [x, x + 1) x [y, y + 1)):
+    const int side = std::max(
+        8,
+        static_cast<int>(std::lround(static_cast<double>(central_fraction) *
+                                     static_cast<double>(std::min(resolution.x, resolution.y)))));
+    const int x0 = std::clamp(static_cast<int>(std::floor(cx_)) - side / 2, 0, resolution.x - 1);
+    const int y0 = std::clamp(static_cast<int>(std::floor(cy_)) - side / 2, 0, resolution.y - 1);
+    const int x1 = std::min(x0 + side, resolution.x);
+    const int y1 = std::min(y0 + side, resolution.y);
+    std::vector<float> central;
+    central.reserve(static_cast<std::size_t>((x1 - x0) * (y1 - y0)));
+    for (int y = y0; y < y1; ++y) {
+        for (int x = x0; x < x1; ++x) {
+            central.push_back(flat(x, y));
+        }
+    }
+    const auto middle = central.begin() + static_cast<std::ptrdiff_t>(central.size() / 2);
+    std::nth_element(central.begin(), middle, central.end());
+    float median = *middle;
+    if (central.size() % 2 == 0) {
+        const float below = *std::max_element(central.begin(), middle);
+        median = 0.5f * (below + median);
+    }
+    if (!(median > 0.f)) {
+        HUIRA_THROW_ERROR(std::string(caller) + " - The flat field is " + std::to_string(median) +
+                          " around the principal point (" + std::to_string(cx_) + ", " +
+                          std::to_string(cy_) + "), so can't be normalized to it.");
+    }
+    for (std::size_t i = 0; i < flat.size(); ++i) {
+        flat[i] = static_cast<float>(static_cast<double>(flat[i]) / static_cast<double>(median));
+    }
+    return flat;
 }
 
 /**
@@ -3047,6 +3335,18 @@ std::string CameraModel<TSpectral>::describe() const
     out << "  Readout:     " << sensor.bit_depth() << "-bit, gain " << num(sensor.conversion_gain())
         << " e-/DN, full well " << num(sensor.full_well_capacity(), 6) << " e-, bias " << bias
         << ", mean QE " << num(qe, 3) << "\n";
+    out << "  Filters:     ";
+    if (filters_.empty()) {
+        out << "none (clear)\n";
+    } else {
+        out << filters_.size() << " in the wheel, selected '" << *selected_filter_name() << "' ("
+            << *selected_filter_ << "): transmission mean "
+            << num(static_cast<double>(sensor.filter_transmission().total()) /
+                       static_cast<double>(TSpectral::size()),
+                   3)
+            << ", flat "
+            << (sensor.has_flat() ? "map (" + map_summary(*sensor.flat_) + ")" : "none") << "\n";
+    }
     out << "  Noise:       " << on_off(sensor.noise_enabled()) << ", read noise "
         << num(sensor.read_noise()) << " e-, row noise " << num(sensor.row_noise())
         << " e-, column noise " << num(sensor.column_noise()) << " e-, dark current " << dark

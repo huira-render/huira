@@ -13,6 +13,7 @@
 #include <optional>
 #include <string>
 #include <type_traits>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -47,6 +48,24 @@ class CameraModelHandle;
 
 template <IsSpectral TSpectral>
 class Renderer;
+
+/**
+ * @brief A filter of a camera's filter wheel: see CameraModel::add_filter().
+ *
+ * @tparam TSpectral The spectral type (e.g., @ref RGB, @ref Visible8)
+ */
+template <IsSpectral TSpectral>
+struct Filter {
+    std::string name;
+
+    /// The fraction of the light the filter passes, per bin (0 to 1).
+    TSpectral transmission{1.f};
+
+    /// Each pixel's response through the filter relative to the principal point's, at the
+    /// sensor's resolution (see CameraModel::flat_from_measured()); null for none, a response of
+    /// 1 everywhere.
+    std::shared_ptr<const Image<float>> flat;
+};
 
 template <IsSpectral TSpectral>
 class SceneView;
@@ -146,6 +165,27 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
 
     std::pair<units::Micrometer, units::Micrometer> pixel_pitch() const;
     Mat3<float> intrinsic_matrix() const;
+
+    std::size_t add_filter(const std::string& name,
+                           const TSpectral& transmission,
+                           std::optional<Image<float>> flat = std::nullopt);
+    void select_filter(std::size_t index);
+    void select_filter(const std::string& name);
+    void clear_filters();
+
+    /// The number of filters in the filter wheel; 0 without one. See add_filter().
+    std::size_t filter_count() const { return filters_.size(); }
+
+    /// The index of the selected filter, or none if the wheel is empty. See select_filter().
+    std::optional<std::size_t> selected_filter() const { return selected_filter_; }
+
+    std::optional<std::string> selected_filter_name() const;
+    const Filter<TSpectral>& filter(std::size_t index) const;
+    const Filter<TSpectral>& filter(const std::string& name) const;
+    std::size_t filter_index(const std::string& name) const;
+
+    Image<float> flat_from_measured(const Image<float>& measured_flat,
+                                    float central_fraction = 0.05f) const;
 
     template <IsAperture TAperture, typename... Args>
     void set_aperture(Args&&... args);
@@ -487,6 +527,14 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     float focal_length_ = .05f;
 
     std::unique_ptr<SensorModel<TSpectral>> sensor_;
+
+    /// The filter wheel: its filters in order, their indices by name, and the selected one (none
+    /// while the wheel is empty). The sensor holds the selected filter's transmission and flat
+    /// (SensorModel::set_filter_response_()), which apply_filter_() gives it.
+    std::vector<Filter<TSpectral>> filters_;
+    std::unordered_map<std::string, std::size_t> filter_indices_;
+    std::optional<std::size_t> selected_filter_;
+    void apply_filter_() const;
     std::unique_ptr<Aperture<TSpectral>> aperture_;
     std::unique_ptr<Distortion<TSpectral>> distortion_ = nullptr;
     /// A PSF set with set_psf() or set_measured_psf(), which takes the place of the aperture's
