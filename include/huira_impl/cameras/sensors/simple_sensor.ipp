@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <memory>
 #include <string>
 #include <type_traits>
 #include <vector>
@@ -23,8 +24,9 @@ namespace huira {
  *
  * For each pixel (each channel, for RGB): the received energy becomes photons and, through the
  * quantum efficiency, the selected filter's transmission and, if it has one, its flat (the
- * pixel's response relative to the principal point's), signal electrons, to which the dark
- * current's electrons are added (the pixel's own, from the dark current map, if one is set). With
+ * pixel's response relative to the principal point's), and the pixel's own gain (PRNU, if set),
+ * signal electrons, to which the dark current's electrons are added (the pixel's own, from the
+ * dark current map, if one is set, and its own as a hot pixel, if it is one). With
  * noise simulated, the electrons collected are drawn from a Poisson distribution of that mean (shot
  * noise); without, they are the mean. They are clamped to the full well, and the read noise is
  * added, with the row's and the column's noise (with noise simulated; see set_row_noise() and
@@ -35,8 +37,8 @@ namespace huira {
  * docs/design_overview/sensor_modeling.rst.
  *
  * Turning noise off removes only what is random: shot noise, read noise, and row and column
- * noise. The dark current's electrons and the bias, and their maps, are not noise, and are
- * applied either way.
+ * noise. The dark current's electrons and the bias, their maps, and the fixed patterns (PRNU and
+ * hot pixels) are not noise, and are applied either way.
  *
  * A pixel whose received power is not finite (NaN or infinite) has no meaningful response: it
  * reads out as NaN, which the image writers record as missing data, and a warning gives the
@@ -64,6 +66,9 @@ void SimpleSensor<TSpectral>::readout(FrameBuffer<TSpectral>& fb, units::Second 
     // Photons to signal electrons, per bin: the quantum efficiency through the filter.
     const TSpectral response = config.quantum_efficiency * this->filter_transmission_;
     const Image<float>* flat = this->flat_.get();
+    // The sensor's fixed patterns, made from its noise seed (the same in every readout):
+    const std::shared_ptr<const Image<float>> prnu_gains = this->prnu_gains_();
+    const std::shared_ptr<const Image<float>> hot_pixels = this->hot_pixel_dark_currents_();
     const double max_dn = std::pow(2.0, static_cast<double>(config.bit_depth)) - 1.0;
 
     const bool noise = config.simulate_noise;
@@ -142,11 +147,18 @@ void SimpleSensor<TSpectral>::readout(FrameBuffer<TSpectral>& fb, units::Second 
                     if (flat != nullptr) {
                         electrons = electrons * (*flat)(x, y);
                     }
+                    if (prnu_gains != nullptr) {
+                        electrons = electrons * (*prnu_gains)(x, y);
+                    }
 
-                    const double pixel_dark_e =
+                    double pixel_dark_e =
                         dark_map != nullptr
                             ? static_cast<double>((*dark_map)(x, y)) * static_cast<double>(dt)
                             : dark_e;
+                    if (hot_pixels != nullptr) {
+                        pixel_dark_e +=
+                            static_cast<double>((*hot_pixels)(x, y)) * static_cast<double>(dt);
+                    }
                     const double pixel_bias =
                         bias_map != nullptr ? bias_map_base + static_cast<double>((*bias_map)(x, y))
                                             : bias;

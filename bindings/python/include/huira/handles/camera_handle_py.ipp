@@ -373,6 +373,28 @@ inline void bind_camera_model_handle(py::module_& m)
              "frame. It comes from a CMOS sensor's column amplifiers and ADCs, and is usually "
              "smaller than the row noise; a CCD has none. A fixed pattern of columns is a bias "
              "map's. Off with the other noise.")
+        .def("set_sensor_prnu",
+             &HandleType::set_sensor_prnu,
+             py::arg("prnu"),
+             "Set the sensor's photo response non-uniformity: the standard deviation of each "
+             "pixel's gain (0.01 is 1%), by which its signal electrons are multiplied. A fixed "
+             "pattern, made from the noise seed: the same in every frame, another with another "
+             "seed. It applies to the light only, and with noise off too. A flat from a real "
+             "flat field already holds the camera's PRNU: leave this at 0 with one. 0 by "
+             "default.")
+        .def("set_sensor_hot_pixels",
+             &HandleType::set_sensor_hot_pixels,
+             py::arg("fraction"),
+             py::arg("dark_current"),
+             py::arg("spread") = 0.f,
+             "Give the sensor hot pixels: each pixel is hot with probability fraction, and a hot "
+             "pixel gathers a dark current of its own, in e-/s, on top of the sensor's: "
+             "dark_current times exp(spread * N(0, 1)), a log-normal distribution whose median "
+             "is dark_current (spread 0 for the same in every hot pixel). A fixed pattern, made "
+             "from the noise seed: the same pixels in every frame, others with another seed; a "
+             "larger fraction keeps a smaller one's hot pixels and adds more. A dark current "
+             "map from a real master dark already holds the camera's hot pixels: leave these "
+             "off with one. Off (fraction 0) by default.")
         .def("set_sensor_dark_current",
              &HandleType::set_sensor_dark_current,
              py::arg("dark_current"),
@@ -448,6 +470,25 @@ inline void bind_camera_model_handle(py::module_& m)
         .def("sensor_column_noise",
              &HandleType::sensor_column_noise,
              "The sensor's column noise, in e- RMS. See set_sensor_column_noise().")
+        .def("sensor_prnu",
+             &HandleType::sensor_prnu,
+             "The standard deviation of each pixel's gain. See set_sensor_prnu().")
+        .def("sensor_prnu_map",
+             &HandleType::sensor_prnu_map,
+             "Each pixel's gain from the PRNU, as an Image_f32: 1 everywhere without it.")
+        .def("sensor_hot_pixel_fraction",
+             &HandleType::sensor_hot_pixel_fraction,
+             "The fraction of the sensor's pixels that are hot. See set_sensor_hot_pixels().")
+        .def("sensor_hot_pixel_dark_current",
+             &HandleType::sensor_hot_pixel_dark_current,
+             "The hot pixels' median dark current, in e-/s.")
+        .def("sensor_hot_pixel_spread",
+             &HandleType::sensor_hot_pixel_spread,
+             "The standard deviation of the natural log of the hot pixels' dark currents.")
+        .def("sensor_hot_pixel_map",
+             &HandleType::sensor_hot_pixel_map,
+             "Each pixel's dark current as a hot pixel, in e-/s, as an Image_f32: 0 for the "
+             "pixels that aren't hot.")
         .def("sensor_dark_current",
              &HandleType::sensor_dark_current,
              "The sensor's dark current, in electrons per second.")

@@ -2,11 +2,13 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <mutex>
 #include <numbers>
 #include <string>
 
@@ -49,8 +51,10 @@ class SensorRandom {
     /// What a stream of random numbers is for. Each has its own, so that adding draws to one
     /// never changes another's: a sensor with row noise has the same pixel noise as without.
     enum class Stream : std::uint64_t {
-        Rows = 1,    ///< One draw per row of a readout (row noise)
-        Columns = 2, ///< The draws for a readout's columns (column noise)
+        Rows = 1,      ///< One draw per row of a readout (row noise)
+        Columns = 2,   ///< The draws for a readout's columns (column noise)
+        Prnu = 3,      ///< Each pixel's gain, per row, the same in every readout (PRNU)
+        HotPixels = 4, ///< Which pixels are hot, and how, per row, the same in every readout
     };
 
     /// The random numbers for the pixels of one row of one readout.
@@ -167,8 +171,12 @@ struct SensorConfig {
     float read_noise = 10.f;    // e- RMS
     float row_noise = 0.f;    // e- RMS, shared by a row's pixels (see SensorModel::set_row_noise())
     float column_noise = 0.f; // e- RMS, shared by a column's pixels
-    float dark_current = 1.f; // e-/s
-    float bias_level_dn = 10.f; // ADU
+    float prnu = 0.f; // Each pixel's gain's standard deviation (see SensorModel::set_prnu())
+    float hot_pixel_fraction = 0.f;     // See SensorModel::set_hot_pixels()
+    float hot_pixel_dark_current = 0.f; // e-/s
+    float hot_pixel_spread = 0.f;       // Natural log of the hot pixels' dark currents' spread
+    float dark_current = 1.f;           // e-/s
+    float bias_level_dn = 10.f;         // ADU
 
     int bit_depth = 12;
 
@@ -329,6 +337,27 @@ class SensorModel {
     /// The column noise, in e- RMS. See set_column_noise().
     float column_noise() const { return config_.column_noise; }
 
+    void set_prnu(float prnu);
+
+    /// The standard deviation of each pixel's gain (0.01 is 1%). See set_prnu().
+    float prnu() const { return config_.prnu; }
+
+    Image<float> prnu_map() const;
+
+    void set_hot_pixels(float fraction, float dark_current, float spread = 0.f);
+
+    /// The fraction of the pixels that are hot. See set_hot_pixels().
+    float hot_pixel_fraction() const { return config_.hot_pixel_fraction; }
+
+    /// The hot pixels' median dark current, in e-/s, added to the sensor's. See set_hot_pixels().
+    float hot_pixel_dark_current() const { return config_.hot_pixel_dark_current; }
+
+    /// The spread of the hot pixels' dark currents: the standard deviation of their natural log.
+    /// See set_hot_pixels().
+    float hot_pixel_spread() const { return config_.hot_pixel_spread; }
+
+    Image<float> hot_pixel_map() const;
+
     void set_dark_current(float dark_current);
     float dark_current() const { return config_.dark_current; }
 
@@ -476,6 +505,26 @@ class SensorModel {
     {
         return readout_count_.fetch_add(1, std::memory_order_relaxed);
     }
+
+    /// A fixed pattern (each pixel's gain, or hot pixels' dark current) as last made, and what it
+    /// was made from, so that it is made again only when that changes. Made from the noise seed,
+    /// so a copy of the sensor, with a seed of its own, makes its own.
+    struct FixedPatternCache {
+        std::mutex mutex;
+        std::shared_ptr<const Image<float>> map;
+        std::array<double, 7> key{};
+        bool made = false;
+    };
+    mutable FixedPatternCache prnu_cache_;
+    mutable FixedPatternCache hot_pixel_cache_;
+
+    /// Each pixel's gain (PRNU), or null without PRNU. Made from the noise seed when first
+    /// needed after it, the PRNU or the resolution changed.
+    std::shared_ptr<const Image<float>> prnu_gains_() const;
+
+    /// Each pixel's dark current as a hot pixel, in e-/s, 0 for the others, or null without hot
+    /// pixels. Made as prnu_gains_() is.
+    std::shared_ptr<const Image<float>> hot_pixel_dark_currents_() const;
 
     /// Largest bit depth accepted. The sensor response holds DN / (2^bit_depth - 1) as a float,
     /// from which every DN is recovered exactly, by round(value * (2^bit_depth - 1)), up to 24

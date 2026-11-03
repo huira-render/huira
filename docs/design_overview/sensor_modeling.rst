@@ -232,6 +232,37 @@ From C++, the maps are on the sensor (``SensorModel::set_dark_current_map()``,
         huira.Image_f32(columns, origin=huira.PixelOrigin.TopLeft), huira.BiasMapKind.Relative)
 
 
+PRNU and hot pixels
+-------------------
+
+Without calibration frames, a sensor's two most visible fixed patterns can be made up instead,
+from parameters, each the same in every frame:
+
+- *PRNU* (photo response non-uniformity; ``set_sensor_prnu()``): each pixel's signal electrons
+  are multiplied by a gain of its own, drawn once from a normal distribution of mean 1 and the
+  given standard deviation (0.01 is 1%; never below 0). It applies to the light only, not the
+  dark current.
+- *Hot pixels* (``set_sensor_hot_pixels(fraction, dark_current, spread)``): each pixel is hot with
+  probability ``fraction``, and a hot pixel gathers a dark current of its own, in e⁻/s, on top of
+  the sensor's (the single value, or the dark current map): ``dark_current`` times
+  :math:`e^{\text{spread} \cdot N(0, 1)}`, a log-normal distribution whose median is
+  ``dark_current``. A spread of 0 gives every hot pixel the same; 0.5 spreads them about 1.6x
+  either way. A larger fraction keeps a smaller one's hot pixels, with the same dark currents,
+  and adds more.
+
+Both are made from the noise seed (``set_sensor_noise_seed()``), on random numbers of their own,
+keyed by the seed and the pixel but not the readout: a seed is a detector, with the same
+patterns in every frame, and another seed is another detector. They are made again when the
+seed, their parameters or the resolution change. Being fixed, they apply with noise off too.
+``sensor_prnu_map()`` and ``sensor_hot_pixel_map()`` give them, and ``describe()`` lists them.
+Both are off by default.
+
+They stand in for calibration frames, so don't use both for the same thing: a flat from a real
+flat field (see Filters and flats) already holds the camera's PRNU, and a dark current map from
+a real master dark its hot pixels. PRNU's normal tail can also take a pixel's response, QE times
+its gain, a little above 1 electron per photon when the QE is near 1, which isn't warned of.
+
+
 Filters and flats
 -----------------
 
@@ -287,7 +318,7 @@ is one image, applied to the pixel's electrons from every bin.
 Noise off
 ---------
 
-``enable_sensor_noise(false)`` on the camera (``enable_noise(false)`` on a ``SensorModel``; ``enable_sensor_noise(False)`` in Python) removes what is random: shot noise, read noise, and row and column noise. Each pixel then collects the expected number of electrons, signal and dark current together. The dark current's electrons and the bias, and their maps, are still added, since they are not noise, and the result is still quantized.
+``enable_sensor_noise(false)`` on the camera (``enable_noise(false)`` on a ``SensorModel``; ``enable_sensor_noise(False)`` in Python) removes what is random: shot noise, read noise, and row and column noise. Each pixel then collects the expected number of electrons, signal and dark current together. The dark current's electrons and the bias, their maps, and the fixed patterns (PRNU, hot pixels, a filter's flat) are still applied, since they are not noise, and the result is still quantized.
 
 
 Missing data
@@ -306,7 +337,9 @@ numbers determined by the seed, the number of readouts the sensor has made since
 set, and the row. A frame's noise therefore does not depend on other cameras, threads or the
 order rows are read out in; successive frames differ; and setting the same seed again repeats
 the same sequence of frames. Row noise and column noise are drawn from streams of their own,
-keyed by the stream too, so that turning either on leaves the pixels' noise as it was. The random
+keyed by the stream too, so that turning either on leaves the pixels' noise as it was. The fixed
+patterns (PRNU and hot pixels) are made from the seed too, on streams of their own keyed by the
+seed and the pixel, but not the readout, so they are the same in every frame. The random
 integers are the same with every standard library; the
 normal and Poisson draws made from them use ``std::log``, ``std::exp`` and the like, which can
 differ in their last bit between platforms, so frames repeat exactly on one platform and
@@ -326,6 +359,8 @@ Changes in v0.9.11
 - A camera has a filter wheel, whose filters have a transmission per bin and may have a flat
   (see Filters and flats), and ``flat_from_measured()`` makes a flat from a flat field. The wheel
   is empty by default, a clear filter, so frames are as before.
+- PRNU and hot pixels can be made from parameters and the noise seed (see PRNU and hot pixels).
+  Both are off by default, so frames are as before.
 
 
 Changes in v0.9.10

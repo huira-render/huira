@@ -447,6 +447,33 @@ void CameraModelHandle<TSpectral>::set_sensor_column_noise(float column_noise) c
 }
 
 /**
+ * @brief Set the sensor's PRNU: the standard deviation of each pixel's gain (0.01 is 1%), a fixed
+ * pattern made from the noise seed. 0 by default. See SensorModel::set_prnu().
+ * @param prnu The standard deviation of each pixel's gain
+ */
+template <IsSpectral TSpectral>
+void CameraModelHandle<TSpectral>::set_sensor_prnu(float prnu) const
+{
+    this->get_()->sensor_->set_prnu(prnu);
+}
+
+/**
+ * @brief Give the sensor hot pixels: a fraction of its pixels, a fixed pattern made from the
+ * noise seed, that gather a dark current of their own on top of the sensor's. Off by default.
+ * See SensorModel::set_hot_pixels().
+ * @param fraction The fraction of the pixels that are hot, from 0 to 1
+ * @param dark_current The hot pixels' median dark current, in e-/s
+ * @param spread The standard deviation of the natural log of their dark currents
+ */
+template <IsSpectral TSpectral>
+void CameraModelHandle<TSpectral>::set_sensor_hot_pixels(float fraction,
+                                                         float dark_current,
+                                                         float spread) const
+{
+    this->get_()->sensor_->set_hot_pixels(fraction, dark_current, spread);
+}
+
+/**
  * @brief Set the sensor dark current, the same for every pixel. A dark current map, while one is
  * set, takes its place. See SensorModel::set_dark_current().
  * @param dark_current Dark current, in e-/s
@@ -660,6 +687,48 @@ template <IsSpectral TSpectral>
 float CameraModelHandle<TSpectral>::sensor_column_noise() const
 {
     return this->get_()->sensor_->column_noise();
+}
+
+/// Get the sensor's PRNU: the standard deviation of each pixel's gain. See set_sensor_prnu().
+template <IsSpectral TSpectral>
+float CameraModelHandle<TSpectral>::sensor_prnu() const
+{
+    return this->get_()->sensor_->prnu();
+}
+
+/// Get each pixel's gain from the PRNU, or 1 everywhere without it.
+template <IsSpectral TSpectral>
+Image<float> CameraModelHandle<TSpectral>::sensor_prnu_map() const
+{
+    return this->get_()->sensor_->prnu_map();
+}
+
+/// Get the fraction of the sensor's pixels that are hot. See set_sensor_hot_pixels().
+template <IsSpectral TSpectral>
+float CameraModelHandle<TSpectral>::sensor_hot_pixel_fraction() const
+{
+    return this->get_()->sensor_->hot_pixel_fraction();
+}
+
+/// Get the hot pixels' median dark current, in e-/s. See set_sensor_hot_pixels().
+template <IsSpectral TSpectral>
+float CameraModelHandle<TSpectral>::sensor_hot_pixel_dark_current() const
+{
+    return this->get_()->sensor_->hot_pixel_dark_current();
+}
+
+/// Get the spread of the hot pixels' dark currents. See set_sensor_hot_pixels().
+template <IsSpectral TSpectral>
+float CameraModelHandle<TSpectral>::sensor_hot_pixel_spread() const
+{
+    return this->get_()->sensor_->hot_pixel_spread();
+}
+
+/// Get each pixel's dark current as a hot pixel, in e-/s: 0 for the pixels that aren't hot.
+template <IsSpectral TSpectral>
+Image<float> CameraModelHandle<TSpectral>::sensor_hot_pixel_map() const
+{
+    return this->get_()->sensor_->hot_pixel_map();
 }
 
 /// Get the sensor's dark current, in electrons per second.

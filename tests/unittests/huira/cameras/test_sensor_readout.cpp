@@ -1351,3 +1351,203 @@ TEST_CASE("The camera's description lists the filter wheel", "[cameras][sensor][
               "selected 'G' (1): transmission mean 0.3, flat map (mean 0.9, from 0.9 to 0.9)") !=
           std::string::npos);
 }
+
+TEST_CASE("PRNU gives each pixel a gain of its own, the same in every frame",
+          "[cameras][sensor][fixed]")
+{
+    SensorProbe camera;
+    electron_counter(camera); // 64x64, 1 e-/DN
+    camera.sensor_->set_noise_seed(21);
+    camera.sensor_->enable_noise(false);
+    auto frame_buffer = camera.make_frame_buffer();
+    frame_buffer.enable_sensor_response();
+    expect_electrons(camera, frame_buffer, 10000.0);
+
+    // Without it, every pixel is the same:
+    for (double v : read_dn(camera, frame_buffer)) {
+        REQUIRE(std::abs(v - 10000.0) < 1e-3);
+    }
+    CHECK(camera.sensor_->prnu_map()(5, 5) == 1.f);
+
+    camera.sensor_->set_prnu(0.02f);
+    CHECK(camera.sensor_->prnu() == 0.02f);
+    const Image<float> gains = camera.sensor_->prnu_map();
+    const std::vector<double> first = read_dn(camera, frame_buffer);
+    std::vector<double> ratios;
+    for (std::size_t i = 0; i < first.size(); ++i) {
+        const auto pixel = static_cast<int>(i / 3);
+        const double gain = static_cast<double>(gains(pixel % 64, pixel / 64));
+        // Each pixel's signal, by its gain (to the rounding of a float's electrons to DN); its
+        // three channels alike:
+        REQUIRE(std::abs(first[i] - 10000.0 * gain) <= 0.5 + 1e-2);
+        REQUIRE(first[i] == first[i - i % 3]);
+        if (i % 3 == 0) {
+            ratios.push_back(first[i] / 10000.0);
+        }
+    }
+    // 4096 gains: mean 1, standard deviation 0.02.
+    CHECK(std::abs(mean_of(ratios) - 1.0) < 0.002);
+    CHECK(std::abs(std::sqrt(variance_of(ratios)) / 0.02 - 1.0) < 0.06);
+
+    // The same in the next frame, and with the seed again; another with another seed:
+    CHECK(read_dn(camera, frame_buffer) == first);
+    camera.sensor_->set_noise_seed(21);
+    CHECK(read_dn(camera, frame_buffer) == first);
+    camera.sensor_->set_noise_seed(22);
+    CHECK(read_dn(camera, frame_buffer) != first);
+
+    // With noise, the gain sets the mean the shot noise is drawn around, and the noise itself
+    // is as without PRNU: its random numbers are their own.
+    camera.sensor_->set_noise_seed(23);
+    camera.sensor_->enable_noise(true);
+    camera.sensor_->set_prnu(0.f);
+    const std::vector<double> plain = read_dn(camera, frame_buffer);
+    camera.sensor_->set_noise_seed(23);
+    camera.sensor_->set_prnu(0.02f);
+    const Image<float> seeded = camera.sensor_->prnu_map();
+    const std::vector<double> with_prnu = read_dn(camera, frame_buffer);
+    double sum = 0.0;
+    for (std::size_t i = 0; i < plain.size(); i += 3) {
+        const auto pixel = static_cast<int>(i / 3);
+        sum += with_prnu[i] - plain[i] -
+               10000.0 * (static_cast<double>(seeded(pixel % 64, pixel / 64)) - 1.0);
+    }
+    CHECK(std::abs(sum / 4096.0) < 3.0); // the differences are the gains', on average
+
+    // It applies to the light, not the dark current:
+    camera.sensor_->enable_noise(false);
+    camera.sensor_->set_dark_current(500.f);
+    frame_buffer.received_power().fill(RGB{0.f});
+    for (double v : read_dn(camera, frame_buffer)) {
+        REQUIRE(std::abs(v - 500.0) < 1e-3);
+    }
+
+    // Made again for a new resolution:
+    camera.configure_sensor_from_pitch(Resolution{16, 8}, units::Micrometer(5.0));
+    CHECK(camera.sensor_->prnu_map().width() == 16);
+
+    CHECK_THROWS(camera.sensor_->set_prnu(-0.01f));
+    CHECK_THROWS(camera.sensor_->set_prnu(std::numeric_limits<float>::infinity()));
+    CHECK(camera.sensor_->prnu() == 0.02f);
+}
+
+TEST_CASE("Hot pixels gather a dark current of their own, the same pixels in every frame",
+          "[cameras][sensor][fixed]")
+{
+    SensorProbe camera;
+    camera.configure_sensor_from_pitch(Resolution{256, 256}, units::Micrometer(5.0));
+    camera.sensor_->set_conversion_gain(1.f);
+    camera.sensor_->set_bias_level_dn(0.f);
+    camera.sensor_->set_dark_current(0.f);
+    camera.sensor_->set_read_noise(0.f);
+    camera.sensor_->set_full_well_capacity(1e9f);
+    camera.sensor_->set_bit_depth(20);
+    camera.sensor_->set_noise_seed(5);
+    camera.sensor_->enable_noise(false);
+    auto frame_buffer = camera.make_frame_buffer();
+    frame_buffer.enable_sensor_response();
+    frame_buffer.received_power().fill(RGB{0.f});
+
+    // 1% of the pixels, each at 100 e-/s, over 2 s:
+    camera.sensor_->set_hot_pixels(0.01f, 100.f);
+    const Image<float> map = camera.sensor_->hot_pixel_map();
+    std::size_t hot = 0;
+    for (std::size_t i = 0; i < map.size(); ++i) {
+        REQUIRE((map[i] == 0.f || map[i] == 100.f));
+        hot += map[i] > 0.f ? std::size_t{1} : std::size_t{0};
+    }
+    CHECK(std::abs(static_cast<double>(hot) - 655.36) < 4.0 * std::sqrt(655.36)); // binomial
+    const std::vector<double> dn = read_dn(camera, frame_buffer, 2.0);
+    for (std::size_t i = 0; i < dn.size(); ++i) {
+        const auto pixel = static_cast<int>(i / 3);
+        REQUIRE(std::abs(dn[i] - 2.0 * static_cast<double>(map(pixel % 256, pixel / 256))) < 1e-3);
+    }
+    CHECK(read_dn(camera, frame_buffer, 2.0) == dn); // the same pixels in the next frame
+
+    // A larger fraction keeps them, with the same dark currents, and adds more:
+    camera.sensor_->set_hot_pixels(0.05f, 100.f);
+    const Image<float> more = camera.sensor_->hot_pixel_map();
+    std::size_t more_hot = 0;
+    for (std::size_t i = 0; i < map.size(); ++i) {
+        if (map[i] > 0.f) {
+            REQUIRE(more[i] == map[i]);
+        }
+        more_hot += more[i] > 0.f ? std::size_t{1} : std::size_t{0};
+    }
+    CHECK(more_hot > 4 * hot);
+
+    // A spread: log-normal about the median.
+    camera.sensor_->set_hot_pixels(0.05f, 100.f, 0.5f);
+    const Image<float> spread = camera.sensor_->hot_pixel_map();
+    std::vector<double> logs;
+    for (std::size_t i = 0; i < spread.size(); ++i) {
+        if (spread[i] > 0.f) {
+            REQUIRE(more[i] > 0.f); // the same pixels
+            logs.push_back(std::log(static_cast<double>(spread[i]) / 100.0));
+        }
+    }
+    CHECK(std::abs(mean_of(logs)) < 0.05);
+    CHECK(std::abs(std::sqrt(variance_of(logs)) / 0.5 - 1.0) < 0.08);
+    CHECK(camera.sensor_->hot_pixel_spread() == 0.5f);
+
+    // They add to the dark current in effect, a map's too:
+    camera.sensor_->set_hot_pixels(0.01f, 100.f);
+    camera.sensor_->set_dark_current_map(Image<float>(256, 256, 7.f));
+    for (double v : read_dn(camera, frame_buffer)) {
+        REQUIRE((std::abs(v - 7.0) < 1e-3 || std::abs(v - 107.0) < 1e-3));
+    }
+
+    // Another seed, other pixels:
+    camera.sensor_->set_noise_seed(6);
+    const Image<float> other = camera.sensor_->hot_pixel_map();
+    bool differ = false;
+    for (std::size_t i = 0; i < map.size(); ++i) {
+        differ = differ || (other[i] > 0.f) != (map[i] > 0.f);
+    }
+    CHECK(differ);
+
+    // Off with a fraction or dark current of 0:
+    camera.sensor_->set_hot_pixels(0.f, 100.f);
+    CHECK(camera.sensor_->hot_pixel_map()(3, 3) == 0.f);
+
+    CHECK_THROWS(camera.sensor_->set_hot_pixels(1.5f, 100.f));
+    CHECK_THROWS(camera.sensor_->set_hot_pixels(-0.1f, 100.f));
+    CHECK_THROWS(camera.sensor_->set_hot_pixels(0.01f, -1.f));
+    CHECK_THROWS(camera.sensor_->set_hot_pixels(0.01f, 100.f, -0.5f));
+    CHECK_THROWS(camera.sensor_->set_hot_pixels(0.01f, std::numeric_limits<float>::quiet_NaN()));
+}
+
+TEST_CASE("A copied sensor has the same fixed pattern settings, and patterns of its own",
+          "[cameras][sensor][fixed]")
+{
+    SensorProbe camera;
+    electron_counter(camera);
+    camera.sensor_->set_prnu(0.03f);
+    camera.sensor_->set_hot_pixels(0.02f, 50.f, 0.3f);
+
+    SensorProbe other;
+    other.set_sensor<SimpleSensor<RGB>>(
+        *dynamic_cast<const SimpleSensor<RGB>*>(camera.sensor_.get()));
+    CHECK(other.sensor_->prnu() == 0.03f);
+    CHECK(other.sensor_->hot_pixel_fraction() == 0.02f);
+    CHECK(other.sensor_->hot_pixel_dark_current() == 50.f);
+    CHECK(other.sensor_->hot_pixel_spread() == 0.3f);
+
+    // A new seed is a new detector; the same seed, the same one:
+    CHECK(other.sensor_->prnu_map()(10, 10) != camera.sensor_->prnu_map()(10, 10));
+    other.sensor_->set_noise_seed(camera.sensor_->noise_seed());
+    CHECK(other.sensor_->prnu_map()(10, 10) == camera.sensor_->prnu_map()(10, 10));
+    const Image<float> a = camera.sensor_->hot_pixel_map();
+    const Image<float> b = other.sensor_->hot_pixel_map();
+    for (std::size_t i = 0; i < a.size(); ++i) {
+        REQUIRE(a[i] == b[i]);
+    }
+
+    const std::string text = camera.describe();
+    INFO(text);
+    CHECK(text.find("Fixed:       PRNU 3%, hot pixels 2% at 50 e-/s (spread 0.3), from the seed") !=
+          std::string::npos);
+    SensorProbe plain;
+    plain.configure_sensor_from_pitch(Resolution{4, 4}, units::Micrometer(5.0));
+    CHECK(plain.describe().find("Fixed:       PRNU 0%, hot pixels none") != std::string::npos);
+}

@@ -2,13 +2,17 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <limits>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <utility>
 
 #include "huira/core/types.hpp"
 #include "huira/util/logger.hpp"
+#include "tbb/blocked_range.h"
+#include "tbb/parallel_for.h"
 
 namespace huira {
 
@@ -37,6 +41,9 @@ SensorModel<TSpectral>::SensorModel(SensorConfig<TSpectral> config)
     set_read_noise(config.read_noise);
     set_row_noise(config.row_noise);
     set_column_noise(config.column_noise);
+    set_prnu(config.prnu);
+    set_hot_pixels(
+        config.hot_pixel_fraction, config.hot_pixel_dark_current, config.hot_pixel_spread);
     set_dark_current(config.dark_current);
     // The bias is checked against the bit depth, so the bit depth first, from no bias:
     config_.bias_level_dn = 0.f;
@@ -357,6 +364,196 @@ void SensorModel<TSpectral>::set_column_noise(float column_noise)
                           std::to_string(column_noise) + " e-");
     }
     config_.column_noise = column_noise;
+}
+
+/**
+ * @brief Sets the sensor's photo response non-uniformity (PRNU): how much the pixels' gains
+ * differ, the same in every readout.
+ *
+ * Each pixel's signal electrons are multiplied by its own gain, drawn once from a normal
+ * distribution of mean 1 and this standard deviation (0.01 is 1%; at most 0, never negative),
+ * as the pixels of a real sensor differ in their response to light. It is a fixed pattern:
+ * made from the noise seed (set_noise_seed()), so the same in every frame, and another with
+ * another seed. It applies to the light only, not the dark current, and, being fixed, applies
+ * with noise off too. The pattern's random numbers are their own, so setting it doesn't change
+ * the noise.
+ *
+ * A flat from a real flat field (CameraModel::flat_from_measured()) already holds the camera's
+ * PRNU: set this to 0 with one, or the PRNU is applied twice. 0 by default.
+ *
+ * @param prnu The standard deviation of each pixel's gain.
+ * @throws std::runtime_error if the value is negative or not finite.
+ */
+template <IsSpectral TSpectral>
+void SensorModel<TSpectral>::set_prnu(float prnu)
+{
+    if (!(prnu >= 0.f) || !std::isfinite(prnu)) {
+        HUIRA_THROW_ERROR("SensorModel::set_prnu - PRNU must be non-negative and finite: " +
+                          std::to_string(prnu));
+    }
+    config_.prnu = prnu;
+}
+
+/**
+ * @brief Each pixel's gain from the PRNU (see set_prnu()), by which its signal electrons are
+ * multiplied: or, without PRNU, 1 everywhere, at the sensor's resolution.
+ */
+template <IsSpectral TSpectral>
+Image<float> SensorModel<TSpectral>::prnu_map() const
+{
+    const auto gains = prnu_gains_();
+    return gains != nullptr ? *gains : Image<float>(config_.resolution, 1.f);
+}
+
+/**
+ * @brief Gives the sensor hot pixels: a fraction of its pixels, the same in every readout, that
+ * gather a much larger dark current than the rest.
+ *
+ * Each pixel is hot with probability fraction, and a hot pixel gathers a dark current of its
+ * own on top of the sensor's (set_dark_current(), or the dark current map): dark_current, times
+ * exp(spread x N(0, 1)), a log-normal distribution whose median is dark_current and whose
+ * natural log has that standard deviation (0, the default, for the same dark current in every
+ * hot pixel; 0.5 for a spread of about 1.6x either way). It is a fixed pattern: made from the
+ * noise seed (set_noise_seed()), so the same pixels in every frame, and others with another
+ * seed. A larger fraction keeps the hot pixels of a smaller one, with the same dark currents,
+ * and adds more. Being dark current, its electrons are drawn with shot noise, and, being fixed,
+ * they are added with noise off too.
+ *
+ * A dark current map from a real master dark (set_dark_current_map()) already holds the
+ * camera's hot pixels: leave these off with one, or they are counted twice. Off (a fraction of
+ * 0) by default.
+ *
+ * @param fraction The fraction of the pixels that are hot, from 0 to 1.
+ * @param dark_current The hot pixels' median dark current, in e-/s.
+ * @param spread The standard deviation of the natural log of their dark currents.
+ * @throws std::runtime_error if the fraction is not in [0, 1], or the dark current or spread is
+ *         negative or not finite.
+ */
+template <IsSpectral TSpectral>
+void SensorModel<TSpectral>::set_hot_pixels(float fraction, float dark_current, float spread)
+{
+    if (!(fraction >= 0.f) || !(fraction <= 1.f)) {
+        HUIRA_THROW_ERROR("SensorModel::set_hot_pixels - The fraction of hot pixels must be from "
+                          "0 to 1: " +
+                          std::to_string(fraction));
+    }
+    if (!(dark_current >= 0.f) || !std::isfinite(dark_current)) {
+        HUIRA_THROW_ERROR("SensorModel::set_hot_pixels - The hot pixels' dark current must be "
+                          "non-negative and finite: " +
+                          std::to_string(dark_current) + " e-/s");
+    }
+    if (!(spread >= 0.f) || !std::isfinite(spread)) {
+        HUIRA_THROW_ERROR("SensorModel::set_hot_pixels - The spread must be non-negative and "
+                          "finite: " +
+                          std::to_string(spread));
+    }
+    config_.hot_pixel_fraction = fraction;
+    config_.hot_pixel_dark_current = dark_current;
+    config_.hot_pixel_spread = spread;
+}
+
+/**
+ * @brief Each pixel's dark current as a hot pixel, in e-/s, added to the sensor's: 0 for the
+ * pixels that aren't hot, and everywhere without hot pixels. See set_hot_pixels().
+ */
+template <IsSpectral TSpectral>
+Image<float> SensorModel<TSpectral>::hot_pixel_map() const
+{
+    const auto rates = hot_pixel_dark_currents_();
+    return rates != nullptr ? *rates : Image<float>(config_.resolution, 0.f);
+}
+
+namespace detail {
+/// A fixed pattern from its cache, or made (row by row, in parallel) and cached if what it is
+/// made from changed. make_row(row, random, out) fills one row from that row's random numbers.
+template <typename TCache, typename TMakeRow>
+std::shared_ptr<const Image<float>> fixed_pattern(TCache& cache,
+                                                  const std::array<double, 7>& key,
+                                                  const Resolution& resolution,
+                                                  SensorRandom::Stream stream,
+                                                  std::uint64_t seed,
+                                                  TMakeRow make_row)
+{
+    std::lock_guard<std::mutex> lock(cache.mutex);
+    if (cache.made && cache.key == key) {
+        return cache.map;
+    }
+    auto map = std::make_shared<Image<float>>(resolution);
+    tbb::parallel_for(tbb::blocked_range<int>(0, resolution.y),
+                      [&](const tbb::blocked_range<int>& rows) {
+                          for (int y = rows.begin(); y < rows.end(); ++y) {
+                              SensorRandom random(stream, seed, 0, static_cast<std::uint64_t>(y));
+                              make_row(y, random, *map);
+                          }
+                      });
+    cache.map = std::move(map);
+    cache.key = key;
+    cache.made = true;
+    return cache.map;
+}
+} // namespace detail
+
+template <IsSpectral TSpectral>
+std::shared_ptr<const Image<float>> SensorModel<TSpectral>::prnu_gains_() const
+{
+    const double prnu = static_cast<double>(config_.prnu);
+    if (prnu == 0.0) {
+        return nullptr;
+    }
+    const Resolution resolution = config_.resolution;
+    const std::array<double, 7> key{static_cast<double>(noise_seed_ >> 32),
+                                    static_cast<double>(noise_seed_ & 0xFFFFFFFFULL),
+                                    static_cast<double>(resolution.x),
+                                    static_cast<double>(resolution.y),
+                                    prnu,
+                                    0.0,
+                                    0.0};
+    return detail::fixed_pattern(prnu_cache_,
+                                 key,
+                                 resolution,
+                                 detail::SensorRandom::Stream::Prnu,
+                                 noise_seed_,
+                                 [&](int y, detail::SensorRandom& random, Image<float>& gains) {
+                                     for (int x = 0; x < resolution.x; ++x) {
+                                         gains(x, y) = static_cast<float>(
+                                             std::max(0.0, 1.0 + prnu * random.normal()));
+                                     }
+                                 });
+}
+
+template <IsSpectral TSpectral>
+std::shared_ptr<const Image<float>> SensorModel<TSpectral>::hot_pixel_dark_currents_() const
+{
+    const double fraction = static_cast<double>(config_.hot_pixel_fraction);
+    const double dark_current = static_cast<double>(config_.hot_pixel_dark_current);
+    const double spread = static_cast<double>(config_.hot_pixel_spread);
+    if (fraction == 0.0 || dark_current == 0.0) {
+        return nullptr;
+    }
+    const Resolution resolution = config_.resolution;
+    const std::array<double, 7> key{static_cast<double>(noise_seed_ >> 32),
+                                    static_cast<double>(noise_seed_ & 0xFFFFFFFFULL),
+                                    static_cast<double>(resolution.x),
+                                    static_cast<double>(resolution.y),
+                                    fraction,
+                                    dark_current,
+                                    spread};
+    return detail::fixed_pattern(
+        hot_pixel_cache_,
+        key,
+        resolution,
+        detail::SensorRandom::Stream::HotPixels,
+        noise_seed_,
+        [&](int y, detail::SensorRandom& random, Image<float>& rates) {
+            for (int x = 0; x < resolution.x; ++x) {
+                // One uniform and one normal for every pixel, hot or not, so that which pixels
+                // are hot, and how, doesn't depend on the fraction: a larger one only adds more.
+                const double u = random.uniform();
+                const double n = random.normal();
+                rates(x, y) =
+                    u < fraction ? static_cast<float>(dark_current * std::exp(spread * n)) : 0.f;
+            }
+        });
 }
 
 /**
@@ -761,6 +958,10 @@ void SensorModel<TSpectral>::set_roll(units::Radian angle)
  * the sensor has made since the seed was set, and by the row. So a frame's noise does not depend
  * on other cameras, threads or render order, successive frames differ, and setting the same seed
  * again repeats the same sequence of frames.
+ *
+ * The seed also makes the sensor's fixed patterns, the same in every readout: each pixel's gain
+ * (set_prnu()) and which pixels are hot (set_hot_pixels()). A seed is a detector: the same seed
+ * gives the same patterns, and another seed other ones.
  *
  * Sensors get distinct seeds by default, in the order they are made, so that two cameras never
  * share their noise unless given the same seed. A sensor set with CameraModel::set_sensor() is
