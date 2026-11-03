@@ -3048,8 +3048,9 @@ std::string CameraModel<TSpectral>::describe() const
         << " e-/DN, full well " << num(sensor.full_well_capacity(), 6) << " e-, bias " << bias
         << ", mean QE " << num(qe, 3) << "\n";
     out << "  Noise:       " << on_off(sensor.noise_enabled()) << ", read noise "
-        << num(sensor.read_noise()) << " e-, dark current " << dark << ", seed "
-        << sensor.noise_seed() << "\n";
+        << num(sensor.read_noise()) << " e-, row noise " << num(sensor.row_noise())
+        << " e-, column noise " << num(sensor.column_noise()) << " e-, dark current " << dark
+        << ", seed " << sensor.noise_seed() << "\n";
     out << "  Motion blur: " << on_off(motion_blur_) << "\n";
 
     out << "  Precomputed: " << (is_precomputed() ? "yes" : "no")

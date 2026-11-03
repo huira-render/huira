@@ -94,6 +94,8 @@ class CameraModelHandle : public Handle<CameraModel<TSpectral>> {
     void set_sensor_full_well_capacity(float fwc) const;
     void enable_sensor_noise(bool noise = true) const;
     void set_sensor_read_noise(float read_noise) const;
+    void set_sensor_row_noise(float row_noise) const;
+    void set_sensor_column_noise(float column_noise) const;
     void set_sensor_dark_current(float dark_current) const;
     void set_sensor_dark_current_map(Image<float> electrons_per_second) const;
     void clear_sensor_dark_current_map() const;
@@ -114,6 +116,8 @@ class CameraModelHandle : public Handle<CameraModel<TSpectral>> {
     float sensor_full_well_capacity() const;
     bool sensor_noise_enabled() const;
     float sensor_read_noise() const;
+    float sensor_row_noise() const;
+    float sensor_column_noise() const;
     float sensor_dark_current() const;
     bool has_sensor_dark_current_map() const;
     Image<float> sensor_dark_current_map() const;

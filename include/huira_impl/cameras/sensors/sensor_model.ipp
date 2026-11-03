@@ -34,6 +34,8 @@ SensorModel<TSpectral>::SensorModel(SensorConfig<TSpectral> config)
     set_full_well_capacity(config.full_well_capacity);
     enable_noise(config.simulate_noise);
     set_read_noise(config.read_noise);
+    set_row_noise(config.row_noise);
+    set_column_noise(config.column_noise);
     set_dark_current(config.dark_current);
     // The bias is checked against the bit depth, so the bit depth first, from no bias:
     config_.bias_level_dn = 0.f;
@@ -245,6 +247,68 @@ void SensorModel<TSpectral>::set_read_noise(float read_noise)
             std::to_string(read_noise) + " e-");
     }
     config_.read_noise = read_noise;
+}
+
+/**
+ * @brief Sets the row noise: noise shared by the pixels of a row, different in every readout.
+ *
+ * In each readout, every row's pixels shift together by one draw from a normal distribution of
+ * this standard deviation, in electrons, added with the read noise (after the full well clamps
+ * the charge), as banding along the rows that changes from frame to frame. For RGB, a row's
+ * channels shift together too.
+ *
+ * It comes from what a row's pixels share as they are read out: in a CMOS sensor, which
+ * converts a whole row at once, the ADCs' shared ramp, references and supplies; in a CCD, the
+ * output amplifier's slow drift over the row read through it. Rows run along the sensor's x
+ * axis, the image's rows; for a sensor read out along y, set the column noise instead. A fixed
+ * pattern of rows, the same in every frame, is a bias map's (set_bias_map()).
+ *
+ * Its random numbers are its own, so turning it on doesn't change the pixels' noise. Off with
+ * the other noise (enable_noise()). 0 by default.
+ *
+ * @param row_noise The row noise, in e- RMS.
+ * @throws std::runtime_error if the value is negative or not finite.
+ */
+template <IsSpectral TSpectral>
+void SensorModel<TSpectral>::set_row_noise(float row_noise)
+{
+    if (!(row_noise >= 0.f) || !std::isfinite(row_noise)) {
+        HUIRA_THROW_ERROR("SensorModel::set_row_noise - Row noise must be non-negative and "
+                          "finite: " +
+                          std::to_string(row_noise) + " e-");
+    }
+    config_.row_noise = row_noise;
+}
+
+/**
+ * @brief Sets the column noise: noise shared by the pixels of a column, different in every
+ * readout.
+ *
+ * In each readout, every column's pixels shift together by one draw from a normal distribution
+ * of this standard deviation, in electrons, added with the read noise and the row noise, as
+ * banding along the columns that changes from frame to frame. For RGB, a column's channels shift
+ * together too.
+ *
+ * It comes from what a column's pixels share in a CMOS sensor, read through one column
+ * amplifier and ADC: their slow (1/f) noise. It is usually smaller than the row noise, and a CCD,
+ * which has nothing of its own for each column, has none (unless its rows run along y). A fixed
+ * pattern of columns, the same in every frame, is a bias map's (set_bias_map()).
+ *
+ * Its random numbers are its own, so turning it on doesn't change the pixels' or the rows'
+ * noise. Off with the other noise (enable_noise()). 0 by default.
+ *
+ * @param column_noise The column noise, in e- RMS.
+ * @throws std::runtime_error if the value is negative or not finite.
+ */
+template <IsSpectral TSpectral>
+void SensorModel<TSpectral>::set_column_noise(float column_noise)
+{
+    if (!(column_noise >= 0.f) || !std::isfinite(column_noise)) {
+        HUIRA_THROW_ERROR("SensorModel::set_column_noise - Column noise must be non-negative and "
+                          "finite: " +
+                          std::to_string(column_noise) + " e-");
+    }
+    config_.column_noise = column_noise;
 }
 
 /**

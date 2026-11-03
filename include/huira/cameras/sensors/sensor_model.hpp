@@ -46,8 +46,24 @@ inline std::uint64_t next_default_noise_seed()
  */
 class SensorRandom {
   public:
+    /// What a stream of random numbers is for. Each has its own, so that adding draws to one
+    /// never changes another's: a sensor with row noise has the same pixel noise as without.
+    enum class Stream : std::uint64_t {
+        Rows = 1,    ///< One draw per row of a readout (row noise)
+        Columns = 2, ///< The draws for a readout's columns (column noise)
+    };
+
+    /// The random numbers for the pixels of one row of one readout.
     SensorRandom(std::uint64_t seed, std::uint64_t readout, std::uint64_t row)
         : state_(mix_(seed ^ mix_(readout ^ mix_(row))))
+    {
+    }
+
+    /// The random numbers of another stream, for one index (a row, say) of one readout. Keyed
+    /// by the stream too, so independent of the pixels' and of each other's.
+    SensorRandom(Stream stream, std::uint64_t seed, std::uint64_t readout, std::uint64_t index)
+        : state_(mix_(mix_(STREAM_KEY_ ^ static_cast<std::uint64_t>(stream)) ^ seed ^
+                      mix_(readout ^ mix_(index))))
     {
     }
 
@@ -101,6 +117,10 @@ class SensorRandom {
   private:
     static constexpr std::uint64_t GAMMA_ = 0x9E3779B97F4A7C15ULL;
 
+    /// Mixed with a stream's number into its keys (an arbitrary constant: the first 64 bits of
+    /// the fractional part of the square root of 2).
+    static constexpr std::uint64_t STREAM_KEY_ = 0x6A09E667F3BCC908ULL;
+
     static std::uint64_t finalize_(std::uint64_t z)
     {
         z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ULL;
@@ -141,10 +161,13 @@ struct SensorConfig {
 
     float full_well_capacity = 20000.f; // e-
 
-    bool simulate_noise = true; // Shot and read noise (see SensorModel::enable_noise()); the dark
-                                // current and bias apply either way
+    bool simulate_noise = true; // Shot, read, row and column noise (see
+                                // SensorModel::enable_noise()); the dark current and bias apply
+                                // either way
     float read_noise = 10.f;    // e- RMS
-    float dark_current = 1.f;   // e-/s
+    float row_noise = 0.f;    // e- RMS, shared by a row's pixels (see SensorModel::set_row_noise())
+    float column_noise = 0.f; // e- RMS, shared by a column's pixels
+    float dark_current = 1.f; // e-/s
     float bias_level_dn = 10.f; // ADU
 
     int bit_depth = 12;
@@ -269,16 +292,27 @@ class SensorModel {
     void set_full_well_capacity(float fwc);
     float full_well_capacity() const { return config_.full_well_capacity; }
 
-    /// Turn shot noise and read noise on (the default) or off. Off, a pixel collects the expected
-    /// number of electrons; the dark current's electrons and the bias are still added, since they
-    /// are not noise.
+    /// Turn shot noise, read noise, and row and column noise, on (the default) or off. Off, a
+    /// pixel collects the expected number of electrons; the dark current's electrons and the
+    /// bias are still added, since they are not noise.
     void enable_noise(bool noise = true) { config_.simulate_noise = noise; }
 
-    /// Whether shot noise and read noise are on (the default). See enable_noise().
+    /// Whether shot noise, read noise, and row and column noise are on (the default). See
+    /// enable_noise().
     bool noise_enabled() const { return config_.simulate_noise; }
 
     void set_read_noise(float read_noise);
     float read_noise() const { return config_.read_noise; }
+
+    void set_row_noise(float row_noise);
+
+    /// The row noise, in e- RMS. See set_row_noise().
+    float row_noise() const { return config_.row_noise; }
+
+    void set_column_noise(float column_noise);
+
+    /// The column noise, in e- RMS. See set_column_noise().
+    float column_noise() const { return config_.column_noise; }
 
     void set_dark_current(float dark_current);
     float dark_current() const { return config_.dark_current; }

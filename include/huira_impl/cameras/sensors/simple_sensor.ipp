@@ -6,6 +6,7 @@
 #include <limits>
 #include <string>
 #include <type_traits>
+#include <vector>
 
 #include "huira/concepts/spectral_concepts.hpp"
 #include "huira/images/image.hpp"
@@ -24,15 +25,17 @@ namespace huira {
  * quantum efficiency, signal electrons, to which the dark current's electrons are added (the
  * pixel's own, from the dark current map, if one is set). With noise simulated, the electrons
  * collected are drawn from a Poisson distribution of that mean (shot noise); without, they are
- * the mean. They are clamped to the full well, and the read noise is added (with noise
- * simulated). The ADC divides by the gain, adds the bias (the pixel's own, from the bias map, if
+ * the mean. They are clamped to the full well, and the read noise is added, with the row's and
+ * the column's noise (with noise simulated; see set_row_noise() and set_column_noise()). The ADC
+ * divides by the gain, adds the bias (the pixel's own, from the bias map, if
  * one is set), rounds to a whole number of DN and clamps to its range, [0, 2^bit_depth - 1]. The
  * response holds DN / (2^bit_depth - 1), so its values are exact fractions of whole DN, and the
  * image records the bit depth (Image::sensor_bit_depth()) for the image writers. See
  * docs/design_overview/sensor_modeling.rst.
  *
- * Turning noise off removes only what is random: shot noise and read noise. The dark current's
- * electrons and the bias, and their maps, are not noise, and are applied either way.
+ * Turning noise off removes only what is random: shot noise, read noise, and row and column
+ * noise. The dark current's electrons and the bias, and their maps, are not noise, and are
+ * applied either way.
  *
  * A pixel whose received power is not finite (NaN or infinite) has no meaningful response: it
  * reads out as NaN, which the image writers record as missing data, and a warning gives the
@@ -63,6 +66,8 @@ void SimpleSensor<TSpectral>::readout(FrameBuffer<TSpectral>& fb, units::Second 
     const double dark_e = static_cast<double>(config.dark_current) * static_cast<double>(dt);
     const double bias = static_cast<double>(config.bias_level_dn);
     const double read_noise = noise ? static_cast<double>(config.read_noise) : 0.0;
+    const double row_noise = noise ? static_cast<double>(config.row_noise) : 0.0;
+    const double column_noise = noise ? static_cast<double>(config.column_noise) : 0.0;
     const double full_well = static_cast<double>(config.full_well_capacity);
     const double gain = static_cast<double>(config.gain);
 
@@ -73,8 +78,12 @@ void SimpleSensor<TSpectral>::readout(FrameBuffer<TSpectral>& fb, units::Second 
 
     std::atomic<std::size_t> non_finite{0};
 
-    // Expected electrons to the normalized response, with the pixel's bias:
-    auto respond = [&](double expected_e, double pixel_bias, detail::SensorRandom& random) {
+    // Expected electrons to the normalized response, with the pixel's bias, and the noise its row
+    // and column share:
+    auto respond = [&](double expected_e,
+                       double pixel_bias,
+                       double shared_noise_e,
+                       detail::SensorRandom& random) {
         if (!std::isfinite(expected_e)) {
             non_finite.fetch_add(1, std::memory_order_relaxed);
             return std::numeric_limits<float>::quiet_NaN();
@@ -84,6 +93,9 @@ void SimpleSensor<TSpectral>::readout(FrameBuffer<TSpectral>& fb, units::Second 
         if (read_noise > 0.0) {
             electrons += read_noise * random.normal();
         }
+        if (shared_noise_e != 0.0) {
+            electrons += shared_noise_e;
+        }
         // The ADC: to whole DN, within its range.
         const double dn = std::clamp(std::round(electrons / gain + pixel_bias), 0.0, max_dn);
         return static_cast<float>(dn / max_dn);
@@ -91,12 +103,34 @@ void SimpleSensor<TSpectral>::readout(FrameBuffer<TSpectral>& fb, units::Second 
 
     const std::uint64_t readout_number = this->next_readout_number_();
     const int width = received_power.width();
+
+    // Each column's noise for this readout, from the columns' own random numbers:
+    std::vector<double> column_noise_e(static_cast<std::size_t>(width), 0.0);
+    if (column_noise > 0.0) {
+        detail::SensorRandom columns(
+            detail::SensorRandom::Stream::Columns, this->noise_seed_, readout_number, 0);
+        for (double& column_e : column_noise_e) {
+            column_e = column_noise * columns.normal();
+        }
+    }
+
     tbb::parallel_for(
         tbb::blocked_range<int>(0, received_power.height()),
         [&](const tbb::blocked_range<int>& rows) {
             for (int y = rows.begin(); y < rows.end(); ++y) {
                 detail::SensorRandom random(
                     this->noise_seed_, readout_number, static_cast<std::uint64_t>(y));
+
+                // The row's noise for this readout, from the rows' own random numbers:
+                double row_noise_e = 0.0;
+                if (row_noise > 0.0) {
+                    detail::SensorRandom row_random(detail::SensorRandom::Stream::Rows,
+                                                    this->noise_seed_,
+                                                    readout_number,
+                                                    static_cast<std::uint64_t>(y));
+                    row_noise_e = row_noise * row_random.normal();
+                }
+
                 for (int x = 0; x < width; ++x) {
                     // Power to energy, to photons, to signal electrons:
                     const TSpectral photons = received_power(x, y) * dt / photon_energy;
@@ -110,11 +144,15 @@ void SimpleSensor<TSpectral>::readout(FrameBuffer<TSpectral>& fb, units::Second 
                         bias_map != nullptr ? bias_map_base + static_cast<double>((*bias_map)(x, y))
                                             : bias;
 
+                    const double shared_noise_e =
+                        row_noise_e + column_noise_e[static_cast<std::size_t>(x)];
+
                     if constexpr (std::is_same_v<TSpectral, RGB>) {
                         RGB value;
                         for (std::size_t c = 0; c < 3; ++c) {
                             value[c] = respond(static_cast<double>(electrons[c]) + pixel_dark_e,
                                                pixel_bias,
+                                               shared_noise_e,
                                                random);
                         }
                         output(x, y) = value;
@@ -122,6 +160,7 @@ void SimpleSensor<TSpectral>::readout(FrameBuffer<TSpectral>& fb, units::Second 
                         output(x, y) =
                             respond(static_cast<double>(electrons.total()) + pixel_dark_e,
                                     pixel_bias,
+                                    shared_noise_e,
                                     random);
                     }
                 }
