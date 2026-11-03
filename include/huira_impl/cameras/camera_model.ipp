@@ -3351,6 +3351,16 @@ std::string CameraModel<TSpectral>::describe() const
         << num(sensor.read_noise()) << " e-, row noise " << num(sensor.row_noise())
         << " e-, column noise " << num(sensor.column_noise()) << " e-, dark current " << dark
         << ", seed " << sensor.noise_seed() << "\n";
+    out << "  Fixed:       PRNU " << num(100.0 * static_cast<double>(sensor.prnu()))
+        << "%, hot pixels ";
+    if (sensor.hot_pixel_fraction() > 0.f && sensor.hot_pixel_dark_current() > 0.f) {
+        out << num(100.0 * static_cast<double>(sensor.hot_pixel_fraction())) << "% at "
+            << num(sensor.hot_pixel_dark_current()) << " e-/s (spread "
+            << num(sensor.hot_pixel_spread()) << ")";
+    } else {
+        out << "none";
+    }
+    out << ", from the seed\n";
     out << "  Motion blur: " << on_off(motion_blur_) << "\n";
 
     out << "  Precomputed: " << (is_precomputed() ? "yes" : "no")

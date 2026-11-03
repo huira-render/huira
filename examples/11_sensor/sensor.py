@@ -6,7 +6,7 @@ Demonstrates:
     - Turning photons into digital numbers (DN): quantum efficiency, full well capacity,
       conversion gain (or gain in dB), bias level and bit depth
     - Noise: shot noise and read noise (on by default), row and column noise, dark current, and
-      the noise seed
+      the noise seed; and fixed patterns made from the seed: PRNU and hot pixels
     - The physical signal chain (huira.visible8): each pixel collects one value from every
       spectral bin, as a real photosite does, where huira.rgb fills three color channels
     - Saving the raw DN: 16-bit FITS with header metadata and a world coordinate system (WCS),
@@ -110,6 +110,13 @@ def main():
     camera_model.enable_sensor_noise(True)
     camera_model.set_sensor_noise_seed(42)
 
+    # Fixed patterns, the same in every frame, made from the seed: each pixel's own gain (PRNU, a
+    # standard deviation of 1% here) and hot pixels (0.1% of the pixels, with a dark current of
+    # about 200 e-/s each, spread about 1.6x either way). A seed is a detector: another seed has
+    # other patterns. Calibration frames from a real camera hold its own (see below).
+    camera_model.set_sensor_prnu(0.01)
+    camera_model.set_sensor_hot_pixels(0.001, 200, spread=0.5)
+
     pointing_ra, pointing_dec = 56.75, 24.12  # the Pleiades
     camera = scene.root.new_instance(camera_model)
     camera.look_at(direction(pointing_ra, pointing_dec), huira.Vec3(0, 0, 1))
@@ -206,6 +213,9 @@ def main():
     # default); a pattern of offsets from the bias level would be BiasMapKind.Relative. Like the
     # single values, the maps are not noise, and apply with noise off too.
     camera_model.set_sensor_bias_map(master_bias)
+
+    # The master dark holds the camera's hot pixels, so the made-up ones go:
+    camera_model.set_sensor_hot_pixels(0, 0)
 
     camera_model.enable_sensor_noise(True)
     frame_buffer = camera_model.make_frame_buffer()

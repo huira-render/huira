@@ -5,7 +5,7 @@
 //   - Turning photons into digital numbers (DN): quantum efficiency, full well capacity,
 //     conversion gain (or gain in dB), bias level and bit depth
 //   - Noise: shot noise and read noise (on by default), row and column noise, dark current, and
-//     the noise seed
+//     the noise seed; and fixed patterns made from the seed: PRNU and hot pixels
 //   - The physical signal chain (huira::Visible8): each pixel collects one value from every
 //     spectral bin, as a real photosite does, where huira::RGB fills three color channels
 //   - Saving the raw DN: 16-bit FITS with header metadata and a world coordinate system (WCS),
@@ -113,6 +113,13 @@ int main(int argc, char** argv)
     camera_model.set_sensor_column_noise(0.5f);
     camera_model.enable_sensor_noise(true);
     camera_model.set_sensor_noise_seed(42);
+
+    // Fixed patterns, the same in every frame, made from the seed: each pixel's own gain (PRNU, a
+    // standard deviation of 1% here) and hot pixels (0.1% of the pixels, with a dark current of
+    // about 200 e-/s each, spread about 1.6x either way). A seed is a detector: another seed has
+    // other patterns. Calibration frames from a real camera hold its own (see below).
+    camera_model.set_sensor_prnu(0.01f);
+    camera_model.set_sensor_hot_pixels(0.001f, 200.f, 0.5f);
 
     const double pointing_ra = 56.75; // the Pleiades
     const double pointing_dec = 24.12;
@@ -232,6 +239,9 @@ int main(int argc, char** argv)
     // the default); a pattern of offsets from the bias level would be BiasMapKind::Relative.
     // Like the single values, the maps are not noise, and apply with noise off too.
     camera_model.set_sensor_bias_map(master_bias);
+
+    // The master dark holds the camera's hot pixels, so the made-up ones go:
+    camera_model.set_sensor_hot_pixels(0.f, 0.f);
 
     camera_model.enable_sensor_noise(true);
     auto calibrated_buffer = camera_model.make_frame_buffer();
