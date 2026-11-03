@@ -22,15 +22,16 @@ namespace huira {
  * @brief Simulates the sensor readout, from the received power to digital numbers (DN).
  *
  * For each pixel (each channel, for RGB): the received energy becomes photons and, through the
- * quantum efficiency, signal electrons, to which the dark current's electrons are added (the
- * pixel's own, from the dark current map, if one is set). With noise simulated, the electrons
- * collected are drawn from a Poisson distribution of that mean (shot noise); without, they are
- * the mean. They are clamped to the full well, and the read noise is added, with the row's and
- * the column's noise (with noise simulated; see set_row_noise() and set_column_noise()). The ADC
- * divides by the gain, adds the bias (the pixel's own, from the bias map, if
- * one is set), rounds to a whole number of DN and clamps to its range, [0, 2^bit_depth - 1]. The
- * response holds DN / (2^bit_depth - 1), so its values are exact fractions of whole DN, and the
- * image records the bit depth (Image::sensor_bit_depth()) for the image writers. See
+ * quantum efficiency, the selected filter's transmission and, if it has one, its flat (the
+ * pixel's response relative to the principal point's), signal electrons, to which the dark
+ * current's electrons are added (the pixel's own, from the dark current map, if one is set). With
+ * noise simulated, the electrons collected are drawn from a Poisson distribution of that mean (shot
+ * noise); without, they are the mean. They are clamped to the full well, and the read noise is
+ * added, with the row's and the column's noise (with noise simulated; see set_row_noise() and
+ * set_column_noise()). The ADC divides by the gain, adds the bias (the pixel's own, from the bias
+ * map, if one is set), rounds to a whole number of DN and clamps to its range, [0, 2^bit_depth -
+ * 1]. The response holds DN / (2^bit_depth - 1), so its values are exact fractions of whole DN, and
+ * the image records the bit depth (Image::sensor_bit_depth()) for the image writers. See
  * docs/design_overview/sensor_modeling.rst.
  *
  * Turning noise off removes only what is random: shot noise, read noise, and row and column
@@ -46,8 +47,8 @@ namespace huira {
  * @param fb The frame buffer containing received power and where the sensor response will be
  * written.
  * @param exposure_time The exposure time in seconds.
- * @throws std::runtime_error if a dark current or bias map is set at another resolution than the
- *         frame buffer's.
+ * @throws std::runtime_error if a dark current or bias map, or the filter's flat, is set at
+ *         another resolution than the frame buffer's.
  */
 template <IsSpectral TSpectral>
 void SimpleSensor<TSpectral>::readout(FrameBuffer<TSpectral>& fb, units::Second exposure_time) const
@@ -60,6 +61,9 @@ void SimpleSensor<TSpectral>::readout(FrameBuffer<TSpectral>& fb, units::Second 
     const SensorConfig<TSpectral>& config = this->config_;
     const float dt = static_cast<float>(exposure_time.to_si());
     const TSpectral photon_energy = TSpectral::photon_energies();
+    // Photons to signal electrons, per bin: the quantum efficiency through the filter.
+    const TSpectral response = config.quantum_efficiency * this->filter_transmission_;
+    const Image<float>* flat = this->flat_.get();
     const double max_dn = std::pow(2.0, static_cast<double>(config.bit_depth)) - 1.0;
 
     const bool noise = config.simulate_noise;
@@ -134,7 +138,10 @@ void SimpleSensor<TSpectral>::readout(FrameBuffer<TSpectral>& fb, units::Second 
                 for (int x = 0; x < width; ++x) {
                     // Power to energy, to photons, to signal electrons:
                     const TSpectral photons = received_power(x, y) * dt / photon_energy;
-                    const TSpectral electrons = photons * config.quantum_efficiency;
+                    TSpectral electrons = photons * response;
+                    if (flat != nullptr) {
+                        electrons = electrons * (*flat)(x, y);
+                    }
 
                     const double pixel_dark_e =
                         dark_map != nullptr

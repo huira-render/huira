@@ -1,6 +1,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -88,6 +89,27 @@ class CameraModelHandle : public Handle<CameraModel<TSpectral>> {
     Mat3<float> intrinsic_matrix() const;
     Resolution resolution() const;
     std::pair<units::Micrometer, units::Micrometer> pixel_pitch() const;
+
+    std::size_t add_filter(const std::string& name,
+                           const TSpectral& transmission,
+                           std::optional<Image<float>> flat = std::nullopt) const;
+    std::size_t add_filter(const std::string& name,
+                           double transmission,
+                           std::optional<Image<float>> flat = std::nullopt) const;
+    void select_filter(std::size_t index) const;
+    void select_filter(const std::string& name) const;
+    void clear_filters() const;
+    std::size_t filter_count() const;
+    std::optional<std::size_t> selected_filter() const;
+    std::optional<std::string> selected_filter_name() const;
+    std::string filter_name(std::size_t index) const;
+    std::size_t filter_index(const std::string& name) const;
+    TSpectral filter_transmission(std::size_t index) const;
+    TSpectral filter_transmission(const std::string& name) const;
+    std::optional<Image<float>> filter_flat(std::size_t index) const;
+    std::optional<Image<float>> filter_flat(const std::string& name) const;
+    Image<float> flat_from_measured(const Image<float>& measured_flat,
+                                    float central_fraction = 0.05f) const;
 
     void set_sensor_quantum_efficiency(double qe) const;
     void set_sensor_quantum_efficiency(TSpectral qe) const;
@@ -207,6 +229,8 @@ class CameraModelHandle : public Handle<CameraModel<TSpectral>> {
     std::optional<Ray<TSpectral>> try_cast_ray(const Pixel& pixel) const;
 
     FrameBuffer<TSpectral> make_frame_buffer() const;
+
+    float pixel_radiance_to_power(int x, int y) const;
 
     void use_blender_convention(bool value = true) const;
     bool uses_blender_convention() const;

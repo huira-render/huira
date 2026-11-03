@@ -1,4 +1,5 @@
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <limits>
@@ -135,12 +136,13 @@ void SensorModel<TSpectral>::set_resolution(Resolution resolution)
             HUIRA_LOG_WARNING("SensorModel::set_resolution - The sensor's " + std::string(name) +
                               " is " + detail::resolution_text(map->resolution()) +
                               ", and the sensor is now " + detail::resolution_text(resolution) +
-                              ". Set a map of the new size, or clear it: a readout throws until "
+                              ". Set one of the new size, or clear it: a readout throws until "
                               "then.");
         }
     };
     warn(dark_current_map_, "dark current map");
     warn(bias_map_, "bias map");
+    warn(flat_, "filter's flat");
 }
 
 /**
@@ -213,6 +215,52 @@ void SensorModel<TSpectral>::set_quantum_efficiency(const TSpectral& qe)
                           "valid values between 0 and 1.");
     }
     config_.quantum_efficiency = qe;
+    check_response_();
+}
+
+/**
+ * @brief The flat of the filter in front of the sensor: each pixel's response relative to the
+ * principal point's, by which its signal electrons are multiplied (see CameraModel::add_filter()
+ * and flat_from_measured()); or, without one, 1 everywhere at the sensor's resolution.
+ */
+template <IsSpectral TSpectral>
+Image<float> SensorModel<TSpectral>::flat() const
+{
+    if (flat_ != nullptr) {
+        return *flat_;
+    }
+    return Image<float>(config_.resolution, 1.f);
+}
+
+template <IsSpectral TSpectral>
+void SensorModel<TSpectral>::set_filter_response_(const TSpectral& transmission,
+                                                  std::shared_ptr<const Image<float>> flat)
+{
+    filter_transmission_ = transmission;
+    flat_ = std::move(flat);
+    check_response_();
+}
+
+template <IsSpectral TSpectral>
+void SensorModel<TSpectral>::check_response_() const
+{
+    const TSpectral response = config_.quantum_efficiency * filter_transmission_;
+    float largest_flat = 1.f;
+    if (flat_ != nullptr) {
+        largest_flat = 0.f;
+        for (std::size_t i = 0; i < flat_->size(); ++i) {
+            largest_flat = std::max(largest_flat, (*flat_)[i]);
+        }
+    }
+    const float largest = response.max() * largest_flat;
+    if (largest > 1.f) {
+        HUIRA_LOG_WARNING("SensorModel - The response, quantum efficiency x filter transmission x "
+                          "flat, is " +
+                          std::to_string(largest) +
+                          " at most: above 1, a pixel makes more electrons than it receives "
+                          "photons. The quantum efficiency is the response at the principal "
+                          "point, where the flat is normalized to 1, so lower it, or the flat.");
+    }
 }
 
 /**
@@ -594,6 +642,7 @@ void SensorModel<TSpectral>::check_map_resolutions_(const Resolution& resolution
     };
     check(dark_current_map_, "dark current map");
     check(bias_map_, "bias map");
+    check(flat_, "filter's flat");
 }
 
 /// Throws unless the bias is below the largest value the bit depth holds, where every pixel
