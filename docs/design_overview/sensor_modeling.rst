@@ -77,6 +77,34 @@ When reading out the pixel values, the sensor electronics introduce additional n
 
 It is added after the full well has clamped the charge, so saturated pixels have read noise too.
 
+**Row and column noise.** Read noise is each pixel's own. Some of the readout's noise is
+shared instead, by the pixels read through the same circuits at the same time, and shows as
+banding that changes from frame to frame:
+
+- *Row noise* (``set_sensor_row_noise()``): a CMOS sensor converts a whole row at once, through
+  ADCs that share a ramp, references and supplies, whose fluctuations shift the whole row. A CCD
+  reads each row out through its output amplifier, whose slow drift shifts the row too. It is
+  the larger of the two in most CMOS sensors.
+- *Column noise* (``set_sensor_column_noise()``): each column of a CMOS sensor is read through
+  its own amplifier and ADC, whose slow (1/f) noise shifts the whole column. It is usually
+  smaller; a CCD, which has nothing of its own for each column, has none.
+
+Both are standard deviations in electrons, 0 by default, and independent of each other: a CMOS
+sensor has both. In each readout, every row's pixels shift together by one draw from a normal
+distribution of the row noise's standard deviation, and every column's by one of the column
+noise's, added with the read noise:
+
+.. math::
+
+    N_{electrons\_read}(x, y) = N_{electrons\_total} + \text{Normal}(0, \sigma_{read})
+        + \text{Normal}_y(0, \sigma_{row}) + \text{Normal}_x(0, \sigma_{column})
+
+For RGB, a pixel's three channels shift together. Rows run along the sensor's x axis, the
+image's rows, and turn with it (``set_sensor_roll()``); for a sensor read out along y, set the
+column noise instead. These are temporal: a fixed pattern of rows or columns, the same in every
+frame, is part of the bias, and is given by a bias map (see Calibration maps). Each has random
+numbers of its own, so turning one on changes nothing else's noise (see Random numbers).
+
 
 7. Gain & ADC (Quantization):
 -----------------------------
@@ -199,7 +227,7 @@ From C++, the maps are on the sensor (``SensorModel::set_dark_current_map()``,
 Noise off
 ---------
 
-``enable_sensor_noise(false)`` on the camera (``enable_noise(false)`` on a ``SensorModel``; ``enable_sensor_noise(False)`` in Python) removes what is random: shot noise and read noise. Each pixel then collects the expected number of electrons, signal and dark current together. The dark current's electrons and the bias, and their maps, are still added, since they are not noise, and the result is still quantized.
+``enable_sensor_noise(false)`` on the camera (``enable_noise(false)`` on a ``SensorModel``; ``enable_sensor_noise(False)`` in Python) removes what is random: shot noise, read noise, and row and column noise. Each pixel then collects the expected number of electrons, signal and dark current together. The dark current's electrons and the bias, and their maps, are still added, since they are not noise, and the result is still quantized.
 
 
 Missing data
@@ -217,7 +245,9 @@ depend on what else was made before it; a copy of a sensor has the same settings
 numbers determined by the seed, the number of readouts the sensor has made since the seed was
 set, and the row. A frame's noise therefore does not depend on other cameras, threads or the
 order rows are read out in; successive frames differ; and setting the same seed again repeats
-the same sequence of frames. The random integers are the same with every standard library; the
+the same sequence of frames. Row noise and column noise are drawn from streams of their own,
+keyed by the stream too, so that turning either on leaves the pixels' noise as it was. The random
+integers are the same with every standard library; the
 normal and Poisson draws made from them use ``std::log``, ``std::exp`` and the like, which can
 differ in their last bit between platforms, so frames repeat exactly on one platform and
 toolchain.
@@ -231,6 +261,8 @@ Changes in v0.9.11
   bias. Without maps, frames are as before. Integer FITS and TIFF calibration frames from other
   software are turned into DN as they are read (see :doc:`image_output`), and normalized ones
   are refused.
+- Row noise and column noise, temporal banding along rows and columns, can be set (see Read
+  Noise). Both are 0 by default, so frames are as before.
 
 
 Changes in v0.9.10

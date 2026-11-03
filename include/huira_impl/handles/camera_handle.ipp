@@ -263,7 +263,8 @@ void CameraModelHandle<TSpectral>::set_sensor_full_well_capacity(float fwc) cons
 }
 
 /**
- * @brief Turn the sensor's shot noise and read noise on (the default) or off.
+ * @brief Turn the sensor's shot noise, read noise, and row and column noise on (the default) or
+ * off.
  *
  * Off, each pixel collects the expected number of electrons. The dark current's electrons and
  * the bias are still added, since they are not noise.
@@ -284,6 +285,28 @@ template <IsSpectral TSpectral>
 void CameraModelHandle<TSpectral>::set_sensor_read_noise(float read_noise) const
 {
     this->get_()->sensor_->set_read_noise(read_noise);
+}
+
+/**
+ * @brief Set the sensor's row noise: noise shared by a row's pixels, different in every readout,
+ * in e- RMS. 0 by default. See SensorModel::set_row_noise().
+ * @param row_noise Row noise, in e- RMS
+ */
+template <IsSpectral TSpectral>
+void CameraModelHandle<TSpectral>::set_sensor_row_noise(float row_noise) const
+{
+    this->get_()->sensor_->set_row_noise(row_noise);
+}
+
+/**
+ * @brief Set the sensor's column noise: noise shared by a column's pixels, different in every
+ * readout, in e- RMS. 0 by default. See SensorModel::set_column_noise().
+ * @param column_noise Column noise, in e- RMS
+ */
+template <IsSpectral TSpectral>
+void CameraModelHandle<TSpectral>::set_sensor_column_noise(float column_noise) const
+{
+    this->get_()->sensor_->set_column_noise(column_noise);
 }
 
 /**
@@ -473,8 +496,8 @@ float CameraModelHandle<TSpectral>::sensor_full_well_capacity() const
     return this->get_()->sensor_->full_well_capacity();
 }
 
-/// Whether the sensor's shot noise and read noise are on (the default). See
-/// enable_sensor_noise().
+/// Whether the sensor's shot noise, read noise, and row and column noise are on (the default).
+/// See enable_sensor_noise().
 template <IsSpectral TSpectral>
 bool CameraModelHandle<TSpectral>::sensor_noise_enabled() const
 {
@@ -486,6 +509,20 @@ template <IsSpectral TSpectral>
 float CameraModelHandle<TSpectral>::sensor_read_noise() const
 {
     return this->get_()->sensor_->read_noise();
+}
+
+/// Get the sensor's row noise, in e- RMS. See set_sensor_row_noise().
+template <IsSpectral TSpectral>
+float CameraModelHandle<TSpectral>::sensor_row_noise() const
+{
+    return this->get_()->sensor_->row_noise();
+}
+
+/// Get the sensor's column noise, in e- RMS. See set_sensor_column_noise().
+template <IsSpectral TSpectral>
+float CameraModelHandle<TSpectral>::sensor_column_noise() const
+{
+    return this->get_()->sensor_->column_noise();
 }
 
 /// Get the sensor's dark current, in electrons per second.

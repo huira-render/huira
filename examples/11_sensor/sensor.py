@@ -5,7 +5,8 @@ Demonstrates:
     - The sensor's geometry: resolution, pixel pitch and principal point
     - Turning photons into digital numbers (DN): quantum efficiency, full well capacity,
       conversion gain (or gain in dB), bias level and bit depth
-    - Noise: shot noise and read noise (on by default), dark current, and the noise seed
+    - Noise: shot noise and read noise (on by default), row and column noise, dark current, and
+      the noise seed
     - The physical signal chain (huira.visible8): each pixel collects one value from every
       spectral bin, as a real photosite does, where huira.rgb fills three color channels
     - Saving the raw DN: 16-bit FITS with header metadata and a world coordinate system (WCS),
@@ -24,7 +25,7 @@ Writes:
     output/11_sensor.png             the readout, as a picture
     output/11_sensor.fits            ...as DN, with a header
     output/11_sensor.tif             ...as DN
-    output/11_sensor_noiseless.png   the same frame without shot or read noise
+    output/11_sensor_noiseless.png   the same frame without noise
     output/11_sensor_calibrated.png  the frame with each pixel's own dark current and bias
 """
 
@@ -97,9 +98,13 @@ def main():
     camera_model.set_sensor_bit_depth(14)
 
     # Noise: shot noise (the randomness of the photons and dark current's electrons) and read
-    # noise (electrons RMS, added at readout) are on by default. The seed makes the noise
-    # repeatable: the same seed gives the same frames, in the same order.
+    # noise (electrons RMS, added at readout) are on by default. A CMOS sensor's rows, and to a
+    # lesser degree its columns, also shift together by a different amount in every frame, as
+    # faint banding: row and column noise, in electrons RMS, 0 unless set. The seed makes the
+    # noise repeatable: the same seed gives the same frames, in the same order.
     camera_model.set_sensor_read_noise(8)
+    camera_model.set_sensor_row_noise(1.5)
+    camera_model.set_sensor_column_noise(0.5)
     camera_model.enable_sensor_noise(True)
     camera_model.set_sensor_noise_seed(42)
 
@@ -158,8 +163,8 @@ def main():
     print(f"Read back {header.object}, {header.exptime} s: "
           f"brightest pixel {brightest:.0f} DN of {full_scale}")
 
-    # The same frame without shot and read noise. The dark current and bias are still added: they
-    # are not noise.
+    # The same frame without noise (shot, read, row or column). The dark current and bias are
+    # still added: they are not noise.
     camera_model.enable_sensor_noise(False)
     frame_buffer = camera_model.make_frame_buffer()
     frame_buffer.enable_sensor_response()

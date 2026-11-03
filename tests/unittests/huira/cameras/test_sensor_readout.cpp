@@ -898,3 +898,189 @@ TEST_CASE("The camera's description includes the maps", "[cameras][sensor][maps]
     text = camera.describe();
     CHECK(text.find("bias 10 DN + map (offsets mean 0, from -1.5 to 1.5 DN)") != std::string::npos);
 }
+
+namespace {
+
+/// The response of one channel, in DN, as an image.
+Image<float> read_channel_dn(SensorProbe& camera, FrameBuffer<RGB>& frame_buffer, std::size_t c)
+{
+    camera.readout(frame_buffer, units::Second(1.0));
+    const double max_dn = std::pow(2.0, camera.sensor_->bit_depth()) - 1.0;
+    Image<float> dn = frame_buffer.sensor_response().get_channel(c);
+    for (std::size_t i = 0; i < dn.size(); ++i) {
+        dn[i] = static_cast<float>(std::round(static_cast<double>(dn[i]) * max_dn));
+    }
+    return dn;
+}
+
+/// A dark sensor whose only noise is its row and column noise: 1 e-/DN, a bias of 1000 DN.
+void banded_sensor(SensorProbe& camera, int width, int height)
+{
+    camera.configure_sensor_from_pitch(Resolution{width, height}, units::Micrometer(5.0));
+    camera.sensor_->set_conversion_gain(1.f);
+    camera.sensor_->set_bias_level_dn(1000.f);
+    camera.sensor_->set_dark_current(0.f);
+    camera.sensor_->set_read_noise(0.f);
+    camera.sensor_->set_full_well_capacity(1e9f);
+    camera.sensor_->set_bit_depth(20);
+    camera.sensor_->set_noise_seed(3);
+}
+
+} // namespace
+
+TEST_CASE("Row noise shifts each row's pixels together, differently in each frame",
+          "[cameras][sensor][banding]")
+{
+    SensorProbe camera;
+    banded_sensor(camera, 64, 256);
+    camera.sensor_->set_row_noise(20.f);
+    CHECK(camera.sensor_->row_noise() == 20.f);
+    auto frame_buffer = camera.make_frame_buffer();
+    frame_buffer.enable_sensor_response();
+    frame_buffer.received_power().fill(RGB{0.f});
+
+    std::vector<double> row_offsets;
+    std::vector<double> first_frame;
+    for (int frame = 0; frame < 4; ++frame) {
+        const Image<float> red = read_channel_dn(camera, frame_buffer, 0);
+        const Image<float> blue = read_channel_dn(camera, frame_buffer, 2);
+        (void)blue; // a second readout, a new frame
+        for (int y = 0; y < red.height(); ++y) {
+            // Every pixel of a row, in every channel, shifts together:
+            for (int x = 0; x < red.width(); ++x) {
+                REQUIRE(red(x, y) == red(0, y));
+            }
+            row_offsets.push_back(static_cast<double>(red(0, y)) - 1000.0);
+        }
+        if (frame == 0) {
+            first_frame.assign(row_offsets.begin(), row_offsets.end());
+        }
+    }
+    const Image<RGB>& response = frame_buffer.sensor_response();
+    CHECK(response(5, 7)[0] == response(5, 7)[1]);
+    CHECK(response(5, 7)[1] == response(5, 7)[2]);
+
+    // 1024 rows: mean 0, variance 400 (plus the rounding's 1/12):
+    CHECK(std::abs(mean_of(row_offsets)) < 2.0);
+    CHECK(std::abs(variance_of(row_offsets) / (400.0 + 1.0 / 12.0) - 1.0) < 0.15);
+
+    // Successive frames differ, and the seed repeats them:
+    CHECK(std::vector<double>(row_offsets.begin() + 256, row_offsets.begin() + 512) != first_frame);
+    camera.sensor_->set_noise_seed(3);
+    const Image<float> again = read_channel_dn(camera, frame_buffer, 0);
+    for (int y = 0; y < 256; ++y) {
+        REQUIRE(static_cast<double>(again(0, y)) - 1000.0 ==
+                first_frame[static_cast<std::size_t>(y)]);
+    }
+}
+
+TEST_CASE("Column noise shifts each column's pixels together, differently in each frame",
+          "[cameras][sensor][banding]")
+{
+    SensorProbe camera;
+    banded_sensor(camera, 256, 64);
+    camera.sensor_->set_column_noise(20.f);
+    CHECK(camera.sensor_->column_noise() == 20.f);
+    auto frame_buffer = camera.make_frame_buffer();
+    frame_buffer.enable_sensor_response();
+    frame_buffer.received_power().fill(RGB{0.f});
+
+    std::vector<double> column_offsets;
+    std::vector<double> first_frame;
+    for (int frame = 0; frame < 4; ++frame) {
+        const Image<float> green = read_channel_dn(camera, frame_buffer, 1);
+        for (int x = 0; x < green.width(); ++x) {
+            for (int y = 0; y < green.height(); ++y) {
+                REQUIRE(green(x, y) == green(x, 0));
+            }
+            column_offsets.push_back(static_cast<double>(green(x, 0)) - 1000.0);
+        }
+        if (frame == 0) {
+            first_frame.assign(column_offsets.begin(), column_offsets.end());
+        }
+    }
+    CHECK(std::abs(mean_of(column_offsets)) < 2.0);
+    CHECK(std::abs(variance_of(column_offsets) / (400.0 + 1.0 / 12.0) - 1.0) < 0.15);
+    CHECK(std::vector<double>(column_offsets.begin() + 256, column_offsets.begin() + 512) !=
+          first_frame);
+}
+
+TEST_CASE("Row and column noise add, independently of each other and of the pixels' noise",
+          "[cameras][sensor][banding]")
+{
+    SensorProbe camera;
+    banded_sensor(camera, 32, 32);
+    auto frame_buffer = camera.make_frame_buffer();
+    frame_buffer.enable_sensor_response();
+    expect_electrons(camera, frame_buffer, 50.0); // shot noise, from the pixels' own numbers
+
+    // The pixels' noise alone:
+    camera.sensor_->set_noise_seed(9);
+    const Image<float> plain = read_channel_dn(camera, frame_buffer, 0);
+
+    // With row and column noise, from the same seed: each pixel's value differs from it by its
+    // row's and its column's draws, rounded, whatever the pixel's own noise was. So the pixels'
+    // noise is unchanged:
+    camera.sensor_->set_row_noise(30.f);
+    camera.sensor_->set_column_noise(10.f);
+    camera.sensor_->set_noise_seed(9);
+    const Image<float> banded = read_channel_dn(camera, frame_buffer, 0);
+    auto shift = [&](int x, int y) { return static_cast<double>(banded(x, y) - plain(x, y)); };
+    bool any_shift = false;
+    for (int y = 0; y < 32; ++y) {
+        for (int x = 0; x < 32; ++x) {
+            // Additive: shift(x, y) = row(y) + column(x), to within the rounding of each.
+            REQUIRE(std::abs(shift(x, y) - shift(x, 0) - shift(0, y) + shift(0, 0)) <= 2.0);
+            any_shift = any_shift || shift(x, y) != 0.0;
+        }
+    }
+    CHECK(any_shift);
+
+    // Without the row noise, the columns' draws are the same as with it: the rows' numbers are
+    // their own.
+    camera.sensor_->set_row_noise(0.f);
+    camera.sensor_->set_noise_seed(9);
+    const Image<float> columns_only = read_channel_dn(camera, frame_buffer, 0);
+    auto column = [&](int x) { return static_cast<double>(columns_only(x, 0) - plain(x, 0)); };
+    for (int x = 0; x < 32; ++x) {
+        for (int y = 0; y < 32; ++y) {
+            REQUIRE(static_cast<double>(columns_only(x, y) - plain(x, y)) == column(x));
+        }
+        CHECK(std::abs((column(x) - column(0)) - (shift(x, 0) - shift(0, 0))) <= 2.0);
+    }
+}
+
+TEST_CASE("Row and column noise are off with the other noise, and checked when set",
+          "[cameras][sensor][banding]")
+{
+    SensorProbe camera;
+    banded_sensor(camera, 16, 16);
+    camera.sensor_->set_row_noise(50.f);
+    camera.sensor_->set_column_noise(50.f);
+    camera.sensor_->enable_noise(false);
+    auto frame_buffer = camera.make_frame_buffer();
+    frame_buffer.enable_sensor_response();
+    frame_buffer.received_power().fill(RGB{0.f});
+    for (double v : read_dn(camera, frame_buffer)) {
+        REQUIRE(std::abs(v - 1000.0) < 1e-3);
+    }
+
+    // Default to 0, and are copied with the sensor's settings:
+    SensorProbe fresh;
+    CHECK(fresh.sensor_->row_noise() == 0.f);
+    CHECK(fresh.sensor_->column_noise() == 0.f);
+    SensorProbe other;
+    other.set_sensor<SimpleSensor<RGB>>(
+        *dynamic_cast<const SimpleSensor<RGB>*>(camera.sensor_.get()));
+    CHECK(other.sensor_->row_noise() == 50.f);
+    CHECK(other.sensor_->column_noise() == 50.f);
+
+    for (const float bad :
+         {-1.f, std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity()}) {
+        CHECK_THROWS(camera.sensor_->set_row_noise(bad));
+        CHECK_THROWS(camera.sensor_->set_column_noise(bad));
+    }
+    CHECK(camera.sensor_->row_noise() == 50.f);
+
+    CHECK(camera.describe().find("row noise 50 e-, column noise 50 e-") != std::string::npos);
+}

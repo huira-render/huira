@@ -263,10 +263,30 @@ inline void bind_camera_model_handle(py::module_& m)
         .def("enable_sensor_noise",
              &HandleType::enable_sensor_noise,
              py::arg("noise") = true,
-             "Turn the sensor's shot noise and read noise on (the default) or off. Off, each "
-             "pixel collects the expected number of electrons; the dark current's electrons and "
-             "the bias are still added, since they are not noise.")
+             "Turn the sensor's shot noise, read noise, and row and column noise on (the "
+             "default) or off. Off, each pixel collects the expected number of electrons; the "
+             "dark current's electrons and the bias, and their maps, are still added, since "
+             "they are not noise.")
         .def("set_sensor_read_noise", &HandleType::set_sensor_read_noise, py::arg("read_noise"))
+        .def("set_sensor_row_noise",
+             &HandleType::set_sensor_row_noise,
+             py::arg("row_noise"),
+             "Set the sensor's row noise, in e- RMS (0 by default): in each readout, every row's "
+             "pixels shift together by one draw of this standard deviation, added with the read "
+             "noise, as banding along the rows that changes from frame to frame. It comes from "
+             "what a row shares as it is read out (a CMOS sensor's shared ADC ramp and "
+             "references; a CCD output amplifier's drift). Rows run along the image's x axis; "
+             "for a sensor read out along y, set the column noise. A fixed pattern of rows is a "
+             "bias map's. Off with the other noise.")
+        .def("set_sensor_column_noise",
+             &HandleType::set_sensor_column_noise,
+             py::arg("column_noise"),
+             "Set the sensor's column noise, in e- RMS (0 by default): in each readout, every "
+             "column's pixels shift together by one draw of this standard deviation, added with "
+             "the read and row noise, as banding along the columns that changes from frame to "
+             "frame. It comes from a CMOS sensor's column amplifiers and ADCs, and is usually "
+             "smaller than the row noise; a CCD has none. A fixed pattern of columns is a bias "
+             "map's. Off with the other noise.")
         .def("set_sensor_dark_current",
              &HandleType::set_sensor_dark_current,
              py::arg("dark_current"),
@@ -331,11 +351,17 @@ inline void bind_camera_model_handle(py::module_& m)
              "The sensor's full well capacity, in electrons.")
         .def("sensor_noise_enabled",
              &HandleType::sensor_noise_enabled,
-             "Whether the sensor's shot noise and read noise are on (the default). See "
-             "enable_sensor_noise().")
+             "Whether the sensor's shot noise, read noise, and row and column noise are on (the "
+             "default). See enable_sensor_noise().")
         .def("sensor_read_noise",
              &HandleType::sensor_read_noise,
              "The sensor's read noise, in electrons.")
+        .def("sensor_row_noise",
+             &HandleType::sensor_row_noise,
+             "The sensor's row noise, in e- RMS. See set_sensor_row_noise().")
+        .def("sensor_column_noise",
+             &HandleType::sensor_column_noise,
+             "The sensor's column noise, in e- RMS. See set_sensor_column_noise().")
         .def("sensor_dark_current",
              &HandleType::sensor_dark_current,
              "The sensor's dark current, in electrons per second.")
