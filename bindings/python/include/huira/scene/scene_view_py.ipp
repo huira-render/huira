@@ -2,8 +2,10 @@
 
 #include <cstdint>
 #include <optional>
+#include <vector>
 
 #include "huira/core/interval.hpp"
+#include "huira/core/transform.hpp"
 #include "huira/sampling/sampler.hpp"
 #include "huira/scene/scene_view.hpp"
 #include "huira/scene/scene_view_types.hpp"
@@ -19,6 +21,35 @@ template <IsSpectral TSpectral>
 void bind_scene_view(py::module_& m)
 {
     using SV = SceneView<TSpectral>;
+    using UI = UnresolvedInstance<TSpectral>;
+
+    py::class_<UI>(m,
+                   "UnresolvedInstance",
+                   "An instance of an unresolved object in a scene view, at its temporal samples: "
+                   "one an instance in the scene graph places, or a satellite of a constellation")
+        .def_readonly("instance_id",
+                      &UI::instance_id,
+                      "The instance that places it, or NO_OBJECT_ID for a satellite")
+        .def_readonly("constellation_id",
+                      &UI::constellation_id,
+                      "A satellite's constellation's id, or NO_OBJECT_ID")
+        .def_readonly(
+            "catalog_number", &UI::catalog_number, "A satellite's NORAD catalog number, or 0")
+        .def_readonly("times", &UI::times, "The times of its temporal samples")
+        .def_property_readonly(
+            "positions",
+            [](const UI& self) {
+                std::vector<Vec3<double>> positions;
+                positions.reserve(self.transforms.size());
+                for (const Transform<float>& transform : self.transforms) {
+                    positions.emplace_back(transform.position);
+                }
+                return positions;
+            },
+            "Where it is in the camera's frame at each sample, in meters")
+        .def_readonly("irradiances",
+                      &UI::irradiances,
+                      "The irradiance it gives the camera: one for each sample, or one for all");
 
     py::class_<SV>(m, "SceneView")
         .def(py::init<const Scene<TSpectral>&,
@@ -92,6 +123,15 @@ void bind_scene_view(py::module_& m)
              py::arg("hit"),
              "The IDs of the geometry, model, instance and part a HitRecord landed on, as an "
              "ObjectIds: each NO_OBJECT_ID for a miss or a light")
+        .def("unresolved_instances",
+             &SV::unresolved_instances,
+             "The instances of unresolved objects collected (UnresolvedInstance): those the scene "
+             "graph places, then the satellites of the scene's constellations in front of the "
+             "camera")
+        .def("skipped_satellites",
+             &SV::skipped_satellites,
+             "The satellites of the scene's constellations left out, as SGP4 can't place them "
+             "during the exposure (SkippedSatellite)")
         .def("unresolved_irradiance",
              &SV::unresolved_irradiance,
              py::arg("instance"),

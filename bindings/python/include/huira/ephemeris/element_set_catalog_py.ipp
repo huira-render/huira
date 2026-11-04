@@ -82,7 +82,10 @@ inline void bind_element_set_catalog(py::module_& m)
                SkipReason::TOO_OLD,
                "Its epoch is further than max_age from the reference time")
         .value(
-            "SUPERSEDED", SkipReason::SUPERSEDED, "Another element set for its satellite was kept");
+            "SUPERSEDED", SkipReason::SUPERSEDED, "Another element set for its satellite was kept")
+        .value("CLAIMED",
+               SkipReason::CLAIMED,
+               "Its satellite places a node, or is in another constellation");
 
     py::class_<ElementSetSource>(
         m, "ElementSetSource", "Where in a catalog an element set kept from it came from")

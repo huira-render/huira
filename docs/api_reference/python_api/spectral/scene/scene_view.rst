@@ -5,3 +5,6 @@ Scene View
    :members:
    :undoc-members:
 
+.. autoclass-spectral:: UnresolvedInstance
+   :members:
+   :undoc-members:
