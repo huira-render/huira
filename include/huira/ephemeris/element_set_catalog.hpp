@@ -88,6 +88,17 @@ struct SkippedElementSet {
 };
 
 /**
+ * @brief Where in a catalog an element set kept from it came from.
+ */
+struct ElementSetSource {
+    /// Which entry of the catalog it was, counted from 0.
+    std::size_t entry = 0;
+
+    /// The line its entry starts on, counted from 1, or 0 in a JSON catalog.
+    std::size_t line = 0;
+};
+
+/**
  * @brief Satellites' element sets read from a catalog of TLEs or OMMs, with a report of the
  * entries left out of it and why.
  *
@@ -120,6 +131,9 @@ struct SkippedElementSet {
 struct ElementSetCatalog {
     /// The element sets read and kept.
     std::vector<SatRec> element_sets;
+
+    /// Where each element set kept came from, in the same order.
+    std::vector<ElementSetSource> sources;
 
     /// The entries left out, and why, in the order of the catalog.
     std::vector<SkippedElementSet> skipped;

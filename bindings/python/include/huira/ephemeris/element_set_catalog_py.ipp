@@ -84,6 +84,18 @@ inline void bind_element_set_catalog(py::module_& m)
         .value(
             "SUPERSEDED", SkipReason::SUPERSEDED, "Another element set for its satellite was kept");
 
+    py::class_<ElementSetSource>(
+        m, "ElementSetSource", "Where in a catalog an element set kept from it came from")
+        .def_readonly(
+            "entry", &ElementSetSource::entry, "Which entry of the catalog it was, counted from 0")
+        .def_readonly("line",
+                      &ElementSetSource::line,
+                      "The line its entry starts on, counted from 1, or 0 in a JSON catalog")
+        .def("__repr__", [](const ElementSetSource& self) {
+            return "<ElementSetSource entry " + std::to_string(self.entry) +
+                   (self.line != 0 ? ", line " + std::to_string(self.line) : std::string()) + ">";
+        });
+
     py::class_<SkippedElementSet>(m, "SkippedElementSet", "An entry of a catalog left out of it")
         .def_readonly(
             "entry", &SkippedElementSet::entry, "Which entry of the catalog it was, counted from 0")
@@ -109,6 +121,9 @@ inline void bind_element_set_catalog(py::module_& m)
                                   "with read() or parse().")
         .def_readonly(
             "element_sets", &ElementSetCatalog::element_sets, "The element sets kept (SatRec)")
+        .def_readonly("sources",
+                      &ElementSetCatalog::sources,
+                      "Where each element set kept came from (ElementSetSource), in the same order")
         .def_readonly("skipped",
                       &ElementSetCatalog::skipped,
                       "The entries left out, and why (SkippedElementSet), in the catalog's order")

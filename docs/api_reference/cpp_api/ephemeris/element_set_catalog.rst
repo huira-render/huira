@@ -9,6 +9,10 @@ ElementSetCatalog
    :members:
    :undoc-members:
 
+.. doxygenstruct:: huira::ElementSetSource
+   :members:
+   :undoc-members:
+
 .. doxygenstruct:: huira::SkippedElementSet
    :members:
    :undoc-members:
