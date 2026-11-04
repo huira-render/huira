@@ -165,10 +165,11 @@ struct SensorConfig {
 
     float full_well_capacity = 20000.f; // e-
 
-    bool simulate_noise = true; // Shot, read, row and column noise (see
-                                // SensorModel::enable_noise()); the dark current and bias apply
-                                // either way
-    float read_noise = 10.f;    // e- RMS
+    bool simulate_noise = true;         // Shot, read, row and column noise (see
+                                        // SensorModel::enable_noise())
+    bool simulate_imperfections = true; // Dark current, hot pixels, PRNU, the bias map and the
+                                        // flat (see SensorModel::enable_imperfections())
+    float read_noise = 10.f;            // e- RMS
     float row_noise = 0.f;    // e- RMS, shared by a row's pixels (see SensorModel::set_row_noise())
     float column_noise = 0.f; // e- RMS, shared by a column's pixels
     float prnu = 0.f; // Each pixel's gain's standard deviation (see SensorModel::set_prnu())
@@ -315,14 +316,33 @@ class SensorModel {
     void set_full_well_capacity(float fwc);
     float full_well_capacity() const { return config_.full_well_capacity; }
 
-    /// Turn shot noise, read noise, and row and column noise, on (the default) or off. Off, a
-    /// pixel collects the expected number of electrons; the dark current's electrons and the
-    /// bias are still added, since they are not noise.
+    /// Turn the sensor's noise on (the default) or off: what is random, and differs from frame to
+    /// frame (shot noise, read noise, and row and column noise). Off, a pixel collects the
+    /// expected number of electrons. The imperfections, which are the same in every frame, are
+    /// a switch of their own (enable_imperfections()). See docs/design_overview/
+    /// sensor_modeling.rst for the four combinations.
     void enable_noise(bool noise = true) { config_.simulate_noise = noise; }
 
-    /// Whether shot noise, read noise, and row and column noise are on (the default). See
-    /// enable_noise().
+    /// Whether the sensor's noise is on (the default). See enable_noise().
     bool noise_enabled() const { return config_.simulate_noise; }
+
+    /// Turn the sensor's imperfections on (the default) or off: what makes it less than ideal,
+    /// and is the same in every frame. Off, there is no dark current (the single value, the map
+    /// or hot pixels), each pixel's gain is 1 (no PRNU, and no flat from the selected filter),
+    /// and the bias is the bias level (no bias map). The settings are kept, and apply again when
+    /// turned back on. The bias level stays: it isn't an imperfection, but the offset the ADC
+    /// adds so that the read noise isn't clipped at 0 DN (set it to 0 for none). The quantum
+    /// efficiency, the filter's transmission, the gain, the full well and the ADC's quantization
+    /// are what the sensor is, and stay too. With noise off as well, the sensor is ideal; with
+    /// noise on, its frames are as perfectly calibrated ones, with only shot noise and the
+    /// readout's noise. See enable_noise().
+    void enable_imperfections(bool imperfections = true)
+    {
+        config_.simulate_imperfections = imperfections;
+    }
+
+    /// Whether the sensor's imperfections are on (the default). See enable_imperfections().
+    bool imperfections_enabled() const { return config_.simulate_imperfections; }
 
     void set_read_noise(float read_noise);
     float read_noise() const { return config_.read_noise; }

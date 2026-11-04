@@ -349,10 +349,21 @@ inline void bind_camera_model_handle(py::module_& m)
         .def("enable_sensor_noise",
              &HandleType::enable_sensor_noise,
              py::arg("noise") = true,
-             "Turn the sensor's shot noise, read noise, and row and column noise on (the "
-             "default) or off. Off, each pixel collects the expected number of electrons; the "
-             "dark current's electrons and the bias, and their maps, are still added, since "
-             "they are not noise.")
+             "Turn the sensor's noise on (the default) or off: what is random, and differs "
+             "from frame to frame (shot noise, read noise, and row and column noise). Off, each "
+             "pixel collects the expected number of electrons. The imperfections, which are the "
+             "same in every frame, are a switch of their own: enable_sensor_imperfections().")
+        .def("enable_sensor_imperfections",
+             &HandleType::enable_sensor_imperfections,
+             py::arg("imperfections") = true,
+             "Turn the sensor's imperfections on (the default) or off: what makes it less than "
+             "ideal, and is the same in every frame. Off, there is no dark current (the single "
+             "value, the map or hot pixels), each pixel's gain is 1 (no PRNU, and no flat from "
+             "the selected filter), and the bias is the bias level (no bias map); the settings "
+             "are kept, and apply again when turned back on. The bias level, quantum "
+             "efficiency, filter transmission, gain, full well and quantization stay. With "
+             "noise off too, the sensor is ideal; with noise on, its frames are as perfectly "
+             "calibrated ones, with only shot noise and the readout's noise.")
         .def("set_sensor_read_noise", &HandleType::set_sensor_read_noise, py::arg("read_noise"))
         .def("set_sensor_row_noise",
              &HandleType::set_sensor_row_noise,
@@ -379,7 +390,8 @@ inline void bind_camera_model_handle(py::module_& m)
              "Set the sensor's photo response non-uniformity: the standard deviation of each "
              "pixel's gain (0.01 is 1%), by which its signal electrons are multiplied. A fixed "
              "pattern, made from the noise seed: the same in every frame, another with another "
-             "seed. It applies to the light only, and with noise off too. A flat from a real "
+             "seed. It applies to the light only, with noise off too, and is off with the "
+             "sensor's imperfections (enable_sensor_imperfections()). A flat from a real "
              "flat field already holds the camera's PRNU: leave this at 0 with one. 0 by "
              "default.")
         .def("set_sensor_hot_pixels",
@@ -392,14 +404,16 @@ inline void bind_camera_model_handle(py::module_& m)
              "dark_current times exp(spread * N(0, 1)), a log-normal distribution whose median "
              "is dark_current (spread 0 for the same in every hot pixel). A fixed pattern, made "
              "from the noise seed: the same pixels in every frame, others with another seed; a "
-             "larger fraction keeps a smaller one's hot pixels and adds more. A dark current "
-             "map from a real master dark already holds the camera's hot pixels: leave these "
-             "off with one. Off (fraction 0) by default.")
+             "larger fraction keeps a smaller one's hot pixels and adds more. Off with the "
+             "sensor's imperfections (enable_sensor_imperfections()). A dark current map from a "
+             "real master dark already holds the camera's hot pixels: leave these off with one. "
+             "Off (fraction 0) by default.")
         .def("set_sensor_dark_current",
              &HandleType::set_sensor_dark_current,
              py::arg("dark_current"),
              "Set the sensor's dark current, in e-/s, the same for every pixel. A dark current "
-             "map, while one is set, takes its place.")
+             "map, while one is set, takes its place. Off with the sensor's imperfections "
+             "(enable_sensor_imperfections()).")
         .def("set_sensor_dark_current_map",
              &HandleType::set_sensor_dark_current_map,
              py::arg("electrons_per_second"),
@@ -408,7 +422,8 @@ inline void bind_camera_model_handle(py::module_& m)
              "(Image_f32(array, origin=...) makes one from a numpy array). Each pixel's dark "
              "current, times the exposure time, is the mean number of electrons it gathers in "
              "the dark, added to its signal before shot noise; for RGB, each channel gathers "
-             "that many. Like the dark current, it applies with noise off too. "
+             "that many. Like the dark current, it applies with noise off too, and is off with "
+             "the sensor's imperfections. "
              "huira.dark_current_from_master_dark() makes one from a master dark and a master "
              "bias. The camera keeps it until it is cleared or replaced.")
         .def("clear_sensor_dark_current_map",
@@ -434,7 +449,8 @@ inline void bind_camera_model_handle(py::module_& m)
              "normalized: multiply a 32-bit float master from Siril or PixInsight by 65535. With "
              "BiasMapKind.Relative, it is each pixel's offset from the bias level, averaging "
              "about 0, and the bias level still applies. Each pixel's bias "
-             "must be in [0, 2^bit_depth - 1). Like the bias level, it applies with noise off "
+             "must be in [0, 2^bit_depth - 1). With the sensor's imperfections off, the bias is "
+             "the bias level. Like the bias level, it applies with noise off "
              "too. The camera keeps it until it is cleared or replaced.")
         .def("clear_sensor_bias_map",
              &HandleType::clear_sensor_bias_map,
@@ -459,8 +475,11 @@ inline void bind_camera_model_handle(py::module_& m)
              "The sensor's full well capacity, in electrons.")
         .def("sensor_noise_enabled",
              &HandleType::sensor_noise_enabled,
-             "Whether the sensor's shot noise, read noise, and row and column noise are on (the "
-             "default). See enable_sensor_noise().")
+             "Whether the sensor's noise is on (the default). See enable_sensor_noise().")
+        .def("sensor_imperfections_enabled",
+             &HandleType::sensor_imperfections_enabled,
+             "Whether the sensor's imperfections are on (the default). See "
+             "enable_sensor_imperfections().")
         .def("sensor_read_noise",
              &HandleType::sensor_read_noise,
              "The sensor's read noise, in electrons.")

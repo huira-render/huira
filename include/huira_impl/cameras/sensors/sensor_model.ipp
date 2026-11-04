@@ -38,6 +38,7 @@ SensorModel<TSpectral>::SensorModel(SensorConfig<TSpectral> config)
     set_quantum_efficiency(config.quantum_efficiency);
     set_full_well_capacity(config.full_well_capacity);
     enable_noise(config.simulate_noise);
+    enable_imperfections(config.simulate_imperfections);
     set_read_noise(config.read_noise);
     set_row_noise(config.row_noise);
     set_column_noise(config.column_noise);
@@ -371,12 +372,13 @@ void SensorModel<TSpectral>::set_column_noise(float column_noise)
  * differ, the same in every readout.
  *
  * Each pixel's signal electrons are multiplied by its own gain, drawn once from a normal
- * distribution of mean 1 and this standard deviation (0.01 is 1%; at most 0, never negative),
+ * distribution of mean 1 and this standard deviation (0.01 is 1%; at least 0, never negative),
  * as the pixels of a real sensor differ in their response to light. It is a fixed pattern:
  * made from the noise seed (set_noise_seed()), so the same in every frame, and another with
  * another seed. It applies to the light only, not the dark current, and, being fixed, applies
- * with noise off too. The pattern's random numbers are their own, so setting it doesn't change
- * the noise.
+ * with noise off too; it is one of the sensor's imperfections, off with them
+ * (enable_imperfections()). The pattern's random numbers are their own, so setting it doesn't
+ * change the noise.
  *
  * A flat from a real flat field (CameraModel::flat_from_measured()) already holds the camera's
  * PRNU: set this to 0 with one, or the PRNU is applied twice. 0 by default.
@@ -417,7 +419,8 @@ Image<float> SensorModel<TSpectral>::prnu_map() const
  * noise seed (set_noise_seed()), so the same pixels in every frame, and others with another
  * seed. A larger fraction keeps the hot pixels of a smaller one, with the same dark currents,
  * and adds more. Being dark current, its electrons are drawn with shot noise, and, being fixed,
- * they are added with noise off too.
+ * they are added with noise off too; they are one of the sensor's imperfections, off with them
+ * (enable_imperfections()).
  *
  * A dark current map from a real master dark (set_dark_current_map()) already holds the
  * camera's hot pixels: leave these off with one, or they are counted twice. Off (a fraction of
@@ -560,7 +563,8 @@ std::shared_ptr<const Image<float>> SensorModel<TSpectral>::hot_pixel_dark_curre
  * @brief Sets the dark current of the sensor: the same for every pixel.
  *
  * A dark current map, while one is set, takes its place; a warning says so. See
- * set_dark_current_map().
+ * set_dark_current_map(). Like the map, it is one of the sensor's imperfections, off with them
+ * (enable_imperfections()).
  *
  * @param dark_current The dark current in electrons per second.
  * @throws std::runtime_error if the value is invalid.
@@ -587,8 +591,9 @@ void SensorModel<TSpectral>::set_dark_current(float dark_current)
  *
  * Each pixel's dark current, times the exposure time, is the mean number of electrons it
  * gathers in the dark. They are added to its signal electrons before shot noise, which draws the
- * two together, and, as for the single dark current, they are added with noise off too. For RGB,
- * each channel of a pixel gathers that many.
+ * two together, and, as for the single dark current, they are added with noise off too, and are
+ * off with the sensor's imperfections (enable_imperfections()). For RGB, each channel of a pixel
+ * gathers that many.
  *
  * dark_current_from_master_dark() gives the map from a master dark and a master bias. The map is
  * in the image's layout (top row first; see Image), as the sensor response is. The sensor keeps
@@ -708,7 +713,8 @@ void SensorModel<TSpectral>::set_bias_level_dn(float bias_level_dn)
  * multiply it by 65535).
  *
  * The map is in the image's layout (top row first; see Image), as the sensor response is. The
- * bias, like the dark current, is not noise: it is applied with noise off too. The sensor keeps
+ * bias, like the dark current, is not noise: it is applied with noise off too. With the sensor's
+ * imperfections off (enable_imperfections()), the bias is the bias level. The sensor keeps
  * the map until it is cleared (clear_bias_map()) or replaced, and copies of the sensor share it.
  *
  * @param dn The bias, or the offsets from the bias level, of each pixel, in DN, at the sensor's

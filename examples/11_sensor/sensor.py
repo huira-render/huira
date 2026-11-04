@@ -15,6 +15,8 @@ Demonstrates:
     - Calibration maps: each pixel's own dark current, from a master dark and a master bias,
       and its own bias
     - A filter wheel: a filter's transmission per spectral bin, and its flat from a flat field
+    - The two switches: noise (random, frame to frame) and imperfections (the same in every
+      frame); both off is an ideal sensor
 
 Builds on: 10 Optics
 Data: tycho2.hrsc, the Tycho-2 star catalog (see README.md)
@@ -29,6 +31,7 @@ Writes:
     output/11_sensor_noiseless.png   the same frame without noise
     output/11_sensor_calibrated.png  the frame with each pixel's own dark current and bias
     output/11_sensor_red.png         the frame through a red filter, with its flat
+    output/11_sensor_ideal.png       ...from an ideal sensor: no noise, no imperfections
 """
 
 import math
@@ -172,8 +175,9 @@ def main():
     print(f"Read back {header.object}, {header.exptime} s: "
           f"brightest pixel {brightest:.0f} DN of {full_scale}")
 
-    # The same frame without noise (shot, read, row or column). The dark current and bias are
-    # still added: they are not noise.
+    # The same frame without noise (shot, read, row or column): the expected frame, the mean of
+    # many. The imperfections, which are the same in every frame (here the dark current, hot
+    # pixels and PRNU), are a switch of their own, and still apply.
     camera_model.enable_sensor_noise(False)
     frame_buffer = camera_model.make_frame_buffer()
     frame_buffer.enable_sensor_response()
@@ -251,6 +255,21 @@ def main():
     renderer.render(scene_view, frame_buffer)
     huira.write_png(
         output_dir / "11_sensor_red.png", huira.linear_to_srgb(frame_buffer.sensor_response)
+    )
+
+    # The two switches, together. Noise is what is random (shot, read, row and column noise), and
+    # imperfections what is the same in every frame (the dark current and its map, hot pixels,
+    # PRNU, the flat, and the bias map, leaving the bias level). With both on, a realistic frame;
+    # with noise off, the expected frame, above; with imperfections off, a frame as from a
+    # perfectly calibrated camera, with only shot noise and the readout's; and with both off, an
+    # ideal sensor. The QE, the filter's transmission, the gain and the bias level stay.
+    camera_model.enable_sensor_noise(False)
+    camera_model.enable_sensor_imperfections(False)
+    frame_buffer = camera_model.make_frame_buffer()
+    frame_buffer.enable_sensor_response()
+    renderer.render(scene_view, frame_buffer)
+    huira.write_png(
+        output_dir / "11_sensor_ideal.png", huira.linear_to_srgb(frame_buffer.sensor_response)
     )
 
 

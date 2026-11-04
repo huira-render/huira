@@ -1551,3 +1551,158 @@ TEST_CASE("A copied sensor has the same fixed pattern settings, and patterns of 
     plain.configure_sensor_from_pitch(Resolution{4, 4}, units::Micrometer(5.0));
     CHECK(plain.describe().find("Fixed:       PRNU 0%, hot pixels none") != std::string::npos);
 }
+
+namespace {
+
+/// A sensor with every imperfection and every kind of noise, at 1 e-/DN and 20 bits: its pixels
+/// expect 1000 e- of signal through a filter that passes half, with a flat of 0.8, over 1 s.
+void imperfect_sensor(SensorProbe& camera)
+{
+    electron_counter(camera); // 64x64
+    camera.sensor_->set_noise_seed(31);
+    camera.sensor_->set_bias_level_dn(100.f);
+    camera.sensor_->set_read_noise(5.f);
+    camera.sensor_->set_row_noise(2.f);
+    camera.sensor_->set_column_noise(1.f);
+    camera.sensor_->set_dark_current(20.f);
+    camera.sensor_->set_dark_current_map(Image<float>(64, 64, 30.f));
+    camera.sensor_->set_bias_map(map_of(64, 64, [](int x, int) { return x % 4 - 1.5; }),
+                                 BiasMapKind::Relative);
+    camera.sensor_->set_prnu(0.05f);
+    camera.sensor_->set_hot_pixels(0.05f, 400.f);
+    camera.add_filter("half", RGB{0.5f}, Image<float>(64, 64, 0.8f));
+}
+
+} // namespace
+
+TEST_CASE("With noise and imperfections off, the sensor is ideal", "[cameras][sensor][switches]")
+{
+    SensorProbe camera;
+    imperfect_sensor(camera);
+    auto frame_buffer = camera.make_frame_buffer();
+    frame_buffer.enable_sensor_response();
+    expect_electrons(camera, frame_buffer, 1000.0);
+
+    CHECK(camera.sensor_->imperfections_enabled()); // on by default
+    camera.sensor_->enable_noise(false);
+    camera.sensor_->enable_imperfections(false);
+    CHECK_FALSE(camera.sensor_->imperfections_enabled());
+
+    // Every pixel the same: the signal through the filter's transmission (not its flat), no
+    // dark current, PRNU or hot pixels, and the bias level (not the bias map).
+    for (double v : read_dn(camera, frame_buffer)) {
+        REQUIRE(std::abs(v - (500.0 + 100.0)) < 1e-3);
+    }
+
+    // The settings are kept, and apply again when turned back on:
+    CHECK(camera.sensor_->has_dark_current_map());
+    CHECK(camera.sensor_->has_bias_map());
+    CHECK(camera.sensor_->prnu() == 0.05f);
+    CHECK(camera.sensor_->has_flat());
+    camera.sensor_->enable_imperfections(true);
+    const std::vector<double> expected = read_dn(camera, frame_buffer);
+    const Image<float> gains = camera.sensor_->prnu_map();
+    const Image<float> hot = camera.sensor_->hot_pixel_map();
+    for (std::size_t i = 0; i < expected.size(); ++i) {
+        const auto pixel = static_cast<int>(i / 3);
+        const int x = pixel % 64;
+        const int y = pixel / 64;
+        // The expected frame: the signal through the flat and the pixel's gain, the map's dark
+        // current and the pixel's as a hot pixel, and the bias level with the map's offset.
+        const double e =
+            500.0 * 0.8 * static_cast<double>(gains(x, y)) + 30.0 + static_cast<double>(hot(x, y));
+        REQUIRE(std::abs(expected[i] - (e + 100.0 + (x % 4 - 1.5))) <= 0.5 + 1e-2);
+    }
+}
+
+TEST_CASE("With imperfections off and noise on, frames are as perfectly calibrated ones",
+          "[cameras][sensor][switches]")
+{
+    SensorProbe camera;
+    imperfect_sensor(camera);
+    camera.sensor_->set_row_noise(0.f);
+    camera.sensor_->set_column_noise(0.f);
+    camera.sensor_->enable_imperfections(false);
+    auto frame_buffer = camera.make_frame_buffer();
+    frame_buffer.enable_sensor_response();
+    expect_electrons(camera, frame_buffer, 1000.0);
+
+    // Shot noise on the 500 e- through the filter, and the read noise: mean 600 DN, variance
+    // 500 + 25, the same everywhere.
+    const std::vector<double> dn = read_dn(camera, frame_buffer);
+    CHECK(std::abs(mean_of(dn) - 600.0) < 0.6);
+    CHECK(std::abs(variance_of(dn) / 525.0 - 1.0) < 0.05);
+
+    // The noise is the noise of a sensor that has none of the imperfections:
+    SensorProbe ideal;
+    electron_counter(ideal);
+    ideal.sensor_->set_noise_seed(31);
+    ideal.sensor_->set_bias_level_dn(100.f);
+    ideal.sensor_->set_read_noise(5.f);
+    ideal.add_filter("half", RGB{0.5f});
+    auto ideal_buffer = ideal.make_frame_buffer();
+    ideal_buffer.enable_sensor_response();
+    expect_electrons(ideal, ideal_buffer, 1000.0);
+    camera.sensor_->set_noise_seed(31);
+    CHECK(read_dn(camera, frame_buffer) == read_dn(ideal, ideal_buffer));
+}
+
+TEST_CASE("Turning one switch off leaves what the other governs", "[cameras][sensor][switches]")
+{
+    SensorProbe camera;
+    imperfect_sensor(camera);
+    auto frame_buffer = camera.make_frame_buffer();
+    frame_buffer.enable_sensor_response();
+    frame_buffer.received_power().fill(RGB{0.f});
+
+    // Noise on, imperfections off: no dark current, so dark pixels hold the bias level and the
+    // readout's noise only (read, row and column: 25 + 4 + 1).
+    camera.sensor_->enable_imperfections(false);
+    const std::vector<double> dark = read_dn(camera, frame_buffer);
+    CHECK(std::abs(mean_of(dark) - 100.0) < 1.0);
+    CHECK(variance_of(dark) < 40.0);
+
+    // Noise off, imperfections on: the expected dark frame, from the map, hot pixels and bias
+    // map, without noise:
+    camera.sensor_->enable_imperfections(true);
+    camera.sensor_->enable_noise(false);
+    const Image<float> hot = camera.sensor_->hot_pixel_map();
+    const std::vector<double> expected = read_dn(camera, frame_buffer);
+    for (std::size_t i = 0; i < expected.size(); ++i) {
+        const auto pixel = static_cast<int>(i / 3);
+        const int x = pixel % 64;
+        const double e = 30.0 + static_cast<double>(hot(x, pixel / 64));
+        REQUIRE(std::abs(expected[i] - std::round(e + 100.0 + (x % 4 - 1.5))) < 1e-3);
+    }
+
+    // With imperfections off, the maps and the flat needn't fit: they aren't used.
+    camera.configure_sensor_from_pitch(Resolution{32, 32}, units::Micrometer(5.0));
+    auto small = camera.make_frame_buffer();
+    small.enable_sensor_response();
+    CHECK_THROWS(camera.readout(small, units::Second(1.0)));
+    camera.sensor_->enable_imperfections(false);
+    CHECK_NOTHROW(camera.readout(small, units::Second(1.0)));
+}
+
+TEST_CASE("The imperfections switch is a setting, copied and described",
+          "[cameras][sensor][switches]")
+{
+    SensorProbe camera;
+    camera.configure_sensor_from_pitch(Resolution{4, 4}, units::Micrometer(5.0));
+    CHECK(camera.describe().find("Ideal:       no, imperfections on") != std::string::npos);
+    camera.sensor_->enable_imperfections(false);
+    CHECK(camera.describe().find("Ideal:       calibrated, imperfections off") !=
+          std::string::npos);
+    camera.sensor_->enable_noise(false);
+    CHECK(camera.describe().find("Ideal:       yes, imperfections off") != std::string::npos);
+
+    SensorProbe other;
+    other.set_sensor<SimpleSensor<RGB>>(
+        *dynamic_cast<const SimpleSensor<RGB>*>(camera.sensor_.get()));
+    CHECK_FALSE(other.sensor_->imperfections_enabled());
+
+    SensorConfig<RGB> config;
+    config.simulate_imperfections = false;
+    const SimpleSensor<RGB> configured(SimpleSensorConfig<RGB>{config});
+    CHECK_FALSE(configured.imperfections_enabled());
+}

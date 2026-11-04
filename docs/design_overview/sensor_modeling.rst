@@ -170,7 +170,8 @@ image is stored (from numpy, ``huira.Image_f32(array, origin=...)`` says which r
 the top; see :doc:`pixel_conventions`). A pixel's dark current is added to its signal electrons
 before shot noise, which draws the two together, and its bias is added by the ADC, as for the
 single values. For RGB, each channel of a pixel gathers its dark current and has its bias. The
-maps are not noise, so they apply with noise off too. The camera keeps them until they are
+maps are not noise, so they apply with noise off too; they are among the sensor's imperfections,
+and are off with them (see Noise and imperfections). The camera keeps them until they are
 cleared (``clear_sensor_dark_current_map()``, ``clear_sensor_bias_map()``) or replaced, and a
 copy of a sensor shares them. ``sensor_dark_current_map()`` and ``sensor_bias_map()`` give each
 pixel's value, from the map or the single value; the camera's ``describe()`` summarizes them.
@@ -253,7 +254,8 @@ from parameters, each the same in every frame:
 Both are made from the noise seed (``set_sensor_noise_seed()``), on random numbers of their own,
 keyed by the seed and the pixel but not the readout: a seed is a detector, with the same
 patterns in every frame, and another seed is another detector. They are made again when the
-seed, their parameters or the resolution change. Being fixed, they apply with noise off too.
+seed, their parameters or the resolution change. Being fixed, they apply with noise off too;
+they are among the sensor's imperfections, and are off with them (see Noise and imperfections).
 ``sensor_prnu_map()`` and ``sensor_hot_pixel_map()`` give them, and ``describe()`` lists them.
 Both are off by default.
 
@@ -271,9 +273,10 @@ A camera has a filter wheel (``add_filter()``, ``select_filter()``, by index or 
 the fraction of the light it passes in each bin, and may have a *flat*: each pixel's response
 through it relative to the principal point's. The selected filter's transmission multiplies the
 quantum efficiency, and its flat each pixel's signal electrons, before shot noise (see Quantum
-Efficiency, above); the dark current and bias are not affected, as they are not light. A frame
-is read out through the filter selected when it is rendered. The camera's ``describe()`` lists
-the wheel.
+Efficiency, above); the dark current and bias are not affected, as they are not light. The flat
+is among the sensor's imperfections, and is off with them; the transmission is not (see Noise and
+imperfections). A frame is read out through the filter selected when it is rendered. The
+camera's ``describe()`` lists the wheel.
 
 **What a flat is.** A flat field is a frame of a uniformly lit scene (a dome, a twilight sky, a
 lamp through a diffuser), with the bias and dark subtracted. Every pixel receives the same light,
@@ -315,10 +318,37 @@ Per-bin flats (a different flat for each spectral bin of one filter) are not sup
 is one image, applied to the pixel's electrons from every bin.
 
 
-Noise off
----------
+Noise and imperfections
+-----------------------
 
-``enable_sensor_noise(false)`` on the camera (``enable_noise(false)`` on a ``SensorModel``; ``enable_sensor_noise(False)`` in Python) removes what is random: shot noise, read noise, and row and column noise. Each pixel then collects the expected number of electrons, signal and dark current together. The dark current's electrons and the bias, their maps, and the fixed patterns (PRNU, hot pixels, a filter's flat) are still applied, since they are not noise, and the result is still quantized.
+Two switches on the camera leave parts of the sensor out, each without changing its settings:
+
+- ``enable_sensor_noise(false)`` turns off the **noise**: what is random, and differs from frame
+  to frame. That is shot noise, read noise, and row and column noise. Each pixel then collects
+  the expected number of electrons.
+- ``enable_sensor_imperfections(false)`` turns off the **imperfections**: what makes the sensor
+  less than ideal, and is the same in every frame. That is the dark current (the single value,
+  the dark current map and hot pixels), each pixel's own gain (PRNU, and the selected filter's
+  flat), and the bias map, so the bias is the bias level.
+
+(On a ``SensorModel``, ``enable_noise()`` and ``enable_imperfections()``; in Python, with
+``False``.) Neither touches what the sensor *is*: its quantum efficiency, the filter's
+transmission, the gain, the full well, the bias level and the ADC's quantization. The bias
+level stays because it isn't an imperfection, but the offset an ADC adds so that the read noise
+isn't clipped at 0 DN; set it to 0 for none, knowing that, with noise on, dark pixels are then
+clipped.
+
+The two switches are independent, so there are four combinations, each with its use:
+
+- **Both on** (the default): a realistic frame, as the camera takes it.
+- **Noise off, imperfections on**: the *expected* frame, the mean of many realistic ones. Every
+  dark current, map, pattern and flat applies, exactly, so this is how to check them.
+- **Noise on, imperfections off**: a frame as from a *perfectly calibrated* camera, after bias,
+  dark and flat correction, with only the noise no calibration removes: shot noise and the
+  readout's. For testing what runs on calibrated frames.
+- **Both off**: an *ideal sensor*, giving the expected electrons, by the gain, on the bias level.
+
+The camera's ``describe()`` says which (its "Ideal:" line).
 
 
 Missing data
@@ -361,6 +391,10 @@ Changes in v0.9.11
   is empty by default, a clear filter, so frames are as before.
 - PRNU and hot pixels can be made from parameters and the noise seed (see PRNU and hot pixels).
   Both are off by default, so frames are as before.
+- The sensor's imperfections (dark current, hot pixels, PRNU, the flat and the bias map) can be
+  turned off, apart from its noise, for perfectly calibrated frames or, with noise off too, an
+  ideal sensor (see Noise and imperfections). They are on by default, so frames are as before,
+  and turning noise off does what it did.
 
 
 Changes in v0.9.10
