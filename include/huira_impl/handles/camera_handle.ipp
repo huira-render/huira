@@ -237,7 +237,7 @@ std::pair<units::Micrometer, units::Micrometer> CameraModelHandle<TSpectral>::pi
  * CameraModel::add_filter().
  * @param name The filter's name, unused by the wheel's other filters.
  * @param transmission The fraction of the light the filter passes, per bin, from 0 to 1.
- * @param flat The filter's flat (see flat_from_measured()), or none.
+ * @param flat The filter's flat (see flat_from_flat_field()), or none.
  * @return The filter's index, in the order added.
  */
 template <IsSpectral TSpectral>
@@ -253,7 +253,7 @@ std::size_t CameraModelHandle<TSpectral>::add_filter(const std::string& name,
  * CameraModel::add_filter().
  * @param name The filter's name, unused by the wheel's other filters.
  * @param transmission The fraction of the light the filter passes, from 0 to 1.
- * @param flat The filter's flat (see flat_from_measured()), or none.
+ * @param flat The filter's flat (see flat_from_flat_field()), or none.
  * @return The filter's index, in the order added.
  */
 template <IsSpectral TSpectral>
@@ -280,6 +280,24 @@ void CameraModelHandle<TSpectral>::select_filter(const std::string& name) const
     this->get_()->select_filter(name);
 }
 
+/// Replace the flat of the filter at an index, or remove it (none). See
+/// CameraModel::set_filter_flat().
+template <IsSpectral TSpectral>
+void CameraModelHandle<TSpectral>::set_filter_flat(std::size_t index,
+                                                   std::optional<Image<float>> flat) const
+{
+    this->get_()->set_filter_flat(index, std::move(flat));
+}
+
+/// Replace the flat of the filter with a name, or remove it (none). See
+/// CameraModel::set_filter_flat().
+template <IsSpectral TSpectral>
+void CameraModelHandle<TSpectral>::set_filter_flat(const std::string& name,
+                                                   std::optional<Image<float>> flat) const
+{
+    this->get_()->set_filter_flat(name, std::move(flat));
+}
+
 /// Empty the filter wheel: the camera then has a clear filter, with no flat.
 template <IsSpectral TSpectral>
 void CameraModelHandle<TSpectral>::clear_filters() const
@@ -296,9 +314,9 @@ std::size_t CameraModelHandle<TSpectral>::filter_count() const
 
 /// The index of the selected filter, or none if the wheel is empty.
 template <IsSpectral TSpectral>
-std::optional<std::size_t> CameraModelHandle<TSpectral>::selected_filter() const
+std::optional<std::size_t> CameraModelHandle<TSpectral>::selected_filter_index() const
 {
-    return this->get_()->selected_filter();
+    return this->get_()->selected_filter_index();
 }
 
 /// The name of the selected filter, or none if the wheel is empty.
@@ -354,19 +372,19 @@ std::optional<Image<float>> CameraModelHandle<TSpectral>::filter_flat(const std:
 
 /**
  * @brief A filter's flat from a flat field taken through it: each pixel's response relative to
- * the principal point's, with the falloff Huira renders itself divided out, normalized to the
- * median of a central square. See CameraModel::flat_from_measured().
- * @param measured_flat The flat field, bias and dark subtracted, at the sensor's resolution, in
- *        any scale.
+ * the principal point's, with the falloff the renderer gives each pixel divided out, normalized
+ * to the median of a central square. See CameraModel::flat_from_flat_field().
+ * @param flat_field The flat field, bias and dark subtracted, at the sensor's resolution, in any
+ *        scale.
  * @param central_fraction The side of the square the result is normalized to, as a fraction of
  *        the shorter side of the sensor (5% by default).
- * @return The flat, for add_filter().
+ * @return The flat, for add_filter() or set_filter_flat().
  */
 template <IsSpectral TSpectral>
-Image<float> CameraModelHandle<TSpectral>::flat_from_measured(const Image<float>& measured_flat,
-                                                              float central_fraction) const
+Image<float> CameraModelHandle<TSpectral>::flat_from_flat_field(const Image<float>& flat_field,
+                                                                float central_fraction) const
 {
-    return this->get_()->flat_from_measured(measured_flat, central_fraction);
+    return this->get_()->flat_from_flat_field(flat_field, central_fraction);
 }
 
 /**
@@ -390,8 +408,8 @@ void CameraModelHandle<TSpectral>::set_sensor_quantum_efficiency(TSpectral qe) c
 }
 
 /**
- * @brief Set the sensor full well capacity.
- * @param fwc Full well capacity value
+ * @brief Set the sensor's full well capacity: the most electrons a pixel holds.
+ * @param fwc Full well capacity, in e-
  */
 template <IsSpectral TSpectral>
 void CameraModelHandle<TSpectral>::set_sensor_full_well_capacity(float fwc) const
@@ -400,13 +418,9 @@ void CameraModelHandle<TSpectral>::set_sensor_full_well_capacity(float fwc) cons
 }
 
 /**
- * @brief Turn the sensor's noise on (the default) or off: what is random, and differs from frame
- * to frame (shot noise, read noise, and row and column noise).
- *
- * Off, each pixel collects the expected number of electrons. The imperfections, which are the
- * same in every frame, are a switch of their own: see enable_sensor_imperfections() and
- * SensorModel::enable_noise().
- *
+ * @brief Turn the sensor's noise on (the default) or off: shot noise, read noise, and row and
+ * column noise. Off, each pixel collects the expected number of electrons. Independent of
+ * enable_sensor_imperfections(). See SensorModel::enable_noise().
  * @param noise True to simulate noise, false not to
  */
 template <IsSpectral TSpectral>
@@ -416,16 +430,10 @@ void CameraModelHandle<TSpectral>::enable_sensor_noise(bool noise) const
 }
 
 /**
- * @brief Turn the sensor's imperfections on (the default) or off: what makes it less than
- * ideal, and is the same in every frame.
- *
- * Off, there is no dark current (the single value, the map or hot pixels), each pixel's gain is
- * 1 (no PRNU, and no flat from the selected filter), and the bias is the bias level (no bias
- * map); the settings are kept, and apply again when turned back on. The bias level, the quantum
- * efficiency, the filter's transmission, the gain, the full well and the quantization stay. With
- * noise off too, the sensor is ideal; with noise on, its frames are as perfectly calibrated ones.
- * See SensorModel::enable_imperfections().
- *
+ * @brief Turn the sensor's imperfections on (the default) or off: the dark current (single
+ * value, map and hot pixels), PRNU, the selected filter's flat, and the bias map. Off, each
+ * pixel's gain is 1 and the bias is the bias level; the settings are kept. Independent of
+ * enable_sensor_noise(). See SensorModel::enable_imperfections().
  * @param imperfections True to simulate imperfections, false not to
  */
 template <IsSpectral TSpectral>
@@ -435,8 +443,8 @@ void CameraModelHandle<TSpectral>::enable_sensor_imperfections(bool imperfection
 }
 
 /**
- * @brief Set the sensor read noise.
- * @param read_noise Read noise value
+ * @brief Set the sensor's read noise: the noise of each pixel's readout, in e- RMS.
+ * @param read_noise Read noise, in e- RMS
  */
 template <IsSpectral TSpectral>
 void CameraModelHandle<TSpectral>::set_sensor_read_noise(float read_noise) const
@@ -479,10 +487,10 @@ void CameraModelHandle<TSpectral>::set_sensor_prnu(float prnu) const
 
 /**
  * @brief Give the sensor hot pixels: a fraction of its pixels, a fixed pattern made from the
- * noise seed, that gather a dark current of their own on top of the sensor's. Off by default.
- * See SensorModel::set_hot_pixels().
+ * noise seed, that gather a dark current of their own on top of the sensor's. Off by default; a
+ * fraction of 0 turns them off. See SensorModel::set_hot_pixels().
  * @param fraction The fraction of the pixels that are hot, from 0 to 1
- * @param dark_current The hot pixels' median dark current, in e-/s
+ * @param dark_current The hot pixels' median dark current, in e-/s (above 0 with a fraction)
  * @param spread The standard deviation of the natural log of their dark currents
  */
 template <IsSpectral TSpectral>
@@ -542,14 +550,14 @@ void CameraModelHandle<TSpectral>::set_sensor_bias_level(float bias_level) const
  * @brief Set the bias of each pixel (BiasMapKind::Absolute, the default: a master bias), or its
  * offset from the bias level (BiasMapKind::Relative). See SensorModel::set_bias_map().
  *
- * @param dn The bias, or the offsets from the bias level, of each pixel, in DN, at the sensor's
- *        resolution.
+ * @param bias_dn The bias, or the offsets from the bias level, of each pixel, in DN, at the
+ *        sensor's resolution.
  * @param kind What the values are.
  */
 template <IsSpectral TSpectral>
-void CameraModelHandle<TSpectral>::set_sensor_bias_map(Image<float> dn, BiasMapKind kind) const
+void CameraModelHandle<TSpectral>::set_sensor_bias_map(Image<float> bias_dn, BiasMapKind kind) const
 {
-    this->get_()->sensor_->set_bias_map(std::move(dn), kind);
+    this->get_()->sensor_->set_bias_map(std::move(bias_dn), kind);
 }
 
 /// Clear the sensor's bias map, so that every pixel has the bias level again.
@@ -560,8 +568,8 @@ void CameraModelHandle<TSpectral>::clear_sensor_bias_map() const
 }
 
 /**
- * @brief Set the sensor bit depth.
- * @param bit_depth Bit depth value
+ * @brief Set the sensor's bit depth: its ADC's, so DN run from 0 to 2^bit_depth - 1.
+ * @param bit_depth Bit depth, in bits
  */
 template <IsSpectral TSpectral>
 void CameraModelHandle<TSpectral>::set_sensor_bit_depth(int bit_depth) const
@@ -648,8 +656,9 @@ void CameraModelHandle<TSpectral>::set_sensor_roll(units::Radian angle) const
 /**
  * @brief Seed the sensor's noise, so that its frames can be reproduced.
  *
- * Setting the same seed again repeats the same sequence of frames. Sensors get distinct seeds by
- * default. See SensorModel::set_noise_seed().
+ * Setting the same seed again repeats the same sequence of frames. The seed also makes the
+ * sensor's PRNU and hot pixels, so another seed gives another sensor's. Sensors get distinct
+ * seeds by default. See SensorModel::set_noise_seed().
  *
  * @param seed Any value.
  */
@@ -1262,13 +1271,9 @@ std::optional<Ray<TSpectral>> CameraModelHandle<TSpectral>::try_cast_ray(const P
 }
 
 /**
- * @brief Create a new frame buffer with the camera's resolution.
- * @return FrameBuffer<TSpectral> Frame buffer
- */
-/**
  * @brief The power a pixel receives per unit of radiance, in m^2 sr: its solid angle times the
  * aperture area projected along the direction to its center. This is the falloff the renderer
- * gives each pixel, which flat_from_measured() divides out of a flat field. See
+ * gives each pixel, which flat_from_flat_field() divides out of a flat field. See
  * CameraModel::pixel_radiance_to_power().
  * @param x Pixel column.
  * @param y Pixel row, from the top.
@@ -1279,6 +1284,10 @@ float CameraModelHandle<TSpectral>::pixel_radiance_to_power(int x, int y) const
     return this->get_()->pixel_radiance_to_power(x, y);
 }
 
+/**
+ * @brief Create a new frame buffer with the camera's resolution.
+ * @return FrameBuffer<TSpectral> Frame buffer
+ */
 template <IsSpectral TSpectral>
 FrameBuffer<TSpectral> CameraModelHandle<TSpectral>::make_frame_buffer() const
 {

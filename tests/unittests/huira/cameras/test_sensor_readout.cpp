@@ -645,6 +645,9 @@ TEST_CASE("Maps are checked when set, and when the bias or bit depth changes",
 
     // The sensor's resolution:
     CHECK_THROWS(camera.sensor_->set_dark_current_map(Image<float>(32, 64, 1.f)));
+    Image<float> normalized(64, 64, 0.001f);
+    normalized.set_sensor_bit_depth(16); // a frame in DN / 65535, not e-/s
+    CHECK_THROWS(camera.sensor_->set_dark_current_map(normalized));
     CHECK_THROWS(camera.sensor_->set_bias_map(Image<float>(64, 32, 100.f)));
 
     // Dark currents are non-negative and finite:
@@ -824,6 +827,9 @@ TEST_CASE("dark_current_from_master_dark gives (dark - bias) * gain / exposure",
     CHECK_THROWS(dark_current_from_master_dark(
         dark, bias, 2.f, units::Second(std::numeric_limits<double>::infinity())));
     CHECK_THROWS(dark_current_from_master_dark(Image<float>(), 0.f, 2.f, units::Second(4.0)));
+    CHECK_THROWS(dark_current_from_master_dark(dark, -1.f, 2.f, units::Second(4.0)));
+    CHECK_THROWS(dark_current_from_master_dark(
+        dark, std::numeric_limits<float>::quiet_NaN(), 2.f, units::Second(4.0)));
 }
 
 TEST_CASE("A dark current map is recovered from the sensor's own calibration frames",
@@ -1092,7 +1098,7 @@ TEST_CASE("A filter wheel's filters are selected by index or name, and the first
     electron_counter(camera); // 64x64, 1 e-/DN, no dark current, bias or read noise
     camera.sensor_->enable_noise(false);
     CHECK(camera.filter_count() == 0);
-    CHECK_FALSE(camera.selected_filter().has_value());
+    CHECK_FALSE(camera.selected_filter_index().has_value());
     CHECK_FALSE(camera.selected_filter_name().has_value());
     CHECK_THROWS(camera.select_filter(0));
     CHECK_THROWS(camera.select_filter("R"));
@@ -1100,15 +1106,15 @@ TEST_CASE("A filter wheel's filters are selected by index or name, and the first
     CHECK_THROWS(camera.filter_index("R"));
 
     CHECK(camera.add_filter("R", RGB{0.9f, 0.1f, 0.f}) == 0);
-    CHECK(camera.selected_filter() == 0); // the first is selected
+    CHECK(camera.selected_filter_index() == 0); // the first is selected
     CHECK(camera.add_filter("G", RGB{0.1f, 0.8f, 0.1f}) == 1);
     CHECK(camera.add_filter("B", RGB{0.f, 0.1f, 0.7f}) == 2);
     CHECK(camera.filter_count() == 3);
-    CHECK(camera.selected_filter() == 0); // still
+    CHECK(camera.selected_filter_index() == 0); // still
     CHECK(camera.selected_filter_name() == "R");
 
     camera.select_filter("B");
-    CHECK(camera.selected_filter() == 2);
+    CHECK(camera.selected_filter_index() == 2);
     camera.select_filter(1);
     CHECK(camera.selected_filter_name() == "G");
     CHECK(camera.filter_index("B") == 2);
@@ -1124,7 +1130,7 @@ TEST_CASE("A filter wheel's filters are selected by index or name, and the first
     CHECK(camera.filter_count() == 3);
     CHECK_THROWS(camera.select_filter(3));
     CHECK_THROWS(camera.select_filter("U"));
-    CHECK(camera.selected_filter() == 1); // unchanged by what failed
+    CHECK(camera.selected_filter_index() == 1); // unchanged by what failed
 
     // Each channel's signal is scaled by the selected filter's transmission in its bin:
     auto frame_buffer = camera.make_frame_buffer();
@@ -1142,7 +1148,7 @@ TEST_CASE("A filter wheel's filters are selected by index or name, and the first
     // Emptied, the camera has a clear filter again:
     camera.clear_filters();
     CHECK(camera.filter_count() == 0);
-    CHECK_FALSE(camera.selected_filter().has_value());
+    CHECK_FALSE(camera.selected_filter_index().has_value());
     dn = read_dn(camera, frame_buffer);
     CHECK(std::abs(dn[0] - 1000.0) < 1e-3);
     CHECK(std::abs(dn[2] - 1000.0) < 1e-3);
@@ -1203,6 +1209,39 @@ TEST_CASE("A filter's flat scales each pixel's signal before shot noise",
     CHECK_NOTHROW(camera.add_filter("dead", RGB{1.f}, bad));
 }
 
+TEST_CASE("A filter's flat is replaced or removed in place", "[cameras][sensor][filters]")
+{
+    SensorProbe camera;
+    electron_counter(camera);
+    camera.sensor_->enable_noise(false);
+    camera.add_filter("V", RGB{1.f}, Image<float>(64, 64, 0.5f));
+    camera.add_filter("R", RGB{1.f}, Image<float>(64, 64, 0.25f));
+    auto frame_buffer = camera.make_frame_buffer();
+    frame_buffer.enable_sensor_response();
+    expect_electrons(camera, frame_buffer, 1000.0);
+    CHECK(std::abs(read_dn(camera, frame_buffer)[0] - 500.0) < 1e-3);
+
+    // The selected filter's new flat applies at once:
+    camera.set_filter_flat("V", Image<float>(64, 64, 0.8f));
+    CHECK(camera.filter("V").flat->operator()(0, 0) == 0.8f);
+    CHECK(camera.sensor_->flat()(0, 0) == 0.8f);
+    CHECK(std::abs(read_dn(camera, frame_buffer)[0] - 800.0) < 1e-3);
+
+    // Another filter's is kept for when it is selected:
+    camera.set_filter_flat(1, std::nullopt);
+    CHECK(camera.filter("R").flat == nullptr);
+    CHECK(camera.sensor_->flat()(0, 0) == 0.8f);
+    camera.select_filter("R");
+    CHECK_FALSE(camera.sensor_->has_flat());
+    CHECK(std::abs(read_dn(camera, frame_buffer)[0] - 1000.0) < 1e-3);
+
+    // Checked as add_filter() checks it:
+    CHECK_THROWS(camera.set_filter_flat("V", Image<float>(32, 32, 1.f)));
+    CHECK_THROWS(camera.set_filter_flat(2, Image<float>(64, 64, 1.f)));
+    CHECK_THROWS(camera.set_filter_flat("U", std::nullopt));
+    CHECK(camera.filter("V").flat->operator()(0, 0) == 0.8f); // unchanged by what failed
+}
+
 TEST_CASE("The response is warned of above 1 electron per photon", "[cameras][sensor][filters]")
 {
     SensorProbe camera;
@@ -1251,7 +1290,7 @@ TEST_CASE("The selected filter follows the camera to a new sensor, and its flat 
     CHECK(other.sensor_->filter_transmission()[0] == 1.f);
 
     // The sensor reconfigured to another size: the flat no longer fits, and a readout throws
-    // until the filter is replaced or the wheel cleared.
+    // until the filter's flat is replaced or removed, or the wheel cleared.
     {
         WarningCapture capture;
         camera.configure_sensor_from_pitch(Resolution{32, 32}, units::Micrometer(5.0));
@@ -1260,11 +1299,29 @@ TEST_CASE("The selected filter follows the camera to a new sensor, and its flat 
     auto frame_buffer = camera.make_frame_buffer();
     frame_buffer.enable_sensor_response();
     CHECK_THROWS(camera.readout(frame_buffer, units::Second(1.0)));
-    camera.clear_filters();
+    camera.set_filter_flat("R", Image<float>(32, 32, 0.5f));
     CHECK_NOTHROW(camera.readout(frame_buffer, units::Second(1.0)));
+
+    // A new sensor of another size behind a filter with a flat is warned of the same way:
+    camera.set_filter_flat("R", std::nullopt);
+    camera.add_filter("G", RGB{0.f, 0.5f, 0.f}, Image<float>(32, 32, 0.5f));
+    camera.select_filter("G");
+    {
+        WarningCapture capture;
+        SensorProbe larger;
+        larger.configure_sensor_from_pitch(Resolution{48, 48}, units::Micrometer(5.0));
+        camera.set_sensor<SimpleSensor<RGB>>(
+            *dynamic_cast<const SimpleSensor<RGB>*>(larger.sensor_.get()));
+        CHECK(capture.any("filter's flat is 32x32, and the sensor is 48x48"));
+    }
+    auto larger_buffer = camera.make_frame_buffer();
+    larger_buffer.enable_sensor_response();
+    CHECK_THROWS(camera.readout(larger_buffer, units::Second(1.0)));
+    camera.clear_filters();
+    CHECK_NOTHROW(camera.readout(larger_buffer, units::Second(1.0)));
 }
 
-TEST_CASE("flat_from_measured divides out the rendered falloff and normalizes to the center",
+TEST_CASE("flat_from_flat_field divides out the rendered falloff and normalizes to the center",
           "[cameras][sensor][filters]")
 {
     // A wide lens, where the natural falloff is large: 50 x 40 px of 100 um at 2 mm.
@@ -1280,7 +1337,7 @@ TEST_CASE("flat_from_measured divides out the rendered falloff and normalizes to
             natural(x, y) = 12345.f * camera.pixel_radiance_to_power(x, y);
         }
     }
-    const Image<float> unity = camera.flat_from_measured(natural);
+    const Image<float> unity = camera.flat_from_flat_field(natural);
     CHECK(camera.pixel_radiance_to_power(0, 0) < 0.5f * camera.pixel_radiance_to_power(25, 20));
     for (std::size_t i = 0; i < unity.size(); ++i) {
         REQUIRE(std::abs(unity[i] - 1.f) < 1e-4f);
@@ -1296,7 +1353,7 @@ TEST_CASE("flat_from_measured divides out the rendered falloff and normalizes to
                                                  (1.0 + 0.01 * ((x * 7 + y * 3) % 5 - 2)));
         }
     }
-    const Image<float> flat = camera.flat_from_measured(measured);
+    const Image<float> flat = camera.flat_from_flat_field(measured);
     CHECK(std::abs(flat(25, 20) - 1.f) < 0.03f); // the center, to within its PRNU
     CHECK(std::abs(flat(0, 0) - 0.4f) < 0.03f);  // 1 - 0.3 * 2
     CHECK(flat(49, 39) < flat(25, 20));
@@ -1307,22 +1364,22 @@ TEST_CASE("flat_from_measured divides out the rendered falloff and normalizes to
     Image<float> dusty = measured;
     dusty(25, 20) *= 0.1f;
     dusty(24, 20) *= 0.1f;
-    const Image<float> flat_dusty = camera.flat_from_measured(dusty);
+    const Image<float> flat_dusty = camera.flat_from_flat_field(dusty);
     CHECK(std::abs(flat_dusty(10, 10) - flat(10, 10)) < 0.01f);
     CHECK(flat_dusty(25, 20) < 0.15f);
 
     // A larger patch:
-    const Image<float> wide = camera.flat_from_measured(measured, 0.5f);
+    const Image<float> wide = camera.flat_from_flat_field(measured, 0.5f);
     CHECK(wide(25, 20) > flat(25, 20)); // normalized to a dimmer, wider median
 
     // What can't be used:
-    CHECK_THROWS(camera.flat_from_measured(Image<float>(40, 50, 1.f)));
-    CHECK_THROWS(camera.flat_from_measured(measured, 0.f));
-    CHECK_THROWS(camera.flat_from_measured(measured, 1.5f));
-    CHECK_THROWS(camera.flat_from_measured(Image<float>(50, 40, 0.f))); // no signal at the center
+    CHECK_THROWS(camera.flat_from_flat_field(Image<float>(40, 50, 1.f)));
+    CHECK_THROWS(camera.flat_from_flat_field(measured, 0.f));
+    CHECK_THROWS(camera.flat_from_flat_field(measured, 1.5f));
+    CHECK_THROWS(camera.flat_from_flat_field(Image<float>(50, 40, 0.f))); // no signal at the center
     Image<float> missing = measured;
     missing(5, 5) = std::numeric_limits<float>::quiet_NaN();
-    CHECK_THROWS(camera.flat_from_measured(missing));
+    CHECK_THROWS(camera.flat_from_flat_field(missing));
 
     // The flat is for the wheel, and gives back the measured response in a render of a uniform
     // scene: the rendered falloff times the flat is the measured falloff.
@@ -1506,9 +1563,12 @@ TEST_CASE("Hot pixels gather a dark current of their own, the same pixels in eve
     }
     CHECK(differ);
 
-    // Off with a fraction or dark current of 0:
+    // Off with a fraction of 0 (with any dark current); a fraction of hot pixels with no dark
+    // current is refused rather than silently off:
     camera.sensor_->set_hot_pixels(0.f, 100.f);
     CHECK(camera.sensor_->hot_pixel_map()(3, 3) == 0.f);
+    CHECK_NOTHROW(camera.sensor_->set_hot_pixels(0.f, 0.f));
+    CHECK_THROWS(camera.sensor_->set_hot_pixels(0.01f, 0.f));
 
     CHECK_THROWS(camera.sensor_->set_hot_pixels(1.5f, 100.f));
     CHECK_THROWS(camera.sensor_->set_hot_pixels(-0.1f, 100.f));
@@ -1684,17 +1744,43 @@ TEST_CASE("Turning one switch off leaves what the other governs", "[cameras][sen
     CHECK_NOTHROW(camera.readout(small, units::Second(1.0)));
 }
 
+TEST_CASE("A frame buffer is read out by the sensor it was made for", "[cameras][sensor]")
+{
+    // The patterns are at the sensor's resolution, so a frame of another size can't be read out
+    // through them (and means nothing to the sensor anyway), with imperfections or without.
+    SensorProbe camera;
+    electron_counter(camera); // 64x64
+    camera.sensor_->set_prnu(0.02f);
+    camera.sensor_->set_hot_pixels(0.05f, 100.f);
+    auto frame_buffer = camera.make_frame_buffer();
+    frame_buffer.enable_sensor_response();
+    camera.configure_sensor_from_pitch(Resolution{32, 32}, units::Micrometer(5.0));
+    CHECK_THROWS_WITH(
+        camera.readout(frame_buffer, units::Second(1.0)),
+        Catch::Matchers::ContainsSubstring("frame buffer is 64x64, and the sensor 32x32"));
+    camera.sensor_->enable_imperfections(false);
+    CHECK_THROWS(camera.readout(frame_buffer, units::Second(1.0)));
+    auto fitting = camera.make_frame_buffer();
+    fitting.enable_sensor_response();
+    CHECK_NOTHROW(camera.readout(fitting, units::Second(1.0)));
+}
+
 TEST_CASE("The imperfections switch is a setting, copied and described",
           "[cameras][sensor][switches]")
 {
     SensorProbe camera;
     camera.configure_sensor_from_pitch(Resolution{4, 4}, units::Micrometer(5.0));
-    CHECK(camera.describe().find("Ideal:       no, imperfections on") != std::string::npos);
-    camera.sensor_->enable_imperfections(false);
-    CHECK(camera.describe().find("Ideal:       calibrated, imperfections off") !=
+    CHECK(camera.describe().find("Switches:    noise on, imperfections on (realistic frames)") !=
           std::string::npos);
     camera.sensor_->enable_noise(false);
-    CHECK(camera.describe().find("Ideal:       yes, imperfections off") != std::string::npos);
+    CHECK(camera.describe().find("Switches:    noise off, imperfections on (expected frames, "
+                                 "without noise)") != std::string::npos);
+    camera.sensor_->enable_imperfections(false);
+    CHECK(camera.describe().find("Switches:    noise off, imperfections off (an ideal sensor)") !=
+          std::string::npos);
+    camera.sensor_->enable_noise(true);
+    CHECK(camera.describe().find("Switches:    noise on, imperfections off (frames as from a "
+                                 "calibrated camera)") != std::string::npos);
 
     SensorProbe other;
     other.set_sensor<SimpleSensor<RGB>>(

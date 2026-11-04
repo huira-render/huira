@@ -78,11 +78,11 @@ is kept in the metadata, but doesn't normalize. 16- and 32-bit integer TIFFs are
 way, by their range, or by a ``MaxSampleValue`` of :math:`2^{\text{bits}} - 1`. (Counts above
 :math:`2^{24}`, which only 32-bit files hold, are kept to a float's precision.)
 
-Some files hold no counts that can be recovered, and are read without a bit depth: 8-bit TIFFs,
-PNGs without an ``sBIT`` chunk, JPEG, BMP and TGA are pictures, normalized by their range; 64-bit
-integer FITS files are too wide to write back as counts; and float FITS and TIFF files are returned
-as they are, in whatever units the software that wrote them used (counts, or counts divided by
-65535 from Siril or PixInsight, say). See :doc:`sensor_modeling` for calibration frames.
+Some files hold no counts that a bit depth can record, and are read without one: 8-bit TIFFs,
+PNGs without an ``sBIT`` chunk, JPEG, BMP and TGA are pictures, normalized by their range; and
+64-bit integer FITS files, and float FITS and TIFF files, are returned as they are, in whatever
+units the software that wrote them used (counts, or counts divided by 65535 from Siril or
+PixInsight, say). See :doc:`sensor_modeling` for calibration frames.
 
 An image read with a bit depth is written as counts, like a sensor response: unchanged in a file
 of as many bits, with the lowest bits dropped in a narrower one, and as counts in a float FITS

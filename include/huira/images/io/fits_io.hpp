@@ -28,8 +28,8 @@ namespace huira {
 //     are recovered exactly, as value * (2^bits - 1), whatever wrote the
 //     file. (Any other SATURATE, such as a level where the response stops
 //     being linear, is kept in the metadata but doesn't normalise.) A 64-bit
-//     integer image is divided by its type's range without a bit depth: a
-//     float can't hold its counts.
+//     integer image (BITPIX 64) is returned as it is, without a bit depth: a
+//     float can't hold its counts, nor can a bit depth record them.
 //
 //   • Otherwise, float BITPIX (−32, −64), or integers scaled by a BSCALE that
 //     isn't a whole number: returned as they are (physical / flux units;

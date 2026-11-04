@@ -241,7 +241,6 @@ int main(int argc, char** argv)
 
     // The master bias is each pixel's bias, in place of the bias level (BiasMapKind::Absolute,
     // the default); a pattern of offsets from the bias level would be BiasMapKind::Relative.
-    // Like the single values, the maps are not noise, and apply with noise off too.
     camera_model.set_sensor_bias_map(master_bias);
 
     // The master dark holds the camera's hot pixels, so the made-up ones go:
@@ -255,13 +254,13 @@ int main(int argc, char** argv)
                            huira::linear_to_srgb(calibrated_buffer.sensor_response()));
 
     // A filter wheel. A filter passes a fraction of the light in each spectral bin (Visible8's
-    // eight bins run from blue to red), and may have a flat: each pixel's response through it,
+    // eight bins run from blue to red), and may have a flat: each pixel's response through it
     // relative to the principal point's, from a flat field (a frame of a uniformly lit scene,
-    // bias and dark subtracted). Here the flat field is made up: the falloff Huira renders
-    // itself, times extra vignetting toward the corners and a dust shadow. flat_from_measured
-    // divides the rendered falloff out, so the flat keeps only the rest, and normalizes it to the
+    // bias and dark subtracted). Here the flat field is made up: the falloff the renderer gives
+    // each pixel, times extra vignetting toward the corners and a dust shadow.
+    // flat_from_flat_field divides the rendered falloff out and normalizes the rest to the
     // median of a central patch, so the quantum efficiency is the response at the principal
-    // point and pixels that respond more are above 1. An empty wheel is a clear filter.
+    // point. An empty wheel is a clear filter.
     huira::Image<float> flat_field(width, height);
     for (int y = 0; y < height; ++y) {
         for (int x = 0; x < width; ++x) {
@@ -273,7 +272,7 @@ int main(int argc, char** argv)
                 static_cast<float>(camera_model.pixel_radiance_to_power(x, y) * vignetting * dust);
         }
     }
-    const huira::Image<float> red_flat = camera_model.flat_from_measured(flat_field);
+    const huira::Image<float> red_flat = camera_model.flat_from_flat_field(flat_field);
     camera_model.add_filter("clear", 1.0);
     camera_model.add_filter(
         "red", TSpectral({0.f, 0.f, 0.f, 0.f, 0.2f, 0.8f, 0.9f, 0.8f}), red_flat);
@@ -289,10 +288,10 @@ int main(int argc, char** argv)
 
     // The two switches, together. Noise is what is random (shot, read, row and column noise), and
     // imperfections what is the same in every frame (the dark current and its map, hot pixels,
-    // PRNU, the flat, and the bias map, leaving the bias level). With both on, a realistic frame;
-    // with noise off, the expected frame, above; with imperfections off, a frame as from a
-    // perfectly calibrated camera, with only shot noise and the readout's; and with both off, an
-    // ideal sensor. The QE, the filter's transmission, the gain and the bias level stay.
+    // PRNU, the flat, and the bias map). With both on, a realistic frame; with noise off, the
+    // expected frame, above; with imperfections off, a frame as from a perfectly calibrated
+    // camera; and with both off, an ideal sensor, which still has its QE, transmission, gain and
+    // bias level.
     camera_model.enable_sensor_noise(false);
     camera_model.enable_sensor_imperfections(false);
     auto ideal_buffer = camera_model.make_frame_buffer();

@@ -214,8 +214,7 @@ def main():
     camera_model.set_sensor_dark_current_map(dark_map)
 
     # The master bias is each pixel's bias, in place of the bias level (BiasMapKind.Absolute, the
-    # default); a pattern of offsets from the bias level would be BiasMapKind.Relative. Like the
-    # single values, the maps are not noise, and apply with noise off too.
+    # default); a pattern of offsets from the bias level would be BiasMapKind.Relative.
     camera_model.set_sensor_bias_map(master_bias)
 
     # The master dark holds the camera's hot pixels, so the made-up ones go:
@@ -230,20 +229,20 @@ def main():
     )
 
     # A filter wheel. A filter passes a fraction of the light in each spectral bin (visible8's
-    # eight bins run from blue to red), and may have a flat: each pixel's response through it,
+    # eight bins run from blue to red), and may have a flat: each pixel's response through it
     # relative to the principal point's, from a flat field (a frame of a uniformly lit scene,
-    # bias and dark subtracted). Here the flat field is made up: the falloff Huira renders
-    # itself, times extra vignetting toward the corners and a dust shadow. flat_from_measured
-    # divides the rendered falloff out, so the flat keeps only the rest, and normalizes it to the
-    # median of a central patch, so the quantum efficiency is the response at the principal
-    # point and pixels that respond more are above 1. An empty wheel is a clear filter.
+    # bias and dark subtracted). Here the flat field is made up: the falloff the renderer gives
+    # each pixel, times extra vignetting toward the corners and a dust shadow.
+    # flat_from_flat_field divides the rendered falloff out and normalizes the rest to the median
+    # of a central patch, so the quantum efficiency is the response at the principal point. An
+    # empty wheel is a clear filter.
     rendered_falloff = np.array(
         [[camera_model.pixel_radiance_to_power(x, y) for x in range(width)] for y in range(height)]
     )
     vignetting = 1 - 0.4 * ((columns - cx) ** 2 + (rows - cy) ** 2) / (cx**2 + cy**2)
     dust = 1 - 0.3 * np.exp(-np.hypot(columns - 300, rows - 200) / 12)
     flat_field = huira.Image_f32(rendered_falloff * vignetting * dust, origin=top_left)
-    red_flat = camera_model.flat_from_measured(flat_field)
+    red_flat = camera_model.flat_from_flat_field(flat_field)
     camera_model.add_filter("clear", 1.0)
     camera_model.add_filter("red", [0, 0, 0, 0, 0.2, 0.8, 0.9, 0.8], red_flat)
     camera_model.select_filter("red")
@@ -259,10 +258,10 @@ def main():
 
     # The two switches, together. Noise is what is random (shot, read, row and column noise), and
     # imperfections what is the same in every frame (the dark current and its map, hot pixels,
-    # PRNU, the flat, and the bias map, leaving the bias level). With both on, a realistic frame;
-    # with noise off, the expected frame, above; with imperfections off, a frame as from a
-    # perfectly calibrated camera, with only shot noise and the readout's; and with both off, an
-    # ideal sensor. The QE, the filter's transmission, the gain and the bias level stay.
+    # PRNU, the flat, and the bias map). With both on, a realistic frame; with noise off, the
+    # expected frame, above; with imperfections off, a frame as from a perfectly calibrated
+    # camera; and with both off, an ideal sensor, which still has its QE, transmission, gain and
+    # bias level.
     camera_model.enable_sensor_noise(False)
     camera_model.enable_sensor_imperfections(False)
     frame_buffer = camera_model.make_frame_buffer()

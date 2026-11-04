@@ -62,8 +62,8 @@ struct Filter {
     TSpectral transmission{1.f};
 
     /// Each pixel's response through the filter relative to the principal point's, at the
-    /// sensor's resolution (see CameraModel::flat_from_measured()); null for none, a response of
-    /// 1 everywhere.
+    /// sensor's resolution (see CameraModel::flat_from_flat_field()); null for a response of 1
+    /// everywhere.
     std::shared_ptr<const Image<float>> flat;
 };
 
@@ -171,21 +171,23 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
                            std::optional<Image<float>> flat = std::nullopt);
     void select_filter(std::size_t index);
     void select_filter(const std::string& name);
+    void set_filter_flat(std::size_t index, std::optional<Image<float>> flat);
+    void set_filter_flat(const std::string& name, std::optional<Image<float>> flat);
     void clear_filters();
 
     /// The number of filters in the filter wheel; 0 without one. See add_filter().
     std::size_t filter_count() const { return filters_.size(); }
 
     /// The index of the selected filter, or none if the wheel is empty. See select_filter().
-    std::optional<std::size_t> selected_filter() const { return selected_filter_; }
+    std::optional<std::size_t> selected_filter_index() const { return selected_filter_; }
 
     std::optional<std::string> selected_filter_name() const;
     const Filter<TSpectral>& filter(std::size_t index) const;
     const Filter<TSpectral>& filter(const std::string& name) const;
     std::size_t filter_index(const std::string& name) const;
 
-    Image<float> flat_from_measured(const Image<float>& measured_flat,
-                                    float central_fraction = 0.05f) const;
+    Image<float> flat_from_flat_field(const Image<float>& flat_field,
+                                      float central_fraction = 0.05f) const;
 
     template <IsAperture TAperture, typename... Args>
     void set_aperture(Args&&... args);
@@ -534,7 +536,10 @@ class CameraModel : public SceneObject<CameraModel<TSpectral>> {
     std::vector<Filter<TSpectral>> filters_;
     std::unordered_map<std::string, std::size_t> filter_indices_;
     std::optional<std::size_t> selected_filter_;
-    void apply_filter_() const;
+    void apply_filter_();
+    std::shared_ptr<const Image<float>> checked_flat_(const char* caller,
+                                                      const std::string& name,
+                                                      std::optional<Image<float>>& flat) const;
     std::unique_ptr<Aperture<TSpectral>> aperture_;
     std::unique_ptr<Distortion<TSpectral>> distortion_ = nullptr;
     /// A PSF set with set_psf() or set_measured_psf(), which takes the place of the aperture's

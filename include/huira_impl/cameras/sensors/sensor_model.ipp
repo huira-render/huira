@@ -13,6 +13,7 @@
 #include "huira/util/logger.hpp"
 #include "tbb/blocked_range.h"
 #include "tbb/parallel_for.h"
+#include "tbb/task_arena.h"
 
 namespace huira {
 
@@ -127,8 +128,9 @@ void SensorModel<TSpectral>::check_sensor_size(units::Millimeter width,
 /**
  * @brief Sets the sensor resolution.
  *
- * A dark current or bias map of another size stays set, and a readout throws until it is
- * replaced by one of the new size or cleared; a warning says so.
+ * A dark current map, bias map or filter flat of another size stays set, with a warning; a
+ * readout with imperfections on throws until it is replaced or cleared (a flat, by
+ * CameraModel::set_filter_flat()).
  *
  * @param resolution The new sensor resolution (width x height).
  * @throws std::runtime_error if the resolution is not at least 1x1.
@@ -144,8 +146,8 @@ void SensorModel<TSpectral>::set_resolution(Resolution resolution)
             HUIRA_LOG_WARNING("SensorModel::set_resolution - The sensor's " + std::string(name) +
                               " is " + detail::resolution_text(map->resolution()) +
                               ", and the sensor is now " + detail::resolution_text(resolution) +
-                              ". Set one of the new size, or clear it: a readout throws until "
-                              "then.");
+                              ". Replace or clear it: a readout with imperfections on throws "
+                              "until then.");
         }
     };
     warn(dark_current_map_, "dark current map");
@@ -229,7 +231,7 @@ void SensorModel<TSpectral>::set_quantum_efficiency(const TSpectral& qe)
 /**
  * @brief The flat of the filter in front of the sensor: each pixel's response relative to the
  * principal point's, by which its signal electrons are multiplied (see CameraModel::add_filter()
- * and flat_from_measured()); or, without one, 1 everywhere at the sensor's resolution.
+ * and flat_from_flat_field()); or, without one, 1 everywhere at the sensor's resolution.
  */
 template <IsSpectral TSpectral>
 Image<float> SensorModel<TSpectral>::flat() const
@@ -246,6 +248,13 @@ void SensorModel<TSpectral>::set_filter_response_(const TSpectral& transmission,
 {
     filter_transmission_ = transmission;
     flat_ = std::move(flat);
+    if (flat_ != nullptr && !(flat_->resolution() == config_.resolution)) {
+        HUIRA_LOG_WARNING("SensorModel::set_filter_response_ - The filter's flat is " +
+                          detail::resolution_text(flat_->resolution()) + ", and the sensor is " +
+                          detail::resolution_text(config_.resolution) +
+                          ". Replace or clear it: a readout with imperfections on throws until "
+                          "then.");
+    }
     check_response_();
 }
 
@@ -306,23 +315,16 @@ void SensorModel<TSpectral>::set_read_noise(float read_noise)
 }
 
 /**
- * @brief Sets the row noise: noise shared by the pixels of a row, different in every readout.
+ * @brief Sets the row noise: a shift shared by all the pixels of a row, drawn anew for each row
+ * in each readout. 0 by default.
  *
- * In each readout, every row's pixels shift together by one draw from a normal distribution of
- * this standard deviation, in electrons, added with the read noise (after the full well clamps
- * the charge), as banding along the rows that changes from frame to frame. For RGB, a row's
- * channels shift together too.
+ * Added with the read noise, after the full well clamps the charge; for RGB, a row's channels
+ * shift together. Rows run along the sensor's x axis; for a sensor read out along y, use
+ * set_column_noise(). A fixed row pattern belongs in a bias map (set_bias_map()). Off with
+ * enable_noise(false). Where it comes from: docs/design_overview/sensor_modeling.rst, "Read
+ * Noise".
  *
- * It comes from what a row's pixels share as they are read out: in a CMOS sensor, which
- * converts a whole row at once, the ADCs' shared ramp, references and supplies; in a CCD, the
- * output amplifier's slow drift over the row read through it. Rows run along the sensor's x
- * axis, the image's rows; for a sensor read out along y, set the column noise instead. A fixed
- * pattern of rows, the same in every frame, is a bias map's (set_bias_map()).
- *
- * Its random numbers are its own, so turning it on doesn't change the pixels' noise. Off with
- * the other noise (enable_noise()). 0 by default.
- *
- * @param row_noise The row noise, in e- RMS.
+ * @param row_noise The standard deviation, in e- RMS.
  * @throws std::runtime_error if the value is negative or not finite.
  */
 template <IsSpectral TSpectral>
@@ -337,23 +339,13 @@ void SensorModel<TSpectral>::set_row_noise(float row_noise)
 }
 
 /**
- * @brief Sets the column noise: noise shared by the pixels of a column, different in every
- * readout.
+ * @brief Sets the column noise: a shift shared by all the pixels of a column, drawn anew for
+ * each column in each readout. 0 by default.
  *
- * In each readout, every column's pixels shift together by one draw from a normal distribution
- * of this standard deviation, in electrons, added with the read noise and the row noise, as
- * banding along the columns that changes from frame to frame. For RGB, a column's channels shift
- * together too.
+ * As set_row_noise(), along the sensor's y axis. A CMOS sensor has both, the row noise usually
+ * the larger; a CCD has row noise only.
  *
- * It comes from what a column's pixels share in a CMOS sensor, read through one column
- * amplifier and ADC: their slow (1/f) noise. It is usually smaller than the row noise, and a CCD,
- * which has nothing of its own for each column, has none (unless its rows run along y). A fixed
- * pattern of columns, the same in every frame, is a bias map's (set_bias_map()).
- *
- * Its random numbers are its own, so turning it on doesn't change the pixels' or the rows'
- * noise. Off with the other noise (enable_noise()). 0 by default.
- *
- * @param column_noise The column noise, in e- RMS.
+ * @param column_noise The standard deviation, in e- RMS.
  * @throws std::runtime_error if the value is negative or not finite.
  */
 template <IsSpectral TSpectral>
@@ -368,20 +360,13 @@ void SensorModel<TSpectral>::set_column_noise(float column_noise)
 }
 
 /**
- * @brief Sets the sensor's photo response non-uniformity (PRNU): how much the pixels' gains
- * differ, the same in every readout.
+ * @brief Sets the PRNU (photo response non-uniformity): the standard deviation of each pixel's
+ * gain, a fixed pattern made from the noise seed. 0 by default.
  *
- * Each pixel's signal electrons are multiplied by its own gain, drawn once from a normal
- * distribution of mean 1 and this standard deviation (0.01 is 1%; at least 0, never negative),
- * as the pixels of a real sensor differ in their response to light. It is a fixed pattern:
- * made from the noise seed (set_noise_seed()), so the same in every frame, and another with
- * another seed. It applies to the light only, not the dark current, and, being fixed, applies
- * with noise off too; it is one of the sensor's imperfections, off with them
- * (enable_imperfections()). The pattern's random numbers are their own, so setting it doesn't
- * change the noise.
- *
- * A flat from a real flat field (CameraModel::flat_from_measured()) already holds the camera's
- * PRNU: set this to 0 with one, or the PRNU is applied twice. 0 by default.
+ * Each pixel's signal electrons are multiplied by its gain, drawn once from a normal
+ * distribution of mean 1 and this standard deviation (0.01 is 1%), never below 0. The light only:
+ * not the dark current. An imperfection (enable_imperfections()). A flat from a real flat field
+ * already holds the camera's PRNU, so leave this at 0 with one.
  *
  * @param prnu The standard deviation of each pixel's gain.
  * @throws std::runtime_error if the value is negative or not finite.
@@ -408,29 +393,24 @@ Image<float> SensorModel<TSpectral>::prnu_map() const
 }
 
 /**
- * @brief Gives the sensor hot pixels: a fraction of its pixels, the same in every readout, that
- * gather a much larger dark current than the rest.
- *
- * Each pixel is hot with probability fraction, and a hot pixel gathers a dark current of its
- * own on top of the sensor's (set_dark_current(), or the dark current map): dark_current, times
- * exp(spread x N(0, 1)), a log-normal distribution whose median is dark_current and whose
- * natural log has that standard deviation (0, the default, for the same dark current in every
- * hot pixel; 0.5 for a spread of about 1.6x either way). It is a fixed pattern: made from the
- * noise seed (set_noise_seed()), so the same pixels in every frame, and others with another
- * seed. A larger fraction keeps the hot pixels of a smaller one, with the same dark currents,
- * and adds more. Being dark current, its electrons are drawn with shot noise, and, being fixed,
- * they are added with noise off too; they are one of the sensor's imperfections, off with them
- * (enable_imperfections()).
- *
- * A dark current map from a real master dark (set_dark_current_map()) already holds the
- * camera's hot pixels: leave these off with one, or they are counted twice. Off (a fraction of
+ * @brief Gives the sensor hot pixels: a fraction of its pixels, a fixed pattern made from the
+ * noise seed, that gather a dark current of their own on top of the sensor's. Off (a fraction of
  * 0) by default.
  *
+ * Each pixel is hot with probability fraction. A hot pixel's dark current is dark_current times
+ * exp(spread x N(0, 1)): log-normal, with that median. With a spread of 0 every hot pixel has
+ * the median; 0.5 spreads them about 1.6x either way. A larger fraction keeps a smaller one's
+ * hot pixels, with the same dark currents, and adds more. Dark current, so drawn with shot
+ * noise; an imperfection (enable_imperfections()). A dark current map from a real master dark
+ * already holds the camera's hot pixels, so leave these off with one. set_hot_pixels(0, 0) turns
+ * them off.
+ *
  * @param fraction The fraction of the pixels that are hot, from 0 to 1.
- * @param dark_current The hot pixels' median dark current, in e-/s.
+ * @param dark_current The hot pixels' median dark current, in e-/s; positive unless the fraction
+ *        is 0.
  * @param spread The standard deviation of the natural log of their dark currents.
- * @throws std::runtime_error if the fraction is not in [0, 1], or the dark current or spread is
- *         negative or not finite.
+ * @throws std::runtime_error if the fraction is not in [0, 1], the dark current is not positive
+ *         (with a fraction above 0), or the dark current or spread is negative or not finite.
  */
 template <IsSpectral TSpectral>
 void SensorModel<TSpectral>::set_hot_pixels(float fraction, float dark_current, float spread)
@@ -444,6 +424,10 @@ void SensorModel<TSpectral>::set_hot_pixels(float fraction, float dark_current, 
         HUIRA_THROW_ERROR("SensorModel::set_hot_pixels - The hot pixels' dark current must be "
                           "non-negative and finite: " +
                           std::to_string(dark_current) + " e-/s");
+    }
+    if (fraction > 0.f && dark_current == 0.f) {
+        HUIRA_THROW_ERROR("SensorModel::set_hot_pixels - Hot pixels need a dark current above 0 "
+                          "e-/s; a fraction of 0 turns them off.");
     }
     if (!(spread >= 0.f) || !std::isfinite(spread)) {
         HUIRA_THROW_ERROR("SensorModel::set_hot_pixels - The spread must be non-negative and "
@@ -482,13 +466,17 @@ std::shared_ptr<const Image<float>> fixed_pattern(TCache& cache,
         return cache.map;
     }
     auto map = std::make_shared<Image<float>>(resolution);
-    tbb::parallel_for(tbb::blocked_range<int>(0, resolution.y),
-                      [&](const tbb::blocked_range<int>& rows) {
-                          for (int y = rows.begin(); y < rows.end(); ++y) {
-                              SensorRandom random(stream, seed, 0, static_cast<std::uint64_t>(y));
-                              make_row(y, random, *map);
-                          }
-                      });
+    // Isolated, so that this thread can't pick up another readout of the sensor while it waits,
+    // which would deadlock on the lock it holds.
+    tbb::this_task_arena::isolate([&] {
+        tbb::parallel_for(
+            tbb::blocked_range<int>(0, resolution.y), [&](const tbb::blocked_range<int>& rows) {
+                for (int y = rows.begin(); y < rows.end(); ++y) {
+                    SensorRandom random(stream, seed, 0, static_cast<std::uint64_t>(y));
+                    make_row(y, random, *map);
+                }
+            });
+    });
     cache.map = std::move(map);
     cache.key = key;
     cache.made = true;
@@ -530,7 +518,7 @@ std::shared_ptr<const Image<float>> SensorModel<TSpectral>::hot_pixel_dark_curre
     const double fraction = static_cast<double>(config_.hot_pixel_fraction);
     const double dark_current = static_cast<double>(config_.hot_pixel_dark_current);
     const double spread = static_cast<double>(config_.hot_pixel_spread);
-    if (fraction == 0.0 || dark_current == 0.0) {
+    if (fraction == 0.0) {
         return nullptr;
     }
     const Resolution resolution = config_.resolution;
@@ -553,8 +541,12 @@ std::shared_ptr<const Image<float>> SensorModel<TSpectral>::hot_pixel_dark_curre
                 // are hot, and how, doesn't depend on the fraction: a larger one only adds more.
                 const double u = random.uniform();
                 const double n = random.normal();
-                rates(x, y) =
-                    u < fraction ? static_cast<float>(dark_current * std::exp(spread * n)) : 0.f;
+                // (kept finite in float, whatever the spread)
+                rates(x, y) = u < fraction
+                                  ? static_cast<float>(std::min(
+                                        dark_current * std::exp(spread * n),
+                                        static_cast<double>(std::numeric_limits<float>::max())))
+                                  : 0.f;
             }
         });
 }
@@ -562,8 +554,7 @@ std::shared_ptr<const Image<float>> SensorModel<TSpectral>::hot_pixel_dark_curre
 /**
  * @brief Sets the dark current of the sensor: the same for every pixel.
  *
- * A dark current map, while one is set, takes its place; a warning says so. See
- * set_dark_current_map(). Like the map, it is one of the sensor's imperfections, off with them
+ * A dark current map, while one is set, takes its place; a warning says so. An imperfection
  * (enable_imperfections()).
  *
  * @param dark_current The dark current in electrons per second.
@@ -590,25 +581,27 @@ void SensorModel<TSpectral>::set_dark_current(float dark_current)
  * (set_dark_current()).
  *
  * Each pixel's dark current, times the exposure time, is the mean number of electrons it
- * gathers in the dark. They are added to its signal electrons before shot noise, which draws the
- * two together, and, as for the single dark current, they are added with noise off too, and are
- * off with the sensor's imperfections (enable_imperfections()). For RGB, each channel of a pixel
- * gathers that many.
- *
- * dark_current_from_master_dark() gives the map from a master dark and a master bias. The map is
- * in the image's layout (top row first; see Image), as the sensor response is. The sensor keeps
- * the map until it is cleared (clear_dark_current_map()) or replaced, and copies of the sensor
- * share it.
+ * gathers in the dark, added to its signal before shot noise; for RGB, each channel gathers that
+ * many. dark_current_from_master_dark() makes the map from a master dark and a master bias. In
+ * the sensor response's layout (top row first). An imperfection (enable_imperfections()). Kept
+ * until clear_dark_current_map() or replaced; copies of the sensor share it.
  *
  * @param electrons_per_second The dark current of each pixel, in e-/s, at the sensor's
  *        resolution.
- * @throws std::runtime_error if the map is not at the sensor's resolution, or a value is
- *         negative or not finite.
+ * @throws std::runtime_error if the map is not at the sensor's resolution, a value is negative
+ *         or not finite, or the image has a sensor bit depth (a frame in normalized DN, not
+ *         e-/s: see dark_current_from_master_dark()).
  */
 template <IsSpectral TSpectral>
 void SensorModel<TSpectral>::set_dark_current_map(Image<float> electrons_per_second)
 {
     const char* caller = "SensorModel::set_dark_current_map";
+    if (electrons_per_second.sensor_bit_depth() > 0) {
+        HUIRA_THROW_ERROR(std::string(caller) +
+                          " - The map has a sensor bit depth, so holds normalized DN (a sensor "
+                          "response, or a frame read from a file), not electrons per second. "
+                          "Make a map from a master dark with dark_current_from_master_dark().");
+    }
     if (!(electrons_per_second.resolution() == config_.resolution)) {
         HUIRA_THROW_ERROR(std::string(caller) + " - The map must be at the sensor's resolution, " +
                           detail::resolution_text(config_.resolution) + ": it is " +
@@ -626,7 +619,6 @@ void SensorModel<TSpectral>::set_dark_current_map(Image<float> electrons_per_sec
                 std::to_string(i / static_cast<std::size_t>(config_.resolution.x)) + ")");
         }
     }
-    electrons_per_second.set_sensor_bit_depth(0); // e-/s, whatever the image was
     dark_current_map_ = std::make_shared<const Image<float>>(std::move(electrons_per_second));
 }
 
@@ -693,47 +685,36 @@ void SensorModel<TSpectral>::set_bias_level_dn(float bias_level_dn)
  * @brief Sets the bias of each pixel, in place of the one bias level for all, or as offsets from
  * it.
  *
- * The bias is what the ADC adds to every pixel, in DN, before rounding: a dark, unexposed pixel
- * with no read noise reads its bias. A map gives each pixel its own, in one of two forms:
+ * - BiasMapKind::Absolute (the default): each pixel's bias, as a master bias frame gives it. The
+ *   bias level is not used while the map is set.
+ * - BiasMapKind::Relative: each pixel's offset from the bias level, averaging about 0 (a warning
+ *   points out a mean beyond half a DN). The bias level still applies, and moves the whole map.
  *
- * - BiasMapKind::Absolute (the default): each pixel's bias, as a master bias frame (the mean or
- *   median of many frames taken with no exposure) gives it. The bias level is not used while
- *   the map is set.
- * - BiasMapKind::Relative: each pixel's offset from the bias level: the bias's structure alone
- *   (column patterns, gradients), averaging about 0. The bias level still applies, and
- *   changing it moves the whole map. A warning points out a map whose offsets average more than
- *   half a DN from 0.
+ * Values are DN. An image with a sensor bit depth (a sensor response, or a frame read from a
+ * file that records it) holds DN / (2^bits - 1), and an absolute map is converted from it; an
+ * absolute map that looks normalized (no bit depth, every value at most 1 DN), and a relative
+ * map with a bit depth, are refused: see docs/design_overview/sensor_modeling.rst, "Calibration
+ * maps". In the sensor response's layout (top row first). An imperfection
+ * (enable_imperfections()). Kept until clear_bias_map() or replaced; copies of the sensor share
+ * it.
  *
- * The values are DN. An image with a sensor bit depth (Image::sensor_bit_depth(): a sensor
- * response, or a frame read from an integer FITS or a 16- or 32-bit integer TIFF file) holds
- * DN / (2^bits - 1), and an absolute map is turned into DN from it; a relative map of one is
- * refused, as offsets are not stored that way. An absolute map without a sensor bit depth whose
- * values are all at most 1 DN is refused: no real bias in DN is, so it is normalized, and its DN
- * can't be recovered (a 32-bit float master from Siril or PixInsight holds DN / 65535, say;
- * multiply it by 65535).
- *
- * The map is in the image's layout (top row first; see Image), as the sensor response is. The
- * bias, like the dark current, is not noise: it is applied with noise off too. With the sensor's
- * imperfections off (enable_imperfections()), the bias is the bias level. The sensor keeps
- * the map until it is cleared (clear_bias_map()) or replaced, and copies of the sensor share it.
- *
- * @param dn The bias, or the offsets from the bias level, of each pixel, in DN, at the sensor's
- *        resolution.
+ * @param bias_dn The bias, or the offsets from the bias level, of each pixel, in DN, at the
+ *        sensor's resolution.
  * @param kind What the values are: see above.
  * @throws std::runtime_error if the map is not at the sensor's resolution, a value is not
  *         finite, a pixel's bias would be outside [0, 2^bit_depth - 1), the map is absolute and
  *         normalized, or the map is relative and has a sensor bit depth.
  */
 template <IsSpectral TSpectral>
-void SensorModel<TSpectral>::set_bias_map(Image<float> dn, BiasMapKind kind)
+void SensorModel<TSpectral>::set_bias_map(Image<float> bias_dn, BiasMapKind kind)
 {
     const char* caller = "SensorModel::set_bias_map";
-    if (!(dn.resolution() == config_.resolution)) {
+    if (!(bias_dn.resolution() == config_.resolution)) {
         HUIRA_THROW_ERROR(std::string(caller) + " - The map must be at the sensor's resolution, " +
                           detail::resolution_text(config_.resolution) + ": it is " +
-                          detail::resolution_text(dn.resolution()));
+                          detail::resolution_text(bias_dn.resolution()));
     }
-    if (kind == BiasMapKind::Relative && dn.sensor_bit_depth() > 0) {
+    if (kind == BiasMapKind::Relative && bias_dn.sensor_bit_depth() > 0) {
         HUIRA_THROW_ERROR(std::string(caller) +
                           " - A relative bias map holds offsets in DN, but this image has a "
                           "sensor bit depth, so holds normalized DN, as a sensor response or a "
@@ -741,23 +722,23 @@ void SensorModel<TSpectral>::set_bias_map(Image<float> dn, BiasMapKind kind)
                           "BiasMapKind::Absolute, or subtract its mean in DN first.");
     }
     if (kind == BiasMapKind::Absolute) {
-        detail::check_not_normalized(dn, "bias map", caller);
-        const double scale = detail::dn_per_value(dn);
+        detail::check_not_normalized(bias_dn, "bias map", caller);
+        const double scale = detail::dn_per_value(bias_dn);
         if (scale != 1.0) {
-            for (std::size_t i = 0; i < dn.size(); ++i) {
-                dn[i] = static_cast<float>(static_cast<double>(dn[i]) * scale);
+            for (std::size_t i = 0; i < bias_dn.size(); ++i) {
+                bias_dn[i] = static_cast<float>(static_cast<double>(bias_dn[i]) * scale);
             }
         }
     }
-    dn.set_sensor_bit_depth(0); // DN, as converted
-    check_bias_map_(dn, kind, config_.bias_level_dn, config_.bit_depth, caller);
+    bias_dn.set_sensor_bit_depth(0); // DN, as converted
+    check_bias_map_(bias_dn, kind, config_.bias_level_dn, config_.bit_depth, caller);
 
     if (kind == BiasMapKind::Relative) {
         double sum = 0.0;
-        for (std::size_t i = 0; i < dn.size(); ++i) {
-            sum += static_cast<double>(dn[i]);
+        for (std::size_t i = 0; i < bias_dn.size(); ++i) {
+            sum += static_cast<double>(bias_dn[i]);
         }
-        const double mean = sum / static_cast<double>(dn.size());
+        const double mean = sum / static_cast<double>(bias_dn.size());
         if (std::abs(mean) > 0.5) {
             HUIRA_LOG_WARNING(std::string(caller) + " - The relative bias map's offsets average " +
                               std::to_string(mean) +
@@ -765,7 +746,7 @@ void SensorModel<TSpectral>::set_bias_map(Image<float> dn, BiasMapKind kind)
                               "about 0; for a map of the bias itself, use BiasMapKind::Absolute.");
         }
     }
-    bias_map_ = std::make_shared<const Image<float>>(std::move(dn));
+    bias_map_ = std::make_shared<const Image<float>>(std::move(bias_dn));
     bias_map_kind_ = kind;
 }
 
@@ -965,9 +946,8 @@ void SensorModel<TSpectral>::set_roll(units::Radian angle)
  * on other cameras, threads or render order, successive frames differ, and setting the same seed
  * again repeats the same sequence of frames.
  *
- * The seed also makes the sensor's fixed patterns, the same in every readout: each pixel's gain
- * (set_prnu()) and which pixels are hot (set_hot_pixels()). A seed is a detector: the same seed
- * gives the same patterns, and another seed other ones.
+ * The seed also makes the sensor's fixed patterns, PRNU (set_prnu()) and hot pixels
+ * (set_hot_pixels()), the same in every readout: another seed gives another sensor's.
  *
  * Sensors get distinct seeds by default, in the order they are made, so that two cameras never
  * share their noise unless given the same seed. A sensor set with CameraModel::set_sensor() is

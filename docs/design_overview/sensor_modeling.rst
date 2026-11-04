@@ -169,30 +169,30 @@ Each map is at the sensor's resolution, in the sensor response's layout: top row
 image is stored (from numpy, ``huira.Image_f32(array, origin=...)`` says which row of the array is
 the top; see :doc:`pixel_conventions`). A pixel's dark current is added to its signal electrons
 before shot noise, which draws the two together, and its bias is added by the ADC, as for the
-single values. For RGB, each channel of a pixel gathers its dark current and has its bias. The
-maps are not noise, so they apply with noise off too; they are among the sensor's imperfections,
-and are off with them (see Noise and imperfections). The camera keeps them until they are
-cleared (``clear_sensor_dark_current_map()``, ``clear_sensor_bias_map()``) or replaced, and a
-copy of a sensor shares them. ``sensor_dark_current_map()`` and ``sensor_bias_map()`` give each
-pixel's value, from the map or the single value; the camera's ``describe()`` summarizes them.
+single values. For RGB, each channel of a pixel gathers its dark current and has its bias. Both
+maps are among the sensor's imperfections (see Noise and imperfections). The camera keeps them
+until they are cleared (``clear_sensor_dark_current_map()``, ``clear_sensor_bias_map()``) or
+replaced, and a copy of a sensor shares them. ``sensor_dark_current_map()`` and
+``sensor_bias_map()`` give each pixel's value, from the map or the single value; the camera's
+``describe()`` summarizes them.
 
 Values are checked when set: a dark current must be non-negative and finite, and each pixel's
 bias (a relative map's added to the bias level) finite and in :math:`[0, \text{MaxDN})`, as for
 the bias level; a later bias level or bit depth that would take a pixel out of that range is
 refused. A map that is no longer at the sensor's resolution, after the camera's sensor is
-configured again, stays set, with a warning, and a readout throws until it is replaced or
-cleared.
+configured again, stays set, with a warning, and a readout with imperfections on throws until it
+is replaced or cleared.
 
 Calibration frames are in DN, and how a file holds them depends on what wrote it. Huira's
 readers return values normalized to about [0, 1], and record the bit depth they were normalized
 by where it is known (``Image::sensor_bit_depth()``; ``sensor_bit_depth`` in Python): the values
 are then :math:`DN / (2^{\text{bits}} - 1)`, and are turned back into DN exactly. So:
 
-- **Integer FITS files**, from any software, just work: FITS integers are counts, and the reader
-  records their bit depth (see :doc:`image_output`). So do Huira's own sensor responses, and
-  frames it saved.
-- **16- and 32-bit integer TIFFs** just work too, for the same reason. An 8-bit TIFF is a
-  picture, and too coarse to be a calibration frame.
+- **Integer FITS files** (8, 16 and 32 bits), from any software, are read with the bit depth of
+  their counts (see :doc:`image_output`), as are Huira's own sensor responses and frames it
+  saved.
+- **16- and 32-bit integer TIFFs** are read the same way. An 8-bit TIFF is a picture, and too
+  coarse to be a calibration frame.
 - **Float FITS and TIFF files** are read as they are, so their values must be DN. Many hold DN
   (astropy, MaxIm DL and professional pipelines). Siril and PixInsight save normalized floats
   instead, :math:`DN / 65535`: multiply them by 65535 (``np.asarray(image) * 65535`` into a new
@@ -201,14 +201,15 @@ are then :math:`DN / (2^{\text{bits}} - 1)`, and are turned back into DN exactly
   sRGB-encoded.
 - **Cameras that scale their DN to fill 16 bits** (many 12- and 14-bit cameras' software
   multiplies by 16 or 4) give files whose DN are the scaled ones: give
-  ``dark_current_from_master_dark()`` the conversion gain per file DN, not per ADC DN.
+  ``dark_current_from_master_dark()`` the conversion gain per file DN, not per ADC DN, and a bias
+  level and bit depth in file DN to any bias map from them.
 
 ``dark_current_from_master_dark()`` and an absolute bias map refuse an image without a bit depth
-whose values are all at most 1 DN: no real master dark or bias in DN is, as the bias alone is
-many DN, so it is normalized, and taking it as DN would give a dark current and bias of about 0.
-An image of zeros is accepted. A relative bias map is offsets in DN, so one with a sensor bit
-depth is refused. Nothing can tell a float file in DN from one in some other unit: that, and the
-conversion gain's DN, are for the user to know.
+whose values are all at most 1 DN, as normalized: a real master dark or bias in DN is many DN,
+and taking the image as DN would give a dark current and bias of about 0 (an image of zeros is
+accepted). A relative bias map holds offsets in DN, so any image with a sensor bit depth is
+refused. Nothing can tell a float file in DN from one in another unit: check what the software
+that wrote it saves, as for the conversion gain's DN.
 
 From C++, the maps are on the sensor (``SensorModel::set_dark_current_map()``,
 ``set_bias_map()``), and through the camera's handle as above. In Python::
@@ -251,32 +252,37 @@ from parameters, each the same in every frame:
   either way. A larger fraction keeps a smaller one's hot pixels, with the same dark currents,
   and adds more.
 
-Both are made from the noise seed (``set_sensor_noise_seed()``), on random numbers of their own,
-keyed by the seed and the pixel but not the readout: a seed is a detector, with the same
-patterns in every frame, and another seed is another detector. They are made again when the
-seed, their parameters or the resolution change. Being fixed, they apply with noise off too;
-they are among the sensor's imperfections, and are off with them (see Noise and imperfections).
+Both are made from the noise seed (``set_sensor_noise_seed()``), on random numbers of their own
+keyed by the seed and the row, not the readout, so they are the same in every frame, and
+another seed gives another sensor's (a copy of a sensor has a new seed, so patterns of its own,
+though it shares the copied maps). They are made again when the seed, their parameters or the
+resolution change, and are among the sensor's imperfections (see Noise and imperfections).
 ``sensor_prnu_map()`` and ``sensor_hot_pixel_map()`` give them, and ``describe()`` lists them.
-Both are off by default.
+Both are off by default; ``set_sensor_hot_pixels(0, 0)`` turns hot pixels off again.
 
 They stand in for calibration frames, so don't use both for the same thing: a flat from a real
 flat field (see Filters and flats) already holds the camera's PRNU, and a dark current map from
-a real master dark its hot pixels. PRNU's normal tail can also take a pixel's response, QE times
-its gain, a little above 1 electron per photon when the QE is near 1, which isn't warned of.
+a real master dark its hot pixels. PRNU's normal tail can take a pixel's response, QE times its
+gain, a little above 1 electron per photon when the QE is near 1, which isn't warned of.
 
 
 Filters and flats
 -----------------
 
-A camera has a filter wheel (``add_filter()``, ``select_filter()``, by index or by name;
-``clear_filters()``), empty by default, which is a clear filter. Each filter has a transmission,
-the fraction of the light it passes in each bin, and may have a *flat*: each pixel's response
-through it relative to the principal point's. The selected filter's transmission multiplies the
-quantum efficiency, and its flat each pixel's signal electrons, before shot noise (see Quantum
-Efficiency, above); the dark current and bias are not affected, as they are not light. The flat
-is among the sensor's imperfections, and is off with them; the transmission is not (see Noise and
-imperfections). A frame is read out through the filter selected when it is rendered. The
-camera's ``describe()`` lists the wheel.
+A camera has a filter wheel (``add_filter()``, ``select_filter()`` by index or by name,
+``set_filter_flat()``, ``clear_filters()``), empty by default, which is a clear filter. Each
+filter has a transmission, the fraction of the light it passes in each bin, and may have a
+*flat*: each pixel's response through it relative to the principal point's. The selected
+filter's transmission multiplies the quantum efficiency, and its flat each pixel's signal
+electrons, before shot noise (see Quantum Efficiency, above); the dark current and bias are not
+light, so are not affected. The flat is among the sensor's imperfections; the transmission is
+not (see Noise and imperfections). A frame is read out through the filter selected when it is
+rendered. For a flat without a filter wheel, add one clear filter (transmission 1) with the
+flat. Filters are not removed one at a time, which would renumber the rest;
+``clear_filters()`` empties the wheel. ``filter_flat()`` gives a filter's flat, or none if it has
+none, where the sensor's own getters (``sensor_dark_current_map()``, ``sensor_prnu_map()`` and
+the like) give what applies to each pixel, filled in when nothing is set. The camera's
+``describe()`` lists the wheel.
 
 **What a flat is.** A flat field is a frame of a uniformly lit scene (a dome, a twilight sky, a
 lamp through a diffuser), with the bias and dark subtracted. Every pixel receives the same light,
@@ -287,29 +293,29 @@ and the pixel's own sensitivity (PRNU).
 
 **What Huira divides out.** The renderer already gives each pixel the falloff of its geometry:
 its solid angle, and the cosine of its angle from the axis (``pixel_radiance_to_power()``). A
-flat that still held that falloff would apply it twice. ``flat_from_measured()`` divides it out,
-so the flat keeps only what the renderer does not model.
+flat that still held that falloff would apply it twice. ``flat_from_flat_field()`` divides it
+out, so the flat keeps only what the renderer does not model.
 
-**Normalization.** ``flat_from_measured()`` then divides the result by the median of the pixels
+**Normalization.** ``flat_from_flat_field()`` then divides the result by the median of the pixels
 in a square around the principal point, 5% of the shorter side of the sensor on each edge (at
 least 8 pixels; ``central_fraction`` sets it). So:
 
-- The flat is 1 at the principal point, and the quantum efficiency and the filter's transmission
-  are the response *there*. Pixels that respond more than the principal point's, by their PRNU,
-  are above 1, and that is as it should be: a flat has no scale of its own to lose, and the
-  camera's efficiency is the QE and transmission. The one physical bound is that a pixel can't
-  make more electrons than it receives photons, :math:`QE \times T \times V \le 1`, which the
-  sensor warns of when a filter is added or selected or the QE is set.
+- The flat is about 1 at the principal point, and the quantum efficiency and the filter's
+  transmission are the response *there*. Pixels that respond more than the principal point's, by
+  their PRNU, are above 1: a flat has no scale of its own to lose, and the camera's efficiency is
+  the QE and transmission. The one physical bound is that a pixel can't make more electrons than
+  it receives photons, :math:`QE \times T \times V \le 1`, which the sensor warns of when the
+  selected filter or the QE changes.
 - The median is used so that a speck of dust or a hot pixel in the square doesn't set the scale,
   and a square rather than the one pixel at the principal point for the same reason.
 - The flat is an ordinary image: to normalize it another way, do so in numpy and give the
-  result to ``add_filter()``.
+  result to ``add_filter()`` or ``set_filter_flat()``.
 
 The camera's focal length, distortion and principal point must be as they were when the flat
 field was taken, since the falloff divided out depends on them. In Python::
 
     flat_field, _ = huira.read_fits("flat_V.fits")  # bias and dark subtracted
-    flat = camera_model.flat_from_measured(flat_field)
+    flat = camera_model.flat_from_flat_field(flat_field)
     camera_model.add_filter("V", 0.85, flat)
     camera_model.add_filter("R", huira.visible8.SpectralBins([0, 0, 0, 0.1, 0.8, 0.9, 0.9, 0.7]))
     camera_model.select_filter("R")
@@ -327,16 +333,17 @@ Two switches on the camera leave parts of the sensor out, each without changing 
   to frame. That is shot noise, read noise, and row and column noise. Each pixel then collects
   the expected number of electrons.
 - ``enable_sensor_imperfections(false)`` turns off the **imperfections**: what makes the sensor
-  less than ideal, and is the same in every frame. That is the dark current (the single value,
-  the dark current map and hot pixels), each pixel's own gain (PRNU, and the selected filter's
-  flat), and the bias map, so the bias is the bias level.
+  less than ideal, is the same in every frame, and a calibration would remove. That is the dark
+  current (the single value, the dark current map and hot pixels), each pixel's own gain (PRNU,
+  and the selected filter's flat), and the bias map, so the bias is the bias level.
 
 (On a ``SensorModel``, ``enable_noise()`` and ``enable_imperfections()``; in Python, with
 ``False``.) Neither touches what the sensor *is*: its quantum efficiency, the filter's
 transmission, the gain, the full well, the bias level and the ADC's quantization. The bias
 level stays because it isn't an imperfection, but the offset an ADC adds so that the read noise
 isn't clipped at 0 DN; set it to 0 for none, knowing that, with noise on, dark pixels are then
-clipped.
+clipped. With imperfections off, the maps and the flat aren't used, so a readout doesn't need
+them to fit the sensor.
 
 The two switches are independent, so there are four combinations, each with its use:
 
@@ -348,7 +355,7 @@ The two switches are independent, so there are four combinations, each with its 
   readout's. For testing what runs on calibrated frames.
 - **Both off**: an *ideal sensor*, giving the expected electrons, by the gain, on the bias level.
 
-The camera's ``describe()`` says which (its "Ideal:" line).
+The camera's ``describe()`` says which (its "Switches:" line).
 
 
 Missing data
@@ -369,7 +376,7 @@ order rows are read out in; successive frames differ; and setting the same seed 
 the same sequence of frames. Row noise and column noise are drawn from streams of their own,
 keyed by the stream too, so that turning either on leaves the pixels' noise as it was. The fixed
 patterns (PRNU and hot pixels) are made from the seed too, on streams of their own keyed by the
-seed and the pixel, but not the readout, so they are the same in every frame. The random
+seed and the row, but not the readout, so they are the same in every frame. The random
 integers are the same with every standard library; the
 normal and Poisson draws made from them use ``std::log``, ``std::exp`` and the like, which can
 differ in their last bit between platforms, so frames repeat exactly on one platform and
@@ -381,14 +388,14 @@ Changes in v0.9.11
 
 - Each pixel can have its own dark current and bias, from maps (see Calibration maps), and
   ``dark_current_from_master_dark()`` makes the dark current's from a master dark and a master
-  bias. Without maps, frames are as before. Integer FITS and TIFF calibration frames from other
-  software are turned into DN as they are read (see :doc:`image_output`), and normalized ones
-  are refused.
+  bias. Without maps, frames are as before. Integer FITS and TIFF files are read with the bit
+  depth of their counts, so calibration frames from other software recover their DN (see
+  :doc:`image_output`), and normalized ones are refused.
 - Row noise and column noise, temporal banding along rows and columns, can be set (see Read
   Noise). Both are 0 by default, so frames are as before.
 - A camera has a filter wheel, whose filters have a transmission per bin and may have a flat
-  (see Filters and flats), and ``flat_from_measured()`` makes a flat from a flat field. The wheel
-  is empty by default, a clear filter, so frames are as before.
+  (see Filters and flats), and ``flat_from_flat_field()`` makes a flat from a flat field. The
+  wheel is empty by default, a clear filter, so frames are as before.
 - PRNU and hot pixels can be made from parameters and the noise seed (see PRNU and hot pixels).
   Both are off by default, so frames are as before.
 - The sensor's imperfections (dark current, hot pixels, PRNU, the flat and the bias map) can be
