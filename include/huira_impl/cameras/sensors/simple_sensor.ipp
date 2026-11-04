@@ -51,13 +51,20 @@ namespace huira {
  * @param fb The frame buffer containing received power and where the sensor response will be
  * written.
  * @param exposure_time The exposure time in seconds.
- * @throws std::runtime_error if a dark current or bias map, or the filter's flat, is set at
- *         another resolution than the frame buffer's, and imperfections are on.
+ * @throws std::runtime_error if the frame buffer is not at the sensor's resolution, or a dark
+ *         current or bias map, or the filter's flat, is set at another resolution and
+ *         imperfections are on.
  */
 template <IsSpectral TSpectral>
 void SimpleSensor<TSpectral>::readout(FrameBuffer<TSpectral>& fb, units::Second exposure_time) const
 {
     const Image<TSpectral>& received_power = fb.received_power();
+    if (!(received_power.resolution() == this->config_.resolution)) {
+        HUIRA_THROW_ERROR("SimpleSensor::readout - The frame buffer is " +
+                          detail::resolution_text(received_power.resolution()) +
+                          ", and the sensor " + detail::resolution_text(this->config_.resolution) +
+                          ": a frame buffer is read out by the sensor it was made for.");
+    }
     // The imperfections: the dark current, the maps, the flat and the fixed patterns. Without
     // them, none is used, so none need fit.
     const bool imperfections = this->config_.simulate_imperfections;
@@ -72,7 +79,7 @@ void SimpleSensor<TSpectral>::readout(FrameBuffer<TSpectral>& fb, units::Second 
     const TSpectral photon_energy = TSpectral::photon_energies();
     // Photons to signal electrons, per bin: the quantum efficiency through the filter.
     const TSpectral response = config.quantum_efficiency * this->filter_transmission_;
-    const Image<float>* flat = imperfections ? this->flat_.get() : nullptr;
+    const std::shared_ptr<const Image<float>> flat = imperfections ? this->flat_ : nullptr;
     // The sensor's fixed patterns, made from its noise seed (the same in every readout):
     const std::shared_ptr<const Image<float>> prnu_gains =
         imperfections ? this->prnu_gains_() : nullptr;
@@ -91,8 +98,9 @@ void SimpleSensor<TSpectral>::readout(FrameBuffer<TSpectral>& fb, units::Second 
     const double gain = static_cast<double>(config.gain);
 
     // Each pixel's dark current and bias, where maps give them:
-    const Image<float>* dark_map = imperfections ? this->dark_current_map_.get() : nullptr;
-    const Image<float>* bias_map = imperfections ? this->bias_map_.get() : nullptr;
+    const std::shared_ptr<const Image<float>> dark_map =
+        imperfections ? this->dark_current_map_ : nullptr;
+    const std::shared_ptr<const Image<float>> bias_map = imperfections ? this->bias_map_ : nullptr;
     const double bias_map_base = this->bias_map_kind_ == BiasMapKind::Relative ? bias : 0.0;
 
     std::atomic<std::size_t> non_finite{0};

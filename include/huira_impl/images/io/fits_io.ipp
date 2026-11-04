@@ -501,13 +501,11 @@ inline int fits_image_type(int bit_depth)
     }
 }
 
-// Largest value of an integer image of the given type: a CFITSIO image type, as
-// fits_image_type() and fits_get_img_equivtype() give, so that unsigned types stored with BZERO
-// are told apart from signed ones.
-/// The bits of an integer image type whose range, 0 (or its negative) to 2^bits - 1, its values
-/// are normalised by when read, for recording as the image's bit depth: up to the 32 bits that
-/// counts are written with. 0 for a 64-bit integer type, which a float can't hold anyway, and for
-/// any other type.
+// The bits of an integer image type whose range, 0 (or its negative) to 2^bits - 1, its values
+// are normalised by when read, for recording as the image's bit depth. The type is a CFITSIO
+// image type, as fits_image_type() and fits_get_img_equivtype() give, so that unsigned types
+// stored with BZERO are told apart from signed ones. 0 for a 64-bit integer type, whose values
+// are returned as they are (a float can't hold a 64-bit count anyway), and for any other type.
 inline int fits_type_bits(int image_type)
 {
     switch (image_type) {
@@ -528,6 +526,8 @@ inline int fits_type_bits(int image_type)
     }
 }
 
+// What an integer image of the given type is divided by when read: 2^fits_type_bits - 1, and 1
+// for a type that is returned as it is.
 inline double fits_type_max(int image_type)
 {
     switch (image_type) {
@@ -543,8 +543,6 @@ inline double fits_type_max(int image_type)
         return 2147483647.0;
     case ULONG_IMG:
         return 4294967295.0;
-    case LONGLONG_IMG:
-        return 9223372036854775807.0;
     default:
         return 1.0;
     }

@@ -98,9 +98,11 @@ class CameraModelHandle : public Handle<CameraModel<TSpectral>> {
                            std::optional<Image<float>> flat = std::nullopt) const;
     void select_filter(std::size_t index) const;
     void select_filter(const std::string& name) const;
+    void set_filter_flat(std::size_t index, std::optional<Image<float>> flat) const;
+    void set_filter_flat(const std::string& name, std::optional<Image<float>> flat) const;
     void clear_filters() const;
     std::size_t filter_count() const;
-    std::optional<std::size_t> selected_filter() const;
+    std::optional<std::size_t> selected_filter_index() const;
     std::optional<std::string> selected_filter_name() const;
     std::string filter_name(std::size_t index) const;
     std::size_t filter_index(const std::string& name) const;
@@ -108,8 +110,8 @@ class CameraModelHandle : public Handle<CameraModel<TSpectral>> {
     TSpectral filter_transmission(const std::string& name) const;
     std::optional<Image<float>> filter_flat(std::size_t index) const;
     std::optional<Image<float>> filter_flat(const std::string& name) const;
-    Image<float> flat_from_measured(const Image<float>& measured_flat,
-                                    float central_fraction = 0.05f) const;
+    Image<float> flat_from_flat_field(const Image<float>& flat_field,
+                                      float central_fraction = 0.05f) const;
 
     void set_sensor_quantum_efficiency(double qe) const;
     void set_sensor_quantum_efficiency(TSpectral qe) const;
@@ -125,7 +127,7 @@ class CameraModelHandle : public Handle<CameraModel<TSpectral>> {
     void set_sensor_dark_current_map(Image<float> electrons_per_second) const;
     void clear_sensor_dark_current_map() const;
     void set_sensor_bias_level(float bias_level) const;
-    void set_sensor_bias_map(Image<float> dn, BiasMapKind kind = BiasMapKind::Absolute) const;
+    void set_sensor_bias_map(Image<float> bias_dn, BiasMapKind kind = BiasMapKind::Absolute) const;
     void clear_sensor_bias_map() const;
     void set_sensor_bit_depth(int bit_depth) const;
     void set_sensor_conversion_gain(float gain) const;

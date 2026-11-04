@@ -29,21 +29,18 @@ inline void bind_sensor_calibration(py::module_& m)
 
     const char* doc =
         "The dark current of each pixel, in electrons per second, from a master dark and a "
-        "master bias: (dark - bias) * conversion_gain / exposure_time.\n\n"
-        "A master dark is the mean, or median, of many frames taken with the shutter closed, and "
-        "a master bias of many taken with no exposure; both in DN, as the camera that took them "
-        "read them out, and conversion_gain is that camera's, in e-/DN. master_bias is an image "
-        "the size of the master dark, or one value in DN for every pixel. exposure_time is the "
-        "master dark's (any time unit, e.g. Second).\n\n"
-        "The values of an image with a sensor_bit_depth (a sensor response, or a frame read "
-        "from an integer FITS or a 16- or 32-bit integer TIFF file) are DN / (2^bits - 1), and "
-        "are turned into DN; any other image's values are DN. An image without a sensor bit "
-        "depth whose values are all at most 1 DN is refused: no real master dark or bias in DN "
-        "is, as the bias alone is many DN, so it is normalized, and its DN can't be recovered. A "
-        "32-bit float master from Siril or PixInsight holds DN / 65535: multiply it by 65535.\n\n"
-        "The result is for CameraModelHandle.set_sensor_dark_current_map(). A pixel below the "
-        "master bias, which noise in either does near zero dark current, has a dark current of "
-        "0; a warning gives the number of them.";
+        "master bias: (dark - bias) * conversion_gain / exposure_time, for "
+        "CameraModelHandle.set_sensor_dark_current_map().\n\n"
+        "Both frames are in DN, as the camera that took them read them out, and conversion_gain "
+        "is that camera's, in e-/DN. master_bias is an image the size of the master dark, or one "
+        "value in DN for every pixel. exposure_time is the master dark's (any time unit, e.g. "
+        "Second).\n\n"
+        "An image with a sensor_bit_depth (a sensor response, or a frame read from a file that "
+        "records its counts' bit depth) holds DN / (2^bits - 1) and is converted; "
+        "any other image's values are taken as DN, and one without a bit depth whose values are "
+        "all at most 1 DN is refused as normalized (multiply a 32-bit float master from Siril or "
+        "PixInsight by 65535). A pixel below the master bias, which noise does near zero dark "
+        "current, gets 0; a warning counts them.";
 
     m.def("dark_current_from_master_dark",
           py::overload_cast<const Image<float>&, const Image<float>&, float, units::Second>(

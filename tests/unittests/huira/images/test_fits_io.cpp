@@ -508,8 +508,8 @@ TEST_CASE("FITS images from other software are normalised by their type's range"
     check_read(USHORT_IMG, 65535.0, 1.0, 16);
     check_read(LONG_IMG, 2147483647.0, 1.0, 31);
     check_read(ULONG_IMG, 1073741824.0, 1073741824.0 / 4294967295.0, 32);
-    check_read(LONGLONG_IMG, 4611686018427387904.0, 0.5, 0); // more bits than a float holds
-    check_read(FLOAT_IMG, 3.5, 3.5, 0);                      // as it is
+    check_read(LONGLONG_IMG, 1048576.0, 1048576.0, 0); // as it is: too wide for a bit depth
+    check_read(FLOAT_IMG, 3.5, 3.5, 0);                // as it is
     check_read(DOUBLE_IMG, -0.125, -0.125, 0);
     fs::remove(path);
 }

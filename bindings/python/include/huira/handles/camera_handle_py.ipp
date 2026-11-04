@@ -249,30 +249,29 @@ inline void bind_camera_model_handle(py::module_& m)
         .def("delete_distortion", &HandleType::delete_distortion)
 
         // Filter wheel
-        .def(
-            "add_filter",
-            [](const HandleType& self,
-               const std::string& name,
-               const py::object& transmission,
-               std::optional<Image<float>> flat) {
-                if (py::isinstance<py::float_>(transmission) ||
-                    py::isinstance<py::int_>(transmission)) {
-                    return self.add_filter(name, transmission.cast<double>(), std::move(flat));
-                }
-                return self.add_filter(name, transmission.cast<TSpectral>(), std::move(flat));
-            },
-            py::arg("name"),
-            py::arg("transmission"),
-            py::arg("flat") = std::nullopt,
-            "Add a filter to the camera's filter wheel, and select it if it is the first; "
-            "returns its index. transmission is the fraction of the light it passes, from 0 to "
-            "1: one number for every bin, or a SpectralBins with one per bin. flat is the "
-            "filter's flat, an Image_f32 of each pixel's response through it relative to the "
-            "principal point's (flat_from_measured() makes one from a flat field), or None. "
-            "The selected filter's transmission multiplies the sensor's quantum efficiency, and "
-            "its flat each pixel's signal electrons, before shot noise. A camera whose wheel is "
-            "empty has a clear filter, with no flat. The name must be unused by the wheel's "
-            "other filters.")
+        .def("add_filter",
+             py::overload_cast<const std::string&, double, std::optional<Image<float>>>(
+                 &HandleType::add_filter, py::const_),
+             py::arg("name"),
+             py::arg("transmission"),
+             py::arg("flat") = std::nullopt,
+             "Add a filter to the camera's filter wheel, and select it if it is the first; "
+             "returns its index. transmission is the fraction of the light it passes, from 0 to "
+             "1: one number for every bin, or a SpectralBins (or a list or array, one value per "
+             "bin). flat is the filter's flat, an Image_f32 of each pixel's response through it "
+             "relative to the principal point's (flat_from_flat_field() makes one from a flat "
+             "field), or None for 1 everywhere. The selected filter's transmission multiplies "
+             "the sensor's quantum efficiency, and its flat each pixel's signal electrons; the "
+             "flat is one of the sensor's imperfections (enable_sensor_imperfections()). A "
+             "camera whose wheel is empty has a clear filter and no flat. The name must be "
+             "unused by the wheel's other filters.")
+        .def("add_filter",
+             py::overload_cast<const std::string&, const TSpectral&, std::optional<Image<float>>>(
+                 &HandleType::add_filter, py::const_),
+             py::arg("name"),
+             py::arg("transmission"),
+             py::arg("flat") = std::nullopt,
+             "As above, with the transmission per bin.")
         .def("select_filter",
              py::overload_cast<std::size_t>(&HandleType::select_filter, py::const_),
              py::arg("index"),
@@ -282,14 +281,28 @@ inline void bind_camera_model_handle(py::module_& m)
              py::overload_cast<const std::string&>(&HandleType::select_filter, py::const_),
              py::arg("name"),
              "Select a filter of the filter wheel by name.")
+        .def("set_filter_flat",
+             py::overload_cast<std::size_t, std::optional<Image<float>>>(
+                 &HandleType::set_filter_flat, py::const_),
+             py::arg("index"),
+             py::arg("flat"),
+             "Replace the flat of the filter at an index, as for add_filter(), or remove it "
+             "(None).")
+        .def("set_filter_flat",
+             py::overload_cast<const std::string&, std::optional<Image<float>>>(
+                 &HandleType::set_filter_flat, py::const_),
+             py::arg("name"),
+             py::arg("flat"),
+             "Replace the flat of the filter with a name, as for add_filter(), or remove it "
+             "(None).")
         .def("clear_filters",
              &HandleType::clear_filters,
              "Empty the filter wheel: the camera then has a clear filter, with no flat.")
         .def("filter_count",
              &HandleType::filter_count,
              "The number of filters in the filter wheel; 0 without one.")
-        .def("selected_filter",
-             &HandleType::selected_filter,
+        .def("selected_filter_index",
+             &HandleType::selected_filter_index,
              "The index of the selected filter, or None if the wheel is empty.")
         .def("selected_filter_name",
              &HandleType::selected_filter_name,
@@ -318,21 +331,21 @@ inline void bind_camera_model_handle(py::module_& m)
              py::overload_cast<const std::string&>(&HandleType::filter_flat, py::const_),
              py::arg("name"),
              "The flat of the filter with a name, as an Image_f32, or None if it has none.")
-        .def("flat_from_measured",
-             &HandleType::flat_from_measured,
-             py::arg("measured_flat"),
+        .def("flat_from_flat_field",
+             &HandleType::flat_from_flat_field,
+             py::arg("flat_field"),
              py::arg("central_fraction") = 0.05f,
              "A filter's flat from a flat field taken through it (an Image_f32 at the sensor's "
              "resolution, bias and dark subtracted, in any scale): each pixel's response "
-             "relative to the principal point's, with the falloff Huira renders itself (each "
-             "pixel's solid angle and cosine) divided out, so that it keeps only what the "
-             "renderer doesn't model: further vignetting, the filter's unevenness, dust and "
-             "PRNU. It is normalized to the median of a square around the principal point, "
-             "central_fraction of the shorter side on each edge (5% by default, at least 8 "
-             "pixels), so a speck of dust there doesn't set the scale: the quantum efficiency "
-             "and transmission are then the response at the principal point, and pixels that "
-             "respond more are above 1. The camera's focal length, distortion and principal "
-             "point must be as when the flat field was taken.")
+             "relative to the principal point's, with the falloff the renderer gives each pixel "
+             "(its solid angle and cosine) divided out, so that it keeps what the renderer "
+             "doesn't model: further vignetting, the filter's unevenness, dust and PRNU. It is "
+             "normalized to the median of a square around the principal point, central_fraction "
+             "of the shorter side on each edge (5% by default, at least 8 pixels), so a speck of "
+             "dust there doesn't set the scale; the quantum efficiency and transmission are then "
+             "the response at the principal point, and pixels that respond more are above 1. "
+             "The camera's focal length, distortion and principal point must be as when the flat "
+             "field was taken. For add_filter() or set_filter_flat().")
 
         // Sensor properties
         .def("set_sensor_quantum_efficiency",
@@ -345,55 +358,48 @@ inline void bind_camera_model_handle(py::module_& m)
              "Set quantum efficiency (spectral)")
         .def("set_sensor_full_well_capacity",
              &HandleType::set_sensor_full_well_capacity,
-             py::arg("fwc"))
+             py::arg("fwc"),
+             "Set the sensor's full well capacity, in e-: the most electrons a pixel holds.")
         .def("enable_sensor_noise",
              &HandleType::enable_sensor_noise,
              py::arg("noise") = true,
-             "Turn the sensor's noise on (the default) or off: what is random, and differs "
-             "from frame to frame (shot noise, read noise, and row and column noise). Off, each "
-             "pixel collects the expected number of electrons. The imperfections, which are the "
-             "same in every frame, are a switch of their own: enable_sensor_imperfections().")
+             "Turn the sensor's noise on (the default) or off: shot noise, read noise, and row "
+             "and column noise. Off, each pixel collects the expected number of electrons. "
+             "Independent of enable_sensor_imperfections().")
         .def("enable_sensor_imperfections",
              &HandleType::enable_sensor_imperfections,
              py::arg("imperfections") = true,
-             "Turn the sensor's imperfections on (the default) or off: what makes it less than "
-             "ideal, and is the same in every frame. Off, there is no dark current (the single "
-             "value, the map or hot pixels), each pixel's gain is 1 (no PRNU, and no flat from "
-             "the selected filter), and the bias is the bias level (no bias map); the settings "
-             "are kept, and apply again when turned back on. The bias level, quantum "
-             "efficiency, filter transmission, gain, full well and quantization stay. With "
-             "noise off too, the sensor is ideal; with noise on, its frames are as perfectly "
-             "calibrated ones, with only shot noise and the readout's noise.")
-        .def("set_sensor_read_noise", &HandleType::set_sensor_read_noise, py::arg("read_noise"))
+             "Turn the sensor's imperfections on (the default) or off: what is the same in every "
+             "frame and a calibration would remove, the dark current (single value, map and hot "
+             "pixels), PRNU, the selected filter's flat, and the bias map. Off, each pixel's "
+             "gain is 1 and the bias is the bias level; the settings are kept. Independent of "
+             "enable_sensor_noise(): with both off the sensor is ideal, and with only "
+             "imperfections off its frames are as from a calibrated camera.")
+        .def("set_sensor_read_noise",
+             &HandleType::set_sensor_read_noise,
+             py::arg("read_noise"),
+             "Set the sensor's read noise, in e- RMS: the noise of each pixel's readout.")
         .def("set_sensor_row_noise",
              &HandleType::set_sensor_row_noise,
              py::arg("row_noise"),
              "Set the sensor's row noise, in e- RMS (0 by default): in each readout, every row's "
-             "pixels shift together by one draw of this standard deviation, added with the read "
-             "noise, as banding along the rows that changes from frame to frame. It comes from "
-             "what a row shares as it is read out (a CMOS sensor's shared ADC ramp and "
-             "references; a CCD output amplifier's drift). Rows run along the image's x axis; "
-             "for a sensor read out along y, set the column noise. A fixed pattern of rows is a "
-             "bias map's. Off with the other noise.")
+             "pixels shift together by one draw of this standard deviation, as banding along "
+             "the rows (the image's x axis) that changes from frame to frame. For a sensor read "
+             "out along y, set the column noise instead. Off with the other noise.")
         .def("set_sensor_column_noise",
              &HandleType::set_sensor_column_noise,
              py::arg("column_noise"),
              "Set the sensor's column noise, in e- RMS (0 by default): in each readout, every "
-             "column's pixels shift together by one draw of this standard deviation, added with "
-             "the read and row noise, as banding along the columns that changes from frame to "
-             "frame. It comes from a CMOS sensor's column amplifiers and ADCs, and is usually "
-             "smaller than the row noise; a CCD has none. A fixed pattern of columns is a bias "
-             "map's. Off with the other noise.")
+             "column's pixels shift together by one draw of this standard deviation, as banding "
+             "along the columns that changes from frame to frame. Off with the other noise.")
         .def("set_sensor_prnu",
              &HandleType::set_sensor_prnu,
              py::arg("prnu"),
              "Set the sensor's photo response non-uniformity: the standard deviation of each "
              "pixel's gain (0.01 is 1%), by which its signal electrons are multiplied. A fixed "
-             "pattern, made from the noise seed: the same in every frame, another with another "
-             "seed. It applies to the light only, with noise off too, and is off with the "
-             "sensor's imperfections (enable_sensor_imperfections()). A flat from a real "
-             "flat field already holds the camera's PRNU: leave this at 0 with one. 0 by "
-             "default.")
+             "pattern made from the noise seed, the same in every frame; one of the sensor's "
+             "imperfections. A flat from a real flat field already holds the camera's PRNU: "
+             "leave this at 0 with one. 0 by default.")
         .def("set_sensor_hot_pixels",
              &HandleType::set_sensor_hot_pixels,
              py::arg("fraction"),
@@ -402,18 +408,17 @@ inline void bind_camera_model_handle(py::module_& m)
              "Give the sensor hot pixels: each pixel is hot with probability fraction, and a hot "
              "pixel gathers a dark current of its own, in e-/s, on top of the sensor's: "
              "dark_current times exp(spread * N(0, 1)), a log-normal distribution whose median "
-             "is dark_current (spread 0 for the same in every hot pixel). A fixed pattern, made "
-             "from the noise seed: the same pixels in every frame, others with another seed; a "
-             "larger fraction keeps a smaller one's hot pixels and adds more. Off with the "
-             "sensor's imperfections (enable_sensor_imperfections()). A dark current map from a "
-             "real master dark already holds the camera's hot pixels: leave these off with one. "
-             "Off (fraction 0) by default.")
+             "is dark_current (spread 0 for the same in every hot pixel). A fixed pattern made "
+             "from the noise seed, the same pixels in every frame; a larger fraction keeps a "
+             "smaller one's hot pixels and adds more. One of the sensor's imperfections. A dark "
+             "current map from a real master dark already holds the camera's hot pixels: leave "
+             "these off with one. Off (fraction 0) by default; set_sensor_hot_pixels(0, 0) turns "
+             "them off.")
         .def("set_sensor_dark_current",
              &HandleType::set_sensor_dark_current,
              py::arg("dark_current"),
              "Set the sensor's dark current, in e-/s, the same for every pixel. A dark current "
-             "map, while one is set, takes its place. Off with the sensor's imperfections "
-             "(enable_sensor_imperfections()).")
+             "map, while one is set, takes its place. One of the sensor's imperfections.")
         .def("set_sensor_dark_current_map",
              &HandleType::set_sensor_dark_current_map,
              py::arg("electrons_per_second"),
@@ -422,10 +427,10 @@ inline void bind_camera_model_handle(py::module_& m)
              "(Image_f32(array, origin=...) makes one from a numpy array). Each pixel's dark "
              "current, times the exposure time, is the mean number of electrons it gathers in "
              "the dark, added to its signal before shot noise; for RGB, each channel gathers "
-             "that many. Like the dark current, it applies with noise off too, and is off with "
-             "the sensor's imperfections. "
-             "huira.dark_current_from_master_dark() makes one from a master dark and a master "
-             "bias. The camera keeps it until it is cleared or replaced.")
+             "that many. huira.dark_current_from_master_dark() makes one from a master dark and "
+             "a master bias; an image with a sensor_bit_depth (normalized DN, not e-/s) is "
+             "refused. One of the sensor's imperfections. The camera keeps it until it is "
+             "cleared or replaced.")
         .def("clear_sensor_dark_current_map",
              &HandleType::clear_sensor_dark_current_map,
              "Clear the sensor's dark current map, so that every pixel has the dark current "
@@ -437,33 +442,39 @@ inline void bind_camera_model_handle(py::module_& m)
              "while one is set, takes its place; a relative one is added to it.")
         .def("set_sensor_bias_map",
              &HandleType::set_sensor_bias_map,
-             py::arg("dn"),
+             py::arg("bias_dn"),
              py::arg("kind") = BiasMapKind::Absolute,
              "Set the bias of each pixel, in DN: an Image_f32 at the sensor's resolution, in the "
              "sensor response's layout (Image_f32(array, origin=...) makes one from a numpy "
              "array). With kind BiasMapKind.Absolute (the default), it is each pixel's bias, as "
-             "a master bias frame gives it, and the bias level is not used while it is set; an "
-             "image with a sensor_bit_depth (a sensor response, or a frame read from an integer "
-             "FITS or a 16- or 32-bit integer TIFF file) holds DN / (2^bits - 1), and is turned "
-             "into DN, and one without whose values are all at most 1 DN is refused, as "
-             "normalized: multiply a 32-bit float master from Siril or PixInsight by 65535. With "
-             "BiasMapKind.Relative, it is each pixel's offset from the bias level, averaging "
-             "about 0, and the bias level still applies. Each pixel's bias "
-             "must be in [0, 2^bit_depth - 1). With the sensor's imperfections off, the bias is "
-             "the bias level. Like the bias level, it applies with noise off "
-             "too. The camera keeps it until it is cleared or replaced.")
+             "a master bias frame gives it, and the bias level is not used while it is set; with "
+             "BiasMapKind.Relative, each pixel's offset from the bias level, averaging about 0, "
+             "and the bias level still applies. Each pixel's bias must be in [0, 2^bit_depth - "
+             "1). An image with a sensor_bit_depth (a sensor response, or a frame read from a "
+             "file that records its counts' bit depth) holds DN / (2^bits - 1) and is "
+             "converted; one without, whose values are all at most 1 DN, is refused as "
+             "normalized (multiply a 32-bit float master from Siril or PixInsight by 65535). One "
+             "of the sensor's imperfections. The camera keeps it until it is cleared or "
+             "replaced.")
         .def("clear_sensor_bias_map",
              &HandleType::clear_sensor_bias_map,
              "Clear the sensor's bias map, so that every pixel has the bias level again.")
-        .def("set_sensor_bit_depth", &HandleType::set_sensor_bit_depth, py::arg("bit_depth"))
-        .def("set_sensor_conversion_gain", &HandleType::set_sensor_conversion_gain, py::arg("gain"))
+        .def("set_sensor_bit_depth",
+             &HandleType::set_sensor_bit_depth,
+             py::arg("bit_depth"),
+             "Set the sensor's bit depth: its ADC's, so DN run from 0 to 2^bit_depth - 1.")
+        .def("set_sensor_conversion_gain",
+             &HandleType::set_sensor_conversion_gain,
+             py::arg("gain"),
+             "Set the sensor's conversion gain, in e-/DN.")
         .def("set_sensor_gain_db", &HandleType::set_sensor_gain_db, py::arg("gain_db"))
         .def("set_sensor_unity_db", &HandleType::set_sensor_unity_db, py::arg("unity_db"))
         .def("set_sensor_noise_seed",
              &HandleType::set_sensor_noise_seed,
              py::arg("seed"),
              "Seed the sensor's noise. Setting the same seed again repeats the same sequence of "
-             "frames; sensors get distinct seeds by default.")
+             "frames; the seed also makes the sensor's PRNU and hot pixels, so another seed "
+             "gives another sensor's. Sensors get distinct seeds by default.")
         .def("sensor_noise_seed",
              &HandleType::sensor_noise_seed,
              "The seed of the sensor's noise. See set_sensor_noise_seed().")
@@ -873,7 +884,7 @@ inline void bind_camera_model_handle(py::module_& m)
              "The power pixel (x, y) (column, row from the top) receives per unit of radiance, "
              "in m^2 sr: its solid angle times the aperture area projected along the direction "
              "to its center. This is the falloff the renderer gives each pixel, which "
-             "flat_from_measured() divides out of a flat field.")
+             "flat_from_flat_field() divides out of a flat field.")
 
         // Blender convention
         .def("use_blender_convention",
