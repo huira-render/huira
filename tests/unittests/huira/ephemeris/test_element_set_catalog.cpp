@@ -198,6 +198,15 @@ TEST_CASE("ElementSetCatalog: Reads TLEs, of two lines or three", "[catalog]")
     CHECK(same_states(catalog.element_sets[0], SatRec::from_tle(ISS_LINE1, ISS_LINE2)));
     CHECK(catalog.element_sets[0].mode() == Sgp4Mode::AFSPC);
 
+    // Where each came from: its entry, and the line it starts on, its name's if it has one
+    REQUIRE(catalog.sources.size() == 3);
+    CHECK(catalog.sources[0].entry == 0);
+    CHECK(catalog.sources[0].line == 1);
+    CHECK(catalog.sources[1].entry == 1);
+    CHECK(catalog.sources[1].line == 6);
+    CHECK(catalog.sources[2].entry == 2);
+    CHECK(catalog.sources[2].line == 9);
+
     // In the mode asked for
     const ElementSetCatalog improved =
         ElementSetCatalog::parse(text, ElementSetFormat::TLE, {.mode = Sgp4Mode::IMPROVED});
@@ -449,6 +458,11 @@ TEST_CASE("ElementSetCatalog: Keeps one element set for each satellite", "[catal
         // In the order the satellites first appear
         REQUIRE(numbers(catalog) == std::vector<int>{25544, 23599});
         CHECK(catalog.element_sets[0].epoch() == newer.epoch());
+        // The newer came from the third entry
+        REQUIRE(catalog.sources.size() == 2);
+        CHECK(catalog.sources[0].entry == 2);
+        CHECK(catalog.sources[0].line == 5);
+        CHECK(catalog.sources[1].entry == 1);
         REQUIRE(catalog.skipped.size() == 1);
         CHECK(catalog.skipped[0].reason == SkipReason::SUPERSEDED);
         CHECK(catalog.skipped[0].entry == 0);

@@ -5,6 +5,10 @@ ElementSetCatalog
    :members:
    :undoc-members:
 
+.. autoclass:: huira.ElementSetSource
+   :members:
+   :undoc-members:
+
 .. autoclass:: huira.SkippedElementSet
    :members:
    :undoc-members:

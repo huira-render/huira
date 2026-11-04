@@ -486,12 +486,8 @@ inline ElementSetCatalog ElementSetCatalog::parse(std::string_view text,
     const std::unordered_set<int> exclude(options.exclude.begin(), options.exclude.end());
 
     ElementSetCatalog result;
-    // Where each element set kept came from, and which satellite's is where
-    struct Kept {
-        std::size_t entry = 0;
-        std::size_t line = 0;
-    };
-    std::vector<Kept> kept;
+    // Which satellite's element set is where
+    std::vector<ElementSetSource>& kept = result.sources;
     std::unordered_map<int, std::size_t> index_of;
 
     std::size_t invalid = 0;
@@ -577,7 +573,7 @@ inline ElementSetCatalog ElementSetCatalog::parse(std::string_view text,
         SatRec& other = result.element_sets[found->second];
         const bool replaces = options.reference_time ? distance(*satrec) < distance(other)
                                                      : satrec->epoch() > other.epoch();
-        const auto superseded_by = [](const SatRec& winner, const Kept& where) {
+        const auto superseded_by = [](const SatRec& winner, const ElementSetSource& where) {
             return "another element set for its satellite, entry " + std::to_string(where.entry) +
                    (where.line != 0 ? " on line " + std::to_string(where.line) : std::string()) +
                    ", with its epoch at " + winner.epoch().to_utc_string() + ", was kept";
