@@ -41,6 +41,7 @@
 #include "huira/handles/materials/bsdf_handle.hpp"
 #include "huira/handles/materials/material_handle.hpp"
 #include "huira/handles/materials/texture_handle.hpp"
+#include "huira/handles/scene/constellation_handle.hpp"
 #include "huira/handles/scene/frame_handle.hpp"
 #include "huira/handles/scene/instance_handle.hpp"
 #include "huira/handles/scene/node_handle.hpp"
@@ -68,6 +69,7 @@
 #include "huira/sampling/sampler.hpp"
 
 // scene/
+#include "huira/scene/constellation.hpp"
 #include "huira/scene/frame_node.hpp"
 #include "huira/scene/instance.hpp"
 #include "huira/scene/node.hpp"
@@ -101,6 +103,7 @@ template struct Transform<TestFloat>;
 
 template class BSDFHandle<TestSpectral>;
 template class CameraModelHandle<TestSpectral>;
+template class ConstellationHandle<TestSpectral>;
 template class FrameHandle<TestSpectral>;
 template class InstanceHandle<TestSpectral>;
 template class MeshHandle<TestSpectral>;
@@ -140,6 +143,7 @@ template class Primitive<TestSpectral>;
 
 template class Renderer<TestSpectral>;
 
+template class Constellation<TestSpectral>;
 template class Node<TestSpectral>;
 template class UnresolvedAsteroid<TestSpectral>;
 template class UnresolvedEmitter<TestSpectral>;

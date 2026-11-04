@@ -73,6 +73,7 @@ set(UNIT_TESTS
     huira/render/test_unresolved_position.cpp
     huira/render/test_unresolved_tables.cpp
 
+    huira/scene/test_constellation.cpp
     huira/scene/test_direct_lit_radiance.cpp
     huira/scene/test_node_rates.cpp
     huira/scene/test_pose_sources.cpp
