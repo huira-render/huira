@@ -103,6 +103,22 @@ class SceneView {
     /// The light instances collected for this view.
     [[nodiscard]] const std::vector<LightInstance<TSpectral>>& lights() const { return lights_; }
 
+    /// The instances of unresolved objects collected for this view, each with its transforms in
+    /// the camera's frame at its temporal samples, and the irradiance resolved for it: those the
+    /// scene graph places, then the satellites of the scene's constellations in front of the
+    /// camera (see Constellation).
+    [[nodiscard]] const std::vector<UnresolvedInstance<TSpectral>>& unresolved_instances() const
+    {
+        return unresolved_objects_;
+    }
+
+    /// The satellites of the scene's constellations left out of this view, as SGP4 can't place
+    /// them during the exposure.
+    [[nodiscard]] const std::vector<SkippedSatellite>& skipped_satellites() const
+    {
+        return skipped_satellites_;
+    }
+
     /// Sentinel returned by indirect_source_index() for hits that are not on an indirect source.
     static constexpr std::size_t NO_INDIRECT_SOURCE = std::numeric_limits<std::size_t>::max();
 
@@ -279,6 +295,46 @@ class SceneView {
                                          bool bsdf_ray_follows) const;
 
     void traverse_and_collect_(const std::shared_ptr<Node<TSpectral>>& node);
+
+    /// How closely light time is solved for, in seconds, as for a node (see
+    /// Node::get_apparent_transform()).
+    static constexpr double LIGHT_TIME_TOLERANCE = 1e-12;
+
+    /**
+     * @brief Where the Earth's TEME frame is when the light the camera sees at a temporal sample
+     * left the Earth's center: the frame a constellation's satellites are placed in.
+     *
+     * Its pose relative to the solar system barycenter, with the J2000 axes, is SPICE's, at one
+     * time for each sample, and carried on from there by its velocity and angular velocity to
+     * each satellite's own time, when its light left it (see satellite_at_()). The two differ by
+     * at most the light time from the Earth's center to the satellite, 0.14 s at the geostationary
+     * belt and 1.3 s at the Moon's distance, over which the frame's acceleration, from the Sun's
+     * pull, moves it by 0.06 mm and 5 mm, and the change in its turning turns it by far less.
+     */
+    struct TemeSample {
+        Transform<double> frame; ///< Its position, velocity, rotation and angular velocity.
+        double et = 0.0;         ///< When, in seconds past J2000 (TDB).
+        double light_time = 0.0; ///< From the Earth's center to the camera, s (0 in TRUE_STATE).
+    };
+    std::map<double, TemeSample> teme_samples_;
+    const TemeSample& teme_at_(double fraction);
+
+    /// A satellite as seen at a temporal sample: where it is, in the camera's frame, as the only
+    /// probe of its motion (see choose_fractions_()), and how fast its direction turns, in rad/s.
+    struct SatelliteSample {
+        std::vector<Vec3<double>> probes;
+        double turn_rate = 0.0;
+    };
+    [[nodiscard]] SatelliteSample satellite_at_(const SatRec& satrec, double fraction) const;
+
+    void collect_constellations_(const Scene<TSpectral>& scene);
+    void collect_constellation_(const Constellation<TSpectral>& constellation);
+
+    /// The unresolved objects the scene's constellations' satellites are seen as, which are
+    /// collected even when none of their satellites is in front of the camera.
+    std::unordered_set<const void*> constellation_assets_;
+
+    std::vector<SkippedSatellite> skipped_satellites_;
 
     void handle_asset_ptr_(Primitive<TSpectral>* primitive,
                            const std::vector<Transform<float>>& instance_apparent_transforms);
