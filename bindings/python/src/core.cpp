@@ -16,6 +16,7 @@
 #include "huira/images/fits_metadata_py.ipp"
 #include "huira/images/image_py.ipp"
 #include "huira/render/ray_py.ipp"
+#include "huira/scene/constellation_py.ipp"
 #include "huira/scene/node.hpp"
 #include "huira/scene/object_ids_py.ipp"
 #include "huira/scene/pose_sources_py.ipp"
@@ -49,6 +50,7 @@ void bind_core(py::module_& m)
     huira::spice::bind_spice(m);
     huira::bind_satrec(m);
     huira::bind_element_set_catalog(m);
+    huira::bind_constellation_reports(m);
 
     huira::bind_distortion_coefficients(m);
     huira::bind_pixel_convention(m);

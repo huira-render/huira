@@ -578,6 +578,33 @@ inline void bind_scene(py::module_& m)
              "Set the name of an unresolved object")
 
         // =============================================================
+        // Constellations
+        // =============================================================
+        .def("new_constellation",
+             &SceneType::new_constellation,
+             py::arg("unresolved_object"),
+             py::arg("name") = "",
+             "Create a constellation: satellites placed by SGP4, many at once, each seen as an "
+             "instance of the unresolved object given (a Lambertian sphere lit by the Sun, say). "
+             "It starts empty: add satellites with its load(), from a catalog of TLEs or OMMs, or "
+             "add(), from SatRecs. A satellite is placed once, by a node or by one constellation. "
+             "Rendering them needs an SPK with the Earth's ephemeris, such as de440s.bsp.")
+        .def("get_constellation",
+             &SceneType::get_constellation,
+             py::arg("name"),
+             "Get a constellation handle by name")
+        .def("delete_constellation",
+             &SceneType::delete_constellation,
+             py::arg("constellation_handle"),
+             "Delete a constellation; its satellites can then be placed by something else")
+        .def("set_constellation_name",
+             static_cast<void (SceneType::*)(const ConstellationHandle<TSpectral>&,
+                                             const std::string&)>(&SceneType::set_name),
+             py::arg("constellation_handle"),
+             py::arg("name"),
+             "Set the name of a constellation")
+
+        // =============================================================
         // Camera models
         // =============================================================
         .def("new_camera_model",
@@ -804,6 +831,7 @@ inline void bind_scene(py::module_& m)
         .def("print_meshes", &SceneType::print_meshes)
         .def("print_lights", &SceneType::print_lights)
         .def("print_unresolved_objects", &SceneType::print_unresolved_objects)
+        .def("print_constellations", &SceneType::print_constellations)
         .def("print_camera_models", &SceneType::print_camera_models)
         .def("print_models", &SceneType::print_models)
         .def("print_graph", &SceneType::print_graph)

@@ -14,14 +14,17 @@
 // clang-format on
 
 #include "huira/concepts/spectral_concepts.hpp"
+#include "huira/scene/constellation_py.ipp"
 #include "huira/scene/scene_py.ipp"
 
 namespace huira::python {
 
-/// The fourth part of a spectral submodule (see bindings.hpp): the scene.
+/// The fourth part of a spectral submodule (see bindings.hpp): the constellation handle, which the
+/// scene makes, and the scene.
 template <IsSpectral TSpectral>
 void bind_spectral_scene(pybind11::module_& m)
 {
+    huira::bind_constellation_handle<TSpectral>(m);
     huira::bind_scene<TSpectral>(m);
 }
 

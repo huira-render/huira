@@ -320,9 +320,10 @@ Any other position source the node had is replaced.)")
 
 The node must be a child of the scene's TEME frame (Scene.teme_frame()), the
 frame SGP4 gives states in. A satellite places one node: to place more than one
-thing with it, make them children of that node. Calling this again for the same
-satellite, on the same node, replaces its element set: with a newer TLE, for
-example. Building a SceneView raises if SGP4 can't place the satellite at a
+thing with it, make them children of that node. It can't place a node while a
+constellation holds it (see Scene.new_constellation). Calling this again for
+the same satellite, on the same node, replaces its element set: with a newer
+TLE, for example. Building a SceneView raises if SGP4 can't place the satellite at a
 time the view needs, most often because it has decayed by then. Any other
 position source the node had is replaced; its rotation is left alone.)")
         .def(

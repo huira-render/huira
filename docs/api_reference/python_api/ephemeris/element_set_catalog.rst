@@ -20,3 +20,11 @@ ElementSetCatalog
 .. autoclass:: huira.SkipReason
    :members:
    :undoc-members:
+
+.. autoclass:: huira.ConstellationReport
+   :members:
+   :undoc-members:
+
+.. autoclass:: huira.SkippedSatellite
+   :members:
+   :undoc-members:

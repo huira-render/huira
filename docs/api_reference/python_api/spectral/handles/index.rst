@@ -9,6 +9,7 @@ Handle API
    instance_handle
    light_handle
    unresolved_handle
+   constellation_handle
 
    frame_handle
    root_frame_handle
