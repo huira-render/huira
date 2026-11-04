@@ -10,6 +10,7 @@ Handles
    instance_handle
    light_handle
    unresolved_handle
+   constellation_handle
    mesh_handle
    model_handle
    

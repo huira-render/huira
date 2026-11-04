@@ -16,13 +16,13 @@ The Huira C++ API is organized into the modules below. Select one to explore it.
         :link: scene/index
         :link-type: doc
 
-        Nodes, frames and instances; the Scene that holds them and the SceneView that fixes it at an instant for rendering.
+        Nodes, frames and instances, and constellations of satellites; the Scene that holds them and the SceneView that fixes it at an instant for rendering.
 
     .. grid-item-card:: Handles API
         :link: handles/index
         :link-type: doc
 
-        Safe, smart-pointer wrappers for working with the Scene Graph: cameras, instances, lights, unresolved objects, meshes, models and frames.
+        Safe, smart-pointer wrappers for working with the Scene Graph: cameras, instances, lights, unresolved objects, constellations, meshes, models and frames.
 
     .. grid-item-card:: Assets
         :link: assets/index

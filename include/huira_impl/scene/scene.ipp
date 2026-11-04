@@ -756,7 +756,88 @@ void Scene<TSpectral>::delete_unresolved_object(
 {
     auto unresolved_object_shared = unresolved_object_handle.get();
     prune_graph_references_(unresolved_object_shared.get());
+
+    // A constellation seen as it goes with it, as an instance of it does
+    std::vector<std::shared_ptr<Constellation<TSpectral>>> seen_as;
+    for (const auto& constellation : constellations_) {
+        if (constellation->unresolved_object() == unresolved_object_shared) {
+            seen_as.push_back(constellation);
+        }
+    }
+    for (const auto& constellation : seen_as) {
+        HUIRA_LOG_INFO("Scene::delete_unresolved_object - " + constellation->get_info() +
+                       " is deleted with " + unresolved_object_shared->get_info() +
+                       ", which its satellites are seen as");
+        constellation->clear();
+        constellations_.remove(constellation);
+    }
+
     unresolved_objects_.remove(unresolved_object_shared);
+}
+
+/**
+ * @brief Creates a constellation: satellites placed by SGP4, many at once, and seen as points.
+ *
+ * It starts empty: add satellites to it with ConstellationHandle::load(), from a catalog of TLEs
+ * or OMMs, or ConstellationHandle::add(), from their element sets. Each satellite is seen as an
+ * instance of the unresolved object given (see Constellation).
+ *
+ * Loads Huira's frame kernel, which defines the TEME frame's axes, as teme_frame() does. To render
+ * the satellites, load an SPK with the Earth's ephemeris, such as de440s.bsp.
+ *
+ * @param unresolved_object What each satellite is seen as: a Lambertian sphere lit by the Sun
+ *        (new_unresolved_sphere()), say, or one of a fixed brightness.
+ * @param name Optional name
+ * @return ConstellationHandle<TSpectral> Handle to the new constellation
+ */
+template <IsSpectral TSpectral>
+ConstellationHandle<TSpectral>
+Scene<TSpectral>::new_constellation(const UnresolvedObjectHandle<TSpectral>& unresolved_object,
+                                    std::string name)
+{
+    spice::ensure_teme_frame_loaded();
+    auto constellation = std::make_shared<Constellation<TSpectral>>(this, unresolved_object.get());
+    constellations_.add(constellation, name);
+    HUIRA_LOG_INFO("Scene::new_constellation - " + constellation->get_info() + ", seen as " +
+                   constellation->unresolved_object()->get_info());
+    return ConstellationHandle<TSpectral>{constellation};
+}
+
+/**
+ * @brief Sets the name of a constellation.
+ * @param constellation_handle Handle to the constellation
+ * @param name New name
+ */
+template <IsSpectral TSpectral>
+void Scene<TSpectral>::set_name(const ConstellationHandle<TSpectral>& constellation_handle,
+                                const std::string& name)
+{
+    constellations_.set_name(constellation_handle.get(), name);
+}
+
+/**
+ * @brief Retrieves a constellation by name.
+ * @param name Name of the constellation
+ * @return ConstellationHandle<TSpectral> Handle to the constellation
+ */
+template <IsSpectral TSpectral>
+ConstellationHandle<TSpectral> Scene<TSpectral>::get_constellation(const std::string& name) const
+{
+    return ConstellationHandle<TSpectral>{constellations_.lookup(name)};
+}
+
+/**
+ * @brief Deletes a constellation from the scene. Its satellites can then be placed by something
+ * else.
+ * @param constellation_handle Handle to the constellation
+ */
+template <IsSpectral TSpectral>
+void Scene<TSpectral>::delete_constellation(
+    const ConstellationHandle<TSpectral>& constellation_handle)
+{
+    auto constellation = constellation_handle.get();
+    constellation->clear();
+    constellations_.remove(constellation);
 }
 
 /**
@@ -1347,6 +1428,21 @@ void Scene<TSpectral>::print_unresolved_objects() const
 }
 
 /**
+ * @brief Prints information about all constellations in the scene.
+ */
+template <IsSpectral TSpectral>
+void Scene<TSpectral>::print_constellations() const
+{
+    std::cout << cyan("Constellations: " + std::to_string(constellations_.size()) + " loaded")
+              << "\n";
+    for (const auto& constellation : constellations_) {
+        std::cout << " - " << constellation->get_info() << ": "
+                  << std::to_string(constellation->size()) << " satellites, seen as "
+                  << constellation->unresolved_object()->get_info() << "\n";
+    }
+}
+
+/**
  * @brief Prints information about all camera models in the scene.
  */
 template <IsSpectral TSpectral>
@@ -1409,6 +1505,9 @@ void Scene<TSpectral>::print_contents() const
     std::cout << " - "
               << cyan("UnresolvedObjects: " + std::to_string(unresolved_objects_.size()) +
                       " loaded")
+              << "\n";
+    std::cout << " - "
+              << cyan("Constellations: " + std::to_string(constellations_.size()) + " loaded")
               << "\n";
     std::cout << " - " << magenta("Models: " + std::to_string(models_.size()) + " loaded") << "\n";
     std::cout << "Scene Graph:\n";
