@@ -36,9 +36,11 @@ namespace huira {
  * the image records the bit depth (Image::sensor_bit_depth()) for the image writers. See
  * docs/design_overview/sensor_modeling.rst.
  *
- * Turning noise off removes only what is random: shot noise, read noise, and row and column
- * noise. The dark current's electrons and the bias, their maps, and the fixed patterns (PRNU and
- * hot pixels) are not noise, and are applied either way.
+ * Two switches leave parts out. Turning noise off (enable_noise()) removes what is random:
+ * shot noise, read noise, and row and column noise. Turning imperfections off
+ * (enable_imperfections()) removes what is the same in every frame: the dark current (the single
+ * value, the map and hot pixels), PRNU, the selected filter's flat, and the bias map, leaving
+ * the bias level. Each is applied whatever the other is.
  *
  * A pixel whose received power is not finite (NaN or infinite) has no meaningful response: it
  * reads out as NaN, which the image writers record as missing data, and a warning gives the
@@ -50,13 +52,18 @@ namespace huira {
  * written.
  * @param exposure_time The exposure time in seconds.
  * @throws std::runtime_error if a dark current or bias map, or the filter's flat, is set at
- *         another resolution than the frame buffer's.
+ *         another resolution than the frame buffer's, and imperfections are on.
  */
 template <IsSpectral TSpectral>
 void SimpleSensor<TSpectral>::readout(FrameBuffer<TSpectral>& fb, units::Second exposure_time) const
 {
     const Image<TSpectral>& received_power = fb.received_power();
-    this->check_map_resolutions_(received_power.resolution(), "SimpleSensor::readout");
+    // The imperfections: the dark current, the maps, the flat and the fixed patterns. Without
+    // them, none is used, so none need fit.
+    const bool imperfections = this->config_.simulate_imperfections;
+    if (imperfections) {
+        this->check_map_resolutions_(received_power.resolution(), "SimpleSensor::readout");
+    }
     auto& output = fb.sensor_response();
     output.set_sensor_bit_depth(this->config_.bit_depth);
 
@@ -65,14 +72,17 @@ void SimpleSensor<TSpectral>::readout(FrameBuffer<TSpectral>& fb, units::Second 
     const TSpectral photon_energy = TSpectral::photon_energies();
     // Photons to signal electrons, per bin: the quantum efficiency through the filter.
     const TSpectral response = config.quantum_efficiency * this->filter_transmission_;
-    const Image<float>* flat = this->flat_.get();
+    const Image<float>* flat = imperfections ? this->flat_.get() : nullptr;
     // The sensor's fixed patterns, made from its noise seed (the same in every readout):
-    const std::shared_ptr<const Image<float>> prnu_gains = this->prnu_gains_();
-    const std::shared_ptr<const Image<float>> hot_pixels = this->hot_pixel_dark_currents_();
+    const std::shared_ptr<const Image<float>> prnu_gains =
+        imperfections ? this->prnu_gains_() : nullptr;
+    const std::shared_ptr<const Image<float>> hot_pixels =
+        imperfections ? this->hot_pixel_dark_currents_() : nullptr;
     const double max_dn = std::pow(2.0, static_cast<double>(config.bit_depth)) - 1.0;
 
     const bool noise = config.simulate_noise;
-    const double dark_e = static_cast<double>(config.dark_current) * static_cast<double>(dt);
+    const double dark_e =
+        imperfections ? static_cast<double>(config.dark_current) * static_cast<double>(dt) : 0.0;
     const double bias = static_cast<double>(config.bias_level_dn);
     const double read_noise = noise ? static_cast<double>(config.read_noise) : 0.0;
     const double row_noise = noise ? static_cast<double>(config.row_noise) : 0.0;
@@ -81,8 +91,8 @@ void SimpleSensor<TSpectral>::readout(FrameBuffer<TSpectral>& fb, units::Second 
     const double gain = static_cast<double>(config.gain);
 
     // Each pixel's dark current and bias, where maps give them:
-    const Image<float>* dark_map = this->dark_current_map_.get();
-    const Image<float>* bias_map = this->bias_map_.get();
+    const Image<float>* dark_map = imperfections ? this->dark_current_map_.get() : nullptr;
+    const Image<float>* bias_map = imperfections ? this->bias_map_.get() : nullptr;
     const double bias_map_base = this->bias_map_kind_ == BiasMapKind::Relative ? bias : 0.0;
 
     std::atomic<std::size_t> non_finite{0};

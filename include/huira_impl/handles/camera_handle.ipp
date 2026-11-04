@@ -400,11 +400,12 @@ void CameraModelHandle<TSpectral>::set_sensor_full_well_capacity(float fwc) cons
 }
 
 /**
- * @brief Turn the sensor's shot noise, read noise, and row and column noise on (the default) or
- * off.
+ * @brief Turn the sensor's noise on (the default) or off: what is random, and differs from frame
+ * to frame (shot noise, read noise, and row and column noise).
  *
- * Off, each pixel collects the expected number of electrons. The dark current's electrons and
- * the bias are still added, since they are not noise.
+ * Off, each pixel collects the expected number of electrons. The imperfections, which are the
+ * same in every frame, are a switch of their own: see enable_sensor_imperfections() and
+ * SensorModel::enable_noise().
  *
  * @param noise True to simulate noise, false not to
  */
@@ -412,6 +413,25 @@ template <IsSpectral TSpectral>
 void CameraModelHandle<TSpectral>::enable_sensor_noise(bool noise) const
 {
     this->get_()->sensor_->enable_noise(noise);
+}
+
+/**
+ * @brief Turn the sensor's imperfections on (the default) or off: what makes it less than
+ * ideal, and is the same in every frame.
+ *
+ * Off, there is no dark current (the single value, the map or hot pixels), each pixel's gain is
+ * 1 (no PRNU, and no flat from the selected filter), and the bias is the bias level (no bias
+ * map); the settings are kept, and apply again when turned back on. The bias level, the quantum
+ * efficiency, the filter's transmission, the gain, the full well and the quantization stay. With
+ * noise off too, the sensor is ideal; with noise on, its frames are as perfectly calibrated ones.
+ * See SensorModel::enable_imperfections().
+ *
+ * @param imperfections True to simulate imperfections, false not to
+ */
+template <IsSpectral TSpectral>
+void CameraModelHandle<TSpectral>::enable_sensor_imperfections(bool imperfections) const
+{
+    this->get_()->sensor_->enable_imperfections(imperfections);
 }
 
 /**
@@ -660,12 +680,18 @@ float CameraModelHandle<TSpectral>::sensor_full_well_capacity() const
     return this->get_()->sensor_->full_well_capacity();
 }
 
-/// Whether the sensor's shot noise, read noise, and row and column noise are on (the default).
-/// See enable_sensor_noise().
+/// Whether the sensor's noise is on (the default). See enable_sensor_noise().
 template <IsSpectral TSpectral>
 bool CameraModelHandle<TSpectral>::sensor_noise_enabled() const
 {
     return this->get_()->sensor_->noise_enabled();
+}
+
+/// Whether the sensor's imperfections are on (the default). See enable_sensor_imperfections().
+template <IsSpectral TSpectral>
+bool CameraModelHandle<TSpectral>::sensor_imperfections_enabled() const
+{
+    return this->get_()->sensor_->imperfections_enabled();
 }
 
 /// Get the sensor's read noise, in electrons.

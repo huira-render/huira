@@ -541,8 +541,9 @@ void CameraModel<TSpectral>::set_intrinsics(float fx,
  * pixel's response through it relative to the principal point's, from flat_from_measured(). The
  * selected filter's transmission multiplies the sensor's quantum efficiency, and its flat each
  * pixel's signal electrons, before shot noise (see SimpleSensor::readout()); a camera whose wheel
- * is empty has a clear filter, with no flat. Filters are selected by index, in the order added,
- * or by name (select_filter()).
+ * is empty has a clear filter, with no flat. The flat is one of the sensor's imperfections, and
+ * not applied with them off (SensorModel::enable_imperfections()); the transmission is applied
+ * either way. Filters are selected by index, in the order added, or by name (select_filter()).
  *
  * @param name The filter's name, unused by the wheel's other filters.
  * @param transmission The fraction of the light the filter passes, per bin, from 0 to 1.
@@ -3361,6 +3362,14 @@ std::string CameraModel<TSpectral>::describe() const
         out << "none";
     }
     out << ", from the seed\n";
+    out << "  Ideal:       ";
+    if (sensor.imperfections_enabled()) {
+        out << "no, imperfections on";
+    } else {
+        out << (sensor.noise_enabled() ? "calibrated" : "yes")
+            << ", imperfections off: no dark current, hot pixels, PRNU, bias map or flat";
+    }
+    out << "\n";
     out << "  Motion blur: " << on_off(motion_blur_) << "\n";
 
     out << "  Precomputed: " << (is_precomputed() ? "yes" : "no")
