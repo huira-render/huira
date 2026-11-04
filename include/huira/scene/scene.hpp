@@ -19,6 +19,7 @@
 #include "huira/handles/materials/bsdf_handle.hpp"
 #include "huira/handles/materials/material_handle.hpp"
 #include "huira/handles/materials/texture_handle.hpp"
+#include "huira/handles/scene/constellation_handle.hpp"
 #include "huira/handles/scene/root_frame_handle.hpp"
 #include "huira/handles/volumes/density_field_handle.hpp"
 #include "huira/handles/volumes/medium_handle.hpp"
@@ -26,6 +27,7 @@
 #include "huira/images/image.hpp"
 #include "huira/materials/material.hpp"
 #include "huira/materials/texture.hpp"
+#include "huira/scene/constellation.hpp"
 #include "huira/scene/name_registry.hpp"
 #include "huira/scene/tle_manager.hpp"
 #include "huira/stars/io/star_data.hpp"
@@ -169,6 +171,14 @@ class Scene {
     void
     delete_unresolved_object(const UnresolvedObjectHandle<TSpectral>& unresolved_object_handle);
 
+    ConstellationHandle<TSpectral>
+    new_constellation(const UnresolvedObjectHandle<TSpectral>& unresolved_object,
+                      std::string name = "");
+    void set_name(const ConstellationHandle<TSpectral>& constellation_handle,
+                  const std::string& name);
+    ConstellationHandle<TSpectral> get_constellation(const std::string& name) const;
+    void delete_constellation(const ConstellationHandle<TSpectral>& constellation_handle);
+
     CameraModelHandle<TSpectral> new_camera_model(std::string name = "");
     void set_name(const CameraModelHandle<TSpectral>& camera_model_handle, const std::string& name);
     CameraModelHandle<TSpectral> get_camera_model(const std::string& name) const;
@@ -239,6 +249,7 @@ class Scene {
     void print_meshes() const;
     void print_lights() const;
     void print_unresolved_objects() const;
+    void print_constellations() const;
     void print_camera_models() const;
     void print_models() const;
     void print_graph() const;
@@ -302,14 +313,19 @@ class Scene {
     NameRegistry<Node<TSpectral>> node_registry_;
     void register_node_name_(const std::shared_ptr<Node<TSpectral>>& node, const std::string& name);
 
-    /// The satellites that place nodes, by NORAD catalog number (see Node::set_tle_position())
+    /// The satellites the scene places, by NORAD catalog number: by nodes (see
+    /// Node::set_tle_position()) and in constellations
     TleManager<TSpectral> tle_manager_;
+
+    /// Satellites placed by SGP4 and seen as points, many at once (see Constellation)
+    NameRegistry<Constellation<TSpectral>> constellations_;
 
     /// Embree RTC Device
     std::shared_ptr<EmbreeDevice> device_;
 
     friend class Node<TSpectral>;
     friend class FrameNode<TSpectral>;
+    friend class Constellation<TSpectral>;
     friend class SceneView<TSpectral>;
     friend class ModelLoader<TSpectral>;
 };

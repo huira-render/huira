@@ -28,6 +28,7 @@
 #include "huira/handles/assets/light_handle.hpp"
 #include "huira/handles/assets/model_handle.hpp"
 #include "huira/handles/geometry/mesh_handle.hpp"
+#include "huira/handles/scene/constellation_handle.hpp"
 #include "huira/handles/scene/instance_handle.hpp"
 // #include "huira/handles/scene/node_handle.hpp"       // Not part of public API
 // #include "huira/handles/root_frame_handle.hpp" // Not part of public API

@@ -33,6 +33,7 @@ enum class SkipReason {
     EXCLUDED,     ///< Its satellite is one of ElementSetOptions::exclude.
     TOO_OLD,      ///< Its epoch is further than ElementSetOptions::max_age from the reference time.
     SUPERSEDED,   ///< Another element set for its satellite was kept (see ElementSetCatalog).
+    CLAIMED,      ///< Something else places its satellite: a node, or another constellation.
 };
 
 /**

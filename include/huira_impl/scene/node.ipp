@@ -495,14 +495,16 @@ void Node<TSpectral>::set_keplerian_orbit(units::Meter semi_major_axis,
  *
  * The scene holds one element set for each satellite. Calling this again for the same satellite,
  * on the same node, replaces it: with a newer TLE, for example. No other node can be placed by the
- * satellite until this one is deleted or given another position source.
+ * satellite until this one is deleted or given another position source, nor can a constellation
+ * hold it (see Constellation), and a satellite a constellation holds can't place a node.
  *
  * SGP4 is evaluated as a scene view is built. If it can't place the satellite at a time the view
  * needs, most often because it has decayed by then, building the view throws.
  *
  * @param satrec The satellite's element set (see SatRec::from_tle()).
  * @throws std::runtime_error if the node isn't a child of its scene's TEME frame, if another node
- *         is placed by the same satellite, or if a child of the node is placed by SPICE.
+ *         is placed by the same satellite or a constellation holds it, or if a child of the node
+ *         is placed by SPICE.
  */
 template <IsSpectral TSpectral>
 void Node<TSpectral>::set_tle_position(const SatRec& satrec)

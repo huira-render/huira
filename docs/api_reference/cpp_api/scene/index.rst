@@ -9,6 +9,7 @@ Scene Graph
    frame_node
    root_frame_node
    teme_frame_node
+   constellation
    instance
    scene
    scene_view
