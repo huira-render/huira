@@ -4,9 +4,14 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <iomanip>
+#include <ios>
 #include <limits>
 #include <map>
 #include <memory>
+#include <optional>
+#include <set>
+#include <sstream>
 #include <string>
 #include <type_traits>
 #include <vector>
@@ -16,13 +21,16 @@
 #include "huira/assets/lights/light.hpp"
 #include "huira/assets/lights/sphere_light.hpp"
 #include "huira/core/physics.hpp"
+#include "huira/core/spice.hpp"
 #include "huira/core/time.hpp"
 #include "huira/core/transform.hpp"
 #include "huira/geometry/mesh.hpp"
 #include "huira/handles/camera_handle.hpp"
 #include "huira/render/shading_utils.hpp"
 #include "huira/render/trajectory_arc.hpp"
+#include "huira/scene/constellation.hpp"
 #include "huira/scene/scene.hpp"
+#include "huira/scene/teme_frame_node.hpp"
 #include "tbb/blocked_range.h"
 #include "tbb/parallel_for.h"
 
@@ -128,6 +136,10 @@ SceneView<TSpectral>::SceneView(const Scene<TSpectral>& scene,
     HUIRA_LOG_INFO("SceneView collected " + std::to_string(primitives_.size()) +
                    " unique primitive batches and " + std::to_string(lights_.size()) +
                    " light instances.");
+
+    // And the satellites of the scene's constellations, after the scene graph's unresolved
+    // objects:
+    collect_constellations_(scene);
     if (has_motion_blur_) {
         HUIRA_LOG_INFO("SceneView: motion blur, with up to " +
                        std::to_string(max_temporal_samples_) + " temporal samples");
@@ -169,8 +181,11 @@ SceneView<TSpectral>::SceneView(const Scene<TSpectral>& scene,
     }
 
     for (auto& unresolved_object : scene.unresolved_objects_) {
-        bool found = false;
+        bool found = constellation_assets_.contains(unresolved_object.get());
         for (const auto& instance : unresolved_objects_) {
+            if (found) {
+                break;
+            }
             if (instance.unresolved_object->id() == unresolved_object->id()) {
                 found = true;
                 break;
@@ -291,10 +306,14 @@ SceneView<TSpectral>::SceneView(const Scene<TSpectral>& scene,
     // can cast occlusion/sampling rays through this view. Each object gets its own
     // deterministically seeded sampler for reproducible results. What each instance
     // resolves to is kept here, with the instance: an object placed more than once, or
-    // seen by more than one view, has an irradiance for each.
-    for (auto& unresolved : unresolved_objects_) {
+    // seen by more than one view, has an irradiance for each. The satellites of
+    // constellations, which can number thousands, come last, and are resolved in parallel,
+    // each with its own sampler.
+    const auto resolve = [this](UnresolvedInstance<TSpectral>& unresolved) {
         const UnresolvedObject<TSpectral>& object = *unresolved.unresolved_object;
-        RandomSampler<float> sampler(static_cast<unsigned int>(object.id()));
+        RandomSampler<float> sampler(
+            static_cast<std::uint32_t>(object.id()) ^
+            (static_cast<std::uint32_t>(unresolved.catalog_number) * 2654435761u));
         unresolved.irradiances =
             object.resolve_irradiance(unresolved.transforms, unresolved.times, *this, sampler);
 
@@ -315,7 +334,23 @@ SceneView<TSpectral>::SceneView(const Scene<TSpectral>& scene,
                     " resolved an invalid spectral irradiance: " + irradiance.to_string());
             }
         }
+    };
+    const auto first_satellite = static_cast<std::size_t>(
+        std::find_if(unresolved_objects_.begin(),
+                     unresolved_objects_.end(),
+                     [](const UnresolvedInstance<TSpectral>& unresolved) {
+                         return unresolved.constellation_id != NO_OBJECT_ID;
+                     }) -
+        unresolved_objects_.begin());
+    for (std::size_t i = 0; i < first_satellite; ++i) {
+        resolve(unresolved_objects_[i]);
     }
+    tbb::parallel_for(tbb::blocked_range<std::size_t>(first_satellite, unresolved_objects_.size()),
+                      [&](const tbb::blocked_range<std::size_t>& range) {
+                          for (std::size_t i = range.begin(); i != range.end(); ++i) {
+                              resolve(unresolved_objects_[i]);
+                          }
+                      });
 }
 
 /**
@@ -851,6 +886,378 @@ void SceneView<TSpectral>::traverse_and_collect_(const std::shared_ptr<Node<TSpe
     for (const auto& child : node->get_children()) {
         traverse_and_collect_(child);
     }
+}
+
+namespace detail {
+/// Thrown, and caught, as a satellite's temporal samples are chosen: the frames it is placed from
+/// aren't evaluated yet at this fraction of the exposure, which only the scene view's own thread
+/// can do (see SceneView::collect_constellation_()).
+struct MissingFrames {
+    double fraction = 0.0;
+};
+
+/// Thrown, and caught, as a satellite is placed: SGP4 can't place it at this time, in ET.
+struct UnplacedSatellite {
+    double et = 0.0;
+};
+
+/// The fewest halvings of the exposure whose grid holds a fraction of it (that is, k / 2^level
+/// for a whole k), or -1 if none to Embree's limit on temporal samples does.
+inline int dyadic_level(double fraction)
+{
+    for (int level = 0; (std::size_t{1} << level) < 2 * RTC_MAX_TIME_STEP_COUNT; ++level) {
+        const double scaled = std::ldexp(fraction, level);
+        if (scaled == std::floor(scaled)) {
+            return level;
+        }
+    }
+    return -1;
+}
+} // namespace detail
+
+/**
+ * @brief Collect the satellites of the scene's constellations (see collect_constellation_()).
+ *
+ * A hidden constellation's satellites are left out, and the unresolved object they are seen as
+ * is reported as hidden, unless something else places it.
+ *
+ * @param scene The scene viewed.
+ */
+template <IsSpectral TSpectral>
+void SceneView<TSpectral>::collect_constellations_(const Scene<TSpectral>& scene)
+{
+    for (const auto& constellation : scene.constellations_) {
+        const void* asset = constellation->unresolved_object().get();
+        if (!constellation->is_visible()) {
+            hidden_assets_.insert(asset);
+            continue;
+        }
+        constellation_assets_.insert(asset);
+        collect_constellation_(*constellation);
+    }
+}
+
+/**
+ * @brief Collect a constellation's satellites, each as an instance of its unresolved object.
+ *
+ * Each satellite is placed as a node placed by its TLE would be (see Node::set_tle_position()),
+ * with light time and aberration as the view observes, but without the scene graph: from the
+ * Earth's TEME frame, evaluated by SPICE once for each temporal sample (see TemeSample), and SGP4,
+ * for all the satellites in parallel. Each is given its own temporal samples, as many as its
+ * motion in view needs (see choose_fractions_()): one for a satellite that stays put, and more for
+ * one that crosses the frame.
+ *
+ * The frames are evaluated on this thread, as the camera's pose may come from SPICE or from a
+ * Python function. A satellite's samples are chosen in rounds: in each, every satellite not yet
+ * done is followed as far as the frames evaluated so far allow, and those that need more ask for
+ * them, a whole level of halvings of the exposure at a time, for the next round. Few rounds are
+ * needed: one, and then one for each halving of the exposure the fastest satellite needs.
+ *
+ * A satellite SGP4 can't place at some time it is needed is left out, and reported, with one
+ * warning for the constellation (see skipped_satellites()). One that stays behind the camera
+ * through the exposure, which the renderer would not draw, is left out too.
+ *
+ * @param constellation The constellation.
+ */
+template <IsSpectral TSpectral>
+void SceneView<TSpectral>::collect_constellation_(const Constellation<TSpectral>& constellation)
+{
+    const std::vector<std::shared_ptr<TleEntry>>& entries = constellation.entries_;
+    const std::size_t n = entries.size();
+    if (n == 0) {
+        return;
+    }
+    const std::string info = constellation.get_info();
+
+    struct Satellite {
+        std::map<double, SatelliteSample> samples;
+        std::vector<double> fractions;
+        double missing = -1.0;          // The fraction it needs frames at next, if any
+        std::optional<double> unplaced; // When SGP4 can't place it, in ET, if it can't
+    };
+    std::vector<Satellite> satellites(n);
+
+    // The frames every satellite starts from: at the samples asked for, or those that tell
+    // whether it moves (see choose_fractions_())
+    const std::vector<double> start = requested_temporal_samples_
+                                          ? uniform_fractions_(*requested_temporal_samples_)
+                                          : std::vector<double>{0.0, 0.25, 0.5, 0.75, 1.0};
+    for (double fraction : start) {
+        teme_at_(fraction);
+    }
+
+    std::vector<std::size_t> pending(n);
+    for (std::size_t i = 0; i < n; ++i) {
+        pending[i] = i;
+    }
+    while (!pending.empty()) {
+        tbb::parallel_for(
+            tbb::blocked_range<std::size_t>(0, pending.size()),
+            [&](const tbb::blocked_range<std::size_t>& range) {
+                for (std::size_t p = range.begin(); p != range.end(); ++p) {
+                    Satellite& satellite = satellites[pending[p]];
+                    const SatRec& satrec = entries[pending[p]]->satrec;
+                    satellite.missing = -1.0;
+
+                    // Each sample is evaluated once, and kept, through the rounds
+                    const auto sample_at = [&](double fraction) -> const SatelliteSample& {
+                        auto found = satellite.samples.find(fraction);
+                        if (found == satellite.samples.end()) {
+                            found =
+                                satellite.samples.emplace(fraction, satellite_at_(satrec, fraction))
+                                    .first;
+                        }
+                        return found->second;
+                    };
+                    try {
+                        satellite.fractions = choose_fractions_(
+                            [&](double fraction) -> const std::vector<Vec3<double>>& {
+                                return sample_at(fraction).probes;
+                            },
+                            [&]() {
+                                double rate = 0.0;
+                                for (double fraction : {0.0, 0.5, 1.0}) {
+                                    rate = std::max(rate, sample_at(fraction).turn_rate);
+                                }
+                                return rate;
+                            },
+                            DrawnHalfway{},
+                            MAX_AUTOMATIC_SAMPLES,
+                            info + ": satellite " + std::to_string(satrec.catalog_number()));
+                        for (double fraction : satellite.fractions) {
+                            sample_at(fraction);
+                        }
+                    } catch (const detail::MissingFrames& missing) {
+                        satellite.missing = missing.fraction;
+                    } catch (const detail::UnplacedSatellite& unplaced) {
+                        satellite.unplaced = unplaced.et;
+                    }
+                }
+            });
+
+        // The frames the satellites not yet done need, a level of halvings at a time
+        std::vector<std::size_t> next;
+        std::set<int> levels;
+        for (std::size_t index : pending) {
+            const double missing = satellites[index].missing;
+            if (missing < 0.0) {
+                continue;
+            }
+            next.push_back(index);
+            const int level = detail::dyadic_level(missing);
+            if (level < 0) {
+                teme_at_(missing);
+            } else {
+                levels.insert(level);
+            }
+        }
+        for (int level : levels) {
+            const std::size_t count = std::size_t{1} << level;
+            for (std::size_t k = 0; k <= count; ++k) {
+                teme_at_(std::ldexp(static_cast<double>(k), -level));
+            }
+        }
+        pending = std::move(next);
+    }
+
+    // Each satellite placed in front of the camera at some time is an instance of the
+    // constellation's unresolved object, in the order of the constellation
+    const float depth_sign = camera_model_->blender_convention_ ? -1.f : 1.f;
+    std::size_t placed = 0;
+    std::size_t behind = 0;
+    std::size_t unplaced = 0;
+    for (std::size_t i = 0; i < n; ++i) {
+        const Satellite& satellite = satellites[i];
+        const SatRec& satrec = entries[i]->satrec;
+        if (satellite.unplaced) {
+            const Time when = Time::from_et(*satellite.unplaced);
+            std::ostringstream days;
+            days << std::fixed << std::setprecision(1)
+                 << (when.et() - satrec.epoch().et()) / 86400.0;
+            skipped_satellites_.push_back(
+                {constellation.id(),
+                 satrec.catalog_number(),
+                 satrec.name(),
+                 "SGP4 can't place it at " + when.to_utc_string() + ", " + days.str() +
+                     " days from its element set's epoch: " + satrec.error_message_at(when)});
+            ++unplaced;
+            continue;
+        }
+
+        UnresolvedInstance<TSpectral> instance;
+        instance.unresolved_object = constellation.unresolved_object();
+        instance.constellation_id = constellation.id();
+        instance.catalog_number = satrec.catalog_number();
+        bool in_front = false;
+        for (double fraction : satellite.fractions) {
+            const Vec3<double>& position = satellite.samples.at(fraction).probes.front();
+            Transform<float> transform;
+            transform.position = Vec3<float>{position};
+            in_front = in_front || depth_sign * transform.position.z > 0.f;
+            instance.transforms.push_back(transform);
+            instance.times.push_back(time_at_(fraction));
+        }
+        if (!in_front) {
+            ++behind;
+            continue;
+        }
+        max_temporal_samples_ = std::max(max_temporal_samples_, instance.transforms.size());
+        unresolved_objects_.push_back(std::move(instance));
+        ++placed;
+    }
+
+    HUIRA_LOG_INFO("SceneView - " + info + ": placed " + std::to_string(placed) + " of its " +
+                   std::to_string(n) + " satellites; " + std::to_string(behind) +
+                   " are behind the camera");
+    if (unplaced > 0) {
+        const std::size_t first = skipped_satellites_.size() - unplaced;
+        std::string listed;
+        for (std::size_t i = first; i < std::min(first + 3, skipped_satellites_.size()); ++i) {
+            listed += (i == first ? "" : "; ") +
+                      std::to_string(skipped_satellites_[i].catalog_number) + ": " +
+                      skipped_satellites_[i].message;
+        }
+        HUIRA_LOG_WARNING("SceneView - " + info + ": " + std::to_string(unplaced) + " of its " +
+                          std::to_string(n) +
+                          " satellites can't be placed by SGP4 during the exposure, and are left "
+                          "out (see SceneView::skipped_satellites()). " +
+                          (unplaced > 3 ? "The first three: " : "") + listed);
+    }
+}
+
+/**
+ * @brief The Earth's TEME frame at a temporal sample, evaluated once and kept (see TemeSample).
+ *
+ * Its pose is SPICE's at the time the light the camera sees at the sample left the Earth's center:
+ * light time is solved for as it is for a node (see Node::get_apparent_transform()), unless the
+ * view observes in TRUE_STATE. The camera's pose at the sample is evaluated too, if it isn't yet.
+ *
+ * @param fraction The time, as a fraction of the exposure from 0 to 1.
+ */
+template <IsSpectral TSpectral>
+const typename SceneView<TSpectral>::TemeSample& SceneView<TSpectral>::teme_at_(double fraction)
+{
+    const auto found = teme_samples_.find(fraction);
+    if (found != teme_samples_.end()) {
+        return found->second;
+    }
+
+    const Transform<double>& observer = observer_at_(fraction).ssb;
+    const double t_obs = time_at_(fraction).et();
+    TemeSample sample;
+    const auto earth_at = [&](double light_time) {
+        sample.et = t_obs - light_time;
+        auto [position, velocity, unused] =
+            spice::spkezr<double>(TemeFrameNode<TSpectral>::SPICE_ORIGIN,
+                                  Time::from_et(sample.et),
+                                  "J2000",
+                                  "NONE",
+                                  "SSB");
+        sample.frame.position = position;
+        sample.frame.velocity = velocity;
+    };
+    earth_at(0.0);
+    if (obs_mode_ != ObservationMode::TRUE_STATE) {
+        double light_time =
+            glm::length(observer.position - sample.frame.position) / SPEED_OF_LIGHT<double>();
+        for (std::size_t i = 0; i < 10; ++i) {
+            earth_at(light_time);
+            const double next =
+                glm::length(observer.position - sample.frame.position) / SPEED_OF_LIGHT<double>();
+            const bool converged = std::abs(next - light_time) < LIGHT_TIME_TOLERANCE;
+            light_time = next;
+            if (converged) {
+                break;
+            }
+        }
+        sample.light_time = light_time;
+    }
+    auto [rotation, angular_velocity] =
+        spice::sxform<double>("J2000", spice::TEME_FRAME_NAME, Time::from_et(sample.et));
+    sample.frame.rotation = rotation;
+    sample.frame.angular_velocity = angular_velocity;
+    return teme_samples_.emplace(fraction, sample).first->second;
+}
+
+/**
+ * @brief A satellite of a constellation as the camera sees it at a temporal sample.
+ *
+ * It is placed as a node placed by its TLE would be: SGP4's state in the TEME frame, at the time
+ * its light left it, which is solved for as for a node (see Node::get_apparent_transform()), and
+ * aberrated by the camera's velocity in ABERRATED_STATE. The frame is carried on to that time from
+ * where SPICE put it for the sample (see TemeSample). Safe to call from many threads at once: it
+ * reads only what is evaluated already.
+ *
+ * @param satrec The satellite's element set.
+ * @param fraction The time, as a fraction of the exposure from 0 to 1.
+ * @return Where it is in the camera's frame, and how fast its direction turns.
+ * @throws detail::MissingFrames if the frames at the fraction aren't evaluated yet.
+ * @throws detail::UnplacedSatellite if SGP4 can't place it at the time its light left it.
+ */
+template <IsSpectral TSpectral>
+typename SceneView<TSpectral>::SatelliteSample
+SceneView<TSpectral>::satellite_at_(const SatRec& satrec, double fraction) const
+{
+    const auto observer_found = observer_poses_.find(fraction);
+    const auto teme_found = teme_samples_.find(fraction);
+    if (observer_found == observer_poses_.end() || teme_found == teme_samples_.end()) {
+        throw detail::MissingFrames{fraction};
+    }
+    const ObserverPose& observer = observer_found->second;
+    const Transform<double>& camera = observer.ssb;
+    const TemeSample& teme = teme_found->second;
+    const double t_obs = time_at_(fraction).et();
+
+    // Its state relative to the barycenter, light_time before the observation
+    Vec3<double> position{0.0};
+    Vec3<double> velocity{0.0};
+    const auto place = [&](double light_time) {
+        const double et = t_obs - light_time;
+        const std::optional<PositionState> state = satrec.evaluate(Time::from_et(et));
+        if (!state) {
+            throw detail::UnplacedSatellite{et};
+        }
+        const double dt = et - teme.et;
+        const Vec3<double> offset = teme.frame.rotation * state->position;
+        const Vec3<double> spin = glm::cross(teme.frame.angular_velocity, offset);
+        position = teme.frame.position + teme.frame.velocity * dt + offset + spin * dt;
+        velocity = teme.frame.velocity + teme.frame.rotation * state->velocity + spin;
+    };
+    if (obs_mode_ == ObservationMode::TRUE_STATE) {
+        place(0.0);
+    } else {
+        double light_time = teme.light_time;
+        for (std::size_t i = 0; i < 10; ++i) {
+            place(light_time);
+            const double next = glm::length(camera.position - position) / SPEED_OF_LIGHT<double>();
+            const bool converged = std::abs(next - light_time) < LIGHT_TIME_TOLERANCE;
+            light_time = next;
+            if (converged) {
+                break;
+            }
+        }
+    }
+
+    Vec3<double> apparent = position;
+    if (obs_mode_ == ObservationMode::ABERRATED_STATE) {
+        const Vec3<double> relative = position - camera.position;
+        const double distance = glm::length(relative);
+        if (distance > 1e-8) {
+            apparent = camera.position +
+                       compute_aberrated_direction(relative / distance, camera.velocity) * distance;
+        }
+    }
+
+    // How fast it turns as seen from the camera, as for a point source a node places (see
+    // sample_instance_()): the frame's turning relative to the camera's, and how fast its direction
+    // swings as it passes
+    SatelliteSample sample;
+    sample.probes.push_back(observer.inverse.apply_to_point(apparent));
+    sample.turn_rate =
+        glm::length(teme.frame.angular_velocity - camera.angular_velocity) +
+        glm::length(velocity - camera.velocity) /
+            std::max(glm::length(apparent - camera.position), std::numeric_limits<double>::min());
+    return sample;
 }
 
 /**

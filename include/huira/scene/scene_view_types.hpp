@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "embree4/rtcore.h"
@@ -74,6 +75,22 @@ struct UnresolvedInstance {
     std::vector<Transform<float>> transforms; // Transform at N times
     std::vector<Time> times;                  // The N times, evenly spaced through the exposure
     std::vector<TSpectral> irradiances;       // Resolved: one for each time, or one for all
+
+    /// For a satellite of a constellation, which no instance places (its instance_id is
+    /// NO_OBJECT_ID): the constellation, and the satellite's NORAD catalog number.
+    std::uint64_t constellation_id = NO_OBJECT_ID;
+    int catalog_number = 0;
+};
+
+/**
+ * @brief A satellite of a constellation that a scene view left out, as SGP4 can't place it at
+ * some time during the exposure: most often, because it has decayed.
+ */
+struct SkippedSatellite {
+    std::uint64_t constellation_id = NO_OBJECT_ID; ///< Its constellation.
+    int catalog_number = 0;                        ///< Its NORAD catalog number.
+    std::string name;                              ///< Its name, or empty.
+    std::string message;                           ///< Why, in words.
 };
 
 /**
