@@ -18,6 +18,7 @@ images.
 |---|---|---|
 | [Tycho-2 star catalog](#tycho-2-star-catalog) | [media.huira.space/data/stars/tycho2/](https://media.huira.space/data/stars/tycho2/) | CC BY-NC 3.0 IGO (non-commercial) |
 | [SPICE kernels](#spice-kernels) | [NASA's NAIF](https://naif.jpl.nasa.gov/naif/data.html) | Redistributable unmodified |
+| [NORAD element sets](#norad-element-sets) | [CelesTrak](https://celestrak.org/NORAD/elements/), [Space-Track](https://www.space-track.org/) | CelesTrak: free, under its usage policy; Space-Track: its user agreement |
 | [NASA spacecraft models](#nasa-spacecraft-models) | [media.huira.space/data/models/nasa/](https://media.huira.space/data/models/nasa/) | No copyright; NASA's media guidelines |
 | [Solar System textures](#solar-system-textures) | [media.huira.space/data/textures/solar_system/](https://media.huira.space/data/textures/solar_system/) | CC BY 4.0 |
 | [Kernels that ship with Huira](#kernels-that-ship-with-huira) | Included with Huira | Redistributable unmodified |
@@ -98,6 +99,36 @@ at permanent addresses. The examples that use SPICE list the kernels they load, 
     from the archive's identifier (for example, `urn:nasa:pds:orex.spice` for OSIRIS-REx).
 
 
+## NORAD element sets
+The orbits of the objects in Earth orbit, as the U.S. Space Force tracks them: an element set
+for each, as a two-line element set (TLE) or an Orbit Mean-Elements
+Message (OMM), which Huira propagates with SGP4 (see
+[15 - Satellites](https://github.com/huira-render/huira/tree/main/examples/15_satellites)). An
+element set is good to about a kilometer at its epoch, and drifts from there, so they are
+published several times a day; Huira does not host them, as any copy is soon out of date.
+
+- **Get them:** [CelesTrak](https://celestrak.org/NORAD/elements/) publishes the current element
+  sets, grouped by use (every active satellite, each constellation, space stations, debris), as
+  TLEs or as OMMs in CSV, JSON, KVN or XML; Huira reads all but XML. [Space-Track](https://www.space-track.org/)
+  publishes the same data, current and historical, to users with a free account.
+- **License:** CelesTrak makes its data freely available, and asks that you follow its
+  [usage policy](https://www.celestrak.org/usage-policy.php): in particular, that you not
+  download a dataset more than once an hour, and that new software use its OMM formats, as a
+  TLE cannot hold a catalog number above 99999. Space-Track's
+  [user agreement](https://www.space-track.org/documentation#/user_agree) governs the use and
+  redistribution of its data.
+- **Credit:** name CelesTrak, or Space-Track, as the source of the element sets. Huira
+  propagates them with David Vallado's reference SGP4 code, included unmodified under its
+  authors' [permission notice](https://celestrak.org/publications/AIAA/2006-6753/faq.php),
+  who ask that it be cited: Vallado, D. A., Crawford, P., Hujsak, R., and Kelso, T. S. 2006,
+  "Revisiting Spacetrack Report #3", AIAA 2006-6753,
+  [celestrak.org/publications/AIAA/2006-6753](https://celestrak.org/publications/AIAA/2006-6753/).
+
+> Rendering anything placed by an element set needs the Earth's ephemeris, as SGP4 gives
+> positions relative to the Earth: load an SPK that has it, such as `de440s.bsp` (see
+> [SPICE kernels](#spice-kernels)).
+
+
 ## NASA spacecraft models
 NASA's 3D models of spacecraft: the Gateway core module and OSIRIS-REx. The folder's
 `ATTRIBUTIONS.txt` gives each model's source page and original file name.
@@ -141,7 +172,9 @@ Huira includes two of NAIF's generic kernels, and a custom TEME frame kernel, in
   `huira.spice.load_default_pck()` loads.
 - `fk/huira_teme.tf`: A custom Huira TEME frame kernel, which defines `HUIRA_EARTH_TEME`, the True
   Equator, Mean Equinox of date frame that SGP4 gives states in. Huira loads it when a scene's
-  TEME frame (`Scene.teme_frame()`) is first asked for.
+  TEME frame (`Scene.teme_frame()`) is first asked for, or a constellation is made. The frame is
+  centered on the Earth, so rendering anything in it needs an SPK with the Earth's ephemeris,
+  such as `de440s.bsp`, which does not ship with Huira (see [SPICE kernels](#spice-kernels)).
 
 NAIF's two are unmodified, and redistributed under [NAIF's rules](https://naif.jpl.nasa.gov/naif/rules.html).
 
