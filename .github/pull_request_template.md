@@ -6,13 +6,13 @@
 
 <!-- Pick one. If more than one applies, consider splitting the PR (see CONTRIBUTING.md). -->
 
-- [ ] `fix`: Bug fix
+- [ ] `fix`: Bug fix(es)
 - [ ] `feat`: New feature
 - [ ] `perf`: Performance improvement
 - [ ] `refactor`: Restructuring with no change in behavior
-- [ ] `docs`: Documentation only
-- [ ] `test`: Tests only
-- [ ] `style`: Formatting only
+- [ ] `docs`: Documentation
+- [ ] `test`: Tests
+- [ ] `style`: Formatting
 - [ ] `ci` / `build`: CI, packaging, or build system
 - [ ] **Breaking change** (changes existing behavior or public API)
 
