@@ -22,6 +22,7 @@ to run it. Each source file opens with the features it demonstrates.
 | 12 | [Motion blur](12_motion_blur/) | Spinning and moving instances, exposure time against motion, temporal samples, tracking with `look_at`, and turning motion blur off |
 | 13 | [SPICE](13_spice/) | Loading kernels, SPICE frames, placing by ephemeris, Keplerian orbits, and time driving the scene |
 | 14 | [Unresolved objects](14_unresolved_objects/) | Bodies too far away to cover a pixel, by size and albedo or by magnitude; a camera's attitude from a quaternion; light time and aberration |
+| 15 | [Satellites](15_satellites/) | NORAD element sets, as TLEs or OMMs, propagated with SGP4: a camera riding the ISS, and every active satellite as a constellation; truth data for point sources |
 
 ## Running the examples
 

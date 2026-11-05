@@ -13,6 +13,7 @@ set(HUIRA_EXAMPLE_NAMES
     12_motion_blur
     13_spice
     14_unresolved_objects
+    15_satellites
 )
 
 foreach(example IN LISTS HUIRA_EXAMPLE_NAMES)
