@@ -161,10 +161,10 @@ struct HeldPoseFunctions {
     std::weak_ptr<py::function> rotation;
 };
 
+PYBIND11_EXPORT inline std::unordered_map<const void*, HeldPoseFunctions> g_held_poses;
 inline std::unordered_map<const void*, HeldPoseFunctions>& held_pose_functions()
 {
-    static std::unordered_map<const void*, HeldPoseFunctions> held;
-    return held;
+    return g_held_poses;
 }
 
 /// Record the function a node now holds, as its position or rotation function, and forget those

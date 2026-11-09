@@ -219,11 +219,11 @@ void bind_numpy_arithmetic(PyClass& cls)
             },
             py::is_operator());
     }
-    for (const auto& [name, ufunc] : {std::pair{"__neg__", "negative"},
+    for (auto [name, ufunc] : {std::pair{"__neg__", "negative"},
                                       std::pair{"__pos__", "positive"},
                                       std::pair{"__abs__", "absolute"}}) {
-        cls.def(name, [ufunc = ufunc](const py::object& self) {
-            return py::module_::import("numpy").attr(ufunc)(self);
+        cls.def(name, [numpy_func = ufunc](const py::object& self) {
+            return py::module_::import("numpy").attr(numpy_func)(self);
         });
     }
 }

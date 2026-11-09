@@ -64,7 +64,7 @@ inline void bind_satrec(py::module_& m)
                 // Values as Python writes them, so the numbers json.load() gives come back as
                 // the text they were read from
                 OmmFields text;
-                for (const auto& [keyword, value] : fields) {
+                for (auto [keyword, value] : fields) {
                     if (!value.is_none()) {
                         text[py::str(keyword)] = py::str(value);
                     }
